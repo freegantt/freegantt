@@ -149,19 +149,21 @@ export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
  *  to quote, only one of these.
  *
  *  `'data-changed'` — the rows the draft was measured from were replaced while a handler was still
- *  deciding. `'entry-gone'` — the entry the settle would write was removed. `'write-refused'` — the
- *  commit reached the store and the store said no. `'superseded'` — a new gesture armed before the
- *  handler decided. `'discarded'` — the user pressed Escape, or the Gantt was destroyed, before the
- *  handler decided.
+ *  deciding. `'entry-gone'` — the entry the settle would write was removed. `'superseded'` — a new
+ *  gesture armed before the handler decided. `'discarded'` — the user pressed Escape, or the Gantt
+ *  was destroyed, before the handler decided.
  *
  *  `severity` alone already tells "the user did this on purpose" (`'superseded'`, `'discarded'`,
- *  `severity: 'info'`) from "real work was lost" (the other three, `severity: 'warning'`) — see
- *  `buildGestureDroppedReport`. What `severity` cannot do is tell the three `'warning'` reasons apart
- *  from each other: `'data-changed'`, `'entry-gone'` and `'write-refused'` are three different
- *  failures a consumer may want to handle three different ways. `droppedReason` carries that,
- *  without matching on `message`'s English sentence (`ErrorReport.droppedReason`, branch review F2). */
-export type GestureDroppedReason =
-  'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
+ *  `severity: 'info'`) from "real work was lost" (the other two, `severity: 'warning'`) — see
+ *  `buildGestureDroppedReport`. What `severity` cannot do is tell `'data-changed'` apart from
+ *  `'entry-gone'`: two different failures a consumer may want to handle two different ways.
+ *  `droppedReason` carries that, without matching on `message`'s English sentence
+ *  (`ErrorReport.droppedReason`, branch review F2).
+ *
+ *  ADR 0026 retired a third `'warning'` reason this used to carry, `'write-refused'` — the store
+ *  refusing a commit was always an envelope-only cascade against a several-Segment Entry (D-S5-44),
+ *  and a Bar is one child Entry by default now, so nothing raises that refusal any more. */
+export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone';
 
 /** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-40).
  *
@@ -184,20 +186,19 @@ export interface ErrorReport {
    *  consumer can show their own words without core's framing around them. */
   readonly reason?: string;
   /** Why core dropped a gesture on its own — present only on `'entry-move-dropped'` and
-   *  `'entry-resize-dropped'` (#377). One of five closed reasons, never prose: a consumer reads this
+   *  `'entry-resize-dropped'` (#377). One of four closed reasons, never prose: a consumer reads this
    *  instead of matching `message`'s English sentence.
    *
    *  ```ts
    *  gantt.on('error', (report) => {
-   *    if (report.droppedReason === 'write-refused') retryFromLatest();
-   *    else if (report.droppedReason === 'entry-gone') return; // the entry is gone, nothing to retry
+   *    if (report.droppedReason === 'entry-gone') return; // the entry is gone, nothing to retry
    *    else if (report.droppedReason === 'data-changed') refreshDraftAndRetry();
    *  });
    *  ```
    *  `severity` alone already sorts `'superseded'`/`'discarded'` (`'info'`, the user's own doing) from
-   *  the other three (`'warning'`, real work lost) — see `GestureDroppedReason`'s own doc. What
-   *  `severity` cannot do is tell `'data-changed'` from `'entry-gone'` from `'write-refused'`, and
-   *  that is the distinction this field exists for. */
+   *  the other two (`'warning'`, real work lost) — see `GestureDroppedReason`'s own doc. What
+   *  `severity` cannot do is tell `'data-changed'` from `'entry-gone'`, and that is the distinction
+   *  this field exists for. */
   readonly droppedReason?: GestureDroppedReason;
   /** The entry the report is about, when it is about one. */
   readonly entryId?: EntryId;

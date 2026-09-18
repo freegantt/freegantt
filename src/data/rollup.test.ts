@@ -273,6 +273,43 @@ describe('rollUpFields (S4.2)', () => {
       expect(reports[0]?.message).toContain('cascade');
       expect(reports[0]?.message).toContain('"cost"');
     });
+
+    // Q39: `start`/`end` are ordinary rolling-up Fields now (ADR 0026 retired the Segment that used
+    // to make them a derived pair), so an `EditExtender` cascade that proposes one on a rolling-up
+    // parent hits this same mechanism — not a throw `gesture-pipeline.ts`'s commit path must catch,
+    // but the Rollup silently overwriting the cascade's proposal and reporting the drop, exactly as
+    // it already does for `cost` above. D-S5-44's "the cascade owes the envelope invariant a plain
+    // refusal" holds; only which door enforces it moved, from an ingest-time throw to this report.
+    it("a plugin cascade's write to a rolling-up parent's start is dropped, and raises one report", () => {
+      const reports: ErrorReport[] = [];
+      const state = new DatasetState({
+        entries: [
+          { id: 'p1', name: 'p1', start: '2026-01-01', end: '2026-02-10' },
+          { id: 'c1', name: 'c1', parentId: 'p1', start: '2026-02-01', end: '2026-02-10' },
+        ],
+        timeZone: 'UTC',
+        // A cascade that reaches for the Rollup's own cell — the write lands in `merged`, never
+        // `body`, so `rollup.ts` overwrites it rather than yielding. Picked inside the parent's
+        // existing span so this reconciles cleanly and reaches the Rollup pass, rather than tripping
+        // `InvertedSpanError` first — that inversion case is the extender-bug path #332 already
+        // covers, a fault, not this decision-5 refusal.
+        editExtender: (): EntryEdits => new Map([[entryId('p1'), { start: '2026-01-15' }]]),
+      });
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+
+      state.entries.update('c1', { name: 'c1 renamed' });
+
+      const parent = state.entries.get('p1')!;
+      // The Rollup's own answer wins — the earliest child's start — not the cascade's 2026-01-15.
+      expect(parent.start).toBe(toInstant('UTC', '2026-02-01'));
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('derived-values-dropped');
+      expect(reports[0]?.severity).toBe('warning');
+      expect(reports[0]?.message).toContain('cascade');
+      expect(reports[0]?.message).toContain('"start"');
+    });
   });
 
   describe('D-S4-8 / P1 — rollup after child removal', () => {

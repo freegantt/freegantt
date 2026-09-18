@@ -4,13 +4,14 @@
 //
 // Writes on pointerdown only once (#211, D-S4-30): when a move drag actually arms (the threshold is
 // crossed) on a bar whose Entry is not already in the Selection, `drag`'s own `start()` proposes the
-// Selection right there, so the pick a picked-Segment drag reads is never stale relative to what it
+// Selection right there, so the pick a picked-Entry drag reads is never stale relative to what it
 // grabbed — see the decision table's "grabbed bar not in the Selection" row in
 // `plans/s5-extensibility-and-editing/spec-211-gesture-units.md` §4. A gesture that never crosses the
 // threshold (a plain click) still resolves through `selectFromHit` on pointerup, unchanged; `mousedown`
 // itself still writes nothing — it exists only so a double-click cannot start a native text range.
 
-import type { EntryId, BarId, SegmentId } from '../model/index.js';
+import type { EntryId, BarId } from '../model/index.js';
+import { entryIdOfBar } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type {
   Detachable,
@@ -67,11 +68,10 @@ export function attachEntryGestures(
   container: HTMLElement,
   ctx: EntryGestureContext,
 ): Detachable {
-  /** Last plain- or ctrl-clicked capable Segment — shift-click's range end (#212, ADR 0010). The
-   *  Selection holds Segments, so the anchor names one too. Cleared on an empty-click or Escape
-   *  clear, so a shift-click right after either one degenerates to selecting just its target (there
-   *  is no prior anchor to range from). */
-  let anchor: SegmentId | undefined;
+  /** Last plain- or ctrl-clicked capable Entry — shift-click's range end (#212, ADR 0010, ADR
+   *  0025). Cleared on an empty-click or Escape clear, so a shift-click right after either one
+   *  degenerates to selecting just its target (there is no prior anchor to range from). */
+  let anchor: EntryId | undefined;
 
   /** Set on pointerdown when the hit is a `move`-capable bar or a `resize`-capable handle; cleared
    *  once the pointer stream for that gesture ends (commit or cancel), never read past that point. */
@@ -95,17 +95,17 @@ export function attachEntryGestures(
     start(): boolean {
       if (grabbedId === undefined) return false;
       // #211/#212: a move drag that just armed on a bar the Selection does not already hold selects
-      // that bar's Segment before asking for the session — so the draft `session()` builds reads the
-      // same Selection this write just made, and the drag moves only the grabbed Segment rather than
-      // every Segment of whatever was selected before (or nothing at all). A resize grab is left
+      // that bar's Entry before asking for the session — so the draft `session()` builds reads the
+      // same Selection this write just made, and the drag moves only the grabbed Entry rather than
+      // every Entry of whatever was selected before (or nothing at all). A resize grab is left
       // alone: `resizableEntryId` resolves off hover, not the Selection, so a handle grab selects
       // nothing here.
       if (grabbedEdge === undefined && grabbedBarId !== undefined) {
-        const grabbedSegments = ctx.selection.segmentIdsForBar(grabbedBarId);
-        const selected = ctx.selection.segmentIds();
-        if (!grabbedSegments.some((id) => selected.includes(id))) {
-          anchor = grabbedSegments[0];
-          ctx.selection.propose(grabbedSegments);
+        const grabbedEntryId = entryIdOfBar(grabbedBarId);
+        const selected = ctx.selection.entryIds();
+        if (!selected.includes(grabbedEntryId)) {
+          anchor = grabbedEntryId;
+          ctx.selection.propose([grabbedEntryId]);
         }
       }
       session = ctx.session(grabbedId, currentGesture());
@@ -139,21 +139,20 @@ export function attachEntryGestures(
     },
   });
 
-  /** The range from the shift-anchor to `to`'s last member (#212, ADR 0010). The Selection holds
-   *  Segments, so the range steps over Segments in the order the panes draw them: row by row, and
-   *  inside a row the order that row's Entries draw their own Segments. A row click names every
-   *  Segment the row owns, so that row's last Segment ends the range.
+  /** The range from the shift-anchor to `to`'s last member (#212, ADR 0010, ADR 0025). The range
+   *  steps over Entries in the order the panes draw them: row by row. A row click names every
+   *  selectable Entry the row owns, so that row's last Entry ends the range.
    *
-   *  It ranges over Segments rather than whole rows so that a shift-click selects what the pointer
-   *  crossed. Ranging over rows selected every Segment of every row the range touched, including
+   *  It ranges over Entries rather than whole rows so that a shift-click selects what the pointer
+   *  crossed. Ranging over rows would select every Entry of every row the range touched, including
    *  the ones before the anchor and after the target inside those two end rows. */
-  function selectRange(to: readonly SegmentId[]): readonly SegmentId[] {
-    const order = ctx.selection.selectableSegmentsInRowOrder();
+  function selectRange(to: readonly EntryId[]): readonly EntryId[] {
+    const order = ctx.selection.selectableEntriesInRowOrder();
     const fromIndex = anchor !== undefined ? order.indexOf(anchor) : -1;
     const toIndex = order.indexOf(to[to.length - 1]!);
     if (fromIndex === -1 || toIndex === -1) return to;
     const [lo, hi] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex];
-    // No capability filter here: `selectableSegmentsInRowOrder()` is already capability-filtered,
+    // No capability filter here: `selectableEntriesInRowOrder()` is already capability-filtered,
     // and the capability resolves once, in the shell (I14).
     return order.slice(lo, hi + 1);
   }
@@ -197,7 +196,7 @@ export function attachEntryGestures(
     if (hit === undefined || missesEveryEntry(hit)) {
       if (clearOnMiss && (isPrimaryButton(e) || isRightClick(e))) {
         anchor = undefined;
-        if (ctx.selection.segmentIds().length > 0) ctx.selection.propose([]);
+        if (ctx.selection.entryIds().length > 0) ctx.selection.propose([]);
       }
       return;
     }
@@ -205,11 +204,11 @@ export function attachEntryGestures(
     // Past the miss check, only a primary button may pick, replace, toggle, or range (`isPrimaryButton`).
     if (!isPrimaryButton(e)) return;
 
-    // #212: one hit resolves to a list of Segments — the pane picks the unit. A bar names its own
-    // Segment; a row names every Segment of every selectable Entry it owns. The rules below then run
-    // over the list as a unit. An empty list means the hit landed on something no gesture may
-    // select, which writes nothing and clears nothing.
-    const targets = ctx.selection.selectableSegmentsOf(hit);
+    // #212: one hit resolves to a list of Entries — the pane picks the unit. A bar names its own
+    // Entry; a row names every selectable Entry it owns. The rules below then run over the list as a
+    // unit. An empty list means the hit landed on something no gesture may select, which writes
+    // nothing and clears nothing.
+    const targets = ctx.selection.selectableEntriesOf(hit);
     if (targets.length === 0) return;
 
     if (e.shiftKey) {
@@ -237,8 +236,8 @@ export function attachEntryGestures(
 
   /** Ctrl/⌘ moves the whole list at once: it removes the list when every member is already
    *  selected, else it adds the members that are missing (#185). */
-  function toggled(targets: readonly SegmentId[]): readonly SegmentId[] {
-    const current = ctx.selection.segmentIds();
+  function toggled(targets: readonly EntryId[]): readonly EntryId[] {
+    const current = ctx.selection.entryIds();
     if (targets.every((id) => current.includes(id))) {
       return current.filter((id) => !targets.includes(id));
     }
@@ -265,7 +264,7 @@ export function attachEntryGestures(
     // #272/#273: a held async veto has no live drag left to cancel, so Escape ends the wait instead.
     if (ctx.discardHeldGesture()) return;
     anchor = undefined;
-    if (ctx.selection.segmentIds().length > 0) ctx.selection.propose([]);
+    if (ctx.selection.entryIds().length > 0) ctx.selection.propose([]);
   }
 
   /** `user-select: none` stops highlight *inside* the Gantt. A double-click still starts a native

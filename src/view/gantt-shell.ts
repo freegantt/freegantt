@@ -88,8 +88,8 @@ import {
   UnsupportedUnitError,
   InvalidSnapIncrementError,
   entryIdOfBar,
+  entryId,
   barId,
-  segmentId,
   spansTime,
 } from '../model/index.js';
 import type {
@@ -104,7 +104,6 @@ import type {
   PluginId,
   RaiseError,
   RowId,
-  SegmentId,
   Size,
   ProposedEdits,
   TimeSpan,
@@ -131,8 +130,8 @@ import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
-import { SegmentSelection } from './segment-selection.js';
-import type { SegmentSelectionPorts } from './segment-selection.js';
+import { EntrySelection } from './entry-selection.js';
+import type { EntrySelectionPorts } from './entry-selection.js';
 
 import { RovingFocus } from './roving-focus.js';
 import type { RovingFocusPorts } from './roving-focus.js';
@@ -241,20 +240,15 @@ export interface GanttShellWiring {
      *  resolution the layout pass uses. */
     variant?: string;
     target?:
-      | {
-          kind: 'header';
-          field: FieldKey;
-          entryIds: readonly EntryId[];
-          segmentIds: readonly SegmentId[];
-        }
-      | { kind: 'bar'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
+      | { kind: 'header'; field: FieldKey; entryIds: readonly EntryId[] }
+      | { kind: 'bar'; entryIds: readonly EntryId[] }
       // S5.11, D-S5-26/D-S5-39: the roving-focus grid pane fills two `CommandTarget` kinds a
       // right-click never reaches on its own. `'row'` names a focused Row. `'gridCell'` names a
       // focused Grid cell, and `field` names its column. The splitter also gains its own kind,
       // for parity with the panes either side of it.
-      | { kind: 'row'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
-      | { kind: 'gridCell'; field?: FieldKey; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] }
-      | { kind: 'splitter'; entryIds: readonly EntryId[]; segmentIds: readonly SegmentId[] };
+      | { kind: 'row'; entryIds: readonly EntryId[] }
+      | { kind: 'gridCell'; field?: FieldKey; entryIds: readonly EntryId[] }
+      | { kind: 'splitter'; entryIds: readonly EntryId[] };
   }) => unknown;
   /** S5.2: `freegantt.panToToday`'s own clock read. `view/` may not call `time/`'s `now()` itself
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
@@ -370,8 +364,8 @@ export interface GanttShellOptions {
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. */
   zoomPresets?: readonly PresetRef[];
   /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. Loose
-   *  (`SegmentId | string`), same asymmetry the live `selection` setter already has. */
-  selectedSegmentIds?: readonly (SegmentId | string)[];
+   *  (`EntryId | string`), same asymmetry the live `selection` setter already has. */
+  selectedEntryIds?: readonly (EntryId | string)[];
   /** The layer boundary, as one member (review P5). `api/gantt.ts` supplies every seam in it. */
   wiring: GanttShellWiring;
 }
@@ -395,10 +389,9 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
 }
 
 /** The union `[min x, max(x + width))` of every Bar's own `barSpan` (#295). It is
- *  `GanttShell.reveal`'s target when an entry draws several Bars — one bar per Segment. Revealing
- *  the entry then shows every one of them, not only the first bar. Takes at least one
- *  Bar: `#revealEntrySpan`, its one caller, checks `bars.length > 0` first. A Segment names one
- *  bar, so `#revealSegmentSpan` never unions — it would pan to a sibling. */
+ *  `GanttShell.reveal`'s target when an entry draws several Bars. Revealing the entry then shows
+ *  every one of them, not only the first bar. Takes at least one Bar: `#revealEntrySpan`, its one
+ *  caller, checks `bars.length > 0` first. */
 function unionSpan(
   bars: readonly Bar[],
   scale: TimeScale,
@@ -415,9 +408,9 @@ function unionSpan(
 }
 
 /** A stand-in Bar for `barSpan`, for the case where nothing paints the target (#295). A variant
- *  produced no Bar, or no Bar draws the named Segment. The dates it is handed become the target, so
- *  reveal never becomes a no-op. It is a stand-in, not a second formula: `barSpan` still answers
- *  the geometry, and it carries no box, so it takes the ordinary span-and-floor path. */
+ *  produced no Bar for the named Entry. The dates it is handed become the target, so reveal never
+ *  becomes a no-op. It is a stand-in, not a second formula: `barSpan` still answers the geometry,
+ *  and it carries no box, so it takes the ordinary span-and-floor path. */
 function fallbackSpanBar(ownerId: EntryId, start: Instant, end: Instant): Bar {
   return { id: barId(ownerId), entryId: ownerId, variant: '', label: '', start, end };
 }
@@ -456,9 +449,9 @@ export class GanttShell {
    *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
    *  select step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
-  /** The Selection (#212, ADR 0010, #230 R4): what is selected, and what a pointer hit would select.
-   *  Built once, right after `#capabilities` in the constructor below. */
-  #segmentSelection!: SegmentSelection;
+  /** The Selection (#212, ADR 0010, ADR 0025, #230 R4): what is selected, and what a pointer hit
+   *  would select. Built once, right after `#capabilities` in the constructor below. */
+  #entrySelection!: EntrySelection;
   /** S3.2, D-S3-9: resolved once, re-resolved only when `capabilities` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #capabilityRules: Capabilities = {};
@@ -845,7 +838,7 @@ export class GanttShell {
     // dataset-change-subscription.ts).
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
-      this.#segmentSelection.forgetSegmentsTheDatasetDropped(changeSet);
+      this.#entrySelection.forgetEntriesTheDatasetDropped(changeSet);
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -881,15 +874,14 @@ export class GanttShell {
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#capabilities = this.#resolveCapabilities();
-    this.#segmentSelection = new SegmentSelection(this.#segmentSelectionPorts());
+    this.#entrySelection = new EntrySelection(this.#entrySelectionPorts());
     this.#treeCollapse = new TreeCollapse({
       plannedRows: () => this.#layout.plannedRows(),
       entries: () => this.#options.dataset.entries.all,
       entry: (id) => this.#options.dataset.entries.get(id),
       canSelect: (id) => this.#canGesture('select', id),
       selected: () => this.selectedEntryIds[0],
-      proposeSelection: (ids) =>
-        this.#segmentSelection.propose(this.#options.dataset.entries.segmentIdsOfEntries(ids)),
+      proposeSelection: (ids) => this.#entrySelection.propose(ids),
       confirm: (change) =>
         this.#proposeChange('beforeCollapseChange', 'collapseChange', change, () => {
           this.#layout.invalidateFrom(0);
@@ -908,7 +900,6 @@ export class GanttShell {
       timeScale: () => this.#viewport.timeScale,
       preset: () => this.#viewport.preset,
       snap: () => this.snap,
-      selectedSegmentIds: () => this.#segmentSelection.segmentIds,
       selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
@@ -933,17 +924,13 @@ export class GanttShell {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
       entryFor: (item) => this.#entryFor(item),
       can: (capability, entry, edge) => this.#capabilities.can(capability, entry, edge),
-      // #230 R4: `interaction/` asks one collaborator, not eight. `SegmentSelection` answers all of
-      // it but the two projections that are not its own — the Dataset's and the frame's.
+      // #230 R4: `interaction/` asks one collaborator, not four. `EntrySelection` answers all of it
+      // (ADR 0025: a former Segment is an ordinary Entry, so there is no second projection to ask).
       selection: {
-        segmentIds: () => this.#segmentSelection.segmentIds,
-        entryIds: () => this.#segmentSelection.entryIds,
-        propose: (next) => this.#segmentSelection.propose(next),
-        selectableEntriesInRowOrder: () => this.#segmentSelection.selectableEntriesInRowOrder(),
-        selectableSegmentsInRowOrder: () => this.#segmentSelection.selectableSegmentsInRowOrder(),
-        selectableSegmentsOf: (hit) => this.#segmentSelection.selectableSegmentsOf(hit),
-        segmentIdsOfEntries: (ids) => this.#options.dataset.entries.segmentIdsOfEntries(ids),
-        segmentIdsForBar: (item) => this.#layout.segmentIdsForBar(item),
+        entryIds: () => this.#entrySelection.entryIds,
+        propose: (next) => this.#entrySelection.propose(next),
+        selectableEntriesInRowOrder: () => this.#entrySelection.selectableEntriesInRowOrder(),
+        selectableEntriesOf: (hit) => this.#entrySelection.selectableEntriesOf(hit),
       },
       setHovered: (item) => this.#setHovered(item),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
@@ -1050,7 +1037,7 @@ export class GanttShell {
     // constructor returned. They moved here, ahead of the first flush below. A constructor-supplied
     // plugin's variant, keybinding or command now reaches frame 1, and so does a zoom or a selection.
     // Every collaborator these setters touch (`#registrations`, `#commandRegistry`, `#keymap`,
-    // `#segmentSelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
+    // `#entrySelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
     // post-construction assignment would have. `variantFor`/`Capabilities` read these registries
     // live at render time, never a cached snapshot. So applying them a few lines earlier changes
     // only which frame the result first appears in.
@@ -1060,7 +1047,7 @@ export class GanttShell {
     this.#datasetPlugins = options.datasetPlugins ?? [];
     this.plugins = options.plugins ?? [];
     if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
-    if (options.selectedSegmentIds !== undefined) this.selection = options.selectedSegmentIds;
+    if (options.selectedEntryIds !== undefined) this.selection = options.selectedEntryIds;
     this.#phase = 'live';
     this.#frames.flush();
 
@@ -1298,22 +1285,22 @@ export class GanttShell {
     this.#frameSettings.set({ todayLineMarginTicks: ticks });
   }
 
-  /** The Selection itself (#212, ADR 0010) — Segment ids. */
-  get selection(): readonly SegmentId[] {
-    return this.#segmentSelection.segmentIds;
+  /** The Selection itself (#212, ADR 0010, ADR 0025) — Entry ids. */
+  get selection(): readonly EntryId[] {
+    return this.#entrySelection.entryIds;
   }
 
-  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`SegmentId | string`),
+  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`EntryId | string`),
    *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. */
-  set selection(ids: readonly (SegmentId | string)[]) {
-    this.#segmentSelection.propose(ids.map((id) => segmentId(id)));
+  set selection(ids: readonly (EntryId | string)[]) {
+    this.#entrySelection.propose(ids.map((id) => entryId(id)));
   }
 
-  /** The Entries the Selection's Segments belong to, deduped, in row order (#212, ADR 0010). It is
-   *  one projection. The public getter, the affordance ids, the gesture pipeline and every command
-   *  context read it. So no two of them can disagree about what is selected. */
+  /** The Entries the Selection holds, in row order (#212, ADR 0010, ADR 0025). It is one projection.
+   *  The public getter, the affordance ids, the gesture pipeline and every command context read it.
+   *  So no two of them can disagree about what is selected. */
   get selectedEntryIds(): readonly EntryId[] {
-    return this.#segmentSelection.entryIds;
+    return this.#entrySelection.entryIds;
   }
 
   get variants(): readonly EntryVariant[] {
@@ -1410,23 +1397,21 @@ export class GanttShell {
     this.#refreshCapabilities();
   }
 
-  /** `SegmentSelection`'s one ports object (#230 R4) — the shell's own state, behind the closures
-   *  `SegmentSelectionPorts` names. `confirm`/`announce` reuse the shell's own `#proposeChange`/
-   *  `#events`, so a Selection change is one more line in `ProposableChange`, not a second veto path.
-   *  `paint` writes the backend's own state and re-derives hover/gesture affordances from it — the
-   *  same pair every direct `#selection` write used to make by hand. */
-  #segmentSelectionPorts(): SegmentSelectionPorts {
+  /** `EntrySelection`'s one ports object (#230 R4, ADR 0025) — the shell's own state, behind the
+   *  closures `EntrySelectionPorts` names. `confirm`/`announce` reuse the shell's own
+   *  `#proposeChange`/`#events`, so a Selection change is one more line in `ProposableChange`, not a
+   *  second veto path. `paint` writes the backend's own state and re-derives hover/gesture
+   *  affordances from it — the same pair every direct `#selection` write used to make by hand. */
+  #entrySelectionPorts(): EntrySelectionPorts {
     return {
-      entries: () => this.#options.dataset.entries,
       plannedRows: () => this.#layout.plannedRows(),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
-      segmentIdsForBar: (id) => this.#layout.segmentIdsForBar(id),
       canGesture: (capability, id) => this.#canGesture(capability, id),
       confirm: (change, apply) =>
         this.#proposeChange('beforeSelectionChange', 'selectionChange', change, apply),
       announce: (change) => this.#emit('selectionChange', change),
-      paint: (segmentIds) => {
-        this.#interactionState.selectedSegmentIds = segmentIds;
+      paint: (entryIds) => {
+        this.#interactionState.selectedEntryIds = entryIds;
         this.#refreshAffordances();
       },
     };
@@ -1491,9 +1476,9 @@ export class GanttShell {
    *  what real keyboard focus sits on right now (S5.11, D-S5-39), one of the five `TargetKind`s.
    *
    *  A keyboard chord has no right-clicked node to reconcile against the Selection. So `target`'s
-   *  `entryIds`/`segmentIds` name the Selection directly, for every kind but `'header'` and
-   *  `'splitter'` (#212). `when`/`run` then read `ctx.target.entryIds` exactly as a mouse invocation
-   *  does. `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt` — `view/` may not
+   *  `entryIds` names the Selection directly, for every kind but `'header'` and `'splitter'` (#212).
+   *  `when`/`run` then read `ctx.target.entryIds` exactly as a mouse invocation does.
+   *  `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt` — `view/` may not
    *  name either type (D-S5-5's mirror).
    *
    *  A `wiring` with no `buildCommandContext` makes every command's context an empty object, for a
@@ -1501,8 +1486,7 @@ export class GanttShell {
    *  without first checking `ctx.entry`/`ctx.target`, and no such test runs a command that needs
    *  them. */
   #buildCommandContext(): CommandContext<unknown> {
-    const segmentIds = this.#segmentSelection.segmentIds;
-    const entryIds = this.#segmentSelection.entryIds;
+    const entryIds = this.#entrySelection.entryIds;
     const id = entryIds[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
     // S5.11, D-S5-39: real DOM focus is the single source of truth for "what is the target of
@@ -1513,10 +1497,10 @@ export class GanttShell {
     // #199/#212: no node holds focus (an empty pane) — fall back to the Selection alone.
     const target =
       domTarget === undefined
-        ? segmentIds.length > 0
-          ? { kind: 'bar' as const, entryIds, segmentIds }
+        ? entryIds.length > 0
+          ? { kind: 'bar' as const, entryIds }
           : undefined
-        : this.#targetFromDom(domTarget, entryIds, segmentIds);
+        : this.#targetFromDom(domTarget, entryIds);
     // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
     // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
@@ -1527,10 +1511,10 @@ export class GanttShell {
   }
 
   /** The `CommandTarget` a resolved `DomTarget` names (S5.11, D-S5-39). `'header'` and `'splitter'`
-   *  stand for no Entry and no Segment, so both name empty sets, matching `DomTarget`'s own contract.
-   *  Every other kind names the current Selection. A keyboard chord has no separate "clicked" thing
-   *  to reconcile the Selection against (this file's own doc comment above). */
-  #targetFromDom(domTarget: DomTarget, entryIds: readonly EntryId[], segmentIds: readonly SegmentId[]) {
+   *  stand for no Entry, so both name empty sets, matching `DomTarget`'s own contract. Every other
+   *  kind names the current Selection. A keyboard chord has no separate "clicked" thing to reconcile
+   *  the Selection against (this file's own doc comment above). */
+  #targetFromDom(domTarget: DomTarget, entryIds: readonly EntryId[]) {
     // Each arm returns an object literal with its own `kind` literal, never `domTarget.kind` read
     // straight through. That keeps the inferred return type the exact union `CommandTarget` names.
     // Widening `kind` to plain `TargetKind` would lose that precision.
@@ -1538,19 +1522,19 @@ export class GanttShell {
       case 'header': {
         const field = domTarget.field;
         return field !== undefined
-          ? { kind: 'header' as const, field, entryIds: [], segmentIds: [] }
-          : { kind: 'bar' as const, entryIds, segmentIds };
+          ? { kind: 'header' as const, field, entryIds: [] }
+          : { kind: 'bar' as const, entryIds };
       }
       case 'splitter':
-        return { kind: 'splitter' as const, entryIds: [], segmentIds: [] };
+        return { kind: 'splitter' as const, entryIds: [] };
       case 'row':
-        return { kind: 'row' as const, entryIds, segmentIds };
+        return { kind: 'row' as const, entryIds };
       case 'gridCell':
         return domTarget.field !== undefined
-          ? { kind: 'gridCell' as const, field: domTarget.field, entryIds, segmentIds }
-          : { kind: 'gridCell' as const, entryIds, segmentIds };
+          ? { kind: 'gridCell' as const, field: domTarget.field, entryIds }
+          : { kind: 'gridCell' as const, entryIds };
       case 'bar':
-        return { kind: 'bar' as const, entryIds, segmentIds };
+        return { kind: 'bar' as const, entryIds };
     }
   }
 
@@ -1571,13 +1555,13 @@ export class GanttShell {
         const now = this.#options.wiring.now;
         if (now !== undefined) this.panToToday(now());
       },
-      selectAll: () => this.#segmentSelection.propose(this.#segmentSelection.selectableSegmentsInRowOrder()),
-      clearSelection: () => this.#segmentSelection.propose([]),
-      hasSelection: () => this.#segmentSelection.segmentIds.length > 0,
+      selectAll: () => this.#entrySelection.propose(this.#entrySelection.selectableEntriesInRowOrder()),
+      clearSelection: () => this.#entrySelection.propose([]),
+      hasSelection: () => this.#entrySelection.entryIds.length > 0,
       keyboardPanEnabled: () => this.#resolvedViewportGestures.keyboardPan,
-      nothingSelected: () => this.#segmentSelection.segmentIds.length === 0,
-      selectNextSegment: () => this.#segmentSelection.step(1),
-      selectPreviousSegment: () => this.#segmentSelection.step(-1),
+      nothingSelected: () => this.#entrySelection.entryIds.length === 0,
+      selectNextEntry: () => this.#entrySelection.step(1),
+      selectPreviousEntry: () => this.#entrySelection.step(-1),
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
       pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
       panToStart: () => this.#viewport.scroll.x.panTo(0),
@@ -1607,8 +1591,7 @@ export class GanttShell {
         Math.max(1, Math.floor(this.#viewport.visible.height / this.#frameSettings.rowHeight)),
       collapseRow: (id) => this.#treeCollapse.collapse(id),
       expandRow: (id) => this.#treeCollapse.expand(id),
-      selectOnFocus: (hit) =>
-        this.#segmentSelection.propose(this.#segmentSelection.selectableSegmentsOf(hit)),
+      selectOnFocus: (hit) => this.#entrySelection.propose(this.#entrySelection.selectableEntriesOf(hit)),
       setFocusedColumn: (field) => this.#columnChrome.setFocusedColumn(field),
       revealRow: (index) => {
         const y = this.#layout.rowTop(index);
@@ -1861,11 +1844,12 @@ export class GanttShell {
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
     bind('Alt+ArrowRight', 'freegantt.moveColumnRight');
     bind('Alt+ArrowLeft', 'freegantt.moveColumnLeft');
-    // #212, ADR 0010: the Selection holds Segments. So a keyboard user needs a way to move it from
-    // one bar of a row to the next. `interaction/keyboard-editing.ts` leaves a modified arrow alone,
-    // so this chord never also nudges the entry it just reselected.
-    bind('Mod+ArrowRight', 'freegantt.selectNextSegment');
-    bind('Mod+ArrowLeft', 'freegantt.selectPreviousSegment');
+    // #212, ADR 0010, ADR 0025: a row can draw several bars, one Entry each. So a keyboard user
+    // needs a way to move the Selection from one bar of a row to the next. `interaction/
+    // keyboard-editing.ts` leaves a modified arrow alone, so this chord never also nudges the entry
+    // it just reselected.
+    bind('Mod+ArrowRight', 'freegantt.selectNextEntry');
+    bind('Mod+ArrowLeft', 'freegantt.selectPreviousEntry');
     // #212, ADR 0010: the same command the right-click menu offers. `captureInEditable` stays at
     // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
     // both refuse the chord, the same way every other core binding already does.
@@ -1915,11 +1899,10 @@ export class GanttShell {
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
    *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below; finding 7). */
   #refreshAffordances(): void {
-    const sole = this.#segmentSelection.soleEntry();
+    const sole = this.#entrySelection.soleEntry();
     const ids = projectAffordances({
       hoveredBarId: this.#hoveredBarId,
-      soleSelectedEntryId: sole?.id,
-      selectedSegmentCountOfSoleEntry: sole?.segmentCount ?? 0,
+      soleSelectedEntryId: sole,
       barIdsForEntry: (id) => this.#layout.barIdsForEntry(id),
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
     });
@@ -2121,37 +2104,29 @@ export class GanttShell {
     panToTodayLine(this.#viewport, at, align, this.#frameSettings.todayLineMarginTicks);
   }
 
-  /** An id that names an Entry reveals the union of every Bar that Entry draws. An id that instead
-   *  names one of its Segments reveals the one Bar that draws that Segment. When an id could be
-   *  read either way, the Entry reading wins (ADR 0010, #212).
-   *  Both readings share one geometry path. It asks `FrameLayout` for the row's Bars, and
-   *  `barSpan` for each Bar's own x/width off the bound `TimeScale`. The box is included (#295),
-   *  so a `diamond()` row reveals its true glyph width. That is the same formula `computeFrame`
-   *  paints bars from, so the two can never drift apart. It then hands the resulting `Rect` to
-   *  `Viewport.reveal` (S1.9, D-S1.9-6). When nothing paints the named target, its own dates are
-   *  the target instead (`fallbackSpanBar`), so reveal never becomes a no-op.
-   *  Throws `RevealTargetNotFoundError` for an id the dataset reads as neither an Entry nor a
-   *  Segment (#227). `id`'s own type stays a union here: once neither reading resolves, nothing
-   *  says which one the caller meant. A collapsed ancestor expands before any Bar is read.
-   *  `FrameLayout` answers Bars from the post-collapse plan, so a row collapse hid answers empty.
-   *  A still-hidden row (filter) keeps the current y — it does not jump to 0.
-   *  A plain `string` is a legal id here. Both readings resolve by asking the store, never by
-   *  reading the brand. */
-  reveal(id: EntryId | SegmentId | string): void {
+  /** An id that names an Entry reveals the union of every Bar that Entry draws (ADR 0010, ADR 0025,
+   *  #212).
+   *  It asks `FrameLayout` for the row's Bars, and `barSpan` for each Bar's own x/width off the
+   *  bound `TimeScale`. The box is included (#295), so a `diamond()` row reveals its true glyph
+   *  width. That is the same formula `computeFrame` paints bars from, so the two can never drift
+   *  apart. It then hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6). When nothing
+   *  paints the named target, its own dates are the target instead (`fallbackSpanBar`), so reveal
+   *  never becomes a no-op.
+   *  Throws `RevealTargetNotFoundError` for an id the dataset does not hold (#227). A collapsed
+   *  ancestor expands before any Bar is read. `FrameLayout` answers Bars from the post-collapse
+   *  plan, so a row collapse hid answers empty. A still-hidden row (filter) keeps the current y —
+   *  it does not jump to 0.
+   *  A plain `string` is a legal id here — it resolves by asking the store, never by reading the
+   *  brand. */
+  reveal(id: EntryId | string): void {
     const entries = this.#options.dataset.entries;
     const entry = entries.get(id);
-    if (entry !== undefined) {
-      // A non-spanning Entry draws no bar (`spansTime`, ADR 0012), so there is no x/width to
-      // reveal. Only the row still shows (#232-adjacent gap surfaced by Build 1, no existing rule
-      // covered it).
-      if (!spansTime(entry)) return this.#revealRow(entry.id);
-      return this.#revealEntrySpan(entry.id, entry.start, entry.end);
-    }
-    const ownerId = entries.entryIdOfSegment(id);
-    const owner = ownerId === undefined ? undefined : entries.get(ownerId);
-    const segment = owner?.segments.find((candidate) => candidate.id === id);
-    if (owner === undefined || segment === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
-    return this.#revealSegmentSpan(owner.id, segment.id, segment.start, segment.end);
+    if (entry === undefined) throw new RevealTargetNotFoundError(id, 'reveal');
+    // A non-spanning Entry draws no bar (`spansTime`, ADR 0012), so there is no x/width to
+    // reveal. Only the row still shows (#232-adjacent gap surfaced by Build 1, no existing rule
+    // covered it).
+    if (!spansTime(entry)) return this.#revealRow(entry.id);
+    return this.#revealEntrySpan(entry.id, entry.start, entry.end);
   }
 
   /** Reveals a row with no bar to target — the vertical position only. The horizontal scroll
@@ -2178,21 +2153,6 @@ export class GanttShell {
       items.length > 0
         ? unionSpan(items, scale, minBarWidthPx)
         : barSpan(fallbackSpanBar(ownerId, start, end), scale, minBarWidthPx);
-    this.#revealRect(rowIndex, x, width);
-  }
-
-  /** Reveals one Segment: the Bar that draws it, box included (#295). A summary draws one bar over
-   *  the whole span, and that one bar stands for every Segment — so it is the target here too.
-   *  When no Bar draws this Segment at all, the Segment's own dates are the target. A sibling bar
-   *  never is: the caller named this Segment, and panning to another one would show the wrong
-   *  Segment. That is the rule `RovingFocus` relies on — a split Entry's other Segments must not
-   *  widen the pan past the bar that has focus. */
-  #revealSegmentSpan(ownerId: EntryId, targetSegmentId: SegmentId, start: Instant, end: Instant): void {
-    const rowIndex = this.#expandAndFindRow(ownerId);
-    const items = this.#layout.barsForEntry(ownerId);
-    const target = items.find((item) => this.#layout.segmentIdsForBar(item.id).includes(targetSegmentId));
-    const drawn = target ?? fallbackSpanBar(ownerId, start, end);
-    const { x, width } = barSpan(drawn, this.#viewport.timeScale, this.#frameSettings.minBarWidthPx);
     this.#revealRect(rowIndex, x, width);
   }
 

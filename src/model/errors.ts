@@ -14,7 +14,7 @@
 // (D-S5-44), so a baked-in prefix tells one of those two callers about a call it never made (#239).
 
 import type { FieldKey } from './field.js';
-import type { EntryId, SegmentId } from './ids.js';
+import type { EntryId } from './ids.js';
 import type { ChangeSet } from './change-set.js';
 import type { PluginId } from './plugin.js';
 import type { TimeSpan, TimeUnit } from './time.js';
@@ -45,13 +45,9 @@ export type BuiltInThrownCode =
   | 'unknown-preset'
   | 'invalid-preset'
   | 'entry-not-found'
-  | 'segment-not-found'
   | 'reveal-target-not-found'
   | 'duplicate-entry-id'
-  | 'duplicate-segment-id'
   | 'parent-cycle'
-  | 'segments-out-of-sync'
-  | 'empty-segments'
   | 'inverted-span'
   | 'unknown-field'
   | 'duplicate-field-key'
@@ -244,29 +240,8 @@ export class EntryNotFoundError extends FreeGanttError {
   }
 }
 
-/** `code: 'segment-not-found'` — an id `entries.removeSegments()` is given that names no Segment on
- *  any Entry. This matches `EntryNotFoundError`'s posture for `entries.remove`: the call throws
- *  before it stages anything, and the transaction discards whatever it staged for other ids. */
-export class SegmentNotFoundError extends FreeGanttError {
-  readonly segmentId: SegmentId;
-  readonly operation: string;
-
-  constructor(segmentId: SegmentId, operation: string) {
-    super(
-      'segment-not-found' satisfies BuiltInThrownCode,
-      `${operation}: there is no segment with id "${segmentId}". Check the id — nothing was removed.`,
-    );
-    this.name = 'SegmentNotFoundError';
-    this.segmentId = segmentId;
-    this.operation = operation;
-  }
-}
-
-/** `code: 'reveal-target-not-found'` — `reveal(id)` given an id the dataset reads as neither an
- *  Entry nor a Segment (#212, ADR 0010, issue #227). `reveal` alone takes `EntryId | SegmentId`; once
- *  neither reading resolves, nothing tells which one the caller meant, so the message names both
- *  rather than picking `EntryNotFoundError` or `SegmentNotFoundError` and forging the id's brand to
- *  match. */
+/** `code: 'reveal-target-not-found'` — `reveal(id)` given an id the dataset holds no Entry for
+ *  (#212, ADR 0010, issue #227, retired from Segment to Entry alone by ADR 0026). */
 export class RevealTargetNotFoundError extends FreeGanttError {
   readonly targetId: string;
   readonly operation: string;
@@ -274,7 +249,7 @@ export class RevealTargetNotFoundError extends FreeGanttError {
   constructor(targetId: string, operation: string) {
     super(
       'reveal-target-not-found' satisfies BuiltInThrownCode,
-      `${operation}: "${targetId}" names neither an entry nor a segment. Check the id — it must be one of the two.`,
+      `${operation}: "${targetId}" names no entry. Check the id.`,
     );
     this.name = 'RevealTargetNotFoundError';
     this.targetId = targetId;
@@ -296,27 +271,6 @@ export class DuplicateEntryIdError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-segment-id'` — two Segments in the store share one `SegmentId`: authored twice
- *  in the same `segments` array, authored on two different Entries, or authored on construction
- *  (#212, ADR 0010). A `SegmentId` is the Selection's identity, so a duplicate is rejected the same
- *  way a duplicate `EntryId` is — before anything stages. `operation` names which of the three
- *  throwing calls it was (`entries.add`, `entries.update`, or `construction`), the same way
- *  `EntryNotFoundError`/`SegmentNotFoundError` name theirs. */
-export class DuplicateSegmentIdError extends FreeGanttError {
-  readonly segmentId: SegmentId;
-  readonly operation: string;
-
-  constructor(segmentId: SegmentId, operation: string) {
-    super(
-      'duplicate-segment-id' satisfies BuiltInThrownCode,
-      `${operation}: a segment with id "${segmentId}" already exists. Give this segment a different id, or leave its id out to move the one that is there.`,
-    );
-    this.name = 'DuplicateSegmentIdError';
-    this.segmentId = segmentId;
-    this.operation = operation;
-  }
-}
-
 /** `code: 'parent-cycle'` — a `parentId` edit that would make an entry its own ancestor, self-parenting
  * included (S2.3 §1.3). */
 export class ParentCycleError extends FreeGanttError {
@@ -332,85 +286,30 @@ export class ParentCycleError extends FreeGanttError {
   }
 }
 
-/** `code: 'segments-out-of-sync'` — a `start`/`end` write and the entry's Segments disagree, either
- *  way (D-S4-30, narrowed by #212; widened by the #212 fix-plan review, finding S3):
- *  - `'ambiguous'`: the write names `start`/`end` and no Segments, on an entry that draws several.
- *    The envelope spans the Segments, so moving it alone says nothing about which stretch moved.
- *  - `'conflicting'`: the write names both `start`/`end` and `segments`, and the segments' own
- *    envelope is not the `start`/`end` named alongside them — one edit cannot mean both.
- *  An entry that draws one Segment never sees either: that Segment *is* the envelope, so the write
- *  updates it in the same transaction and the two halves can only agree.
- *
- *  `operation` comes from the caller, because `reconcileEnvelope` serves two of them (D-S5-44). */
-export class SegmentsOutOfSyncError extends FreeGanttError {
-  readonly entryId: EntryId;
-  readonly reason: 'ambiguous' | 'conflicting';
-  readonly operation: string;
-
-  constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting', operation: string) {
-    super(
-      'segments-out-of-sync' satisfies BuiltInThrownCode,
-      reason === 'ambiguous'
-        ? `${operation}: "${entryId}" draws several segments, so start and end alone do not say which one moves. Write the segments instead.`
-        : `${operation}: the start and end written for "${entryId}" do not match the segments in the same edit. Write the segments alone, and let the library work out the start and end.`,
-    );
-    this.name = 'SegmentsOutOfSyncError';
-    this.entryId = entryId;
-    this.reason = reason;
-    this.operation = operation;
-  }
-}
-
-/** `code: 'empty-segments'` — `entries.update(id, { segments: [] })`: every stored Entry keeps at
- *  least one Segment (#212), so an update cannot empty the list out from under it. `entries.add`
- *  reads `segments: []` differently and mints one Segment over the entry's own span (S2.3 §1.1) —
- *  there, `[]` means "the caller named none", and ingest has a whole span to fall back on. An update
- *  has no such span to invent one from without silently discarding the Segment ids already there, so
- *  it refuses instead. */
-export class EmptySegmentsError extends FreeGanttError {
-  readonly entryId: EntryId;
-  readonly operation: string;
-
-  constructor(entryId: EntryId, operation: string) {
-    super(
-      'empty-segments' satisfies BuiltInThrownCode,
-      `${operation}: "${entryId}" must keep at least one segment. To remove segments, call entries.removeSegments; to remove the whole entry, call entries.remove.`,
-    );
-    this.name = 'EmptySegmentsError';
-    this.entryId = entryId;
-    this.operation = operation;
-  }
-}
-
 /** `code: 'inverted-span'` — a span whose `end` sits before its `start`. The repo owner refused this
  *  at the mutation boundary (2026-09-06 ruling, #143): the write is rejected, not stored and rendered,
  *  and not silently collapsed. A zero-length span (`start === end`) stays legal — it is the empty
  *  half-open interval `[t, t)`, a different question from an inverted one.
  *
  *  The constructor is structural for the reason `InvalidSnapIncrementError`'s is (s5-231 review, F4).
- *  It names the Entry the consumer wrote, names the Segment as well when the fault is a Segment's
- *  own, and prints both instants — a bulk load whose zone shifted by an hour is invisible without
- *  them. It takes `operation` from the caller, because an `EditExtender` cascade reaches the same
- *  check as `entries.update()` does. */
+ *  It names the Entry the consumer wrote and prints both instants — a bulk load whose zone shifted by
+ *  an hour is invisible without them. It takes `operation` from the caller, because an `EditExtender`
+ *  cascade reaches the same check as `entries.update()` does. */
 export class InvertedSpanError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly span: TimeSpan;
   readonly operation: string;
-  readonly segmentId?: SegmentId;
 
-  constructor(entryId: EntryId, span: TimeSpan, operation: string, segmentId?: SegmentId) {
+  constructor(entryId: EntryId, span: TimeSpan, operation: string) {
     super(
       'inverted-span' satisfies BuiltInThrownCode,
-      `${operation}: ` +
-        (segmentId === undefined ? `"${entryId}"` : `segment "${segmentId}" of "${entryId}"`) +
-        ` ends at ${span.end} and starts at ${span.start}, so it ends before it starts. ` +
-        `Swap the two, or fix the value that is wrong.`,
+      `${operation}: "${entryId}" ends at ${span.end} and starts at ${span.start}, so it ends before ` +
+        `it starts. Swap the two, or fix the value that is wrong.`,
     );
     this.name = 'InvertedSpanError';
     this.entryId = entryId;
     this.span = span;
     this.operation = operation;
-    if (segmentId !== undefined) this.segmentId = segmentId;
   }
 }
 
@@ -937,8 +836,8 @@ export class UnknownCommandError extends FreeGanttError {
 /** `code: 'empty-covers'` — an empty cover list, from either door that takes one: `notCovered([])`,
  *  or a shading rule written `{ covers: [] }` (#404). An empty list has no complement to compute:
  *  every instant would read as "not covered", which paints the whole window and is never what a
- *  plugin author meant to write. Modeled on `EmptySegmentsError`'s shape: a consumer mistake at the
- *  config boundary, not a value core derives. `operation` names the caller, because two of them
+ *  plugin author meant to write. A consumer mistake at the config boundary, not a value core
+ *  derives. `operation` names the caller, because two of them
  *  reach this and a baked-in prefix would tell one about a call it never made (see the file header,
  *  #239; #404 review F3). */
 export class EmptyCoversError extends FreeGanttError {

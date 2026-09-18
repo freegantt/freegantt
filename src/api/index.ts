@@ -18,8 +18,8 @@ export type {
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';
-// D-S5-44: the rigid move a plugin's cascade writes honestly, instead of a several-Segment
-// envelope-only write `data/` refuses.
+// D-S5-44 (ADR 0026 retired the several-Segment case it names): the rigid move a plugin's cascade
+// writes honestly, for the one span an Entry has.
 export { moveEntryTo } from './dataset-plugin.js';
 // The extension hook's own types (D4, D-S2-6): a plugin that writes an extender by hand, rather than
 // composing one inline, names these. EntryEdit is the write side — what a cascade returns, and what
@@ -237,13 +237,9 @@ export {
   UnknownPresetError,
   InvalidPresetError,
   EntryNotFoundError,
-  SegmentNotFoundError,
   RevealTargetNotFoundError,
   DuplicateEntryIdError,
-  DuplicateSegmentIdError,
   ParentCycleError,
-  SegmentsOutOfSyncError,
-  EmptySegmentsError,
   EmptyCoversError,
   InvertedSpanError,
   UnknownFieldError,
@@ -282,7 +278,7 @@ export {
   barIdFromDataset,
   entryIdFromDataset,
   entryIdOfBar,
-  segmentIndexOfBar,
+  partIndexOfBar,
   changeSetId,
 } from '../model/index.js';
 export type { PluginId, Disposer, KeyChord } from '../model/index.js';
@@ -292,8 +288,6 @@ export type {
   Entry,
   StoredEntry,
   EntryId,
-  Segment,
-  SegmentId,
   RowId,
   BarId,
   Instant,
@@ -308,7 +302,6 @@ export type {
 // Public because a consumer that types its own entry builder needs to name them.
 export type {
   EntryInput,
-  SegmentInput,
   InstantInput,
   TimeSpanInput,
   DateOnlyEndRule,
@@ -392,10 +385,10 @@ export { wholeEntryBar } from '../layout/index.js';
 // ADR 0022: the producer for a marker that must hold its size at every zoom — `diamond()`'s glyph is
 // the shipped case. `barSpan` honours the Bar's `box` ahead of the span-and-floor path.
 export { fixedWidthBar } from '../layout/index.js';
-// ADR 0023: the symmetric pair behind `EntryVariant.items` — a variant with no `items` key gets
-// `followSegments`, and `summary()` states `ignoreSegments` explicitly. An author who wants either
-// shape on a variant of their own names it the same way: `items: ignoreSegments`.
-export { ignoreSegments, followSegments } from '../layout/index.js';
+// ADR 0023, ADR 0026: `EntryVariant.bars`'s own default — a variant with no `bars` key gets this one
+// Bar producer, and `summary()` states it explicitly too, for the same reason `BarProducer` itself is
+// exported above (an author naming it directly on a variant of their own).
+export { unclaimedSpan } from '../layout/index.js';
 // ADR 0022 §1: core's three shipped looks, as factories over `EntryVariant` rather than private
 // object literals — `variants: [summary({ when: myRule })]` reuses core's rail instead of
 // hand-building `.fg-bar-summary` again. `diamond()` is not seeded into any Gantt; no row wears it

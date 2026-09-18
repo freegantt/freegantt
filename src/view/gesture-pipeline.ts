@@ -17,7 +17,6 @@ import type {
   ProposedEdit,
   RaiseError,
   Refusable,
-  SegmentId,
   ProposedEdits,
 } from '../model/index.js';
 import { EntryNotFoundError, entryId, barId, spansTime } from '../model/index.js';
@@ -29,8 +28,7 @@ import {
   buildGestureDroppedReport,
   buildRefusalReport,
 } from '../data/error-reporting.js';
-import { isEnvelopeRefusal, reconcileExtenderEditsForPreview } from '../data/entry-reader.js';
-import { effectiveEntriesFor, entryAfterEdits } from '../data/entry-tree.js';
+import { entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
 import type {
@@ -59,11 +57,8 @@ export interface GesturePipelineDeps {
    *  showing preset's. `'tick'` still arrives unresolved: only a gesture knows which preset is
    *  measuring it. */
   snap(): SnapSetting;
-  /** The Selection (#212, ADR 0010) — the same Segment ids `render/dom` paints from. A draft reads
-   *  it, so a gesture acts on exactly the bars that paint selected, never more. */
-  selectedSegmentIds(): readonly SegmentId[];
-  /** The Entries those Segments belong to, deduped, in row order — one projection, resolved by the
-   *  shell, so this file never turns a Segment into an Entry itself. */
+  /** The Selection (#212, ADR 0010, ADR 0025) — the Entry ids `render/dom` paints from, in row
+   *  order. */
   selectedEntryIds(): readonly EntryId[];
   entryById(id: EntryId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
@@ -216,11 +211,6 @@ export class GesturePipeline {
     if (bars.length === 0) return undefined;
     const anchor = bars[0]!;
     const { entries, paintedOnly } = this.#draftedEntries(bars, capability);
-    // Review finding 9: the Selection cannot change mid-drag — the arming grab is the last write it
-    // sees before `commit`/`cancel` ends the gesture — so this `Set` is built once here, not once per
-    // rAF inside `#draftFor`. A select-all held through a drag no longer allocates a Set of every
-    // Segment in the Dataset sixty times a second.
-    const selectedSegmentIds = new Set(this.#deps.selectedSegmentIds());
     const proposalFor = (dxPx: number, options: DraftOptions | undefined): GestureProposal =>
       this.#proposalFor({
         gesture,
@@ -229,7 +219,6 @@ export class GesturePipeline {
         grabbed: anchor.id,
         dxPx,
         options,
-        selectedSegmentIds,
       });
     return {
       preview: (dxPx, options) => {
@@ -348,16 +337,14 @@ export class GesturePipeline {
     grabbed: EntryId;
     dxPx: number;
     options: DraftOptions | undefined;
-    selectedSegmentIds: ReadonlySet<SegmentId>;
   }): GestureProposal {
-    const { gesture, entries, paintedOnly, grabbed, dxPx, options, selectedSegmentIds } = input;
+    const { gesture, entries, paintedOnly, grabbed, dxPx, options } = input;
     const base = {
       zone: this.#deps.timeZone(),
       scale: this.#deps.timeScale(),
       snap: this.#resolveSnap(options?.suspendSnap),
       entries,
       dxPx,
-      selectedSegmentIds,
     };
     const paints =
       gesture.kind === 'resize' ? draftForResize({ ...base, edge: gesture.edge }) : draftForMove(base);
@@ -483,25 +470,23 @@ export class GesturePipeline {
    *  and a keydown listener calls `session.nudge()`, and both discard the Promise. So a throw out of
    *  this becomes an uncaught error or an unhandled rejection that no consumer code can catch. The
    *  gesture answers `false` instead — the write did not land — and the report says which of the
-   *  three things happened, because the boolean cannot:
+   *  two things happened, because the boolean cannot:
    *
    *  - The entry is gone. Another call removed it before the write (`inline-editing.ts`'s cell
    *    commit folds the same case, #137 F10). The user's own edit is moot now.
-   *  - The store refused the write. An envelope-only cascade against a several-Segment Entry is the
-   *    one core raises (D-S5-44), and the preview path already drops that Entry's ghost for the same
-   *    reason — so the two paths now tell one story about one edit.
    *  - Anything else is a fault, and `#reportCommitFault` says so. Calling a plugin's bug a refusal
-   *    is the misreport #258 and #332 both ruled out, so the fault keeps its own code and severity. */
+   *    is the misreport #258 and #332 both ruled out, so the fault keeps its own code and severity.
+   *
+   *  ADR 0026 retired the third outcome this used to report: an envelope-only cascade refused against
+   *  a several-Segment Entry (D-S5-44). A Bar is one child Entry by default now, so there is no
+   *  envelope left to refuse — `start`/`end` are ordinary Fields, and the extender's cascade reconciles
+   *  through `data/dataset-state.ts`'s `toEditsReading`, the same call the preview path makes. */
   #finishCommit(finish: () => boolean, refusal: GestureRefusal): boolean {
     try {
       return finish();
     } catch (error) {
       if (error instanceof EntryNotFoundError) {
         this.#reportGestureDropped(refusal.entryId, refusal.event, 'entry-gone');
-        return false;
-      }
-      if (isEnvelopeRefusal(error)) {
-        this.#reportGestureDropped(refusal.entryId, refusal.event, 'write-refused');
         return false;
       }
       this.#reportCommitFault(refusal, error);
@@ -670,44 +655,28 @@ export class GesturePipeline {
    *  pseudocode the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on
    *  every `pointermove`. No wired seam (P1's default) means no ghost, which is what an unoccupied
    *  hook writes anyway — behaviorally identical to before this hook existed. The seam hands over
-   *  storage-shaped edits, because `api/Dataset.extraEditsFor` reads the occupant's loose writes
-   *  through the dataset's own zone first (#209 C3): pixels need an `Instant`, and `layout/` may not
-   *  derive one (I10).
+   *  storage-shaped, already-reconciled edits: `api/Dataset.extraEditsFor` (this dep's own supplier,
+   *  `data/dataset-state.ts`) reads the occupant's loose writes through `toEditsReading`, the same
+   *  call the commit path makes (ADR 0026 — `start`/`end` are ordinary Fields now, so there is no
+   *  envelope reconciliation left for this file to redo). So a drag previews exactly what it commits
+   *  (#212 R2 fix-plan review) with no second pass here.
    *
-   *  The raw hook result is reconciled the same way `data/build-commit-change-set.ts` reconciles it
-   *  at commit, against the same effective state (committed entries overlaid with this draft) — so a
-   *  drag previews exactly what it commits (#212 R2 fix-plan review). Before this, the preview
-   *  painted the hook's raw, unreconciled edit — a plugin cascading `start` alone onto a
-   *  several-Segment Entry could preview one span and then commit a different one.
-   *
-   *  This runs inside a rAF callback with nothing to catch a throw, and the reconciliation a several-
-   *  Segment envelope-only cascade owes is a refusal (`SegmentsOutOfSyncError`, D-S5-44) — so this
-   *  calls `reconcileExtenderEditsForPreview`, not `reconcileExtenderEdits`: a refused edit paints no
-   *  ghost for that Entry this frame, and the commit path still throws the same edit for real.
-   *
-   *  #332: a bug in the extender itself (a bare `Error`, `UnknownFieldError`, anything
-   *  `isEnvelopeRefusal` does not name) is not a refusal, and `reconcileExtenderEditsWith` rethrows it
-   *  unchanged from *either* call this makes. The `try` below catches it, the one place on this rAF
-   *  path that can — recovered the same way `render/dom`'s `callRenderer` recovers a bad renderer: this
-   *  frame paints with no cascade ghost, same as no extender installed, and the drag carries on. */
+   *  #332: a bug in the extender itself (a bare `Error`, `UnknownFieldError`, an inverted span) still
+   *  throws out of `extraEditsFor`. The `try` below catches it, the one place on this rAF path that
+   *  can — recovered the same way `render/dom`'s `callRenderer` recovers a bad renderer: this frame
+   *  paints with no cascade ghost, same as no extender installed, and the drag carries on. */
   #extraFor(draft: ProposedEdits): ProposedEdits {
     const extraEditsFor = this.#deps.extraEditsFor;
     if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
     try {
       const entries = this.#deps.committedEntriesById();
-      const raw = extraEditsFor({
+      return extraEditsFor({
         entries,
         proposed: draft,
         entryAfterEdits: (id) => entryAfterEdits(entries, draft, entryId(id)),
         addedEntryIds: EMPTY_ENTRY_IDS,
         removedEntryIds: EMPTY_ENTRY_IDS,
       });
-      // No hook installed is the default, and it writes nothing — so the frame reconciles nothing and
-      // allocates nothing (I5). A hook that did write costs one entry per id it named:
-      // `reconcileExtenderEditsForPreview` reads only the ids its own edits name, and `entries` above
-      // is the supplier's cached map, not a copy this frame made.
-      if (raw.size === 0) return raw;
-      return reconcileExtenderEditsForPreview(effectiveEntriesFor(entries, draft, raw.keys()), raw);
     } catch (error) {
       this.#reportExtenderFault(error);
       return NO_EXTRA_EDITS;

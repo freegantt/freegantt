@@ -14,7 +14,6 @@ import type {
   FieldKey,
   FieldValue,
   Instant,
-  Segment,
   StoredEntry,
 } from '../model/index.js';
 import { UnknownFieldError } from '../model/index.js';
@@ -38,8 +37,6 @@ export interface EntrySource {
   readField(entry: StoredEntry, key: FieldKey): unknown;
   durationOf(entry: StoredEntry): Duration | undefined;
 }
-
-const NO_SEGMENTS: readonly Segment[] = Object.freeze([]);
 
 /**
  * One row, as it stands now.
@@ -76,10 +73,6 @@ class LiveEntry implements Entry {
 
   get end(): Instant | undefined {
     return this.#stored()?.end;
-  }
-
-  get segments(): readonly Segment[] {
-    return this.#stored()?.segments ?? NO_SEGMENTS;
   }
 
   get hasChildren(): boolean {
@@ -143,8 +136,8 @@ class LiveEntry implements Entry {
    * `JSON.stringify(entry)` hands back the stored values, not `{"id": …}` alone.
    *
    * Every value on this row is a getter, and `JSON.stringify` reads own enumerable properties only,
-   * so without this hook a consumer who serializes `entries.all` loses every name, date and Segment
-   * and is told nothing. It is deliberately **not** on the `Entry` interface: `toInput()` is the one
+   * so without this hook a consumer who serializes `entries.all` loses every name and date and is
+   * told nothing. It is deliberately **not** on the `Entry` interface: `toInput()` is the one
    * copy door a caller names (ADR 0017), and this is the platform calling that same door.
    */
   toJSON(): EntryInput {
@@ -160,7 +153,6 @@ class LiveEntry implements Entry {
       ...(stored.parentId !== undefined ? { parentId: stored.parentId } : {}),
       ...(stored.start !== undefined ? { start: stored.start } : {}),
       ...(stored.end !== undefined ? { end: stored.end } : {}),
-      segments: stored.segments,
       props: { ...stored.props },
     };
   }

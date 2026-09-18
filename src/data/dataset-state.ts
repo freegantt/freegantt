@@ -15,7 +15,6 @@ import type {
   FieldKey,
   FieldType,
   Instant,
-  SegmentId,
   Disposer,
   EditExtender,
   EditRequest,
@@ -25,10 +24,10 @@ import type {
   HierarchySource,
   HierarchySourceWrapper,
 } from '../model/index.js';
-import { changeSetId, mintedSegmentId } from '../model/index.js';
+import { changeSetId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { authoredSegmentIdsOf, toEditsReading, toEntries } from './entry-reader.js';
+import { toEditsReading, toEntries } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
@@ -121,15 +120,6 @@ export class DatasetState implements Dataset {
   #datasetRevision = 0;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
-  /** Per-instance for the same reason (#212) — the id a Segment nobody named gets. */
-  #segmentCounter = 0;
-  /** Every `SegmentId` this construction's own `entries` input already named, reserved before the
-   *  first mint (#212) — the counter and an authored id share one format (`sg${n}`), so a document
-   *  round trip can otherwise hand a minted id to the same number an authored one already claimed. */
-  readonly #reservedSegmentIds: ReadonlySet<SegmentId>;
-  /** `false` until `this.entries` is assigned — `#segmentIdTaken` cannot read the store before it
-   *  exists, which is exactly the window `#reservedSegmentIds` covers on its own. */
-  #entryStoreReady = false;
   readonly #history: History;
   readonly #disposePlugins: Disposer | undefined;
 
@@ -155,11 +145,9 @@ export class DatasetState implements Dataset {
           ? undefined
           : { cache: this.computedCache, datasetRevision: this.#datasetRevision },
     });
-    this.#reservedSegmentIds = authoredSegmentIdsOf(options.entries);
     this.#entryContext = {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
-      mintSegmentId: () => this.#nextSegmentId(),
     };
     this.entries = new EntryStore(
       toEntries(options.entries, this.#entryContext, this.fields),
@@ -169,7 +157,6 @@ export class DatasetState implements Dataset {
       this,
       createErrorRaiser(this.bus),
     );
-    this.#entryStoreReady = true;
     this.pluginStores = new PluginStores(this);
     // Plugins set up here and nowhere else: the entry store exists, so a `setup`-time store write
     // wraps itself in a transaction, and the construction Rollup below has not run, so a Field a
@@ -228,12 +215,11 @@ export class DatasetState implements Dataset {
   }
 
   /** The commit path's own door onto the extension hook (#232) — calls the occupant exactly once,
-   *  the same as `extraEditsFor` above, but also reports which of `start`/`end`/`segments` the
-   *  occupant's own loose edit named on each Entry. `buildCommitChangeSet` needs that fact to tell
-   *  the hook's authored envelope keys from the ones `reconcileEnvelope` derives on the hook's
-   *  behalf — `ProposedEdit.proposedKeys` alone conflates the two (#232). Not part of the public
-   *  surface: an app author never reads an envelope key list, only the reconciled `ProposedEdits`
-   *  `extraEditsFor` already gives them. */
+   *  the same as `extraEditsFor` above, and hands `buildCommitChangeSet` the occupant's stored edits
+   *  to merge against the body's own (ADR 0026 — `start`/`end` are ordinary Fields now, so there is
+   *  no envelope reconciliation left to report here). Not part of the public surface: an app author
+   *  never reads this reading, only the reconciled `ProposedEdits` `extraEditsFor` already gives
+   *  them. */
   extraEditsReadingFor(request: EditRequest): EditsReading {
     return toEditsReading(
       this.#callExtender(request),
@@ -268,35 +254,9 @@ export class DatasetState implements Dataset {
     this.#disposePlugins?.();
   }
 
-  #nextSegmentId(): SegmentId {
-    let candidate: SegmentId;
-    do {
-      this.#segmentCounter += 1;
-      candidate = mintedSegmentId(this.#segmentCounter);
-    } while (this.#segmentIdTaken(candidate));
-    return candidate;
-  }
-
-  /** `id` already names a Segment — reserved by this construction's own input, or already on an
-   *  Entry the store holds (#212). A minted id and an authored one share one counter format
-   *  (`sg${n}`), so skipping a taken candidate is what keeps a document round trip from handing the
-   *  two the same number. */
-  #segmentIdTaken(id: SegmentId): boolean {
-    if (this.#reservedSegmentIds.has(id)) return true;
-    if (!this.#entryStoreReady) return false;
-    return this.entries.entryIdOfSegment(id) !== undefined;
-  }
-
   nextChangeSetId(): ChangeSetId {
     this.#changeSetCounter += 1;
     return changeSetId(this.#changeSetCounter);
-  }
-
-  /** `TransactionData.mintSegmentId` (ADR 0012) — `build-commit-change-set.ts`'s real counter for a
-   *  plugin cascade that turns a dateless Entry spanning for the first time. Shares `#nextSegmentId`
-   *  with construction ingest (`toEntries`), so a minted id never collides with an authored one. */
-  mintSegmentId(): SegmentId {
-    return this.#nextSegmentId();
   }
 
   /** Call: `dataset.field('cost')` — the resolved declaration, or `undefined`. */

@@ -15,7 +15,6 @@ import type {
   GridColumn,
   Instant,
   Refusable,
-  SegmentId,
 } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 import type { ResolvedTheme } from './theme.js';
@@ -47,12 +46,12 @@ export interface GridColumnsChange {
   readonly to: readonly GridColumn[];
 }
 
-/** S3, D-S3-10/D-S3-22; ADR 0010, #212. Fires on the Gantt, never the Dataset — selection is Gantt
- *  state, so two Gantt instances bound to one Dataset can hold different selections. It carries
- *  Segment ids, because the Selection holds Segments. */
+/** S3, D-S3-10/D-S3-22; ADR 0010, ADR 0025, #212. Fires on the Gantt, never the Dataset — selection
+ *  is Gantt state, so two Gantt instances bound to one Dataset can hold different selections. It
+ *  carries Entry ids, because the Selection holds Entries. */
 export interface SelectionChange {
-  readonly from: readonly SegmentId[];
-  readonly to: readonly SegmentId[];
+  readonly from: readonly EntryId[];
+  readonly to: readonly EntryId[];
 }
 
 /** S5.8, D-S5-19: what `beforeEntryEdit`/`entryEdit` carry — named `EntryFieldEdit`, not `EntryEdit`

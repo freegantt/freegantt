@@ -1,22 +1,7 @@
 // model/ is types + brand/id helpers only — zero runtime beyond this, zero dependencies (plans/01 §1.1).
 
-import type { EntryId, SegmentId } from './ids.js';
-import type { Instant, InstantInput, TimeSpan, TimeSpanInput } from './time.js';
-
-/** One dated stretch of an Entry, and the unit the Selection holds (#212, ADR 0010). Interrupted
- * work stores several; an Entry that never mentioned one stores a single Segment over its own span,
- * filled at ingest, so every Entry reads the same way and no caller carries a "no segments" branch.
- * A Segment carries an id because a Selection, an undo and a `removeSegments` call all have to name
- * the same stretch after its siblings move — see `SegmentId`. */
-export interface Segment extends TimeSpan {
-  id: SegmentId;
-}
-
-/** What a consumer writes for one Segment. The id is theirs to name and optional: an omitted id is
- * minted at ingest from the Dataset's own counter. `Segment` is itself a valid `SegmentInput`. */
-export interface SegmentInput extends TimeSpanInput {
-  id?: string;
-}
+import type { EntryId } from './ids.js';
+import type { Instant, InstantInput, TimeSpan } from './time.js';
 
 /** The values one row stores at one moment (ADR 0017). `Entry` (`entry.ts`) is the other half of
  *  the pair: it answers questions about a row **now** — `read(key)`, `children()`, `duration()`,
@@ -38,21 +23,16 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
    *  field: a row with no name still stores, still spans, still draws — core defaults nothing off
    *  it beyond the Grid's `name` column and the default bar label reading the same Field. */
   name?: string;
-  /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if it holds a
-   * Segment and draws a bar. */
+  /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if this Entry
+   * draws a bar. */
   start?: Instant;
   /** Exclusive — see plans/01 §5. Omitted iff this Entry does not span (ADR 0012); see `start`. */
   end?: Instant;
-  /** Every stretch this Entry draws. Empty when the Entry does not span (ADR 0012, revises #212's
-   * "never empty"). A spanning Entry stores at least one Segment: interrupted work stores several
-   * bars on one row; everything else stores the single Segment ingest filled in over `[start, end)`.
-   * `start` and `end` stay the envelope over all of them. */
-  segments: readonly Segment[];
   /** Consumer-owned. A Field key is the whole address (ADR 0011): `{ key: 'cost' }` reads and writes
-   *  `entry.props.cost`, and nothing declares a `source`. Always present — ingest fills `{}`, the
-   *  same rule `segments` already follows, so no reader carries a "no props" branch. `Partial<TProps>`
-   *  because a required key on `TProps` is still one a stored record may lack: `add({ id, name })`
-   *  reaches that state on its own, with no write to refuse it. */
+   *  `entry.props.cost`, and nothing declares a `source`. Always present — ingest fills `{}`, so no
+   *  reader carries a "no props" branch. `Partial<TProps>` because a required key on `TProps` is
+   *  still one a stored record may lack: `add({ id, name })` reaches that state on its own, with no
+   *  write to refuse it. */
   props: Readonly<Partial<TProps>>;
 }
 
@@ -103,15 +83,12 @@ export interface EntryInput<TProps = Record<string, unknown>> {
    *  column, and the default bar label, both read an empty value. */
   name?: string | undefined;
   /** Optional on every kind (ADR 0012, revises this comment's earlier "required for an authored
-   * span"): an Entry spans if and only if `start` and `end` are both present, and holds no Segment
-   * and draws no bar otherwise. One date with no other is legal and stores as written. An unreadable
-   * date is still an `InvalidInstantError`. */
+   * span"): an Entry spans if and only if `start` and `end` are both present, and draws no bar
+   * otherwise. One date with no other is legal and stores as written. An unreadable date is still an
+   * `InvalidInstantError`. */
   start?: InstantInput | undefined;
   /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
   end?: InstantInput | undefined;
-  /** Interrupted work — renders as multiple bars on one row. Omit it and ingest fills one Segment
-   * over `[start, end)`, so a stored `Entry` always has at least one. */
-  segments?: readonly SegmentInput[] | undefined;
   /** Passenger data, and a bag a consumer already holds (ADR 0011, Q15). A declared Field key belongs
    *  at the top level instead — `entries.add({ id, name, owner: 'Ali' })` — and naming one both here
    *  and at the top throws. An unknown top-level key, or a key here that names a core key, warns and
@@ -148,13 +125,13 @@ export type PropsEdit<TProps> = { [K in keyof TProps]?: TProps[K] | undefined };
  * (`props?: never` below is what makes `{ props: { owner: 'Sam' } }` fail to compile, the same brand
  * that keeps a `ProposedEdit` from masquerading as this type).
  *
- * An edit may remove exactly what a stored Entry may lack: `segments` is required on `Entry`, so
- * `{ segments: undefined }` does not compile, while `{ parentId: undefined }`, `{ name: undefined }`
- * (#421 C5) and (after ADR 0012) `{ start: undefined }` do. Every declared consumer key is removable
- * without exception, because `props` is `Partial<TProps>` everywhere already. */
+ * An edit may remove exactly what a stored Entry may lack: `{ parentId: undefined }`,
+ * `{ name: undefined }` (#421 C5) and (after ADR 0012) `{ start: undefined }` all compile. Every
+ * declared consumer key is removable without exception, because `props` is `Partial<TProps>`
+ * everywhere already. */
 // `Exclude<…, undefined>` on the non-removable arm is load-bearing. `EntryInput`'s optional keys
 // admit an explicit `undefined` so that `entries.add({ ...entry.toInput() })` compiles (ADR 0017),
-// and without this the widening would leak here and quietly make `segments` removable.
+// and without this the widening would leak into a key that must never be removed by accident.
 export type EntryEdit<TProps = Record<string, unknown>> = {
   [K in keyof EntryEnvelope<TProps>]?: K extends RemovableEntryKey
     ? EntryEnvelope<TProps>[K] | undefined
@@ -225,7 +202,7 @@ export interface EditRequest {
   /** `id` as this transaction's own body edits leave it: committed state overlaid with `proposed`
    *  (and, at commit, this transaction's own adds). `undefined` when `id` names no entry there either.
    *  `entries.get(id)` is the wrong read for judging an in-flight edit against current shape — it
-   *  still shows an Entry's Segments as they were before this transaction rewrote them, so a cascade
+   *  still shows an Entry's dates as they were before this transaction rewrote them, so a cascade
    *  reasoning from it can propose a write core then refuses against the shape it actually has
    *  (D-S5-45). A per-id lookup, not a second map on this object: the drag preview calls this every
    *  rAF frame and must not copy the dataset to answer it (I5). */
@@ -245,7 +222,6 @@ export interface EditRequest {
  *  `ExtenderWrapper` — the type a plugin author writes against — can name it (D-S5-23).
  *
  *  What it returns is read by the same rules `dataset.entries.update(id, edit)` obeys (#209): a Field
- *  no Dataset declares is refused (`UnknownFieldError`), and an edit that moves `start`/`end` on an
- *  Entry with several Segments without restating `segments` is refused too (`SegmentsOutOfSyncError`,
- *  D-S5-44) — `moveEntryTo` writes that move. An id nothing in the transaction knows is skipped. */
+ *  no Dataset declares is refused (`UnknownFieldError`). `moveEntryTo` is the door a cascade uses to
+ *  slide an Entry's whole span. An id nothing in the transaction knows is skipped. */
 export type EditExtender = (request: EditRequest) => EntryEdits;

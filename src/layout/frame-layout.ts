@@ -7,13 +7,12 @@
 
 import { placeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
-import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
+import { FrameMemory } from './frame-memory.js';
 import { DecorationRunner } from './decorations.js';
 import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
-import { entryIdOfBar } from '../model/index.js';
-import type { ChangeSet, EntryId, BarId, RowId, SegmentId } from '../model/index.js';
+import type { ChangeSet, EntryId, BarId, RowId } from '../model/index.js';
 import type { Bar } from './items/item.js';
 
 /** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
@@ -23,8 +22,6 @@ export interface FrameLayoutView {
   barsForEntry(id: EntryId): readonly Bar[];
   barIdsForEntry(id: EntryId): readonly BarId[];
   entryIdsForRow(id: RowId): readonly EntryId[];
-  segmentIdsForBar(id: BarId): readonly SegmentId[];
-  segmentIdsForRow(id: RowId): readonly SegmentId[];
   readonly frameRevision: number;
 }
 
@@ -48,7 +45,7 @@ export class FrameLayout implements FrameLayoutView {
   /** How many frames this layout has planned (#212). A reader that caches an answer taken from this
    * layout holds this number beside it, and drops the cache once the layout has planned another
    * frame. `view/gantt-dom.ts`'s one-slot pointer memo is that reader. A rendered node cannot report
-   * the same thing: a bar keeps its `data-item-id` while the Segment under it changes. */
+   * the same thing: a bar keeps its `data-item-id` while what it draws can still change underneath. */
   get frameRevision(): number {
     return this.#frameRevision;
   }
@@ -116,31 +113,11 @@ export class FrameLayout implements FrameLayoutView {
   }
 
   /** Every Bar this entry draws, by id, in the order its row produced them (#185). It answers from
-   * the producer output, never from the `${entryId}:${segmentIndex}` id convention, so a plugin
-   * Kind that draws several Bars from an entry with no Segments gets the same true answer. Empty
-   * when collapse hid the row, or when the entry draws nothing. */
+   * the producer output, never from the `${entryId}:${partIndex}` id convention, so a plugin Kind
+   * that draws several Bars from one Entry gets the same true answer. Empty when collapse hid the
+   * row, or when the entry draws nothing. */
   barIdsForEntry(id: EntryId): readonly BarId[] {
     return this.barsForEntry(id).map((item) => item.id);
-  }
-
-  /** Every Segment this Bar stands for (#212, ADR 0010) — the one answer, which the pointer path
-   * and the gesture path both read. A Bar that drew one Segment names it alone; a Bar that drew
-   * the Entry's whole span names every Segment of that Entry. It answers from the row memory that
-   * produced the Bars, the same way `barIdsForEntry` does, so no caller reads a Segment out of the
-   * `${entryId}:${segmentIndex}` id convention or off a rendered node, and this layout applies no
-   * Entry rule of its own (#230 R1). Empty for a Bar no current frame planned. */
-  segmentIdsForBar(id: BarId): readonly SegmentId[] {
-    const rowId = this.#rowOfEntry.get(entryIdOfBar(id));
-    if (rowId === undefined) return NO_SEGMENT_IDS;
-    return this.#memory.rowMemory(rowId).segmentIdsByBar.get(id) ?? NO_SEGMENT_IDS;
-  }
-
-  /** Every Segment of every Entry this row owns, in row order (#199, #212) — what a click on a row
-   * or on one of its cells stands for. Unfiltered, exactly like `entryIdsForRow`: it states what the
-   * row holds, and a caller applies its own capability rule. Empty for a grouping header row, and
-   * for a `RowId` no current frame planned. */
-  segmentIdsForRow(id: RowId): readonly SegmentId[] {
-    return this.#memory.segmentIdsOfEntries(this.entryIdsForRow(id));
   }
 
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */

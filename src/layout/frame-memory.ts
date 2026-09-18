@@ -2,7 +2,7 @@
 // a row's Bars are produced once per dataset revision, whether `heightOfRow` forced it above the
 // viewport or `placeFrame` placed it in the window.
 
-import type { Entry, EntryId, BarId, SegmentId } from '../model/index.js';
+import type { Entry, EntryId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
@@ -10,18 +10,10 @@ import { produceBarsForRow } from './items/produce-items.js';
 import { NO_VARIANTS } from './items/item.js';
 import type { Bar, VariantBars } from './items/item.js';
 
-/** Shared and frozen, so a row or a Bar that stands for no Segment costs no allocation (I5). */
-export const NO_SEGMENT_IDS: readonly SegmentId[] = Object.freeze([]);
-
-/** What this memory remembers about one row (#212, ADR 0010). One record, so the Bars and the
- *  Segments they stand for can never fall out of step: they are produced together, from one Entry
- *  source, and cached together under one key. */
+/** What this memory remembers about one row (#212, ADR 0010): the Bars its Entries produced,
+ *  cached together under one key. */
 export interface RowMemory {
   readonly items: readonly Bar[];
-  /** Which Segments each produced Bar stands for. */
-  readonly segmentIdsByBar: ReadonlyMap<BarId, readonly SegmentId[]>;
-  /** Every Segment of every Entry this row owns, in row order. */
-  readonly segmentIds: readonly SegmentId[];
 }
 
 export interface FrameMemoryBind {
@@ -38,12 +30,8 @@ export class FrameMemory {
   #heights: PrefixSumHeightIndex | undefined;
   #produced = new Map<string, RowMemory>();
   /** The answer for a row no current frame planned. One per memory, not one per call, and not a
-   *  module-level constant — two Gantts must not share it (I2). */
-  readonly #noRow: RowMemory = {
-    items: [],
-    segmentIdsByBar: new Map(),
-    segmentIds: NO_SEGMENT_IDS,
-  };
+   * module-level constant — two Gantts must not share it (I2). */
+  readonly #noRow: RowMemory = { items: [] };
   #plan: readonly PlannedRow[] = [];
   #rowById = new Map<string, PlannedRow>();
   #entryById = new Map<EntryId, Entry>();
@@ -100,61 +88,9 @@ export class FrameMemory {
     const row = this.#rowById.get(id);
     if (row === undefined) return this.#noRow;
     const items = produceBarsForRow(row, this.#entryById, this.#registry);
-    const produced: RowMemory = {
-      items,
-      segmentIdsByBar: this.#segmentIdsEachBarStandsFor(items),
-      segmentIds: this.segmentIdsOfEntries(row.entryIds),
-    };
+    const produced: RowMemory = { items };
     this.#produced.set(id, produced);
     return produced;
-  }
-
-  /** Call: `memory.segmentIdsOfEntries(layout.entryIdsForRow(id))` — every Segment of every named
-   *  Entry, in the order named (#199, #212). Unfiltered: it states what those Entries hold, and a
-   *  caller applies its own capability rule. Entries come from the last `sync`, not from the live
-   *  Dataset, so the answer describes the frame on screen. An Entry that sync did not hold
-   *  contributes nothing.
-   *
-   *  It answers for any Entry this memory holds, not only for one a planned row owns — which is why
-   *  it is not read off `RowMemory.segmentIds`. `FrameLayout.entryIdsForRow` still names the Entries
-   *  of a row collapse has hidden, and its Segment answer must agree with it. */
-  segmentIdsOfEntries(entryIds: readonly EntryId[]): readonly SegmentId[] {
-    if (entryIds.length === 0) return NO_SEGMENT_IDS;
-    const segmentIds: SegmentId[] = [];
-    for (const entryId of entryIds) {
-      const entry = this.#entryById.get(entryId);
-      if (entry === undefined) continue;
-      for (const segment of entry.segments) segmentIds.push(segment.id);
-    }
-    return segmentIds;
-  }
-
-  /** The one rule — "which Segments does this Bar stand for" (#212, #230, ADR 0010) — asked for a
-   *  whole row at once, so the answer is cached beside the Bars it describes instead of recomputed
-   *  per pointer event (I5). It is private, and it is the rule's only body: `placeFrame` copies the
-   *  answer onto `FrameBar.segmentIds` and `FrameLayout.segmentIdsForBar` reads the same map, so
-   *  no layer outside `layout/` can restate the rule against an Entry source of its own.
-   *
-   *  A Bar that drew one Segment stands for that Segment alone. A Bar that drew its Entry's
-   *  whole span — a parent, or a plugin's own variant — stands for every Segment of that Entry,
-   *  because any of them selects it. A Bar whose Entry this memory does not hold stands for no
-   *  Segment.
-   *
-   *  Which Segment a Bar *draws* is the other, narrower fact, and `Bar.segmentId` states it. A
-   *  resize handle and the `data-segment-id` stamp both need that one; nothing else does. */
-  #segmentIdsEachBarStandsFor(items: readonly Bar[]): ReadonlyMap<BarId, readonly SegmentId[]> {
-    const byBar = new Map<BarId, readonly SegmentId[]>();
-    for (const item of items) {
-      byBar.set(item.id, this.#segmentIdsOneBarStandsFor(item));
-    }
-    return byBar;
-  }
-
-  #segmentIdsOneBarStandsFor(item: Bar): readonly SegmentId[] {
-    if (item.segmentId !== undefined) return [item.segmentId];
-    const entry = this.#entryById.get(item.entryId);
-    if (entry === undefined) return NO_SEGMENT_IDS;
-    return entry.segments.map((segment) => segment.id);
   }
 
   forgetProduced(rowId: string): void {

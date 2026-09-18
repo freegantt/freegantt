@@ -23,7 +23,7 @@ import type { EntryPredicate, EntryRule } from '../entry-rule.js';
 import { compileEntryRule } from '../entry-rule.js';
 export type { EntryPredicate, EntryRule, FieldMatch } from '../entry-rule.js';
 import type { DrawnVariant, BarProducer, VariantBars } from './item.js';
-import { fixedWidthBar, ignoreSegments, followSegments } from './item.js';
+import { fixedWidthBar, unclaimedSpan } from './item.js';
 
 /** One row's variant, as the rule that won answered it. Every seam reads its five answers off this
  *  one object, so what a row draws, how it looks, what you can do to it and what rules its look
@@ -67,8 +67,8 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  it. A last resort never outranks a rule that states a claim, core's own `summary` included, so
    *  a variant that means "every row, whatever else claims it" says `when: () => true`. */
   when?: EntryRule<TProps>;
-  /** What shape it draws. Default: one Bar per Segment, or one over the whole span when the Entry
-   *  has none (`followSegments`, ADR 0023). */
+  /** What shape it draws. Default: one Bar over the entry's whole span (`unclaimedSpan`, ADR 0023,
+   *  ADR 0026). */
   bars?: BarProducer;
   /** How it looks. A paint that names no content of its own — `class`, `style` or `attrs` alone —
    *  decorates the library's own bar and keeps its label (`J34`). */
@@ -269,14 +269,14 @@ const DIAMOND_CSS = `
 `;
 
 /** `bar()` — core's plain look, and the shipped floor every unclaimed row wears. Carries
- *  `followSegments` — the same producer a variant with no `bars` key gets from the registry.
- *  `bar()`'s own shape and the default shape always agree (ADR 0023).
+ *  `unclaimedSpan` — the same producer a variant with no `bars` key gets from the registry.
+ *  `bar()`'s own shape and the default shape always agree (ADR 0023, ADR 0026).
  *
  *  Carries no `css`. Its look **is** `.fg-bar`, the element class every look wears — diamonds
  *  included — so that stays structure, in the always-shipped base sheet, not one look's own rule.
  *
  *  Every key on `overrides` wins, `name` included: `bar({ name: 'phase', when: myRule })` keeps
- *  `followSegments` and answers for the rows `myRule` claims instead of every row nothing else
+ *  `unclaimedSpan` and answers for the rows `myRule` claims instead of every row nothing else
  *  claimed.
  *
  *  **`bar` and `summary` keep their plain names (F13).** `import { bar } from 'freegantt'` reads as
@@ -287,7 +287,7 @@ const DIAMOND_CSS = `
 export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: LEAF_VARIANT_NAME,
-    bars: followSegments,
+    bars: unclaimedSpan,
     ...overrides,
   };
 }
@@ -296,15 +296,14 @@ export function bar(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  (`entry.hasChildren`), never on a stored word (ADR 0013's own rule, narrowed by ADR 0022, not
  *  spent): a consumer who wants the rail on a different rule passes their own `when`.
  *
- *  **States its own `bars` explicitly.** A parent may author several Segments of its own
- *  (`src/data/rollup.ts` refused to reject one at ingest). The data-following default is not
- *  automatically safe here. `ignoreSegments` is the shape a summary needs whatever its Segments
- *  do — one rail. It says so, rather than trusting the registry's default to agree (ADR 0023). */
+ *  **States its own `bars` explicitly.** `unclaimedSpan` is the shape a summary needs whatever its
+ *  children do — one rail. It says so, rather than trusting the registry's default to agree (ADR
+ *  0023, ADR 0026). */
 export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
   return {
     name: SUMMARY_VARIANT_NAME,
     when: (entry: Entry) => entry.hasChildren,
-    bars: ignoreSegments,
+    bars: unclaimedSpan,
     paint: () => SUMMARY_BAR,
     css: SUMMARY_CSS,
     ...overrides,
@@ -402,7 +401,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       variant,
       resolved: {
         name: variant.name,
-        bars: variant.bars ?? followSegments,
+        bars: variant.bars ?? unclaimedSpan,
         paint: variant.paint,
         capabilities: variant.capabilities,
         css: variant.css,

@@ -3,7 +3,7 @@
 // `produce-items.ts` may name both, with no import ring between the three.
 
 import { barId } from '../../model/index.js';
-import type { Entry, EntryId, Instant, BarId, SegmentId } from '../../model/index.js';
+import type { Entry, EntryId, Instant, BarId } from '../../model/index.js';
 
 /** Which point of the entry's own span a fixed box holds fixed — `'center'` for a marker (a diamond
  *  points at an instant), `'start'` for a flag (the pole sits on the date and the cloth hangs to the
@@ -38,9 +38,6 @@ export interface Bar {
   label?: string;
   start: Instant;
   end: Instant;
-  /** The one Segment this Bar draws (#212, ADR 0010) — set only when the Bar stands for a real
-   *  Segment of the Entry, never for a Bar that draws the Entry's whole span (`wholeEntryBar`). */
-  segmentId?: SegmentId;
   /** A painted box the time scale does not size, or `undefined` for an ordinary span-and-floor box.
    *  A marker that must hold its size at every zoom — `diamond()`'s glyph is the shipped case —
    *  states it here.
@@ -57,8 +54,9 @@ export interface Bar {
 }
 
 /** What shape one variant draws. `EntryVariant.bars` takes one. Omit it and the variant draws
- *  `followSegments`, the registry's own default (ADR 0023). One Bar per Segment, or one Bar
- *  over the whole span when the Entry has none.
+ *  `unclaimedSpan`, the registry's own default (ADR 0023, ADR 0026) — one Bar over the entry's
+ *  whole span. A former Segment is an ordinary child Entry now, so it draws its own Bar through its
+ *  own row, never through this Entry's producer.
  *
  *  **Takes the variant's own name.** A variant states its name once (ADR 0018), so the registry
  *  passes its own registration's name here instead of a producer inventing or hardcoding one — the
@@ -68,8 +66,8 @@ export interface Bar {
  *
  *  **Takes whether `childrenAsSegments` claims this Entry as a row's subject** (`true` for a claimed
  *  parent's own bar, `false` otherwise; `EntriesRowSource.childrenAsSegments`, #421 C2). Core's own
- *  `ignoreSegments` and `followSegments` return no Bar for it, so `summary()` paints no rail over
- *  the bars it stands for. A producer that ignores this parameter still draws — nothing skips it. */
+ *  `unclaimedSpan` returns no Bar for it, so `summary()` paints no rail over the bars its children
+ *  already draw. A producer that ignores this parameter still draws — nothing skips it. */
 export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 
 /** One row's variant, as the item pass reads it: which one won, and what it draws. `variants.ts`
@@ -98,19 +96,18 @@ export const NO_VARIANTS: VariantBars = Object.freeze({
   resolveFor: () => undefined,
 });
 
-/** The one place the `${entryId}:${segmentIndex}` id convention is written. Every producer builds its
- *  Bars here, so no producer restates it. `segmentId` is the caller's own Segment, not re-derived
- *  from `segmentIndex` — a caller with no Segment in hand (a whole Entry) simply omits it. */
+/** The one place the `${entryId}:${partIndex}` id convention is written. Every producer builds its
+ *  Bars here, so no producer restates it. A core producer always calls this with the default part
+ *  index: an Entry draws one Bar over its own span (#421, ADR 0026). */
 export function entryBar(
   entry: Entry,
-  segmentIndex: number,
+  partIndex: number,
   start: Instant,
   end: Instant,
   variant: string,
-  segmentId?: SegmentId,
 ): Bar {
-  const item: Bar = {
-    id: barId(entry.id, segmentIndex),
+  return {
+    id: barId(entry.id, partIndex),
     entryId: entry.id,
     variant,
     // #421 C5, Q36: no `label` — the Entry's name is a Field like any other, and `placeFrame`
@@ -118,8 +115,6 @@ export function entryBar(
     start,
     end,
   };
-  if (segmentId !== undefined) item.segmentId = segmentId;
-  return item;
 }
 
 /** One Bar covering the entry's whole span — what almost every `BarProducer` returns, and the
@@ -163,46 +158,19 @@ export function fixedWidthBar(px: number, anchor: BarAnchor = 'center'): BarProd
   return (entry, variant) => [{ ...wholeEntryBar(entry, variant), box }];
 }
 
-/** Always one Bar, over the entry's whole span — the shape `summary()` states explicitly. A
- *  summary is one rail whatever the Segments do (ADR 0023). The one-line wrapper that turns
- *  `wholeEntryBar`'s single Bar into a `BarProducer`'s array, so `bars: ignoreSegments` reads
- *  as a plain assignment, the same shape `followSegments` takes.
+/** Always one Bar, over the entry's whole span — the shape `bar()` and `summary()` both state
+ *  (ADR 0023, ADR 0026). The registry's own default for a variant with no `bars` key: a former
+ *  Segment is an ordinary child Entry now, so there is no second, narrower shape left to choose
+ *  between — one Entry always draws one Bar over its own span.
  *
- *  Call: `variants: [{ name: 'summary', when: (e) => e.hasChildren, bars: ignoreSegments }]` —
+ *  Call: `variants: [{ name: 'summary', when: (e) => e.hasChildren, bars: unclaimedSpan }]` —
  *  "the summary variant's bars: always one bar."
  *
- *  Draws nothing for a claimed parent's own row (#421 C2, Q26/Q27/Q33): `childrenAsSegments`
- *  already carries the row's bars, so `summary()`'s rail would paint over the very bars it stands
- *  for. A consumer producer that ignores the parameter still draws — nothing else skips it. */
-export function ignoreSegments(entry: Entry, variant: string, childrenAsSegments = false): readonly Bar[] {
+ *  **"Claimed" here means `childrenAsSegments` (#421 C2).** Draws nothing for a row whose children
+ *  `childrenAsSegments` already matched onto it (Q26/Q27/Q33): those children draw their own Bars
+ *  through their own rows, so this producer's rail would paint a second bar over the same span. A
+ *  consumer producer that ignores the parameter still draws — nothing else skips it. */
+export function unclaimedSpan(entry: Entry, variant: string, childrenAsSegments = false): readonly Bar[] {
   if (childrenAsSegments) return [];
   return [wholeEntryBar(entry, variant)];
-}
-
-/** One Bar per Segment, or one Bar over the whole span when the Entry has none. The shape a
- *  variant with no `bars` key gets (ADR 0023).
- *
- *  Follows the data: a row authored in pieces draws its pieces, gaps included. A plain start/end
- *  row draws the one Bar it has always drawn.
- *
- *  Call: `variants: [{ name: 'phase', when: myRule, bars: followSegments }]` — "the phase
- *  variant's bars: one bar per segment." Naming it explicitly only matters when a variant also
- *  overrides something else on `bar()`'s own object, and still wants to keep this shape. The
- *  registry already gives this shape to a variant that names no `bars` at all.
- *
- *  Fallback branch, reached only for a spanning Entry with no Segments of its own (the plain
- *  start/end case). Same load-bearing cast as `wholeEntryBar` — `produceBarsForRow` never calls
- *  this producer for a non-spanning Entry (ADR 0012, Build 1, J2).
- *
- *  Draws nothing for a claimed parent's own row (#421 C2, Q26/Q27/Q33): the row's children carry
- *  its bars, so a leaf variant's default shape would double them. */
-export function followSegments(entry: Entry, variant: string, childrenAsSegments = false): readonly Bar[] {
-  if (childrenAsSegments) return [];
-  const segments = entry.segments;
-  if (segments !== undefined && segments.length > 0) {
-    return segments.map((segment, index) =>
-      entryBar(entry, index, segment.start, segment.end, variant, segment.id),
-    );
-  }
-  return ignoreSegments(entry, variant);
 }

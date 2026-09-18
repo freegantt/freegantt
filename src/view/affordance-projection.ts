@@ -11,12 +11,8 @@ export interface AffordanceInputs {
   /** The one Entry the Selection names, when it names exactly one (#212, ADR 0010, review finding 7).
    *  `undefined` when the Selection is empty or spans more than one Entry — either way the
    *  sole-selection fallback below has nothing to fall back to. The handle pair brackets an Entry
-   *  (#200), so this narrows to an Entry, not a Segment count. */
+   *  (#200). */
   soleSelectedEntryId: EntryId | undefined;
-  /** How many of the Selection's Segments belong to `soleSelectedEntryId`. Meaningless when that is
-   *  `undefined`. Exactly one means the user named one bar, and that is when the sole-selection
-   *  fallback shows its handles (#212). */
-  selectedSegmentCountOfSoleEntry: number;
   /** Every Bar one entry draws in the current frame (`FrameLayout.barIdsForEntry`). The fallback
    *  asks it instead of building a Bar id out of an entry id. */
   barIdsForEntry: (id: EntryId) => readonly BarId[];
@@ -41,8 +37,7 @@ export interface AffordanceIds {
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
-  const { hoveredBarId, soleSelectedEntryId, selectedSegmentCountOfSoleEntry, barIdsForEntry, canGesture } =
-    inputs;
+  const { hoveredBarId, soleSelectedEntryId, barIdsForEntry, canGesture } = inputs;
   const hoveredEntryId = hoveredBarId !== undefined ? entryIdOfBar(hoveredBarId) : undefined;
 
   const out: AffordanceIds = {};
@@ -56,7 +51,6 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
     hoveredBarId,
     hoveredEntryId,
     soleSelectedEntryId,
-    selectedSegmentCountOfSoleEntry,
     barIdsForEntry,
     canGesture,
   });
@@ -80,35 +74,24 @@ function resolveEdges(
 
 /** Which Entry does the handle pair bracket, and which of its two edges may resize (#142)? The
  *  hovered bar's Entry when a bar is hovered. With nothing hovered, the single selected Entry — but
- *  only once the Selection names one of its Segments (#212), or when it draws exactly one bar. A
- *  segmented Entry selected from the grid pane has every Segment in the Selection, so it gets no
- *  handles until the pointer visits one bar. */
+ *  only when it draws exactly one bar (#421 ADR 0026: a former Segment is its own Entry now, so a
+ *  parent whose children draw several bars gets no handles from selecting the parent alone; the
+ *  pointer must visit one bar). */
 function resolveResizableEntry(inputs: {
   hoveredBarId: BarId | undefined;
   hoveredEntryId: EntryId | undefined;
   soleSelectedEntryId: EntryId | undefined;
-  selectedSegmentCountOfSoleEntry: number;
   barIdsForEntry: (id: EntryId) => readonly BarId[];
   canGesture: (capability: GestureCapability, id: EntryId, edge?: 'start' | 'end') => boolean;
 }): { entryId: EntryId; edges: { start: boolean; end: boolean } } | undefined {
-  const {
-    hoveredBarId,
-    hoveredEntryId,
-    soleSelectedEntryId,
-    selectedSegmentCountOfSoleEntry,
-    barIdsForEntry,
-    canGesture,
-  } = inputs;
+  const { hoveredBarId, hoveredEntryId, soleSelectedEntryId, barIdsForEntry, canGesture } = inputs;
   if (hoveredBarId !== undefined) {
     if (hoveredEntryId === undefined) return undefined;
     const edges = resolveEdges(hoveredEntryId, canGesture);
     return edges === undefined ? undefined : { entryId: hoveredEntryId, edges };
   }
   if (soleSelectedEntryId === undefined) return undefined;
+  if (barIdsForEntry(soleSelectedEntryId).length !== 1) return undefined;
   const edges = resolveEdges(soleSelectedEntryId, canGesture);
-  if (edges === undefined) return undefined;
-  if (selectedSegmentCountOfSoleEntry === 1) return { entryId: soleSelectedEntryId, edges };
-  return barIdsForEntry(soleSelectedEntryId).length === 1
-    ? { entryId: soleSelectedEntryId, edges }
-    : undefined;
+  return edges === undefined ? undefined : { entryId: soleSelectedEntryId, edges };
 }
