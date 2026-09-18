@@ -358,7 +358,7 @@ own children.
 **A claimed row is a summary in the grid already.** The claimed parent's cells roll up from its
 children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The one thing the design
 suppresses is the parent's own bar `Item`, so `summary()`'s rail does not paint over the children it
-stands for. A consumer variant may still paint a rail behind them. **How a variant asks for that rail is not ruled yet** — build C2 owns the seam and question Q26 in [`BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) holds the recommendation: the claim changes the default producer to "no Items", and an explicit `items` on a variant still wins.
+stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with an `items` producer of their own. **How that producer says so is question Q27**, which build C2 holds — core's own `summary()` names an `items` producer too, and it must not paint over the bars it stands for.
 
 :::note Why the key says "segments"
 Read the call site aloud: "row source: entries, children as segments, where show-days-on-row is
@@ -450,7 +450,7 @@ own Item so <code>summary()</code>'s rail does not paint over its children.
 | `resolveRows` | one row, `entryIds: ['t1']` | one row, `entryIds: ['req-1','d1','d2']`; children get none | one row each; children nest at `depth + 1` |
 | Row is expandable | no | no — the rule opens it, not a chevron | yes |
 | `resolveFor(entry)` | `bar()`, the last resort | per child: whatever rule claims it | `summary()` claims on `entry.hasChildren` |
-| `variant.items(entry)` | one Item over `[start, end)` | one Item per child Entry | one rail Item (`ignoreSegments`) |
+| `variant.items(entry)` | one Item over `[start, end)` | one Item per child Entry; the parent itself produces none | one rail Item (`ignoreSegments`, renamed `wholeSpan` when the Segment retires) |
 | Rollup writes | nothing | the parent's `hours`, `start`, `end` | the same three, identically |
 | `placeFrame` | one `FrameBar` | one `FrameBar` per Item | one rail `FrameBar` |
 | Selection unit | the Entry | the Entry | the Entry |
