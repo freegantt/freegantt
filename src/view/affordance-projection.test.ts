@@ -7,8 +7,8 @@ const A = entryId('a');
 const B = entryId('b');
 const ITEM_A = barId(A);
 
-/** Both entries draw one bar each — the shape almost every entry has. A test that needs a segmented
- *  entry builds its own answer instead. */
+/** Both entries draw one bar each — the shape every core Entry has (ADR 0026). A test that needs an
+ *  Entry drawing several bars (only a plugin variant can, #421) builds its own answer instead. */
 function oneBarEach(id: EntryId): readonly BarId[] {
   return [barId(id)];
 }
@@ -18,7 +18,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredBarId: ITEM_A,
       soleSelectedEntryId: B,
-      selectedSegmentCountOfSoleEntry: 1,
       barIdsForEntry: oneBarEach,
       canGesture: (capability, id) => capability === 'move' && id === A,
     });
@@ -33,7 +32,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const oneSelected = projectAffordances({
       hoveredBarId: undefined,
       soleSelectedEntryId: A,
-      selectedSegmentCountOfSoleEntry: 1,
       barIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -42,7 +40,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const twoSelected = projectAffordances({
       hoveredBarId: undefined,
       soleSelectedEntryId: undefined,
-      selectedSegmentCountOfSoleEntry: 0,
       barIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -51,7 +48,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const noneSelected = projectAffordances({
       hoveredBarId: undefined,
       soleSelectedEntryId: undefined,
-      selectedSegmentCountOfSoleEntry: 0,
       barIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -62,7 +58,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredBarId: ITEM_A,
       soleSelectedEntryId: undefined,
-      selectedSegmentCountOfSoleEntry: 0,
       barIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -75,7 +70,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredBarId: undefined,
       soleSelectedEntryId: A,
-      selectedSegmentCountOfSoleEntry: 1,
       barIdsForEntry: oneBarEach,
       canGesture: () => false,
     });
@@ -86,7 +80,6 @@ describe('projectAffordances (D-S3-6)', () => {
     const result = projectAffordances({
       hoveredBarId: undefined,
       soleSelectedEntryId: undefined,
-      selectedSegmentCountOfSoleEntry: 0,
       barIdsForEntry: oneBarEach,
       canGesture: () => true,
     });
@@ -95,24 +88,19 @@ describe('projectAffordances (D-S3-6)', () => {
     expect(result.resizableEntryId).toBeUndefined();
   });
 
-  it('one selected Segment hands the handles to its own Entry, whichever bar drew it (#200, #212)', () => {
-    const segments = [barId(A, 0), barId(A, 1), barId(A, 2)];
-    const result = projectAffordances({
-      hoveredBarId: undefined,
-      soleSelectedEntryId: A,
-      selectedSegmentCountOfSoleEntry: 1,
-      barIdsForEntry: () => segments,
-      canGesture: () => true,
-    });
-    // The pair brackets an Entry, so the answer is the Entry, not the selected bar (#200).
-    expect(result.resizableEntryId).toBe(A);
-  });
+  // Retired (ADR 0026, #421): a prior test here, 'one selected Segment hands the handles to its own
+  // Entry, whichever bar drew it', asked what happened when the sole selected Entry drew several
+  // bars and exactly one of its former Segments was selected — the pair bracketed the Entry anyway.
+  // A core Entry now always draws exactly one bar over its own span, so `barIdsForEntry` returning
+  // several bars for the sole selected Entry only happens behind a plugin variant, and the rule for
+  // that shape is unconditional now: no single bar owns the pair, so it parks (see the merged test
+  // below, `resolveResizableEntry`'s own doc comment). There is no "how many were selected" question
+  // left to ask.
 
-  it('hovering one Segment hands the handles to its Entry (#200)', () => {
+  it('hovering a bar with a non-zero partIndex hands the handles to its Entry (#200)', () => {
     const result = projectAffordances({
       hoveredBarId: barId(A, 2),
       soleSelectedEntryId: undefined,
-      selectedSegmentCountOfSoleEntry: 0,
       barIdsForEntry: () => [barId(A, 0), barId(A, 1), barId(A, 2)],
       canGesture: () => true,
     });
@@ -122,27 +110,15 @@ describe('projectAffordances (D-S3-6)', () => {
     expect(result.resizableEntryId).toBe(A);
   });
 
-  it('a segmented entry selected from the grid parks the handles (#185, #212)', () => {
+  it('a sole selected Entry drawing several bars parks the handles — no single bar owns the pair (#185, #212, ADR 0026)', () => {
     const result = projectAffordances({
       hoveredBarId: undefined,
       soleSelectedEntryId: A,
-      selectedSegmentCountOfSoleEntry: 2,
       barIdsForEntry: () => [barId(A, 0), barId(A, 1)],
       canGesture: () => true,
     });
-    // Both Segments selected and two bars drawn: no single bar owns the shared handle pair.
-    expect(result.resizableEntryId).toBeUndefined();
-  });
-
-  it('a Selection holding no Segment of the sole Entry leaves a segmented one parked (#212)', () => {
-    const result = projectAffordances({
-      hoveredBarId: undefined,
-      soleSelectedEntryId: A,
-      selectedSegmentCountOfSoleEntry: 0,
-      barIdsForEntry: () => [barId(A, 0), barId(A, 1)],
-      canGesture: () => true,
-    });
-    // A drew two bars and the Selection names neither, so no single bar owns the pair.
+    // Only a plugin variant draws several bars for one Entry; whichever bars they are, no single one
+    // owns the shared handle pair.
     expect(result.resizableEntryId).toBeUndefined();
   });
 
@@ -151,7 +127,6 @@ describe('projectAffordances (D-S3-6)', () => {
       const result = projectAffordances({
         hoveredBarId: undefined,
         soleSelectedEntryId: A,
-        selectedSegmentCountOfSoleEntry: 1,
         barIdsForEntry: oneBarEach,
         canGesture: (capability, id, edge) => capability === 'resize' && edge === 'start',
       });
@@ -163,7 +138,6 @@ describe('projectAffordances (D-S3-6)', () => {
       const result = projectAffordances({
         hoveredBarId: ITEM_A,
         soleSelectedEntryId: undefined,
-        selectedSegmentCountOfSoleEntry: 0,
         barIdsForEntry: oneBarEach,
         canGesture: (capability, id, edge) => capability === 'resize' && edge === 'end',
       });
@@ -175,7 +149,6 @@ describe('projectAffordances (D-S3-6)', () => {
       const result = projectAffordances({
         hoveredBarId: undefined,
         soleSelectedEntryId: A,
-        selectedSegmentCountOfSoleEntry: 1,
         barIdsForEntry: oneBarEach,
         canGesture: () => false,
       });
