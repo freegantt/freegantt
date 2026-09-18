@@ -128,6 +128,20 @@ function resizeEdit(entry: Entry, edge: 'start' | 'end', moved: Instant): Propos
   return { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set(['end']), end };
 }
 
+/** The span an edit draws: the edit read over the entry it edits.
+ *
+ *  A resize names the one edge it moves and holds the other (ADR 0026 — `start`/`end` are ordinary
+ *  Fields now, and an edit writes only what moved). So a drafted span is never the edit alone, and
+ *  every reader that wants the whole span asks here rather than assuming the edit carries it.
+ *
+ *  A half-dated entry stays half-dated: this fills in nothing the entry does not already hold. */
+export function spanAfterEdit(
+  entry: Entry,
+  edit: ProposedEdit,
+): { start: Instant | undefined; end: Instant | undefined } {
+  return { start: edit.start ?? entry.start, end: edit.end ?? entry.end };
+}
+
 /** What the hot-path paint needs to preview a draft with no frame rebuild (D-S3-18): a pixel offset
  *  and width delta per affected item, read off the bound `TimeScale` against each entry's committed
  *  span. `extra` marks an entry the extension hook added rather than the caller's own selection
@@ -157,15 +171,18 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly BarPreview[
   function pushOffset(id: EntryId, edit: ProposedEdit, isExtra: boolean): void {
     const original = byId.get(id);
     if (!original) return;
-    if (!spansTime(edit)) return;
+    // An edit that names no date moves no bar. An extender writing `props` alone is the usual one.
+    if (edit.start === undefined && edit.end === undefined) return;
     // A gesture reaches this branch only for an Entry that already has a grip to grab, which means
     // it already spans (`spansTime`, ADR 0012) — but nothing narrows `original` here, so this asks
     // the question rather than asserting it: a dateless Entry paints no offset instead of a crash.
     if (!spansTime(original)) return;
+    const drafted = spanAfterEdit(original, edit);
+    if (!spansTime(drafted)) return;
     const x0 = scale.xForInstant(original.start);
-    const x1 = scale.xForInstant(edit.start);
+    const x1 = scale.xForInstant(drafted.start);
     const width0 = scale.xForInstant(original.end) - x0;
-    const width1 = scale.xForInstant(edit.end) - x1;
+    const width1 = scale.xForInstant(drafted.end) - x1;
     out.push({ barId: barId(id), dx: x1 - x0, dWidth: width1 - width0, extra: isExtra });
   }
 

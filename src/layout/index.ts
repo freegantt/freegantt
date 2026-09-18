@@ -150,6 +150,12 @@ export type {
 export { ZOOM_PRESETS, isTimeUnit } from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';
 export type { ViewportOptions, ViewportHandle, DatasetBinding } from './viewport/viewport.js';
-export { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
+export {
+  cursorLabelForX,
+  draftForMove,
+  draftForResize,
+  previewOffsets,
+  spanAfterEdit,
+} from './gesture-draft.js';
 export type { DraftInput, BarPreview, PreviewOffsetsInput } from './gesture-draft.js';
 export type { SnapUnit } from '../time/index.js';

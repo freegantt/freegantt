@@ -5,7 +5,13 @@
 // through `EntryGestureContext`. (Named `GesturePipeline`, not the plan's original "GestureHost" —
 // "Host" is a retired word, D-S1.11-6/#64, for smuggling two concepts under one name.)
 
-import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from '../layout/index.js';
+import {
+  cursorLabelForX,
+  draftForMove,
+  draftForResize,
+  previewOffsets,
+  spanAfterEdit,
+} from '../layout/index.js';
 import type { BarPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type {
   Entry,
@@ -37,7 +43,6 @@ import type {
   EntryResize,
   GanttEventMap,
   ProposedDates,
-  ProposedSpan,
 } from './event-bus.js';
 import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
@@ -119,16 +124,6 @@ interface GestureProposal {
   /** The bar the user grabbed — `event.entry`, and where the payload's own span comes from. It is
    *  always a key of `paints`. */
   readonly grabbed: EntryId;
-}
-
-/** The dates one edit proposes for one entry — what `event.entries` carries. A date the edit leaves
- *  alone stays absent here: a half-dated descendant moves the date it holds and gains no second one
- *  (ADR 0013, Q9). */
-function proposedDatesOf(entry: EntryId, edit: ProposedEdit): ProposedDates {
-  const dates: { entry: EntryId; start?: Instant; end?: Instant } = { entry };
-  if (edit.start !== undefined) dates.start = edit.start;
-  if (edit.end !== undefined) dates.end = edit.end;
-  return dates;
 }
 
 /** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
@@ -354,6 +349,26 @@ export class GesturePipeline {
     return { writes, paints, grabbed };
   }
 
+  /** The dates one drafted edit proposes for one entry — what `event.entries` carries, and what
+   *  `#commit` guards the grabbed bar's own span on.
+   *
+   *  The edit is read over the entry's committed span (`spanAfterEdit`), never taken alone: a resize
+   *  names the one edge it moves and holds the other (ADR 0026), so the edit by itself is half a
+   *  span. A date neither the edit nor the entry holds stays absent — a half-dated descendant moves
+   *  the date it holds and gains no second one (ADR 0013, Q9).
+   *
+   *  An entry the store no longer holds falls back to the edit's own dates: the write is about to
+   *  report `entry-gone` (`#finishCommit`), and the payload says what the gesture asked for. */
+  #proposedDatesOf(id: EntryId, edit: ProposedEdit | undefined): ProposedDates {
+    const dates: { entry: EntryId; start?: Instant; end?: Instant } = { entry: id };
+    if (edit === undefined) return dates;
+    const committed = this.#deps.entryById(id);
+    const span = committed === undefined ? edit : spanAfterEdit(committed, edit);
+    if (span.start !== undefined) dates.start = span.start;
+    if (span.end !== undefined) dates.end = span.end;
+    return dates;
+  }
+
   /** `beforeEntryMove`/`beforeEntryResize` → one commit → `entryMove`/`entryResize` (D-S3-16,
    *  D-S3-22). Event names come from `gesture.kind` once; `#settle` is the one veto/write path.
    *  `commitEntryEdits` does the actual write and folds a sync veto and a `MutationCancelledError`
@@ -364,14 +379,9 @@ export class GesturePipeline {
     if (proposal.writes.size === 0) return Promise.resolve(false);
     // The grabbed bar draws, so it spans (`spansTime`, ADR 0012) — a parent bar included, whose
     // envelope this reads off the paint side because the write side never holds it (ADR 0013).
-    const grabbedEdit = proposal.paints.get(proposal.grabbed);
-    if (grabbedEdit === undefined || !spansTime(grabbedEdit)) return Promise.resolve(false);
-    const grabbed: ProposedSpan = {
-      entry: proposal.grabbed,
-      start: grabbedEdit.start,
-      end: grabbedEdit.end,
-    };
-    const spans = [...proposal.writes].map(([id, edit]) => proposedDatesOf(id, edit));
+    const grabbed = this.#proposedDatesOf(proposal.grabbed, proposal.paints.get(proposal.grabbed));
+    if (!spansTime(grabbed)) return Promise.resolve(false);
+    const spans = [...proposal.writes].map(([id, edit]) => this.#proposedDatesOf(id, edit));
     const itemIds = [...proposal.paints.keys()].map((id) => barId(id));
     // #210: the same note goes out on the `before*` payload and comes back in the refusal, so a
     // handler's `refuse('…')` reaches the report core raises for its veto. `Refusable` belongs to
