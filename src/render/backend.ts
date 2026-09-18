@@ -4,15 +4,15 @@
 import type {
   EntryId,
   GeometryFrame,
-  ItemId,
-  ItemPreview,
+  BarId,
+  BarPreview,
   ClientPoint,
   RowId,
   SegmentId,
 } from '../layout/index.js';
 
 export interface InteractionState {
-  hoveredItemId?: ItemId;
+  hoveredBarId?: BarId;
   /** The row under the pointer, in whichever pane the pointer is in — the grid row it landed on, or
    *  the row that owns the hovered bar. A backend paints it on both the grid row and its timeline
    *  band, so one row reads as one row across the splitter. Undefined parks the paint. */
@@ -35,15 +35,15 @@ export interface InteractionState {
   resizableEdges?: { start: boolean; end: boolean };
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3, D-S3-6). */
-  movableItemId?: ItemId;
+  movableBarId?: BarId;
   /** S3.3, D-S3-18: an in-flight drag's per-item pixel offset, coalesced on the shell's own rAF.
    *  Undefined outside a gesture — a backend parks every previewed bar back on its committed
    *  transform the moment this clears. */
-  preview?: readonly ItemPreview[];
+  preview?: readonly BarPreview[];
   /** S3.5, D-S3-17: which bars a `beforeEntryMove`/`beforeEntryResize` handler's unsettled Promise is
    *  holding — painted `data-state~="pending"` (reduced opacity and a dotted outline). Undefined once
    *  it settles either way. */
-  pendingItemIds?: readonly ItemId[];
+  pendingBarIds?: readonly BarId[];
   /** S3.8, D-S3-15: content-x of the Cursor line during a pointer drag. Undefined parks the
    *  singleton. Never a frame decoration. */
   cursorX?: number;
@@ -60,12 +60,12 @@ export interface InteractionState {
 }
 
 /** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185). A row hit
- *  names the row, and the row is what owns Entries — a backend never invents an Item id for it. */
+ *  names the row, and the row is what owns Entries — a backend never invents a Bar id for it. */
 export type HitResult = BarHit | RowHit;
 
 export interface BarHit {
   kind: 'bar';
-  itemId: ItemId;
+  barId: BarId;
   /** S3.4, D-S3-4: set when the hit landed on a resize handle rather than the bar body — which edge
    *  a resize gesture should grab. Sourced from the handle's own `data-edge` attribute (D-S3-8). */
   edge?: 'start' | 'end';

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cursorLabelForX, draftForMove, draftForResize, previewOffsets } from './gesture-draft.js';
 import type { Entry, Instant, ProposedEdit, ProposedEdits } from '../model/index.js';
-import { entryId, itemId, segmentId } from '../model/index.js';
+import { entryId, barId, segmentId } from '../model/index.js';
 import { entryDouble } from './entry-double.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
 
@@ -297,13 +297,13 @@ describe('previewOffsets', () => {
       [a.id, envelopeEdit(instant('2026-06-15T15:00:00Z'), instant('2026-06-15T17:00:00Z'))],
     ]);
     const [preview] = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
-    expect(preview).toEqual({ itemId: itemId(a.id), dx: 60, dWidth: 0, extra: false });
+    expect(preview).toEqual({ barId: barId(a.id), dx: 60, dWidth: 0, extra: false });
   });
 
   it('reports a width delta when the edit changes duration', () => {
     const proposed = new Map([[a.id, envelopeEdit(a.start, instant('2026-06-15T18:00:00Z'))]]);
     const [preview] = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
-    expect(preview).toEqual({ itemId: itemId(a.id), dx: 0, dWidth: 120, extra: false });
+    expect(preview).toEqual({ barId: barId(a.id), dx: 0, dWidth: 120, extra: false });
   });
 
   it('marks entries from the extra map as extra: true', () => {
@@ -311,7 +311,7 @@ describe('previewOffsets', () => {
       [b.id, envelopeEdit(instant('2026-06-16T10:00:00Z'), instant('2026-06-16T13:00:00Z'))],
     ]);
     const [preview] = previewOffsets({ proposed: new Map(), extra, entries: [b], scale });
-    expect(preview).toEqual({ itemId: itemId(b.id), dx: 60, dWidth: 0, extra: true });
+    expect(preview).toEqual({ barId: barId(b.id), dx: 60, dWidth: 0, extra: true });
   });
 
   it('skips an id with no matching original entry', () => {
@@ -754,8 +754,8 @@ describe('previewOffsets — segments (S4.10)', () => {
     ]);
     const previews = previewOffsets({ proposed, extra: new Map(), entries: [segmented], scale });
     expect(previews).toEqual([
-      { itemId: itemId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
-      { itemId: itemId(segmented.id, 1), dx: 60, dWidth: 0, extra: false },
+      { barId: barId(segmented.id, 0), dx: 0, dWidth: 0, extra: false },
+      { barId: barId(segmented.id, 1), dx: 60, dWidth: 0, extra: false },
     ]);
   });
 });

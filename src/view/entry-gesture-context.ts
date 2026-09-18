@@ -5,7 +5,7 @@
 // The sole declaration (C5): `interaction/` may import `view/` (the legal edge, plans/01 §1), so this
 // type lives here once instead of being mirrored on both sides of that edge.
 
-import type { Entry, EntryId, ItemId, RowId, SegmentId, ClientPoint } from '../model/index.js';
+import type { Entry, EntryId, BarId, RowId, SegmentId, ClientPoint } from '../model/index.js';
 import type { GestureCapability } from './capability.js';
 
 /** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
@@ -28,8 +28,7 @@ export interface DraftOptions {
  *
  *  A row hit names the row alone. Which Entries the row owns is `entriesForRow`'s answer, so
  *  `interaction/` never turns a row into an Entry by itself. */
-export type EntryHit =
-  { kind: 'bar'; itemId: ItemId; edge?: 'start' | 'end' } | { kind: 'row'; rowId: RowId };
+export type EntryHit = { kind: 'bar'; barId: BarId; edge?: 'start' | 'end' } | { kind: 'row'; rowId: RowId };
 
 /** One armed gesture (D-GH-1): `session()` resolves what moves once, at arm time, so
  *  `interaction/entry-gestures.ts`'s pointer machine holds this one object instead of separately
@@ -58,7 +57,7 @@ export interface EntryGestureSession {
  *  One member on `EntryGestureContext`, not eight, for the reason R3 gave `ContainerDomPorts`: a port
  *  bag whose members answer one collaborator's questions is that collaborator, spelled out. The names
  *  say `segmentIds`, not `segments`, because every one of them returns ids — the same word
- *  `DomTarget.segmentIds` and `FrameLayoutView.segmentIdsForItem` already use. */
+ *  `DomTarget.segmentIds` and `FrameLayoutView.segmentIdsForBar` already use. */
 export interface SelectionForGestures {
   /** The Selection itself — Segment ids. */
   segmentIds(): readonly SegmentId[];
@@ -83,8 +82,8 @@ export interface SelectionForGestures {
   /** Every Segment this bar stands for (#212, ADR 0010) — the pane picks the unit. A bar that drew
    *  one Segment names that Segment alone. A bar that drew an Entry's whole span (a group, a
    *  milestone) names every Segment of that Entry. It reads the same answer `DomTarget.segmentIds`
-   *  reads — `FrameLayoutView.segmentIdsForItem` — so the pointer path and this one cannot disagree. */
-  segmentIdsForItem(item: ItemId): readonly SegmentId[];
+   *  reads — `FrameLayoutView.segmentIdsForBar` — so the pointer path and this one cannot disagree. */
+  segmentIdsForBar(id: BarId): readonly SegmentId[];
 }
 
 /** Grown from S3.1/S3.2's `EntrySelectionContext` into the full gesture context (D-S3-5/D-GH-1): the
@@ -95,14 +94,14 @@ export interface EntryGestureContext {
   /** Content-surface hit test — `RenderBackend.hitTest`, already client-relative (S1 D-D). */
   hitTest(at: ClientPoint): EntryHit | undefined;
   /** The entry under an item id, or undefined once segments exist and an id outlives its item. */
-  entryFor(itemId: ItemId): Entry | undefined;
+  entryFor(barId: BarId): Entry | undefined;
   /** One resolution (I14, D-S3-9) — `view/capability.ts`'s answer for `entry` on `capability`.
    *  `edge` narrows a `'resize'` question to one handle (#142); every other capability ignores it. */
   can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
   /** What is selected, and what a hit would select — one collaborator, one member (#230 R4). */
   selection: SelectionForGestures;
   /** S3.2 (D-S3-6): the item id under the pointer, or undefined on pointerleave. */
-  setHovered(itemId: ItemId | undefined): void;
+  setHovered(barId: BarId | undefined): void;
   /** The grid row under the pointer, or undefined once it leaves the grid pane. The timeline pane
    *  reports no row of its own: over there a bar names the row, and the shell reads it off the frame
    *  rather than asking the pointer twice. */

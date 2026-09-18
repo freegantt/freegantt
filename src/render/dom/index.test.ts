@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { createDomBackend } from './index.js';
-import { computeFrame, createVariantRegistry, fixedWidthItem } from '../../layout/index.js';
+import { computeFrame, createVariantRegistry, fixedWidthBar } from '../../layout/index.js';
 import type {
   BarRenderer,
   ResolvedRenderer,
   DateLineLabelPlacement,
   Entry,
   ErrorReportInput,
-  ItemId,
+  BarId,
   ResolvedBarLabel,
   TimeScale,
   ViewPreset,
@@ -44,7 +44,7 @@ const preset: ViewPreset = {
 };
 const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 
-/** One Entry, drawn as `count` bars — the multi-Item shape a Segmented Entry has (#185). Each
+/** One Entry, drawn as `count` bars — the multi-Bar shape a Segmented Entry has (#185). Each
  *  Segment spans the whole Entry, so they share the row's one band. */
 function segmentsOf(entry: Entry, count: number) {
   return Array.from({ length: count }, (_, index) => ({
@@ -99,7 +99,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', barId: frame.bars[0]!.id });
     expect(backend.hitTest(point(999, 999))).toBeNull();
 
     document.elementFromPoint = original;
@@ -691,7 +691,7 @@ describe('render/dom backend', () => {
     // test could not tell an ordinary bar from a floored one. One real px-per-ms scale here instead.
     const realScale: TimeScale = { ...scale, xForInstant: (instant) => instant, pxPerMs: 1 };
     const ordinary = sampleEntries[0]!;
-    // An Item's span comes from its Segment, not the Entry's own start/end (`produce-items.ts`), so
+    // A Bar's span comes from its Segment, not the Entry's own start/end (`produce-items.ts`), so
     // the Segment needs the same zero-width edit the Entry gets — an Entry-only edit here would
     // leave the old, full-width Segment still drawing the bar.
     const zeroWidth = entryDoubleLike(sampleEntries[1]!, {
@@ -729,7 +729,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('stamps data-span="fixed" on an Item whose variant states a `box` (ADR 0022), at the box’s own width', () => {
+  it('stamps data-span="fixed" on a Bar whose variant states a `box` (ADR 0022), at the box’s own width', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -740,7 +740,7 @@ describe('render/dom backend', () => {
     variantRegistry.addPluginVariant({
       name: 'marker',
       when: () => true,
-      items: fixedWidthItem(13),
+      bars: fixedWidthBar(13),
     });
     const frame = computeFrame({
       entries: [t1],
@@ -1151,7 +1151,7 @@ describe('render/dom backend', () => {
     const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
     const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
 
-    backend.applyState({ hoveredItemId: a!.id, selectedSegmentIds: [a!.segmentId!, b!.segmentId!] });
+    backend.applyState({ hoveredBarId: a!.id, selectedSegmentIds: [a!.segmentId!, b!.segmentId!] });
     expect(nodeA.dataset['state']).toBe('hovered selected');
     expect(nodeB.dataset['state']).toBe('selected');
 
@@ -1384,7 +1384,7 @@ describe('render/dom backend', () => {
       variants: variantRegistry,
     });
     backend.sync(frame);
-    const stateOf = (id: ItemId): string =>
+    const stateOf = (id: BarId): string =>
       timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
     backend.applyState({ selectedSegmentIds: [frame.bars[1]!.segmentId!] });
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
@@ -1427,7 +1427,7 @@ describe('render/dom backend', () => {
 
     // The Selection is keyed by Segment, so it outlived the node that drew it: the selected bar
     // comes back painted and its siblings stay clear.
-    const stateOf = (id: ItemId): string =>
+    const stateOf = (id: BarId): string =>
       timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
@@ -1499,7 +1499,7 @@ describe('render/dom backend', () => {
     observer.observe(timeline, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
 
     const hovered = frame.bars[1]!.id;
-    backend.applyState({ selectedSegmentIds: everySegment, hoveredItemId: hovered });
+    backend.applyState({ selectedSegmentIds: everySegment, hoveredBarId: hovered });
     const touched = observer.takeRecords().map((record) => (record.target as HTMLElement).dataset['itemId']);
     observer.disconnect();
 
@@ -1539,7 +1539,7 @@ describe('render/dom backend', () => {
   });
 
   // Bug hunt (S5 fixes): hitTest's grid-row fallback — a click that misses the bar layer resolves
-  // against the grid pane's own .fg-row. It names the row (#185), never an Item id of its own.
+  // against the grid pane's own .fg-row. It names the row (#185), never a Bar id of its own.
   it('hitTest resolves a grid-row miss on the bar layer to that row (#185)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
@@ -1596,9 +1596,9 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  // S3.6, D-S3-18, U7: ItemPreview.extra distinguishes the caller's own gesture ('dragging') from an
+  // S3.6, D-S3-18, U7: BarPreview.extra distinguishes the caller's own gesture ('dragging') from an
   // installed extension hook's cascade ('ghost') — two entries offset in the same preview frame.
-  it('applyState paints dragging/ghost data-state tokens off ItemPreview.extra and clears them once the preview drops', () => {
+  it('applyState paints dragging/ghost data-state tokens off BarPreview.extra and clears them once the preview drops', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1620,8 +1620,8 @@ describe('render/dom backend', () => {
 
     backend.applyState({
       preview: [
-        { itemId: a!.id, dx: 10, dWidth: 0, extra: false },
-        { itemId: b!.id, dx: 5, dWidth: 0, extra: true },
+        { barId: a!.id, dx: 10, dWidth: 0, extra: false },
+        { barId: b!.id, dx: 5, dWidth: 0, extra: true },
       ],
     });
     expect(nodeA.dataset['state']).toBe('dragging');
@@ -1732,7 +1732,7 @@ describe('render/dom backend', () => {
 
     expect(backend.hitTest(point(5, 5))).toEqual({
       kind: 'bar',
-      itemId: frame.bars[0]!.id,
+      barId: frame.bars[0]!.id,
       edge: 'end',
     });
 
@@ -1787,9 +1787,9 @@ describe('render/dom backend', () => {
     document.elementFromPoint = (x: number, y: number) =>
       x === 5 && y === 5 ? start : x === 6 && y === 6 ? end : original(x, y);
 
-    // Each handle grabs the bar it sits on, so a resize arms the Entry through a real Item id.
-    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', itemId: first!.id, edge: 'start' });
-    expect(backend.hitTest(point(6, 6))).toEqual({ kind: 'bar', itemId: last!.id, edge: 'end' });
+    // Each handle grabs the bar it sits on, so a resize arms the Entry through a real Bar id.
+    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', barId: first!.id, edge: 'start' });
+    expect(backend.hitTest(point(6, 6))).toEqual({ kind: 'bar', barId: last!.id, edge: 'end' });
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -1926,7 +1926,7 @@ describe('render/dom backend', () => {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
 
-    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', itemId: frame.bars[0]!.id });
+    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', barId: frame.bars[0]!.id });
 
     document.elementFromPoint = original;
     backend.destroy();
@@ -1934,7 +1934,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it("sets data-movable on movableItemId's bar and clears it when the id moves elsewhere (D-S3-6)", () => {
+  it("sets data-movable on movableBarId's bar and clears it when the id moves elsewhere (D-S3-6)", () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -1954,11 +1954,11 @@ describe('render/dom backend', () => {
     const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
     const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
 
-    backend.applyState({ movableItemId: a!.id });
+    backend.applyState({ movableBarId: a!.id });
     expect(nodeA.hasAttribute('data-movable')).toBe(true);
     expect(nodeB.hasAttribute('data-movable')).toBe(false);
 
-    backend.applyState({ movableItemId: b!.id });
+    backend.applyState({ movableBarId: b!.id });
     expect(nodeA.hasAttribute('data-movable')).toBe(false);
     expect(nodeB.hasAttribute('data-movable')).toBe(true);
 
@@ -2386,7 +2386,7 @@ describe('render/dom backend', () => {
       restoreRuler();
     });
 
-    it('a fixed-width Item’s label finds no room in its own box, so `fitBar` moves it outside (ADR 0022, E5)', () => {
+    it('a fixed-width Bar’s label finds no room in its own box, so `fitBar` moves it outside (ADR 0022, E5)', () => {
       // The box holds no label — 13px minus the gap on both sides is negative — so `diamond()`'s own
       // glyph relies on the same `fitBar` arithmetic every narrow bar already uses. Nothing about
       // `box`/`span: 'fixed'` reaches `resolveBarLabelPlacement`: it reads `bar.x`/`bar.width` alone,
@@ -2395,7 +2395,7 @@ describe('render/dom backend', () => {
       withStubRuler();
       const t1 = sampleEntries[0]!;
       const markerRegistry = createVariantRegistry({ fieldFor: () => undefined });
-      markerRegistry.addPluginVariant({ name: 'marker', when: () => true, items: fixedWidthItem(13) });
+      markerRegistry.addPluginVariant({ name: 'marker', when: () => true, bars: fixedWidthBar(13) });
       const backend = paintingBackend([t1]);
       const { grid, timeline } = mountSurfaces();
       backend.mount({ grid, timeline });
@@ -2567,7 +2567,7 @@ describe('render/dom backend', () => {
       const measureTextCallsBeforePreview = measureTextCalls;
 
       // Shrinks the bar past the fit line entirely off the hot path — no frame, no canvas call.
-      backend.applyState({ preview: [{ itemId: id, dx: 0, dWidth: -180, extra: false }] });
+      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: -180, extra: false }] });
       expect(bar.dataset['label']).toBe('outside');
       observer.disconnect();
       expect(mutations).toBe(0);

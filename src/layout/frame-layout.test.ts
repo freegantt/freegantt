@@ -2,15 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
 import { createVariantRegistry } from './items/variants.js';
-import { fixedWidthItem } from './items/item.js';
+import { fixedWidthBar } from './items/item.js';
 import { sampleEntries, sampleStoredEntries } from '../../fixtures/sample-dataset.js';
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
-import * as produceItems from './items/produce-items.js';
+import * as produceBars from './items/produce-items.js';
 import type { Entry, EntryId } from '../model/index.js';
 import type { EntryDoubleValues } from './entry-double.js';
 import { entryDouble, entryDoubles } from './entry-double.js';
-import { changeSetId, entryId, itemId, rowId, segmentId } from '../model/index.js';
+import { changeSetId, entryId, barId, rowId, segmentId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
@@ -143,25 +143,25 @@ describe('FrameLayout', () => {
     }
   });
 
-  it('itemIdsForEntry answers every bar a segmented entry draws (#185)', () => {
+  it('barIdsForEntry answers every bar a segmented entry draws (#185)', () => {
     const layout = new FrameLayout();
     const segmented = overlappingEntry(sampleEntries[0]!, 3);
     const frame = layout.computeFrame(input({ entries: [segmented] }));
 
-    expect(layout.itemIdsForEntry(segmented.id)).toEqual(frame.bars.map((bar) => bar.id));
-    expect(layout.itemIdsForEntry(segmented.id)).toHaveLength(3);
+    expect(layout.barIdsForEntry(segmented.id)).toEqual(frame.bars.map((bar) => bar.id));
+    expect(layout.barIdsForEntry(segmented.id)).toHaveLength(3);
   });
 
-  it('itemIdsForEntry answers a plugin variant that draws its own Items (#185)', () => {
-    // A producer is free to name its Items — nothing here parses `${entryId}:${segmentIndex}`.
+  it('barIdsForEntry answers a plugin variant that draws its own Bars (#185)', () => {
+    // A producer is free to name its Bars — nothing here parses `${entryId}:${segmentIndex}`.
     const variant = 'twin';
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addPluginVariant({
       name: variant,
       when: () => true,
-      items: (entry) => [
+      bars: (entry) => [
         {
-          id: itemId(entry.id, 7),
+          id: barId(entry.id, 7),
           entryId: entry.id,
           variant,
           label: entry.name ?? '',
@@ -169,7 +169,7 @@ describe('FrameLayout', () => {
           end: entry.end!,
         },
         {
-          id: itemId(entry.id, 9),
+          id: barId(entry.id, 9),
           entryId: entry.id,
           variant,
           label: entry.name ?? '',
@@ -182,54 +182,54 @@ describe('FrameLayout', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [entry], variants: registry }));
 
-    expect(layout.itemIdsForEntry(entry.id)).toEqual([itemId(entry.id, 7), itemId(entry.id, 9)]);
+    expect(layout.barIdsForEntry(entry.id)).toEqual([barId(entry.id, 7), barId(entry.id, 9)]);
   });
 
-  it('itemIdsForEntry answers empty for an entry no row carries (#185)', () => {
+  it('barIdsForEntry answers empty for an entry no row carries (#185)', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
 
-    expect(layout.itemIdsForEntry(sampleEntries[1]!.id)).toEqual([]);
+    expect(layout.barIdsForEntry(sampleEntries[1]!.id)).toEqual([]);
   });
 
-  it('itemsForEntry answers the full Item, box included, not just its id (#295)', () => {
+  it('barsForEntry answers the full Bar, box included, not just its id (#295)', () => {
     const px = 13;
     const variant = 'diamond';
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addPluginVariant({
       name: variant,
       when: () => true,
-      items: fixedWidthItem(px),
+      bars: fixedWidthBar(px),
     });
     const entry: Entry = sampleEntries[0]!;
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [entry], variants: registry }));
 
-    const items = layout.itemsForEntry(entry.id);
+    const items = layout.barsForEntry(entry.id);
     expect(items).toHaveLength(1);
     expect(items[0]?.box).toEqual({ widthPx: px, anchor: 'center' });
   });
 
-  it('segmentIdsForItem names the one Segment a Segment bar drew (#212)', () => {
+  it('segmentIdsForBar names the one Segment a Segment bar drew (#212)', () => {
     const layout = new FrameLayout();
     const segmented = overlappingEntry(sampleEntries[0]!, 3);
     const frame = layout.computeFrame(input({ entries: [segmented] }));
 
-    expect(frame.bars.map((bar) => layout.segmentIdsForItem(bar.id))).toEqual(
+    expect(frame.bars.map((bar) => layout.segmentIdsForBar(bar.id))).toEqual(
       segmented.segments.map((segment) => [segment.id]),
     );
   });
 
-  it('segmentIdsForItem names every Segment of the Entry for a whole-entry variant (#212)', () => {
+  it('segmentIdsForBar names every Segment of the Entry for a whole-entry variant (#212)', () => {
     // A whole-entry variant (a parent, a milestone) draws one bar over the whole Entry, so it drew
     // no single Segment. It still stands for all of them: a click on it selects the Entry's work.
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addPluginVariant({
       name: 'milestone',
       when: () => true,
-      items: (entry) => [
+      bars: (entry) => [
         {
-          id: itemId(entry.id, 0),
+          id: barId(entry.id, 0),
           entryId: entry.id,
           variant: 'milestone',
           label: entry.name ?? '',
@@ -244,17 +244,17 @@ describe('FrameLayout', () => {
 
     expect(frame.bars).toHaveLength(1);
     expect(frame.bars[0]!.segmentId).toBeUndefined();
-    expect(layout.segmentIdsForItem(frame.bars[0]!.id)).toEqual(
+    expect(layout.segmentIdsForBar(frame.bars[0]!.id)).toEqual(
       wholeSpan.segments.map((segment) => segment.id),
     );
   });
 
-  it('segmentIdsForItem answers empty for an Item no current frame planned (#212)', () => {
+  it('segmentIdsForBar answers empty for a Bar no current frame planned (#212)', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
 
-    expect(layout.segmentIdsForItem(itemId(sampleEntries[1]!.id, 0))).toEqual([]);
-    expect(layout.segmentIdsForItem(itemId(sampleEntries[0]!.id, 4))).toEqual([]);
+    expect(layout.segmentIdsForBar(barId(sampleEntries[1]!.id, 0))).toEqual([]);
+    expect(layout.segmentIdsForBar(barId(sampleEntries[0]!.id, 4))).toEqual([]);
   });
 
   it('segmentIdsForRow names every Segment of every Entry the row owns, in row order (#199, #212)', () => {
@@ -310,7 +310,7 @@ describe('FrameLayout', () => {
 
 describe('FrameLayout row production (S4.8, [S4-A5])', () => {
   it('produces a row once per revision, not once per read', () => {
-    const spy = vi.spyOn(produceItems, 'produceItemsForRow');
+    const spy = vi.spyOn(produceBars, 'produceBarsForRow');
     const layout = new FrameLayout();
     const entries = [overlappingEntry(sampleEntries[0]!, 2), sampleEntries[1]!];
     const rowsInput = input({ entries });
@@ -337,7 +337,7 @@ describe('FrameLayout row production (S4.8, [S4-A5])', () => {
     expect(first.rows[0]?.height).toBe(layout.rowTop(1) - layout.rowTop(0));
     expect(heightAt).toHaveBeenCalled();
 
-    const produceSpy = vi.spyOn(produceItems, 'produceItemsForRow');
+    const produceSpy = vi.spyOn(produceBars, 'produceBarsForRow');
     produceSpy.mockClear();
     layout.invalidateFrom(1);
     layout.computeFrame(rowsInput);
@@ -351,7 +351,7 @@ describe('FrameLayout row production (S4.8, [S4-A5])', () => {
   it('invalidateForChange walks from the lowest updated row, and from 0 on add/remove', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input());
-    const produceSpy = vi.spyOn(produceItems, 'produceItemsForRow');
+    const produceSpy = vi.spyOn(produceBars, 'produceBarsForRow');
 
     const update: ChangeSet = {
       id: changeSetId(1),

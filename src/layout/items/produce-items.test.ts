@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { emptyGroupDataset } from '../../../fixtures/empty-group-dataset.js';
-import { itemId, rowId, segmentId } from '../../model/index.js';
+import { barId, rowId, segmentId } from '../../model/index.js';
 import type { Entry, EntryId, Instant } from '../../model/index.js';
 import type { EntryDoubleValues } from '../entry-double.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import type { PlannedRow } from '../rows/row-source.js';
-import { produceItemsForRow } from './produce-items.js';
-import { followSegments, wholeEntryItem } from './item.js';
+import { produceBarsForRow } from './produce-items.js';
+import { followSegments, wholeEntryBar } from './item.js';
 import { createVariantRegistry } from './variants.js';
 
-describe('wholeEntryItem (review P3)', () => {
-  it('covers the entry span, stamps the variant it is told, and owns the Item id convention', () => {
+describe('wholeEntryBar (review P3)', () => {
+  it('covers the entry span, stamps the variant it is told, and owns the Bar id convention', () => {
     const t1 = spanEntry('t1', { name: 'Load test' });
     // No `label` (#421 C5, Q36): the built-in producer leaves it absent, so `placeFrame`'s bound
-    // `barLabelFor` resolves the Entry's name through its Field — this Item never restates it.
-    expect(wholeEntryItem(t1, 'buffer')).toEqual({
-      id: itemId(t1.id, 0),
+    // `barLabelFor` resolves the Entry's name through its Field — this Bar never restates it.
+    expect(wholeEntryBar(t1, 'buffer')).toEqual({
+      id: barId(t1.id, 0),
       entryId: t1.id,
       variant: 'buffer',
       start: t1.start,
@@ -25,23 +25,23 @@ describe('wholeEntryItem (review P3)', () => {
 
   it('carries no segmentId, because it draws the whole Entry and stands for no single Segment (#212)', () => {
     const t1 = spanEntry('t1');
-    expect(wholeEntryItem(t1, 'leaf').segmentId).toBeUndefined();
+    expect(wholeEntryBar(t1, 'leaf').segmentId).toBeUndefined();
   });
 
   it('is what a variant with no `items` of its own draws when the Entry has no Segments (ADR 0023)', () => {
     const t1 = spanEntry('t1', { segments: [] });
     const own = createVariantRegistry({ fieldFor: () => undefined });
     own.addPluginVariant({ name: 'buffer', when: () => true });
-    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual([
-      wholeEntryItem(t1, 'buffer'),
+    expect(produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual([
+      wholeEntryBar(t1, 'buffer'),
     ]);
   });
 
-  it('draws one Item per Segment for a variant with no `items` of its own (ADR 0023)', () => {
+  it('draws one Bar per Segment for a variant with no `bars` of its own (ADR 0023)', () => {
     const t1 = spanEntry('t1');
     const own = createVariantRegistry({ fieldFor: () => undefined });
     own.addPluginVariant({ name: 'buffer', when: () => true });
-    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual(
+    expect(produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), own)).toEqual(
       followSegments(t1, 'buffer'),
     );
   });
@@ -54,21 +54,21 @@ describe('a producer stamps the registration’s own name, not one it invents (A
     const dispose = registry.addPluginVariant({
       name: 'phase',
       when: () => true,
-      items: (entry, variant) => [wholeEntryItem(entry, variant)],
+      bars: (entry, variant) => [wholeEntryBar(entry, variant)],
     });
 
-    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
-      wholeEntryItem(t1, 'phase'),
+    expect(produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
+      wholeEntryBar(t1, 'phase'),
     ]);
 
     dispose();
     registry.addPluginVariant({
       name: 'stage',
       when: () => true,
-      items: (entry, variant) => [wholeEntryItem(entry, variant)],
+      bars: (entry, variant) => [wholeEntryBar(entry, variant)],
     });
-    expect(produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
-      wholeEntryItem(t1, 'stage'),
+    expect(produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).toEqual([
+      wholeEntryBar(t1, 'stage'),
     ]);
   });
 });
@@ -99,8 +99,8 @@ function entryByIdFor(entries: readonly Entry[]): ReadonlyMap<EntryId, Entry> {
 
 const registry = createVariantRegistry({ fieldFor: () => undefined });
 
-describe('produceItemsForRow', () => {
-  it('produces one Item per Segment with ids t1:0, t1:1, t1:2', () => {
+describe('produceBarsForRow', () => {
+  it('produces one Bar per Segment with ids t1:0, t1:1, t1:2', () => {
     const t1 = spanEntry('t1', {
       segments: [
         { id: segmentId('t1-0'), start: asInstant(0), end: asInstant(2) },
@@ -108,17 +108,17 @@ describe('produceItemsForRow', () => {
         { id: segmentId('t1-2'), start: asInstant(6), end: asInstant(8) },
       ],
     });
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
-    expect(items.map((item) => item.id)).toEqual([itemId(t1.id, 0), itemId(t1.id, 1), itemId(t1.id, 2)]);
+    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    expect(items.map((item) => item.id)).toEqual([barId(t1.id, 0), barId(t1.id, 1), barId(t1.id, 2)]);
     expect(items.map((item) => item.start)).toEqual([asInstant(0), asInstant(3), asInstant(6)]);
     expect(items.map((item) => item.segmentId)).toEqual(t1.segments.map((segment) => segment.id));
   });
 
   it('produces t1:0 for an entry with its one default Segment (#212: an Entry never has none)', () => {
     const t1 = spanEntry('t1');
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(1);
-    expect(items[0]?.id).toBe(itemId(t1.id, 0));
+    expect(items[0]?.id).toBe(barId(t1.id, 0));
     expect(items[0]?.start).toBe(t1.start);
     expect(items[0]?.end).toBe(t1.end);
     expect(items[0]?.segmentId).toBe(t1.segments[0]?.id);
@@ -126,10 +126,10 @@ describe('produceItemsForRow', () => {
 
   it('draws the leaf variant for a childless Entry no rule claims (ADR 0013)', () => {
     const t1 = spanEntry('t1');
-    expect(() => produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).not.toThrow();
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    expect(() => produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).not.toThrow();
+    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(1);
-    expect(items[0]?.id).toBe(itemId(t1.id, 0));
+    expect(items[0]?.id).toBe(barId(t1.id, 0));
     expect(items[0]?.variant).toBe('leaf');
   });
 
@@ -138,7 +138,7 @@ describe('produceItemsForRow', () => {
       { id: 't1', start: 0, end: 10 },
       { id: 'c1', parentId: 't1', start: 0, end: 10 },
     ]);
-    const items = produceItemsForRow(planned([t1!.id]), entryByIdFor([t1!]), registry);
+    const items = produceBarsForRow(planned([t1!.id]), entryByIdFor([t1!]), registry);
     expect(items).toHaveLength(1);
     expect(items[0]?.variant).toBe('summary');
   });
@@ -146,17 +146,17 @@ describe('produceItemsForRow', () => {
   it('an Entry with one date and no Segment draws no bar (ADR 0012 Gate)', () => {
     const t1 = entryDouble({ id: 't1', start: 0 });
     expect(t1.end).toBeUndefined();
-    const items = produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
     expect(items).toHaveLength(0);
   });
 
-  it('[S4-A8] an entry with no children produces no Item; a child gives it a real span (ADR 0012)', () => {
+  it('[S4-A8] an entry with no children produces no Bar; a child gives it a real span (ADR 0012)', () => {
     const dataset = emptyGroupDataset();
     const empty = dataset.entries.get('g1')!;
     expect(empty.start).toBeUndefined();
     expect(empty.end).toBeUndefined();
-    const emptyItems = produceItemsForRow(planned([empty.id]), entryByIdFor([empty]), registry);
-    expect(emptyItems).toHaveLength(0);
+    const emptyBars = produceBarsForRow(planned([empty.id]), entryByIdFor([empty]), registry);
+    expect(emptyBars).toHaveLength(0);
 
     dataset.entries.add({
       id: 'c1',
@@ -166,11 +166,11 @@ describe('produceItemsForRow', () => {
       end: '2026-03-05',
     });
     const filled = dataset.entries.get('g1')!;
-    const filledItems = produceItemsForRow(planned([filled.id]), entryByIdFor([filled]), registry);
-    expect(filledItems).toHaveLength(1);
-    expect(filledItems[0]?.start).toBe(filled.start);
-    expect(filledItems[0]?.end).toBe(filled.end);
-    expect(filledItems[0]?.start).not.toBe(filledItems[0]?.end);
+    const filledBars = produceBarsForRow(planned([filled.id]), entryByIdFor([filled]), registry);
+    expect(filledBars).toHaveLength(1);
+    expect(filledBars[0]?.start).toBe(filled.start);
+    expect(filledBars[0]?.end).toBe(filled.end);
+    expect(filledBars[0]?.start).not.toBe(filledBars[0]?.end);
   });
 
   it('passes `childrenAsSegments: true` only for a claimed row’s subject — nothing skips it (#421 C2, Q33)', () => {
@@ -183,14 +183,14 @@ describe('produceItemsForRow', () => {
     own.addPluginVariant({
       name: 'watch',
       when: () => true,
-      items: (entry, variant, childrenAsSegments) => {
+      bars: (entry, variant, childrenAsSegments) => {
         seen.push({ id: entry.id, childrenAsSegments });
-        return [wholeEntryItem(entry, variant)];
+        return [wholeEntryBar(entry, variant)];
       },
     });
 
     const claimedRow: PlannedRow = { ...planned([p1!.id, c1!.id]), claimed: true };
-    produceItemsForRow(claimedRow, entryByIdFor([p1!, c1!]), own);
+    produceBarsForRow(claimedRow, entryByIdFor([p1!, c1!]), own);
 
     // The subject (entryIds[0]) is asked with `true`; the child it claims is asked with `false`.
     // Nothing is skipped — the producer runs, and answers, for both (Q33).
@@ -207,17 +207,17 @@ describe('produceItemsForRow', () => {
     own.addPluginVariant({
       name: 'watch',
       when: () => true,
-      items: (entry, variant, childrenAsSegments) => {
+      bars: (entry, variant, childrenAsSegments) => {
         seen.push(childrenAsSegments);
-        return [wholeEntryItem(entry, variant)];
+        return [wholeEntryBar(entry, variant)];
       },
     });
 
-    produceItemsForRow(planned([t1.id]), entryByIdFor([t1]), own);
+    produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), own);
     expect(seen).toEqual([false]);
   });
 
-  it('a header row (kind: header) produces no Items', () => {
+  it('a header row (kind: header) produces no Bars', () => {
     const t1 = spanEntry('t1');
     const header: PlannedRow = {
       id: rowId('header'),
@@ -229,7 +229,7 @@ describe('produceItemsForRow', () => {
       expanded: true,
       headerLabel: 'Team',
     };
-    const items = produceItemsForRow(header, entryByIdFor([t1]), registry);
+    const items = produceBarsForRow(header, entryByIdFor([t1]), registry);
     expect(items).toEqual([]);
   });
 });

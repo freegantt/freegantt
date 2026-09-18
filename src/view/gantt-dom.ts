@@ -17,7 +17,7 @@
 // A layer's own rect left with it. `rowLayerBounds` sat here until #168 and now reads
 // `ctx.view.rowLayer.bounds` — the box belongs to the layer it describes.
 //
-// What this seam reads off a node, and what it asks for. A node states its own identity: which Item,
+// What this seam reads off a node, and what it asks for. A node states its own identity: which Bar,
 // which Row, which Field. Every *set* a target names is asked of the layout instead (#185, #199,
 // #212). A stamp is written for one frame, and a node outlives that frame. So a set read off a node
 // can describe the frame before this one. That is how a removed Segment made `targetUnder` name a
@@ -30,8 +30,8 @@ import {
   ENTRY_ID_KEY,
   FIELD_ATTRIBUTE,
   FIELD_KEY,
-  ITEM_ID_ATTRIBUTE,
-  ITEM_ID_KEY,
+  BAR_ID_ATTRIBUTE,
+  BAR_ID_KEY,
   ROW_CELL_CLASS,
   ROW_CLASS,
   ROW_ID_KEY,
@@ -39,7 +39,7 @@ import {
   ROW_LABEL_TEXT_CLASS,
 } from '../render/dom/dom-contract.js';
 import { cssEscapeAttr } from '../render/dom/css-escape.js';
-import { entryId, entryIdOfItem, itemIdFromDataset, rowIdFromDataset } from '../model/index.js';
+import { entryId, entryIdOfBar, barIdFromDataset, rowIdFromDataset } from '../model/index.js';
 import type { Entry, EntryId, FieldKey, RowId, SegmentId, TargetKind } from '../model/index.js';
 import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
@@ -94,7 +94,7 @@ export interface GanttDom {
    *  stays over one bar resolves to the same frozen object every time, and allocates nothing. */
   targetUnder(node: Node): DomTarget | undefined;
   /** The first bar of `id` that the current frame has mounted. A popup or a tooltip anchors on it.
-   *  It asks the layout which Items the entry draws (#185). So an entry whose first Segment is
+   *  It asks the layout which Bars the entry draws (#185). So an entry whose first Segment is
    *  scrolled off still anchors on a Segment that is on screen. `undefined` when the entry has no
    *  bar in the current frame at all. */
   barFor(id: EntryId | string): HTMLElement | undefined;
@@ -156,7 +156,7 @@ export class ContainerDom implements GanttDom {
    *  `data-item-id` while the Segment under it changes. So a removed Segment leaves every node stamp
    *  equal, and the cached Segment set dead. One number compare per event, and no allocation (I5). */
   #memoElement: Element | undefined;
-  #memoItemId: string | undefined;
+  #memoBarId: string | undefined;
   #memoEntryId: string | undefined;
   #memoField: string | undefined;
   #memoFrameRevision: number | undefined;
@@ -174,23 +174,23 @@ export class ContainerDom implements GanttDom {
     if (!(node instanceof Element)) return undefined;
     const element = node.closest<HTMLElement>(TARGET_SELECTOR);
     if (element === null || !this.owns(element)) return undefined;
-    const itemIdAttr = element.dataset[ITEM_ID_KEY];
+    const barIdAttr = element.dataset[BAR_ID_KEY];
     const entryIdAttr = element.dataset[ENTRY_ID_KEY];
     const fieldAttr = element.dataset[FIELD_KEY];
     const frameRevision = this.#ports.layout.frameRevision;
     if (
       this.#memoTarget !== undefined &&
       this.#memoElement === element &&
-      this.#memoItemId === itemIdAttr &&
+      this.#memoBarId === barIdAttr &&
       this.#memoEntryId === entryIdAttr &&
       this.#memoField === fieldAttr &&
       this.#memoFrameRevision === frameRevision
     ) {
       return this.#memoTarget;
     }
-    const target = this.#resolve(element, itemIdAttr, fieldAttr);
+    const target = this.#resolve(element, barIdAttr, fieldAttr);
     this.#memoElement = element;
-    this.#memoItemId = itemIdAttr;
+    this.#memoBarId = barIdAttr;
     this.#memoEntryId = entryIdAttr;
     this.#memoField = fieldAttr;
     this.#memoFrameRevision = frameRevision;
@@ -199,9 +199,9 @@ export class ContainerDom implements GanttDom {
   }
 
   barFor(id: EntryId | string): HTMLElement | undefined {
-    for (const item of this.#ports.layout.itemIdsForEntry(entryId(id))) {
+    for (const item of this.#ports.layout.barIdsForEntry(entryId(id))) {
       const bar = this.#ports.container.querySelector<HTMLElement>(
-        `.${BAR_CLASS}${attributeIs(ITEM_ID_ATTRIBUTE, item)}`,
+        `.${BAR_CLASS}${attributeIs(BAR_ID_ATTRIBUTE, item)}`,
       );
       if (bar !== null) return bar;
     }
@@ -234,8 +234,8 @@ export class ContainerDom implements GanttDom {
    *  would poison every later reader of the same node. */
   #resolve(element: HTMLElement, itemIdAttr: string | undefined, fieldAttr: string | undefined): DomTarget {
     if (element.classList.contains(BAR_CLASS)) {
-      const id = itemIdFromDataset(itemIdAttr);
-      const entry = id === undefined ? undefined : this.#ports.entryById(entryIdOfItem(id));
+      const id = barIdFromDataset(itemIdAttr);
+      const entry = id === undefined ? undefined : this.#ports.entryById(entryIdOfBar(id));
       // A bar draws one Entry, so the subject and the set it stands for are the same one Entry.
       // Which Segments: the layout answers (#212). The bar's own `data-segment-id` says which
       // Segment it draws right now, which is a narrower fact and goes stale under a recycled node.
@@ -243,7 +243,7 @@ export class ContainerDom implements GanttDom {
         kind: 'bar',
         element,
         entryIds: entry === undefined ? NO_ENTRY_IDS : [entry.id],
-        segmentIds: id === undefined ? NO_SEGMENT_IDS : this.#ports.layout.segmentIdsForItem(id),
+        segmentIds: id === undefined ? NO_SEGMENT_IDS : this.#ports.layout.segmentIdsForBar(id),
         ...entryPart(entry),
       });
     }

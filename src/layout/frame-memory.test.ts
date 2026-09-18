@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { FrameMemory } from './frame-memory.js';
 import { createVariantRegistry } from './items/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
-import * as produceItems from './items/produce-items.js';
+import * as produceBars from './items/produce-items.js';
 import { entryId, rowId, segmentId } from '../model/index.js';
 import type { Entry } from '../model/index.js';
 import { entryDoubleLike } from './entry-double.js';
@@ -61,7 +61,7 @@ describe('FrameMemory (A2)', () => {
   });
 
   it('a new datasetRevision produces again without invalidateFrom', () => {
-    const spy = vi.spyOn(produceItems, 'produceItemsForRow');
+    const spy = vi.spyOn(produceBars, 'produceBarsForRow');
     const memory = new FrameMemory();
     const bind = {
       plan: planOf(sampleEntries.slice(0, 1)),
@@ -79,7 +79,7 @@ describe('FrameMemory (A2)', () => {
   });
 });
 
-describe('FrameMemory remembers the Segment sets beside the Items (#230 R1)', () => {
+describe('FrameMemory remembers the Segment sets beside the Bars (#230 R1)', () => {
   const registry = createVariantRegistry({ fieldFor: () => undefined });
 
   function memoryFor(entries: readonly Entry[]): { memory: FrameMemory; rowKey: string } {
@@ -89,18 +89,18 @@ describe('FrameMemory remembers the Segment sets beside the Items (#230 R1)', ()
     return { memory, rowKey: String(plan[0]!.id) };
   }
 
-  it('caches segmentIdsByItem, so a repeated ask allocates nothing (I5)', () => {
+  it('caches segmentIdsByBar, so a repeated ask allocates nothing (I5)', () => {
     const { memory, rowKey } = memoryFor([sampleEntries[0]!]);
 
-    expect(memory.rowMemory(rowKey).segmentIdsByItem).toBe(memory.rowMemory(rowKey).segmentIdsByItem);
+    expect(memory.rowMemory(rowKey).segmentIdsByBar).toBe(memory.rowMemory(rowKey).segmentIdsByBar);
   });
 
-  it('names the Segments each Item stands for, keyed by that Item', () => {
+  it('names the Segments each Bar stands for, keyed by that Bar', () => {
     const { memory, rowKey } = memoryFor([sampleEntries[0]!]);
     const row = memory.rowMemory(rowKey);
 
     for (const item of row.items) {
-      expect(row.segmentIdsByItem.get(item.id)).toEqual(
+      expect(row.segmentIdsByBar.get(item.id)).toEqual(
         item.segmentId === undefined ? sampleEntries[0]!.segments.map((s) => s.id) : [item.segmentId],
       );
     }

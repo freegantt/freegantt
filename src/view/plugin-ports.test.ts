@@ -93,7 +93,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     resolveTooltipRenderer: () => undefined,
     variantFor: (): ResolvedVariant => ({
       name: 'leaf',
-      items: () => [],
+      bars: () => [],
       paint: undefined,
       capabilities: undefined,
       css: undefined,

@@ -19,7 +19,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - Repo: TS strict, Vite, Vitest, ESLint + import-boundary rules (invariant I1) wired into CI from the first commit.
 - `model/`: `Entry` (including `kind` — authored from day one, even while only `'span'` renders), ids, `Instant` brand, `TimeSpan`, `Duration`.
 - `time/` (minimal): `instant()`, `toISO()`, zone-aware `startOfDay`/`addDays`/`diff` for one dataset zone; magic-constant lint (I10).
-- `layout/` (minimal): row resolution (`source: 'entries'`, flat list), one item per entry, fixed row height, `computeFrame()` returning rows + bars; deterministic `Item.id` (I8).
+- `layout/` (minimal): row resolution (`source: 'entries'`, flat list), one bar per entry, fixed row height, `computeFrame()` returning rows + bars; deterministic `Bar.id` (I8).
 - `render/dom` (minimal): mount, `sync(frame)` rendering absolutely-positioned row and bar elements; the keyed reconciler in its hard-bounded scope (`01` §8.1); `render/null` for tests.
 - `api/` (minimal): `new Dataset({ entries })`, `new Gantt({ container, dataset })`, `destroy()`.
 - Harness: a Vite page that mounts the Gantt on a fixture; this page lives forever and every slice adds to it.
@@ -30,7 +30,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 **Acceptance**
 
 - [x] Harness shows fixture entries as bars positioned correctly against time.
-- [x] `computeFrame()` snapshot-tested headlessly; `Item.id` determinism asserted.
+- [x] `computeFrame()` snapshot-tested headlessly; `Bar.id` determinism asserted.
 - [x] Import-boundary lint fails the build on a violation (proven by a deliberate red test in CI setup).
 - [x] `render/null` consumes a frame in Node with no DOM.
 - [x] Two Gantt instances mount on one page without shared state (I2 test exists from day one).
@@ -188,8 +188,8 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 - `hierarchy: { autoGroup: true }` on `Dataset`: first child promotes a `'span'` parent to `group` within the triggering transaction; promote `'span'` only, never demote (`02` §2). **Superseded by ADR 0013:** nothing promotes a stored classification, because there is none. `autoGroup` is deleted, and losing the last child leaves a normal, dateless Entry.
 - Row sources: `{ source: 'group', groupBy }` and `{ source: 'custom', resolve }` (`01` §2.3); group header rows.
 - Sort and filter on the row source (`rowSource.filter`, `rowSource.sort`, `rowSource.filterPolicy`) with tree-aware policies (filter keeps ancestors by default; `filterPolicy: 'matchOnly'` for flat match lists; sort stays within parent).
-- Item emission: `entry.segments` → multiple items on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index. **Retired by #298:** `singleLane` is the only row-packing behavior, so packing, sub-lanes and `heightMode` are gone. **The Segment itself is retired by #421** (S9 R1, ruled 2026-09-17): several bars on one row are now several child Entries the row source folds onto their parent's row.
-- Interaction with lanes: drag/resize on packed items; collapse/expand by keyboard. **Retired by #298:** no lanes remain to drag or resize within; a row's items share its one band.
+- Bar emission: `entry.segments` → multiple bars on one row; overlap auto-packing into sub-lanes; `heightMode: 'pack'` variable row heights through the height index. **Retired by #298:** `singleLane` is the only row-packing behavior, so packing, sub-lanes and `heightMode` are gone. **The Segment itself is retired by #421** (S9 R1, ruled 2026-09-17): several bars on one row are now several child Entries the row source folds onto their parent's row.
+- Interaction with lanes: drag/resize on packed bars; collapse/expand by keyboard. **Retired by #298:** no lanes remain to drag or resize within; a row's bars share its one band.
 - Harness: tree fixture, with **one** Gantt and a button that switches `gantt.rowSource` between the tree and a grouped source. That proves the Row ≠ Entry payoff and proves live reconfiguration (`02` §2) in the same demo. Two Gantts on one dataset is not the demo: D9 is about a shared axis and scroll between charts with **different** data (`02` §5), and a shared `Dataset` — while free, since a second Gantt is only a second `change` subscriber — is not a case the library designs around or tests.
 - **Known gaps due this slice (issue #91 §9):** §9-E is a bet on `RowHeightIndex.heightAt`/`invalidateFrom` and `RenderBackend.applyState` finally getting production callers — pack-mode row heights above and the hover/selection/drag hot path are exactly that; if either lands and still does not use the methods, remove them rather than leave decoration. **Amended by #298:** pack-mode row heights are gone, so the hot path is the only half of this bet left to settle; `FrameMemoryBind.heightAt` survives as a per-row override independent of packing. §9-G: `render/backend.ts`'s `hitTest(x, y)` does not name its coordinate space (DOM backend takes client coords, `GeometryFrame` is content coords) — this slice's gesture controllers are its first callers, so give it a named `ClientPoint` type before wiring them up, not after. §9-B (`view/gantt-shell.ts`'s `#wiring` boolean) is worth revisiting too: tree UI and lane interaction both add more to wire during construction.
 

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { SegmentSelection } from './segment-selection.js';
 import type { SegmentSelectionPorts, SegmentSelectionRow } from './segment-selection.js';
 import { EntryStore } from '../data/entry-store.js';
-import { entryId, itemId, rowId, segmentId } from '../model/index.js';
-import type { ChangeSet, EntryId, Instant, ItemId, RowId, SegmentId, StoredEntry } from '../model/index.js';
+import { entryId, barId, rowId, segmentId } from '../model/index.js';
+import type { ChangeSet, EntryId, Instant, BarId, RowId, SegmentId, StoredEntry } from '../model/index.js';
 import type { SelectionChange } from './event-bus.js';
 
 // T1-7 (#246 S2-4): `SegmentSelection` has no direct test — everything about it was covered only
@@ -46,7 +46,7 @@ function entryStoreOf(entries: readonly StoredEntry[]): EntryStore {
 interface PortsOptions {
   rows?: readonly SegmentSelectionRow[];
   rowIdForEntry?: (id: EntryId) => RowId | undefined;
-  segmentIdsForItem?: (id: ItemId) => readonly SegmentId[];
+  segmentIdsForBar?: (id: BarId) => readonly SegmentId[];
   canGesture?: (capability: 'select', id: EntryId) => boolean;
 }
 
@@ -60,7 +60,7 @@ function buildPorts(
     entries: () => store,
     plannedRows: () => options.rows ?? [],
     rowIdForEntry: options.rowIdForEntry ?? (() => undefined),
-    segmentIdsForItem: options.segmentIdsForItem ?? (() => []),
+    segmentIdsForBar: options.segmentIdsForBar ?? (() => []),
     canGesture: options.canGesture ?? (() => true),
     confirm: (_change, apply) => {
       apply();
@@ -151,19 +151,19 @@ describe('SegmentSelection.selectableSegmentsOf, both hit kinds (#212, ADR 0010)
   it('a bar hit names its own Segment when the Entry may be selected, and nothing when it may not', () => {
     const e1 = entry('e1', ['e1-1', 'e1-2']);
     const store = entryStoreOf([e1]);
-    const bar = itemId(e1.id, 1);
+    const bar = barId(e1.id, 1);
     const { ports: allowed } = buildPorts(store, {
-      segmentIdsForItem: (id) => (id === bar ? [segmentId('e1-2')] : []),
+      segmentIdsForBar: (id) => (id === bar ? [segmentId('e1-2')] : []),
     });
-    expect(new SegmentSelection(allowed).selectableSegmentsOf({ kind: 'bar', itemId: bar })).toEqual([
+    expect(new SegmentSelection(allowed).selectableSegmentsOf({ kind: 'bar', barId: bar })).toEqual([
       segmentId('e1-2'),
     ]);
 
     const { ports: refused } = buildPorts(store, {
-      segmentIdsForItem: (id) => (id === bar ? [segmentId('e1-2')] : []),
+      segmentIdsForBar: (id) => (id === bar ? [segmentId('e1-2')] : []),
       canGesture: () => false,
     });
-    expect(new SegmentSelection(refused).selectableSegmentsOf({ kind: 'bar', itemId: bar })).toEqual([]);
+    expect(new SegmentSelection(refused).selectableSegmentsOf({ kind: 'bar', barId: bar })).toEqual([]);
   });
 });
 
@@ -367,7 +367,7 @@ describe('SegmentSelection.propose (D-S3-10)', () => {
       entries: () => store,
       plannedRows: () => [],
       rowIdForEntry: () => undefined,
-      segmentIdsForItem: () => [],
+      segmentIdsForBar: () => [],
       canGesture: () => true,
       confirm,
       announce: () => {},

@@ -3,7 +3,7 @@
 // different question: what the row pass draws once a variant has been resolved.
 
 import { describe, expect, it } from 'vitest';
-import { itemId, segmentId } from '../../model/index.js';
+import { barId, segmentId } from '../../model/index.js';
 import type { Entry, Field, FieldKey, Instant } from '../../model/index.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import { bar, createVariantRegistry, diamond, summary } from './variants.js';
@@ -242,7 +242,7 @@ describe('what the double-claim diagnostic reports (J36)', () => {
 });
 
 describe('what a variant answers about itself', () => {
-  it('draws one whole-entry Item with no `items` of its own, and its own producer with one', () => {
+  it('draws one whole-entry Bar with no `bars` of its own, and its own producer with one', () => {
     const registry = createVariantRegistry(declaring({ key: 'plain' }, { key: 'twin' }));
     const t1 = spanEntry('t1');
 
@@ -250,9 +250,9 @@ describe('what a variant answers about itself', () => {
     registry.addPluginVariant({
       name: 'twin',
       when: { twin: true },
-      items: (entry) => [
+      bars: (entry) => [
         {
-          id: itemId(entry.id, 7),
+          id: barId(entry.id, 7),
           entryId: entry.id,
           variant: 'twin',
           label: entry.name ?? '',
@@ -262,10 +262,8 @@ describe('what a variant answers about itself', () => {
       ],
     });
 
-    expect(registry.resolveFor(spanEntry('a', { plain: true })).items(t1, 'plain')).toHaveLength(1);
-    expect(registry.resolveFor(spanEntry('b', { twin: true })).items(t1, 'twin')[0]?.id).toBe(
-      itemId(t1.id, 7),
-    );
+    expect(registry.resolveFor(spanEntry('a', { plain: true })).bars(t1, 'plain')).toHaveLength(1);
+    expect(registry.resolveFor(spanEntry('b', { twin: true })).bars(t1, 'twin')[0]?.id).toBe(barId(t1.id, 7));
   });
 
   it('answers the `paint` and `capabilities` of the rule that claimed the row, and nothing for core’s floor', () => {
@@ -303,26 +301,26 @@ describe('what a variant answers about itself', () => {
     const registry = createVariantRegistry(declaring({ key: 'a' }));
     const first = (): undefined => undefined;
     const second = (): undefined => undefined;
-    registry.addConsumerVariant({ name: 'x', when: { a: 1 }, paint: first, items: () => [] });
+    registry.addConsumerVariant({ name: 'x', when: { a: 1 }, paint: first, bars: () => [] });
     registry.addConsumerVariant({ name: 'x', when: { a: 2 }, paint: second });
 
     const one = registry.resolveFor(spanEntry('one', { a: 1 }));
     expect(one.name).toBe('x');
     expect(one.paint).toBe(first);
-    expect(one.items(spanEntry('one', { a: 1 }), 'x')).toEqual([]);
+    expect(one.bars(spanEntry('one', { a: 1 }), 'x')).toEqual([]);
     expect(registry.resolveFor(spanEntry('two', { a: 2 })).paint).toBe(second);
   });
 
   it('lets a plugin re-skin core’s own `leaf`, and disposal restores core’s producer', () => {
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     const t1 = spanEntry('t1');
-    const shipped = registry.resolveFor(t1).items;
+    const shipped = registry.resolveFor(t1).bars;
 
-    const dispose = registry.addPluginVariant({ name: 'leaf', items: () => [] });
-    expect(registry.resolveFor(t1).items(t1, 'leaf')).toEqual([]);
+    const dispose = registry.addPluginVariant({ name: 'leaf', bars: () => [] });
+    expect(registry.resolveFor(t1).bars(t1, 'leaf')).toEqual([]);
 
     dispose();
-    expect(registry.resolveFor(t1).items).toBe(shipped);
+    expect(registry.resolveFor(t1).bars).toBe(shipped);
   });
 });
 
@@ -332,13 +330,13 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.name).toBe('leaf');
     expect(variant.when).toBeUndefined();
     expect(variant.css).toBeUndefined();
-    // followSegments, not the whole-entry default: a Segment on the row draws its own Item.
-    const [item] = variant.items!(spanEntry('t1'), 'leaf');
+    // followSegments, not the whole-entry default: a Segment on the row draws its own Bar.
+    const [item] = variant.bars!(spanEntry('t1'), 'leaf');
     expect(item!.variant).toBe('leaf');
     expect(item!.segmentId).toBeDefined();
   });
 
-  it('summary() claims a row by structure, carries the rail’s own class and css, and states one whole-entry Item explicitly (ADR 0023)', () => {
+  it('summary() claims a row by structure, carries the rail’s own class and css, and states one whole-entry Bar explicitly (ADR 0023)', () => {
     const variant = summary();
     const [parent, child] = entryDoubles([
       { id: 'p', start: 0, end: 10 },
@@ -361,23 +359,23 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
         { id: segmentId('p2-1'), start: 6 as Instant, end: 10 as Instant },
       ],
     });
-    expect(variant.items!(busyParent, 'summary')).toHaveLength(1);
+    expect(variant.bars!(busyParent, 'summary')).toHaveLength(1);
   });
 
-  it('summary()’s `ignoreSegments` draws no Item for a claimed row’s subject (#421 C2, Q27)', () => {
+  it('summary()’s `ignoreSegments` draws no Bar for a claimed row’s subject (#421 C2, Q27)', () => {
     const variant = summary();
     const claimedParent = entryDouble({ id: 'p3', start: 0, end: 10 });
-    expect(variant.items!(claimedParent, 'summary', true)).toEqual([]);
+    expect(variant.bars!(claimedParent, 'summary', true)).toEqual([]);
     // The parameter is optional (a two-argument producer an author already wrote keeps compiling,
     // ADR 0018): omitted, it still draws the rail.
-    expect(variant.items!(claimedParent, 'summary')).toHaveLength(1);
+    expect(variant.bars!(claimedParent, 'summary')).toHaveLength(1);
   });
 
-  it('bar()’s `followSegments` draws no Item for a claimed row’s subject (#421 C2, Q27)', () => {
+  it('bar()’s `followSegments` draws no Bar for a claimed row’s subject (#421 C2, Q27)', () => {
     const variant = bar();
     const claimedParent = spanEntry('p4');
-    expect(variant.items!(claimedParent, 'leaf', true)).toEqual([]);
-    expect(variant.items!(claimedParent, 'leaf')).toHaveLength(1);
+    expect(variant.bars!(claimedParent, 'leaf', true)).toEqual([]);
+    expect(variant.bars!(claimedParent, 'leaf')).toHaveLength(1);
   });
 
   it('diamond() claims a zero-duration row, draws a 13px fixed box, and carries its own css', () => {
@@ -385,7 +383,7 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     const point = entryDouble({ id: 'm', start: 5, end: 5 });
     expect((variant.when as (entry: Entry) => boolean)(point)).toBe(true);
     expect((variant.when as (entry: Entry) => boolean)(spanEntry('span'))).toBe(false);
-    const [item] = variant.items!(point, 'diamond');
+    const [item] = variant.bars!(point, 'diamond');
     expect(item!.box).toEqual({ widthPx: 13, anchor: 'center' });
     expect((variant.paint as unknown as () => unknown)?.()).toEqual({ class: { 'fg-bar-diamond': true } });
     expect(variant.css).toContain('.fg-bar-diamond');
@@ -423,7 +421,7 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(variant.when).toEqual({ checkpoint: true });
     expect(variant.paint).toBe(paint);
     // Everything `overrides` left untouched still answers core's default.
-    expect(variant.items).toBeDefined();
+    expect(variant.bars).toBeDefined();
     expect(variant.css).toContain('.fg-bar-diamond');
   });
 

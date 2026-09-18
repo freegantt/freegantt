@@ -27,7 +27,7 @@ function mount(
   return { gantt, container };
 }
 
-/** Which variant each painted bar wears, by Item id. The rendered `data-variant` attribute is the
+/** Which variant each painted bar wears, by Bar id. The rendered `data-variant` attribute is the
  *  one public reading of a resolved variant. */
 function variantsOn(container: HTMLElement): Record<string, string> {
   const painted: Record<string, string> = {};

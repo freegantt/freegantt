@@ -7,7 +7,7 @@ export type EntryId = string & { readonly __brand: 'EntryId' };
  *  mistake. */
 export type SegmentId = string & { readonly __brand: 'SegmentId' };
 export type RowId = string & { readonly __brand: 'RowId' };
-export type ItemId = string & { readonly __brand: 'ItemId' };
+export type BarId = string & { readonly __brand: 'BarId' };
 export type ChangeSetId = string & { readonly __brand: 'ChangeSetId' };
 
 export function entryId(value: string): EntryId {
@@ -35,50 +35,50 @@ export function changeSetId(counter: number): ChangeSetId {
   return `cs${counter}` as ChangeSetId;
 }
 
-/** Item.id = `${entryId}:${segmentIndex ?? 0}` — deterministic across layout passes (plans/01 §2.4). */
-export function itemId(entry: EntryId, segmentIndex = 0): ItemId {
-  return `${entry}:${segmentIndex}` as ItemId;
+/** Bar.id = `${entryId}:${segmentIndex ?? 0}` — deterministic across layout passes (plans/01 §2.4). */
+export function barId(entry: EntryId, segmentIndex = 0): BarId {
+  return `${entry}:${segmentIndex}` as BarId;
 }
 
-/** Call: `itemIdFromDataset(bar.dataset['itemId'])` — the DOM→brand trust boundary for a `.fg-bar`
+/** Call: `barIdFromDataset(bar.dataset['itemId'])` — the DOM→brand trust boundary for a `.fg-bar`
  *  node's `data-item-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
  *  `undefined` out, so a caller keeps its own "no bar hit" branch instead of taking one here. */
-export function itemIdFromDataset(value: string | undefined): ItemId | undefined {
-  return value === undefined ? undefined : (value as ItemId);
+export function barIdFromDataset(value: string | undefined): BarId | undefined {
+  return value === undefined ? undefined : (value as BarId);
 }
 
 /** Call: `rowIdFromDataset(row.dataset['rowId'])` — the DOM→brand trust boundary for a `.fg-row`
  *  node's `data-row-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
- *  `undefined` out, mirroring `itemIdFromDataset`. */
+ *  `undefined` out, mirroring `barIdFromDataset`. */
 export function rowIdFromDataset(value: string | undefined): RowId | undefined {
   return value === undefined ? undefined : (value as RowId);
 }
 
 /** Call: `entryIdFromDataset(row.dataset['entryId'])` — the DOM→brand trust boundary for a `.fg-row`
  *  node's `data-entry-id` attribute (`render/dom/index.ts` is what writes it). `undefined` in,
- *  `undefined` out, mirroring `itemIdFromDataset`. */
+ *  `undefined` out, mirroring `barIdFromDataset`. */
 export function entryIdFromDataset(value: string | undefined): EntryId | undefined {
   return value === undefined ? undefined : entryId(value);
 }
 
 /** Call: `segmentIdFromDataset(bar.dataset['segmentId'])` — the DOM→brand trust boundary for a
  *  `.fg-bar` node's `data-segment-id` attribute (`render/dom/index.ts` is what writes it).
- *  `undefined` in, `undefined` out, mirroring `itemIdFromDataset`. A bar that draws its Entry's
+ *  `undefined` in, `undefined` out, mirroring `barIdFromDataset`. A bar that draws its Entry's
  *  whole span (a group, a milestone, a plugin's own kind) carries no Segment, so this stays
  *  `undefined` there too — its caller falls back to the owning Entry. */
 export function segmentIdFromDataset(value: string | undefined): SegmentId | undefined {
   return value === undefined ? undefined : segmentId(value);
 }
 
-/** Call: `dataset.entries.get(entryIdOfItem(hit.itemId))`. Splits on the last colon so an EntryId that
- *  itself contains a colon still round-trips with `itemId`. */
-export function entryIdOfItem(id: ItemId): EntryId {
+/** Call: `dataset.entries.get(entryIdOfBar(hit.barId))`. Splits on the last colon so an EntryId that
+ *  itself contains a colon still round-trips with `barId`. */
+export function entryIdOfBar(id: BarId): EntryId {
   const sep = id.lastIndexOf(':');
   return entryId(sep < 0 ? id : id.slice(0, sep));
 }
 
-/** Call: `segmentIndexOfItem(item.id)` — the index `itemId` wrote. */
-export function segmentIndexOfItem(id: ItemId): number {
+/** Call: `segmentIndexOfBar(bar.id)` — the index `barId` wrote. */
+export function segmentIndexOfBar(id: BarId): number {
   const sep = id.lastIndexOf(':');
   if (sep < 0) return 0;
   const index = Number(id.slice(sep + 1));

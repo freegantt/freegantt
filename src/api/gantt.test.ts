@@ -15,7 +15,7 @@ import {
   TimeScaleModel,
   MS,
   entryId,
-  itemId,
+  barId,
   contextMenu,
   diamond,
 } from './index.js';
@@ -2376,7 +2376,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
       const variant = gantt.variantFor(entry);
 
       expect(variant.name).toBe('diamond');
-      expect(variant.items).toEqual(expect.any(Function));
+      expect(variant.bars).toEqual(expect.any(Function));
 
       gantt.destroy();
     });
@@ -2630,9 +2630,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
             ctx.variants.add({
               name: 'buffer',
               when: (entry) => entry.id === sampleEntries[0]!.id,
-              items: (entry) => [
+              bars: (entry) => [
                 {
-                  id: itemId(entry.id, 0),
+                  id: barId(entry.id, 0),
                   entryId: entry.id,
                   variant: 'buffer',
                   label: `buffer: ${entry.name}`,
@@ -2679,9 +2679,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
             ctx.variants.add({
               name: 'unlabelled',
               when: (entry) => entry.id === sampleEntries[0]!.id,
-              items: (entry) => [
+              bars: (entry) => [
                 {
-                  id: itemId(entry.id, 0),
+                  id: barId(entry.id, 0),
                   entryId: entry.id,
                   variant: 'unlabelled',
                   start: entry.start!,
@@ -3659,7 +3659,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const itemIds = bars.map((bar) => bar.dataset['itemId']);
       // p1 draws no bar of its own — `summary()` resolved for it and `ignoreSegments` answered `[]`
       // (Q27). c1 and c2 draw their own bars, on p1's row.
-      expect(itemIds).toEqual([itemId(entryId('c1'), 0), itemId(entryId('c2'), 0)]);
+      expect(itemIds).toEqual([barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars.every((bar) => bar.dataset['variant'] === 'leaf')).toBe(true);
 
       gantt.destroy();
@@ -3688,9 +3688,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
           {
             name: 'band',
             when: (entry) => entry.hasChildren,
-            items: (entry, variant) => [
+            bars: (entry, variant) => [
               {
-                id: itemId(entry.id, 99),
+                id: barId(entry.id, 99),
                 entryId: entry.id,
                 variant,
                 label: entry.name ?? '',
@@ -3706,11 +3706,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const itemIds = bars.map((bar) => bar.dataset['itemId']);
       // p1's own band bar draws, plus c1's and c2's own bars — the band producer ignoring the new
       // parameter still ran and still won for p1 (Q26).
-      expect(itemIds).toEqual([
-        itemId(entryId('p1'), 99),
-        itemId(entryId('c1'), 0),
-        itemId(entryId('c2'), 0),
-      ]);
+      expect(itemIds).toEqual([barId(entryId('p1'), 99), barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars[0]?.dataset['variant']).toBe('band');
 
       gantt.destroy();
@@ -3774,10 +3770,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       expect(rowIds).toEqual(['p1', 'p2', 'c3']);
 
       const p2Bar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${itemId(entryId('p2'), 0)}"]`,
+        `.fg-bar[data-item-id="${barId(entryId('p2'), 0)}"]`,
       )!;
       const c3Bar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${itemId(entryId('c3'), 0)}"]`,
+        `.fg-bar[data-item-id="${barId(entryId('c3'), 0)}"]`,
       )!;
       // p2 is unclaimed and still wears the rail (`summary()`, resolved on `entry.hasChildren`), in
       // the same Gantt, in the same frame, as p1's claimed row drawing c1's and c2's own bars.
@@ -3786,9 +3782,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const p1Bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).map(
         (bar) => bar.dataset['itemId'],
       );
-      expect(p1Bars).toContain(itemId(entryId('c1'), 0));
-      expect(p1Bars).toContain(itemId(entryId('c2'), 0));
-      expect(p1Bars).not.toContain(itemId(entryId('p1'), 0));
+      expect(p1Bars).toContain(barId(entryId('c1'), 0));
+      expect(p1Bars).toContain(barId(entryId('c2'), 0));
+      expect(p1Bars).not.toContain(barId(entryId('p1'), 0));
 
       gantt.destroy();
       container.remove();
@@ -3834,7 +3830,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const original = document.elementFromPoint.bind(document);
 
       const lockedBar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${itemId(entryId('c1'), 0)}"]`,
+        `.fg-bar[data-item-id="${barId(entryId('c1'), 0)}"]`,
       )!;
       document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? lockedBar : original(x, y));
       timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
@@ -3846,7 +3842,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       expect(end.hidden).toBe(true);
 
       const openBar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${itemId(entryId('c2'), 0)}"]`,
+        `.fg-bar[data-item-id="${barId(entryId('c2'), 0)}"]`,
       )!;
       document.elementFromPoint = (x: number, y: number) => (x === 6 && y === 5 ? openBar : original(x, y));
       timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 6, clientY: 5 }));

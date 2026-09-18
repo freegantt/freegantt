@@ -10,7 +10,7 @@
 // threshold (a plain click) still resolves through `selectFromHit` on pointerup, unchanged; `mousedown`
 // itself still writes nothing — it exists only so a double-click cannot start a native text range.
 
-import type { EntryId, ItemId, SegmentId } from '../model/index.js';
+import type { EntryId, BarId, SegmentId } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type {
   Detachable,
@@ -81,7 +81,7 @@ export function attachEntryGestures(
   let grabbedEdge: 'start' | 'end' | undefined;
   /** The bar the pointer actually landed on, set alongside `grabbedId` for a move grab only (#211).
    *  `drag`'s `start()` reads it once, to name the pick if this grab turns out to arm the Selection. */
-  let grabbedItemId: ItemId | undefined;
+  let grabbedBarId: BarId | undefined;
   /** D-GH-1: what `ctx.session()` armed for this drag — replaces `armedEntries` (`session` already
    *  closes over the capable entries and the grabbed `EntryGesture` shape). Defined only between a
    *  successful `start()` and the matching `commit`/`cancel`. */
@@ -100,8 +100,8 @@ export function attachEntryGestures(
       // every Segment of whatever was selected before (or nothing at all). A resize grab is left
       // alone: `resizableEntryId` resolves off hover, not the Selection, so a handle grab selects
       // nothing here.
-      if (grabbedEdge === undefined && grabbedItemId !== undefined) {
-        const grabbedSegments = ctx.selection.segmentIdsForItem(grabbedItemId);
+      if (grabbedEdge === undefined && grabbedBarId !== undefined) {
+        const grabbedSegments = ctx.selection.segmentIdsForBar(grabbedBarId);
         const selected = ctx.selection.segmentIds();
         if (!grabbedSegments.some((id) => selected.includes(id))) {
           anchor = grabbedSegments[0];
@@ -128,14 +128,14 @@ export function attachEntryGestures(
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
-      grabbedItemId = undefined;
+      grabbedBarId = undefined;
     },
     cancel(): void {
       session!.cancel();
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
-      grabbedItemId = undefined;
+      grabbedBarId = undefined;
     },
   });
 
@@ -165,19 +165,19 @@ export function attachEntryGestures(
     // A drag only ever starts on a bar: a row hit arms nothing (D-S3-10's grid-row clause).
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
     const bar = hit?.kind === 'bar' ? hit : undefined;
-    const entry = bar !== undefined ? ctx.entryFor(bar.itemId) : undefined;
+    const entry = bar !== undefined ? ctx.entryFor(bar.barId) : undefined;
     if (entry !== undefined && bar?.edge !== undefined && ctx.can('resize', entry, bar.edge)) {
       grabbedId = entry.id;
       grabbedEdge = bar.edge;
-      grabbedItemId = undefined;
+      grabbedBarId = undefined;
     } else if (entry !== undefined && bar !== undefined && ctx.can('move', entry)) {
       grabbedId = entry.id;
       grabbedEdge = undefined;
-      grabbedItemId = bar.itemId;
+      grabbedBarId = bar.barId;
     } else {
       grabbedId = undefined;
       grabbedEdge = undefined;
-      grabbedItemId = undefined;
+      grabbedBarId = undefined;
     }
     drag.down(e);
   }
@@ -228,11 +228,11 @@ export function attachEntryGestures(
     ctx.selection.propose(targets);
   }
 
-  /** True when the hit stands for nothing the Dataset still holds — a stale Item id, which is the
+  /** True when the hit stands for nothing the Dataset still holds — a stale Bar id, which is the
    *  same "nothing there" a miss reports. A row that exists but owns nothing selectable is not this:
    *  the pointer did land on a row, so an empty timeline's clear must not fire for it. */
   function missesEveryEntry(hit: EntryHit): boolean {
-    return hit.kind === 'bar' && ctx.entryFor(hit.itemId) === undefined;
+    return hit.kind === 'bar' && ctx.entryFor(hit.barId) === undefined;
   }
 
   /** Ctrl/⌘ moves the whole list at once: it removes the list when every member is already
@@ -285,7 +285,7 @@ export function attachEntryGestures(
   function onPointerMove(e: PointerEvent): void {
     drag.move(e);
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
-    ctx.setHovered(hit?.kind === 'bar' ? hit.itemId : undefined);
+    ctx.setHovered(hit?.kind === 'bar' ? hit.barId : undefined);
   }
 
   function onPointerLeave(): void {

@@ -15,8 +15,8 @@
 // compose a literal from two separate reads — the #216 Q3 carry this plan hands off.
 
 import { segmentIdsDroppedBy } from '../data/change-set.js';
-import { entryIdOfItem } from '../model/index.js';
-import type { ChangeSet, EntryId, ItemId, RowId, SegmentId } from '../model/index.js';
+import { entryIdOfBar } from '../model/index.js';
+import type { ChangeSet, EntryId, BarId, RowId, SegmentId } from '../model/index.js';
 import type { PlannedRowKind } from '../layout/index.js';
 import { isPlannedHeaderRow } from '../layout/index.js';
 import type { EntryStoreView } from '../model/index.js';
@@ -43,8 +43,8 @@ export interface SegmentSelectionPorts {
   plannedRows(): readonly SegmentSelectionRow[];
   /** Which row currently shows this Entry (D4). */
   rowIdForEntry(id: EntryId): RowId | undefined;
-  /** Every Segment this bar stands for — `FrameLayout.segmentIdsForItem` (#212). */
-  segmentIdsForItem(id: ItemId): readonly SegmentId[];
+  /** Every Segment this bar stands for — `FrameLayout.segmentIdsForBar` (#212). */
+  segmentIdsForBar(id: BarId): readonly SegmentId[];
   /** D-S3-9's one capability resolution (I14) — never resolved twice for the same question. */
   canGesture(capability: GestureCapability, id: EntryId): boolean;
   /** The cancelable `beforeSelectionChange` → apply → `selectionChange` sequence (D-S3-10). Returns
@@ -93,15 +93,15 @@ export class SegmentSelection {
 
   /** The Segments this hit selects (#212, ADR 0010). A row names every Segment of every selectable
    *  Entry it owns; a bar names its own Segment when its Entry may be selected. Both branches read
-   *  the answer the view already holds — `segmentIdsForItem` fills the same table
+   *  the answer the view already holds — `segmentIdsForBar` fills the same table
    *  `DomTarget.segmentIds` does. The one switch on hit kind `ContainerDom#resolve` also makes;
    *  `interaction/` never makes it a second time. */
   selectableSegmentsOf(hit: EntryHit): readonly SegmentId[] {
     if (hit.kind === 'row') {
       return this.#ports.entries().segmentIdsOfEntries(this.#selectableEntriesOfRow(hit.rowId));
     }
-    const entryId = entryIdOfItem(hit.itemId);
-    return this.#ports.canGesture('select', entryId) ? this.#ports.segmentIdsForItem(hit.itemId) : [];
+    const entryId = entryIdOfBar(hit.barId);
+    return this.#ports.canGesture('select', entryId) ? this.#ports.segmentIdsForBar(hit.barId) : [];
   }
 
   /** The selectable entries in resolved row order — a keyboard row step and a shift-range both walk

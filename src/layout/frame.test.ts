@@ -22,8 +22,8 @@ import type { DecorationContext } from './decoration.js';
 import { entryId, segmentId } from '../model/index.js';
 import type { Entry, Instant, TimeSpan } from '../model/index.js';
 import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from './entry-double.js';
-import { wholeEntryItem } from './items/item.js';
-import type { FixedBarBox, Item } from './items/item.js';
+import { wholeEntryBar } from './items/item.js';
+import type { FixedBarBox, Bar } from './items/item.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
  *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
@@ -31,11 +31,11 @@ function spanOf(entry: Entry): TimeSpan {
   return { start: entry.start as Instant, end: entry.end as Instant };
 }
 
-/** A full `Item` for `barSpan`, built the same way `computeFrame` builds one (`wholeEntryItem`) —
- *  `barSpan` takes the whole `Item`, box included (#295), so a test hands it a real one instead of
+/** A full `Bar` for `barSpan`, built the same way `computeFrame` builds one (`wholeEntryBar`) —
+ *  `barSpan` takes the whole `Bar`, box included (#295), so a test hands it a real one instead of
  *  a literal missing `box`. Pass `box` to build the fixed-box case `diamond()` ships. */
-function itemOf(entry: Entry, box?: FixedBarBox): Item {
-  const item = wholeEntryItem(entry, 'bar');
+function itemOf(entry: Entry, box?: FixedBarBox): Bar {
+  const item = wholeEntryBar(entry, 'bar');
   return box === undefined ? item : { ...item, box };
 }
 
@@ -127,7 +127,7 @@ describe('computeFrame', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      // No producer sets `Item.label`; this stands in for `view/`'s default `barLabels` (#421 C5).
+      // No producer sets `Bar.label`; this stands in for `view/`'s default `barLabels` (#421 C5).
       barLabelFor: (entry) => entry.name ?? '',
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
@@ -137,7 +137,7 @@ describe('computeFrame', () => {
     );
   });
 
-  it('produces deterministic Item.id across repeated passes (I8)', () => {
+  it('produces deterministic Bar.id across repeated passes (I8)', () => {
     const first = computeFrame({
       entries: sampleEntries,
       scale,
@@ -555,7 +555,7 @@ describe('computeFrame', () => {
     expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
   });
 
-  it('carries the segmentId its Item had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
+  it('carries the segmentId its Bar had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
     const [entry, grouped, groupedChild] = entryDoubles([
       entryValuesOf(sampleEntries[0]!, {
         segments: [

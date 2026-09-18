@@ -382,9 +382,9 @@ barRenderer: ({ entry, item }) => ({
 
 Both questions — *how does this entry look?* and *what can you do to it?* — resolve **per entry**, not per Gantt, and every mechanism sees the whole entry (structure, fields, typed `props`):
 
-**Variant.** Every bar element carries `data-variant`, so variant styling is level-2 CSS with zero JS (`.fg-bar[data-variant="summary"] { ... }`). That attribute is the Variant this Gantt resolved for the row — `summary`, `leaf`, or a consumer's or a plugin's own — never a stored Entry classification (ADR 0013, ADR 0018). A bar whose painted span was widened to `--fg-bar-min-width` carries `data-span="minimum"` (#212 follow-up); an Item that states a fixed painted box (`Item.box`, ADR 0022) carries `data-span="fixed"` instead — pair either with `data-variant` to style a floored bar differently from a fixed-width diamond (`.fg-bar[data-variant="leaf"][data-span="minimum"] { ... }`). At level 3, `variants` paints one named set of rows and `barRenderer` is the catch-all for every bar no Variant paints:
+**Variant.** Every bar element carries `data-variant`, so variant styling is level-2 CSS with zero JS (`.fg-bar[data-variant="summary"] { ... }`). That attribute is the Variant this Gantt resolved for the row — `summary`, `leaf`, or a consumer's or a plugin's own — never a stored Entry classification (ADR 0013, ADR 0018). A bar whose painted span was widened to `--fg-bar-min-width` carries `data-span="minimum"` (#212 follow-up); a Bar that states a fixed painted box (`Bar.box`, ADR 0022) carries `data-span="fixed"` instead — pair either with `data-variant` to style a floored bar differently from a fixed-width diamond (`.fg-bar[data-variant="leaf"][data-span="minimum"] { ... }`). At level 3, `variants` paints one named set of rows and `barRenderer` is the catch-all for every bar no Variant paints:
 
-**The shipped set (ADR 0022).** Core exports three factories, each `(overrides?: Partial<EntryVariant>) => EntryVariant`, and every key on `overrides` wins: `bar()` (the default leaf look), `summary()` (a parent's rollup bar, seeded into `CORE_VARIANTS`), and `diamond()` (a zero-duration marker, `.fg-bar-diamond`, seeded into no row until a `when` rule claims one). `diamond()`'s box is fixed-width through `fixedWidthItem(px, anchor?)`, also published from `layout/`. A Variant may carry its own `css`, injected once per Gantt inside `@layer freegantt`, after the base sheet — this is how `diamond()` ships its own glyph, and how a consumer's `flag()` or `chevron()` can too, with no core edit. `gantt.variantFor(entry)` answers the whole resolved Variant for one row on one Gantt (`ResolvedVariant`, public); a plugin reads the same door as `ctx.view.variantFor`.
+**The shipped set (ADR 0022).** Core exports three factories, each `(overrides?: Partial<EntryVariant>) => EntryVariant`, and every key on `overrides` wins: `bar()` (the default leaf look), `summary()` (a parent's rollup bar, seeded into `CORE_VARIANTS`), and `diamond()` (a zero-duration marker, `.fg-bar-diamond`, seeded into no row until a `when` rule claims one). `diamond()`'s box is fixed-width through `fixedWidthBar(px, anchor?)`, also published from `layout/`. A Variant may carry its own `css`, injected once per Gantt inside `@layer freegantt`, after the base sheet — this is how `diamond()` ships its own glyph, and how a consumer's `flag()` or `chevron()` can too, with no core edit. `gantt.variantFor(entry)` answers the whole resolved Variant for one row on one Gantt (`ResolvedVariant`, public); a plugin reads the same door as `ctx.view.variantFor`.
 
 ```ts
 variants: [{ name: 'buffer', when: { buffer: true }, paint: ({ entry }) => hatched(entry) }],
@@ -666,12 +666,12 @@ consumer's rules outrank every plugin's.
 subscription of its own has nothing left to return. `return () => {};` was ceremony, and to a
 newcomer it read as if something were missing.
 
-**`wholeEntryItem(entry)` is public.** It returns one Item covering the entry's whole span, and it
-is pure and DOM-free, and it is the one owner of the `${entryId}:${segmentIndex}` Item id
+**`wholeEntryBar(entry)` is public.** It returns one Bar covering the entry's whole span, and it
+is pure and DOM-free, and it is the one owner of the `${entryId}:${segmentIndex}` Bar id
 convention — the one thing a plugin could otherwise get wrong from documentation alone.
-`ignoreSegments(entry, variant)` wraps it into an `ItemProducer`, and `followSegments(entry,
-variant)` is its pair: one Item per Segment, or one over the whole span when the Entry has none.
-A Variant that omits `items` draws `followSegments` (ADR 0023) — `summary()` states
+`ignoreSegments(entry, variant)` wraps it into a `BarProducer`, and `followSegments(entry,
+variant)` is its pair: one Bar per Segment, or one over the whole span when the Entry has none.
+A Variant that omits `bars` draws `followSegments` (ADR 0023) — `summary()` states
 `ignoreSegments` explicitly, because a summary is one rail whatever its Segments do.
 
 One shared mechanism implements all of this — see **Registration table** in `CONTEXT.md`. A seam that

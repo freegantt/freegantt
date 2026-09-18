@@ -7,13 +7,13 @@ import type {
   EntryHit,
   SelectionForGestures,
 } from '../view/index.js';
-import { entryId, entryIdOfItem, itemId, rowId, segmentId, segmentIndexOfItem } from '../model/index.js';
+import { entryId, entryIdOfBar, barId, rowId, segmentId, segmentIndexOfBar } from '../model/index.js';
 import type {
   Entry,
   EntryEdits,
   EntryId,
   Instant,
-  ItemId,
+  BarId,
   Segment,
   SegmentId,
   StoredEntry,
@@ -26,7 +26,7 @@ const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
 
 /** The fake's own Segment naming: Entry `a`, Segment index 0, is `a-0`. It keeps the Selection
- *  readable in an assertion, and it lets `segmentsForItem` answer per bar rather than per Entry. */
+ *  readable in an assertion, and it lets `segmentsForBar` answer per bar rather than per Entry. */
 function segmentOf(id: EntryId, index = 0): SegmentId {
   return segmentId(`${id}-${index}`);
 }
@@ -121,9 +121,9 @@ function makeContext(overrides: ContextOverrides = {}): {
 
   const ctx: EntryGestureContext = {
     hitTest: (at) =>
-      at.x >= 0 && at.x < ORDER.length ? { kind: 'bar', itemId: itemId(ORDER[at.x]!) } : undefined,
-    entryFor: (item: ItemId) => {
-      const id = entryIdOfItem(item);
+      at.x >= 0 && at.x < ORDER.length ? { kind: 'bar', barId: barId(ORDER[at.x]!) } : undefined,
+    entryFor: (item: BarId) => {
+      const id = entryIdOfBar(item);
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,
@@ -175,9 +175,9 @@ function makeContext(overrides: ContextOverrides = {}): {
       selectableSegmentsInRowOrder: () =>
         ctx.selection.segmentIdsOfEntries(ORDER.filter((id) => ctx.can('select', entryFor(id)))),
       // #212: the shell answers both of these from the frame and the Dataset. The fake gives every
-      // Entry one Segment, and reads a bar's own Segment index out of the Item id it was handed.
+      // Entry one Segment, and reads a bar's own Segment index out of the Bar id it was handed.
       segmentIdsOfEntries: (ids) => ids.map((id) => segmentOf(id)),
-      segmentIdsForItem: (item) => [segmentOf(entryIdOfItem(item), segmentIndexOfItem(item))],
+      segmentIdsForBar: (item) => [segmentOf(entryIdOfBar(item), segmentIndexOfBar(item))],
       // #185, #212, #230 R4: the pane rule — a row names every selectable Entry it owns (the fake
       // maps one row id to the Entry of the same name, so a test that wants a multi-entry row
       // overrides it); a bar names its own Segment when its Entry may be selected.
@@ -188,9 +188,9 @@ function makeContext(overrides: ContextOverrides = {}): {
             : [];
           return ctx.selection.segmentIdsOfEntries(owned);
         }
-        const entry = ctx.entryFor(hit.itemId);
+        const entry = ctx.entryFor(hit.barId);
         return entry !== undefined && ctx.can('select', entry)
-          ? ctx.selection.segmentIdsForItem(hit.itemId)
+          ? ctx.selection.segmentIdsForBar(hit.barId)
           : [];
       },
     },
@@ -492,7 +492,7 @@ describe('attachEntryGestures — grid row click', () => {
   });
 
   // #185: a row that owns several Entries selects all of them. `hitTest` reports the row, and
-  // `selectableSegmentsOf` answers which Segments it owns — no Item id is invented anywhere on this path.
+  // `selectableSegmentsOf` answers which Segments it owns — no Bar id is invented anywhere on this path.
   const MULTI_ENTRY_ROW = rowId('multi-entry');
 
   function multiEntryRowContext(rowEntries: readonly EntryId[] = [A, B]) {
@@ -500,13 +500,13 @@ describe('attachEntryGestures — grid row click', () => {
     return makeContext({
       hitTest: (at) => {
         if (at.x === 0) return { kind: 'row', rowId: MULTI_ENTRY_ROW };
-        return at.x === 1 ? { kind: 'bar', itemId: itemId(A) } : undefined;
+        return at.x === 1 ? { kind: 'bar', barId: barId(A) } : undefined;
       },
       selection: {
         selectableSegmentsOf: (hit: EntryHit) =>
           hit.kind === 'row'
             ? rowEntries.map((id) => segmentOf(id))
-            : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
+            : [segmentOf(entryIdOfBar(hit.barId), segmentIndexOfBar(hit.barId))],
       },
     });
   }
@@ -556,12 +556,12 @@ describe('attachEntryGestures — grid row click', () => {
     const rowLayer = document.createElement('div');
     const { ctx, proposals } = makeContext({
       hitTest: (at) =>
-        at.x === 0 ? { kind: 'bar', itemId: itemId(A) } : { kind: 'row', rowId: MULTI_ENTRY_ROW },
+        at.x === 0 ? { kind: 'bar', barId: barId(A) } : { kind: 'row', rowId: MULTI_ENTRY_ROW },
       selection: {
         selectableSegmentsOf: (hit: EntryHit) =>
           hit.kind === 'row'
             ? [B, C].map((id) => segmentOf(id))
-            : [segmentOf(entryIdOfItem(hit.itemId), segmentIndexOfItem(hit.itemId))],
+            : [segmentOf(entryIdOfBar(hit.barId), segmentIndexOfBar(hit.barId))],
       },
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
@@ -632,7 +632,7 @@ describe('attachEntryGestures — hover (S3.2)', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const hovered: (ItemId | undefined)[] = [];
+    const hovered: (BarId | undefined)[] = [];
     const { ctx } = makeContext({ setHovered: (id) => hovered.push(id) });
     attachEntryGestures(pane, rowLayer, container, ctx);
 
@@ -640,14 +640,14 @@ describe('attachEntryGestures — hover (S3.2)', () => {
     pane.dispatchEvent(move(99)); // no hit
     pane.dispatchEvent(new PointerEvent('pointerleave'));
 
-    expect(hovered).toEqual([itemId(B), undefined, undefined]);
+    expect(hovered).toEqual([barId(B), undefined, undefined]);
   });
 
   it('detach() stops reporting hover', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const hovered: (ItemId | undefined)[] = [];
+    const hovered: (BarId | undefined)[] = [];
     const { ctx } = makeContext({ setHovered: (id) => hovered.push(id) });
     attachEntryGestures(pane, rowLayer, container, ctx).detach();
 
@@ -736,7 +736,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
       can: (capability) => capability === 'resize' || capability === 'select',
       hitTest: (at) =>
         at.x >= 0 && at.x < ORDER.length
-          ? { kind: 'bar', itemId: itemId(ORDER[at.x]!), edge: 'end' }
+          ? { kind: 'bar', barId: barId(ORDER[at.x]!), edge: 'end' }
           : undefined,
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
@@ -819,7 +819,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const rowLayer = document.createElement('div');
     const capabilities: ('move' | 'resize')[] = [];
     const { ctx, proposals, commits } = makeContext({
-      hitTest: () => ({ kind: 'bar' as const, itemId: itemId(A), edge: 'end' }),
+      hitTest: () => ({ kind: 'bar' as const, barId: barId(A), edge: 'end' }),
       can: (capability) => capability === 'resize' || capability === 'select',
       entriesForGesture: (grabbed, capability) => {
         capabilities.push(capability);
@@ -847,8 +847,8 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const { ctx, proposals } = makeContext({
       hitTest: (at) =>
         at.x === 0
-          ? { kind: 'bar' as const, itemId: itemId(A), edge: 'start' }
-          : { kind: 'bar' as const, itemId: itemId(ORDER[at.x]!) },
+          ? { kind: 'bar' as const, barId: barId(A), edge: 'start' }
+          : { kind: 'bar' as const, barId: barId(ORDER[at.x]!) },
       can: (capability) => capability === 'select', // resize refused (e.g. milestone)
       commit,
     });
@@ -869,7 +869,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const rowLayer = document.createElement('div');
     const asked: Array<'start' | 'end' | undefined> = [];
     const { ctx } = makeContext({
-      hitTest: () => ({ kind: 'bar' as const, itemId: itemId(A), edge: 'start' }),
+      hitTest: () => ({ kind: 'bar' as const, barId: barId(A), edge: 'start' }),
       can: (capability, _entry, edge) => {
         if (capability === 'resize') asked.push(edge);
         return capability === 'select';
@@ -891,7 +891,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     const rowLayer = document.createElement('div');
     const commit = vi.fn(() => Promise.resolve(true));
     const { ctx, proposals } = makeContext({
-      hitTest: () => ({ kind: 'bar' as const, itemId: itemId(A), edge: 'start' }),
+      hitTest: () => ({ kind: 'bar' as const, barId: barId(A), edge: 'start' }),
       can: (capability, _entry, edge) =>
         capability === 'select' || (capability === 'resize' && edge === 'end'),
       commit,
@@ -913,7 +913,7 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     mockPointerCapture(pane);
-    const middle = itemId(A, 1);
+    const middle = barId(A, 1);
     const grabbedIds: EntryId[] = [];
     const segmented = storeOf([
       storedFor(A, [
@@ -923,8 +923,8 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
       ]),
     ]).get(A)!;
     const { ctx } = makeContext({
-      hitTest: () => ({ kind: 'bar' as const, itemId: middle }),
-      entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfItem(item))),
+      hitTest: () => ({ kind: 'bar' as const, barId: middle }),
+      entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfBar(item))),
       session: (grabbed) => {
         grabbedIds.push(grabbed);
         return {
@@ -948,9 +948,9 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    const middle = itemId(A, 1);
+    const middle = barId(A, 1);
     const { ctx, proposals } = makeContext({
-      hitTest: () => ({ kind: 'bar' as const, itemId: middle }),
+      hitTest: () => ({ kind: 'bar' as const, barId: middle }),
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
 
