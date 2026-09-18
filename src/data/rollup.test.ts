@@ -540,8 +540,7 @@ describe('the Rollup reads a compute Field fresh, never the pre-commit memo (#30
 // (SPIKE-FINDINGS.md: 8.6 ms → 4.9 ms for one write over a 10,200-row fixture).
 describe('the Rollup fast path skips re-deriving the committed tree (#421 C4)', () => {
   /** How many times the two expensive re-derivations ran while `run` was committing. Spies on the
-   *  named exports `rollup.ts` calls directly — the same technique
-   *  `entry-store.mutation.test.ts`'s `overlayCallsForMultiSegmentDelete` uses for `entryAfterEdit`.
+   *  named exports `rollup.ts` calls directly.
    *
    *  `checks` carries one call every commit pays regardless of the fast path: `EntryStore`'s own
    *  `committedParents()` memo (`entry-store.ts`'s `#hierarchy`) re-derives once per revision, and
