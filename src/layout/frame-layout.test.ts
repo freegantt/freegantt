@@ -7,10 +7,9 @@ import { sampleEntries, sampleStoredEntries } from '../../fixtures/sample-datase
 import { createTimeScale, dayPreset } from '../time/index.js';
 import * as resolveRowsMod from './rows/resolve-rows.js';
 import * as produceBars from './items/produce-items.js';
-import type { Entry, EntryId } from '../model/index.js';
-import type { EntryDoubleValues } from './entry-double.js';
-import { entryDouble, entryDoubles } from './entry-double.js';
-import { changeSetId, entryId, barId, rowId, segmentId } from '../model/index.js';
+import type { Entry } from '../model/index.js';
+import { entryDoubles } from './entry-double.js';
+import { changeSetId, entryId, barId, rowId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
@@ -58,31 +57,6 @@ function input(overrides: Partial<LayoutInput> = {}): LayoutInput {
     variants: variantRegistry,
     ...overrides,
   };
-}
-
-function overlappingValues(base: Entry, copies: number, parentId?: EntryId): EntryDoubleValues {
-  // Load-bearing non-null assertion (ADR 0012): every fixture entry this file feeds it is
-  // authored with both dates.
-  const start = base.start!;
-  const end = base.end!;
-  return {
-    id: String(base.id),
-    ...(base.name !== undefined ? { name: base.name } : {}),
-    start,
-    end,
-    ...(parentId !== undefined ? { parentId: String(parentId) } : {}),
-    segments: Array.from({ length: copies }, (_, index) => ({
-      id: segmentId(`${base.id}-${index}`),
-      start,
-      end,
-    })),
-  };
-}
-
-/** A row this file states by hand — the live `Entry` a layout call takes, never a spread of one
- *  (ADR 0017, finding P2: a spread drops every getter and every method). */
-function overlappingEntry(base: Entry, copies: number): Entry {
-  return entryDouble(overlappingValues(base, copies));
 }
 
 describe('FrameLayout', () => {
@@ -143,17 +117,17 @@ describe('FrameLayout', () => {
     }
   });
 
-  it('barIdsForEntry answers every bar a segmented entry draws (#185)', () => {
+  it('barIdsForEntry answers the one bar an ordinary entry draws (#185)', () => {
     const layout = new FrameLayout();
-    const segmented = overlappingEntry(sampleEntries[0]!, 3);
-    const frame = layout.computeFrame(input({ entries: [segmented] }));
+    const entry = sampleEntries[0]!;
+    const frame = layout.computeFrame(input({ entries: [entry] }));
 
-    expect(layout.barIdsForEntry(segmented.id)).toEqual(frame.bars.map((bar) => bar.id));
-    expect(layout.barIdsForEntry(segmented.id)).toHaveLength(3);
+    expect(layout.barIdsForEntry(entry.id)).toEqual(frame.bars.map((bar) => bar.id));
+    expect(layout.barIdsForEntry(entry.id)).toHaveLength(1);
   });
 
   it('barIdsForEntry answers a plugin variant that draws its own Bars (#185)', () => {
-    // A producer is free to name its Bars — nothing here parses `${entryId}:${segmentIndex}`.
+    // A producer is free to name its Bars — nothing here parses `${entryId}:${partIndex}`.
     const variant = 'twin';
     const registry = createVariantRegistry({ fieldFor: () => undefined });
     registry.addPluginVariant({
@@ -210,56 +184,14 @@ describe('FrameLayout', () => {
     expect(items[0]?.box).toEqual({ widthPx: px, anchor: 'center' });
   });
 
-  it('segmentIdsForBar names the one Segment a Segment bar drew (#212)', () => {
-    const layout = new FrameLayout();
-    const segmented = overlappingEntry(sampleEntries[0]!, 3);
-    const frame = layout.computeFrame(input({ entries: [segmented] }));
+  // Retired (ADR 0026, #421): `segmentIdsForBar`/`segmentIdsForRow` named which Segment(s) a Bar
+  // or a row stood for. A core Entry now always draws exactly one Bar over its own span, so there
+  // is no Segment set left to name — `entryIdsForRow` (kept and rewritten below) is the surviving
+  // per-row answer, and a Bar already names its one Entry directly via `Bar.entryId`.
 
-    expect(frame.bars.map((bar) => layout.segmentIdsForBar(bar.id))).toEqual(
-      segmented.segments.map((segment) => [segment.id]),
-    );
-  });
-
-  it('segmentIdsForBar names every Segment of the Entry for a whole-entry variant (#212)', () => {
-    // A whole-entry variant (a parent, a milestone) draws one bar over the whole Entry, so it drew
-    // no single Segment. It still stands for all of them: a click on it selects the Entry's work.
-    const registry = createVariantRegistry({ fieldFor: () => undefined });
-    registry.addPluginVariant({
-      name: 'milestone',
-      when: () => true,
-      bars: (entry) => [
-        {
-          id: barId(entry.id, 0),
-          entryId: entry.id,
-          variant: 'milestone',
-          label: entry.name ?? '',
-          start: entry.start!,
-          end: entry.end!,
-        },
-      ],
-    });
-    const layout = new FrameLayout();
-    const wholeSpan = overlappingEntry(sampleEntries[0]!, 2);
-    const frame = layout.computeFrame(input({ entries: [wholeSpan], variants: registry }));
-
-    expect(frame.bars).toHaveLength(1);
-    expect(frame.bars[0]!.segmentId).toBeUndefined();
-    expect(layout.segmentIdsForBar(frame.bars[0]!.id)).toEqual(
-      wholeSpan.segments.map((segment) => segment.id),
-    );
-  });
-
-  it('segmentIdsForBar answers empty for a Bar no current frame planned (#212)', () => {
-    const layout = new FrameLayout();
-    layout.computeFrame(input({ entries: [sampleEntries[0]!] }));
-
-    expect(layout.segmentIdsForBar(barId(sampleEntries[1]!.id, 0))).toEqual([]);
-    expect(layout.segmentIdsForBar(barId(sampleEntries[0]!.id, 4))).toEqual([]);
-  });
-
-  it('segmentIdsForRow names every Segment of every Entry the row owns, in row order (#199, #212)', () => {
+  it('entryIdsForRow names every Entry the row owns, in row order (#199)', () => {
     // Only a custom row source can put several Entries on one Row, which is the shape this answers.
-    const owned = sampleEntries.slice(0, 3).map((entry) => overlappingEntry(entry, 2));
+    const owned = sampleEntries.slice(0, 3);
     const oneRowForAll: LayoutInput['rows'] = {
       source: 'custom',
       resolve: ({ entries }) => [{ id: 'lane-1', entryIds: entries.map((entry) => entry.id) }],
@@ -267,19 +199,21 @@ describe('FrameLayout', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: owned, rows: oneRowForAll }));
 
-    expect(layout.segmentIdsForRow(rowId('lane-1'))).toEqual(
-      owned.flatMap((entry) => entry.segments.map((segment) => segment.id)),
-    );
-    expect(layout.segmentIdsForRow(rowId('no-such-row'))).toEqual([]);
+    expect(layout.entryIdsForRow(rowId('lane-1'))).toEqual(owned.map((entry) => entry.id));
+    expect(layout.entryIdsForRow(rowId('no-such-row'))).toEqual([]);
   });
 
-  it('a row collapse hid still names its Segments, exactly as it still names its Entries (#230 R1)', () => {
-    // `segmentIdsForRow` reads the frame's Entry map, not its planned rows, for one reason: it must
-    // agree with `entryIdsForRow`, which answers for a hidden row. Reading the planned rows instead
-    // would silently narrow one of the pair and not the other.
+  it('a row collapse hid still names its Entries, from the frame Entry map not its planned rows (#230 R1)', () => {
+    // `entryIdsForRow` reads the frame's Entry map, not its planned rows, so it still answers for a
+    // row a collapsed ancestor hides.
     const [parent, child] = entryDoubles([
-      overlappingValues(sampleEntries[0]!, 2),
-      overlappingValues(sampleEntries[1]!, 2, sampleEntries[0]!.id),
+      { id: String(sampleEntries[0]!.id), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+      {
+        id: String(sampleEntries[1]!.id),
+        start: sampleEntries[1]!.start!,
+        end: sampleEntries[1]!.end!,
+        parentId: String(sampleEntries[0]!.id),
+      },
     ]) as readonly [Entry, Entry];
     const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
     const layout = new FrameLayout();
@@ -289,10 +223,9 @@ describe('FrameLayout', () => {
     layout.computeFrame(input({ entries: [parent, child], rows: tree, collapsed: [parent.id] }));
 
     expect(layout.entryIdsForRow(childRow)).toEqual([child.id]);
-    expect(layout.segmentIdsForRow(childRow)).toEqual(child.segments.map((segment) => segment.id));
   });
 
-  it('a grouping header row stands for no Segment, on both paths (#230 R0)', () => {
+  it('a grouping header row stands for no Entry, on both paths (#230 R0)', () => {
     const layout = new FrameLayout();
     const frame = layout.computeFrame(
       input({
@@ -304,7 +237,7 @@ describe('FrameLayout', () => {
     const header = frame.rows.find((row) => row.kind === 'header');
     expect(header).toBeDefined();
     expect(header!.entryIds).toEqual([]);
-    expect(layout.segmentIdsForRow(header!.id)).toEqual([]);
+    expect(layout.entryIdsForRow(header!.id)).toEqual([]);
   });
 });
 
@@ -312,7 +245,7 @@ describe('FrameLayout row production (S4.8, [S4-A5])', () => {
   it('produces a row once per revision, not once per read', () => {
     const spy = vi.spyOn(produceBars, 'produceBarsForRow');
     const layout = new FrameLayout();
-    const entries = [overlappingEntry(sampleEntries[0]!, 2), sampleEntries[1]!];
+    const entries = sampleEntries.slice(0, 2);
     const rowsInput = input({ entries });
 
     layout.computeFrame(rowsInput);
@@ -327,11 +260,7 @@ describe('FrameLayout row production (S4.8, [S4-A5])', () => {
   it('invalidateFrom recomputes only the suffix; heightAt has a production caller', () => {
     const heightAt = vi.spyOn(PrefixSumHeightIndex.prototype, 'heightAt');
     const layout = new FrameLayout();
-    const entries = [
-      overlappingEntry(sampleEntries[0]!, 1),
-      overlappingEntry(sampleEntries[1]!, 3),
-      overlappingEntry(sampleEntries[2]!, 1),
-    ];
+    const entries = sampleEntries.slice(0, 3);
     const rowsInput = input({ entries });
     const first = layout.computeFrame(rowsInput);
     expect(first.rows[0]?.height).toBe(layout.rowTop(1) - layout.rowTop(0));
