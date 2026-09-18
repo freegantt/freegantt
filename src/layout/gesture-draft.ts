@@ -143,7 +143,7 @@ export function spanAfterEdit(
 }
 
 /** What the hot-path paint needs to preview a draft with no frame rebuild (D-S3-18): a pixel offset
- *  and width delta per affected item, read off the bound `TimeScale` against each entry's committed
+ *  and width delta per affected bar, read off the bound `TimeScale` against each entry's committed
  *  span. `extra` marks an entry the extension hook added rather than the caller's own selection
  *  (S3.6 — always `false` until the extender is wired in). */
 export interface BarPreview {

@@ -353,7 +353,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
    *  the plugin half of the `GanttOptions.variants` a consumer writes — one type, two doors, one
    *  shape. It replaced four registrations that each repeated the variant's name. */
   variants: {
-    /** Installs one variant on this Gantt. `when` says which rows wear it, `items` what shape it
+    /** Installs one variant on this Gantt. `when` says which rows wear it, `bars` what shape it
      *  draws, `paint` how it looks, and `can` what you can do to it. Omit `when` and the variant
      *  answers for every row nothing newer claims.
      *
@@ -440,7 +440,7 @@ export function buildPluginPorts(
     const entry = shell.entry(resolvedId);
     if (entry === undefined) return undefined;
     try {
-      return resolved.renderer({ entry, item: bar });
+      return resolved.renderer({ entry, bar });
     } catch (error) {
       // S5.12, D-S5-41: report first; the `console.error` behind it is the fallback for a consumer
       // with nothing subscribed to `error`. It left `isDevMode()` for the reason that guard's own

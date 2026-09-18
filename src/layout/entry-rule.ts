@@ -1,9 +1,9 @@
 // layout/ — one match syntax for "which Entry does this rule claim?" A variant's `when`
-// (`items/variants.ts`) and a row source's `childrenAsSegments` (`rows/entries-source.ts`) both ask
+// (`bars/variants.ts`) and a row source's `childrenAsSegments` (`rows/entries-source.ts`) both ask
 // this question, so both compile their rule here rather than each reading its own syntax (#421 C1).
 //
-// Depends on `model/` alone. Neither `items/variants.ts` nor `rows/entries-source.ts` may import the
-// other (`items/` already imports `rows/row-source.js`, so the arrow the other way would close a
+// Depends on `model/` alone. Neither `bars/variants.ts` nor `rows/entries-source.ts` may import the
+// other (`bars/` already imports `rows/row-source.js`, so the arrow the other way would close a
 // ring) — this file is the shared floor both stand on instead.
 
 import type { CoreFieldValues, Entry, Field, FieldKey } from '../model/index.js';

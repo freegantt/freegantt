@@ -89,8 +89,8 @@ function makeContext(overrides: ContextOverrides = {}): {
   const ctx: EntryGestureContext = {
     hitTest: (at) =>
       at.x >= 0 && at.x < ORDER.length ? { kind: 'bar', barId: barId(ORDER[at.x]!) } : undefined,
-    entryFor: (item: BarId) => {
-      const id = entryIdOfBar(item);
+    entryFor: (barId: BarId) => {
+      const id = entryIdOfBar(barId);
       return ORDER.includes(id) ? entryFor(id) : undefined;
     },
     can: () => true,

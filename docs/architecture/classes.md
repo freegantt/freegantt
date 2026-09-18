@@ -113,7 +113,7 @@ emits header ticks and date-line decorations.
 
 #### produceBarsForRow() — function
 
-*`layout/items/produce-items.ts`*
+*`layout/bars/produce-bars.ts`*
 
 Per-row bar production. An Entry carries no stored classification, so nothing dispatches on a type
 tag: the variant registry resolves one variant per Entry, and that variant's own producer builds the

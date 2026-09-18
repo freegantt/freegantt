@@ -1165,7 +1165,7 @@ describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
 
     const preview = applied[0] as readonly { barId: string; dx: number; extra: boolean }[];
     // The parent's own bar is the caller's gesture, not an extender's ghost, so `extra` stays false.
-    expect(preview.map((item) => [item.barId, item.dx, item.extra])).toEqual([
+    expect(preview.map((bar) => [bar.barId, bar.dx, bar.extra])).toEqual([
       [barId(entryId('phase')), 50, false],
       [barId(entryId('child')), 50, false],
     ]);

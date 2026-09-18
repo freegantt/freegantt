@@ -84,7 +84,7 @@ function mountSurfaces(): { grid: HTMLElement; timeline: HTMLElement } {
 }
 
 describe('render/dom backend', () => {
-  it('finds the item under a point via event delegation, not a materialized hit index (#31)', () => {
+  it('finds the bar under a point via event delegation, not a materialized hit index (#31)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });

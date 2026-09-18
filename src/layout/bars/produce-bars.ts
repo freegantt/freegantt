@@ -9,7 +9,7 @@ import { spansTime } from '../../model/index.js';
 import type { Entry, EntryId } from '../../model/index.js';
 import type { PlannedRow } from '../rows/row-source.js';
 import { isPlannedHeaderRow } from '../rows/row-source.js';
-import type { Bar, VariantBars } from './item.js';
+import type { Bar, VariantBars } from './bar.js';
 
 /** What one Entry draws: its variant, then that variant's own producer.
  *
@@ -21,7 +21,7 @@ import type { Bar, VariantBars } from './item.js';
  *
  *  Passes `childrenAsSegments` straight through to the producer (#421 C2, Q33) — nothing here
  *  skips the Entry. A claimed row's subject still reaches its own variant's producer, so a
- *  consumer's own `items` still runs and still wins (Q26). */
+ *  consumer's own `bars` still runs and still wins (Q26). */
 export function resolveBars(
   entry: Entry,
   registry: VariantBars,
@@ -40,7 +40,7 @@ export function produceBarsForRow(
   registry: VariantBars,
 ): readonly Bar[] {
   if (isPlannedHeaderRow(row)) return [];
-  const items: Bar[] = [];
+  const bars: Bar[] = [];
   for (const id of row.entryIds) {
     const entry = entryById.get(id);
     if (entry === undefined) continue;
@@ -50,9 +50,9 @@ export function produceBarsForRow(
     // BUILD-LOG.md).
     if (!spansTime(entry)) continue;
     // Nothing skips a claimed row's subject (Q33): the fact travels to the producer instead, so
-    // a consumer's own `items` still runs for it and still wins (Q26).
+    // a consumer's own `bars` still runs for it and still wins (Q26).
     const childrenAsSegments = row.claimed === true && id === row.entryIds[0];
-    items.push(...resolveBars(entry, registry, childrenAsSegments));
+    bars.push(...resolveBars(entry, registry, childrenAsSegments));
   }
-  return items;
+  return bars;
 }

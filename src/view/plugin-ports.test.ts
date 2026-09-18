@@ -60,7 +60,7 @@ function makeEntry(id: string): Entry {
 }
 
 function makeBar(): FrameBar {
-  return { id: 'item', x: 0, y: 0, width: 10, height: 4 } as unknown as FrameBar;
+  return { id: 'bar', x: 0, y: 0, width: 10, height: 4 } as unknown as FrameBar;
 }
 
 function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {

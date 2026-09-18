@@ -5,8 +5,8 @@ import type { Entry, EntryId } from '../../model/index.js';
 import type { EntryDoubleValues } from '../entry-double.js';
 import { entryDouble, entryDoubles } from '../entry-double.js';
 import type { PlannedRow } from '../rows/row-source.js';
-import { produceBarsForRow } from './produce-items.js';
-import { wholeEntryBar } from './item.js';
+import { produceBarsForRow } from './produce-bars.js';
+import { wholeEntryBar } from './bar.js';
 import { createVariantRegistry } from './variants.js';
 
 describe('wholeEntryBar (review P3)', () => {
@@ -96,20 +96,20 @@ describe('produceBarsForRow', () => {
 
   it('produces t1:0 for an ordinary Entry — always exactly one Bar (#421, ADR 0026)', () => {
     const t1 = spanEntry('t1');
-    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
-    expect(items).toHaveLength(1);
-    expect(items[0]?.id).toBe(barId(t1.id, 0));
-    expect(items[0]?.start).toBe(t1.start);
-    expect(items[0]?.end).toBe(t1.end);
+    const bars = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.id).toBe(barId(t1.id, 0));
+    expect(bars[0]?.start).toBe(t1.start);
+    expect(bars[0]?.end).toBe(t1.end);
   });
 
   it('draws the leaf variant for a childless Entry no rule claims (ADR 0013)', () => {
     const t1 = spanEntry('t1');
     expect(() => produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry)).not.toThrow();
-    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
-    expect(items).toHaveLength(1);
-    expect(items[0]?.id).toBe(barId(t1.id, 0));
-    expect(items[0]?.variant).toBe('leaf');
+    const bars = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.id).toBe(barId(t1.id, 0));
+    expect(bars[0]?.variant).toBe('leaf');
   });
 
   it('draws the parent variant for an Entry with children no rule claims', () => {
@@ -117,16 +117,16 @@ describe('produceBarsForRow', () => {
       { id: 't1', start: 0, end: 10 },
       { id: 'c1', parentId: 't1', start: 0, end: 10 },
     ]);
-    const items = produceBarsForRow(planned([t1!.id]), entryByIdFor([t1!]), registry);
-    expect(items).toHaveLength(1);
-    expect(items[0]?.variant).toBe('summary');
+    const bars = produceBarsForRow(planned([t1!.id]), entryByIdFor([t1!]), registry);
+    expect(bars).toHaveLength(1);
+    expect(bars[0]?.variant).toBe('summary');
   });
 
   it('an Entry with only a start date draws no bar (ADR 0012 Gate)', () => {
     const t1 = entryDouble({ id: 't1', start: 0 });
     expect(t1.end).toBeUndefined();
-    const items = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
-    expect(items).toHaveLength(0);
+    const bars = produceBarsForRow(planned([t1.id]), entryByIdFor([t1]), registry);
+    expect(bars).toHaveLength(0);
   });
 
   it('[S4-A8] an entry with no children produces no Bar; a child gives it a real span (ADR 0012)', () => {
@@ -208,7 +208,7 @@ describe('produceBarsForRow', () => {
       expanded: true,
       headerLabel: 'Team',
     };
-    const items = produceBarsForRow(header, entryByIdFor([t1]), registry);
-    expect(items).toEqual([]);
+    const bars = produceBarsForRow(header, entryByIdFor([t1]), registry);
+    expect(bars).toEqual([]);
   });
 });

@@ -9,8 +9,8 @@
 // names; the old file is a separate tidying call.
 //
 // Restore-by-key, not by node. A virtualized row's node comes and goes as the window scrolls; the
-// row it stands for does not. So this module remembers "row `r7`, column `budget`" or "bar for
-// item `e3:1`", not an `HTMLElement`. It re-resolves the element fresh after every frame, the same
+// row it stands for does not. So this module remembers "row `r7`, column `budget`" or "bar
+// `e3:1`", not an `HTMLElement`. It re-resolves the element fresh after every frame, the same
 // reason `ContainerDom` never keys off node identity either (I8). A row or bar that no longer
 // exists (filtered away, collapsed away) falls back to its nearest surviving neighbour.
 //

@@ -13,7 +13,7 @@ import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
 import type { ChangeSet, EntryId, BarId, RowId } from '../model/index.js';
-import type { Bar } from './items/item.js';
+import type { Bar } from './bars/bar.js';
 
 /** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
  *  satisfies it; a test hands a literal. It is the read half of `FrameLayout`, the same split
@@ -105,11 +105,11 @@ export class FrameLayout implements FrameLayoutView {
   barsForEntry(id: EntryId): readonly Bar[] {
     const rowId = this.#rowOfEntry.get(id);
     if (rowId === undefined) return [];
-    const items: Bar[] = [];
-    for (const item of this.#memory.rowMemory(rowId).items) {
-      if (item.entryId === id) items.push(item);
+    const bars: Bar[] = [];
+    for (const bar of this.#memory.rowMemory(rowId).bars) {
+      if (bar.entryId === id) bars.push(bar);
     }
-    return items;
+    return bars;
   }
 
   /** Every Bar this entry draws, by id, in the order its row produced them (#185). It answers from
@@ -117,7 +117,7 @@ export class FrameLayout implements FrameLayoutView {
    * that draws several Bars from one Entry gets the same true answer. Empty when collapse hid the
    * row, or when the entry draws nothing. */
   barIdsForEntry(id: EntryId): readonly BarId[] {
-    return this.barsForEntry(id).map((item) => item.id);
+    return this.barsForEntry(id).map((bar) => bar.id);
   }
 
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */

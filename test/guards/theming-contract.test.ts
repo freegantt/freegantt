@@ -26,7 +26,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const read = (rel: string): string => fs.readFileSync(path.join(root, rel), 'utf8');
 
 const styles = read('src/view/styles.ts');
-const variants = read('src/layout/items/variants.ts');
+const variants = read('src/layout/bars/variants.ts');
 const doc = read('docs/05-consumer-api.md');
 
 // ---------------------------------------------------------------------------------------------

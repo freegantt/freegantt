@@ -249,7 +249,7 @@ this one.
 `plans/02-public-api.md` §4 states the customization ladder: level 2 is the Parts list. This section
 is the reference that statement points at — every `.fg-*` class the base stylesheet
 (`src/view/styles.ts`) defines, plus the two glyph classes `summary()` and `diamond()` ship in their
-own CSS (`src/layout/items/variants.ts`, ADR 0022). It landed here with the token tables (issue #334).
+own CSS (`src/layout/bars/variants.ts`, ADR 0022). It landed here with the token tables (issue #334).
 
 A **public** Part is level-2 surface a consumer stylesheet targets. An **internal** Part is plumbing:
 the reconciler owns the node, and there is no stability promise on the name. Publishing the internal

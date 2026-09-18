@@ -99,7 +99,7 @@ This has bitten three times. `'scale-options-ignored'` and the corrected-rollup 
 
 **What it is legitimately for:** making *our own* development stricter, at a cost we do not want to charge a consumer. `transaction.ts` deep-freezes a ChangeSet so our tests catch a mutation. `build-commit-change-set.ts` asserts an extension hook did not overwrite the body. Both would still be correct if they never ran anywhere else. The test is: *would a consumer want this?* If yes, it must not be gated.
 
-**The replacement, when the answer is yes:** raise it through `raiseError` at `severity: 'warning'`, in every build. When the real concern is cost rather than noise, remove the cost by not asking the question — `produce-items.ts` stops its claim scan at the first match when no report sink is wired, rather than gating the report.
+**The replacement, when the answer is yes:** raise it through `raiseError` at `severity: 'warning'`, in every build. When the real concern is cost rather than noise, remove the cost by not asking the question — `produce-bars.ts` stops its claim scan at the first match when no report sink is wired, rather than gating the report.
 
 ## 6. Implementation order
 

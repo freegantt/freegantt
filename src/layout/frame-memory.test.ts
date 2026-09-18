@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FrameMemory } from './frame-memory.js';
-import { createVariantRegistry } from './items/variants.js';
+import { createVariantRegistry } from './bars/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
-import * as produceBars from './items/produce-items.js';
+import * as produceBars from './bars/produce-bars.js';
 import { rowId } from '../model/index.js';
 import { entryDoubleLike } from './entry-double.js';
 import type { PlannedRow } from './rows/row-source.js';
@@ -59,9 +59,9 @@ describe('FrameMemory (A2)', () => {
     const one = sampleEntries[0]!;
     const plan = planOf([one]);
     memory.sync({ plan, rowHeight: 32, entries: [one], registry, datasetRevision: 0 });
-    const firstItems = memory.rowMemory(String(plan[0]!.id)).items;
-    expect(firstItems).toHaveLength(1);
-    expect(firstItems[0]!.entryId).toBe(one.id);
+    const firstBars = memory.rowMemory(String(plan[0]!.id)).bars;
+    expect(firstBars).toHaveLength(1);
+    expect(firstBars[0]!.entryId).toBe(one.id);
 
     const moved = entryDoubleLike(one, {
       start: addMs(one.start!, 1000),
@@ -69,8 +69,8 @@ describe('FrameMemory (A2)', () => {
     });
     memory.sync({ plan, rowHeight: 32, entries: [moved], registry, datasetRevision: 1 });
 
-    const secondItems = memory.rowMemory(String(plan[0]!.id)).items;
-    expect(secondItems[0]!.start).toBe(moved.start);
+    const secondBars = memory.rowMemory(String(plan[0]!.id)).bars;
+    expect(secondBars[0]!.start).toBe(moved.start);
   });
 
   it('a new datasetRevision produces again without invalidateFrom', () => {
@@ -96,8 +96,8 @@ describe('FrameMemory (A2)', () => {
 // beside the Bars (#230 R1)' — `RowMemory.segmentIds`/`segmentIdsByBar` and
 // `FrameMemory.segmentIdsOfEntries` named which Segment(s) each Bar stood for. A core Entry now
 // always draws exactly one Bar over its own span, so there is no Segment set left to name, and
-// `RowMemory` carries only `items`. Two tests below still ask a real question about the cache
-// itself and are kept, rewritten against `items`.
+// `RowMemory` carries only `bars`. Two tests below still ask a real question about the cache
+// itself and are kept, rewritten against `bars`.
 describe('FrameMemory caches the Bars a row produced (#230 R1)', () => {
   const registry = createVariantRegistry({ fieldFor: () => undefined });
 
@@ -120,7 +120,7 @@ describe('FrameMemory caches the Bars a row produced (#230 R1)', () => {
   it('answers a row no frame planned with nothing, and allocates nothing to say so', () => {
     const { memory } = memoryFor([sampleEntries[0]!]);
 
-    expect(memory.rowMemory('no-such-row').items).toEqual([]);
+    expect(memory.rowMemory('no-such-row').bars).toEqual([]);
     expect(memory.rowMemory('no-such-row')).toBe(memory.rowMemory('no-other-row'));
   });
 });

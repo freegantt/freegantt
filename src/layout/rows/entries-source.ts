@@ -31,7 +31,7 @@ export function entryTreeIndex(entries: readonly Entry[]): {
 
 /** No Field registry wired in — a pure `layout/` test, or any caller with no Dataset behind it —
  *  reads every key as undeclared, the same fallback `createVariantRegistry` takes for `when`
- *  (`items/variants.ts`). A field-match rule then claims nothing; a predicate rule still runs, since
+ *  (`bars/variants.ts`). A field-match rule then claims nothing; a predicate rule still runs, since
  *  it reads no Field at all. */
 const NO_ENTRY_RULE_PORTS: EntryRulePorts = Object.freeze({
   fieldFor: () => undefined,

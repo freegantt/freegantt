@@ -409,7 +409,7 @@ aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produ
 <text x="315" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ PlannedRow[]</text>
 <rect x="428" y="46" width="178" height="66" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="2" />
 <text x="517" y="70" text-anchor="middle" class="box-name" font-size="12" fill="var(--ink)">produceBarsForRow()</text>
-<text x="517" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/items/produce-items.ts</text>
+<text x="517" y="86" text-anchor="middle" class="box-sub" font-size="9" fill="var(--muted)">layout/bars/produce-bars.ts</text>
 <text x="517" y="100" text-anchor="middle" class="box-name" font-size="10" fill="var(--muted)">→ Bar[]</text>
 <rect x="630" y="46" width="178" height="66" rx="7" fill="var(--bg)" stroke="var(--border-strong)" stroke-width="1.5" />
 <text x="719" y="70" text-anchor="middle" class="box-name" font-size="12.5" fill="var(--ink)">placeFrame()</text>
