@@ -3499,6 +3499,86 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       gantt.destroy();
       container.remove();
     });
+
+    it('the rule switches live: clearing it gives every child its row back', async () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: true },
+      });
+      const rowIdsNow = (): (string | null)[] =>
+        Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+          row.getAttribute('data-entry-id'),
+        );
+
+      expect(rowIdsNow()).toEqual(['p1', 'p2']);
+
+      // Every config key is live-reconfigurable (`plans/02`), and this one is no exception.
+      gantt.rowSource = { source: 'entries' };
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(rowIdsNow()).toEqual(['p1', 'c1', 'c2', 'p2', 'c3']);
+
+      gantt.rowSource = { source: 'entries', childrenAsSegments: true };
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(rowIdsNow()).toEqual(['p1', 'p2']);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('two Gantts on one Dataset disagree: one folds the children, the other gives them rows (I2)', () => {
+      const first = document.createElement('div');
+      const second = document.createElement('div');
+      document.body.append(first, second);
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const folded = new Gantt({
+        container: first,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: true },
+      });
+      const open = new Gantt({ container: second, dataset });
+      const rowIdsIn = (container: HTMLElement): (string | null)[] =>
+        Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+          row.getAttribute('data-entry-id'),
+        );
+
+      // The rule is a per-Gantt row question, never a stored classification on the Entry (I2).
+      expect(rowIdsIn(first)).toEqual(['p1', 'p2']);
+      expect(rowIdsIn(second)).toEqual(['p1', 'c1', 'c2', 'p2', 'c3']);
+
+      folded.destroy();
+      open.destroy();
+      first.remove();
+      second.remove();
+    });
+
+    it('a filter that drops a claimed parent drops its segments with it (J-plan-F)', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({ timeZone: 'UTC', fields: [{ key: 'phase' }], entries: claimTree() });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: {
+          source: 'entries',
+          childrenAsSegments: true,
+          filter: (entry) => entry.id !== 'p1',
+        },
+      });
+
+      const rowIds = Array.from(container.querySelectorAll<HTMLElement>('.fg-row')).map((row) =>
+        row.getAttribute('data-entry-id'),
+      );
+      // c1 and c2 are bars on p1's row, not rows. The filter drops that row, so they go with it.
+      // Nothing brings them back as rows of their own.
+      expect(rowIds).toEqual(['p2']);
+
+      gantt.destroy();
+      container.remove();
+    });
   });
 
   // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
