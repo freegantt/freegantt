@@ -103,6 +103,8 @@ export interface BarLabelSpec {
   /** The Field a bar's label reads — `formatValue` prints it, the same as a Grid cell (#421 C5).
    *  Defaults to `'name'`. */
   field?: FieldKey;
+  /** Which side the label paints on, at whatever fit rule `BarLabelPolicy` states. Defaults to
+   *  `'fitBar'`. */
   placement?: BarLabelPolicy;
 }
 
