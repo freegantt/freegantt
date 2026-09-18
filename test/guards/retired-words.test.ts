@@ -156,9 +156,106 @@ describe('retired words stay retired', () => {
   // id spellings only — a menu still has items.
   it('never reintroduces `Item` as the drawn unit (ADR 0026, #421)', () => {
     const hits = findHits(
-      /\bItemId\b|\bitemId\b|\bItemProducer\b|\bVariantItems\b|\bproduceItemsForRow\b|\bwholeEntryItem\b|\bfixedWidthItem\b|\bdata-item-id\b/,
+      /\bItemId\b|\bitemId\b|\bItemProducer\b|\bVariantItems\b|\bproduceItemsForRow\b|\bwholeEntryItem\b|\bfixedWidthItem\b|\bdata-item-id\b|\bBarRendererContext\.item\b|\bTooltipRendererContext\.item\b|\bRowMemory\.items\b/,
       (line) => /ADR 0\d{3}/.test(line) || /retired/i.test(line),
     );
+    expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
+  });
+
+  // F6 (#421 review): the rename that retired `Item` missed a directory, two file names and a struct
+  // field — `layout/items/`, `item.ts`, `produce-items.ts`, `RowMemory.items` — because the guard
+  // above only ever watched compound identifiers, never a bare path or a field re-declaration. These
+  // two checks close that: one watches the filesystem shape directly (a rename cannot silently drop a
+  // `git mv` the way a spelling can drop a letter), the other watches the exact declaration text a
+  // regression would have to reintroduce.
+  it('never reintroduces the `layout/items/` directory or its `item.ts`/`produce-items.ts` file names (ADR 0026, #421)', () => {
+    const staleDirNames = new Set(['items']);
+    const staleBasenames = new Set(['item.ts', 'item.test.ts', 'produce-items.ts', 'produce-items.test.ts']);
+    const offenders: string[] = [];
+
+    function scan(dir: string): void {
+      let entries: string[];
+      try {
+        entries = fs.readdirSync(dir);
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (SKIP_DIRS.has(entry)) continue;
+        const full = path.join(dir, entry);
+        if (fs.statSync(full).isDirectory()) {
+          if (staleDirNames.has(entry)) offenders.push(path.relative(root, full));
+          scan(full);
+        } else if (staleBasenames.has(entry)) {
+          offenders.push(path.relative(root, full));
+        }
+      }
+    }
+
+    scan(path.join(root, 'src/layout'));
+    expect(offenders, JSON.stringify(offenders, null, 2)).toEqual([]);
+  });
+
+  it('never reintroduces the `RowMemory.items` field (ADR 0026, #421)', () => {
+    const hits = findHits(
+      /\bitems:\s*readonly Bar\[\]/,
+      (line) => /ADR 0\d{3}/.test(line) || /retired/i.test(line),
+    );
+    expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
+  });
+
+  // The three checks above watch specific spellings and paths — the same narrow style every other
+  // guard in this file uses, because a blanket sweep for the bare word `item`/`items` across
+  // `layout/`, `view/`, `render/`, `interaction/` would also flag every legitimate generic use those
+  // four layers already have: `CellItem` (a grid cell), `RangeBand | RowStripe` decoration items,
+  // `GridColumnInput` items, `syncKeyed`'s own generic `TItem`, and CSS's `align-items`/`.fg-menu-item`.
+  // F6's own survivors were all compound identifiers or file/path spellings, which the checks above
+  // now cover; a change to one of the exempt files below that starts naming a *Bar* as `item` again
+  // needs a human to widen this exemption list, not a regex to guess it.
+  const ITEM_WORD_EXEMPT_FILES = new Set([
+    'src/view/column-chrome.ts',
+    'src/view/grid-columns.ts',
+    'src/view/column-chrome.test.ts',
+    'src/view/core-commands.test.ts',
+    'src/view/roving-focus.test.ts',
+    'src/view/styles.ts',
+    'src/layout/decorations.ts',
+    'src/render/dom/decorations.ts',
+    'src/render/dom/date-line.ts',
+    'src/render/dom/element-description.ts',
+    'src/render/dom/sync-keyed.ts',
+    'src/render/dom/index.ts',
+  ]);
+  const ITEM_WORD_SCAN_DIRS = ['src/layout', 'src/view', 'src/render', 'src/interaction'];
+
+  it('never reintroduces a stray `item`/`items` identifier in layout/, view/, render/ or interaction/ (ADR 0026, #421)', () => {
+    const pattern = /\bitems?\b/i;
+    const hits: Hit[] = [];
+    for (const dir of ITEM_WORD_SCAN_DIRS) {
+      const files: string[] = [];
+      try {
+        walk(path.join(root, dir), files);
+      } catch {
+        continue;
+      }
+      for (const file of files) {
+        const rel = path.relative(root, file);
+        if (rel === SELF || ITEM_WORD_EXEMPT_FILES.has(rel)) continue;
+        if (!file.endsWith('.ts')) continue;
+        let content: string;
+        try {
+          content = fs.readFileSync(file, 'utf8');
+        } catch {
+          continue;
+        }
+        content.split('\n').forEach((line, index) => {
+          if (/CellItem|MenuItem|TItem/.test(line)) return;
+          if (pattern.test(line)) {
+            hits.push({ file: rel, line: index + 1, word: 'item', text: line.trim() });
+          }
+        });
+      }
+    }
     expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
   });
 });
