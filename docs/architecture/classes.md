@@ -609,7 +609,7 @@ Implements `RenderBackend<HTMLElement>`.
 - **applyState(state)** — Hot-path class toggles and transforms only — hover/selection/drag
   preview, zero allocation, never a frame rebuild (I13).
 - **hitTest(x, y)** — `document.elementFromPoint` → `closest('.fg-bar')` →
-  `dataset.itemId`. No materialized hit-region array; the bars array *is* the hit index.
+  `dataset.barId`. No materialized hit-region array; the bars array *is* the hit index.
 
 #### syncKeyed() — function
 

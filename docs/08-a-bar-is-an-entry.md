@@ -309,9 +309,10 @@ parent whose `showDaysOnRow` Field **equals** `true`. `{ team: 'framing' }` clai
 consumer's own — and the comparison is that Field's own `equals`
 ([ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md)). A key no Field declares claims
 nothing, and the miss reports once per rule and key on the `error` event
-(`code: 'unknown-variant-field'`, `severity: 'warning'`, with a `console.warn` fallback when nothing
-subscribes) — the frame keeps drawing, and the typo is loud rather than silent (`J59`,
-`view/gantt-shell.ts`). The new key reports through that same sink. A match is equality, never "has
+(`code: 'unknown-row-source-field'`, `severity: 'warning'`, with a `console.warn` fallback when
+nothing subscribes) — the frame keeps drawing, and the typo is loud rather than silent (`J59`,
+`view/gantt-shell.ts`). `unknown-variant-field` is a different code, for `variants`' own `when` (Q29
+ruled against reusing it for `childrenAsSegments`). A match is equality, never "has
 a value": ask that with a predicate.
 
 **It does not name a variant, and it does not pick one.** `variants` writes the same shape in its
@@ -363,13 +364,13 @@ own children.
 **A claimed row is a summary in the grid already.** The claimed parent's cells roll up from its
 children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The one thing the design
 suppresses is the parent's own bar, so `summary()`'s rail does not paint over the children it
-stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and reads the one fact the producer is handed (Q27):
+stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and that producer ignores the third parameter rather than reading it (Q27):
 
 ```ts
-bars: (entry, variant, childrenAsSegments) => (childrenAsSegments ? [unclaimedSpan(entry, variant)] : []),
+bars: (entry, variant) => [wholeEntryBar(entry, variant)],
 ```
 
-`childrenAsSegments` is `true` for the one Entry whose children are this row's segments, and `false` for every other Entry on it. Core's own `summary()` reads the same fact and draws nothing, so its rail never paints over the bars it stands for.
+This producer always draws, claimed row or not — it is what a rail actually wants. `unclaimedSpan`, the parameter it ignores, is core's own answer of *when to suppress*; a consumer producer that wants its band to survive claiming skips that question and always paints, so it always sits behind the children's bars rather than disappearing the moment `childrenAsSegments` matches the row.
 
 :::note One rename inside this page
 The library's word for a bar was `Item` — `Item`, `ItemId`, `ItemProducer`, `EntryVariant.items`. That word also names a menu row and a grid cell, and everything downstream of it already said *bar*. It becomes `Bar` when the Segment retires (Q28, ruled 2026-09-17), so this page writes `Bar`, `bars` and `unclaimedSpan`. `MenuItem` and `CellItem` keep the generic word, because an item is what they are.

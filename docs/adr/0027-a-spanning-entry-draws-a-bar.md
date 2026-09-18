@@ -39,10 +39,11 @@ in this ADR moves it.
 **A spanning Entry draws one Bar, on the row its `parentId` names.** This replaces "it holds a
 Segment (and draws a bar) iff it spans." There is no second record to hold — the Entry that spans is
 the Bar. A claimed parent draws no bar of its own; the Bars its row shows are its children's, placed
-there by the row-source rule ADR 0026 states. A rolling-up parent draws no bar of its own either
-([ADR 0013](0013-what-decides-that-a-row-derives-its-values.md)) — the two cases share one outcome,
-a parent's own row shows no Bar of its own record, for two different reasons (it derives, or it is
-claimed).
+there by the row-source rule ADR 0026 states. An *unclaimed* rolling-up parent keeps its rail: it
+still draws one Bar over its own (rolled-up) span
+([ADR 0013](0013-what-decides-that-a-row-derives-its-values.md);
+`src/layout/items/item.ts`'s `unclaimedSpan`). Only a claimed parent's own row shows no Bar of its
+own record — being claimed, not deriving, is what removes it.
 
 **"At least one Segment iff it spans" has no successor**, because the thing it counted — how many
 Segments one spanning Entry held — no longer exists. A spanning Entry is one record; it draws exactly
@@ -61,9 +62,9 @@ one Bar; there is nothing left to count.
 - **A claimed child's Delete still un-dates, not removes**, the same outcome ADR 0012's worked table
   gave a bar's last-Segment removal — a claimed child is a spanning Entry drawing a Bar, and clearing
   its span is what Delete on a Bar does. `entries.remove(id)` stays the row-removal door, unchanged.
-- **`docs/08-a-bar-is-an-entry.md` and `CONTEXT.md`'s *Bar* entry state this rule in full**; this
-  record exists so a reader who follows ADR 0012's own citation of "Segment" lands on the current
-  rule rather than a dead end.
+- **`CONTEXT.md`'s *Bar* entry states this rule in full; `docs/08-a-bar-is-an-entry.md` states it
+  through its figures.** This record exists so a reader who follows ADR 0012's own citation of
+  "Segment" lands on the current rule rather than a dead end.
 
 Supersedes the Segment clause of [ADR 0012](0012-dates-are-optional-on-every-kind.md) only. Its
 optional-dates decision — one date without the other is legal, the biconditional on `start`/`end`

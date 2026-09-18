@@ -232,8 +232,13 @@ code.
 Bar emission is a seam, mirroring rendering (§10): the pipeline resolves one Variant per row and calls that Variant's own `bars` (ADR 0018). Core's `parent` draws a summary and core's `leaf` draws a bar. A plugin or a consumer that needs another shape declares a Variant whose `when` rule claims the rows. Every row resolves, because core's `leaf` carries no `when`.
 
 ```ts
-type BarProducer = (entry: Entry) => readonly Bar[];
+type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 ```
+
+The third parameter is the one new seam `childrenAsSegments` adds (#421 C2, Q33): `true` when a row
+source has claimed `entry` and moved its children onto its own row. Core's own producers read it —
+`unclaimedSpan` draws nothing for a claimed parent, since its children already draw their own Bars
+on that row — but a producer may ignore it and always draw, the same as `wholeEntryBar` does.
 
 ### 2.4 Bar identity is deterministic
 
