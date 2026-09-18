@@ -4458,7 +4458,7 @@ describe('Gantt capabilities / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  it('gantt.selectedSegmentIds still accepts a select-incapable Entry — the setter does not consult can("select") (D-S3-9)', () => {
+  it('gantt.selectedEntryIds still accepts a select-incapable Entry — the setter does not consult can("select") (D-S3-9)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset, capabilities: { select: false } });
