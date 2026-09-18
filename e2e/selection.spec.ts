@@ -7,7 +7,7 @@ async function nativeHighlight(page: import('@playwright/test').Page): Promise<s
 /** First span bar whose click point is actually on that bar. Group brackets span the full
  *  dataset, so Playwright then scrolls them under the sticky header and the click never lands. */
 async function unobstructedBar(page: import('@playwright/test').Page) {
-  const itemId = await page.evaluate(() => {
+  const barId = await page.evaluate(() => {
     const pane = document.querySelector('#gantt .fg-timeline-pane');
     if (pane === null) return null;
     const header = pane.querySelector('.fg-header');
@@ -24,18 +24,18 @@ async function unobstructedBar(page: import('@playwright/test').Page) {
       const y = rect.top + rect.height / 2;
       const atPoint = document.elementFromPoint(x, y);
       if (atPoint === null || !bar.contains(atPoint)) continue;
-      return bar.getAttribute('data-item-id');
+      return bar.getAttribute('data-bar-id');
     }
     return null;
   });
-  expect(itemId).not.toBeNull();
-  return page.locator(`#gantt .fg-bar[data-item-id="${itemId}"]`);
+  expect(barId).not.toBeNull();
+  return page.locator(`#gantt .fg-bar[data-bar-id="${barId}"]`);
 }
 
 /** `count` distinct bars a real pointer can land on — the same criteria as `unobstructedBar`, so a
  *  right-click test can build a multi-bar Selection without naming any fixture bar by id. */
 async function unobstructedBars(page: import('@playwright/test').Page, count: number) {
-  const itemIds = await page.evaluate((wanted) => {
+  const barIds = await page.evaluate((wanted) => {
     const pane = document.querySelector('#gantt .fg-timeline-pane');
     if (pane === null) return [];
     const header = pane.querySelector('.fg-header');
@@ -54,13 +54,13 @@ async function unobstructedBars(page: import('@playwright/test').Page, count: nu
       const y = rect.top + rect.height / 2;
       const atPoint = document.elementFromPoint(x, y);
       if (atPoint === null || !bar.contains(atPoint)) continue;
-      const id = bar.getAttribute('data-item-id');
+      const id = bar.getAttribute('data-bar-id');
       if (id !== null) found.push(id);
     }
     return found;
   }, count);
-  expect(itemIds.length).toBe(count);
-  return itemIds.map((id) => page.locator(`#gantt .fg-bar[data-item-id="${id}"]`));
+  expect(barIds.length).toBe(count);
+  return barIds.map((id) => page.locator(`#gantt .fg-bar[data-bar-id="${id}"]`));
 }
 
 /** A point inside the timeline pane, below its sticky header, that lands on no bar — found by
@@ -92,7 +92,7 @@ test('a selected bar keeps its paint when it remounts after a scroll (#185)', as
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bar = await unobstructedBar(page);
-  const itemId = (await bar.getAttribute('data-item-id'))!;
+  const barId = (await bar.getAttribute('data-bar-id'))!;
   const box = await bar.boundingBox();
   expect(box).not.toBeNull();
   await bar.click({ position: { x: 12, y: box!.height / 2 } });
@@ -103,12 +103,12 @@ test('a selected bar keeps its paint when it remounts after a scroll (#185)', as
   await pane.evaluate((el) => {
     el.scrollLeft = el.scrollWidth;
   });
-  await expect(page.locator(`#gantt .fg-bar[data-item-id="${itemId}"]`)).toHaveCount(0);
+  await expect(page.locator(`#gantt .fg-bar[data-bar-id="${barId}"]`)).toHaveCount(0);
 
   await pane.evaluate((el, left) => {
     el.scrollLeft = left;
   }, scrolledLeft);
-  const remounted = page.locator(`#gantt .fg-bar[data-item-id="${itemId}"]`);
+  const remounted = page.locator(`#gantt .fg-bar[data-bar-id="${barId}"]`);
   await expect(remounted).toHaveCount(1);
   await expect(remounted).toHaveAttribute('data-state', /\bselected\b/);
 });

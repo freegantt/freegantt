@@ -3318,12 +3318,12 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
     await paint();
 
-    // Keyed by `data-item-id` (the Entry's own id), not `data-variant`: a variant is a rule
+    // Keyed by `data-bar-id` (the Entry's own id), not `data-variant`: a variant is a rule
     // resolved fresh every frame (ADR 0018), so `data-variant` reverts to `leaf` the moment a
     // plugin drops — the bar itself (and the Entry it draws) does not move.
     const barFor = (entryId: string): HTMLElement =>
       Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).find((bar) =>
-        bar.getAttribute('data-item-id')?.startsWith(`${entryId}:`),
+        bar.getAttribute('data-bar-id')?.startsWith(`${entryId}:`),
       )!;
 
     // Both installed, and both painted their own class from their own `bar` registration.
@@ -3613,10 +3613,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       });
 
       const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
-      const itemIds = bars.map((bar) => bar.dataset['itemId']);
+      const barIds = bars.map((bar) => bar.dataset['barId']);
       // p1 draws no bar of its own — `summary()` resolved for it and `ignoreSegments` answered `[]`
       // (Q27). c1 and c2 draw their own bars, on p1's row.
-      expect(itemIds).toEqual([barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
+      expect(barIds).toEqual([barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars.every((bar) => bar.dataset['variant'] === 'leaf')).toBe(true);
 
       gantt.destroy();
@@ -3660,10 +3660,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       });
 
       const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
-      const itemIds = bars.map((bar) => bar.dataset['itemId']);
+      const barIds = bars.map((bar) => bar.dataset['barId']);
       // p1's own band bar draws, plus c1's and c2's own bars — the band producer ignoring the new
       // parameter still ran and still won for p1 (Q26).
-      expect(itemIds).toEqual([barId(entryId('p1'), 99), barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
+      expect(barIds).toEqual([barId(entryId('p1'), 99), barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars[0]?.dataset['variant']).toBe('band');
 
       gantt.destroy();
@@ -3727,17 +3727,17 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       expect(rowIds).toEqual(['p1', 'p2', 'c3']);
 
       const p2Bar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${barId(entryId('p2'), 0)}"]`,
+        `.fg-bar[data-bar-id="${barId(entryId('p2'), 0)}"]`,
       )!;
       const c3Bar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${barId(entryId('c3'), 0)}"]`,
+        `.fg-bar[data-bar-id="${barId(entryId('c3'), 0)}"]`,
       )!;
       // p2 is unclaimed and still wears the rail (`summary()`, resolved on `entry.hasChildren`), in
       // the same Gantt, in the same frame, as p1's claimed row drawing c1's and c2's own bars.
       expect(p2Bar.dataset['variant']).toBe('summary');
       expect(c3Bar.dataset['variant']).toBe('leaf');
       const p1Bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar')).map(
-        (bar) => bar.dataset['itemId'],
+        (bar) => bar.dataset['barId'],
       );
       expect(p1Bars).toContain(barId(entryId('c1'), 0));
       expect(p1Bars).toContain(barId(entryId('c2'), 0));
@@ -3787,7 +3787,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const original = document.elementFromPoint.bind(document);
 
       const lockedBar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${barId(entryId('c1'), 0)}"]`,
+        `.fg-bar[data-bar-id="${barId(entryId('c1'), 0)}"]`,
       )!;
       document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? lockedBar : original(x, y));
       timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
@@ -3799,7 +3799,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       expect(end.hidden).toBe(true);
 
       const openBar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${barId(entryId('c2'), 0)}"]`,
+        `.fg-bar[data-bar-id="${barId(entryId('c2'), 0)}"]`,
       )!;
       document.elementFromPoint = (x: number, y: number) => (x === 6 && y === 5 ? openBar : original(x, y));
       timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 6, clientY: 5 }));
@@ -4047,7 +4047,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       });
 
       const railBar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-item-id="${barId(entryId('req-1'), 99)}"]`,
+        `.fg-bar[data-bar-id="${barId(entryId('req-1'), 99)}"]`,
       )!;
       const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
       timeline.setPointerCapture = vi.fn();
@@ -4143,7 +4143,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       for (const preset of ['day', 'week', 'year'] as const) {
         gantt.preset = preset;
         const d1Bar = container.querySelector<HTMLElement>(
-          `.fg-bar[data-item-id="${barId(entryId('d1'), 0)}"] .fg-bar-label`,
+          `.fg-bar[data-bar-id="${barId(entryId('d1'), 0)}"] .fg-bar-label`,
         )!;
         const totalCell = container.querySelector<HTMLElement>(
           '.fg-row[data-entry-id="req-1"] [data-field="hours"]',
@@ -4397,12 +4397,12 @@ describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)
 
   it('a timeline click selects the bar’s own child Entry', () => {
     const { container, gantt } = makeSegmentedGantt();
-    const second = container.querySelector<HTMLElement>('.fg-bar[data-item-id="split-b:0"]')!;
+    const second = container.querySelector<HTMLElement>('.fg-bar[data-bar-id="split-b:0"]')!;
 
     clickTimelineOn(container, second);
 
     expect(gantt.selectedEntryIds).toEqual([entryId('split-b')]);
-    const first = container.querySelector<HTMLElement>('.fg-bar[data-item-id="split-a:0"]')!;
+    const first = container.querySelector<HTMLElement>('.fg-bar[data-bar-id="split-a:0"]')!;
     expect(second.dataset['state']).toBe('selected');
     expect(first.dataset['state'] ?? '').toBe('');
 
@@ -4428,9 +4428,9 @@ describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)
 
   it('ctrl-click collects children across two rows', () => {
     const { container, gantt } = makeSegmentedGantt();
-    const plain = container.querySelector<HTMLElement>('.fg-bar[data-item-id="plain:0"]')!;
+    const plain = container.querySelector<HTMLElement>('.fg-bar[data-bar-id="plain:0"]')!;
 
-    clickTimelineOn(container, container.querySelector<HTMLElement>('.fg-bar[data-item-id="split-a:0"]')!);
+    clickTimelineOn(container, container.querySelector<HTMLElement>('.fg-bar[data-bar-id="split-a:0"]')!);
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? plain : original(x, y));
     container
@@ -4448,10 +4448,10 @@ describe('Gantt selection over a claimed row’s bars (ADR 0010, ADR 0025, #421)
   /** Shift-ranges from the `plain` row to the child bar named `childId`, and reports what ends up
    *  selected. */
   function shiftRangeFromPlainTo(container: HTMLElement, childId: string): void {
-    const plainBar = container.querySelector<HTMLElement>('.fg-bar[data-item-id="plain:0"]')!;
+    const plainBar = container.querySelector<HTMLElement>('.fg-bar[data-bar-id="plain:0"]')!;
     clickTimelineOn(container, plainBar);
     const original = document.elementFromPoint.bind(document);
-    const target = container.querySelector<HTMLElement>(`.fg-bar[data-item-id="${childId}:0"]`)!;
+    const target = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${childId}:0"]`)!;
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? target : original(x, y));
     container
       .querySelector<HTMLElement>('.fg-timeline-pane')!
@@ -5564,12 +5564,12 @@ describe('Gantt rows and collapse (S4.6)', () => {
     scroll.panTo(80);
     const yBefore = scroll.state.position;
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
-    const itemId = bar.dataset['itemId'];
+    const barId = bar.dataset['barId'];
 
     gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.name ?? '' };
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    expect(container.querySelector(`[data-item-id="${itemId}"]`)).toBe(bar);
+    expect(container.querySelector(`[data-bar-id="${barId}"]`)).toBe(bar);
     expect(scroll.state.position).toBe(yBefore);
 
     gantt.destroy();
@@ -6644,8 +6644,8 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
   it('ghosts an entry an installed extender moves, through the public seam', async () => {
     const { gantt, container } = buildGantt(cascadeOntoX);
 
-    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
-    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const barA = container.querySelector<HTMLElement>('[data-bar-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-bar-id="x:0"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     timeline.setPointerCapture = vi.fn();
     timeline.releasePointerCapture = vi.fn();
@@ -6668,8 +6668,8 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
   it('ghosts nothing while the hook stands empty, so the assertion above reads the occupant and not a default', async () => {
     const { gantt, container } = buildGantt();
 
-    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
-    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const barA = container.querySelector<HTMLElement>('[data-bar-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-bar-id="x:0"]')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     timeline.setPointerCapture = vi.fn();
     timeline.releasePointerCapture = vi.fn();

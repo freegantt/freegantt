@@ -223,9 +223,9 @@ export class ContainerDom implements GanttDom {
 
   /** Frozen, because plugin code reads this object and the memo keeps it. A caller that wrote to it
    *  would poison every later reader of the same node. */
-  #resolve(element: HTMLElement, itemIdAttr: string | undefined, fieldAttr: string | undefined): DomTarget {
+  #resolve(element: HTMLElement, barIdAttr: string | undefined, fieldAttr: string | undefined): DomTarget {
     if (element.classList.contains(BAR_CLASS)) {
-      const id = barIdFromDataset(itemIdAttr);
+      const id = barIdFromDataset(barIdAttr);
       const entry = id === undefined ? undefined : this.#ports.entryById(entryIdOfBar(id));
       // A bar draws one Entry (#421), so the subject and the set it stands for are the same one Entry.
       return freezeTarget({

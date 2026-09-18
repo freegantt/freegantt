@@ -120,7 +120,7 @@ function paintOneGantt(
 describe('ContainerDom — what render/dom emits is what targetUnder reads', () => {
   it('resolves a painted bar to a bar target carrying its own entry', () => {
     const gantt = paintOneGantt();
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const bar = gantt.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     const target = gantt.dom.targetUnder(bar);
 
@@ -213,7 +213,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
 
   it('a bar of a row that owns three names only the Entry it draws (#199)', () => {
     const gantt = paintOneGantt(threeOnOneRow, oneRowForAllThree);
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const bar = gantt.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     const target = gantt.dom.targetUnder(bar);
 
@@ -235,7 +235,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
   it('answers nothing for a node this Gantt does not own', () => {
     const gantt = paintOneGantt();
     const other = paintOneGantt();
-    const otherBar = other.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const otherBar = other.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     expect(gantt.dom.owns(otherBar)).toBe(false);
     expect(gantt.dom.targetUnder(otherBar)).toBeUndefined();
@@ -258,7 +258,7 @@ describe('ContainerDom — finding an element from an id', () => {
 
     const bar = gantt.dom.barFor(entries[1]!.id);
 
-    expect(bar).toBe(gantt.container.querySelectorAll('[data-item-id]')[1]);
+    expect(bar).toBe(gantt.container.querySelectorAll('[data-bar-id]')[1]);
     // F19: a plain string, not `as EntryId` — `barFor` is loose on this scalar id (#305).
     expect(gantt.dom.barFor('no-such-entry')).toBeUndefined();
     gantt.destroy();
@@ -299,7 +299,7 @@ describe('ContainerDom — finding an element from an id', () => {
 describe('ContainerDom — the pointer path allocates nothing while it rests', () => {
   it('answers with the same frozen target for repeated reads of one node', () => {
     const gantt = paintOneGantt();
-    const bar = gantt.container.querySelector<HTMLElement>('[data-item-id]')!;
+    const bar = gantt.container.querySelector<HTMLElement>('[data-bar-id]')!;
 
     const first = gantt.dom.targetUnder(bar);
     const second = gantt.dom.targetUnder(bar);

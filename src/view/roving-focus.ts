@@ -439,7 +439,7 @@ export class RovingFocus {
     if (bars.length === 0) return;
     const current = this.#timelineFocus;
     const currentIndex =
-      current === undefined ? -1 : bars.findIndex((bar) => bar.dataset['itemId'] === current);
+      current === undefined ? -1 : bars.findIndex((bar) => bar.dataset['barId'] === current);
 
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       const target = this.#nearestBarInAdjacentRow(bars, currentIndex, event.key === 'ArrowDown' ? 1 : -1);
@@ -475,8 +475,8 @@ export class RovingFocus {
   }
 
   #rowIdOfBar(bar: HTMLElement): RowId | undefined {
-    const itemIdAttr = bar.dataset['itemId'];
-    const id = barIdFromDataset(itemIdAttr);
+    const barIdAttr = bar.dataset['barId'];
+    const id = barIdFromDataset(barIdAttr);
     if (id === undefined) return undefined;
     return this.#ports.rowIdForEntry(entryIdOfBar(id));
   }
@@ -505,19 +505,19 @@ export class RovingFocus {
   /** The reveal target for a focused bar: the Entry it draws (ADR 0026 — one Entry draws one bar
    *  by default, so the bar's own Entry is always the answer now). */
   #revealTargetOfBar(bar: HTMLElement): EntryId {
-    const id = barIdFromDataset(bar.dataset['itemId'])!;
+    const id = barIdFromDataset(bar.dataset['barId'])!;
     return entryIdOfBar(id);
   }
 
   #focusBar(bar: HTMLElement): void {
-    const id = barIdFromDataset(bar.dataset['itemId']);
+    const id = barIdFromDataset(bar.dataset['barId']);
     if (id === undefined) return;
     this.#timelineFocus = id;
     this.#ports.selectOnFocus({ kind: 'bar', barId: id });
     this.#ports.revealEntry(this.#revealTargetOfBar(bar));
     this.#applyTimelineTabIndex();
     this.#barElements()
-      .find((candidate) => candidate.dataset['itemId'] === id)
+      .find((candidate) => candidate.dataset['barId'] === id)
       ?.focus();
   }
 
@@ -529,7 +529,7 @@ export class RovingFocus {
     const fromPointer = this.#focusFromPointer;
     this.#focusFromPointer = false;
     if (!(event.target instanceof HTMLElement)) return;
-    const id = barIdFromDataset(event.target.dataset['itemId']);
+    const id = barIdFromDataset(event.target.dataset['barId']);
     if (id === undefined || id === this.#timelineFocus) return;
     this.#timelineFocus = id;
     // Same reasoning as `#handleGridFocusIn`: a pointer gesture on this bar already proposed its
@@ -556,10 +556,10 @@ export class RovingFocus {
   #applyTimelineTabIndex(bars = this.#barElements()): void {
     const hadRealFocus =
       this.focusedElement() !== undefined || document.activeElement === this.#panes.timeline;
-    let target = bars.find((bar) => bar.dataset['itemId'] === this.#timelineFocus);
+    let target = bars.find((bar) => bar.dataset['barId'] === this.#timelineFocus);
     if (target === undefined) {
       target = bars[0];
-      this.#timelineFocus = target === undefined ? undefined : barIdFromDataset(target.dataset['itemId']);
+      this.#timelineFocus = target === undefined ? undefined : barIdFromDataset(target.dataset['barId']);
     }
     if (target !== undefined) {
       target.tabIndex = 0;

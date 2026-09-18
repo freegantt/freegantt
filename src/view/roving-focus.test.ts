@@ -40,7 +40,7 @@ function makeRow(id: RowId, fields: readonly string[]): HTMLElement {
 function makeBar(item: string): HTMLElement {
   const bar = makePane();
   bar.className = 'fg-bar';
-  bar.dataset['itemId'] = item;
+  bar.dataset['barId'] = item;
   bar.tabIndex = -1;
   return bar;
 }

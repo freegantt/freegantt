@@ -119,8 +119,8 @@ function stubElementFromPoint(at: { x: number; y: number; el: Element }): () => 
 describe('[S3-A4] extender preview', () => {
   it('ghosts the extension hook’s own extra on the same preview frame as the caller’s drag', async () => {
     const { shell, container, timeline } = buildShell({ extender: makeCascadeExtender() });
-    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
-    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const barA = container.querySelector<HTMLElement>('[data-bar-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-bar-id="x:0"]')!;
     function transformXOf(el: HTMLElement): number {
       return Number(/translate\((-?\d+(?:\.\d+)?)px/.exec(el.style.transform)![1]);
     }
@@ -150,8 +150,8 @@ describe('[S3-A4] extender preview', () => {
 
   it('Escape mid-drag clears the ghost and writes nothing (P1 identity contrast, [S3-A2])', async () => {
     const { shell, container, timeline, state } = buildShell({ extender: makeCascadeExtender() });
-    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
-    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const barA = container.querySelector<HTMLElement>('[data-bar-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-bar-id="x:0"]')!;
     const xBefore = state.entries.get(entryId('x'))!;
     stubPointerCapture(timeline);
     const restore = stubElementFromPoint({ x: 5, y: 5, el: barA });
@@ -189,8 +189,8 @@ describe('[S3-A4] extender preview', () => {
     built.state.setExtender(() => makeCascadeExtender());
 
     const { shell, container, timeline } = built;
-    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
-    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const barA = container.querySelector<HTMLElement>('[data-bar-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-bar-id="x:0"]')!;
     stubPointerCapture(timeline);
     const restore = stubElementFromPoint({ x: 5, y: 5, el: barA });
 
@@ -208,8 +208,8 @@ describe('[S3-A4] extender preview', () => {
 
   it('no extraEditsFor (P1 default, identity) previews the caller’s own drag with no ghost', async () => {
     const { shell, container, timeline } = buildShell();
-    const barA = container.querySelector<HTMLElement>('[data-item-id="a:0"]')!;
-    const barX = container.querySelector<HTMLElement>('[data-item-id="x:0"]')!;
+    const barA = container.querySelector<HTMLElement>('[data-bar-id="a:0"]')!;
+    const barX = container.querySelector<HTMLElement>('[data-bar-id="x:0"]')!;
     stubPointerCapture(timeline);
     const restore = stubElementFromPoint({ x: 5, y: 5, el: barA });
 

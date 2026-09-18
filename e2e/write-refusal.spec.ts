@@ -31,7 +31,7 @@ async function openPinnedRow(page: Page): Promise<{ bar: Locator; entryId: strin
     window.__gantt.reveal(window.__dataset.entries.get(window.__fixedFinishEntryId)!.id);
     return window.__fixedFinishEntryId;
   });
-  const bar = page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`).first();
+  const bar = page.locator(`#gantt .fg-bar[data-bar-id^="${entryId}:"]`).first();
   await expect(bar).toBeVisible();
   return { bar, entryId };
 }

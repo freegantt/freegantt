@@ -81,13 +81,13 @@ test('[#404] weekend bands appear, follow a pan, and a checkbox removes the plug
   // tab stop per pane instead, so focus lands on the timeline pane's own bar, the honest tab stop
   // whose bubbled keydown the shell's listener sees (same pattern e2e/hierarchy.spec.ts uses). Plain
   // `ArrowRight` moved off panning too (D-S5-26): `Alt+ArrowRight` is the pan chord now.
-  // Keyed on `data-item-id`, not a bare `.first()`: virtualization can still mount more bars ahead
+  // Keyed on `data-bar-id`, not a bare `.first()`: virtualization can still mount more bars ahead
   // of this one in DOM order right after the page settles (#256's own settle race, widened). A
   // `.first()` locator re-resolves on every retry, so it would then quietly point at a new,
   // unfocused bar instead of reporting that this one lost focus.
-  const firstBarId = await page.locator('#gantt .fg-bar').first().getAttribute('data-item-id');
+  const firstBarId = await page.locator('#gantt .fg-bar').first().getAttribute('data-bar-id');
   expect(firstBarId).toBeTruthy();
-  const firstBar = page.locator(`#gantt .fg-bar[data-item-id="${firstBarId}"]`);
+  const firstBar = page.locator(`#gantt .fg-bar[data-bar-id="${firstBarId}"]`);
   await firstBar.focus();
   await expect(firstBar).toBeFocused();
 
@@ -149,8 +149,8 @@ test('every bar of a locked row ghosts alongside a dragged neighbour, and the dr
 
   await page.locator('#lock-entry').check();
 
-  const dragged = page.locator('#gantt .fg-bar[data-item-id^="entry-14:"]').first();
-  const lockedBars = page.locator('#gantt .fg-bar[data-item-id^="entry-15-"]');
+  const dragged = page.locator('#gantt .fg-bar[data-bar-id^="entry-14:"]').first();
+  const lockedBars = page.locator('#gantt .fg-bar[data-bar-id^="entry-15-"]');
   await expect(dragged).toBeVisible();
   // More than one bar on one row is the whole point of the case: one bar would pass even if the
   // cascade moved a single envelope, which is what this test exists to rule out.
@@ -206,7 +206,7 @@ test('#280: a menu taller than the pane scrolls, so every item stays reachable',
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const bar = page.locator('#gantt .fg-bar[data-item-id^="entry-37:"]').first();
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-37:"]').first();
   await bar.scrollIntoViewIfNeeded();
   await expect(bar).toBeVisible();
   await bar.click({ button: 'right' });
@@ -266,7 +266,7 @@ test('#280: scrolling inside the open menu does not dismiss it', async ({ page }
   await page.goto('/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  const bar = page.locator('#gantt .fg-bar[data-item-id^="entry-37:"]').first();
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-37:"]').first();
   await bar.scrollIntoViewIfNeeded();
   await expect(bar).toBeVisible();
   await bar.click({ button: 'right' });

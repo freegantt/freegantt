@@ -239,7 +239,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     /** Review N1/A3: this Gantt's own rendered DOM, as three questions — `owns(node)`,
      *  `targetUnder(node)`, and `barFor(id)`/`cellFor(id, field)`. It is the whole plugin-to-DOM
      *  contract. `extensions/` may not import `render/` (D-S5-5), so before this seam every plugin
-     *  retyped `.fg-bar`, `.fg-row`, `data-item-id` and five more by hand. Nothing versioned them
+     *  retyped `.fg-bar`, `.fg-row`, `data-bar-id` and five more by hand. Nothing versioned them
      *  and nothing tested them. Renaming a class broke every plugin with a green build.
      *
      *  `targetUnder` returns `{ kind, element, entry?, field? }`. `kind` is `TargetKind`, the same

@@ -660,7 +660,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('gives .fg-row role="row" and data-testid/data-row-id, .fg-bar data-testid alongside data-item-id (U6)', () => {
+  it('gives .fg-row role="row" and data-testid/data-row-id, .fg-bar data-testid alongside data-bar-id (U6)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -684,7 +684,7 @@ describe('render/dom backend', () => {
 
     const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.dataset['testid']).toBe('fg-bar');
-    expect(bar.dataset['itemId']).toBe(frame.bars[0]!.id);
+    expect(bar.dataset['barId']).toBe(frame.bars[0]!.id);
     backend.destroy();
   });
 
@@ -713,7 +713,7 @@ describe('render/dom backend', () => {
     });
     backend.sync(frame);
 
-    const nodeFor = (id: string) => timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!;
+    const nodeFor = (id: string) => timeline.querySelector<HTMLElement>(`[data-bar-id="${id}"]`)!;
     expect(nodeFor(`${ordinary.id}:0`).dataset['span']).toBeUndefined();
     expect(nodeFor(`${zeroWidth.id}:0`).dataset['span']).toBe('minimum');
     expect(nodeFor(`${alsoZeroWidth.id}:0`).dataset['span']).toBe('minimum');
@@ -745,7 +745,7 @@ describe('render/dom backend', () => {
     });
     backend.sync(frame);
 
-    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${t1.id}:0"]`)!;
+    const node = timeline.querySelector<HTMLElement>(`[data-bar-id="${t1.id}:0"]`)!;
     expect(node.dataset['span']).toBe('fixed');
     expect(node.style.width).toBe('13px');
     backend.destroy();
@@ -1022,8 +1022,8 @@ describe('render/dom backend', () => {
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
-    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
-    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-bar-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-bar-id="${b!.id}"]`)!;
 
     backend.applyState({ hoveredBarId: a!.id, selectedEntryIds: [a!.entryId, b!.entryId] });
     expect(nodeA.dataset['state']).toBe('hovered selected');
@@ -1135,13 +1135,13 @@ describe('render/dom backend', () => {
 
     backend.applyState({ selectedEntryIds: frame.bars.map((bar) => bar.entryId) });
     for (const bar of frame.bars) {
-      const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
+      const node = timeline.querySelector<HTMLElement>(`[data-bar-id="${bar.id}"]`)!;
       expect(node.dataset['state']).toBe('selected');
     }
 
     backend.applyState({ selectedEntryIds: [] });
     for (const bar of frame.bars) {
-      const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
+      const node = timeline.querySelector<HTMLElement>(`[data-bar-id="${bar.id}"]`)!;
       expect(node.dataset['state']).toBe('');
     }
 
@@ -1186,7 +1186,7 @@ describe('render/dom backend', () => {
     // The Selection is keyed by Entry, so it outlived the node that drew it: the selected bar
     // comes back painted and its siblings stay clear.
     const stateOf = (id: BarId): string =>
-      timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
+      timeline.querySelector<HTMLElement>(`[data-bar-id="${id}"]`)!.dataset['state'] ?? '';
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
     // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
@@ -1218,7 +1218,7 @@ describe('render/dom backend', () => {
     backend.sync({ ...frame, bars: [] }); // the horizontal cull drops the bar
 
     backend.sync(frame); // and a scroll back mounts it again
-    const bar = timeline.querySelector<HTMLElement>(`[data-item-id="${frame.bars[0]!.id}"]`)!;
+    const bar = timeline.querySelector<HTMLElement>(`[data-bar-id="${frame.bars[0]!.id}"]`)!;
     expect(bar.dataset['state']).toBe('selected');
 
     // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
@@ -1259,7 +1259,7 @@ describe('render/dom backend', () => {
 
     const hovered = frame.bars[1]!.id;
     backend.applyState({ selectedEntryIds: everyBarsEntry, hoveredBarId: hovered });
-    const touched = observer.takeRecords().map((record) => (record.target as HTMLElement).dataset['itemId']);
+    const touched = observer.takeRecords().map((record) => (record.target as HTMLElement).dataset['barId']);
     observer.disconnect();
 
     expect(touched).toEqual([hovered]);
@@ -1374,8 +1374,8 @@ describe('render/dom backend', () => {
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
-    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
-    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-bar-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-bar-id="${b!.id}"]`)!;
 
     backend.applyState({
       preview: [
@@ -1556,8 +1556,8 @@ describe('render/dom backend', () => {
     });
     backend.sync(frame);
     const [a, b] = frame.bars;
-    const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
-    const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
+    const nodeA = timeline.querySelector<HTMLElement>(`[data-bar-id="${a!.id}"]`)!;
+    const nodeB = timeline.querySelector<HTMLElement>(`[data-bar-id="${b!.id}"]`)!;
 
     backend.applyState({ movableBarId: a!.id });
     expect(nodeA.hasAttribute('data-movable')).toBe(true);
@@ -1752,7 +1752,7 @@ describe('render/dom backend', () => {
     expect(bar.textContent).toBe('second');
     expect(bar.classList.contains('my-bar')).toBe(true);
     // The library's own base attrs still apply underneath the renderer's own content.
-    expect(bar.dataset['itemId']).toBe(frame.bars[0]!.id);
+    expect(bar.dataset['barId']).toBe(frame.bars[0]!.id);
 
     backend.destroy();
     grid.remove();
