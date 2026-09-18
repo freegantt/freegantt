@@ -15,10 +15,10 @@ holds only what a fresh coordinator cannot recover from those two.**
 | C2, C3, C5, C6, C7 | Not started, in that order |
 
 **Branch:** `Pawel-IT/a-bar-is-a-child-entry-its-own-name-values-varia`.
-**`git push` has not run since `393d1bf`.** Push `ccfd0cc` and `8369074`. No pull request is open.
+**Everything through `d810e4c` is pushed.** No pull request is open.
 The user asked for **commit and push after each stage** — do that from here on.
 
-**Baseline:** `verify:full PASS — all 16 checks green, test:e2e included` at `8369074`.
+**Baseline:** `verify:full PASS — all 16 checks green, test:e2e included` at `d810e4c`.
 
 ---
 
@@ -50,11 +50,13 @@ A later session will re-derive these otherwise. Each was checked against the fil
    The plan's old sentence "the wire already exists" was wrong and is now corrected in place.
 
 2. **`compileRule` and `valueMatches` are module-private** in `src/layout/items/variants.ts:375,391`.
-   C1 has to share them with `layout/rows/entries-source.ts`. **This is an open implementation
-   decision the plan does not make.** The clean answer is to extract the matcher into its own module
-   both files import, so there is one match compiler and one syntax — which is what "an author learns
-   one match syntax" promises. Check `layout/rows/` → `layout/items/` against
-   `.dependency-cruiser.cjs` before choosing.
+   C1 has to share them with `layout/rows/entries-source.ts`. **DECIDED 2026-09-18 by the
+   coordinator: extract them into their own module** — one match compiler, one syntax, which is what
+   "an author learns one match syntax" promises. `.dependency-cruiser.cjs` puts no rule *inside*
+   `layout/`, so `rows/` → `items/` would lint clean, but it points the wrong way: `items/` already
+   imports `rows/row-source.js` (`produce-items.ts:10`), and `variants.ts` drags `BarRenderer` and
+   `Capabilities` behind it. The new module depends on `model/` alone, and both sides import it.
+   **A new file needs its row in `docs/architecture/files.md` or the `guards` check fails.**
 
 3. **`UnknownFieldMatch.rule` is a `VariantClaimant`** (`{ variant: string; pluginId?: PluginId }`,
    `variants.ts:126,137`) and `GanttShell.#reportUnknownFieldMatch` (`view/gantt-shell.ts:1760`)
@@ -77,6 +79,103 @@ Also verified true as written: nine `entryIds[0]` reads in seven files; `resolve
 returns early in the flat branch and never builds `entryTreeIndex` (`entries-source.ts:44-46`);
 `FieldTypeName` (`model/field.ts:14`) has no `boolean`; `field-registry.ts:230` refuses `rollUp` on a
 `compute` Field; `EntryStore.#byParent` was already memoized, which is what made C4 cheap.
+
+---
+
+## What the spike already built for C1 (read 2026-09-18)
+
+**Branch `spike/421-s4-child-entry` holds a working, measured version of C1's fold.** It is probe
+code and does not ship, but a build that re-derives it wastes a day. Read it with:
+
+```
+git diff $(git merge-base main spike/421-s4-child-entry) spike/421-s4-child-entry \
+  -- src/layout/rows/entries-source.ts src/layout/rows/row-source.ts
+```
+
+What it settles, with numbers behind it:
+
+1. **The tuned fold shape.** One pass over `entries` builds *two* Sets — claimed parents, and the
+   children they take off the row list — and both branches read them. Three measured constant-factor
+   rules came out of it, and a rebuild that ignores them costs 2.7× on row resolution:
+   - **Early-return before the tree index** when the rule is unset *and* `tree !== true`. The first
+     cut built the index, ran the claim pass and allocated a `Set` for every consumer who never asked
+     for the feature: today's shipped path went 0.09 ms → 0.24 ms. The early return gives it back.
+   - **`childRowsOf.get(entry.id)` before the rule read.** Only a parent can be claimed, and the rule
+     reads a Field — the most expensive question the pass asks. The Map lookup answers first, so the
+     Field read runs once per parent, not once per Entry (10,000 children can never be claimed).
+   - **Ask `claims()` once per Entry, not twice.** The first cut asked once to build the set and
+     again per row.
+
+   Result: `resolveRows` 6.9 ms → **3.9 ms** on 10,200 Entries, which is **0.38 µs/Entry against
+   today's 0.45 µs/Entry** — row resolution is *cheaper per Entry* than the shipped path.
+
+2. **Shape (a) works in running code.** `entryIds: [entryId(entry.id), ...claimedChildren]`. All nine
+   `entryIds[0]` sites read the right answer with no rewrite.
+
+3. **The tree branch drops claimed children from the walk stack** rather than filtering later — the
+   same drop `collapse.ts:18-20` already does for a collapsed parent's descendants. `expandable` is
+   `!isClaimed && children.length > 0` in the tree branch and `false` in the flat branch.
+
+4. **The spike's one open worry is already answered.** Its `row-source.ts` comment says
+   `ChildrenOnParentRowRule` had to restate the rule type rather than import `FieldMatch`, because
+   `FieldMatch` is generic over `TProps` and row sources are not. **That is not a blocker:**
+   `EntryRule<TProps = Record<string, unknown>>` carries a default, `FieldMatch` ends in
+   `& { [key: string]: unknown }`, and `compileRule` (`variants.ts:375`) **already takes a
+   non-generic `EntryRule`**. C1 imports the real type. It does not restate it.
+
+5. **What the spike could NOT do is exactly what Q21/Q29 ruled C1 must do.** Its `claims()` matches
+   with `Object.is` per key — no Field-typed `equals`, no unknown-key report — because it had no
+   `fieldFor`. C1 adds the port and uses the real compiler.
+
+**Rulings the spike pre-dates, and C1 follows over it:** the key is `childrenAsSegments`, not
+`childrenOnParentRow` (Q24 — the spike's name was this plan's placeholder, and README §"the name is
+ruled" rejects it by name: it says *where*, not *what*). The rule type is `EntryRule`, not a restated
+union (Q30). The report code is `unknown-row-source-field` (Q29).
+
+**The spike's `src/data/` half already shipped as C4** (`393d1bf`) — do not take it again.
+
+### Do not copy the spike's shape — three things are better for the callers
+
+Run against the `codebase-design` skill (deep module = small interface, lots behind it), 2026-09-18.
+
+**Placement is right, and this is why.** The claim reads an **Entry**, not a row: `childrenAsSegments`
+is an `EntryRule`. A post-pass beside `applyCollapse` — `applyClaim(rows, …)`, which is tempting
+because a claim really is a collapse one level deeper (J-plan-I) — holds only ids and would have to
+look every Entry back up, and in the flat branch there are no `parentRowId`s to walk. **Put a pass
+where its inputs live.** The fold stays inside `resolveEntriesSource`.
+
+Three corrections to the spike's shape:
+
+1. **One ports object, not two flat keys.** C1 needs a `fieldFor` *and* a sink for the unknown key
+   (Q29). Put both in **one** type that the shared compiler takes, the way `VariantRegistryPorts`
+   already pairs `fieldFor` with `reportUnknownFieldMatch`:
+   ```ts
+   compileEntryRule(rule: EntryRule, ports: EntryRulePorts): EntryPredicate
+   ```
+   `RowPassInput` (`row-source.ts:149`) then gains **one** optional key carrying that object, and
+   `resolveEntriesSource` takes **one** optional third parameter. Two flat keys would put four
+   field-ish keys on `RowPassInput` beside `fieldCompares`/`fieldContext`, and C2 and C6 would add
+   more. Run the name through the naming skill — read the call site aloud first.
+
+   **Why not `resolveEntriesSource(input: RowPassInput)`, which `RowProducer` already declares?**
+   It is the smaller interface on paper, but `input.source` is a `RowSource` and the entries producer
+   would have to narrow it internally instead of at the one call site that knows
+   (`resolve-rows.ts:29`), and it churns **20 test call sites** (`entries-source.test.ts`,
+   `filter.test.ts`, `sort.test.ts`) that pass `(entries, source)` positionally. One optional ports
+   parameter costs those tests nothing.
+
+2. **One Map, not two Sets.** The spike builds `claimedParentIds` and `claimedChildIds`. Build one
+   `Map<EntryId, readonly Entry[]>` of claimed parent → its children: it answers "is this parent
+   claimed?" with `.has`, hands `entryRow` the children it needs, and the flat branch's skip becomes
+   "is **my** parent claimed?" — `claimedChildrenOf.has(entry.parent()?.id)` — off the structure that
+   already exists. One thing to build, one to read. Keep all three of the spike's measured
+   constant-factor rules while you do it.
+
+3. **`row.claimed` is a real flag, not `entryIds.length > 1`.** C2 reads
+   `row.claimed && entry.id === row.entryIds[0]`. An **empty** claimed parent has one `entryId` and is
+   still claimed — the "draws a blank row" gate. So the marker cannot be derived, which is the
+   evidence for Q19 shape (a) carrying an explicit field. The spike never got here; it widened
+   `entryIds` alone.
 
 ---
 
