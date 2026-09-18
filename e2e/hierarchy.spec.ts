@@ -208,12 +208,16 @@ test('a claimed row draws its children as bars, each with its own text, look and
   // The row total: `hours` rolls up over all three children onto the claimed row's own cell.
   await expect(page.locator('#gantt .fg-row[data-entry-id="req-1"] [data-field="hours"]')).toHaveText('20');
 
-  // Cy's day is locked: dragging its right edge refuses, while Ali's neighbour resizes freely.
-  const mondayBox = await monday.boundingBox();
+  // Cy's day is locked: dragging its right edge refuses. `end` is the field a resize actually
+  // writes — `hours` is a stored prop no resize gesture here ever touches, so it would hold steady
+  // whether or not the capability gate did its job (#421 F3).
   const wednesdayBox = await wednesday.boundingBox();
-  expect(mondayBox).not.toBeNull();
   expect(wednesdayBox).not.toBeNull();
-  const wedHoursBefore = await page.evaluate(() => window.__dataset.entries.get('req-1-wed')?.read('hours'));
+  const wedEndBefore = await page.evaluate(() => Number(window.__dataset.entries.get('req-1-wed')!.end));
+  await page.mouse.move(
+    wednesdayBox!.x + wednesdayBox!.width / 2,
+    wednesdayBox!.y + wednesdayBox!.height / 2,
+  );
   await page.mouse.move(
     wednesdayBox!.x + wednesdayBox!.width - 2,
     wednesdayBox!.y + wednesdayBox!.height / 2,
@@ -222,10 +226,11 @@ test('a claimed row draws its children as bars, each with its own text, look and
   await page.mouse.move(
     wednesdayBox!.x + wednesdayBox!.width + 40,
     wednesdayBox!.y + wednesdayBox!.height / 2,
+    { steps: 5 },
   );
   await page.mouse.up();
-  const wedHoursAfter = await page.evaluate(() => window.__dataset.entries.get('req-1-wed')?.read('hours'));
-  expect(wedHoursAfter).toBe(wedHoursBefore);
+  const wedEndAfter = await page.evaluate(() => Number(window.__dataset.entries.get('req-1-wed')!.end));
+  expect(wedEndAfter).toBe(wedEndBefore);
 
   // A bar with no name still draws — "Site hold" carries no `name` at all.
   await page.evaluate(() => window.__gantt.reveal('site-hold'));
