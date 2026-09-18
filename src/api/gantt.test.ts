@@ -3739,6 +3739,157 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     });
   });
 
+  describe('a shared row resolves per Entry, not per subject (#421 C3, spike Q9)', () => {
+    function claimedGantt(
+      container: HTMLElement,
+      extra: Partial<ConstructorParameters<typeof Gantt>[0]> = {},
+    ) {
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        fields: [{ key: 'locked', type: 'boolean' }],
+        entries: [
+          { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-11-05' },
+          {
+            id: 'c1',
+            name: 'C1',
+            parentId: 'p1',
+            start: '2026-01-01',
+            end: '2026-01-05',
+            props: { locked: true },
+          },
+          { id: 'c2', name: 'C2', parentId: 'p1', start: '2026-11-01', end: '2026-11-05' },
+        ],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        rowSource: { source: 'entries', childrenAsSegments: true },
+        capabilities: { resize: (entry) => entry.read('locked') !== true },
+        ...extra,
+      });
+      return { dataset, gantt };
+    }
+
+    it('a locked child refuses resize while its sibling keeps both handles (I14)', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const { gantt } = claimedGantt(container);
+      const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+      const original = document.elementFromPoint.bind(document);
+
+      const lockedBar = container.querySelector<HTMLElement>(
+        `.fg-bar[data-item-id="${itemId(entryId('c1'), 0)}"]`,
+      )!;
+      document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? lockedBar : original(x, y));
+      timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+      let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+      let end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+      // The same `capabilities.resize` answer that hides the handle also refuses the drag (I14) —
+      // this pins the paint half; `Gantt entryResize`'s tests already pin the refusal half generally.
+      expect(start.hidden).toBe(true);
+      expect(end.hidden).toBe(true);
+
+      const openBar = container.querySelector<HTMLElement>(
+        `.fg-bar[data-item-id="${itemId(entryId('c2'), 0)}"]`,
+      )!;
+      document.elementFromPoint = (x: number, y: number) => (x === 6 && y === 5 ? openBar : original(x, y));
+      timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 6, clientY: 5 }));
+      start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+      end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+      expect(start.hidden).toBe(false);
+      expect(end.hidden).toBe(false);
+
+      document.elementFromPoint = original;
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('keyboard order walks the bars in draw order — the children’s dataset order (J-plan-E)', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const { gantt, dataset } = claimedGantt(container);
+
+      // Select c1's own Segment, then step forward: draw order is c1, c2 — the children's dataset
+      // order, never date order.
+      gantt.selectedSegmentIds = dataset.entries.segmentIdsOfEntries(['c1']);
+      gantt.commands.run('freegantt.selectNextSegment');
+      expect(gantt.selectedEntryIds).toEqual([entryId('c2')]);
+
+      gantt.commands.run('freegantt.selectNextSegment');
+      // c2 is the last bar the row draws: stepping forward again clamps.
+      expect(gantt.selectedEntryIds).toEqual([entryId('c2')]);
+
+      gantt.commands.run('freegantt.selectPreviousSegment');
+      expect(gantt.selectedEntryIds).toEqual([entryId('c1')]);
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('a grid-row click selects every bar the claimed row owns', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const { gantt } = claimedGantt(container);
+      const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="p1"]')!;
+      const original = document.elementFromPoint.bind(document);
+      document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+      row.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5, bubbles: true }));
+      document.elementFromPoint = original;
+
+      expect(gantt.selectedEntryIds).toContain(entryId('c1'));
+      expect(gantt.selectedEntryIds).toContain(entryId('c2'));
+
+      gantt.destroy();
+      container.remove();
+    });
+
+    it('reveal finds a child bar', () => {
+      FakeResizeObserver.instances = [];
+      vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+      try {
+        const container = document.createElement('div');
+        const scroll = new ScrollAxis();
+        const { gantt } = claimedGantt(container, { fit: 'preset', preset: 'day', scroll: { x: scroll } });
+        FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+        expect(scroll.state.position).toBe(0);
+
+        // c2 sits months after c1 — off-screen at a 300px pane, day preset — and it draws only as a
+        // bar on p1's claimed row, never a row of its own.
+        gantt.reveal(entryId('c2'));
+
+        expect(scroll.state.position).toBeGreaterThan(0);
+
+        gantt.destroy();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('an unclaimed, one-Entry row behaves exactly as it does today', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({ entries: [sampleEntries[0]!.toInput()], timeZone: 'UTC' });
+      const gantt = new Gantt({ container, dataset });
+      const row = container.querySelector<HTMLElement>('.fg-row')!;
+      const original = document.elementFromPoint.bind(document);
+      document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+      row.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5, bubbles: true }));
+      document.elementFromPoint = original;
+
+      expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
+
+      gantt.commands.run('freegantt.selectNextSegment');
+      // One bar on the row: nowhere to step, nothing moves.
+      expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
+
+      gantt.destroy();
+      container.remove();
+    });
+  });
+
   // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
   // buy, and it costs core nothing. The word is the consumer's, the write is an ordinary Field
   // write, and the rule reads it back.

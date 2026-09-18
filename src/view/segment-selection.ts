@@ -163,19 +163,34 @@ export class SegmentSelection {
     });
   }
 
-  /** #212: steps the Selection between the Segments of the row it already sits on. `Mod+ArrowRight`
-   *  and `Mod+ArrowLeft` run it. A row that draws one bar has nowhere to step, so the chord writes
-   *  nothing. It clamps at both ends, the same way the `ArrowUp`/`ArrowDown` row step does. */
+  /** #212: steps every selected Segment one position within its own row (#421 C3, spike Q9).
+   *  `Mod+ArrowRight` and `Mod+ArrowLeft` run it. A shared row can hold several selected Segments.
+   *  Each one steps on its own row's list, so a multi-Segment pick on one claimed row moves together
+   *  instead of collapsing to the first. A Segment already at the end of its row's list stays. The
+   *  chord writes nothing when no Segment can move — the same clamp the `ArrowUp`/`ArrowDown` row
+   *  step uses. */
   step(direction: 1 | -1): void {
-    const selected = this.entryIds[0];
-    if (selected === undefined) return;
-    const rowId = this.#ports.rowIdForEntry(selected);
-    if (rowId === undefined) return;
-    const segmentIds = this.#ports.entries().segmentIdsOfEntries(this.#selectableEntriesOfRow(rowId));
-    const current = segmentIds.findIndex((id) => this.#segments.includes(id));
-    const next = segmentIds[current + direction];
-    if (current === -1 || next === undefined) return;
-    this.propose([next]);
+    if (this.#segments.length === 0) return;
+    const entries = this.#ports.entries();
+    const rowSegmentIds = new Map<RowId, readonly SegmentId[]>();
+    let moved = false;
+    const next = this.#segments.map((segmentId) => {
+      const ownerId = entries.entryIdOfSegment(segmentId);
+      const rowId = ownerId === undefined ? undefined : this.#ports.rowIdForEntry(ownerId);
+      if (rowId === undefined) return segmentId;
+      let segmentIds = rowSegmentIds.get(rowId);
+      if (segmentIds === undefined) {
+        segmentIds = entries.segmentIdsOfEntries(this.#selectableEntriesOfRow(rowId));
+        rowSegmentIds.set(rowId, segmentIds);
+      }
+      const current = segmentIds.indexOf(segmentId);
+      const stepped = current === -1 ? undefined : segmentIds[current + direction];
+      if (stepped === undefined) return segmentId;
+      moved = true;
+      return stepped;
+    });
+    if (!moved) return;
+    this.propose(next);
   }
 
   /** Where each Entry sits in the resolved row order. It is built once per projection. So ordering
