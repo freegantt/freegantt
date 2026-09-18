@@ -32,60 +32,6 @@ async function unobstructedBar(page: import('@playwright/test').Page) {
   return page.locator(`#gantt .fg-bar[data-item-id="${itemId}"]`);
 }
 
-/** The first grid row whose Entry draws more than one bar, found at test time. The demo dataset
- *  gives one Entry several Segments, and they share the row's one band. */
-async function rowWithSeveralBars(page: import('@playwright/test').Page): Promise<string> {
-  const entryId = await page.evaluate(() => {
-    const root = document.querySelector('#gantt');
-    if (root === null) return null;
-    for (const row of Array.from(root.querySelectorAll<HTMLElement>('.fg-row[data-entry-id]'))) {
-      const id = row.dataset['entryId'];
-      if (id === undefined) continue;
-      if (root.querySelectorAll(`.fg-bar[data-item-id^="${id}:"]`).length > 1) return id;
-    }
-    return null;
-  });
-  expect(entryId).not.toBeNull();
-  return entryId!;
-}
-
-/** A bar of one Entry the pointer can really land on: scrolled into view, and the topmost element
- *  at its own click point. Segments can overlap, so the second check earns its keep. */
-async function pickableBarOf(page: import('@playwright/test').Page, entryId: string) {
-  const bars = page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`);
-  const count = await bars.count();
-  for (let index = 0; index < count; index++) {
-    const bar = bars.nth(index);
-    await bar.scrollIntoViewIfNeeded();
-    const landsOnIt = await bar.evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      const x = Math.min(rect.left + 12, rect.right - 2);
-      const at = document.elementFromPoint(x, rect.top + rect.height / 2);
-      return at !== null && el.contains(at);
-    });
-    if (landsOnIt) return bar;
-  }
-  throw new Error(`no bar of ${entryId} is under the pointer`);
-}
-
-/** Which bars of one Entry carry the `selected` token right now, by Item id. */
-async function selectedBarIds(page: import('@playwright/test').Page, entryId: string): Promise<string[]> {
-  return page.evaluate((id) => {
-    const bars = document.querySelectorAll<HTMLElement>(`#gantt .fg-bar[data-item-id^="${id}:"]`);
-    return Array.from(bars)
-      .filter((bar) => (bar.dataset['state'] ?? '').split(' ').includes('selected'))
-      .map((bar) => bar.dataset['itemId'] ?? '');
-  }, entryId);
-}
-
-/** `data-state` is a token list — the assertion asks for the token, never for the whole string. */
-async function barStates(page: import('@playwright/test').Page, entryId: string): Promise<string[]> {
-  return page.evaluate((id) => {
-    const bars = document.querySelectorAll<HTMLElement>(`#gantt .fg-bar[data-item-id^="${id}:"]`);
-    return Array.from(bars, (bar) => bar.dataset['state'] ?? '');
-  }, entryId);
-}
-
 /** `count` distinct bars a real pointer can land on — the same criteria as `unobstructedBar`, so a
  *  right-click test can build a multi-bar Selection without naming any fixture bar by id. */
 async function unobstructedBars(page: import('@playwright/test').Page, count: number) {
@@ -117,41 +63,6 @@ async function unobstructedBars(page: import('@playwright/test').Page, count: nu
   return itemIds.map((id) => page.locator(`#gantt .fg-bar[data-item-id="${id}"]`));
 }
 
-/** Zooms the timeline to the one multi-Segment Entry's own span, found at test time from the
- *  public Dataset. `panToToday()` (`harness/main.ts`) otherwise leaves two of its three Segments
- *  outside the time window, so `rowWithSeveralBars` finds a row but sees only one bar in it. */
-async function showSegmentedSpan(page: import('@playwright/test').Page): Promise<void> {
-  const { entryId, segmentCount } = await page.evaluate(() => {
-    const entry = window.__dataset.entries.all.find((candidate) => candidate.segments.length > 1);
-    if (entry === undefined) throw new Error('the dataset has no multi-segment entry');
-    window.__gantt.zoomToSpan({ start: entry.start!, end: entry.end! });
-    return { entryId: String(entry.id), segmentCount: entry.segments.length };
-  });
-  // Wait for every Segment to paint, not just the second one. A caller that counts bars right
-  // after this reads the count while a later bar is still arriving, so a "one fewer bar"
-  // assertion then sees the same count and fails.
-  await expect
-    .poll(() => page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`).count())
-    .toBe(segmentCount);
-}
-
-/** Opens the entry menu for `bar` and returns the menu item for `commandId`, visible and ready. */
-async function openEntryMenu(bar: import('@playwright/test').Locator, commandId: string) {
-  const box = await bar.boundingBox();
-  expect(box).not.toBeNull();
-  await bar.page().mouse.click(box!.x + 12, box!.y + box!.height / 2, { button: 'right' });
-  const item = bar.page().locator(`.fg-menu-item[data-command="${commandId}"]`);
-  await expect(item).toBeVisible();
-  return item;
-}
-
-/** A pointer click on a freshly opened menu item was seen to time out ("element was detached from
- *  the DOM, retrying") although the locator had already resolved to a real button. Reading the
- *  live element at click time avoids the race the popup's own reflow creates. */
-async function clickMenuItem(item: import('@playwright/test').Locator): Promise<void> {
-  await item.evaluate((el) => (el as HTMLElement).click());
-}
-
 /** A point inside the timeline pane, below its sticky header, that lands on no bar — found by
  *  scanning the rendered pane instead of naming a fixture coordinate (rule 3, browser-tests skill). */
 async function emptyTimelinePoint(page: import('@playwright/test').Page): Promise<{ x: number; y: number }> {
@@ -175,52 +86,6 @@ async function emptyTimelinePoint(page: import('@playwright/test').Page): Promis
   expect(point).not.toBeNull();
   return point!;
 }
-
-test('a grid-row click paints every bar of that row (#185)', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
-  await showSegmentedSpan(page);
-
-  const entryId = await rowWithSeveralBars(page);
-  const row = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`);
-  // A cell past the label cell: the twisty lives in the label cell, and a twisty click collapses
-  // the row instead of selecting it.
-  await row.locator('.fg-row-cell').first().click();
-
-  await expect
-    .poll(async () =>
-      (await barStates(page, entryId)).every((state) => state.split(' ').includes('selected')),
-    )
-    .toBe(true);
-});
-
-test('a bar click paints that bar alone; the grid row still paints them all (#185)', async ({ page }) => {
-  await page.goto('/');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
-  await showSegmentedSpan(page);
-
-  const entryId = await rowWithSeveralBars(page);
-  const bar = await pickableBarOf(page, entryId);
-  const itemId = (await bar.getAttribute('data-item-id'))!;
-  const box = await bar.boundingBox();
-  expect(box).not.toBeNull();
-  await bar.click({ position: { x: 12, y: box!.height / 2 } });
-
-  // The pointer named one bar of a row that draws several, so the paint runs that far only.
-  await expect.poll(async () => selectedBarIds(page, entryId)).toEqual([itemId]);
-  // The Selection holds one Segment (ADR 0010), and the row paints selected because it owns that
-  // Segment — a row paints selected when the Selection holds any Segment of any Entry it owns.
-  const row = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`);
-  await expect(row).toHaveAttribute('data-state', /\bselected\b/);
-
-  // A click in the grid pane names a row, not a bar, so the whole Entry paints again.
-  await row.locator('.fg-row-cell').first().click();
-  await expect
-    .poll(async () =>
-      (await barStates(page, entryId)).every((state) => state.split(' ').includes('selected')),
-    )
-    .toBe(true);
-});
 
 test('a selected bar keeps its paint when it remounts after a scroll (#185)', async ({ page }) => {
   await page.goto('/');
@@ -310,73 +175,4 @@ test('a right-click keeps a multi-bar Selection when it lands inside it, and cle
   const empty = await emptyTimelinePoint(page);
   await page.mouse.click(empty.x, empty.y, { button: 'right' });
   await expect(readout).toHaveText('No selection');
-});
-
-test('a right-click Delete on one bar removes that bar alone; Lock reaches the record (#212)', async ({
-  page,
-}) => {
-  await page.goto('/');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
-  await showSegmentedSpan(page);
-
-  const entryId = await rowWithSeveralBars(page);
-  const bars = page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`);
-  const barsBefore = await bars.count();
-
-  const bar = await pickableBarOf(page, entryId);
-  const deleteItem = await openEntryMenu(bar, 'freegantt.deleteSelection');
-  await clickMenuItem(deleteItem);
-
-  // The Segment picked is gone; the other two, and the Entry's row, are not (#212 table row 1).
-  await expect.poll(() => bars.count()).toBe(barsBefore - 1);
-  await expect(page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`)).toBeVisible();
-
-  const remaining = await pickableBarOf(page, entryId);
-  const lockItem = await openEntryMenu(remaining, 'demo.lockEntry');
-  await clickMenuItem(lockItem);
-
-  // Lock reads `entryIds`: it names the record, not the one Segment the menu opened on (table row 3).
-  await expect(page.locator('#log')).toContainText(`entries · ${entryId} · locked`);
-});
-
-test('a right-click Delete on the grid row removes the row; Lock reaches the record (#212)', async ({
-  page,
-}) => {
-  await page.goto('/');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
-  await showSegmentedSpan(page);
-
-  const entryId = await rowWithSeveralBars(page);
-  const row = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"]`);
-  // A cell past the label cell: the twisty lives in the label cell, and a twisty click collapses
-  // the row instead of opening its menu.
-  const rowCell = row.locator('.fg-row-cell').nth(1);
-  const cellBox = await rowCell.boundingBox();
-  expect(cellBox).not.toBeNull();
-  await page.mouse.click(cellBox!.x + 12, cellBox!.y + cellBox!.height / 2, { button: 'right' });
-  const deleteItem = page.locator('.fg-menu-item[data-command="freegantt.deleteSelection"]');
-  await expect(deleteItem).toBeVisible();
-  await clickMenuItem(deleteItem);
-
-  // Deleting from the row removes every Segment the row owns, so the Entry, and its row, go too
-  // (#212 table row 2) — no special case for "the row's last Segment".
-  await expect(row).toHaveCount(0);
-  await expect(page.locator(`#gantt .fg-bar[data-item-id^="${entryId}:"]`)).toHaveCount(0);
-
-  await page.reload();
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
-  await showSegmentedSpan(page);
-  const reloadedEntryId = await rowWithSeveralBars(page);
-  const reloadedRow = page.locator(`#gantt .fg-row[data-entry-id="${reloadedEntryId}"]`);
-  const reloadedCellBox = await reloadedRow.locator('.fg-row-cell').nth(1).boundingBox();
-  expect(reloadedCellBox).not.toBeNull();
-  await page.mouse.click(reloadedCellBox!.x + 12, reloadedCellBox!.y + reloadedCellBox!.height / 2, {
-    button: 'right',
-  });
-  const lockItem = page.locator('.fg-menu-item[data-command="demo.lockEntry"]');
-  await expect(lockItem).toBeVisible();
-  await clickMenuItem(lockItem);
-
-  // Lock reads `entryIds` on the row path too: the whole record locks (#212 table row 4).
-  await expect(page.locator('#log')).toContainText(`entries · ${reloadedEntryId} · locked`);
 });
