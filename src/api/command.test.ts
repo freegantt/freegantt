@@ -1,18 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { entryId, segmentId } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import { registerCoreCommands } from '../view/core-commands.js';
 import type { CoreCommandPorts } from '../view/core-commands.js';
 import { resolveActedOn } from './command.js';
 import type { ActedOn, BuiltInCommandId } from './command.js';
 
-const A = segmentId('a');
-const B = segmentId('b');
-const C = segmentId('c');
+const A = entryId('a');
+const B = entryId('b');
+const C = entryId('c');
 
-/** The pair every caller hands the resolver: a Segment set and the Entries behind it. Each Segment
- *  in these cases belongs to an Entry of the same name, which keeps the projection readable. */
-function actedOn(...ids: readonly (typeof A)[]): ActedOn {
-  return { segmentIds: ids, entryIds: ids.map((id) => entryId(String(id))) };
+function actedOn(...entryIds: readonly (typeof A)[]): ActedOn {
+  return { entryIds };
 }
 
 describe('resolveActedOn() (#212)', () => {
@@ -36,14 +34,8 @@ describe('resolveActedOn() (#212)', () => {
     expect(resolveActedOn(actedOn(A, B), actedOn(A, B))).toEqual(actedOn(A, B));
   });
 
-  it('names nothing when the clicked node stands for no Segment', () => {
+  it('names nothing when the clicked node stands for no Entry', () => {
     expect(resolveActedOn(actedOn(), actedOn(A, B))).toEqual(actedOn());
-  });
-
-  it('carries both readings of one set, so a command never projects one from the other', () => {
-    const resolved = resolveActedOn(actedOn(A), actedOn(A, B));
-    expect(resolved.segmentIds).toEqual([A, B]);
-    expect(resolved.entryIds).toEqual([entryId('a'), entryId('b')]);
   });
 });
 
@@ -70,8 +62,8 @@ const EVERY_BUILT_IN_ID: Record<BuiltInCommandId, true> = {
   'freegantt.pageUp': true,
   'freegantt.selectAll': true,
   'freegantt.clearSelection': true,
-  'freegantt.selectNextSegment': true,
-  'freegantt.selectPreviousSegment': true,
+  'freegantt.selectNextEntry': true,
+  'freegantt.selectPreviousEntry': true,
   'freegantt.deleteSelection': true,
   'freegantt.discardCellEdit': true,
   'freegantt.undo': true,
