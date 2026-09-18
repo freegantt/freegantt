@@ -18,7 +18,6 @@
 // #421, ADR 0025: the Selection holds `EntryId` alone. A former Segment is an ordinary child Entry
 // now, so there is no second id space to project through.
 
-import { entryIdsDroppedBy } from '../data/change-set.js';
 import { entryIdOfBar } from '../model/index.js';
 import type { ChangeSet, EntryId, RowId } from '../model/index.js';
 import type { PlannedRowKind } from '../layout/index.js';
@@ -97,12 +96,12 @@ export class EntrySelection {
     return this.#entries.length === 1 ? this.#entries[0] : undefined;
   }
 
-  /** Drops the Entries `entryIdsDroppedBy(changeSet)` names (#212, finding 8) — left uncorrected, a
-   *  dead id reaches a mutation and throws. Announces `selectionChange` alone; there is no user
-   *  gesture here for a veto to refuse. */
+  /** Drops the Entries `changeSet.removed` names (#212, finding 8) — left uncorrected, a dead id
+   *  reaches a mutation and throws. Announces `selectionChange` alone; there is no user gesture here
+   *  for a veto to refuse. */
   forgetEntriesTheDatasetDropped(changeSet: ChangeSet): void {
     if (this.#entries.length === 0) return;
-    const dropped = entryIdsDroppedBy(changeSet);
+    const dropped = new Set(changeSet.removed.map(({ entity }) => entity.id));
     if (dropped.size === 0) return;
     const kept = this.#entries.filter((id) => !dropped.has(id));
     if (kept.length === this.#entries.length) return;

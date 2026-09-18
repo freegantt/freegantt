@@ -116,16 +116,6 @@ export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[] {
   return changeSet.updated.filter((row): row is FieldUpdated => row.store === 'entries');
 }
 
-/**
- * Every `EntryId` this committed `ChangeSet` removed from the Dataset (review finding 8, #212). A
- * former Segment is an ordinary child Entry now (ADR 0026), so the whole set a commit dropped is
- * `changeSet.removed` itself — there is no second, field-row-shaped source to fold in beside it any
- * more. `view/entry-selection.ts#forgetEntriesTheDatasetDropped` reads this on every commit.
- */
-export function entryIdsDroppedBy(changeSet: ChangeSet): ReadonlySet<EntryId> {
-  return new Set(changeSet.removed.map(({ entity }) => entity.id));
-}
-
 /** Undo's recorded changeset, inverted: `added`↔`removed`, each `updated` row's `from`/`to` swapped,
  *  `origin: 'undo'`. Redo does not invert — it re-applies the recorded rows with `origin: 'redo'`. The
  *  `id` carried over is a placeholder only — `replay` mints a fresh one and ignores this one
