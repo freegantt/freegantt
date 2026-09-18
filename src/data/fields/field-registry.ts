@@ -95,7 +95,7 @@ function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField 
  *  answer `false`. One predicate, because two readers ask: the Rollup pass itself, and #256's
  *  `canWrite`, which refuses a roll-up parent's rolling-up cell and must refuse exactly the set the
  *  pass would overwrite. Two spellings of this test disagreed on `'none'`, and the cell then said
- *  "this value comes from the rows below it" about a value nothing rolls up. */
+ *  "this value comes from its children" about a value nothing rolls up. */
 export function rollsUp(field: Field): boolean {
   return field.rollUp !== undefined && field.rollUp !== 'none';
 }
