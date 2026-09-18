@@ -66,10 +66,11 @@ export function lockEntries(initiallyLocked: readonly string[] = []): LockEntrie
           const entry = request.entries.get(id);
           // A locked entry with no dates has nothing to move (ADR 0012).
           if (entry === undefined || entry.start === undefined) continue;
-          // `moveEntryTo`, never `{ start, end }` (D-S5-50). An Entry may draw several Segments, and
-          // then an envelope alone names none of them, so core refuses that write rather than guess
-          // which one to move (`SegmentsOutOfSyncError`, `'ambiguous'`, D-S5-44). This says the whole
-          // Entry translates rigidly, one Segment at a time, and lets core derive the envelope back.
+          // `moveEntryTo`, never `{ start, end }` written by hand: it is the one place that computes
+          // the rigid translate (`end - start` held fixed), so a cascade never re-derives that math
+          // (ADR 0026 retired the several-Segment case this comment used to guard against — a Bar is
+          // one child Entry by default now, and `moveEntryTo` answers with a plain `{ start, end }`
+          // edit, same shape `dataset.entries.update()` takes).
           mine.set(id, moveEntryTo(entry, addMs(entry.start, moved)));
         }
         // `mergeEntryEdits`, never a `Map` spread: another plugin may already have written one of

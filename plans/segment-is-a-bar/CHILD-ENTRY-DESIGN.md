@@ -61,7 +61,7 @@ Only the optional `segment?` argument went away.
 
 **Core already draws several Entries on one Row.**
 
-- `CONTEXT.md`, *Row*: "one Row may carry the Items of many Entries". **The `custom` row source does this today** — `CustomRow.entryIds` is a list, and `resolveCustomSource` maps every id onto one row (`custom-source.ts:14,20`). *Corrected 2026-09-17: this bullet used to cite the `group` source, which does not do it — `group-source.ts:40` gives every member its own row with `entryIds: [id]`, and only the header row is shared, with `entryIds: []`.*
+- `CONTEXT.md`, *Row*: "one Row may carry the Bars of many Entries". **The `custom` row source does this today** — `CustomRow.entryIds` is a list, and `resolveCustomSource` maps every id onto one row (`custom-source.ts:14,20`). *Corrected 2026-09-17: this bullet used to cite the `group` source, which does not do it — `group-source.ts:40` gives every member its own row with `entryIds: [id]`, and only the header row is shared, with `entryIds: []`.*
 - `layout/rows/entries-source.ts:40` sets `entryIds: [entryId(entry.id)]`. The change is to put the children of a claimed parent into that list and to give them no row.
 - `layout/rows/collapse.ts:18-20` already drops the rows of a collapsed parent's descendants. The new rule is the same walk, and it keeps the children's ids on the parent's row.
 - `FrameLayoutView.entryIdsForRow` already answers every Entry a row owns, for hit tests and the grid-row click.

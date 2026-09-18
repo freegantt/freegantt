@@ -188,8 +188,8 @@ Two agents hit this on #142. Both reported green, both told the truth, and `e2e/
 Documenting the capture rule is not enough on its own: it is exactly the instruction a tired reader skips. So `verify:full` states its own result **inside the output stream**, where no plumbing strips it. Every run prints exactly one verdict line:
 
 ```
-verify:full PASS — all 13 checks green, test:e2e included (58s).
-verify:full FAILED at check 7 of 13: pnpm test:dom (exit code 1). 6 later checks did not run. (21s)
+verify:full PASS — all 16 checks green, test:e2e included (58s).
+verify:full FAILED at check 7 of 16: pnpm test:dom (exit code 1). 9 later checks did not run. (21s)
 ```
 
 It is the last line the gate itself prints. `pnpm` adds one `[ELIFECYCLE]` line after it on a failure, which is why the capture above reads three lines, not one.

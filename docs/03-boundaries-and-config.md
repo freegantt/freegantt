@@ -47,7 +47,7 @@ The last one before `harness-public-api-only` is redundant against the generated
 
 ### 1.2 Deep-import discipline
 
-Modules import through their layer's `index.ts` barrel only (`layout/index.ts`, not `layout/lanes/pack.ts`); enforced by a `forbidden` rule on cross-layer paths with more than one segment. Intra-layer imports go direct — barrels inside a layer create cycles.
+Modules import through their layer's `index.ts` barrel only (`layout/index.ts`, not `layout/rows/sort.ts`); enforced by a `forbidden` rule on cross-layer paths with more than one segment. Intra-layer imports go direct — barrels inside a layer create cycles.
 
 ### 1.3 The red test (`plans/04` §3.2)
 
@@ -145,7 +145,7 @@ These are guard tests, not feature tests; they belong to the guardrail system an
 | Test | Invariant | From |
 |---|---|---|
 | `test/guards/two-gantt-isolation.test.ts` | I2 | S0 |
-| `test/guards/item-identity.test.ts` | I8 | S0 |
+| `test/guards/bar-identity.test.ts` | I8 | S0 |
 | `test/guards/package-shape.test.ts` | one runtime dep, exports sealed | S0 |
 | `test/guards/null-backend-in-node.test.ts` | pure pipeline runs headless | S0 |
 | `test/guards/schedule-purity.property.ts` | I4 | S7 |
