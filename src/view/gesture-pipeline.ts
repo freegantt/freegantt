@@ -148,7 +148,7 @@ interface GestureRefusal {
  *  write, no report (whichever of those already ran when the hold ended owns that job). */
 interface HeldGesture {
   readonly generation: number;
-  readonly itemIds: readonly BarId[];
+  readonly barIds: readonly BarId[];
   readonly proposal: GestureProposal;
   readonly refusal: GestureRefusal;
   /** Part 3 (#273): the stored row each id in `proposal.paints` was measured from, snapshotted the
@@ -186,7 +186,7 @@ export class GesturePipeline {
     this.#previewFrame = new FrameScheduler(() => {
       this.#deps.applyGestureState(
         this.#computePreview(this.#scheduledProposal),
-        this.#held?.itemIds,
+        this.#held?.barIds,
         this.#computeCursor(),
       );
     });
@@ -382,7 +382,7 @@ export class GesturePipeline {
     const grabbed = this.#proposedDatesOf(proposal.grabbed, proposal.paints.get(proposal.grabbed));
     if (!spansTime(grabbed)) return Promise.resolve(false);
     const spans = [...proposal.writes].map(([id, edit]) => this.#proposedDatesOf(id, edit));
-    const itemIds = [...proposal.paints.keys()].map((id) => barId(id));
+    const barIds = [...proposal.paints.keys()].map((id) => barId(id));
     // #210: the same note goes out on the `before*` payload and comes back in the refusal, so a
     // handler's `refuse('…')` reaches the report core raises for its veto. `Refusable` belongs to
     // the `before*` payload alone (event-bus.ts's map already types `entryMove`/`entryResize`
@@ -409,7 +409,7 @@ export class GesturePipeline {
       entryId: grabbed.entry,
       note,
     };
-    return this.#settle(before, proposal, itemIds, refusal, () => {
+    return this.#settle(before, proposal, barIds, refusal, () => {
       const committed = this.#deps.commitEntryEdits(proposal.writes);
       if (committed) {
         this.#deps.emit(event.after, event.afterPayload);
@@ -424,7 +424,7 @@ export class GesturePipeline {
   #settle(
     result: boolean | Promise<boolean>,
     proposal: GestureProposal,
-    itemIds: readonly BarId[],
+    barIds: readonly BarId[],
     refusal: GestureRefusal,
     finish: () => boolean,
   ): Promise<boolean> {
@@ -438,7 +438,7 @@ export class GesturePipeline {
       this.#preview(undefined);
       return Promise.resolve(committed);
     }
-    const generation = this.#awaitVeto(itemIds, proposal, refusal);
+    const generation = this.#awaitVeto(barIds, proposal, refusal);
     return result
       .then(
         (allowed) => allowed,
@@ -552,11 +552,11 @@ export class GesturePipeline {
    *  immediate `applyGestureState`, not a rAF-cleared preview plus a separate pending write. Returns
    *  this hold's generation, so `#settle` can tell a stale settle from a live one when `result`
    *  finally resolves (#272, #273 — this no longer arm-locks `session()`; see `session()`). */
-  #awaitVeto(itemIds: readonly BarId[], proposal: GestureProposal, refusal: GestureRefusal): number {
+  #awaitVeto(barIds: readonly BarId[], proposal: GestureProposal, refusal: GestureRefusal): number {
     const generation = ++this.#generation;
     this.#held = {
       generation,
-      itemIds,
+      barIds,
       proposal,
       refusal,
       measuredFrom: this.#measuredFrom(proposal),
