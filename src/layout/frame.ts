@@ -1,22 +1,12 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type {
-  RowId,
-  BarId,
-  EntryId,
-  Entry,
-  Instant,
-  Rect,
-  TimeUnit,
-  FieldContext,
-  SegmentId,
-} from '../model/index.js';
-import { segmentIndexOfBar } from '../model/index.js';
+import type { RowId, BarId, EntryId, Entry, Instant, Rect, TimeUnit, FieldContext } from '../model/index.js';
+import { partIndexOfBar } from '../model/index.js';
 import type { Tick, TimeScale, ViewPreset } from '../time/index.js';
 import { dropRepeatedGranularity, formatDate, formatEndInclusive, resolveDateFormat } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineDecoration } from './date-line.js';
-import { FrameMemory, NO_SEGMENT_IDS } from './frame-memory.js';
+import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
@@ -140,19 +130,6 @@ export interface FrameBar {
   rowId: RowId;
   /** The variant this bar draws as (ADR 0018) — the `data-variant` `render/` stamps. */
   variant: string;
-  /** The one Segment this bar **draws** (#212, ADR 0010), carried straight through from the Bar
-   *  that produced it. Absent for a bar that draws the Entry's whole span (a parent, or a plugin's
-   *  own variant) — that bar draws no single Segment. */
-  segmentId?: SegmentId;
-  /** Every Segment this bar **stands for** (#212, #230, ADR 0010) — the Segments that select it and
-   *  paint it. A bar that drew one Segment stands for that Segment alone, so this holds it and
-   *  `segmentId` names it. A bar that drew its Entry's whole span stands for every Segment of that
-   *  Entry, because any of them selects it, so this holds them all and `segmentId` is absent.
-   *
-   *  The frame states the fact, and a reader never derives it from an Entry of its own: the set and
-   *  the Bars it describes come from one cached record of one Entry snapshot, so they cannot fall
-   *  out of step. `FrameLayout.segmentIdsForBar` answers the same fact for a lookup by id. */
-  segmentIds: readonly SegmentId[];
   /** What a backend renders as the bar's label (#26) — `LayoutInput.barLabelFor`'s own answer for
    *  this Bar's Entry, or the Bar's own `label` when no resolver is bound. `''` when the Entry has
    *  no name and no resolver names a Field with a value: no label paints, and a `barRenderer` sees
@@ -362,7 +339,7 @@ function columnsForFrame(columns: readonly ResolvedColumn[] | undefined): readon
   });
 }
 
-function segmentCountByEntry(items: readonly Bar[]): ReadonlyMap<EntryId, number> {
+function partCountByEntry(items: readonly Bar[]): ReadonlyMap<EntryId, number> {
   const counts = new Map<EntryId, number>();
   for (const item of items) counts.set(item.entryId, (counts.get(item.entryId) ?? 0) + 1);
   return counts;
@@ -379,7 +356,7 @@ function barA11yLabel(
   // #421 C5: a nameless Entry announces its dates alone, never a leading ", ".
   const prefix = label === '' ? '' : `${label}, `;
   if (partCount <= 1) return `${prefix}${span}`;
-  return `${prefix}part ${segmentIndexOfBar(item.id) + 1} of ${partCount}, ${span}`;
+  return `${prefix}part ${partIndexOfBar(item.id) + 1} of ${partCount}, ${span}`;
 }
 
 /** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
@@ -501,7 +478,7 @@ export function placeFrame(
     const produced = mem.rowMemory(planned.id);
     const items = produced.items;
     const height = index.heightAt(rowIndex);
-    const parts = segmentCountByEntry(items);
+    const parts = partCountByEntry(items);
     rows.push({
       id: planned.id,
       kind: planned.kind,
@@ -515,9 +492,6 @@ export function placeFrame(
       gridCells: cellsForRow(planned, input.columns, entryById),
       // A header row stands for no Entry (D-S4-23), so it owns none and never becomes selectable.
       entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
-      // A reference copy of the set `RowMemory` already resolved for this row (#230 R5) — no
-      // allocation per frame (I5), and the same header rule `entryIds` uses just above.
-      segmentIds: isPlannedHeaderRow(planned) ? NO_SEGMENT_IDS : produced.segmentIds,
     });
 
     for (const item of items) {
@@ -544,11 +518,7 @@ export function placeFrame(
         flags: {},
         span,
         a11yLabel: barA11yLabel(label, item, parts.get(item.entryId) ?? 1, scale, locale),
-        // A reference copy of the set the memory already resolved beside this Bar — no allocation
-        // per frame (I5), and no second Entry source for a reader to disagree with (#230).
-        segmentIds: produced.segmentIdsByBar.get(item.id) ?? NO_SEGMENT_IDS,
       };
-      if (item.segmentId !== undefined) bar.segmentId = item.segmentId;
       bars.push(bar);
     }
   }

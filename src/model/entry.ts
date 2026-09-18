@@ -11,7 +11,7 @@ import type { Duration } from './time.js';
 import type { Instant } from './time.js';
 import type { EntryId } from './ids.js';
 import type { FieldKey, FieldValue } from './field-key.js';
-import type { EntryInput, Segment } from './stored-entry.js';
+import type { EntryInput } from './stored-entry.js';
 
 /**
  * One row, as it stands now.
@@ -35,7 +35,6 @@ export interface Entry<TProps = Record<string, unknown>> {
   readonly start?: Instant | undefined;
   /** Exclusive — see plans/01 §5. Omitted iff this Entry does not span (ADR 0012). */
   readonly end?: Instant | undefined;
-  readonly segments: readonly Segment[];
 
   /** The one by-key value door: a core key, a `props` key, or a `compute` Field. Every answer is
    *  live, and every answer is what its Field declares: a stored key answers the stored value,

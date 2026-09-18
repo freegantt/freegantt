@@ -11,8 +11,6 @@ import type {
   EntryId,
   FieldKey,
   FieldUpdated,
-  Segment,
-  SegmentId,
   UpdatedRow,
 } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
@@ -119,26 +117,13 @@ export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[] {
 }
 
 /**
- * Every `SegmentId` this committed `ChangeSet` took out of the Dataset (review finding 8, #212). An
- * Entry the commit removed contributes all its own; a `segments` field row contributes what it
- * dropped. `view/gantt-shell.ts#forgetSegmentsTheDatasetDropped` reads this instead of checking the
- * whole Selection against `entryIdOfSegment` (finding 6) on every commit — an edit with no removed
- * Entry and no `segments` row costs nothing past building this one empty `Set`.
+ * Every `EntryId` this committed `ChangeSet` removed from the Dataset (review finding 8, #212). A
+ * former Segment is an ordinary child Entry now (ADR 0026), so the whole set a commit dropped is
+ * `changeSet.removed` itself — there is no second, field-row-shaped source to fold in beside it any
+ * more. `view/entry-selection.ts#forgetEntriesTheDatasetDropped` reads this on every commit.
  */
-export function segmentIdsDroppedBy(changeSet: ChangeSet): ReadonlySet<SegmentId> {
-  const dropped = new Set<SegmentId>();
-  for (const { entity } of changeSet.removed) {
-    for (const segment of entity.segments) dropped.add(segment.id);
-  }
-  for (const row of fieldRowsOf(changeSet)) {
-    if (row.field !== 'segments') continue;
-    // `FieldUpdated.from`/`to` are `unknown` — genuinely open for a consumer field. `'segments'` is a
-    // core Field, though, so this cast is load-bearing, the same as `entry-store.ts#applyFieldRow`'s.
-    const before = row.from as readonly Segment[];
-    const afterIds = new Set((row.to as readonly Segment[]).map((segment) => segment.id));
-    for (const segment of before) if (!afterIds.has(segment.id)) dropped.add(segment.id);
-  }
-  return dropped;
+export function entryIdsDroppedBy(changeSet: ChangeSet): ReadonlySet<EntryId> {
+  return new Set(changeSet.removed.map(({ entity }) => entity.id));
 }
 
 /** Undo's recorded changeset, inverted: `added`↔`removed`, each `updated` row's `from`/`to` swapped,

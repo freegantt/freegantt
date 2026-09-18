@@ -14,14 +14,11 @@ const IDENTITY_CAST_HELPERS = new Set([
   'barIdFromDataset',
   'rowIdFromDataset',
   'entryIdFromDataset',
-  'segmentIdFromDataset',
   'changeSetId',
-  'segmentId',
-  'mintedSegmentId',
 ]);
 
 /** Readers of a BarId (D-S4-25). They parse; they are not identity casts. */
-const BAR_ID_READERS = new Set(['entryIdOfBar', 'segmentIndexOfBar']);
+const BAR_ID_READERS = new Set(['entryIdOfBar', 'partIndexOfBar']);
 
 /** The span invariant's one home (ADR 0012, Q5 in plans/field-redesign/BUILD-LOG.md). The author
  * widened the carve-out for it on 2026-09-11: one pure predicate over the two dates, with no state

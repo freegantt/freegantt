@@ -1,6 +1,6 @@
 // time/ owns all zone-aware date arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
 
-import type { Instant, TimeSpan } from '../model/index.js';
+import type { Instant } from '../model/index.js';
 
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = MS_PER_SECOND * 60;
@@ -48,21 +48,3 @@ export const MS = {
   HOUR: MS_PER_HOUR,
   DAY: MS_PER_DAY,
 } as const;
-
-/** What span do these `TimeSpan`s cover together? The earliest start and the latest end. An Entry's
- *  `start`/`end` is this over its Segments (ADR 0010). Never called with an empty list: every stored
- *  Entry keeps at least one Segment (a programming-error assertion, not a consumer-facing check —
- *  callers that take input from a consumer validate before this runs). */
-export function envelopeOfSegments(spans: readonly TimeSpan[]): TimeSpan {
-  const first = spans[0];
-  if (!first) {
-    throw new Error('envelopeOfSegments: called with no TimeSpans — every stored Entry keeps at least one');
-  }
-  let start: Instant = first.start;
-  let end: Instant = first.end;
-  for (const span of spans) {
-    if (span.start < start) start = span.start;
-    if (span.end > end) end = span.end;
-  }
-  return { start, end };
-}

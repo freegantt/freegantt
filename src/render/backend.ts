@@ -1,15 +1,7 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type {
-  EntryId,
-  GeometryFrame,
-  BarId,
-  BarPreview,
-  ClientPoint,
-  RowId,
-  SegmentId,
-} from '../layout/index.js';
+import type { EntryId, GeometryFrame, BarId, BarPreview, ClientPoint, RowId } from '../layout/index.js';
 
 export interface InteractionState {
   hoveredBarId?: BarId;
@@ -17,17 +9,17 @@ export interface InteractionState {
    *  the row that owns the hovered bar. A backend paints it on both the grid row and its timeline
    *  band, so one row reads as one row across the splitter. Undefined parks the paint. */
   hoveredRowId?: RowId;
-  /** The Selection itself (#212, ADR 0010): the Segment ids `Gantt.selectedSegmentIds` holds. A bar
-   *  paints selected when the Selection holds that bar's own Segment. A bar that draws an Entry's
-   *  whole span — a group, a milestone — paints selected when the Selection holds any Segment of that
-   *  Entry. Which bar drew which Segment is the frame's own answer, never a string built from an id. */
-  selectedSegmentIds?: readonly SegmentId[];
+  /** The Selection itself (#212, ADR 0010, ADR 0025): the Entry ids `Gantt.selectedEntryIds` holds.
+   *  A bar paints selected when the Selection holds that bar's own Entry. A bar that draws an Entry's
+   *  whole span — a group, a milestone — paints selected the same way. Which bar drew which Entry is
+   *  the frame's own answer, never a string built from an id. */
+  selectedEntryIds?: readonly EntryId[];
   /** The Entry the shared handle pair brackets (S3, D-S3-6/D-S3-8): the hovered bar's Entry, else
    *  the single selected one — and only when its `resize` capability resolved true. Undefined parks
    *  the handles. A resize acts on the Entry's envelope (#200), so the pair straddles every bar the
    *  Entry drew: the `start` handle on the earliest bar, the `end` handle on the latest. A backend
-   *  reads those bars off the frame it synced, the same way `selectedSegmentIds` paints. The pair
-   *  narrows to one bar when the Selection holds exactly one Segment of the Entry (#212). */
+   *  reads those bars off the frame it synced, the same way `selectedEntryIds` paints. The pair
+   *  narrows to one bar when the Entry the Selection holds draws exactly one bar (#212, ADR 0026). */
   resizableEntryId?: EntryId;
   /** #142: which of `resizableEntryId`'s two handles may resize, independently — a Field's own
    *  one edge can close while the other stays open — a Field's `editable`, or `capabilities.edit` (#256). A backend hides the closed edge's

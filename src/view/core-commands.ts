@@ -26,9 +26,10 @@ export interface CoreCommandPorts {
   hasSelection(): boolean;
   keyboardPanEnabled(): boolean;
   nothingSelected(): boolean;
-  /** #212, ADR 0010: moves the Selection to the next or previous Segment of the row it sits on. */
-  selectNextSegment(): void;
-  selectPreviousSegment(): void;
+  /** #212, ADR 0010, ADR 0025: moves the Selection to the next or previous Entry of the row it
+   *  sits on. */
+  selectNextEntry(): void;
+  selectPreviousEntry(): void;
   pageDown(): void;
   pageUp(): void;
   panToStart(): void;
@@ -110,50 +111,36 @@ export function registerCoreCommands(
     when: () => ports.hasSelection(),
     run: () => ports.clearSelection(),
   });
-  // #212, ADR 0010: the Selection holds Segments, so a row that draws several bars needs a keyboard
-  // way to move between them. Both step within one row and clamp at its ends, so neither ever leaves
+  // #212, ADR 0010, ADR 0025: a row that draws several bars needs a keyboard way to move the
+  // Selection between them. Both step within one row and clamp at its ends, so neither ever leaves
   // the row the user is on.
   register({
-    id: 'freegantt.selectNextSegment',
-    label: 'Select next segment',
+    id: 'freegantt.selectNextEntry',
+    label: 'Select next entry',
     when: () => ports.hasSelection(),
-    run: () => ports.selectNextSegment(),
+    run: () => ports.selectNextEntry(),
   });
   register({
-    id: 'freegantt.selectPreviousSegment',
-    label: 'Select previous segment',
+    id: 'freegantt.selectPreviousEntry',
+    label: 'Select previous entry',
     when: () => ports.hasSelection(),
-    run: () => ports.selectPreviousSegment(),
+    run: () => ports.selectPreviousEntry(),
   });
-  // #212, ADR 0010, ADR 0012: the right-click menu and the `Delete` key run this one command. A
-  // `'bar'` target names the one Segment the user picked, so it reads `segmentIds` and calls
-  // `removeSegments` — removing an Entry's last Segment now keeps the Entry dateless (ADR 0012), so
-  // this alone never deletes a row. Every other target (a grid row or cell) names the whole record,
-  // so it reads `entryIds` and calls `remove` — the row's own delete, not a bar's.
+  // #212, ADR 0010, ADR 0025: the right-click menu and the `Delete` key run this one command. Every
+  // target kind — a bar, a grid row, a cell — names the Entries it acts on in `entryIds`, and this
+  // removes each one (ADR 0025: a former Segment is an ordinary Entry, removed the same way).
   // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,
   // so it stops here instead of reaching `CommandRegistry.run` uncaught (the same swallow `api/`'s
   // `attemptMutation` does; `view/` cannot import `api/`, so this repeats that one line inline).
   register({
     id: 'freegantt.deleteSelection',
     label: 'Delete',
-    when: (ctx) => {
-      const target = asCtx(ctx).target;
-      if (target === undefined) return false;
-      return target.kind === 'bar'
-        ? (target.segmentIds?.length ?? 0) > 0
-        : (target.entryIds?.length ?? 0) > 0;
-    },
+    when: (ctx) => (asCtx(ctx).target?.entryIds?.length ?? 0) > 0,
     run: (ctx) => {
       const target = asCtx(ctx).target;
       if (target === undefined) return;
       try {
-        if (target.kind === 'bar') {
-          const segmentIds = target.segmentIds;
-          if (segmentIds === undefined || segmentIds.length === 0) return;
-          asCtx(ctx).dataset?.entries.removeSegments(segmentIds);
-        } else {
-          for (const id of target.entryIds ?? []) asCtx(ctx).dataset?.entries.remove(id);
-        }
+        for (const id of target.entryIds ?? []) asCtx(ctx).dataset?.entries.remove(id);
       } catch (error) {
         if (!(error instanceof MutationCancelledError)) throw error;
       }

@@ -11,8 +11,8 @@ export { pickDefined } from './pick-defined.js';
 // `render/dom` never imports `model/` directly (render-boundary, plans/01 §1) — these two id
 // helpers are pure id-string math with no model runtime behind them, re-exported here the same way
 // `ColumnAlign` crosses this same boundary (#54).
-export { barId, barIdFromDataset, rowIdFromDataset, entryIdOfBar, segmentId } from '../model/index.js';
-export { wholeEntryBar, fixedWidthBar, ignoreSegments, followSegments } from './items/item.js';
+export { barId, barIdFromDataset, rowIdFromDataset, entryIdOfBar } from '../model/index.js';
+export { wholeEntryBar, fixedWidthBar, unclaimedSpan } from './items/item.js';
 export type { BarAnchor, FixedBarBox, Bar, BarProducer, VariantBars } from './items/item.js';
 export { createVariantRegistry, bar, summary, diamond } from './items/variants.js';
 // #265: shipped Grid-column cell renderers. DOM-free description trees, same factory
@@ -94,15 +94,7 @@ export type {
 // BarId/RowId rather than a bare string — render already receives both via GeometryFrame (#35).
 // ElementDescription joins them the same way (S5.3, D-S5-10): render/dom/element-description.ts
 // builds DOM from it and may not import model/ directly.
-export type {
-  BarId,
-  RowId,
-  EntryId,
-  SegmentId,
-  ClientPoint,
-  ElementDescription,
-  Entry,
-} from '../model/index.js';
+export type { BarId, RowId, EntryId, ClientPoint, ElementDescription, Entry } from '../model/index.js';
 // S5.12, D-S5-40: `render/` may import `layout/` and nothing else (plans/01 §1), so the raise seam
 // reaches `render/dom` the same way `ElementDescription` and `Entry` above already do — a backend
 // that recovers from a throwing renderer must be able to report it.
