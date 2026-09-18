@@ -3448,6 +3448,71 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     container.remove();
   });
 
+  it('[#421 F2] a bad gantt.barLabels field reports once and renders no label, never throws', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
+    const reports: ErrorReport[] = [];
+    const gantt = new Gantt({ container, dataset });
+    gantt.on('error', (report) => {
+      reports.push(report);
+    });
+    // Assigned after the subscription, live (`plans/02`): `barLabels` in `GanttOptions` resolves
+    // during the constructor's own first paint, the same trap the `J59` test above names.
+    gantt.barLabels = { field: 'notAField' };
+    // One report for the field, however many bars and frames run — never one throw per bar, which
+    // would escape `FrameScheduler`'s own rAF callback and reach no consumer (#421 F2).
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    gantt.barLabels = { field: 'notAField' };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
+    expect(bars.length).toBeGreaterThan(0);
+    for (const bar of bars) expect(bar.textContent).toBe('');
+
+    const missing = reports.filter((report) => report.code === 'unknown-bar-label-field');
+    expect(missing).toHaveLength(1);
+    expect(missing[0]?.severity).toBe('warning');
+    expect(missing[0]?.field).toBe('notAField');
+    expect(missing[0]?.message).toContain('barLabels');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('[#421 F2] a bad EntryVariant.barLabels field reports once and renders no label, never throws', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
+    const reports: ErrorReport[] = [];
+    const gantt = new Gantt({ container, dataset });
+    gantt.on('error', (report) => {
+      reports.push(report);
+    });
+    // A variant's own `barLabels` is live too (ADR 0018), and it overrides the Gantt's own — a
+    // valid Gantt-wide field is not enough to save it (`mergeBarLabels`).
+    gantt.variants = [
+      {
+        name: 'badLabelField',
+        when: (entry) => entry.id === sampleEntries[0]!.id,
+        barLabels: { field: 'notAField' },
+      },
+    ];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    gantt.variants = [{ ...gantt.variants[0]! }];
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.textContent).toBe('');
+
+    const missing = reports.filter((report) => report.code === 'unknown-bar-label-field');
+    expect(missing).toHaveLength(1);
+    expect(missing[0]?.field).toBe('notAField');
+
+    gantt.destroy();
+    container.remove();
+  });
+
   describe('childrenAsSegments on a real Gantt (#421 C1, item 1 — entryRulePorts reaches resolveRows)', () => {
     function claimTree() {
       return [

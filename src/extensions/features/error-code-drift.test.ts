@@ -31,6 +31,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'variant-claimed-twice': true,
   'unknown-variant-field': true,
   'unknown-row-source-field': true,
+  'unknown-bar-label-field': true,
   'derived-value': true,
   'derived-values-dropped': true,
   'no-parse-value': true,
