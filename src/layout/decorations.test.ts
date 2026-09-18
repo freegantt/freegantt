@@ -26,7 +26,6 @@ const row: FrameRow = {
   expanded: false,
   gridCells: [],
   entryIds: [],
-  segmentIds: [],
 };
 
 function baseInput(providers: readonly RegisteredDecorationProvider[]): RunDecorationsInput {
