@@ -185,10 +185,9 @@ export const demoTreeEntryInputs: EntryInput<DemoEntryProps>[] = [
     if (entry.start !== undefined) next.start = entry.start;
     if (entry.end !== undefined) next.end = entry.end;
     if (parentId !== undefined) next.parentId = parentId;
-    // `next.end` stays the 3-day span `sample-dataset.ts` authored: ingest reads the Entry's own
-    // envelope from its Segments now (#212, finding 4), so a fixture never has to widen `end` by
-    // hand to cover a Segment that runs past it.
-    if (id === 'entry-16' && entry.start !== undefined) next.segments = separateSegments(entry.start);
+    // Retired (ADR 0026, #421): `entry-16` drew three Segments across its span here. A Segment no
+    // longer exists — an Entry now always draws exactly one Bar, and this page registers no plugin
+    // variant that draws several for one Entry, so `entry-16` is an ordinary single-bar leaf now.
     if (Object.keys(props).length > 0) next.props = props;
     return next;
   }),

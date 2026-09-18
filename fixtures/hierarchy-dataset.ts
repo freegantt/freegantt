@@ -1,10 +1,13 @@
 // Deterministic hierarchy fixture for harness/hierarchy.html (S4.11, D-S4-34): three levels deep, one
 // childless parent-with-no-children ("phase-empty" — ADR 0013: a row with no children is a normal
-// Entry, not a demoted group), one single-day span, one entry with three deliberately overlapping
-// `segments` (the #215/#217 covered-Segment repro), `cost` in `props` on every leaf, and `team` for
-// the filter. Fixed calendar dates only — no clock read. Segment bounds use `Z`-suffixed ISO strings
-// so the fixture never calls `instant()` on a zoneless plain time (harness code is not allowed
-// through `time/`'s plain-time helpers).
+// Entry, not a demoted group), one single-day span, `cost` in `props` on every leaf, and `team` for
+// the filter. Fixed calendar dates only — no clock read. Dates use `Z`-suffixed ISO strings so the
+// fixture never calls `instant()` on a zoneless plain time (harness code is not allowed through
+// `time/`'s plain-time helpers).
+//
+// Retired (ADR 0026, #421): a `segmented` entry with three deliberately overlapping `segments` (the
+// #215/#217 covered-Segment repro) stood here. A Segment no longer exists — an Entry now always
+// draws exactly one Bar, and this page registers no plugin variant that draws several for one Entry.
 
 import { currency } from 'freegantt';
 import type { EntryInput } from 'freegantt';
@@ -60,19 +63,6 @@ export const hierarchyEntryInputs: EntryInput<{ cost: number; team: string }>[] 
     parentId: 'phase-a',
     start: '2026-03-20',
     end: '2026-03-20',
-  },
-  {
-    id: 'segmented',
-    name: 'Segmented work',
-    parentId: 'phase-a',
-    start: '2026-04-01',
-    end: '2026-04-15',
-    segments: [
-      { start: '2026-04-01T00:00:00.000Z', end: '2026-04-05T00:00:00.000Z' },
-      { start: '2026-04-02T00:00:00.000Z', end: '2026-04-06T00:00:00.000Z' },
-      { start: '2026-04-03T00:00:00.000Z', end: '2026-04-15T00:00:00.000Z' },
-    ],
-    props: { cost: 300, team: 'alpha' },
   },
 ];
 
