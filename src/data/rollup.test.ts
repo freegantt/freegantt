@@ -640,6 +640,13 @@ describe('the Rollup fast path skips re-deriving the committed tree (#421 C4)', 
     expect(costOf(state, 'p')).toBe(20);
   });
 
+  // Does the fast path still skip both re-derivations once the tree is the size the spike
+  // measured, not the three-entry size the tests above use? A three-entry fixture cannot tell
+  // `checks`/`childIndexBuilds` staying flat from an accident of a tiny tree; 10,200 entries (the
+  // spike's own 200-parent, 50-child shape) is where SPIKE-FINDINGS.md found the fast path halve
+  // one write from 8.6 ms to 4.9 ms. This asserts the same invariant the small test above does —
+  // `checks === 1`, `childIndexBuilds === 0` — never a wall-clock bound: a millisecond number is
+  // machine-dependent and goes flaky in CI, where a call count is deterministic everywhere.
   it('the fast path stays free of both re-derivations as the tree grows (the spike’s own fixture shape: 200 parents × 50 children)', () => {
     const parents = Array.from({ length: 200 }, (_, p) => ({ id: `p${p}` }));
     const children = parents.flatMap((parent) =>
