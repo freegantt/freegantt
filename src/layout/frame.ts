@@ -21,6 +21,7 @@ import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
+import type { EntryRulePorts } from './entry-rule.js';
 import type { BarAnchor, Item, VariantItems } from './items/item.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
@@ -316,6 +317,11 @@ export interface LayoutInput {
   /** Registered decoration providers (S5.6, D-S5-15), `ctx.view.registerDecoration`'s own record.
    *  Omitted or empty → both `underBars`/`overBars` are `[]`. */
   decorationProviders?: readonly RegisteredDecorationProvider[];
+  /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
+   *  and the unknown-key sink. The shell builds one of these once, at construction (`#421 C1`), the
+   *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
+   *  claims nothing, same as `resolveRows`'s own default. */
+  entryRulePorts?: EntryRulePorts;
 }
 
 function cellsForRow(
@@ -369,6 +375,7 @@ export function resolveLayoutRows(input: LayoutInput): readonly PlannedRow[] {
     ...(input.collapsed !== undefined ? { collapsed: input.collapsed } : {}),
     ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
     ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
+    ...(input.entryRulePorts !== undefined ? { entryRulePorts: input.entryRulePorts } : {}),
   });
 }
 

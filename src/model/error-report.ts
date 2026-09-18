@@ -80,6 +80,11 @@ export type BuiltInReportCode =
   // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
   // down, and a plugin whose key the Dataset never declared is the same case.
   | 'unknown-variant-field'
+  // Q29 (`plans/segment-is-a-bar/BUILD-LOG.md`): a row source's `childrenAsSegments` names a Field
+  // key no Field declares, so the rule claims no row. `unknown-variant-field`'s own rule always
+  // names a variant; `childrenAsSegments` is not one, so it gets its own code. Reported once per
+  // rule and key, and never thrown, for the same reason `unknown-variant-field` is not thrown.
+  | 'unknown-row-source-field'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
   // raise this code once per operation (decision 5) — never per value.

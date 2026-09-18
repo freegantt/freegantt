@@ -70,6 +70,7 @@ interface Meta {
   budget?: number;
   quantity?: number;
   owner?: string;
+  showDaysOnRow?: boolean;
 }
 
 const ENTRIES: readonly EntryInput<Meta>[] = [
@@ -80,7 +81,7 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
     parentId: 'root',
     start: '2026-01-01',
     end: '2026-01-05',
-    props: { cost: 100, budget: 500, quantity: 3 },
+    props: { cost: 100, budget: 500, quantity: 3, showDaysOnRow: false },
   },
   {
     id: 'e2',
@@ -113,6 +114,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'budget' }, // money, WITH parseValue — round-trips
   { field: 'quantity' }, // no `type`, `inputType: 'number'` only
   { field: 'owner' }, // editable: 'api' — the app writes it, the user never types it
+  { field: 'showDaysOnRow' }, // type: 'boolean' — opens a checkbox, not a text input (Q31)
 ];
 
 function makeGantt(
@@ -153,6 +155,7 @@ function makeGantt(
       { key: 'end', editable: false },
       // ADR 0015's middle state: `entries.update()` writes it, and this cell stays dead.
       { key: 'owner', editable: 'api', column: { header: 'Owner' } },
+      { key: 'showDaysOnRow', type: 'boolean', editable: true },
     ],
   });
   const gantt = new Gantt({
@@ -407,6 +410,19 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     dblclick(cellFor(container, 'e1', 'quantity'));
     expect(input(container).type).toBe('number');
     expect(input(container).value).toBe('3');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a type: boolean cell opens a checkbox seeded from its stored value, and writes through .checked (Q31)', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dblclick(cellFor(container, 'e1', 'showDaysOnRow'));
+    const el = input(container);
+    expect(el.type).toBe('checkbox');
+    expect(el.checked).toBe(false); // seeded from e1's stored `false`
+    el.checked = true;
+    enter(el);
+    expect(dataset.entries.get('e1')!.read('showDaysOnRow')).toBe(true);
     gantt.destroy();
     container.remove();
   });

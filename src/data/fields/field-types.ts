@@ -129,6 +129,26 @@ export const duration: FieldType<Duration> = Object.freeze<FieldType<Duration>>(
   compare: compareDuration,
 });
 
+/** True sorts after false — `0`/`1` through `Number`, the same trick `compareDuration` plays on a
+ *  branded value. `undefined`/`null` sort last, matching every other `compare*` in this file. */
+function compareBoolean(a: boolean | undefined, b: boolean | undefined): number {
+  if (a === undefined || a === null) return 1;
+  if (b === undefined || b === null) return -1;
+  return Number(a) - Number(b);
+}
+
+/** A boolean reading (Q22). Formats through `stringifyPrimitive` (`'true'`/`'false'`), sorts false
+ *  before true, and opens a checkbox rather than a text `<input>` (Q31) — so it ships no
+ *  `parseValue`: the checkbox editor reads and writes `.checked` directly
+ *  (`extensions/features/inline-editing.ts`), never `.value`. Ships no `rollUp`, the same reason
+ *  every other type in this file ships none: a default aggregator would overwrite an authored
+ *  parent value on every dataset naming this type. */
+export const boolean: FieldType<boolean> = Object.freeze<FieldType<boolean>>({
+  formatValue: stringifyPrimitive,
+  compare: compareBoolean,
+  inputType: 'checkbox',
+});
+
 /** Call: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. Also still works as a
  *  named type: `fieldTypes: { eur: currency({ code: 'EUR' }) }` then `type: 'eur'`.
  *
@@ -159,4 +179,5 @@ export const SHIPPED_FIELD_TYPES: Readonly<Record<string, FieldType>> = Object.f
   percent,
   date,
   duration,
+  boolean,
 });

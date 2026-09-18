@@ -60,6 +60,7 @@ export class FrameLayout implements FrameLayoutView {
       ...(input.rows !== undefined ? { rows: input.rows } : {}),
       ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
       ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
+      ...(input.entryRulePorts !== undefined ? { entryRulePorts: input.entryRulePorts } : {}),
     });
     this.#indexOpenRows(open);
     this.#plan = stampIndex(applyCollapse(open, new Set(input.collapsed ?? [])));

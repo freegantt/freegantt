@@ -92,9 +92,23 @@ function writesSegmentEnvelope(entry: Entry, field: Field): boolean {
 
 /** Issue #137 F12: with no `parseValue`, only `type: 'text'` reads and writes the raw string. A
  *  Field with no `type` at all reads and writes it too — a plain `props`-addressed Field like the
- *  harness's `team`. Any other named `type` refuses to open rather than guess a parse. */
+ *  harness's `team`. `type: 'boolean'` (Q31) is the other named exception — it needs no
+ *  `parseValue`, because its editor reads `.checked` and never `.value` (`isCheckboxField` below).
+ *  Any other named `type` refuses to open rather than guess a parse. */
 function canOpenGeneric(field: Field): boolean {
-  return field.parseValue !== undefined || field.type === undefined || field.type === 'text';
+  return (
+    field.parseValue !== undefined ||
+    field.type === undefined ||
+    field.type === 'text' ||
+    field.type === 'boolean'
+  );
+}
+
+/** S5.8+, Q31: a `boolean` Field's generic editor is a checkbox, keyed off `inputType` — the same
+ *  attribute that already decides the native `<input>` shape (`Field.inputType`). A checkbox reads
+ *  and writes `.checked`; every other generic editor reads and writes `.value`. */
+function isCheckboxField(field: Field): boolean {
+  return field.inputType === 'checkbox';
 }
 
 /** The four classes this plugin writes, and `view/styles.ts` styles. The session dresses the
@@ -711,13 +725,18 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
 
       function openGeneric(pending: PendingOpen, entry: Entry, field: Field, cell: HTMLElement): void {
         const fieldValue = entry.read(field.key);
+        const checkbox = isCheckboxField(field);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
-        input.value = seedText(field, fieldValue, cell);
+        // Q31: a checkbox is a `.checked` control, not a `.value` one. Seeding and reading it
+        // through `seedText`/`.value` would write the string `'on'` back as the field's value.
+        if (checkbox) input.checked = fieldValue === true;
+        else input.value = seedText(field, fieldValue, cell);
 
         pending.mount({
           element: input,
           read: (): CellEditorValue => {
+            if (checkbox) return { ok: true, value: input.checked };
             if (field.parseValue !== undefined) {
               const value = field.parseValue(input.value, { timeZone: ctx.dataset.timeZone }, entry);
               return value === undefined ? { ok: false, text: input.value } : { ok: true, value };

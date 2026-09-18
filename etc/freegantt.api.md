@@ -80,7 +80,7 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'unknown-row-source-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
 
 // @public
 export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
@@ -870,7 +870,7 @@ export type Field<TValue = unknown> = {
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
-    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
     column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
 } | {
     key: FieldKey;
@@ -941,14 +941,14 @@ export interface FieldType<TValue = unknown> {
     // (undocumented)
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
     // (undocumented)
-    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url';
+    inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
     // (undocumented)
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
     rollUp?: AggregatorName;
 }
 
 // @public (undocumented)
-export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | (string & {});
+export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | (string & {});
 
 // @public (undocumented)
 export interface FieldUpdated {
