@@ -25,6 +25,7 @@ import type {
   DataPlugin,
   EditExtender,
   Entry,
+  EntryInput,
   ErrorReport,
   ChromePlugin,
   GridColumnInput,
@@ -3903,7 +3904,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   describe('the five acceptance boxes C1–C6 left uncovered (#421 C7, 959f8e6)', () => {
     /** `req-1` claims `d1`/`d2` while `showDaysOnRow` reads `true` — the spike's own example
      *  (`plans/segment-is-a-bar/README.md` "The rule, in one line"). */
-    function crewRoster() {
+    function crewRoster(): EntryInput<{ showDaysOnRow: boolean; hours: number }>[] {
       return [
         { id: 'req-1', name: 'Framing crew', props: { showDaysOnRow: true } },
         {
@@ -3958,7 +3959,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       gantt.selectedEntryIds = [entryId('d1')];
 
       const changes: ChangeSet[] = [];
-      dataset.on('change', ({ changeSet }) => changes.push(changeSet));
+      dataset.on('change', ({ changeSet }) => {
+        changes.push(changeSet);
+      });
 
       dataset.entries.update('req-1', { showDaysOnRow: false });
       await paint();
@@ -4089,7 +4092,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       gantt.selectedEntryIds = [entryId('d1')];
 
       const changes: ChangeSet[] = [];
-      dataset.on('change', ({ changeSet }) => changes.push(changeSet));
+      dataset.on('change', ({ changeSet }) => {
+        changes.push(changeSet);
+      });
 
       dataset.entries.update('d1', { parentId: 'req-2' });
       await paint();
