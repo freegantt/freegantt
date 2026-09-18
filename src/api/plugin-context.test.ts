@@ -28,8 +28,7 @@ describe('PluginContextParts is the plugin surface, with both type arguments bou
           id: 'demo.countSelection',
           label: 'Count selection',
           run: (commandCtx) => {
-            selectionCount =
-              commandCtx.gantt.selectedSegmentIds.length + commandCtx.dataset.entries.all.length;
+            selectionCount = commandCtx.gantt.selectedEntryIds.length + commandCtx.dataset.entries.all.length;
           },
         });
         parts.interaction.registerKeybinding({
