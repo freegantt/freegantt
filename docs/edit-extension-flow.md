@@ -43,12 +43,15 @@ never states `proposedKeys`, and never computes an envelope.
 
 - Two plugins on one Entry — `mergeEntryEdits(next(request), mine(request))`, never a `Map` spread or
   an object spread. A spread drops the earlier plugin's write outright (#197, #238).
-- A whole-Entry move — `moveEntryTo(entry, start)`. An envelope-only write against
-  an Entry that draws several Segments is refused (`SegmentsOutOfSyncError`, D-S5-44), because
-  `start`/`end` alone name no Segment to move. `moveEntryTo` returns every Segment translated rigidly,
-  each keeping its own `SegmentId`, and it names `segments` and nothing else — core derives the
-  envelope (D-S5-50, #239). Stating the envelope here used to overwrite an earlier plugin's `end` and
-  commit that write away with no error.
+- A whole-Entry move — `moveEntryTo(entry, start)`. It returns `{ start, end }`: the Entry's own span
+  translated rigidly, so the move keeps the duration and states both edges together. Stating the
+  envelope by hand used to overwrite an earlier plugin's `end` and commit that write away with no
+  error, which is why the helper exists.
+  A row whose children draw on it (`childrenAsSegments`) needs no special case here: each child is an
+  ordinary Entry with its own dates, so a cascade moves the children and the parent's own `start`/`end`
+  roll up from them (ADR 0013). A direct write to a rolling-up parent's own dates is refused
+  (`DerivedFieldNotWritableError`) — and a cascade that proposes one is not refused but **overwritten
+  by the Rollup and reported once** as `derived-values-dropped` (Q39; `plans/01` §535).
 
 **A cascade onto an Entry the same transaction adds.** This case has no base Entry in the committed
 store, so `diffEdit` cannot produce an update row for it. The cascade still lands: it folds into the

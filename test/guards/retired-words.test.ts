@@ -100,6 +100,11 @@ function findHits(pattern: RegExp, isExempt: (line: string) => boolean): Hit[] {
   return hits;
 }
 
+/** A line that *documents* a retirement necessarily names the retired spelling once. Those lines are
+ *  the point of the record, not a relapse — a docs table listing what went, a test comment naming the
+ *  tests it replaced. The guard's job is prose that still *instructs* against a deleted symbol. */
+const RETIREMENT_PROSE = /retired|no longer|deleted|\bgone\b|replaces|used to|#421/i;
+
 describe('retired words stay retired', () => {
   it('never reintroduces `host` (D-S1.11-6, #64)', () => {
     const hits = findHits(/\bhosts?\b/i, (line) => /retired/i.test(line) || /localhost/i.test(line));
@@ -122,6 +127,38 @@ describe('retired words stay retired', () => {
   // ADR 0016 deleted the save format. There is no Document, so nothing names its shape.
   it('never reintroduces `DatasetDocument` (ADR 0016)', () => {
     const hits = findHits(/\bDatasetDocument\b/, (line) => /ADR 0\d{3}/.test(line));
+    expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
+  });
+
+  // ADR 0026 retired the `Segment` **type**. The *word* is not retired and is deliberately not guarded:
+  // `CONTEXT.md` keeps a *Segment* entry meaning "a child Entry drawn as one piece of its parent's
+  // row", and the shipped public key is literally `childrenAsSegments`.
+  //
+  // Nor are the retired TypeScript identifiers guarded here — `SegmentId`, `updateSegment`,
+  // `selectedSegmentIds` and the rest. The types behind them are deleted, so `tsc` refuses any real
+  // use of one, which is a harder guarantee than a regex. What `tsc` cannot see is a **DOM attribute
+  // string**: `data-segment-id` is just text, a consumer copies it into a CSS selector or an e2e
+  // locator, and nothing fails until the selector silently matches nothing. That is this guard's job,
+  // and it is the same job the `data-item-id` line below does.
+  //
+  // Prose that *documents* the retirement names the old spelling once, by necessity — a docs table of
+  // what went, a test comment naming the tests it replaced. Those are the record working, not a
+  // relapse, which is the second reason this guard stays narrow: a line-based pattern cannot tell a
+  // table row that says a symbol "goes" from one that tells a reader to call it.
+  it('never reintroduces the `data-segment-id` DOM stamp (ADR 0026, #421)', () => {
+    const hits = findHits(/\bdata-segment-id\b/, (line) => RETIREMENT_PROSE.test(line));
+    expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
+  });
+
+  // `Item` retires into `Bar` (ADR 0026): the word named the drawn unit under a name none of its own
+  // consumers used, and it doubled for two unrelated concepts. `MenuItem` and `CellItem` keep the
+  // generic word because it is generic in its place, so the pattern matches the bare word and the
+  // id spellings only — a menu still has items.
+  it('never reintroduces `Item` as the drawn unit (ADR 0026, #421)', () => {
+    const hits = findHits(
+      /\bItemId\b|\bitemId\b|\bItemProducer\b|\bVariantItems\b|\bproduceItemsForRow\b|\bwholeEntryItem\b|\bfixedWidthItem\b|\bdata-item-id\b/,
+      (line) => /ADR 0\d{3}/.test(line) || /retired/i.test(line),
+    );
     expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
   });
 });
