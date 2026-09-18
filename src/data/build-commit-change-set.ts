@@ -48,6 +48,8 @@ export interface CommitChangeSetEntryStore {
   committedById(): ReadonlyMap<EntryId, StoredEntry>;
   /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
   committedParents(): ParentIndex;
+  /** The committed rows' children, by parent id — see `EntryStore.committedChildIds`. */
+  committedChildIds(): ReadonlyMap<EntryId, readonly EntryId[]>;
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
   pendingEdits(): ProposedEdits;
@@ -329,7 +331,11 @@ export function buildCommitChangeSet(
     data.fields,
     data.fieldAccess,
     () => data.mintSegmentId(),
-    { committedParents: data.entries.committedParents(), source: data.hierarchySource },
+    {
+      committedParents: data.entries.committedParents(),
+      committedChildIds: data.entries.committedChildIds(),
+      source: data.hierarchySource,
+    },
   );
 
   // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the

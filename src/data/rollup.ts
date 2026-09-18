@@ -17,12 +17,13 @@ import { AggregatorFailedError, spansTime } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
 import { fitSegmentsToEnvelope } from './entry-reader.js';
 import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
-import { checkHierarchyAnswers, parentIdFrom } from './hierarchy-source.js';
+import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
 import type { ParentIndex } from './hierarchy-source.js';
 import {
   createRollUpContext,
   editProposesField,
   entryAfterEdit,
+  proposedKeysOf,
   readField,
   readingChildrenFrom,
   readingHypotheticalRows,
@@ -48,6 +49,10 @@ export interface RollUpEditSets {
  *  can hold. */
 export interface RollUpTree {
   readonly committedParents: ParentIndex;
+  /** `EntryStore.committedChildIds()` — the committed tree's own child index, read back rather than
+   *  re-derived when a commit proves it cannot have moved a row (`committedTreeStillAnswers` below,
+   *  #421 C4). */
+  readonly committedChildIds: ReadonlyMap<EntryId, readonly EntryId[]>;
   readonly source: HierarchySource;
 }
 
@@ -261,6 +266,25 @@ function parentIdIn(parentById: ReadonlyMap<EntryId, EntryId>): HierarchySource 
   return (entry) => parentById.get(entry.id);
 }
 
+/** True when this commit's `added`, `removed` and `merged` edits leave every row's place in the
+ *  tree untouched: no Entry is added or removed, and no edit proposes `parentId`.
+ *
+ *  Only asked under core's own hierarchy source (`storedParentSource` reads `parentId` and nothing
+ *  else). A plugin's source is an arbitrary function that may read any field, so no commit can be
+ *  proven not to move a row under it — that source keeps today's re-check on every commit. Whether a
+ *  source could declare the keys it reads is #426, out of scope here. */
+function commitMovesNoRow(
+  added: readonly StoredEntry[],
+  removed: readonly StoredEntry[],
+  merged: ProposedEdits,
+): boolean {
+  if (added.length > 0 || removed.length > 0) return false;
+  for (const edit of merged.values()) {
+    if (proposedKeysOf(edit).has('parentId')) return false;
+  }
+  return true;
+}
+
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
@@ -299,13 +323,25 @@ export function rollUpFields(
   // second time to reach the same answer. Nothing is reported from either half: the effective tree
   // is one no commit has landed yet, and the store raises the committed one's refusals itself.
   const parentOfPrior = parentIdIn(tree.committedParents);
+  // The store's committed index already holds the right answer when this commit cannot have moved a
+  // row (#421 C4): `entries` and `committed` then share the same structure, so re-deriving either
+  // half below would only recompute what `tree` already carries.
+  const committedTreeStillAnswers =
+    pending !== undefined && tree.source === storedParentSource && commitMovesNoRow(added, removed, merged);
   const parentOfEffective =
-    pending === undefined ? parentOfPrior : parentIdIn(checkHierarchyAnswers(entries, tree.source).parents);
+    pending === undefined || committedTreeStillAnswers
+      ? parentOfPrior
+      : parentIdIn(checkHierarchyAnswers(entries, tree.source).parents);
   const touched =
     pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged, parentOfPrior);
 
-  const byParent = childIdsByParent(entries, parentOfEffective);
-  const priorByParent = pending === undefined ? byParent : childIdsByParent(committed, parentOfPrior);
+  const byParent = committedTreeStillAnswers
+    ? tree.committedChildIds
+    : childIdsByParent(entries, parentOfEffective);
+  const priorByParent =
+    pending === undefined || committedTreeStillAnswers
+      ? byParent
+      : childIdsByParent(committed, parentOfPrior);
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched, parentOfEffective);
   const computed = new Map<EntryId, StoredEntry>();
   // A `compute` Field inside this pass asks `ctx.children()` and must see the pass's own effective

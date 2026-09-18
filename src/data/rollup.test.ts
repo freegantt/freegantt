@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
+import * as entryTree from './entry-tree.js';
+import * as hierarchySource from './hierarchy-source.js';
 import { AggregatorFailedError, entryId } from '../model/index.js';
 import type { ChangeSet, EntryEdits, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
@@ -491,5 +493,134 @@ describe('the Rollup reads a compute Field fresh, never the pre-commit memo (#30
 
     expect(state.entries.get('c')!.read('nameLen')).toBe(LONGER_NAME.length);
     expect(state.entries.get('p')!.read('tally')).toBe(LONGER_NAME.length);
+  });
+});
+
+// #421 C4. The store's own committed index (`committedParents`/`committedChildIds`) already answers
+// for a commit that cannot have moved a row — no add, no remove, no edit naming `parentId`. Before
+// this build, every commit re-derived that answer with `checkHierarchyAnswers` and rebuilt the child
+// index twice with `childIdsByParent`, both costs scaling with dataset size
+// (SPIKE-FINDINGS.md: 8.6 ms → 4.9 ms for one write over a 10,200-row fixture).
+describe('the Rollup fast path skips re-deriving the committed tree (#421 C4)', () => {
+  /** How many times the two expensive re-derivations ran while `run` was committing. Spies on the
+   *  named exports `rollup.ts` calls directly — the same technique
+   *  `entry-store.mutation.test.ts`'s `overlayCallsForMultiSegmentDelete` uses for `entryAfterEdit`.
+   *
+   *  `checks` carries one call every commit pays regardless of the fast path: `EntryStore`'s own
+   *  `committedParents()` memo (`entry-store.ts`'s `#hierarchy`) re-derives once per revision, and
+   *  the commit path reads it before `rollUpFields` runs. `rollup.ts`'s own call is the one the fast
+   *  path removes, so a re-checked commit's `checks` is one more than a fast-pathed one's, never two
+   *  more. `childIndexBuilds` carries no such baseline — `childIdsByParent` is `rollup.ts`'s alone. */
+  function countTreeRederivations(run: () => void): { checks: number; childIndexBuilds: number } {
+    const checkSpy = vi.spyOn(hierarchySource, 'checkHierarchyAnswers');
+    const childIdsSpy = vi.spyOn(entryTree, 'childIdsByParent');
+    checkSpy.mockClear();
+    childIdsSpy.mockClear();
+    run();
+    const counts = { checks: checkSpy.mock.calls.length, childIndexBuilds: childIdsSpy.mock.calls.length };
+    checkSpy.mockRestore();
+    childIdsSpy.mockRestore();
+    return counts;
+  }
+
+  it('a write that touches no parentId and adds/removes nothing takes the fast path', () => {
+    const state = treeDataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p', props: { cost: 10 } },
+      { id: 'b', parentId: 'p', props: { cost: 5 } },
+    ]);
+
+    const { checks, childIndexBuilds } = countTreeRederivations(() => {
+      state.entries.update('a', { cost: 20 });
+    });
+
+    expect(checks).toBe(1); // the store's own baseline call, and nothing from rollup.ts
+    expect(childIndexBuilds).toBe(0);
+    expect(costOf(state, 'p')).toBe(25);
+  });
+
+  it('a reparenting write still re-derives the tree, and rolls up the same as before', () => {
+    const state = treeDataset([{ id: 'a' }, { id: 'b' }, { id: 'c', parentId: 'a', props: { cost: 10 } }]);
+
+    const { checks, childIndexBuilds } = countTreeRederivations(() => {
+      state.entries.update('c', { parentId: 'b' });
+    });
+
+    expect(checks).toBe(2); // the baseline call, plus rollup.ts's own re-check
+    expect(childIndexBuilds).toBe(2);
+    expect(costOf(state, 'a')).toBeUndefined();
+    expect(costOf(state, 'b')).toBe(10);
+  });
+
+  it('adding an Entry still re-derives the tree, even with no parentId written on an existing row', () => {
+    const state = treeDataset([{ id: 'p' }, { id: 'a', parentId: 'p', props: { cost: 10 } }]);
+
+    const { checks, childIndexBuilds } = countTreeRederivations(() => {
+      state.entries.add({ id: 'b', parentId: 'p', name: 'b', props: { cost: 5 } });
+    });
+
+    expect(checks).toBe(2); // the baseline call, plus rollup.ts's own re-check
+    expect(childIndexBuilds).toBe(2);
+    expect(costOf(state, 'p')).toBe(15);
+  });
+
+  it('removing an Entry still re-derives the tree', () => {
+    const state = treeDataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p', props: { cost: 10 } },
+      { id: 'b', parentId: 'p', props: { cost: 5 } },
+    ]);
+
+    const { checks, childIndexBuilds } = countTreeRederivations(() => {
+      state.entries.remove('b');
+    });
+
+    expect(checks).toBe(2); // the baseline call, plus rollup.ts's own re-check
+    expect(childIndexBuilds).toBe(2);
+    expect(costOf(state, 'p')).toBe(10);
+  });
+
+  it("a consumer's own hierarchy source re-checks on every commit — the fast path is core's alone", () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p', name: 'p' },
+        { id: 'c', name: 'c', props: { phaseId: 'p', cost: 10 } },
+      ],
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }, { key: 'phaseId' }],
+    });
+    // The tree lives in `props.phaseId`, never `parentId` — the shape ADR 0020's own example
+    // takes. This write names no `parentId`, so it would take the fast path under core's own
+    // source; a plugin source may read any field, so it must not.
+    state.setHierarchySource(() => (entry) => (entry.props as { phaseId?: string }).phaseId);
+
+    const { checks, childIndexBuilds } = countTreeRederivations(() => {
+      state.entries.update('c', { cost: 20 });
+    });
+
+    expect(checks).toBe(2); // the baseline call, plus the plugin source's own re-check — never the fast path
+    expect(childIndexBuilds).toBe(2);
+    expect(costOf(state, 'p')).toBe(20);
+  });
+
+  it('the fast path stays free of both re-derivations as the tree grows (the spike’s own fixture shape: 200 parents × 50 children)', () => {
+    const parents = Array.from({ length: 200 }, (_, p) => ({ id: `p${p}` }));
+    const children = parents.flatMap((parent) =>
+      Array.from({ length: 50 }, (_, c) => ({
+        id: `${parent.id}-c${c}`,
+        parentId: parent.id,
+        props: { cost: 1 },
+      })),
+    );
+    const large = treeDataset([...parents, ...children]);
+
+    const { checks, childIndexBuilds } = countTreeRederivations(() => {
+      large.entries.update('p0-c0', { cost: 2 });
+    });
+
+    expect(checks).toBe(1); // the store's own baseline call, and nothing from rollup.ts, however large the tree
+    expect(childIndexBuilds).toBe(0);
+    expect(costOf(large, 'p0')).toBe(51);
   });
 });
