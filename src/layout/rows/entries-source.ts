@@ -103,12 +103,24 @@ export function resolveEntriesSource(
   }
 
   if (source.tree !== true) {
+    // The flat branch's own skip set: every descendant of a claimed parent, not only its direct
+    // children — a grandchild loses its row the same way tree mode drops it off the walk stack
+    // below (README's `J-plan-I`). Built off `childRowsOf`, so no second walk of `entries`.
+    const excludedRows = new Set<EntryId>();
+    for (const claimedParentId of claimedChildrenOf.keys()) {
+      const stack = [...(childRowsOf.get(claimedParentId) ?? [])];
+      while (stack.length > 0) {
+        const descendant = stack.pop()!;
+        if (excludedRows.has(descendant.id)) continue;
+        excludedRows.add(descendant.id);
+        const grandchildren = childRowsOf.get(descendant.id);
+        if (grandchildren !== undefined) stack.push(...grandchildren);
+      }
+    }
+
     const rows: UnindexedRow[] = [];
     for (const entry of entries) {
-      // The flat branch's own skip: is *my* parent claimed? Off the structure `entryTreeIndex`
-      // already built, so no second walk.
-      const parentId = entry.parent()?.id;
-      if (parentId !== undefined && claimedChildrenOf.has(parentId)) continue;
+      if (excludedRows.has(entry.id)) continue;
       const claimedChildren = claimedChildrenOf.get(entry.id);
       rows.push(
         entryRow(entry, {
