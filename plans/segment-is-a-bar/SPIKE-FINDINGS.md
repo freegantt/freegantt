@@ -317,6 +317,38 @@ These left the coordinator's handoff when that file was deleted on 2026-09-18. E
 
 ---
 
+## The acceptance boxes no build has covered yet — read this before C7
+
+**Checked 2026-09-18 against #421's own Acceptance list, box by box.** C1–C6 cover most of the 21.
+These five are **not** covered by any test that exists, and C7's gate is "every acceptance box in
+#421 ticked". C7 must build them or say plainly why not.
+
+1. **`dataset.entries.update('req-1', { showDaysOnRow: false })` opens one row into sub-rows, in one
+   undo step, and undoes back.** This is the **live per-Entry switch through a data write**, and it is
+   the spike's **Q10, which S4 never reached**. C1 pinned the live switch through `gantt.rowSource`,
+   which is a different door: this one writes the Field the rule matches on. It needs the re-fold and
+   the undo round trip, and Selection must survive both.
+2. **`rollUp: 'sum'` on `hours` totals the day bars onto the claimed row.** The spike declared the
+   unmodified Rollup does this, and C4 made it cheaper, but no test asserts the total on a *claimed*
+   row.
+3. **A write to a claimed row's `start`/`end` throws `DerivedFieldNotWritableError`, and a row drag
+   moves every bar.** The throw is ADR 0013's existing behaviour; what is unproven is that a claimed
+   row is an ordinary rolling-up parent to the write door. The row drag is the second half and is the
+   riskier one.
+4. **`dataset.entries.update('d1', { parentId: 'req-2' })` moves a bar to another row, keeping its id,
+   its data and its place in the Selection, in one undo step.** Spike **Q13** found that no *gesture*
+   reaches this — `interaction/` has no row-target resolution at commit — but the box asks only for
+   the **data** door, which is an ordinary field write. Prove the data door; do not build the gesture,
+   which #421 does not ask for.
+5. **A test pins that a bar's printed value and its row total read the same at day, week and year
+   zoom.** C5 pinned labels across zoom; the **row total** across zoom is not pinned.
+
+Box 211 is already satisfied and recorded: C3 read all nine `entryIds[0]` sites once each and wrote a
+verdict per site into `999f599`'s commit message. Note the box's own line numbers are stale — C3
+re-derived them, which is the right move.
+
+---
+
 ## How to re-run
 
 ```
