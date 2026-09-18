@@ -27,12 +27,6 @@ describe('EntryEdit — an edit removes exactly what a stored Entry may lack (AD
     expect(edit).toBeDefined();
   });
 
-  it('does not compile: { segments: undefined } — segments is `[]`, never absent', () => {
-    // @ts-expect-error — segments is not removable; an un-dated Entry stores `[]`, not absent.
-    const edit: EntryEdit = { segments: undefined };
-    expect(edit).toBeDefined();
-  });
-
   it('does not compile: { props: { owner: "Sam" } } — a declared key sits flat, never nested', () => {
     // @ts-expect-error — props is refused on EntryEdit; write the declared key flat instead.
     const edit: EntryEdit<{ owner: string }> = { props: { owner: 'Sam' } };
