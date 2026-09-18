@@ -1818,11 +1818,11 @@ export class GanttShell {
 
   /** Where an unknown bar-label Field is reported (#421 F2). `barLabels.field` — the Gantt's own,
    *  or an `EntryVariant`'s — names a key no Field declares, once merged (`mergeBarLabels`). Both
-   *  are live, and `resolveBarLabelText` runs inside `render()`'s own rAF callback, where a throw
+   *  are live. `resolveBarLabelText` runs inside `render()`'s own rAF callback. A throw there
    *  reaches no consumer, so it reports and carries on; the bar prints no label.
    *
    *  One report per field key, not one per bar per frame: this Set holds across every frame this
-   *  Gantt renders, the same shape `#reportUnknownRowSourceField` already holds for its own key. */
+   *  Gantt renders. `#reportUnknownRowSourceField` already holds the same shape for its own key. */
   #reportUnknownBarLabelField(): (field: FieldKey) => void {
     const reported = new Set<FieldKey>();
     return (field) => {
