@@ -8,8 +8,6 @@
 export interface ActedOn {
     // (undocumented)
     entryIds: readonly EntryId[];
-    // (undocumented)
-    segmentIds: readonly SegmentId[];
 }
 
 // @public (undocumented)
@@ -51,7 +49,6 @@ export interface Bar {
     // (undocumented)
     id: BarId;
     label?: string;
-    segmentId?: SegmentId;
     // (undocumented)
     start: Instant;
     variant: string;
@@ -77,7 +74,7 @@ export type BarId = string & {
 };
 
 // @public
-export function barId(entry: EntryId, segmentIndex?: number): BarId;
+export function barId(entry: EntryId, partIndex?: number): BarId;
 
 // @public
 export function barIdFromDataset(value: string | undefined): BarId | undefined;
@@ -117,13 +114,13 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
 
 // @public
-export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextSegment' | 'freegantt.selectPreviousSegment' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
+export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'unknown-row-source-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'segmented-entry' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-claimed-twice' | 'unknown-variant-field' | 'unknown-row-source-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'segment-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'duplicate-segment-id' | 'parent-cycle' | 'segments-out-of-sync' | 'empty-segments' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
 
 // @public
 export interface Capabilities {
@@ -590,7 +587,6 @@ export interface DomTarget {
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
-    segmentIds: readonly SegmentId[];
 }
 
 // @public
@@ -630,15 +626,6 @@ export class DuplicateRowIdError extends FreeGanttError {
     readonly rowId: string;
 }
 
-// @public
-export class DuplicateSegmentIdError extends FreeGanttError {
-    constructor(segmentId: SegmentId, operation: string);
-    // (undocumented)
-    readonly operation: string;
-    // (undocumented)
-    readonly segmentId: SegmentId;
-}
-
 // @public (undocumented)
 export interface Duration {
     // (undocumented)
@@ -648,7 +635,7 @@ export interface Duration {
 }
 
 // @public
-export type DurationMeasure = 'span' | 'segments';
+export type DurationMeasure = 'span' | 'children';
 
 // @public
 export type EditExtender = (request: EditRequest) => EntryEdits;
@@ -684,15 +671,6 @@ export interface ElementDescription {
 // @public
 export class EmptyCoversError extends FreeGanttError {
     constructor(operation: string);
-    // (undocumented)
-    readonly operation: string;
-}
-
-// @public
-export class EmptySegmentsError extends FreeGanttError {
-    constructor(entryId: EntryId, operation: string);
-    // (undocumented)
-    readonly entryId: EntryId;
     // (undocumented)
     readonly operation: string;
 }
@@ -736,8 +714,6 @@ export interface Entry<TProps = Record<string, unknown>> {
     // (undocumented)
     parent(): Entry<TProps> | undefined;
     read<K extends FieldKey>(field: K): FieldValue<TProps, K> | undefined;
-    // (undocumented)
-    readonly segments: readonly Segment[];
     readonly start?: Instant | undefined;
     toInput(): EntryInput<TProps>;
 }
@@ -797,7 +773,6 @@ export interface EntryInput<TProps = Record<string, unknown>> {
     name?: string | undefined;
     parentId?: string | undefined;
     props?: Partial<TProps>;
-    segments?: readonly SegmentInput[] | undefined;
     start?: InstantInput | undefined;
 }
 
@@ -830,7 +805,6 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
     add(input: EntryInput<TProps>): Entry<TProps>;
     // (undocumented)
     remove(id: EntryId | string): void;
-    removeSegments(ids: readonly (SegmentId | string)[]): void;
     // (undocumented)
     update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
 }
@@ -839,13 +813,10 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
 export interface EntryStoreView<TProps = Record<string, unknown>> {
     // (undocumented)
     readonly all: readonly Entry<TProps>[];
-    entryIdOfSegment(id: SegmentId | string): EntryId | undefined;
-    entryIdsOfSegments(ids: readonly (SegmentId | string)[]): readonly EntryId[];
     // (undocumented)
     get(id: EntryId | string): Entry<TProps> | undefined;
     // (undocumented)
     has(id: EntryId | string): boolean;
-    segmentIdsOfEntries(ids: readonly (EntryId | string)[]): readonly SegmentId[];
     // (undocumented)
     readonly size: number;
     readonly storedValues: ReadonlyMap<EntryId, StoredEntry<TProps>>;
@@ -1022,9 +993,6 @@ export interface FixedBarBox {
 export function fixedWidthBar(px: number, anchor?: BarAnchor): BarProducer;
 
 // @public
-export function followSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
-
-// @public
 export interface FormatContext extends FieldContext {
     // (undocumented)
     readonly locale: Intl.LocalesArgument;
@@ -1056,8 +1024,6 @@ export interface FrameBar {
     label: string;
     // (undocumented)
     rowId: RowId;
-    segmentId?: SegmentId;
-    segmentIds: readonly SegmentId[];
     span: BarSpanKind;
     variant: string;
     // (undocumented)
@@ -1105,7 +1071,6 @@ export interface FrameRow {
     // (undocumented)
     kind: PlannedRowKind;
     matched?: boolean;
-    segmentIds: readonly SegmentId[];
     // (undocumented)
     top: number;
 }
@@ -1195,13 +1160,12 @@ export class Gantt<TProps = unknown> {
         end: InstantInput;
     });
     get resolvedTheme(): ResolvedTheme;
-    reveal(id: EntryId | SegmentId | string): void;
+    reveal(id: EntryId | string): void;
     get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry<TProps>[];
     get selectedEntryIds(): readonly EntryId[];
-    get selectedSegmentIds(): readonly SegmentId[];
-    set selectedSegmentIds(ids: readonly (SegmentId | string)[]);
+    set selectedEntryIds(ids: readonly (EntryId | string)[]);
     setCapabilityRule<K extends keyof Capabilities>(capability: K, rule: NonNullable<Capabilities[K]>): void;
     showGridColumn(field: FieldKey): void;
     get snap(): SnapSetting;
@@ -1313,7 +1277,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     plugins?: readonly ChromePlugin<TProps>[];
     rowSource?: RowSource;
     scroll?: ScrollAxes;
-    selectedSegmentIds?: readonly (SegmentId | string)[];
+    selectedEntryIds?: readonly (EntryId | string)[];
     snap?: SnapSetting;
     theme?: Theme;
     todayLine?: boolean | InstantInput;
@@ -1341,7 +1305,7 @@ export type GanttScaleOptions = {
 };
 
 // @public
-export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'write-refused';
+export type GestureDroppedReason = 'data-changed' | 'superseded' | 'discarded' | 'entry-gone';
 
 // @public (undocumented)
 export type GridCellRenderer = (ctx: GridCellRendererContext) => ElementDescription | undefined;
@@ -1435,9 +1399,6 @@ export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: Hi
 export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover;
 
 // @public
-export function ignoreSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
-
-// @public
 export class IllegalCoreFieldOverrideError extends FreeGanttError {
     constructor(key: string, illegalKey: string, overridableKeys: readonly string[]);
     // (undocumented)
@@ -1518,13 +1479,11 @@ export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
 
 // @public
 export class InvertedSpanError extends FreeGanttError {
-    constructor(entryId: EntryId, span: TimeSpan, operation: string, segmentId?: SegmentId);
+    constructor(entryId: EntryId, span: TimeSpan, operation: string);
     // (undocumented)
     readonly entryId: EntryId;
     // (undocumented)
     readonly operation: string;
-    // (undocumented)
-    readonly segmentId?: SegmentId;
     // (undocumented)
     readonly span: TimeSpan;
 }
@@ -1667,6 +1626,9 @@ export class ParentCycleError extends FreeGanttError {
     // (undocumented)
     readonly entryId: EntryId;
 }
+
+// @public
+export function partIndexOfBar(id: BarId): number;
 
 // @public
 export interface PixelSpan {
@@ -2079,51 +2041,11 @@ export interface ScrollAxisState {
 }
 
 // @public
-export interface Segment extends TimeSpan {
-    // (undocumented)
-    id: SegmentId;
-}
-
-// @public
-export type SegmentId = string & {
-    readonly __brand: 'SegmentId';
-};
-
-// @public
-export function segmentIndexOfBar(id: BarId): number;
-
-// @public
-export interface SegmentInput extends TimeSpanInput {
-    // (undocumented)
-    id?: string;
-}
-
-// @public
-export class SegmentNotFoundError extends FreeGanttError {
-    constructor(segmentId: SegmentId, operation: string);
-    // (undocumented)
-    readonly operation: string;
-    // (undocumented)
-    readonly segmentId: SegmentId;
-}
-
-// @public
-export class SegmentsOutOfSyncError extends FreeGanttError {
-    constructor(entryId: EntryId, reason: 'ambiguous' | 'conflicting', operation: string);
-    // (undocumented)
-    readonly entryId: EntryId;
-    // (undocumented)
-    readonly operation: string;
-    // (undocumented)
-    readonly reason: 'ambiguous' | 'conflicting';
-}
-
-// @public
 export interface SelectionChange {
     // (undocumented)
-    readonly from: readonly SegmentId[];
+    readonly from: readonly EntryId[];
     // (undocumented)
-    readonly to: readonly SegmentId[];
+    readonly to: readonly EntryId[];
 }
 
 // @public
@@ -2164,7 +2086,6 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
     name?: string;
     parentId?: EntryId;
     props: Readonly<Partial<TProps>>;
-    segments: readonly Segment[];
     start?: Instant;
 }
 
@@ -2320,6 +2241,9 @@ export interface TooltipsOptions {
     delayMs?: number;
     placement?: PopupPlacement;
 }
+
+// @public
+export function unclaimedSpan(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
 
 // @public
 export class UnknownAggregatorError extends FreeGanttError {
