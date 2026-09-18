@@ -157,6 +157,7 @@ where they do something beyond re-export.
 | `view/frame-scheduler.ts` | `FrameScheduler` | Coalesces render requests into at most one `requestAnimationFrame` per tick — the throttle between "a change happened" and "a frame drew". |
 | `view/dataset-change-subscription.ts` | `subscribeToDatasetChanges()` | Bridges the dataset's `change` event into the shell's render pipeline. |
 | `view/grid-columns.ts` | `resolveColumns(), resolveFieldCompares(), resolveGanttFields()` | Bridges the consumer's `gridColumns` input and field declarations to layout's `ResolvedColumn[]` model. |
+| `view/bar-labels.ts` | `resolveBarLabelText(), resolveBarLabelPolicy()` | Bridges the Gantt's own `barLabels` and a row's own variant `barLabels` to a Field — the bar's own `resolveColumns` (#421 C5). |
 | `view/capability.ts` | `resolveCapabilities()` | Merges the consumer's `Interactions` overrides with the per-kind default table; returns `Capabilities` with a `can(capability, entry)` method (invariant I14). |
 | `view/affordance-projection.ts` | `projectAffordances()` | Pure projection of hovered/movable/resizable paint tokens from hover, selection, and capability resolution. |
 | `view/entry-gesture-context.ts` | `EntryGestureContext, EntryGestureSession, EntryHit` | The type-seam between `view/` (which implements it) and `interaction/` (which drives it). |

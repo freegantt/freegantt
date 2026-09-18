@@ -122,7 +122,11 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
+      // A raw `computeFrame` call binds no `view/` and so resolves no Field on its own (#421 C5) —
+      // this test's own resolver stands in for the Gantt's default `barLabels`, the same plain
+      // identity `view/bar-labels.ts` produces when nothing overrides it.
+      barLabelFor: (entry) => entry.name ?? '',
     });
     backend.sync(frame);
 
@@ -270,7 +274,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
-        columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+        columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
       }),
     );
 
@@ -324,7 +328,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
         { field: 'start', header: 'Start', align: 'start', width: 80, format: () => 'Sep 1' },
         { field: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
         { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
@@ -388,7 +392,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
         { field: 'duration', header: 'Duration', align: 'end', flex: 2, format: () => '2 d' },
       ],
     });
@@ -437,7 +441,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
         { field: 'duration', header: 'Duration', align: 'end', format: () => '2 d' },
       ],
     });
@@ -2019,7 +2023,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       rows: { source: 'entries', tree: true },
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
     });
     backend.sync(frame);
 
@@ -2094,6 +2098,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
+        barLabelFor: (entry) => entry.name ?? '',
       }),
     );
 
@@ -2305,7 +2310,15 @@ describe('render/dom backend', () => {
       };
     }
 
-    function frameFor(barX: number, barWidth: number, contentWidthPx: number) {
+    // Every J1 test wants "Discovery" painted — the plain identity resolver a raw `computeFrame`
+    // call needs to stand in for `view/`'s default `barLabels` (#421 C5). One test overrides it
+    // with `() => ''` to prove the "no label" case, so the caller may still pass its own.
+    function frameFor(
+      barX: number,
+      barWidth: number,
+      contentWidthPx: number,
+      barLabelFor: (entry: Entry) => string = (entry) => entry.name ?? '',
+    ) {
       return computeFrame({
         entries: sampleEntries.slice(0, 1),
         scale: scaleFor(barX, barWidth, contentWidthPx),
@@ -2315,6 +2328,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
+        barLabelFor,
       });
     }
 
@@ -2328,6 +2342,26 @@ describe('render/dom backend', () => {
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       expect(bar.dataset['label']).toBe('inside');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('draws a bar with no name and prints nothing — not a crash, not "undefined" (#421 C5)', () => {
+      withStubRuler();
+      const backend = paintingBackend([sampleEntries[0]!]);
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000, () => ''));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar).toBeTruthy();
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('');
+      expect(bar.textContent).not.toContain('undefined');
 
       backend.destroy();
       grid.remove();
@@ -2374,6 +2408,7 @@ describe('render/dom backend', () => {
         revision: 0,
         datasetRevision: 0,
         variants: markerRegistry,
+        barLabelFor: (entry) => entry.name ?? '',
       });
       backend.sync(frame);
 
@@ -2472,7 +2507,7 @@ describe('render/dom backend', () => {
         }),
         resolveGridCellRenderer: () => undefined,
         resolveHeaderRenderer: () => undefined,
-        readBarLabels: () => 'none',
+        resolveBarLabelPolicy: () => 'none',
       });
       const { grid, timeline } = mountSurfaces();
       backend.mount({ grid, timeline });
@@ -2493,7 +2528,7 @@ describe('render/dom backend', () => {
         resolveBarRenderer: () => undefined,
         resolveGridCellRenderer: () => undefined,
         resolveHeaderRenderer: () => undefined,
-        readBarLabels: () => 'none',
+        resolveBarLabelPolicy: () => 'none',
       });
       const { grid, timeline } = mountSurfaces();
       backend.mount({ grid, timeline });
@@ -2567,7 +2602,7 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
     });
     backend.sync(frame);
 
@@ -2605,7 +2640,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
         { field: 'start', header: 'Start', align: 'start', format: (e) => String(e.start) },
       ],
     });
@@ -2643,7 +2678,7 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
-      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name }],
+      columns: [{ field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' }],
     });
     backend.sync(frame);
 
@@ -2757,7 +2792,7 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
       columns: [
-        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name },
+        { field: 'name', header: 'Name', align: 'start', format: (e) => e.name ?? '' },
         { field: 'cost', header: 'Cost', align: 'end', format: () => '500' },
       ],
     });

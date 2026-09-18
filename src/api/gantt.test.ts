@@ -1847,6 +1847,21 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     gantt.destroy();
   });
 
+  it("the Name cell is empty for an Entry with no name — not 'undefined' (#421 C5)", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: sampleEntries.map((entry, i) => (i === 0 ? { ...entry.toInput(), name: undefined } : entry)),
+    });
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name'] });
+
+    const firstRow = container.querySelector<HTMLElement>('.fg-row')!;
+    const nameCell = firstRow.querySelector('.fg-row-label, .fg-row-cell')!;
+    expect(nameCell.textContent).toBe('');
+
+    gantt.destroy();
+  });
+
   it('a per-column columnRenderer beats a plugin-registered cell renderer (D-S5-11/D-S5-17 combined order, s5.4-renderers.md)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
@@ -2642,6 +2657,47 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     gantt.plugins = [];
     await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(container.querySelector<HTMLElement>('.fg-bar')!.textContent).toBe(sampleEntries[0]!.name);
+
+    gantt.destroy();
+  });
+
+  it("ctx.variants.add's items with no label get the Gantt's barLabels answer (Q36, #421 C5)", async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: [sampleEntries[0]!.toInput()],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.unlabelledVariant',
+          view(ctx) {
+            // No `label` here — the producer opts back into the Gantt's own Field resolution
+            // instead of insisting on its own text (Q36: absent means "the Gantt decides").
+            ctx.variants.add({
+              name: 'unlabelled',
+              when: (entry) => entry.id === sampleEntries[0]!.id,
+              items: (entry) => [
+                {
+                  id: itemId(entry.id, 0),
+                  entryId: entry.id,
+                  variant: 'unlabelled',
+                  start: entry.start!,
+                  end: entry.end!,
+                },
+              ],
+            });
+            return () => {};
+          },
+        },
+      ],
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    expect(bar.textContent).toBe(sampleEntries[0]!.name);
 
     gantt.destroy();
   });
@@ -3637,7 +3693,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
                 id: itemId(entry.id, 99),
                 entryId: entry.id,
                 variant,
-                label: entry.name,
+                label: entry.name ?? '',
                 start: entry.start!,
                 end: entry.end!,
               },
@@ -5336,7 +5392,7 @@ describe('Gantt rows and collapse (S4.6)', () => {
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const itemId = bar.dataset['itemId'];
 
-    gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.name };
+    gantt.rowSource = { source: 'group', groupBy: (entry: Entry) => entry.name ?? '' };
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(container.querySelector(`[data-item-id="${itemId}"]`)).toBe(bar);

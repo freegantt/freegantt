@@ -1044,7 +1044,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
                   id: itemId(entry.id),
                   entryId: entry.id,
                   variant,
-                  label: entry.name,
+                  label: entry.name ?? '',
                   start: drawn.start,
                   end: drawn.end,
                   segmentId: drawn.id,

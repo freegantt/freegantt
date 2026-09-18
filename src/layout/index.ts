@@ -122,9 +122,12 @@ export type {
   RendererFor,
   ResolvedRenderer,
   BarLabels,
+  BarLabelPolicy,
+  BarLabelSpec,
   BarLabelPlacement,
   ResolvedBarLabel,
 } from './renderer.js';
+export { mergeBarLabels } from './renderer.js';
 export { TimeScaleModel } from './viewport/time-scale-model.js';
 export type {
   TimeScaleModelOptions,

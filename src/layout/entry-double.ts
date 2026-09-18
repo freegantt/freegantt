@@ -207,7 +207,7 @@ export function entryValuesOf(base: Entry, overrides: Partial<EntryDoubleValues>
   const above = base.parent();
   return {
     id: String(base.id),
-    name: base.name,
+    ...(base.name !== undefined ? { name: base.name } : {}),
     ...(base.start !== undefined ? { start: base.start } : {}),
     ...(base.end !== undefined ? { end: base.end } : {}),
     ...(above !== undefined ? { parentId: String(above.id) } : {}),

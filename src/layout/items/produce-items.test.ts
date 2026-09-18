@@ -12,11 +12,12 @@ import { createVariantRegistry } from './variants.js';
 describe('wholeEntryItem (review P3)', () => {
   it('covers the entry span, stamps the variant it is told, and owns the Item id convention', () => {
     const t1 = spanEntry('t1', { name: 'Load test' });
+    // No `label` (#421 C5, Q36): the built-in producer leaves it absent, so `placeFrame`'s bound
+    // `barLabelFor` resolves the Entry's name through its Field — this Item never restates it.
     expect(wholeEntryItem(t1, 'buffer')).toEqual({
       id: itemId(t1.id, 0),
       entryId: t1.id,
       variant: 'buffer',
-      label: 'Load test',
       start: t1.start,
       end: t1.end,
     });

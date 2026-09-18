@@ -66,8 +66,8 @@ class LiveEntry implements Entry {
     return current ?? this.#last;
   }
 
-  get name(): string {
-    return this.#stored()?.name ?? '';
+  get name(): string | undefined {
+    return this.#stored()?.name;
   }
 
   get start(): Instant | undefined {
@@ -153,10 +153,10 @@ class LiveEntry implements Entry {
 
   toInput(): EntryInput {
     const stored = this.#stored();
-    if (stored === undefined) return { id: this.id, name: '' };
+    if (stored === undefined) return { id: this.id };
     return {
       id: stored.id,
-      name: stored.name,
+      ...(stored.name !== undefined ? { name: stored.name } : {}),
       ...(stored.parentId !== undefined ? { parentId: stored.parentId } : {}),
       ...(stored.start !== undefined ? { start: stored.start } : {}),
       ...(stored.end !== undefined ? { end: stored.end } : {}),

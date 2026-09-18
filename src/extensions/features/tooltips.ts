@@ -37,7 +37,8 @@ function defaultContent(
   return {
     class: { 'fg-tooltip': true },
     children: [
-      { key: 'title', class: { 'fg-tooltip-title': true }, text: entry.name },
+      // #421 C5: an Entry with no name prints an empty title, never `'undefined'`.
+      { key: 'title', class: { 'fg-tooltip-title': true }, text: entry.name ?? '' },
       { key: 'dates', class: { 'fg-tooltip-dates': true }, text: dates },
       // D-S5-13: "and any column marked `tooltip: true`" — one row per such column, in `gridColumns`
       // order (`ctx.view.resolveTooltipColumns` already filtered and formatted them).

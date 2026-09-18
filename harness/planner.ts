@@ -327,7 +327,7 @@ function renderSelection(): void {
   const done = first.read('progress');
   const percent = typeof done === 'number' ? ` · ${done}%` : '';
   const more = entries.length > 1 ? ` · +${entries.length - 1} more` : '';
-  setReadout(`${first.name} · ${span}${percent}${more}`);
+  setReadout(`${first.name ?? ''} · ${span}${percent}${more}`);
 }
 
 gantt.on('selectionChange', renderSelection);

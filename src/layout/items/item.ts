@@ -29,7 +29,13 @@ export interface Item {
    *  and the capability seams resolve through (ADR 0018). A plain `string`: core never branches on
    *  the name, and nothing stores one. */
   variant: string;
-  label: string;
+  /** A producer's own text for this bar — set it and this Item owns its label, the most specific
+   *  answer available (Q36). Omit it and `layout/frame.ts`'s `placeFrame` fills it from a bound
+   *  `barLabelFor` resolver instead — `view/` builds one from the Gantt's own `barLabels` Field.
+   *  The built-in producers (`entryItem`, `wholeEntryItem`, `fixedWidthItem`) never set this: an
+   *  Entry's name is a Field like any other, read through `formatValue`, not restated here (#421
+   *  C5). `FrameBar.label` is the one resolved answer this feeds — always a `string`, never absent. */
+  label?: string;
   start: Instant;
   end: Instant;
   /** The one Segment this Item draws (#212, ADR 0010) — set only when the Item stands for a real
@@ -107,7 +113,8 @@ export function entryItem(
     id: itemId(entry.id, segmentIndex),
     entryId: entry.id,
     variant,
-    label: entry.name,
+    // #421 C5, Q36: no `label` — the Entry's name is a Field like any other, and `placeFrame`
+    // reads it through a bound `barLabelFor` (`formatValue`), never restated here.
     start,
     end,
   };

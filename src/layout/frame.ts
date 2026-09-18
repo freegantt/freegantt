@@ -153,7 +153,10 @@ export interface FrameBar {
    *  the Items it describes come from one cached record of one Entry snapshot, so they cannot fall
    *  out of step. `FrameLayout.segmentIdsForItem` answers the same fact for a lookup by id. */
   segmentIds: readonly SegmentId[];
-  /** The entry's name — what a backend renders as the bar's label (#26). */
+  /** What a backend renders as the bar's label (#26) — `LayoutInput.barLabelFor`'s own answer for
+   *  this Item's Entry, or the Item's own `label` when no resolver is bound. `''` when the Entry has
+   *  no name and no resolver names a Field with a value: no label paints, and a `barRenderer` sees
+   *  no `ctx.label` either (#421 C5). */
   label: string;
   x: number;
   y: number;
@@ -169,10 +172,11 @@ export interface FrameBar {
    *  check here); a consumer tells a floored or fixed bar apart by pairing this with `variant`.
    *  `render/` stamps it as `data-span="minimum"` or `data-span="fixed"` (`02` §4). */
   span: BarSpanKind;
-  /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`.
-   * Library-derived text, not consumer render output — same precedent as `label` (plans/01 §4: "no user
-   * render output in the frame"). Composed here because it needs the dataset zone and inclusive-end
-   * formatting, both `time/`-only (S1.10, D-S1.10-5). */
+  /** What a screen reader announces: `${label}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`,
+   * or the dates alone when `label` is `''` (#421 C5) — a nameless Entry still reads its dates, never
+   * a leading ", ". Library-derived text, not consumer render output — same precedent as `label`
+   * (plans/01 §4: "no user render output in the frame"). Composed here because it needs the dataset
+   * zone and inclusive-end formatting, both `time/`-only (S1.10, D-S1.10-5). */
   a11yLabel: string;
 }
 
@@ -322,6 +326,14 @@ export interface LayoutInput {
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
    *  claims nothing, same as `resolveRows`'s own default. */
   entryRulePorts?: EntryRulePorts;
+  /** What one bar's label prints (#421 C5). `view/` builds this from the Gantt's own `barLabels`
+   *  Field, merged with the row's own variant (`mergeBarLabels`) and read through `formatValue` —
+   *  the same door a Grid cell reads through (D-S4-13). Read fresh every `placeFrame` call, never
+   *  cached on the Item: a live `gantt.barLabels` reassignment repaints (`frame-settings.ts`'s own
+   *  `INVALIDATION` table), and this is what makes that repaint show the new text. Omitted → falls
+   *  back to the Item's own `label` — `layout/`'s own tests, which build no `view/`, keep working
+   *  with no resolver bound. */
+  barLabelFor?: (entry: Entry) => string;
 }
 
 function cellsForRow(
@@ -357,14 +369,17 @@ function segmentCountByEntry(items: readonly Item[]): ReadonlyMap<EntryId, numbe
 }
 
 function barA11yLabel(
+  label: string,
   item: Item,
   partCount: number,
   scale: TimeScale,
   locale: Intl.LocalesArgument | undefined,
 ): string {
   const span = `${formatDate(scale.timeZone, item.start, locale)} – ${formatEndInclusive(scale.timeZone, item, locale)}`;
-  if (partCount <= 1) return `${item.label}, ${span}`;
-  return `${item.label}, part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
+  // #421 C5: a nameless Entry announces its dates alone, never a leading ", ".
+  const prefix = label === '' ? '' : `${label}, `;
+  if (partCount <= 1) return `${prefix}${span}`;
+  return `${prefix}part ${segmentIndexOfItem(item.id) + 1} of ${partCount}, ${span}`;
 }
 
 /** Call: `resolveLayoutRows(input)`. One row plan from a `LayoutInput`. */
@@ -508,12 +523,19 @@ export function placeFrame(
     for (const item of items) {
       const { x, width, span } = barSpan(item, scale, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
+      // #421 C5, Q36: the Item's own `label` wins when a producer set one — the most specific
+      // answer available, per-bar and authored. Absent, `barLabelFor` (the Gantt's own Field,
+      // resolved and formatted) fills it; absent that too (a `layout/` test with no `view/`), ''.
+      const entry = entryById.get(item.entryId);
+      const label =
+        item.label ??
+        (input.barLabelFor !== undefined && entry !== undefined ? input.barLabelFor(entry) : '');
       const bar: FrameBar = {
         id: item.id,
         entryId: item.entryId,
         rowId: planned.id,
         variant: item.variant,
-        label: item.label,
+        label,
         x,
         // Every row is one lane (singleLane, D-S4-19): the bar centres in the row's own band.
         y: top + (rowHeight - barHeightPx) / 2,
@@ -521,7 +543,7 @@ export function placeFrame(
         height: barHeightPx,
         flags: {},
         span,
-        a11yLabel: barA11yLabel(item, parts.get(item.entryId) ?? 1, scale, locale),
+        a11yLabel: barA11yLabel(label, item, parts.get(item.entryId) ?? 1, scale, locale),
         // A reference copy of the set the memory already resolved beside this Item — no allocation
         // per frame (I5), and no second Entry source for a reader to disagree with (#230).
         segmentIds: produced.segmentIdsByItem.get(item.id) ?? NO_SEGMENT_IDS,

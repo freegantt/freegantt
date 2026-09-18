@@ -4,7 +4,7 @@
 import type {
   BarFlags,
   BarLabelPlacement,
-  BarLabels,
+  BarLabelPolicy,
   BarRenderer,
   BarRendererContext,
   DateLineLabelPlacement,
@@ -28,6 +28,7 @@ import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
 import {
   DEFAULT_DATE_LINE_LABEL_PLACEMENT,
+  entryIdOfItem,
   itemIdFromDataset,
   rowIdFromDataset,
 } from '../../layout/index.js';
@@ -88,11 +89,12 @@ export interface DomBackendOptions {
    *  its own `error` bus. Omitted — a test backend built with no options — the console fallback runs
    *  every time, which is the honest answer when there is no bus for anyone to subscribe to. */
   raiseError?: RaiseError;
-  /** J1. Read fresh every `syncBars` call, same live-reconfiguration posture `resolveBarRenderer`
-   *  below already takes — a closure over `FrameSettings`, not a value snapshotted at construction.
-   *  Omitted — a test backend built with no options — falls back to `'fitBar'`. */
-  readBarLabels?: () => BarLabels;
-  /** #318 follow-up. Read fresh every `sync` call, same posture as `readBarLabels` above. Omitted —
+  /** J1, #421 C5. Per entry, not per frame: `EntryVariant.barLabels` merges key by key over the
+   *  Gantt's own `barLabels`, and a merge needs the row's own variant. Read fresh every `syncBars`
+   *  call, same live-reconfiguration posture `resolveBarRenderer` below already takes. Omitted — a
+   *  test backend built with no options — falls back to `'fitBar'` for every entry. */
+  resolveBarLabelPolicy?: (entry: Entry) => BarLabelPolicy;
+  /** #318 follow-up. Read fresh every `sync` call, same posture as `resolveBarLabelPolicy` above. Omitted —
    *  a test backend built with no options — falls back to `DEFAULT_DATE_LINE_LABEL_PLACEMENT`. */
   readDateLineLabelPlacement?: () => DateLineLabelPlacement;
   resolveBarRenderer: (entry: Entry) => ResolvedRenderer<BarRenderer> | undefined;
@@ -228,7 +230,7 @@ function rowParity(index: number): RowParity {
  *  always reads `'inside'` — today's exact behaviour, so a stub DOM never invents pixels it cannot
  *  measure. */
 function resolveBarLabelPlacement(
-  mode: BarLabels,
+  mode: BarLabelPolicy,
   textWidth: number | undefined,
   barX: number,
   barWidth: number,
@@ -330,7 +332,7 @@ function cellGeom(item: CellItem): CellGeom {
 
 export function createDomBackend(options: DomBackendOptions): RenderBackend<HTMLElement> {
   const { entryById, resolveBarRenderer, resolveGridCellRenderer, resolveHeaderRenderer } = options;
-  const readBarLabels = options.readBarLabels ?? ((): BarLabels => 'fitBar');
+  const resolveBarLabelPolicy = options.resolveBarLabelPolicy ?? ((): BarLabelPolicy => 'fitBar');
   const readDateLineLabelPlacement =
     options.readDateLineLabelPlacement ?? ((): DateLineLabelPlacement => DEFAULT_DATE_LINE_LABEL_PLACEMENT);
   // No injected raiser means no bus, so nothing can be subscribed and the fallback always runs.
@@ -730,14 +732,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     // actual flip, the same diff-and-touch-only posture every other paintedX field in this file keeps.
     const textWidth = labelWidthByItemId.get(id);
     if (textWidth === undefined) return;
-    const placement = resolveBarLabelPlacement(
-      readBarLabels(),
-      textWidth,
-      x,
-      width,
-      barLabelGapPx,
-      contentWidthPx,
-    );
+    const entry = entryById(entryIdOfItem(id));
+    const policy = entry === undefined ? 'fitBar' : resolveBarLabelPolicy(entry);
+    const placement = resolveBarLabelPlacement(policy, textWidth, x, width, barLabelGapPx, contentWidthPx);
     if (placement === (node.dataset['label'] as BarLabelPlacement | undefined)) return;
     if (placement === undefined) delete node.dataset['label'];
     else node.dataset['label'] = placement;
@@ -1115,9 +1112,6 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
-    // One read per frame answers every bar (the same "resolve once per frame" posture `syncRowCells`
-    // keeps for its column renderers) — the setting cannot change part-way through one sync.
-    const barLabels = readBarLabels();
     barGeomByItemId.clear();
     itemIdsByEntryId.clear();
     itemIdsBySegmentId.clear();
@@ -1154,21 +1148,20 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         return node;
       },
       toGeom: (bar) => {
-        // J1: the library measures and places every bar's label first, before any renderer runs, so
-        // a `barRenderer` can paint the label the library already decided on. One text ruler, in one
-        // place — a renderer never needs one of its own to know inside from outside.
-        const textWidth = barLabels === 'none' ? undefined : textRuler?.widthOf(bar.label);
-        const resolvedPlacement = resolveBarLabelPlacement(
-          barLabels,
-          textWidth,
-          bar.x,
-          bar.width,
-          barLabelGapPx,
-          contentWidthPx,
-        );
         // The row, never `bar.variant`: which paint this bar wears is the rule that claimed this
         // row, and two rules may share one name (`F3`).
         const entry = entryById(bar.entryId);
+        // J1: the library measures and places every bar's label first, before any renderer runs, so
+        // a `barRenderer` can paint the label the library already decided on. One text ruler, in one
+        // place — a renderer never needs one of its own to know inside from outside.
+        // An empty label (no name, #421 C5) prints nothing: skip the placement decision entirely
+        // rather than measure a zero-width string, the same `undefined` path `'none'` already takes.
+        const policy = entry === undefined ? 'fitBar' : resolveBarLabelPolicy(entry);
+        const textWidth = bar.label === '' || policy === 'none' ? undefined : textRuler?.widthOf(bar.label);
+        const resolvedPlacement =
+          bar.label === ''
+            ? undefined
+            : resolveBarLabelPlacement(policy, textWidth, bar.x, bar.width, barLabelGapPx, contentWidthPx);
         const resolved = entry === undefined ? undefined : resolveBarRenderer(entry);
         let content: ElementDescription | undefined;
         if (resolved !== undefined && entry !== undefined) {
