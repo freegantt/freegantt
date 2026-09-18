@@ -13,8 +13,7 @@ import type {
   ViewPreset,
 } from '../../layout/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
-import { segmentId } from '../../layout/index.js';
-import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from '../../layout/entry-double.js';
+import { entryDoubleLike, entryDoubles, entryValuesOf } from '../../layout/entry-double.js';
 
 function entryLookup(id: string): Entry | undefined {
   return sampleEntries.find((e) => e.id === id);
@@ -44,20 +43,27 @@ const preset: ViewPreset = {
 };
 const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
 
-/** One Entry, drawn as `count` bars — the multi-Bar shape a Segmented Entry has (#185). Each
- *  Segment spans the whole Entry, so they share the row's one band. */
-function segmentsOf(entry: Entry, count: number) {
-  return Array.from({ length: count }, (_, index) => ({
-    id: segmentId(`${entry.id}-${index}`),
-    start: entry.start!,
-    end: entry.end!,
-  }));
+/** A parent Entry and `count` children, every child spanning the parent's own dates — the
+ *  `childrenAsSegments` shape one row's several bars now come from (ADR 0026, #421). Pass
+ *  `rows: { source: 'entries', childrenAsSegments: true }` to `computeFrame` alongside this so the
+ *  children draw as `count` bars on the parent's one claimed row, and the parent itself draws none. */
+function claimedRowOf(entry: Entry, count: number): readonly Entry[] {
+  return entryDoubles([
+    entryValuesOf(entry),
+    ...Array.from({ length: count }, (_, index) => ({
+      id: `${entry.id}-${index}`,
+      name: `${entry.name} ${index}`,
+      start: entry.start!,
+      end: entry.end!,
+      parentId: String(entry.id),
+    })),
+  ]);
 }
 
-/** A backend that can answer "which Segments does this Entry own" for a roster of its own (#212).
- *  A row paints from that answer, and so does a bar that draws an Entry's whole span. `entries`
- *  defaults to none — `DomBackendOptions.entryById` is mandatory, so every backend built by this
- *  file names its Entry lookup explicitly, even a test that never asks it a question. */
+/** A backend that can look up an Entry by id, for a roster of its own (#212). A row paints from
+ *  that answer, and so does a bar that draws an Entry's own span. `entries` defaults to none —
+ *  `DomBackendOptions.entryById` is mandatory, so every backend built by this file names its
+ *  Entry lookup explicitly, even a test that never asks it a question. */
 function paintingBackend(
   entries: readonly Entry[] = [],
   resolveBarRenderer: (entry: Entry) => ResolvedRenderer<BarRenderer> | undefined = () => undefined,
@@ -590,11 +596,11 @@ describe('render/dom backend', () => {
     for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('hovered');
 
     // Selection wins the paint on a row that is both, and the token set says so in one attribute.
-    backend.applyState({ hoveredRowId: firstRow.id, selectedSegmentIds: firstRow.segmentIds });
+    backend.applyState({ hoveredRowId: firstRow.id, selectedEntryIds: firstRow.entryIds });
     for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('hovered selected');
 
     // Hover moves on: the row it left keeps only what it still is, and the row it reached gains it.
-    backend.applyState({ hoveredRowId: secondRow.id, selectedSegmentIds: firstRow.segmentIds });
+    backend.applyState({ hoveredRowId: secondRow.id, selectedEntryIds: firstRow.entryIds });
     for (const node of nodesOf(firstRow.id)) expect(node.dataset['state']).toBe('selected');
     for (const node of nodesOf(secondRow.id)) expect(node.dataset['state']).toBe('hovered');
 
@@ -691,25 +697,10 @@ describe('render/dom backend', () => {
     // test could not tell an ordinary bar from a floored one. One real px-per-ms scale here instead.
     const realScale: TimeScale = { ...scale, xForInstant: (instant) => instant, pxPerMs: 1 };
     const ordinary = sampleEntries[0]!;
-    // A Bar's span comes from its Segment, not the Entry's own start/end (`produce-items.ts`), so
-    // the Segment needs the same zero-width edit the Entry gets — an Entry-only edit here would
-    // leave the old, full-width Segment still drawing the bar.
-    const zeroWidth = entryDoubleLike(sampleEntries[1]!, {
-      end: sampleEntries[1]!.start!,
-      segments: [
-        { id: segmentId('zero-width-0'), start: sampleEntries[1]!.start!, end: sampleEntries[1]!.start! },
-      ],
-    });
-    const alsoZeroWidth = entryDoubleLike(sampleEntries[2]!, {
-      end: sampleEntries[2]!.start!,
-      segments: [
-        {
-          id: segmentId('also-zero-width-0'),
-          start: sampleEntries[2]!.start!,
-          end: sampleEntries[2]!.start!,
-        },
-      ],
-    });
+    // A Bar's span comes from the Entry's own start/end now (ADR 0026), so a zero-width Entry edit
+    // is enough on its own to floor the bar — no second, segment-shaped edit to keep in step.
+    const zeroWidth = entryDoubleLike(sampleEntries[1]!, { end: sampleEntries[1]!.start! });
+    const alsoZeroWidth = entryDoubleLike(sampleEntries[2]!, { end: sampleEntries[2]!.start! });
     const frame = computeFrame({
       entries: [ordinary, zeroWidth, alsoZeroWidth],
       scale: realScale,
@@ -760,130 +751,13 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('gives a Segment bar data-segment-id; a structural-parent bar carries none (#212, ADR 0013: no core group/milestone kind)', () => {
-    const backend = paintingBackend();
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-
-    const base = sampleEntries[0]!;
-    const [segmented, parentSeed, child] = entryDoubles([
-      entryValuesOf(base, { segments: segmentsOf(base, 2) }),
-      entryValuesOf(sampleEntries[1]!),
-      entryValuesOf(sampleEntries[2]!, { parentId: String(sampleEntries[1]!.id) }),
-    ]) as readonly [Entry, Entry, Entry];
-    const frame = computeFrame({
-      entries: [segmented, parentSeed, child],
-      scale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 0 },
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    backend.sync(frame);
-
-    const bars = Array.from(timeline.querySelectorAll<HTMLElement>('.fg-bar'));
-    const segmentBars = bars.filter((node) => node.dataset['itemId']?.startsWith(`${segmented.id}:`));
-    expect(segmentBars).toHaveLength(2);
-    expect(segmentBars.map((node) => node.dataset['segmentId'])).toEqual(
-      segmented.segments.map((segment) => segment.id),
-    );
-
-    const summaryBar = bars.find((node) => node.dataset['itemId'] === `${parentSeed.id}:0`)!;
-    expect(summaryBar.dataset['segmentId']).toBeUndefined();
-    backend.destroy();
-  });
-
-  it('a bar node restamps data-segment-id when a removed Segment renumbers the bars (#212)', () => {
-    const base = sampleEntries[0]!;
-    const three = entryDoubleLike(base, { segments: segmentsOf(base, 3) });
-    const two = entryDoubleLike(base, { segments: three.segments.slice(1) });
-    let painted: Entry = three;
-    const backend = createDomBackend({
-      entryById: (id) => (id === base.id ? painted : undefined),
-      resolveBarRenderer: () => undefined,
-      resolveGridCellRenderer: () => undefined,
-      resolveHeaderRenderer: () => undefined,
-    });
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-    const paint = () =>
-      backend.sync(
-        computeFrame({
-          entries: [painted],
-          scale,
-          preset,
-          visible: { x: 0, y: 0, width: 0, height: 0 },
-          rowHeight: 32,
-          revision: 0,
-          datasetRevision: 0,
-          variants: variantRegistry,
-        }),
-      );
-
-    paint();
-    const first = timeline.querySelector<HTMLElement>('.fg-bar')!;
-    expect(first.dataset['segmentId']).toBe(three.segments[0]!.id);
-
-    // The consumer drops the first Segment. The bar keys are `${entryId}:${segmentIndex}`, so
-    // `e:0` and `e:1` both survive and the reconciler reuses their nodes. Each one now draws its
-    // former neighbour, and the stamp has to follow.
-    painted = two;
-    paint();
-
-    const bars = Array.from(timeline.querySelectorAll<HTMLElement>('.fg-bar'));
-    expect(bars[0]).toBe(first);
-    expect(bars.map((node) => node.dataset['segmentId'])).toEqual(two.segments.map((segment) => segment.id));
-    backend.destroy();
-  });
-
-  it('a bar that stops drawing a Segment loses its data-segment-id (#212, ADR 0013: a parent draws whole-span, structurally)', () => {
-    const base = sampleEntries[0]!;
-    // Same Entry id and same bar key, drawn as a structural parent the second time — one
-    // whole-span bar, which draws no single Segment. The reused node must drop the stamp, not
-    // keep a stale one.
-    const segmented = entryDouble(entryValuesOf(base, { segments: segmentsOf(base, 1) }));
-    // The same id, wired to a child this time. A live row answers `hasChildren` off its own tree,
-    // so the second paint needs a row that has one — not the leaf the first paint drew.
-    const [parented, child] = entryDoubles([
-      entryValuesOf(base, { segments: segmentsOf(base, 1) }),
-      entryValuesOf(sampleEntries[1]!, { parentId: String(base.id) }),
-    ]) as readonly [Entry, Entry];
-    let entries: readonly Entry[] = [segmented];
-    const backend = createDomBackend({
-      entryById: (id) => entries.find((entry) => entry.id === id),
-      resolveBarRenderer: () => undefined,
-      resolveGridCellRenderer: () => undefined,
-      resolveHeaderRenderer: () => undefined,
-    });
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-    const paint = () =>
-      backend.sync(
-        computeFrame({
-          entries,
-          scale,
-          preset,
-          visible: { x: 0, y: 0, width: 0, height: 0 },
-          rowHeight: 32,
-          revision: 0,
-          datasetRevision: 0,
-          variants: variantRegistry,
-        }),
-      );
-
-    paint();
-    const bar = timeline.querySelector<HTMLElement>(`[data-item-id="${base.id}:0"]`)!;
-    expect(bar.dataset['segmentId']).toBe(segmented.segments[0]!.id);
-
-    entries = [parented, child];
-    paint();
-
-    expect(timeline.querySelector(`[data-item-id="${base.id}:0"]`)).toBe(bar);
-    expect(bar.dataset['segmentId']).toBeUndefined();
-    backend.destroy();
-  });
+  // Retired (ADR 0026, #421): a bar's identity was `data-segment-id`, one Segment among several a
+  // single Entry could draw. A Bar now always draws one Entry's own span at `partIndex` 0 — core
+  // never writes a second part — so there is no per-instance stamp left to restamp or drop, and no
+  // "structural parent draws several Segment-bars, a leaf draws one" split to tell apart. The three
+  // tests this comment replaces (`gives a Segment bar data-segment-id...`, `...restamps
+  // data-segment-id when a removed Segment renumbers the bars`, `...loses its data-segment-id`)
+  // pinned a reconciliation identity scheme that no longer exists.
 
   it('spans the today line the full row content height, not just the visible pane (header readability follow-up)', () => {
     const backend = paintingBackend();
@@ -1151,11 +1025,11 @@ describe('render/dom backend', () => {
     const nodeA = timeline.querySelector<HTMLElement>(`[data-item-id="${a!.id}"]`)!;
     const nodeB = timeline.querySelector<HTMLElement>(`[data-item-id="${b!.id}"]`)!;
 
-    backend.applyState({ hoveredBarId: a!.id, selectedSegmentIds: [a!.segmentId!, b!.segmentId!] });
+    backend.applyState({ hoveredBarId: a!.id, selectedEntryIds: [a!.entryId, b!.entryId] });
     expect(nodeA.dataset['state']).toBe('hovered selected');
     expect(nodeB.dataset['state']).toBe('selected');
 
-    backend.applyState({ selectedSegmentIds: [b!.segmentId!] });
+    backend.applyState({ selectedEntryIds: [b!.entryId] });
     expect(nodeA.dataset['state']).toBe('');
     expect(nodeB.dataset['state']).toBe('selected');
 
@@ -1165,7 +1039,7 @@ describe('render/dom backend', () => {
   });
 
   // Bug hunt (S5 fixes, "grid row highlight and row click"): applyState paints .fg-row the same way
-  // it paints .fg-bar — one Segment-keyed Selection, read against the Entries each row owns (#212).
+  // it paints .fg-bar — one Entry-keyed Selection, read against the Entries each row owns (#212).
   it('applyState paints data-state~="selected" on the row matching a selected bar, and clears it', () => {
     const backend = paintingBackend(sampleEntries.slice(0, 2));
     const { grid, timeline } = mountSurfaces();
@@ -1186,15 +1060,15 @@ describe('render/dom backend', () => {
     const rowA = grid.querySelector<HTMLElement>(`[data-row-id="${a!.rowId}"]`)!;
     const rowB = grid.querySelector<HTMLElement>(`[data-row-id="${b!.rowId}"]`)!;
 
-    backend.applyState({ selectedSegmentIds: [a!.segmentId!] });
+    backend.applyState({ selectedEntryIds: [a!.entryId] });
     expect(rowA.dataset['state']).toBe('selected');
     expect(rowB.dataset['state']).toBeUndefined();
 
-    backend.applyState({ selectedSegmentIds: [b!.segmentId!] });
+    backend.applyState({ selectedEntryIds: [b!.entryId] });
     expect(rowA.dataset['state']).toBe('');
     expect(rowB.dataset['state']).toBe('selected');
 
-    backend.applyState({ selectedSegmentIds: [] });
+    backend.applyState({ selectedEntryIds: [] });
     expect(rowB.dataset['state']).toBe('');
 
     backend.destroy();
@@ -1204,7 +1078,7 @@ describe('render/dom backend', () => {
 
   // #230 R0: a one-Entry row cannot tell "reads row.entryIds[0]" apart from "reads every entryId the
   // row owns". A custom row that puts two Entries on one lane can, so this pins the second reading.
-  it('a row that owns several Entries paints selected from its second Entry’s Segment (#230 R0)', () => {
+  it('a row that owns several Entries paints selected from its second Entry (#230 R0)', () => {
     const [entryA, entryB] = sampleEntries.slice(0, 2);
     const backend = paintingBackend([entryA!, entryB!]);
     const { grid, timeline } = mountSurfaces();
@@ -1228,10 +1102,10 @@ describe('render/dom backend', () => {
     backend.sync(frame);
     const row = grid.querySelector<HTMLElement>('[data-row-id="lane-1"]')!;
 
-    backend.applyState({ selectedSegmentIds: [entryB!.segments[0]!.id] });
+    backend.applyState({ selectedEntryIds: [entryB!.id] });
     expect(row.dataset['state']).toBe('selected');
 
-    backend.applyState({ selectedSegmentIds: [] });
+    backend.applyState({ selectedEntryIds: [] });
     expect(row.dataset['state']).toBe('');
 
     backend.destroy();
@@ -1239,14 +1113,14 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('paints every mounted bar of a selected entry, not only its first (#185)', () => {
+  it('paints every mounted bar a claimed row draws, not only its first (#185, ADR 0026, #421)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
-    const segmented = entryDoubleLike(sampleEntries[0]!, { segments: segmentsOf(sampleEntries[0]!, 3) });
+    const claimed = claimedRowOf(sampleEntries[0]!, 3);
     const frame = computeFrame({
-      entries: [segmented],
+      entries: claimed,
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1254,17 +1128,18 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      rows: { source: 'entries', childrenAsSegments: true },
     });
     backend.sync(frame);
     expect(frame.bars).toHaveLength(3);
 
-    backend.applyState({ selectedSegmentIds: frame.bars.map((bar) => bar.segmentId!) });
+    backend.applyState({ selectedEntryIds: frame.bars.map((bar) => bar.entryId) });
     for (const bar of frame.bars) {
       const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
       expect(node.dataset['state']).toBe('selected');
     }
 
-    backend.applyState({ selectedSegmentIds: [] });
+    backend.applyState({ selectedEntryIds: [] });
     for (const bar of frame.bars) {
       const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
       expect(node.dataset['state']).toBe('');
@@ -1275,106 +1150,23 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  // #230 R2 [#230-14]: the frame states which Segments a bar stands for, and this paint side reads
-  // that statement. It used to derive the set from the live Dataset instead, so a caller that drove
-  // `backend.sync(frame)` with a frame older than the Dataset filed the bar under Segments the frame
-  // never drew. ADR 0010 line 99 names the layout as the source, so the frame wins.
-  it('a whole-span bar stands for the Segments the frame drew, not the live Dataset’s [#230-14]', () => {
-    // A structural parent (ADR 0013: has children, not a stored kind) draws one whole-span bar.
-    const [drawn, child] = entryDoubles([
-      entryValuesOf(sampleEntries[0]!, { segments: segmentsOf(sampleEntries[0]!, 2) }),
-      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
-    ]) as readonly [Entry, Entry];
-    // The live roster the backend reads. It moves on after the frame is built, and never re-renders.
-    let live: Entry = drawn;
-    const backend = createDomBackend({
-      entryById: (id) => (id === drawn.id ? live : id === child.id ? child : undefined),
-      resolveBarRenderer: () => undefined,
-      resolveGridCellRenderer: () => undefined,
-      resolveHeaderRenderer: () => undefined,
-    });
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
+  // Retired (ADR 0026, #421): a structural parent's own bar used to carry the set of Segment ids
+  // it drew (`FrameBar.segmentIds`), so a caller could select a Segment the live Dataset no longer
+  // knew about and still paint the frame's own bar. There is no such bar left to test — a parent
+  // that claims its children draws no bar of its own (`resolveBars`, #421 C2), and an unclaimed
+  // parent's bar answers only for its own id, never a descendant's. The three tests this comment
+  // replaces (`a whole-span bar stands for the Segments the frame drew...`, `a bar that draws an
+  // Entry whole paints when any Segment of that Entry is selected...`, `one selected bar paints
+  // alone, and the Entry paints whole when every Segment is in...`) pinned that retired rollup.
 
-    const frame = computeFrame({
-      entries: [drawn, child],
-      scale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 0 },
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    const bar = frame.bars.find((b) => b.entryId === drawn.id)!;
-    expect(bar.segmentId).toBeUndefined();
-    expect(bar.segmentIds).toEqual(drawn.segments.map((segment) => segment.id));
-
-    // The Dataset drops both Segments this bar drew and grows a third one. Nothing renders.
-    const laterSegment = { id: segmentId(`${drawn.id}-later`), start: drawn.start!, end: drawn.end! };
-    live = entryDoubleLike(drawn, { segments: [laterSegment] });
-
-    backend.sync(frame);
-    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
-
-    // A Segment the frame drew still paints the bar.
-    backend.applyState({ selectedSegmentIds: [drawn.segments[0]!.id] });
-    expect(node.dataset['state']).toBe('selected');
-
-    // A Segment only the live Dataset knows about paints nothing: the frame never drew it.
-    backend.applyState({ selectedSegmentIds: [laterSegment.id] });
-    expect(node.dataset['state']).toBe('');
-
-    backend.destroy();
-    grid.remove();
-    timeline.remove();
-  });
-
-  it('a bar that draws an Entry whole paints when any Segment of that Entry is selected (#212, ADR 0013: a structural parent, not a stored kind)', () => {
-    // A structural parent draws one bar for the whole Entry, so that bar carries no
-    // `data-segment-id`. It still has to light up when the Selection names a Segment of its Entry.
-    const [parent, child] = entryDoubles([
-      entryValuesOf(sampleEntries[0]!),
-      entryValuesOf(sampleEntries[1]!, { parentId: String(sampleEntries[0]!.id) }),
-    ]) as readonly [Entry, Entry];
-    const backend = paintingBackend([parent, child]);
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-
-    const frame = computeFrame({
-      entries: [parent, child],
-      scale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 0 },
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    backend.sync(frame);
-    const bar = frame.bars.find((b) => b.entryId === parent.id)!;
-    expect(bar.segmentId).toBeUndefined();
-    const node = timeline.querySelector<HTMLElement>(`[data-item-id="${bar.id}"]`)!;
-
-    backend.applyState({ selectedSegmentIds: [parent.segments[0]!.id] });
-    expect(node.dataset['state']).toBe('selected');
-
-    backend.applyState({ selectedSegmentIds: [] });
-    expect(node.dataset['state']).toBe('');
-
-    backend.destroy();
-    grid.remove();
-    timeline.remove();
-  });
-
-  it('one selected bar paints alone, and the Entry paints whole when every Segment is in (#212)', () => {
+  it('a selected bar comes back painted after a remount, and its siblings do not (#185, #212, ADR 0026)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
-    const segmented = entryDoubleLike(sampleEntries[0]!, { segments: segmentsOf(sampleEntries[0]!, 3) });
+    const claimed = claimedRowOf(sampleEntries[0]!, 3);
     const frame = computeFrame({
-      entries: [segmented],
+      entries: claimed,
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1382,57 +1174,23 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      rows: { source: 'entries', childrenAsSegments: true },
     });
     backend.sync(frame);
-    const stateOf = (id: BarId): string =>
-      timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
-    backend.applyState({ selectedSegmentIds: [frame.bars[1]!.segmentId!] });
-    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
-
-    // The pointer moved to another bar of the same Entry: both ends of the move repaint.
-    backend.applyState({ selectedSegmentIds: [frame.bars[2]!.segmentId!] });
-    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', '', 'selected']);
-
-    // A grid-row click selects every Segment of the Entry, so every bar it drew paints again.
-    backend.applyState({ selectedSegmentIds: frame.bars.map((bar) => bar.segmentId!) });
-    expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['selected', 'selected', 'selected']);
-
-    backend.destroy();
-    grid.remove();
-    timeline.remove();
-  });
-
-  it('a selected bar comes back painted after a remount, and its siblings do not (#185, #212)', () => {
-    const backend = paintingBackend();
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-
-    const segmented = entryDoubleLike(sampleEntries[0]!, { segments: segmentsOf(sampleEntries[0]!, 3) });
-    const frame = computeFrame({
-      entries: [segmented],
-      scale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 0 },
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    backend.sync(frame);
-    const selected = frame.bars[1]!.segmentId!;
-    backend.applyState({ selectedSegmentIds: [selected] });
+    const selected = frame.bars[1]!.entryId;
+    backend.applyState({ selectedEntryIds: [selected] });
 
     backend.sync({ ...frame, bars: [] }); // the horizontal cull drops every bar of the row
     backend.sync(frame); // and a scroll back mounts them again
 
-    // The Selection is keyed by Segment, so it outlived the node that drew it: the selected bar
+    // The Selection is keyed by Entry, so it outlived the node that drew it: the selected bar
     // comes back painted and its siblings stay clear.
     const stateOf = (id: BarId): string =>
       timeline.querySelector<HTMLElement>(`[data-item-id="${id}"]`)!.dataset['state'] ?? '';
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
     // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
-    backend.applyState({ selectedSegmentIds: [selected] });
+    backend.applyState({ selectedEntryIds: [selected] });
     expect(frame.bars.map((bar) => stateOf(bar.id))).toEqual(['', 'selected', '']);
 
     backend.destroy();
@@ -1456,7 +1214,7 @@ describe('render/dom backend', () => {
       variants: variantRegistry,
     });
     backend.sync(frame);
-    backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
+    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
     backend.sync({ ...frame, bars: [] }); // the horizontal cull drops the bar
 
     backend.sync(frame); // and a scroll back mounts it again
@@ -1465,7 +1223,7 @@ describe('render/dom backend', () => {
 
     // The restamp also joined the painted set, so the next call sees no diff and rewrites nothing.
     const before = bar.dataset['state'];
-    backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
+    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
     expect(bar.dataset['state']).toBe(before);
 
     backend.destroy();
@@ -1478,9 +1236,9 @@ describe('render/dom backend', () => {
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
-    const segmented = entryDoubleLike(sampleEntries[0]!, { segments: segmentsOf(sampleEntries[0]!, 3) });
+    const claimed = claimedRowOf(sampleEntries[0]!, 3);
     const frame = computeFrame({
-      entries: [segmented],
+      entries: claimed,
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -1488,10 +1246,11 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      rows: { source: 'entries', childrenAsSegments: true },
     });
     backend.sync(frame);
-    const everySegment = frame.bars.map((bar) => bar.segmentId!);
-    backend.applyState({ selectedSegmentIds: everySegment });
+    const everyBarsEntry = frame.bars.map((bar) => bar.entryId);
+    backend.applyState({ selectedEntryIds: everyBarsEntry });
 
     // Counting attribute writes is the only observation of "touched" — the tokens themselves say
     // nothing about how many nodes the diff wrote.
@@ -1499,7 +1258,7 @@ describe('render/dom backend', () => {
     observer.observe(timeline, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
 
     const hovered = frame.bars[1]!.id;
-    backend.applyState({ selectedSegmentIds: everySegment, hoveredBarId: hovered });
+    backend.applyState({ selectedEntryIds: everyBarsEntry, hoveredBarId: hovered });
     const touched = observer.takeRecords().map((record) => (record.target as HTMLElement).dataset['itemId']);
     observer.disconnect();
 
@@ -1526,7 +1285,7 @@ describe('render/dom backend', () => {
       variants: variantRegistry,
     });
     backend.sync(frame);
-    backend.applyState({ selectedSegmentIds: [frame.bars[0]!.segmentId!] });
+    backend.applyState({ selectedEntryIds: [frame.bars[0]!.entryId] });
     backend.sync({ ...frame, rows: [], rowCount: 0 }); // simulate virtualization dropping the row
 
     backend.sync(frame); // and remounting it later
@@ -1742,167 +1501,13 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('brackets a segmented entry: one handle per envelope bar, and hitTest names that bar (#200)', () => {
-    const backend = paintingBackend();
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-
-    // The fake scale above parks every instant at x = 0, so this one spreads the two Segments out —
-    // the handle pair has to tell the leftmost bar from the rightmost one. One px per ms keeps the
-    // arithmetic out of the test (I10): the scale reports a difference, it never builds a duration.
-    const base = sampleEntries[0]!;
-    const later = sampleEntries[4]!;
-    const spreadScale: TimeScale = {
-      ...scale,
-      xForInstant: (at) => Number(at) - Number(base.start),
-    };
-    const segmented = entryDoubleLike(base, {
-      end: later.end!,
-      segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
-        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
-      ],
-    });
-    const frame = computeFrame({
-      entries: [segmented],
-      scale: spreadScale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 0 },
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    backend.sync(frame);
-    const [first, last] = frame.bars;
-    expect(frame.bars).toHaveLength(2);
-
-    backend.applyState({ resizableEntryId: segmented.id });
-    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
-    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
-    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
-    expect(end.style.transform).toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
-
-    const original = document.elementFromPoint.bind(document);
-    document.elementFromPoint = (x: number, y: number) =>
-      x === 5 && y === 5 ? start : x === 6 && y === 6 ? end : original(x, y);
-
-    // Each handle grabs the bar it sits on, so a resize arms the Entry through a real Bar id.
-    expect(backend.hitTest(point(5, 5))).toEqual({ kind: 'bar', barId: first!.id, edge: 'start' });
-    expect(backend.hitTest(point(6, 6))).toEqual({ kind: 'bar', barId: last!.id, edge: 'end' });
-
-    document.elementFromPoint = original;
-    backend.destroy();
-    grid.remove();
-    timeline.remove();
-  });
-
-  it('brackets the picked bar alone when the sole selected Entry has a pick (#211, D-S4-30)', () => {
-    const backend = paintingBackend();
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-
-    const base = sampleEntries[0]!;
-    const later = sampleEntries[4]!;
-    const spreadScale: TimeScale = {
-      ...scale,
-      xForInstant: (at) => Number(at) - Number(base.start),
-    };
-    const segmented = entryDoubleLike(base, {
-      end: later.end!,
-      segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
-        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
-      ],
-    });
-    const frame = computeFrame({
-      entries: [segmented],
-      scale: spreadScale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 0 },
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    backend.sync(frame);
-    const [first, last] = frame.bars;
-    expect(frame.bars).toHaveLength(2);
-
-    // The pointer selected the earlier bar — both handles bracket it alone, never the envelope's
-    // latest bar, because a resize on one selected Segment writes only that Segment's edge (#212).
-    backend.applyState({
-      resizableEntryId: segmented.id,
-      selectedSegmentIds: [first!.segmentId!],
-    });
-    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
-    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
-    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
-    expect(end.style.transform).toBe(`translate(${first!.x + first!.width}px, ${first!.y}px)`);
-    expect(end.style.transform).not.toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
-
-    backend.destroy();
-    grid.remove();
-    timeline.remove();
-  });
-
-  it('moves the handle pair onto a bar selected after it already brackets the envelope (#211)', () => {
-    // A hover shows the envelope pair with nothing selected; a click on one of the two bars then
-    // selects it, for the same, still-hovered Entry — `resizableEntryId` never changes, so the
-    // repaint gate must not key off Entry identity alone, or the pair would stay glued to the
-    // envelope (the exact bug spec-211-gesture-units.md §7's harness scenario calls out).
-    const backend = paintingBackend();
-    const { grid, timeline } = mountSurfaces();
-    backend.mount({ grid, timeline });
-
-    const base = sampleEntries[0]!;
-    const later = sampleEntries[4]!;
-    const spreadScale: TimeScale = {
-      ...scale,
-      xForInstant: (at) => Number(at) - Number(base.start),
-    };
-    const segmented = entryDoubleLike(base, {
-      end: later.end!,
-      segments: [
-        { id: segmentId(`${base.id}-0`), start: base.start!, end: base.end! },
-        { id: segmentId(`${base.id}-1`), start: later.start!, end: later.end! },
-      ],
-    });
-    const frame = computeFrame({
-      entries: [segmented],
-      scale: spreadScale,
-      preset,
-      visible: { x: 0, y: 0, width: 0, height: 0 },
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    backend.sync(frame);
-    const [first, last] = frame.bars;
-    expect(frame.bars).toHaveLength(2);
-
-    // Step 1: hover only — nothing selected anywhere. The pair brackets the envelope.
-    backend.applyState({ resizableEntryId: segmented.id, selectedSegmentIds: [] });
-    const start = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
-    const end = timeline.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
-    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
-    expect(end.style.transform).toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
-
-    // Step 2: a click on the earliest bar selects it. `resizableEntryId` names the same Entry as
-    // before — only the Selection changed — and the pair must still move onto that one bar.
-    backend.applyState({
-      resizableEntryId: segmented.id,
-      selectedSegmentIds: [first!.segmentId!],
-    });
-    expect(start.style.transform).toBe(`translate(${first!.x}px, ${first!.y}px)`);
-    expect(end.style.transform).toBe(`translate(${first!.x + first!.width}px, ${first!.y}px)`);
-    expect(end.style.transform).not.toBe(`translate(${last!.x + last!.width}px, ${last!.y}px)`);
-
-    backend.destroy();
-    grid.remove();
-    timeline.remove();
-  });
+  // Retired (ADR 0026, #421): the resize-handle pair used to bracket an "envelope" spanning
+  // several bars one Entry drew as Segments — hover showed the outer edges of every bar, a pick on
+  // one bar narrowed the pair onto it alone. A Bar now always draws one Entry's own span, so there
+  // is no multi-bar envelope for one Entry left to bracket; the resize gesture brackets that Entry's
+  // single bar directly. The three tests this comment replaces (`brackets a segmented entry...`,
+  // `brackets the picked bar alone...`, `moves the handle pair onto a bar selected...`) pinned that
+  // retired envelope mechanism.
 
   it('hitTest never reports an edge for a parked (hidden) handle pair', () => {
     const backend = paintingBackend();
@@ -2046,13 +1651,13 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  it('[S4-A4] paints N bars on one row for N segments', () => {
+  it('[S4-A4] paints N bars on one row for N claimed children', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
     const entry = sampleEntries[0]!;
     const frame = computeFrame({
-      entries: [entryDoubleLike(entry, { segments: segmentsOf(entry, 3) })],
+      entries: claimedRowOf(entry, 3),
       scale,
       preset,
       visible: { x: 0, y: 0, width: 0, height: 0 },
@@ -2060,6 +1665,7 @@ describe('render/dom backend', () => {
       revision: 0,
       datasetRevision: 0,
       variants: variantRegistry,
+      rows: { source: 'entries', childrenAsSegments: true },
     });
     backend.sync(frame);
 
