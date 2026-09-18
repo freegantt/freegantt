@@ -19,10 +19,10 @@ import {
 } from '../time/index.js';
 import type { ViewPresetHeader } from '../time/index.js';
 import type { DecorationContext } from './decoration.js';
-import { entryId, segmentId } from '../model/index.js';
+import { entryId } from '../model/index.js';
 import type { Entry, Instant, TimeSpan } from '../model/index.js';
 import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from './entry-double.js';
-import { wholeEntryBar } from './items/item.js';
+import { entryBar, wholeEntryBar } from './items/item.js';
 import type { FixedBarBox, Bar } from './items/item.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
@@ -532,11 +532,15 @@ describe('computeFrame', () => {
     expect(new Set(grouped.bars.map((bar) => bar.id)).size).toBe(grouped.bars.length);
   });
 
-  it("names a segmented bar as 'part N of M'", () => {
-    const entry = entryDoubleLike(sampleEntries[0]!, {
-      segments: [
-        { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
-        { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
+  it("names a bar with several parts as 'part N of M' — only a plugin variant draws several now (#421, ADR 0026)", () => {
+    const entry = entryDoubleLike(sampleEntries[0]!, {});
+    const own = createVariantRegistry({ fieldFor: () => undefined });
+    own.addPluginVariant({
+      name: 'phased',
+      when: () => true,
+      bars: (e, variant) => [
+        entryBar(e, 0, sampleEntries[0]!.start!, sampleEntries[1]!.end!, variant),
+        entryBar(e, 1, sampleEntries[1]!.end!, sampleEntries[2]!.end!, variant),
       ],
     });
     const frame = computeFrame({
@@ -547,7 +551,7 @@ describe('computeFrame', () => {
       rowHeight: 32,
       revision: 0,
       datasetRevision: 0,
-      variants: variantRegistry,
+      variants: own,
       barLabelFor: (e) => e.name ?? '',
     });
     expect(frame.bars).toHaveLength(2);
@@ -555,37 +559,10 @@ describe('computeFrame', () => {
     expect(frame.bars[1]?.a11yLabel).toMatch(/, part 2 of 2, /);
   });
 
-  it('carries the segmentId its Bar had, for a Segment bar, and none for a whole-Entry bar (#212)', () => {
-    const [entry, grouped, groupedChild] = entryDoubles([
-      entryValuesOf(sampleEntries[0]!, {
-        segments: [
-          { id: segmentId('part-1'), start: sampleEntries[0]!.start!, end: sampleEntries[1]!.end! },
-          { id: segmentId('part-2'), start: sampleEntries[1]!.end!, end: sampleEntries[2]!.end! },
-        ],
-      }),
-      // A whole-entry bar is structural now (ADR 0013): `grouped` needs a real child, not a `kind`
-      // marker, to draw the parent's own summary bar instead of a Segment bar.
-      entryValuesOf(sampleEntries[1]!),
-      entryValuesOf(sampleEntries[2]!, {
-        id: 'grouped-child',
-        parentId: String(sampleEntries[1]!.id),
-      }),
-    ]) as readonly [Entry, Entry, Entry];
-    const frame = computeFrame({
-      entries: [entry, grouped, groupedChild],
-      scale,
-      preset,
-      visible,
-      rowHeight: 32,
-      revision: 0,
-      datasetRevision: 0,
-      variants: variantRegistry,
-    });
-    const segmentedBars = frame.bars.filter((bar) => bar.entryId === entry.id);
-    expect(segmentedBars.map((bar) => bar.segmentId)).toEqual(entry.segments.map((segment) => segment.id));
-    const groupBar = frame.bars.find((bar) => bar.entryId === grouped.id);
-    expect(groupBar?.segmentId).toBeUndefined();
-  });
+  // Retired (ADR 0026, #421): 'carries the segmentId its Bar had, for a Segment bar, and none for a
+  // whole-Entry bar' pinned `FrameBar.segmentId`, which no longer exists — a Bar's own id
+  // (`${entryId}:${partIndex}`, `partIndexOfBar`) already answers which part it draws, so there is
+  // no second id left to carry alongside it.
 });
 
 describe('computeFrame — horizontal culling', () => {
@@ -709,13 +686,6 @@ describe('computeFrame — timeline grid lines (J2)', () => {
       id: 'grid-1',
       start: instant('2026-08-24T00:00:00Z'),
       end: instant('2026-08-25T00:00:00Z'),
-      segments: [
-        {
-          id: segmentId('grid-1-1'),
-          start: instant('2026-08-24T00:00:00Z'),
-          end: instant('2026-08-25T00:00:00Z'),
-        },
-      ],
     }),
   ];
   const dayAndWeekHeaders = {
