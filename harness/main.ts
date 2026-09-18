@@ -132,8 +132,7 @@ function refreshMutationButtons(): void {
 // now, so the readout names the Entries alone — there is no separate Segment count left to show.
 function renderSelection(): void {
   const entryIds = gantt.selectedEntryIds;
-  selectionReadout.textContent =
-    entryIds.length === 0 ? 'No selection' : `Selected: ${entryIds.join(', ')}`;
+  selectionReadout.textContent = entryIds.length === 0 ? 'No selection' : `Selected: ${entryIds.join(', ')}`;
 }
 
 function syncSelectionUi(): void {
