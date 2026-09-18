@@ -7,33 +7,14 @@ import type {
   EntryHit,
   SelectionForGestures,
 } from '../view/index.js';
-import { entryId, entryIdOfBar, barId, rowId, segmentId, segmentIndexOfBar } from '../model/index.js';
-import type {
-  Entry,
-  EntryEdits,
-  EntryId,
-  Instant,
-  BarId,
-  Segment,
-  SegmentId,
-  StoredEntry,
-} from '../model/index.js';
+import { entryId, entryIdOfBar, barId, rowId, partIndexOfBar } from '../model/index.js';
+import type { Entry, EntryEdits, EntryId, Instant, BarId, StoredEntry } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 
 const A = entryId('a');
 const B = entryId('b');
 const C = entryId('c');
 const ORDER: readonly EntryId[] = [A, B, C];
-
-/** The fake's own Segment naming: Entry `a`, Segment index 0, is `a-0`. It keeps the Selection
- *  readable in an assertion, and it lets `segmentsForBar` answer per bar rather than per Entry. */
-function segmentOf(id: EntryId, index = 0): SegmentId {
-  return segmentId(`${id}-${index}`);
-}
-
-const SEG_A = segmentOf(A);
-const SEG_B = segmentOf(B);
-const SEG_C = segmentOf(C);
 
 /** `interaction/` may not import `time/` (I1) — this suite is about pointer semantics, never real
  *  dates, so a bare number stands in for an `Instant` at this one call site. */
@@ -45,25 +26,11 @@ function toInstant(ms: number): Instant {
  *  (`.dependency-cruiser.cjs`), and the store is the one place a live `Entry` is built (ADR 0017),
  *  so nothing here stands one in. */
 function storeOf(rows: readonly StoredEntry[]): EntryStore {
-  let minted = 0;
-  return new EntryStore(rows, {
-    timeZone: 'UTC',
-    dateOnlyEnd: 'inclusive',
-    mintSegmentId: () => segmentId(`minted-${++minted}`),
-  });
+  return new EntryStore(rows, { timeZone: 'UTC', dateOnlyEnd: 'inclusive' });
 }
 
-function storedFor(id: EntryId, segments?: readonly Segment[]): StoredEntry {
-  const start = toInstant(0);
-  const end = toInstant(1);
-  return {
-    id,
-    name: id,
-    start,
-    end,
-    segments: segments ?? [{ id: segmentOf(id), start, end }],
-    props: {},
-  };
+function storedFor(id: EntryId): StoredEntry {
+  return { id, name: id, start: toInstant(0), end: toInstant(1), props: {} };
 }
 
 const rows = storeOf(ORDER.map((id) => storedFor(id)));
@@ -96,13 +63,13 @@ interface SessionOverrides {
 /** `hitTest` reads a fake `data-hit-x` position map instead of real layout — this suite is about
  *  pointer semantics (D-S3-10), not hit-testing, which `render/dom/index.test.ts` already covers. */
 /** Overrides merge one level into `selection`, not over it: a test that replaces
- *  `selectableSegmentsOf` keeps the other seven answers the fake already gives (#230 R4). */
+ *  `selectableEntriesOf` keeps the other three answers the fake already gives (#230 R4). */
 type ContextOverrides = Partial<Omit<EntryGestureContext, 'selection'>> &
   SessionOverrides & { selection?: Partial<SelectionForGestures> };
 
 function makeContext(overrides: ContextOverrides = {}): {
   ctx: EntryGestureContext;
-  proposals: (readonly SegmentId[])[];
+  proposals: (readonly EntryId[])[];
   previews: (EntryEdits | undefined)[];
   commits: [EntryGesture, EntryEdits][];
 } {
@@ -114,8 +81,8 @@ function makeContext(overrides: ContextOverrides = {}): {
     ...ctxOverrides
   } = overrides;
 
-  let selection: readonly SegmentId[] = [];
-  const proposals: (readonly SegmentId[])[] = [];
+  let selection: readonly EntryId[] = [];
+  const proposals: (readonly EntryId[])[] = [];
   const previews: (EntryEdits | undefined)[] = [];
   const commits: [EntryGesture, EntryEdits][] = [];
 
@@ -159,9 +126,7 @@ function makeContext(overrides: ContextOverrides = {}): {
       };
     },
     selection: {
-      segmentIds: () => selection,
-      // The fake names every Segment after its Entry, so the projection reads the prefix back.
-      entryIds: () => ORDER.filter((id) => selection.some((seg) => String(seg).startsWith(`${id}-`))),
+      entryIds: () => selection,
       propose: (next) => {
         selection = next;
         proposals.push(next);
@@ -169,29 +134,15 @@ function makeContext(overrides: ContextOverrides = {}): {
       // The fake answers the same question, so a test that makes an Entry incapable drops it from
       // the order rather than expecting `interaction/` to filter a second time.
       selectableEntriesInRowOrder: () => ORDER.filter((id) => ctx.can('select', entryFor(id))),
-      // #212: the same row walk, one step further down — every selectable Entry's own Segments, in
-      // the order the panes draw them. Shift-click ranges over this, so a test that makes an Entry
-      // incapable drops its Segments from the range too.
-      selectableSegmentsInRowOrder: () =>
-        ctx.selection.segmentIdsOfEntries(ORDER.filter((id) => ctx.can('select', entryFor(id)))),
-      // #212: the shell answers both of these from the frame and the Dataset. The fake gives every
-      // Entry one Segment, and reads a bar's own Segment index out of the Bar id it was handed.
-      segmentIdsOfEntries: (ids) => ids.map((id) => segmentOf(id)),
-      segmentIdsForBar: (item) => [segmentOf(entryIdOfBar(item), segmentIndexOfBar(item))],
       // #185, #212, #230 R4: the pane rule — a row names every selectable Entry it owns (the fake
       // maps one row id to the Entry of the same name, so a test that wants a multi-entry row
-      // overrides it); a bar names its own Segment when its Entry may be selected.
-      selectableSegmentsOf: (hit) => {
+      // overrides it); a bar names its own Entry when it may be selected.
+      selectableEntriesOf: (hit) => {
         if (hit.kind === 'row') {
-          const owned = ORDER.includes(hit.rowId as unknown as EntryId)
-            ? [hit.rowId as unknown as EntryId]
-            : [];
-          return ctx.selection.segmentIdsOfEntries(owned);
+          return ORDER.includes(hit.rowId as unknown as EntryId) ? [hit.rowId as unknown as EntryId] : [];
         }
         const entry = ctx.entryFor(hit.barId);
-        return entry !== undefined && ctx.can('select', entry)
-          ? ctx.selection.segmentIdsForBar(hit.barId)
-          : [];
+        return entry !== undefined && ctx.can('select', entry) ? [entry.id] : [];
       },
     },
     ...ctxOverrides,
@@ -214,10 +165,10 @@ describe('attachEntryGestures — selection (S3.1)', () => {
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     pane.dispatchEvent(up(0));
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
 
     pane.dispatchEvent(up(1));
-    expect(proposals).toEqual([[SEG_A], [SEG_B]]);
+    expect(proposals).toEqual([[A], [B]]);
   });
 
   it('ctrl/cmd-click toggles membership', () => {
@@ -229,10 +180,10 @@ describe('attachEntryGestures — selection (S3.1)', () => {
 
     pane.dispatchEvent(up(0));
     pane.dispatchEvent(up(1, { ctrlKey: true }));
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B]);
+    expect(proposals.at(-1)).toEqual([A, B]);
 
     pane.dispatchEvent(up(0, { metaKey: true }));
-    expect(proposals.at(-1)).toEqual([SEG_B]);
+    expect(proposals.at(-1)).toEqual([B]);
   });
 
   it('shift-click extends over row order from the last plain/ctrl click', () => {
@@ -244,7 +195,7 @@ describe('attachEntryGestures — selection (S3.1)', () => {
 
     pane.dispatchEvent(up(0)); // anchor = A
     pane.dispatchEvent(up(2, { shiftKey: true })); // extend to C
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B, SEG_C]);
+    expect(proposals.at(-1)).toEqual([A, B, C]);
   });
 
   it('a right-click on a bar inside a multi-bar Selection leaves the Selection intact (#199/#205)', () => {
@@ -256,12 +207,12 @@ describe('attachEntryGestures — selection (S3.1)', () => {
 
     pane.dispatchEvent(up(0)); // anchor = A
     pane.dispatchEvent(up(1, { shiftKey: true })); // range A..B
-    expect(proposals).toEqual([[SEG_A], [SEG_A, SEG_B]]);
+    expect(proposals).toEqual([[A], [A, B]]);
 
     pane.dispatchEvent(down(1, { button: 2 }));
     pane.dispatchEvent(up(1, { button: 2 })); // right-click on B, part of the Selection
     // Unchanged — context-menu.ts decides what happens next. No propose call ran at all.
-    expect(proposals).toEqual([[SEG_A], [SEG_A, SEG_B]]);
+    expect(proposals).toEqual([[A], [A, B]]);
   });
 
   it('a right-click on an unselected bar writes nothing at the interaction layer (#199/#205)', () => {
@@ -274,7 +225,7 @@ describe('attachEntryGestures — selection (S3.1)', () => {
     pane.dispatchEvent(up(0)); // select A
     pane.dispatchEvent(down(1, { button: 2 }));
     pane.dispatchEvent(up(1, { button: 2 })); // right-click on B, never selected
-    expect(proposals).toEqual([[SEG_A]]); // context-menu.ts decides what B's right-click acts on, not this layer
+    expect(proposals).toEqual([[A]]); // context-menu.ts decides what B's right-click acts on, not this layer
   });
 
   it('a right-click on empty timeline clears a multi-bar Selection (#199/#205 follow-up)', () => {
@@ -286,7 +237,7 @@ describe('attachEntryGestures — selection (S3.1)', () => {
 
     pane.dispatchEvent(up(0)); // anchor = A
     pane.dispatchEvent(up(1, { shiftKey: true })); // range A..B
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B]);
+    expect(proposals.at(-1)).toEqual([A, B]);
 
     pane.dispatchEvent(down(99, { button: 2 }));
     pane.dispatchEvent(up(99, { button: 2 })); // right-click on empty timeline
@@ -303,7 +254,7 @@ describe('attachEntryGestures — selection (S3.1)', () => {
     pane.dispatchEvent(up(0)); // select A
     pane.dispatchEvent(down(99, { button: 1 }));
     pane.dispatchEvent(up(99, { button: 1 })); // middle-click on empty timeline — opens no menu
-    expect(proposals).toEqual([[SEG_A]]); // only a primary or a right-click may clear
+    expect(proposals).toEqual([[A]]); // only a primary or a right-click may clear
   });
 
   it('a touch tap on a bar selects it, the same as a primary-button click', () => {
@@ -314,7 +265,7 @@ describe('attachEntryGestures — selection (S3.1)', () => {
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     pane.dispatchEvent(up(0, { pointerType: 'touch' }));
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
   });
 
   it('shift-click omits incapable entries from the range; an empty result writes nothing', () => {
@@ -328,7 +279,7 @@ describe('attachEntryGestures — selection (S3.1)', () => {
 
     pane.dispatchEvent(up(0)); // anchor = A (capable)
     pane.dispatchEvent(up(2, { shiftKey: true })); // range A..C, B dropped
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_C]);
+    expect(proposals.at(-1)).toEqual([A, C]);
   });
 
   it('a click on an incapable bar leaves the selection untouched', () => {
@@ -342,7 +293,7 @@ describe('attachEntryGestures — selection (S3.1)', () => {
 
     pane.dispatchEvent(up(0));
     pane.dispatchEvent(up(1)); // B, incapable
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
   });
 
   it('click on empty timeline clears; Escape clears', () => {
@@ -408,7 +359,7 @@ describe('attachEntryGestures — grid row click', () => {
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0));
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
   });
 
   it('shift-click on a grid row ranges, same as the timeline', () => {
@@ -420,7 +371,7 @@ describe('attachEntryGestures — grid row click', () => {
 
     rowLayer.dispatchEvent(up(0)); // anchor = A
     rowLayer.dispatchEvent(up(2, { shiftKey: true })); // extend to C
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B, SEG_C]);
+    expect(proposals.at(-1)).toEqual([A, B, C]);
   });
 
   it('a right-click on a selected grid row leaves the Selection intact (#199/#205)', () => {
@@ -432,11 +383,11 @@ describe('attachEntryGestures — grid row click', () => {
 
     rowLayer.dispatchEvent(up(0)); // anchor = A
     rowLayer.dispatchEvent(up(1, { shiftKey: true })); // range A..B
-    expect(proposals).toEqual([[SEG_A], [SEG_A, SEG_B]]);
+    expect(proposals).toEqual([[A], [A, B]]);
 
     rowLayer.dispatchEvent(up(0, { button: 2 })); // right-click on A, part of the Selection
     // Unchanged: a right-click inside the Selection proposes nothing at all.
-    expect(proposals).toEqual([[SEG_A], [SEG_A, SEG_B]]);
+    expect(proposals).toEqual([[A], [A, B]]);
   });
 
   it('a miss on the grid pane does not clear the selection', () => {
@@ -448,8 +399,8 @@ describe('attachEntryGestures — grid row click', () => {
 
     pane.dispatchEvent(up(0)); // select A off the timeline
     rowLayer.dispatchEvent(up(99)); // grid miss — header row, padding, a twisty
-    expect(proposals).toEqual([[SEG_A]]);
-    expect(ctx.selection.segmentIds()).toEqual([SEG_A]);
+    expect(proposals).toEqual([[A]]);
+    expect(ctx.selection.entryIds()).toEqual([A]);
   });
 
   it('a right-click miss on the grid pane does not clear the selection', () => {
@@ -461,8 +412,8 @@ describe('attachEntryGestures — grid row click', () => {
 
     pane.dispatchEvent(up(0)); // select A off the timeline
     rowLayer.dispatchEvent(up(99, { button: 2 })); // right-click grid miss — header row, padding, a twisty
-    expect(proposals).toEqual([[SEG_A]]);
-    expect(ctx.selection.segmentIds()).toEqual([SEG_A]);
+    expect(proposals).toEqual([[A]]);
+    expect(ctx.selection.entryIds()).toEqual([A]);
   });
 
   it('a grid miss does not drop the shift-anchor — a later shift-click still ranges from it', () => {
@@ -475,7 +426,7 @@ describe('attachEntryGestures — grid row click', () => {
     rowLayer.dispatchEvent(up(0)); // anchor = A
     rowLayer.dispatchEvent(up(99)); // grid miss — clearOnMiss is false, must not drop the anchor either
     rowLayer.dispatchEvent(up(2, { shiftKey: true })); // extend from A to C
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B, SEG_C]);
+    expect(proposals.at(-1)).toEqual([A, B, C]);
   });
 
   it('an empty timeline click still clears, even after a grid miss', () => {
@@ -492,7 +443,7 @@ describe('attachEntryGestures — grid row click', () => {
   });
 
   // #185: a row that owns several Entries selects all of them. `hitTest` reports the row, and
-  // `selectableSegmentsOf` answers which Segments it owns — no Bar id is invented anywhere on this path.
+  // `selectableEntriesOf` answers which Entries it owns — no Bar id is invented anywhere on this path.
   const MULTI_ENTRY_ROW = rowId('multi-entry');
 
   function multiEntryRowContext(rowEntries: readonly EntryId[] = [A, B]) {
@@ -503,10 +454,7 @@ describe('attachEntryGestures — grid row click', () => {
         return at.x === 1 ? { kind: 'bar', barId: barId(A) } : undefined;
       },
       selection: {
-        selectableSegmentsOf: (hit: EntryHit) =>
-          hit.kind === 'row'
-            ? rowEntries.map((id) => segmentOf(id))
-            : [segmentOf(entryIdOfBar(hit.barId), segmentIndexOfBar(hit.barId))],
+        selectableEntriesOf: (hit: EntryHit) => (hit.kind === 'row' ? rowEntries : [entryIdOfBar(hit.barId)]),
       },
     });
   }
@@ -519,8 +467,8 @@ describe('attachEntryGestures — grid row click', () => {
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0));
-    // #212: the grid pane's unit is the row, so it selects every Segment of both Entries.
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B]);
+    // #212: the grid pane's unit is the row, so it selects both Entries the row owns.
+    expect(proposals.at(-1)).toEqual([A, B]);
   });
 
   it('ctrl-click toggles a multi-entry row as a unit (#185)', () => {
@@ -531,7 +479,7 @@ describe('attachEntryGestures — grid row click', () => {
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0, { ctrlKey: true }));
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B]);
+    expect(proposals.at(-1)).toEqual([A, B]);
 
     // Every member is selected now, so the same chord removes the whole row.
     rowLayer.dispatchEvent(up(0, { ctrlKey: true }));
@@ -547,7 +495,7 @@ describe('attachEntryGestures — grid row click', () => {
 
     pane.dispatchEvent(up(1)); // select A off its own bar
     rowLayer.dispatchEvent(up(0, { ctrlKey: true }));
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B]);
+    expect(proposals.at(-1)).toEqual([A, B]);
   });
 
   it('shift-click ranges to the last Entry the row owns (#185)', () => {
@@ -558,29 +506,26 @@ describe('attachEntryGestures — grid row click', () => {
       hitTest: (at) =>
         at.x === 0 ? { kind: 'bar', barId: barId(A) } : { kind: 'row', rowId: MULTI_ENTRY_ROW },
       selection: {
-        selectableSegmentsOf: (hit: EntryHit) =>
-          hit.kind === 'row'
-            ? [B, C].map((id) => segmentOf(id))
-            : [segmentOf(entryIdOfBar(hit.barId), segmentIndexOfBar(hit.barId))],
+        selectableEntriesOf: (hit: EntryHit) => (hit.kind === 'row' ? [B, C] : [entryIdOfBar(hit.barId)]),
       },
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     pane.dispatchEvent(up(0)); // anchor = A
     rowLayer.dispatchEvent(up(1, { shiftKey: true })); // range ends on C, the row's last Entry
-    expect(proposals.at(-1)).toEqual([SEG_A, SEG_B, SEG_C]);
+    expect(proposals.at(-1)).toEqual([A, B, C]);
   });
 
   it('a row Entry that refuses select is skipped, and never blocks the rest (#185)', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
-    // `selectableSegmentsOf` resolves the capability (I14), so an incapable Entry never reaches this file.
+    // `selectableEntriesOf` resolves the capability (I14), so an incapable Entry never reaches this file.
     const { ctx, proposals } = multiEntryRowContext([B]);
     attachEntryGestures(pane, rowLayer, container, ctx);
 
     rowLayer.dispatchEvent(up(0));
-    expect(proposals.at(-1)).toEqual([SEG_B]);
+    expect(proposals.at(-1)).toEqual([B]);
   });
 
   it('a row that owns nothing selectable writes nothing and clears nothing (#185)', () => {
@@ -592,7 +537,7 @@ describe('attachEntryGestures — grid row click', () => {
 
     pane.dispatchEvent(up(1)); // select A off its own bar
     rowLayer.dispatchEvent(up(0)); // a header row: it owns no Entry
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
   });
 
   it('a grid-row pointerup never arms move/resize — no session() call, no drag', () => {
@@ -673,7 +618,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
     // A is already the Selection, with no pick — the drag below grabs the bar it already names, so
     // the pointerdown-arm write (#211) has nothing to do. `proposals` is reset after seeding so the
     // assertion below is about what the drag itself proposes, not this setup step.
-    ctx.selection.propose([SEG_A]);
+    ctx.selection.propose([A]);
     proposals.length = 0;
 
     pane.dispatchEvent(down(0));
@@ -702,11 +647,11 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(down(0));
     expect(proposals).toEqual([]); // still nothing on pointerdown alone, threshold not yet crossed
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1)); // crosses the threshold — the drag arms here
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
 
     pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5));
     expect(commits).toHaveLength(1);
-    expect(proposals).toEqual([[SEG_A]]); // pointerup after a drag proposes nothing further
+    expect(proposals).toEqual([[A]]); // pointerup after a drag proposes nothing further
   });
 
   it('[#211] a drag on a bar already in a multi-Entry Selection does not re-propose it', () => {
@@ -718,7 +663,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
       can: (capability) => capability === 'move' || capability === 'select',
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
-    ctx.selection.propose([SEG_A, SEG_B]);
+    ctx.selection.propose([A, B]);
     proposals.length = 0;
 
     pane.dispatchEvent(down(0)); // grabs A, already part of the Selection
@@ -785,7 +730,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(up(0));
 
     expect(commit).not.toHaveBeenCalled();
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
   });
 
   it('a drag moves every capable entry `entriesForGesture` returns, grabbed first', () => {
@@ -859,7 +804,7 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     pane.dispatchEvent(up(0));
 
     expect(commit).not.toHaveBeenCalled();
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
   });
 
   it("asks can('resize', entry, edge) with the grabbed handle's own edge, not the other one (#142)", () => {
@@ -903,28 +848,27 @@ describe('attachEntryGestures — resize (S3.4)', () => {
     pane.dispatchEvent(up(0));
 
     expect(commit).not.toHaveBeenCalled();
-    expect(proposals).toEqual([[SEG_A]]);
+    expect(proposals).toEqual([[A]]);
   });
 });
 
-describe('attachEntryGestures — segments and visible row order (S4.10)', () => {
-  it('[S4-A4] arms the Entry when a Segment bar is grabbed, never the Segment (#200)', () => {
+// Retired (ADR 0026, #421): this describe block used to be 'segments and visible row order' — a
+// core Entry could grab a middle Segment's bar, and clicking it selected that one Segment, not
+// Segment 0. A core Entry now always draws exactly one Bar over its own span, so there is no
+// per-part identity left to select; only a plugin variant may still hand out several `partIndex`
+// values for one Entry (`layout/frame-layout.test.ts`'s "plugin variant" test), and grabbing any
+// one of its Bars must still arm — and select — the one Entry underneath, never a part of it. The
+// two tests below are kept, rewritten against that surviving question.
+describe('attachEntryGestures — multi-part bars and visible row order (S4.10)', () => {
+  it('[S4-A4] arms the Entry when a bar with a non-zero partIndex is grabbed, never a part of it (#200)', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     mockPointerCapture(pane);
     const middle = barId(A, 1);
     const grabbedIds: EntryId[] = [];
-    const segmented = storeOf([
-      storedFor(A, [
-        { id: segmentId('seg-1'), start: toInstant(0), end: toInstant(1) },
-        { id: segmentId('seg-2'), start: toInstant(2), end: toInstant(3) },
-        { id: segmentId('seg-3'), start: toInstant(4), end: toInstant(5) },
-      ]),
-    ]).get(A)!;
     const { ctx } = makeContext({
       hitTest: () => ({ kind: 'bar' as const, barId: middle }),
-      entryFor: (item) => (item === middle ? segmented : entryFor(entryIdOfBar(item))),
       session: (grabbed) => {
         grabbedIds.push(grabbed);
         return {
@@ -940,11 +884,12 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     pane.dispatchEvent(down(0));
     pane.dispatchEvent(move(DRAG_THRESHOLD_PX + 1));
 
-    // The grabbed bar is the middle Segment; what arms is the Entry the Selection names.
+    // The grabbed bar carries partIndex 1; what arms is the Entry the Selection names.
+    expect(partIndexOfBar(middle)).toBe(1);
     expect(grabbedIds).toEqual([A]);
   });
 
-  it('plain click selects the Segment the bar drew, not only Segment 0 (#212)', () => {
+  it('plain click on a bar with a non-zero partIndex selects its Entry, not a per-part id (#212)', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
@@ -954,9 +899,9 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     });
     attachEntryGestures(pane, rowLayer, container, ctx);
 
-    pane.dispatchEvent(up(1000)); // hit resolves to segment 1 of A
+    pane.dispatchEvent(up(1000)); // hit resolves to A's bar at partIndex 1
 
-    expect(proposals).toEqual([[segmentOf(A, 1)]]);
+    expect(proposals).toEqual([[A]]);
   });
 
   it('shift-click ranges over selectableEntriesInRowOrder, skipping rows not shown', () => {
@@ -970,6 +915,6 @@ describe('attachEntryGestures — segments and visible row order (S4.10)', () =>
     pane.dispatchEvent(up(1)); // select B
     pane.dispatchEvent(up(2, { shiftKey: true })); // range to C
 
-    expect(proposals).toEqual([[SEG_B], [SEG_B, SEG_C]]);
+    expect(proposals).toEqual([[B], [B, C]]);
   });
 });
