@@ -40,7 +40,7 @@ export function resolveBarLabelText(
   bind: ResolveBarLabelBind,
 ): string {
   const merged = mergeBarLabels(ganttBarLabels, variantBarLabels);
-  if (merged.placement === 'none') return '';
+  if (merged.policy === 'none') return '';
   const field = ports.lookup.get(merged.field);
   if (field === undefined) {
     ports.reportUnknownField(merged.field);
@@ -59,5 +59,5 @@ export function resolveBarLabelPolicy(
   ganttBarLabels: BarLabels,
   variantBarLabels: BarLabels | undefined,
 ): BarLabelPolicy {
-  return mergeBarLabels(ganttBarLabels, variantBarLabels).placement;
+  return mergeBarLabels(ganttBarLabels, variantBarLabels).policy;
 }

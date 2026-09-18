@@ -88,8 +88,8 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  carries one fragment, and the library holds one sheet. */
   css?: string;
   /** What this variant's own bars print, and where. Merges key by key over the Gantt's own
-   *  `barLabels` (#421 C5): `{ placement: 'outside' }` alone keeps the Gantt's own `field`,
-   *  and `{ field: 'hours' }` alone keeps the Gantt's own placement. Omit it for no opinion — every
+   *  `barLabels` (#421 C5): `{ policy: 'outside' }` alone keeps the Gantt's own `field`,
+   *  and `{ field: 'hours' }` alone keeps the Gantt's own policy. Omit it for no opinion — every
    *  bar this variant draws then prints exactly what the Gantt's own `barLabels` says. */
   barLabels?: BarLabels;
 }
