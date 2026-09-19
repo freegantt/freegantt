@@ -37,6 +37,7 @@ export default defineConfig({
         planner: page('planner.html'),
         plugins: page('plugins.html'),
         'mount-destroy': page('mount-destroy.html'),
+        'dense-tile-grid': page('dense-tile-grid.html'),
       },
     },
   },
