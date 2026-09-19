@@ -1126,6 +1126,8 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get gridColumns(): readonly GridColumnInput[];
     set gridColumns(columns: readonly GridColumnInput[]);
+    get gridResizable(): boolean;
+    set gridResizable(resizable: boolean);
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(width: GridWidth);
@@ -1268,6 +1270,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     dateLines?: readonly DateLineInput[];
     gridCellRenderer?: GridCellRenderer;
     gridColumns?: readonly GridColumnInput[];
+    gridResizable?: boolean;
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
     locale?: Intl.LocalesArgument;
