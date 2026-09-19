@@ -1275,6 +1275,169 @@ describe('resolvedTheme / themeChange (#330)', () => {
   });
 });
 
+describe('theme: ThemeResolver (#433)', () => {
+  const flushMutationObserver = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it("a resolver keyed on <html class='dark'> resolves dark, and paints data-fg-theme with the answer", () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      const resolver = () => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+      document.documentElement.classList.add('dark');
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(entries),
+        theme: resolver,
+      });
+
+      expect(shell.resolvedTheme).toBe('dark');
+      expect(container.getAttribute('data-fg-theme')).toBe('dark');
+
+      shell.destroy();
+    } finally {
+      document.documentElement.classList.remove('dark');
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('flipping the class the resolver reads fires exactly one themeChange, with the right from/to', async () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const resolver = () => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(entries),
+        theme: resolver,
+      });
+      expect(shell.resolvedTheme).toBe('light');
+
+      const events: Array<{ from: string; to: string }> = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+
+      document.documentElement.classList.add('dark');
+      await flushMutationObserver();
+
+      expect(shell.resolvedTheme).toBe('dark');
+      expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+      shell.destroy();
+      container.remove();
+    } finally {
+      document.documentElement.classList.remove('dark');
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("switching back to 'auto' restores OS-based resolution and the narrow observer filter", async () => {
+    const { query, fire } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const resolver = () => (document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(entries),
+        theme: resolver,
+      });
+      expect(shell.resolvedTheme).toBe('light');
+
+      shell.theme = 'auto';
+      expect(shell.resolvedTheme).toBe('light');
+      expect(container.hasAttribute('data-fg-theme')).toBe(false);
+
+      // The OS is the only thing 'auto' listens to now — a class flip the resolver used to read
+      // moves nothing, and the live MediaQueryList still does.
+      document.documentElement.classList.add('dark');
+      await flushMutationObserver();
+      expect(shell.resolvedTheme).toBe('light');
+
+      const events: Array<{ from: string; to: string }> = [];
+      shell.on('themeChange', (change) => {
+        events.push(change);
+      });
+      fire(true);
+      expect(shell.resolvedTheme).toBe('dark');
+      expect(events).toEqual([{ from: 'light', to: 'dark' }]);
+
+      shell.destroy();
+      container.remove();
+    } finally {
+      document.documentElement.classList.remove('dark');
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("a throwing resolver falls back to the built-in 'auto' answer and reports 'theme-resolver-failed' once", () => {
+    const { query } = fakeDarkSchemeQuery(true);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const reports: Array<{ code: string; severity: string; by: string }> = [];
+      shell.on('error', (report) => {
+        reports.push(report);
+      });
+
+      const resolver = (): 'light' | 'dark' => {
+        throw new Error('boom');
+      };
+      shell.theme = resolver;
+
+      // The OS said dark; the resolver threw, so the fallback answer is the built-in 'auto' read.
+      expect(shell.resolvedTheme).toBe('dark');
+      expect(container.getAttribute('data-fg-theme')).toBe('dark');
+
+      shell.theme = resolver; // second write, same resolver — must not report twice.
+
+      const failures = reports.filter((report) => report.code === 'theme-resolver-failed');
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.severity).toBe('warning');
+      expect(failures[0]?.by).toBe('core');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("a resolver returning something other than 'light'/'dark' also falls back and reports once", () => {
+    const { query } = fakeDarkSchemeQuery(false);
+    vi.stubGlobal('matchMedia', () => query);
+    try {
+      const container = document.createElement('div');
+      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const reports: Array<{ code: string; severity: string }> = [];
+      shell.on('error', (report) => {
+        reports.push(report);
+      });
+
+      // Deliberately mistyped return, the way a JS consumer (no type checker) could hand this in.
+      const resolver = (() => 'auto') as unknown as () => 'light' | 'dark';
+      shell.theme = resolver;
+      shell.theme = resolver; // second write, same resolver — must not report twice.
+
+      expect(shell.resolvedTheme).toBe('light');
+      const failures = reports.filter((report) => report.code === 'theme-resolver-failed');
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.severity).toBe('warning');
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
 describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () => {
   it('a 500-entry transaction updating every entry yields one change, one computeFrame, one sync, and an unchanged height index', () => {
     // Installed before construction so the shell's own first render (#22) is call #0 — the only way
