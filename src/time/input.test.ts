@@ -74,7 +74,7 @@ describe('toInstant()', () => {
     // spread record, anything the compiler has already lost sight of by the time it reaches here.
     expect(() => toInstant(CHICAGO, null as unknown as string)).toThrow(InvalidInstantError);
     expect(() => toInstant(CHICAGO, null as unknown as string)).toThrow(
-      'null. An Entry with no span of its own omits the property instead',
+      'null names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.',
     );
     // The message must not send the reader to look at zones or offsets — that is the one thing that
     // is not wrong here.

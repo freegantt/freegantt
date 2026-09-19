@@ -145,7 +145,7 @@ describe('new Dataset()', () => {
     // deserializes as `null` rather than an absent key.
     const rows = JSON.parse('[{"id":"t1","name":"P","start":null,"end":null}]') as EntryInput[];
     expect(() => new Dataset({ timeZone: 'UTC', entries: rows })).toThrow(
-      /is null\. An Entry with no span of its own omits the property/,
+      'null names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.',
     );
     expect(() => new Dataset({ timeZone: 'UTC', entries: rows })).not.toThrow(/offset|zone/i);
   });
@@ -153,7 +153,9 @@ describe('new Dataset()', () => {
   it('rejects a null end on its own, once start reads fine (#431)', () => {
     expect(
       () => new Dataset({ timeZone: 'UTC', entries: [oneEntry({ end: null as unknown as string })] }),
-    ).toThrow(/is null\. An Entry with no span of its own omits the property/);
+    ).toThrow(
+      'null names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.',
+    );
   });
 });
 
