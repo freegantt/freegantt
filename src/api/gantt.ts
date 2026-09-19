@@ -20,6 +20,7 @@ import type {
   ViewPreset,
   RowSource,
   ResolvedRowSource,
+  Overscan,
 } from '../layout/index.js';
 import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
@@ -105,6 +106,11 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
    *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
   minGridWidth?: number;
+  /** Live (plans/02, "The culling buffer (`overscan`)"). The culling buffer around the visible window: `verticalRows` whole rows
+   *  above and below, `horizontalPx` px left and right of the timeline pane. A row or a bar inside
+   *  the buffer stays mounted while it is one scroll step from view, so a small scroll never shows a
+   *  bare frame. Default `{ verticalRows: 2, horizontalPx: 128 }`. */
+  overscan?: Overscan;
   /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
@@ -300,6 +306,7 @@ export class Gantt<TProps = unknown> {
         'scroll',
         'gridWidth',
         'minGridWidth',
+        'overscan',
         'preset',
         'fit',
         'theme',
@@ -471,6 +478,14 @@ export class Gantt<TProps = unknown> {
 
   set minGridWidth(px: number) {
     this.#shell.minGridWidth = px;
+  }
+
+  get overscan(): Overscan {
+    return this.#shell.overscan;
+  }
+
+  set overscan(o: Overscan) {
+    this.#shell.overscan = o;
   }
 
   get gridColumns(): readonly GridColumnInput[] {

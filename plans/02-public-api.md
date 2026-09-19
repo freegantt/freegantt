@@ -141,9 +141,21 @@ gantt.snap = { unit: 'day', increment: 2 };   // D-S3-24 — this Gantt's own sn
 gantt.gridWidth = 220;                  // S1.8 — same cancelable commit sequence a splitter drag runs
 gantt.gridWidth = 'fitColumns';         // #157 — as wide as the columns, and stays that way
 gantt.minGridWidth = 80;                // #127 — floor the Splitter drag clamps gridWidth to (default 40)
+gantt.overscan = { verticalRows: 0, horizontalPx: 0 };  // #435 — the culling buffer; see below
 ```
 
 Every config key is a live property. Setting one triggers exactly the invalidation it needs (a preset change rebuilds the time axis; a row-source change re-resolves rows) — never a full remount.
+
+### The culling buffer (`overscan`)
+
+The library mounts only rows and bars inside the visible window, plus a buffer around it. `overscan`
+sets that buffer. `verticalRows` sets whole rows above and below the window. `horizontalPx` sets px
+to the left and right of the timeline pane. The default is `{ verticalRows: 2, horizontalPx: 128 }`.
+
+A row or a bar inside the buffer stays mounted while it sits one scroll step from view. This stops a
+small scroll from showing a bare frame before the next paint catches up. A test that checks nothing
+renders outside the visible window should not guess the buffer's size. It reads `gantt.overscan`, or
+sets it to `{ verticalRows: 0, horizontalPx: 0 }` for the tightest possible bound (#435).
 
 **Two keys are exceptions, and both belong to the `Dataset`: `fields` and `plugins`.** A Field declaration and a Dataset plugin are fixed at construction. `dataset.fields` is a read-only getter, `Dataset.plugins` is read-only, and `ctx.fields.register` is legal only while that plugin's own `setup()` runs — a later call throws `RegistrationClosedError`.
 

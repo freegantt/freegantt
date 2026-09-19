@@ -8,16 +8,13 @@ import { test, expect } from '@playwright/test';
 // too-narrow tile). `harness/dense-tile-grid.ts` is 50 rows of 250 day-tiles apiece — both axes far
 // bigger than the pane — under `barLabels: 'insideOrNone'`.
 //
-// Bound derivation: an app author has no public way to read or set the render window's overscan.
-// `GanttOptions` (`src/api/gantt.ts`) carries no `overscan` key; `GanttShellOptions.overscan`
-// (`src/view/gantt-shell.ts:286`) is one layer further in and unreachable from here — a real gap,
-// reported alongside this test rather than papered over. So the bound below does not restate that
-// private slack; it measures the pane's own rendered size and the harness page's own tile/row size
-// for the *exact* visible slice, then adds a fixed, generous, additive headroom — extra tiles and
-// extra rows beyond the edge, the same shape overscan itself takes, not a multiple of the visible
-// count — to cover whatever overscan the engine happens to keep. `layout/frame.ts`'s shipped
-// default is 128px / 2 rows; the headroom here is several times that, so it stays well clear of the
-// real value while remaining far tighter than either "one axis renders unwindowed" scenario below.
+// Bound derivation: this asks "does the culled bar count match the exact visible slice, with no
+// slack at all?" — the tightest question the API can express. `harness/dense-tile-grid.ts` sets
+// `overscan: { verticalRows: 0, horizontalPx: 0 }` on its Gantt, so the render window carries no
+// buffer past the visible edge; the assertion below reads that same setting back off
+// `window.__gantt.overscan` (the public accessor, `src/api/gantt.ts`) rather than restating `0`
+// twice, then measures the pane's own rendered size and the harness page's own tile/row size for
+// the exact visible slice — no headroom added, because none is configured.
 test('bar count stays windowed on both axes under a dense tile grid, and the visible set moves on scroll (#435 follow-up)', async ({
   page,
 }) => {
@@ -36,6 +33,7 @@ test('bar count stays windowed on both axes under a dense tile grid, and the vis
       tileWidthPx: window.__tileWidthPx,
       rowCount: window.__rowCount,
       tilesPerRow: window.__tilesPerRow,
+      overscan: window.__gantt.overscan,
     };
   });
 
@@ -44,11 +42,13 @@ test('bar count stays windowed on both axes under a dense tile grid, and the vis
   const visibleTiles = Math.ceil(geometry.paneWidth / geometry.tileWidthPx) + 1;
   const visibleRows = Math.ceil(geometry.paneHeight / geometry.rowHeightPx) + 1;
 
-  // Additive headroom, well above the shipped 128px / 2-row default (see file comment): 40 tiles
-  // and 10 rows beyond the exact visible slice, on top of it, in each axis.
-  const TILE_HEADROOM = 40;
-  const ROW_HEADROOM = 10;
-  const boundedCount = (visibleTiles + TILE_HEADROOM) * (visibleRows + ROW_HEADROOM);
+  // The real culling buffer, read off the public `overscan` accessor rather than restated as a
+  // literal — #435 closed the gap that once forced a guessed headroom here. The harness page sets
+  // `overscan` to zero, so `rowHeadroom` and `tileHeadroom` resolve to zero and this bound is the
+  // exact visible slice: the tightest assertion the API can express.
+  const rowHeadroom = geometry.overscan.verticalRows ?? 0;
+  const tileHeadroom = Math.ceil((geometry.overscan.horizontalPx ?? 0) / geometry.tileWidthPx);
+  const boundedCount = (visibleTiles + tileHeadroom) * (visibleRows + rowHeadroom);
 
   // The bound must actually bind: comfortably under the full dataset, and under either axis
   // rendering unwindowed on its own — every tile of every row (vertical culling intact, horizontal
