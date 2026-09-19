@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — theme resolver</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        --fg-bar-label-gap: 6px;
+        border: 1px solid #ccc;
+        height: 60vh;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+      .controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      output {
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — theme resolver</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        The Gantt below never sees <code>data-fg-theme</code>: this page signals dark mode the way Tailwind,
+        Filament, and next-themes do, with a <code>dark</code> class on <code>&lt;html&gt;</code>. A
+        <code>ThemeResolver</code> (#433) reads that class instead of the built-in <code>'auto'</code>
+        pin/OS pair. Toggling the class flips the Gantt with no assignment of its own.
+      </p>
+      <div id="page-brief"></div>
+      <div class="controls">
+        <button type="button" data-testid="toggle-dark-class">Toggle wrapping app dark mode</button>
+        <output data-testid="resolver-calls">0 resolver calls</output>
+      </div>
+      <div id="gantt"></div>
+    </main>
+    <script type="module" src="./theme-resolver.ts"></script>
+  </body>
+</html>

@@ -178,7 +178,12 @@ export type AttachColumnGestures = (
  *  document.documentElement.classList.contains('dark') ? 'dark' : 'light'`. It answers
  *  `ResolvedTheme` only, never `'auto'` — a resolver answers a question, it does not ask one back.
  *  A resolver that throws, or returns anything else, falls back to the built-in `'auto'` answer for
- *  that read. It also raises `'theme-resolver-failed'` once (`#resolveWithResolver`). */
+ *  that read. It also raises `'theme-resolver-failed'` once (`#resolveWithResolver`).
+ *
+ *  Keep it cheap and free of side effects. Installing one widens `#themePinObserver` to every
+ *  attribute under the document (`#observeThemePin`). The library then calls this function again on
+ *  any unrelated attribute or class churn anywhere under the root. That includes churn that has
+ *  nothing to do with the change it exists to catch. */
 export type ThemeResolver = () => ResolvedTheme;
 
 /** S1.10, D-S1.10-4: theming's preset axis — `'auto'` follows `prefers-color-scheme` (no
@@ -2109,7 +2114,13 @@ export class GanttShell {
 
   #applyTheme(): void {
     if (typeof this.#theme === 'function') {
-      this.#container.setAttribute('data-fg-theme', this.#resolveWithResolver(this.#theme));
+      // #433: write only on a real change. The widened observer (`#observeThemePin`) wakes on
+      // this very attribute. An unconditional write here would re-enter itself forever, because a
+      // same-value `setAttribute` still queues a mutation record; there is no short-circuit for it.
+      const next = this.#resolveWithResolver(this.#theme);
+      if (this.#container.getAttribute('data-fg-theme') !== next) {
+        this.#container.setAttribute('data-fg-theme', next);
+      }
     } else if (this.#theme === 'auto') {
       this.#container.removeAttribute('data-fg-theme');
     } else {
