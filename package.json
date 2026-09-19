@@ -1,6 +1,6 @@
 {
   "name": "freegantt",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
   "sideEffects": [
     "src/view/styles.ts"
@@ -20,7 +20,7 @@
     "dist"
   ],
   "scripts": {
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "node scripts/setup-hooks.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",

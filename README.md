@@ -210,6 +210,7 @@ dataset.transaction(() => {
 dataset.on('beforeChange', ({ changeSet }) => false); // veto — throws MutationCancelledError
 dataset.on('change', ({ changeSet }) => {
   /* changeSet.added / .removed / .updated — a bound Gantt reacts to this itself */
+  /* undo()/redo() emit this too, tagged origin: 'undo'|'redo' — sample: docs/05-consumer-api.md */
 });
 
 dataset.undo(); // origin: 'undo' on the change event it emits
