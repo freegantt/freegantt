@@ -28,6 +28,7 @@ import type {
   EntryInput,
   ErrorReport,
   ChromePlugin,
+  GridColumn,
   GridColumnInput,
   PluginContext,
   TimeUnit,
@@ -1607,6 +1608,246 @@ describe('Gantt minGridWidth (#127)', () => {
     expect(after).toEqual([]);
     expect(gantt.gridWidth).toBe(160);
 
+    gantt.destroy();
+  });
+});
+
+describe('Gantt gridResizable (#432)', () => {
+  /** Drags the real splitter from `fromX` to `toX` and releases — same helper as the
+   *  `minGridWidth` suite above. */
+  function dragSplitter(container: HTMLElement, fromX: number, toX: number): void {
+    const splitter = container.querySelector<HTMLElement>('.fg-splitter');
+    if (splitter === null) throw new Error('no splitter');
+    splitter.setPointerCapture = vi.fn();
+    splitter.releasePointerCapture = vi.fn();
+    splitter.dispatchEvent(new PointerEvent('pointerdown', { clientX: fromX, pointerId: 1 }));
+    splitter.dispatchEvent(new PointerEvent('pointermove', { clientX: toX, pointerId: 1 }));
+    splitter.dispatchEvent(new PointerEvent('pointerup', { clientX: toX, pointerId: 1 }));
+  }
+
+  it('defaults true: the splitter drags exactly as it did before this option existed', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+    });
+
+    dragSplitter(container, 200, 300);
+
+    expect(gantt.gridWidth).toBe(300);
+    gantt.destroy();
+  });
+
+  it('gridResizable: false stops a splitter drag from changing gridWidth', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridResizable: false,
+    });
+
+    dragSplitter(container, 200, 300);
+
+    expect(gantt.gridWidth).toBe(200);
+    gantt.destroy();
+  });
+
+  it('gridResizable: false fires no beforeGridWidthChange for a drag that cannot arm', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridResizable: false,
+    });
+    const before = vi.fn();
+    gantt.on('beforeGridWidthChange', before);
+
+    dragSplitter(container, 200, 300);
+
+    expect(before).not.toHaveBeenCalled();
+    gantt.destroy();
+  });
+
+  it('gridResizable: false leaves the splitter with no resize cursor', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridResizable: false,
+    });
+
+    const splitter = container.querySelector<HTMLElement>('.fg-splitter')!;
+    expect(splitter.hasAttribute('data-resize-off')).toBe(true);
+
+    gantt.destroy();
+  });
+
+  it('gridResizable: false stops every column painting a resizer grip, regardless of its own resizable', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridResizable: false,
+      gridColumns: [{ field: 'name', resizable: true }],
+    });
+
+    const header = container.querySelector<HTMLElement>('.fg-col-header')!;
+    expect(header.hasAttribute('data-resizable-off')).toBe(true);
+
+    gantt.destroy();
+  });
+
+  it('gridResizable: false fires no beforeGridColumnsChange for a column resize that cannot arm', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridResizable: false,
+      gridColumns: ['name'],
+    });
+    const before = vi.fn();
+    gantt.on('beforeGridColumnsChange', before);
+
+    const resizer = container.querySelector<HTMLElement>('.fg-column-resizer')!;
+    resizer.setPointerCapture = vi.fn();
+    resizer.releasePointerCapture = vi.fn();
+    resizer.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 100, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    resizer.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    resizer.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 250, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+
+    expect(before).not.toHaveBeenCalled();
+    gantt.destroy();
+  });
+
+  it('a programmatic gridWidth write still lands while locked — the gesture is off, not the value', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridResizable: false,
+    });
+
+    gantt.gridWidth = 240;
+
+    expect(gantt.gridWidth).toBe(240);
+    gantt.destroy();
+  });
+
+  it('a programmatic gridColumns write still lands while locked', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridResizable: false,
+      gridColumns: ['name'],
+    });
+
+    gantt.gridColumns = ['name', 'start'];
+
+    expect(gantt.gridColumns.map((c) => (typeof c === 'string' ? c : c.field))).toEqual(['name', 'start']);
+    gantt.destroy();
+  });
+
+  it("locks in gridWidth: 'fitColumns' against a splitter drag — #432's own consequence of #157", () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 'fitColumns',
+      gridColumns: ['name', 'start'],
+      gridResizable: false,
+    });
+    const widthBeforeDrag = gantt.gridWidth;
+
+    dragSplitter(container, widthBeforeDrag, widthBeforeDrag + 400);
+
+    expect(gantt.gridWidth).toBe(widthBeforeDrag);
+    // A stray drag must not convert 'fitColumns' into a fixed width: adding a column still grows
+    // the pane, which only happens while 'fitColumns' still stands.
+    gantt.gridColumns = ['name', 'start', 'end'];
+    expect(gantt.gridWidth).toBeGreaterThan(widthBeforeDrag);
+    gantt.destroy();
+  });
+
+  it('is live: turning gridResizable back on restores the splitter drag', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+      gridResizable: false,
+    });
+
+    gantt.gridResizable = true;
+    dragSplitter(container, 200, 300);
+
+    expect(gantt.gridWidth).toBe(300);
+    gantt.destroy();
+  });
+
+  it('is live: turning gridResizable off mid-session locks an in-place splitter', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridWidth: 200,
+    });
+
+    gantt.gridResizable = false;
+    dragSplitter(container, 200, 300);
+
+    expect(gantt.gridWidth).toBe(200);
+    gantt.destroy();
+  });
+
+  it('a column keeps its own narrower resizable: false once the Gantt-wide lock lifts', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridResizable: false,
+      gridColumns: [{ field: 'name', resizable: false }],
+    });
+
+    gantt.gridResizable = true;
+
+    const header = container.querySelector<HTMLElement>('.fg-col-header')!;
+    expect(header.hasAttribute('data-resizable-off')).toBe(true);
+    gantt.destroy();
+  });
+
+  // F4 (branch review, 2026-09-19): a locked Gantt paints every grip off, but a programmatic
+  // column write's own `from` must still report the consumer's real, authored `resizable` — never
+  // a `resizable: false` the lock forced into a stored resolution and the consumer never wrote.
+  it('gridColumnsChange reports the authored resizable, not the lock, in both from and to', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridResizable: false,
+      gridColumns: ['name', 'start'],
+    });
+    const changed = vi.fn();
+    gantt.on('gridColumnsChange', changed);
+
+    gantt.hideGridColumn('start');
+
+    expect(changed).toHaveBeenCalledTimes(1);
+    const [{ from, to }] = changed.mock.calls[0] as [{ from: GridColumn[]; to: GridColumn[] }];
+    const fromName = from.find((c) => c.field === 'name')!;
+    const toName = to.find((c) => c.field === 'name')!;
+    expect(fromName.resizable).toBe(true);
+    expect(toName.resizable).toBe(true);
     gantt.destroy();
   });
 });

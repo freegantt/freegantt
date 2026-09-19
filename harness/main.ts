@@ -114,6 +114,7 @@ const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
+const lockGridCheckbox = document.querySelector<HTMLInputElement>('#lock-grid-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 const rowsSourceBtn = document.querySelector<HTMLButtonElement>('#rows-source-btn')!;
 const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
@@ -184,6 +185,12 @@ toggleBudgetBtn.addEventListener('click', () => {
   if (wasHidden) gantt.showGridColumn('cost');
   else gantt.hideGridColumn('cost');
   toggleBudgetBtn.textContent = wasHidden ? 'Hide Budget' : 'Show Budget';
+});
+
+// #432: one config key locks both grid-pane resize affordances — the splitter and every column's
+// own resizer grip — live, with no per-column sweep and no event veto.
+lockGridCheckbox.addEventListener('change', () => {
+  gantt.gridResizable = !lockGridCheckbox.checked;
 });
 
 reparentBtn.addEventListener('click', () => {

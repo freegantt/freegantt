@@ -123,6 +123,40 @@ describe('new Dataset()', () => {
     expect(input.start).toBe('2026-09-01');
     expect(first(dataset)).not.toBe(input);
   });
+
+  it('takes an omitted start/end, and an explicit undefined, leaving both absent (#431)', () => {
+    const omitted = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'No span' }],
+    });
+    expect(first(omitted).start).toBeUndefined();
+    expect(first(omitted).end).toBeUndefined();
+
+    const explicitUndefined = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'No span', start: undefined, end: undefined }],
+    });
+    expect(first(explicitUndefined).start).toBeUndefined();
+    expect(first(explicitUndefined).end).toBeUndefined();
+  });
+
+  it('rejects a null start/end with a fault naming the fix, not a zone problem (#431)', () => {
+    // The way this actually reaches a consumer: a row read from JSON, where a missing column often
+    // deserializes as `null` rather than an absent key.
+    const rows = JSON.parse('[{"id":"t1","name":"P","start":null,"end":null}]') as EntryInput[];
+    expect(() => new Dataset({ timeZone: 'UTC', entries: rows })).toThrow(
+      'null names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.',
+    );
+    expect(() => new Dataset({ timeZone: 'UTC', entries: rows })).not.toThrow(/offset|zone/i);
+  });
+
+  it('rejects a null end on its own, once start reads fine (#431)', () => {
+    expect(
+      () => new Dataset({ timeZone: 'UTC', entries: [oneEntry({ end: null as unknown as string })] }),
+    ).toThrow(
+      'null names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.',
+    );
+  });
 });
 
 describe('Dataset timeZone omission (#129)', () => {
