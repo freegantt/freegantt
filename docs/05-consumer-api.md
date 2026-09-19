@@ -174,6 +174,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-cell-padding-block` | `4px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` |
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
 | `--fg-bar-label-gap` | `8px` | `pixel-property.ts`, read once at `mount()` — `.fg-bar-label` inline padding, and the gap between a bar's right edge and an outside label (J1) |
+| `--fg-z-overlay` | `3` | `.fg-overlay` CSS rule directly (not `pixel-property.ts` — a stacking position, not a layout number). Set above every internal layer (the grid header, the timeline header, a dragged column header, the date cursor line) so a mounted `.fg-popup` — a tooltip or a `contextMenu()` — always paints, and hit-tests, above them. Raise it further when this Gantt sits inside a consumer's own stacking context (#437) |
 
 ### Colour and shadow tokens
 
