@@ -28,6 +28,7 @@ export default defineConfig({
         index: page('index.html'),
         'scroll-sync': page('scroll-sync.html'),
         'grid-scroll': page('grid-scroll.html'),
+        'bar-label-fit': page('bar-label-fit.html'),
         zoom: page('zoom.html'),
         'large-dataset': page('large-dataset.html'),
         data: page('data.html'),

@@ -83,7 +83,7 @@ export function barIdFromDataset(value: string | undefined): BarId | undefined;
 export type BarLabelPlacement = 'inside' | 'outside';
 
 // @public
-export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none';
 
 // @public
 export type BarLabels = BarLabelPolicy | BarLabelSpec;
@@ -1147,6 +1147,8 @@ export class Gantt<TProps = unknown> {
     off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     // (undocumented)
     on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+    get overscan(): Overscan;
+    set overscan(o: Overscan);
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
     get plugins(): readonly ChromePlugin<TProps>[];
@@ -1275,6 +1277,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     headerRenderer?: HeaderRenderer;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
+    overscan?: Overscan;
     plugins?: readonly ChromePlugin<TProps>[];
     rowSource?: RowSource;
     scroll?: ScrollAxes;
@@ -1617,6 +1620,14 @@ export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 
 // @public (undocumented)
 export function now(): Instant;
+
+// @public
+export interface Overscan {
+    // (undocumented)
+    horizontalPx?: number;
+    // (undocumented)
+    verticalRows?: number;
+}
 
 // @public
 export type PaneName = 'grid' | 'timeline';

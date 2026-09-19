@@ -442,6 +442,14 @@ ${DARK_COLOR_TOKENS}
    label colour, with no ellipsis: resolveBarLabelPlacement only ever chooses 'outside' when the full
    label already fits past the bar's right edge. */
 .fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); }
+/* data-label='hidden' (F1, #435 follow-up: render/dom/index.ts's own BarLabelToken) — barLabels:
+   'insideOrNone' on a bar too narrow for its label. Named for what the DOM shows, not for the
+   'none' policy value that produces it — this child exists and is measured, only unpainted (R1,
+   pass-2 branch review). It still exists at all so a resize preview can flip this attribute back to
+   'inside' mid-drag (the hot path only flips attributes, never grows a child); this rule hides it
+   instead of the library leaving the child unmounted, which is what kept the label painted, clipped,
+   on a shrink that crossed the fit line mid-drag. */
+.fg-bar[data-label='hidden'] .fg-bar-label { display: none; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). All five tokens paint now.
