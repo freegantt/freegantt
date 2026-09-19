@@ -338,3 +338,73 @@ Worth stating, because a guardrail system that nobody wants to run is a guardrai
 | Build-out cost | ~2 days of S0, of which the 9 custom rules are ~1 day |
 
 The type-aware ESLint pass dominates local lint time and grows with the codebase. If `lint` crosses ~30s, the response is to split the type-aware rules into a separate `lint:types` script run at pre-push and CI only, keeping the per-edit hook syntactic and fast — not to drop rules.
+
+---
+
+## 7. Traps that cost contributors time
+
+Each item below is a real failure from a real branch. None of them is caught by a lint rule, and
+each one cost at least one wasted cycle. Add to this list when a trap costs you a cycle.
+
+The consumer-facing counterpart is `docs/09-integration-pitfalls.md`.
+
+### 7.1 Probe the DOM-free layers in Node, not in a browser
+
+`model/`, `time/`, `data/` and `layout/` never touch the DOM (`plans/01` §1). They ship to the
+browser like everything else, and they also run in plain Node. So a question about tick geometry,
+scale arithmetic or frame culling needs no dev server and no Playwright.
+
+On #436 a browser investigation spent several rounds on stale reads. The same bug then reproduced
+in a throwaway Vitest file in about one minute, and it matched the browser numbers to the pixel.
+
+Write the probe, read it once, then delete it. Pin the behaviour with a real test afterwards.
+
+### 7.2 A stale first read follows any preset or zoom change in the browser
+
+When an e2e test clicks a preset control, the first measurement it takes can still be the old
+frame. On #436 that produced a false "the gap collapsed to 0" and sent the investigation backwards.
+
+Wait for the frame to settle, then read a second time. A negative result from a single read proves
+nothing.
+
+### 7.3 A public type change fails the gate until the API report is regenerated
+
+`api-extractor` compares the built surface against `etc/freegantt.api.md`. Any new or changed public
+type fails `verify:full` until that file is synced.
+
+```bash
+pnpm api-extractor run --local
+```
+
+This caught #448, where the new `bar-renderer-shadowed` code widened the public
+`BuiltInReportCode` union.
+
+### 7.4 The sentence-length guard reads a declared list, not a glob
+
+`scripts/check-sentence-length.mjs` holds `SCOPED_FILES`, which names every file the ASD-STE100 pass
+has actually run over. The rest of `src/` is a measured backlog, not a near miss (§4).
+
+Two consequences. `src/view/gantt-shell.ts` **is** in scope, so a new comment there can fail the
+gate on sentence length alone. Markdown is never read, so a `docs/*.md` file cannot trip it.
+
+Write to the 25-word ceiling anyway. CLAUDE.md states it as a hard rule for all prose.
+
+### 7.5 Playwright's `.check()` can scroll your drag target out of reach
+
+On #432 a splitter drag silently moved nothing. Every test that first checked a lock checkbox
+failed, and the red proof failed twice before the cause was clear.
+
+`.check()` scrolled the page, the splitter moved to a negative `y`, and `mouse.down()` landed on no
+element at all. `elementFromPoint` returned `null` and the drag became a no-op.
+
+Call `await locator.scrollIntoViewIfNeeded()` before a manual `mouse.down()` sequence. Fix this in
+the test driver. Never compensate for it in the library.
+
+### 7.6 Verify a merge conflict resolution with `tsc` before you trust it
+
+A keep-both resolution can eat a brace when the two sides share one closing line. On #446 the
+accessor block's `}` sat after the `>>>>>>>` marker, so a concatenating resolver dropped it. The
+result was one esbuild error and about 18 cascading `tsc` errors.
+
+Run `pnpm typecheck` immediately after any manual conflict resolution. Do this before you run the
+full gate, because the full gate takes far longer to tell you the same thing.

@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
         'boundaries-and-config',
         'hooks-and-ci',
         'consumer-api',
+        'integration-pitfalls',
         'row-source-updates',
         'plugin-authoring',
         'a-bar-is-an-entry',
