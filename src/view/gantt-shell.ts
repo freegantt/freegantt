@@ -38,6 +38,7 @@ import type {
   FrameBar,
   Bar,
   TimeScale,
+  ResolvedColumn,
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
@@ -277,6 +278,8 @@ export interface GanttShellOptions {
    *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
    *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
   minGridWidth?: number;
+  /** Live (#432). See `GanttOptions.gridResizable`. Default `true`. */
+  gridResizable?: boolean;
   /** Build the private default `TimeScaleModel` only (D-S1.9-9). It is a no-op, with a dev-mode
    * warning, when `scale` is also supplied. The shared model already carries its own options. */
   preset?: PresetRef;
@@ -424,6 +427,14 @@ export class GanttShell {
    *  `grid-pane-width.ts`'s own file header. `PaneLayout` holds the px it resolves to; this module
    *  knows nothing about the DOM. */
   #gridPaneWidth!: GridPaneWidth;
+  /** #432: `false` locks the splitter and every column's resizer grip. `#applyGridResizable`
+   *  disables the splitter's attachment and paints no resize cursor. The column half is a gate
+   *  applied where resolved columns are *read*: render and the resize gesture, `#renderedColumns`
+   *  and `#gridResizable`'s own check in `columnGestureContext`/`isColumnResizable`. It is never a
+   *  rewrite stored on `ColumnChrome`'s own resolution. F4: that stored override used to leak a
+   *  `resizable` flip a consumer never made into `gridColumnsChange`'s `from`. A gesture that can
+   *  no longer arm never fires a `before*` event. */
+  #gridResizable = true;
   #panes: Panes;
   #backend: RenderBackend<HTMLElement>;
   #revision = 0;
@@ -435,7 +446,10 @@ export class GanttShell {
    *  changes on its own signal. That signal is a preset with a different band count, not a pane
    *  resize. */
   #paneBox: Size = { width: 0, height: 0 };
-  #splitterAttachment: SplitterAttachment;
+  /** Attached once, in the constructor, and lives for the shell's own lifetime. `#applyGridResizable`
+   *  is the only caller of `setEnabled` — see that method for what "locked" looks like (#432,
+   *  F1/F5). `!` because the constructor creates `#panes` before it can attach this. */
+  #splitterAttachment!: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
   #entryGestures: Detachable | undefined;
   #keyboardEditing: Detachable | undefined;
@@ -609,6 +623,9 @@ export class GanttShell {
     // S1.10, D-S1.10-8: must exist before PaneLayout builds the classed elements the stylesheet
     // targets, or there's a one-frame flash of unstyled content.
     ensureBaseStyles(this.#container.ownerDocument);
+    // #432: read before the first `#bindColumns()` call below, so a locked Gantt never resolves
+    // even its first frame of columns as resizable.
+    this.#gridResizable = options.gridResizable ?? true;
     // #157: `'fitColumns'` names no px of its own. So the pane opens at its authored width
     // (`--fg-grid-pane-width`). `#bindColumns` below then sizes it to the columns, the moment there
     // are resolved columns to measure.
@@ -707,6 +724,27 @@ export class GanttShell {
     // synchronously, and that onChange IS this shell's first render. A consumer variant installed
     // after it would paint nothing until something else invalidated the frame.
     this.#installConsumerVariants(options.variants ?? []);
+    // #127/#139: the splitter proposes a raw px delta, and `GridPaneWidth` applies both bounds on
+    // the way in. So a drag can reach neither below `minGridWidth` nor past the last column's edge.
+    // #432, F1/F5: attached once, unconditionally. `#applyGridResizable` is the only thing that
+    // decides whether it is enabled, live or at construction — so both paths land in the same DOM.
+    // Wired before `#bindColumns()` below: that call's own `syncAria()` needs the attachment to
+    // already exist.
+    this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
+      readGridWidth: () => this.#gridPaneWidth.width,
+      readMinWidth: () => this.#gridPaneWidth.floor,
+      // S5.11: `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
+      // names one whenever the columns do. A `flex` column names none, so this falls back to the
+      // container's own outer bound (`PaneLayout.bounds()`, D-S5-8's same clamp). The pane
+      // physically cannot outgrow the Gantt it sits in, ceiling or not.
+      readMaxWidth: () => this.#gridPaneWidth.ceiling ?? this.#paneLayout.bounds().width,
+      previewGridWidth: (px) => {
+        this.#paneLayout.gridWidth = this.#gridPaneWidth.previewDrag(px);
+      },
+      commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
+    });
+    this.#teardown.add(() => this.#splitterAttachment.setEnabled(false));
+    this.#applyGridResizable();
     this.#bindColumns();
 
     // Mount before binding (#22). The render target exists by the time the binding's own onChange
@@ -863,22 +901,6 @@ export class GanttShell {
       this.#applyPaneMeasurement(size),
     );
     this.#teardown.add(() => this.#paneSizeAttachment.detach());
-    // #127/#139: the splitter proposes a raw px delta, and `GridPaneWidth` applies both bounds on
-    // the way in. So a drag can reach neither below `minGridWidth` nor past the last column's edge.
-    this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
-      readGridWidth: () => this.#gridPaneWidth.width,
-      readMinWidth: () => this.#gridPaneWidth.floor,
-      // S5.11: `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
-      // names one whenever the columns do. A `flex` column names none, so this falls back to the
-      // container's own outer bound (`PaneLayout.bounds()`, D-S5-8's same clamp). The pane
-      // physically cannot outgrow the Gantt it sits in, ceiling or not.
-      readMaxWidth: () => this.#gridPaneWidth.ceiling ?? this.#paneLayout.bounds().width,
-      previewGridWidth: (px) => {
-        this.#paneLayout.gridWidth = this.#gridPaneWidth.previewDrag(px);
-      },
-      commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
-    });
-    this.#teardown.add(() => this.#splitterAttachment.detach());
     this.#capabilityRules = options.capabilities ?? {};
     this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
@@ -990,7 +1012,8 @@ export class GanttShell {
     // handler. That handler swallows it, through `stopImmediatePropagation()`. In the other order,
     // the column drag's Escape would also clear the entry selection as an unrelated side effect.
     const columnGestureContext: ColumnGestureContext = {
-      isResizable: (columnKey) => this.#columnChrome.isResizable(columnKey),
+      // F4: the lock gates the read, not the stored resolution — see `#renderedColumns`.
+      isResizable: (columnKey) => this.#gridResizable && this.#columnChrome.isResizable(columnKey),
       isMovable: (columnKey) => this.#columnChrome.isMovable(columnKey),
       minColumnWidthPx: () => this.#columnChrome.minWidthPx(),
       previewColumnWidth: (columnKey, widthPx) => this.#columnChrome.previewWidth(columnKey, widthPx),
@@ -1584,7 +1607,9 @@ export class GanttShell {
       panLeft: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
       panDown: () => this.#panBy(0, this.#frameSettings.rowHeight),
       panUp: () => this.#panBy(0, -this.#frameSettings.rowHeight),
-      isColumnResizable: (key) => this.#columnChrome.isResizable(key),
+      // F4: same gate as the pointer gesture's `isResizable` above — a locked Gantt refuses the
+      // keyboard resize chord (Shift+Arrow) too, off the same authored resolution.
+      isColumnResizable: (key) => this.#gridResizable && this.#columnChrome.isResizable(key),
       isColumnMovable: (key) => this.#columnChrome.isMovable(key),
       resizeColumnStep: (key, direction) => this.#columnChrome.resizeStep(key, direction),
       moveColumnStep: (key, direction) => this.#columnChrome.moveStep(key, direction),
@@ -2071,6 +2096,28 @@ export class GanttShell {
     this.#splitterAttachment?.syncAria();
   }
 
+  get gridResizable(): boolean {
+    return this.#gridResizable;
+  }
+
+  /** Live (#432). Toggles the splitter's attachment and re-binds columns, so both affordances
+   *  reflect the new answer on the very next frame — see `#applyGridResizable`. */
+  set gridResizable(resizable: boolean) {
+    if (resizable === this.#gridResizable) return;
+    this.#gridResizable = resizable;
+    this.#applyGridResizable();
+    this.#bindColumns();
+    this.#frames.request();
+  }
+
+  /** #432, F1/F5: the one place that reads `#gridResizable` — `SplitterAttachment.setEnabled` owns
+   *  every DOM/ARIA consequence of the answer. Called once from the constructor and once from every
+   *  `gridResizable` write after that. So the constructor-locked path and a live lock always land in
+   *  the same DOM state. */
+  #applyGridResizable(): void {
+    this.#splitterAttachment.setEnabled(this.#gridResizable);
+  }
+
   get preset(): ViewPreset {
     return this.#viewport.preset;
   }
@@ -2285,6 +2332,10 @@ export class GanttShell {
       this.#columnChrome.effectiveInput(),
       this.#columnBind(),
     );
+    // F4: stays the consumer's own authored resolution, lock or no lock. `#renderedColumns()` and
+    // the resize-gesture gate below apply `#gridResizable` where the resolution is *read*. A
+    // rewrite stored here would leak into `gridColumnsChange`'s `from` as a `resizable` flip the
+    // consumer never made.
     this.#columnChrome.setResolvedColumns(bound.columns);
     // The bind's own two outputs. They invalidate nothing on the way in (`frame-settings.ts`'s
     // table). This bind already belongs to whatever asked for it. A repaint here would make every
@@ -2298,7 +2349,16 @@ export class GanttShell {
     // S5.11: the #139 ceiling `aria-valuemax` reads can move even when the pane's own width does
     // not. The columns grew, but the pane was already narrower than either edge — the one branch
     // `resizeToColumns`'s own commit would otherwise never touch.
-    this.#splitterAttachment?.syncAria();
+    this.#splitterAttachment.syncAria();
+  }
+
+  /** F4: what `render()` paints, as opposed to what `ColumnChrome` stores. Locked, every column
+   *  paints `resizable: false` — the grip disappears (`data-resizable-off`, `styles.ts`) — without
+   *  touching the authored resolution `gridColumnsChange` reports from. The lock lifting repaints
+   *  the real, unmodified answer on the very next frame. */
+  #renderedColumns(): readonly ResolvedColumn[] {
+    const resolved = this.#columnChrome.resolvedColumns;
+    return this.#gridResizable ? resolved : resolved.map((column) => ({ ...column, resizable: false }));
   }
 
   #columnBind(): ResolveColumnsBind {
@@ -2382,7 +2442,7 @@ export class GanttShell {
         visible: this.#viewport.visible,
         overscan: this.#viewport.overscan,
         revision: this.#revision++,
-        columns: this.#columnChrome.resolvedColumns,
+        columns: this.#renderedColumns(),
         collapsed: this.#treeCollapse.ids,
         variants: this.#registrations.variants,
         decorationProviders: this.#registrations.decorationProviders(),

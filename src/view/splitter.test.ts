@@ -59,6 +59,7 @@ describe('attachSplitter', () => {
     stubPointerCapture(handle);
     const hooks = fakeHooks();
     const attachment = attachSplitter(handle, hooks);
+    attachment.setEnabled(true);
 
     handle.dispatchEvent(down(100));
     handle.dispatchEvent(move(140));
@@ -67,7 +68,7 @@ describe('attachSplitter', () => {
     expect(hooks.previews).toEqual([240]);
     expect(hooks.commits).toEqual([250]);
 
-    attachment.detach();
+    attachment.setEnabled(false);
   });
 
   it('Escape restores the width at drag start and commits nothing (U5)', () => {
@@ -75,6 +76,7 @@ describe('attachSplitter', () => {
     stubPointerCapture(handle);
     const hooks = fakeHooks();
     const attachment = attachSplitter(handle, hooks);
+    attachment.setEnabled(true);
 
     handle.dispatchEvent(down(100));
     handle.dispatchEvent(move(140));
@@ -84,17 +86,18 @@ describe('attachSplitter', () => {
     expect(hooks.previews).toEqual([240, 200]);
     expect(hooks.commits).toEqual([]);
 
-    attachment.detach();
+    attachment.setEnabled(false);
   });
 
-  it('detach() releases pointer capture and removes every listener', () => {
+  it('setEnabled(false) releases pointer capture and removes every listener', () => {
     const handle = document.createElement('div');
     const { releasePointerCapture } = stubPointerCapture(handle);
     const hooks = fakeHooks();
     const attachment = attachSplitter(handle, hooks);
+    attachment.setEnabled(true);
 
     handle.dispatchEvent(down(100));
-    attachment.detach();
+    attachment.setEnabled(false);
     expect(releasePointerCapture).toHaveBeenCalled();
 
     handle.dispatchEvent(move(200));
@@ -104,23 +107,88 @@ describe('attachSplitter', () => {
     expect(hooks.commits).toEqual([]);
   });
 
+  describe('setEnabled (#432, F1/F5)', () => {
+    it('starts disabled: no listener arms a drag and no ARIA trio paints before the first setEnabled(true)', () => {
+      const handle = document.createElement('div');
+      attachSplitter(handle, fakeHooks());
+
+      expect(handle.getAttribute('aria-label')).toBeNull();
+      expect(handle.getAttribute('aria-valuenow')).toBeNull();
+      expect(handle.getAttribute('aria-hidden')).toBeNull();
+    });
+
+    it('setEnabled(false) strips every trace of the widget from the accessibility tree, not only the tab stop', () => {
+      const handle = document.createElement('div');
+      const attachment = attachSplitter(handle, fakeHooks());
+      attachment.setEnabled(true);
+
+      attachment.setEnabled(false);
+
+      expect(handle.tabIndex).toBe(-1);
+      expect(handle.getAttribute('data-resize-off')).toBe('');
+      expect(handle.getAttribute('aria-hidden')).toBe('true');
+      expect(handle.getAttribute('aria-label')).toBeNull();
+      expect(handle.getAttribute('aria-orientation')).toBeNull();
+      expect(handle.getAttribute('aria-valuemin')).toBeNull();
+      expect(handle.getAttribute('aria-valuemax')).toBeNull();
+      expect(handle.getAttribute('aria-valuenow')).toBeNull();
+    });
+
+    it('setEnabled(true) after a disable restores the tab stop and the full ARIA contract', () => {
+      const handle = document.createElement('div');
+      const attachment = attachSplitter(handle, fakeHooks());
+      attachment.setEnabled(true);
+      attachment.setEnabled(false);
+
+      attachment.setEnabled(true);
+
+      expect(handle.tabIndex).toBe(0);
+      expect(handle.getAttribute('data-resize-off')).toBeNull();
+      expect(handle.getAttribute('aria-hidden')).toBeNull();
+      expect(handle.getAttribute('aria-label')).toBe('Resize grid pane');
+      expect(handle.getAttribute('aria-orientation')).toBe('vertical');
+      expect(handle.getAttribute('aria-valuenow')).toBe('200');
+
+      attachment.setEnabled(false);
+    });
+
+    it('a disabled splitter arms no drag and steps no keyboard resize', () => {
+      const handle = document.createElement('div');
+      stubPointerCapture(handle);
+      const hooks = fakeHooks();
+      const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
+      attachment.setEnabled(false);
+
+      handle.dispatchEvent(down(100));
+      handle.dispatchEvent(move(140));
+      handle.dispatchEvent(up(150));
+      handle.dispatchEvent(key('ArrowRight'));
+
+      expect(hooks.previews).toEqual([]);
+      expect(hooks.commits).toEqual([]);
+    });
+  });
+
   describe('ARIA (S5.11, D-S5-25)', () => {
     it('carries an accessible name and the initial aria-value* trio the moment it attaches', () => {
       const handle = document.createElement('div');
       const attachment = attachSplitter(handle, fakeHooks());
+      attachment.setEnabled(true);
 
       expect(handle.getAttribute('aria-label')).toBe('Resize grid pane');
       expect(handle.getAttribute('aria-valuemin')).toBe('40');
       expect(handle.getAttribute('aria-valuemax')).toBe('500');
       expect(handle.getAttribute('aria-valuenow')).toBe('200');
 
-      attachment.detach();
+      attachment.setEnabled(false);
     });
 
     it('aria-valuenow tracks the width live, during a drag and not only after it', () => {
       const handle = document.createElement('div');
       stubPointerCapture(handle);
       const attachment = attachSplitter(handle, fakeHooks());
+      attachment.setEnabled(true);
 
       handle.dispatchEvent(down(100));
       handle.dispatchEvent(move(140));
@@ -128,20 +196,21 @@ describe('attachSplitter', () => {
       handle.dispatchEvent(up(150));
       expect(handle.getAttribute('aria-valuenow')).toBe('250');
 
-      attachment.detach();
+      attachment.setEnabled(false);
     });
 
     it('syncAria() refreshes the trio from a width change this attachment did not cause', () => {
       const handle = document.createElement('div');
       const hooks = fakeHooks();
       const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
       expect(handle.getAttribute('aria-valuenow')).toBe('200');
 
       hooks.commitGridWidth(320); // stands in for a plugin's `gantt.gridWidth = 320`
       attachment.syncAria();
 
       expect(handle.getAttribute('aria-valuenow')).toBe('320');
-      attachment.detach();
+      attachment.setEnabled(false);
     });
   });
 
@@ -150,31 +219,34 @@ describe('attachSplitter', () => {
       const handle = document.createElement('div');
       const hooks = fakeHooks();
       const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
 
       handle.dispatchEvent(key('ArrowRight'));
 
       expect(hooks.commits).toEqual([216]);
       expect(handle.getAttribute('aria-valuenow')).toBe('216');
 
-      attachment.detach();
+      attachment.setEnabled(false);
     });
 
     it('ArrowLeft narrows by the step', () => {
       const handle = document.createElement('div');
       const hooks = fakeHooks();
       const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
 
       handle.dispatchEvent(key('ArrowLeft'));
 
       expect(hooks.commits).toEqual([184]);
 
-      attachment.detach();
+      attachment.setEnabled(false);
     });
 
     it('Home jumps to the floor and End jumps to the ceiling', () => {
       const handle = document.createElement('div');
       const hooks = fakeHooks();
       const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
 
       handle.dispatchEvent(key('Home'));
       expect(hooks.commits).toEqual([40]);
@@ -182,13 +254,14 @@ describe('attachSplitter', () => {
       handle.dispatchEvent(key('End'));
       expect(hooks.commits).toEqual([40, 500]);
 
-      attachment.detach();
+      attachment.setEnabled(false);
     });
 
     it('a modified arrow is left for the Gantt-wide fallback (Alt+Arrow pans, D-S5-26)', () => {
       const handle = document.createElement('div');
       const hooks = fakeHooks();
       const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
 
       handle.dispatchEvent(key('ArrowRight', { altKey: true }));
       handle.dispatchEvent(key('ArrowRight', { shiftKey: true }));
@@ -196,7 +269,7 @@ describe('attachSplitter', () => {
 
       expect(hooks.commits).toEqual([]);
 
-      attachment.detach();
+      attachment.setEnabled(false);
     });
 
     it('an unresolved before* veto refuses a keyboard step exactly as it refuses a drag', () => {
@@ -206,12 +279,13 @@ describe('attachSplitter', () => {
       const handle = document.createElement('div');
       const hooks = fakeHooks({ commitGridWidth: () => {} }); // width never moves: the veto's own effect
       const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
 
       handle.dispatchEvent(key('ArrowRight'));
 
       expect(handle.getAttribute('aria-valuenow')).toBe('200');
 
-      attachment.detach();
+      attachment.setEnabled(false);
     });
 
     it('a live drag owns Escape, so a keyboard step mid-drag is ignored', () => {
@@ -219,6 +293,7 @@ describe('attachSplitter', () => {
       stubPointerCapture(handle);
       const hooks = fakeHooks();
       const attachment = attachSplitter(handle, hooks);
+      attachment.setEnabled(true);
 
       handle.dispatchEvent(down(100));
       handle.dispatchEvent(key('ArrowRight'));
@@ -226,7 +301,7 @@ describe('attachSplitter', () => {
       expect(hooks.commits).toEqual([]);
 
       handle.dispatchEvent(up(100));
-      attachment.detach();
+      attachment.setEnabled(false);
     });
   });
 });
