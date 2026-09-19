@@ -29,6 +29,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'unknown-parent': true,
   'hierarchy-cycle': true,
   'variant-matched-twice': true,
+  'bar-renderer-shadowed': true,
   'unknown-variant-field': true,
   'unknown-row-source-field': true,
   'unknown-bar-label-field': true,
