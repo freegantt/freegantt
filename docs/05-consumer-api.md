@@ -21,6 +21,55 @@ A **Grid column** is one vertical slice of the Grid pane. It names a Field and c
 
 The Timeline pane paints **Items** as bars on a time scale. A bar is paint, not identity (`CONTEXT.md`). The time axis is not a column. The whole view is a **Gantt**. Chart is a retired word (#7).
 
+## Undo, redo, and the `change` event
+
+Undo and redo are ordinary commits. `dataset.undo()` and `dataset.redo()` return nothing; what
+they did arrives on `dataset.on('change')` — the same channel a user edit uses — tagged
+`origin: 'undo'` or `'redo'`.
+
+```ts
+import { Dataset, fieldRowsOf } from 'freegantt';
+
+const dataset = new Dataset({ timeZone: 'Europe/Warsaw', entries: [ /* … */ ] });
+
+dataset.on('beforeChange', ({ changeSet }) => {
+  if (changeSet.origin === 'undo' && !confirm('Undo this step?')) return false;
+  // a refused undo throws MutationCancelledError and leaves history where it was
+});
+
+dataset.on('change', ({ changeSet }) => {
+  if (changeSet.origin === 'user') return; // a user edit, not an undo/redo
+  const verb = changeSet.origin === 'undo' ? 'undid' : 'redid';
+
+  for (const row of fieldRowsOf(changeSet)) {
+    // row: { store: 'entries', id, field, from, to }
+    // on undo, from/to is inverted: `from` is the edit being reverted, `to` the restored value
+    console.log(`${verb} ${String(row.id)} ${row.field}: ${row.from} -> ${row.to}`);
+  }
+  // changeSet.added / changeSet.removed carry the entries an undo restored or a redo removed
+});
+
+dataset.entries.update('t1', { cost: 200 }); // origin 'user'
+dataset.undo(); // origin 'undo', cost 200 -> 500
+dataset.redo(); // origin 'redo', cost 500 -> 200
+```
+
+`canUndo` / `canRedo` are already post-step inside a `change` handler — the History's cursor
+moves on the `change` the undo commit emits, never on the `undo()` call (D-S2-25) — so one
+handler can drive a toolbar:
+
+```ts
+dataset.on('change', () => {
+  undoButton.disabled = !dataset.canUndo;
+  redoButton.disabled = !dataset.canRedo;
+});
+```
+
+`updated` also carries plugin-store rows (`store: 'plugin:…'`, whole-value, no `field` key).
+`fieldRowsOf(changeSet)` filters to Field rows. `dataset.replay(changeSet)` is the write path
+the built-in undo/redo use, published so a consumer can write their own History against
+`on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` alone.
+
 ## S4 surface (hierarchy and rows)
 
 These landed in slice S4. Details and examples live in `plans/02-public-api.md` §4.2–§4.3.
