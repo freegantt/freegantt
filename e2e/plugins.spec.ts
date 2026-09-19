@@ -28,6 +28,49 @@ test('hovering a bar opens a tooltip with the entry name and dates', async ({ pa
   await expect(tooltip).toHaveCount(0);
 });
 
+// #437: a right-click on the timeline pane's own background, with no bar under the pointer, opens
+// the "Collapse all"/"Expand all" menu anchored at the pane's own top-left corner (D-S5-14) — the
+// same point the sticky grid header and timeline header occupy. No `scrollIntoView` call runs
+// first, so this needs none of the scroll-race care the file banner above warns about; the click
+// lands on an already-visible point. Before #437, `.fg-overlay` carried no z-index and lost to
+// `.fg-grid-header`'s (styles.ts) — the menu painted, but the header painted over it, and the
+// covered part refused every click. `document.elementFromPoint()` is what a real pointer resolves
+// against, so it is the one check that tells "painted" from "clickable" apart.
+test('[#437] a context menu opened near a pane top paints, and hit-tests, above the sticky header', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const timelinePane = page.locator('#gantt .fg-timeline-pane');
+  const timelineBox = await timelinePane.boundingBox();
+  if (!timelineBox) throw new Error('missing timeline pane bounding box');
+
+  // A point inside the pane but off every bar — the timeline canvas itself, not a row.
+  await page.mouse.click(timelineBox.x + timelineBox.width / 2, timelineBox.y + 5, { button: 'right' });
+
+  const menu = page.locator('#gantt .fg-menu');
+  await expect(menu).toBeVisible();
+  const firstItem = page.locator('#gantt .fg-menu-item').first();
+  const firstItemBox = await firstItem.boundingBox();
+  if (!firstItemBox) throw new Error('missing menu item bounding box');
+
+  const gridHeaderBox = await page.locator('#gantt .fg-grid-header').boundingBox();
+  if (!gridHeaderBox) throw new Error('missing grid header bounding box');
+  // A point near the item's own top edge, painted inside the header's vertical range — the fixture
+  // drifted if this ever moves outside that range, and a passing elementFromPoint check below would
+  // then prove nothing.
+  const point = { x: firstItemBox.x + firstItemBox.width / 2, y: firstItemBox.y + 3 };
+  expect(point.y).toBeGreaterThanOrEqual(gridHeaderBox.y);
+  expect(point.y).toBeLessThanOrEqual(gridHeaderBox.y + gridHeaderBox.height);
+
+  const hitsMenuItem = await page.evaluate(
+    (p) => document.elementFromPoint(p.x, p.y)?.closest('.fg-popup') !== null,
+    point,
+  );
+  expect(hitsMenuItem).toBe(true);
+});
+
 // #404 acceptance: "shading paints at the default ladder's two hour rungs". ZOOM_PRESETS' finest
 // two rungs are hourPreset and hourDayWeekPreset (src/time/presets.ts) — any Gantt reaches them by
 // zooming in twice with no configuration, so a first-party shading plugin has to keep painting

@@ -99,6 +99,10 @@ interface ExternalDefault {
   file: string;
   pattern: RegExp;
   unit: 'px' | '';
+  /** #437: `--fg-z-overlay`'s default is computed (`INTERNAL_Z_RAISED + 1`, styles.ts), not a
+   *  literal the pattern can capture whole — this runs on the captured number before it is
+   *  compared to the doc, so the guard checks the same arithmetic the sheet itself runs. */
+  transform?: (raw: number) => number;
 }
 
 const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
@@ -159,6 +163,16 @@ const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
     pattern: /const DEFAULT_BAR_RADIUS_PX = (\d+(?:\.\d+)?);/,
     unit: 'px',
   },
+  // #437: a stacking position, not a pixel length — same posture as the two entries above (a local,
+  // un-exported `const` in styles.ts is the value's only source). `DEFAULT_OVERLAY_Z_INDEX` is
+  // `INTERNAL_Z_RAISED + 1`, not its own literal (styles.ts's own comment says why), so this
+  // pattern matches `INTERNAL_Z_RAISED`'s line and `transform` runs the same `+ 1`.
+  '--fg-z-overlay': {
+    file: 'src/view/styles.ts',
+    pattern: /const INTERNAL_Z_RAISED = (\d+);/,
+    unit: '',
+    transform: (raw) => raw + 1,
+  },
 };
 
 // #392: the colour section's own two theme-independent, unitless tokens — same posture as
@@ -185,7 +199,9 @@ function resolveExternalDefault(token: string, def: ExternalDefault): string {
       `theming-contract guard: expected to find ${token}'s default in ${def.file} matching ${def.pattern}, but did not — the guard's own source reference is stale`,
     );
   }
-  return `${match[1]}${def.unit}`;
+  const raw = Number(match[1]);
+  const resolved = def.transform ? def.transform(raw) : raw;
+  return `${resolved}${def.unit}`;
 }
 
 /** A structural/pixel token's real default, resolved from wherever it actually lives — a
