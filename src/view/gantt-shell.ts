@@ -1901,7 +1901,7 @@ export class GanttShell {
       const detail = reason instanceof Error ? reason.message : String(reason);
       const message =
         `The 'theme' resolver threw or did not answer 'light'/'dark' (${detail}). ` +
-        `Falling back to the built-in 'auto' answer until 'theme' changes again.`;
+        `Falling back to the built-in 'auto' answer until a different resolver is assigned.`;
       this.#raiseError({ code: 'theme-resolver-failed', message, severity: 'warning', by: 'core' }, () =>
         console.warn(`FreeGantt: ${message}`),
       );
@@ -2112,8 +2112,15 @@ export class GanttShell {
     this.#syncResolvedTheme();
   }
 
+  /** #433. One question, asked in four places: is `theme` a `ThemeResolver`, or one of the three
+   *  literal answers? A type predicate so each caller narrows `this.#theme` to `ThemeResolver`
+   *  itself, with no repeated `typeof` check to keep in sync. */
+  #themeIsResolver(theme: Theme): theme is ThemeResolver {
+    return typeof theme === 'function';
+  }
+
   #applyTheme(): void {
-    if (typeof this.#theme === 'function') {
+    if (this.#themeIsResolver(this.#theme)) {
       // #433: write only on a real change. The widened observer (`#observeThemePin`) wakes on
       // this very attribute. An unconditional write here would re-enter itself forever, because a
       // same-value `setAttribute` still queues a mutation record; there is no short-circuit for it.
@@ -2135,12 +2142,12 @@ export class GanttShell {
    *  (`#reportThemeResolverFailed`). A bad resolver must not leave `data-fg-theme` unwritten. It
    *  must not take the Gantt down either; the built-in answer is always a safe one to paint.
    *
-   *  The container's own `data-fg-theme` is cleared before that fallback read. It may still carry
-   *  this same resolver's last *good* answer (`#applyTheme` wrote it), and `resolveTheme`'s
-   *  `closest()` walk checks this container before any real ancestor. Left in place, a resolver's
-   *  own stale answer would shadow a real ancestor pin or the OS. That is exactly the self-pin
-   *  `'auto'` itself avoids, by never writing one. `#applyTheme` rewrites the attribute right after
-   *  this returns either way, so clearing it here is never visible outside this one read. */
+   *  The fallback read starts at the container's *parent*, never the container itself.
+   *  `resolveTheme`'s `closest()` walk would otherwise find this same container's own last-written
+   *  pin first. A failing resolver would then read its own stale answer back forever. "The
+   *  fallback" and "the last write" would be the same attribute, so the write in `#applyTheme`
+   *  would never settle. Reading from the parent finds a real ancestor pin, or the OS, exactly as
+   *  `'auto'` itself would if this container's own pin did not exist. */
   #resolveWithResolver(resolver: ThemeResolver): ResolvedTheme {
     try {
       const answer = resolver();
@@ -2148,8 +2155,7 @@ export class GanttShell {
       throw new Error(`returned ${JSON.stringify(answer)} instead of 'light' or 'dark'`);
     } catch (reason) {
       this.#reportThemeResolverFailed(resolver, reason);
-      this.#container.removeAttribute('data-fg-theme');
-      return resolveTheme(this.#container, this.#matchMedia);
+      return resolveTheme(this.#container.parentElement ?? this.#container, this.#matchMedia);
     }
   }
 
@@ -2165,7 +2171,7 @@ export class GanttShell {
   #observeThemePin(): void {
     this.#themePinObserver.observe(
       this.#themePinTarget,
-      typeof this.#theme === 'function'
+      this.#themeIsResolver(this.#theme)
         ? { attributes: true, subtree: true }
         : { attributes: true, subtree: true, attributeFilter: ['data-fg-theme'] },
     );
@@ -2186,7 +2192,7 @@ export class GanttShell {
    *  reads back like any other pin. Refreshing here, not only from `#syncResolvedTheme`, is what
    *  keeps a direct `gantt.resolvedTheme` read live too, with no assignment in between. */
   get resolvedTheme(): ResolvedTheme {
-    if (typeof this.#theme === 'function') this.#applyTheme();
+    if (this.#themeIsResolver(this.#theme)) this.#applyTheme();
     return resolveTheme(this.#container, this.#matchMedia);
   }
 
@@ -2216,7 +2222,7 @@ export class GanttShell {
    *  `#themePinObserver`'s widened watch (`#observeThemePin`). The mutation this method reacts to
    *  is never `data-fg-theme` itself, so nothing else would re-run the resolver at all. */
   #syncResolvedTheme(): void {
-    if (typeof this.#theme === 'function') this.#applyTheme();
+    if (this.#themeIsResolver(this.#theme)) this.#applyTheme();
     const next = resolveTheme(this.#container, this.#matchMedia);
     if (next === this.#reportedTheme) return;
     const from = this.#reportedTheme;
