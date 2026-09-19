@@ -2191,12 +2191,12 @@ describe('render/dom backend', () => {
       backend.mount({ grid, timeline });
       backend.sync(frameFor(0, 20, 2000));
 
-      // F1 (#435 follow-up): the token is `'none'`, not an absent attribute — the label child exists,
-      // measured, so a resize preview that widens this bar back past the fit line has something to
-      // reveal (applyBarPreview never mounts a child mid-drag). `.fg-bar[data-label='none']
-      // .fg-bar-label { display: none }` (view/styles.ts) is what keeps it unpainted here.
+      // F1 (#435 follow-up): the token is `'hidden'`, not an absent attribute — the label child
+      // exists, measured, so a resize preview that widens this bar back past the fit line has
+      // something to reveal (applyBarPreview never mounts a child mid-drag). `.fg-bar[data-label=
+      // 'hidden'] .fg-bar-label { display: none }` (view/styles.ts) is what keeps it unpainted here.
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
-      expect(bar.dataset['label']).toBe('none');
+      expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
       backend.destroy();
@@ -2294,7 +2294,7 @@ describe('render/dom backend', () => {
       // ellipsis) kept painting it, clipped, inside the now-too-narrow bar — the exact 'inside' look
       // #435 exists to avoid.
       backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: -180, extra: false }] });
-      expect(bar.dataset['label']).toBe('none');
+      expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
       // Widens it back past the fit line, relative to the committed 200px base (a preview delta is
@@ -2325,7 +2325,7 @@ describe('render/dom backend', () => {
 
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       const id = frame.bars[0]!.id;
-      expect(bar.dataset['label']).toBe('none');
+      expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
       // Widens the 20px bar to 200px, crossing the fit line mid-drag. `applyBarPreview` only flips
@@ -2341,6 +2341,33 @@ describe('render/dom backend', () => {
       expect(mutations).toBe(0);
       expect(bar.dataset['label']).toBe('inside');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('insideOrNone on a bar with no name mounts no hidden label child (R7, pass-2 branch review)', () => {
+      // `canFlipToLabel`'s `bar.label !== ''` guard exists so an empty label never spends a hidden
+      // child it can never fill — pin it so a refactor that drops the guard shows up here, not as an
+      // empty `.fg-bar-label` span shipped silently on every unnamed bar.
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000, () => ''));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('');
 
       backend.destroy();
       grid.remove();

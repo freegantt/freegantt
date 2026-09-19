@@ -337,7 +337,7 @@ gap, not a rename.
 | `.fg-tick-line` | Vertical grid line in the timeline body. One per finest-band tick. |
 | `.fg-row-band` | Timeline copy of a grid row's zebra, hover, and selection paint. |
 | `.fg-bar` | One Bar. Every look wears this class, diamonds included. |
-| `.fg-bar-label` | The bar's own text child. |
+| `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
 | `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-bar-diamond` | `diamond()` glyph. CSS ships with the variant, not the base sheet. |

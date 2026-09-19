@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — dense tile grid virtualization</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #gantt {
+        /* Fixed px, not a viewport unit — `e2e/dense-tile-grid.spec.ts` measures this pane's
+           rendered size at runtime and derives its expected bar-count bound from it, so the bound
+           stays correct however the number changes here; it only needs to stay smaller than the
+           full grid in both axes. */
+        --fg-row-height: 20px;
+        --fg-grid-pane-width: 140px;
+        width: 700px;
+        height: 300px;
+        border: 1px solid #ccc;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 10px;
+      }
+      .fg-bar {
+        font-size: 9px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — dense tile grid virtualization</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        Many rows, each a strip of many contiguous day tiles (the #435 shape) — far more rows than the pane's
+        height and far more tiles per row than its width, so both the vertical row window and the horizontal
+        bar cull are exercised at once. <code>barLabels: 'insideOrNone'</code>, the mode this branch made
+        costlier per tile.
+      </p>
+      <div id="gantt"></div>
+    </main>
+    <script type="module" src="./dense-tile-grid.ts"></script>
+  </body>
+</html>
