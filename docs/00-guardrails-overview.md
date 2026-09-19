@@ -19,6 +19,7 @@ slug: /
 | `06-plugin-authoring.md` | Plugin authoring guide — the two-halves shape, every registration seam, disposal |
 | `07-row-source-updates.md` | How to change one `rowSource` setting and keep the rest |
 | `08-a-bar-is-an-entry.md` | ADR-adjacent record of #421: a Bar is one child Entry by default |
+| `09-integration-pitfalls.md` | Integration reports that were misunderstandings — what the reader searched, and the real answer |
 | `edit-extension-flow.md` | The extension hook — flow and sample usage for `data/edit-extension.ts` |
 
 ---
