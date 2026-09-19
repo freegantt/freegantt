@@ -525,6 +525,8 @@ export class GanttShell {
    *  observes a refusal or a recovered fault takes it. That is the gesture pipeline, the render
    *  backend, the plugin runtime, and each plugin's own `ctx.raiseError`. */
   #raiseError: RaiseError = createErrorRaiser(this.#events);
+  /** #448: where a shadowed `barRenderer` is reported. Built once; `render()` is its only caller. */
+  #reportBarRendererShadowed = this.#createBarRendererShadowedReport();
   /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is. Built once, from
    *  this shell's own `on`/`off` below. A plugin never sees the rest of this class's public surface
    *  the way handing it `this` directly would. */
@@ -1818,6 +1820,38 @@ export class GanttShell {
     };
   }
 
+  /** Where a shadowed `barRenderer` is reported (#448). `#paintFor`'s ladder reaches `barRenderer`
+   *  only when the resolved variant has no `paint` of its own. When every Entry in the Dataset
+   *  already resolves to a variant that paints, `barRenderer` never runs, and nothing said why.
+   *
+   *  Checked once per assignment, against the whole Dataset's Entries — `render()` already holds
+   *  `dataset.entries.all` — never against one frame's windowed rows. A frame can hold only
+   *  variant-painted rows while other rows sit off-window. That answers "did this frame paint with
+   *  it", not "does this renderer ever paint". A scroll must not read as the second question.
+   *
+   *  The `WeakSet` is keyed on the renderer function itself. A scroll, a hover, or a variant added
+   *  or removed re-renders with the same function, and checks nothing twice. Assigning a new
+   *  function is a new assignment, and gets its own check. An empty Dataset answers nothing, so it
+   *  is never recorded as checked — the check runs again once an Entry exists to ask about.
+   *
+   *  Not behind `isDevMode()`, for the reason D-S5-41 already found on `'scale-options-ignored'`. */
+  #createBarRendererShadowedReport(): (renderer: BarRenderer, entries: readonly Entry[]) => void {
+    const checked = new WeakSet<BarRenderer>();
+    return (renderer, entries) => {
+      if (entries.length === 0 || checked.has(renderer)) return;
+      checked.add(renderer);
+      const everyEntryHasItsOwnPaint = entries.every((entry) => this.variantFor(entry).paint !== undefined);
+      if (!everyEntryHasItsOwnPaint) return;
+      const message =
+        `'barRenderer' painted no bars: every entry resolved to a variant with its own 'paint', ` +
+        `and a variant outranks the Gantt-wide renderer. Remove a variant's 'paint', or move this ` +
+        `renderer into the variants that need it.`;
+      this.#raiseError({ code: 'bar-renderer-shadowed', message, severity: 'warning', by: 'core' }, () =>
+        console.warn(`FreeGantt: ${message}`),
+      );
+    };
+  }
+
   /** Where an `UnknownRowSourceField` is reported (Q29, ADR-adjacent to `J59`). A
    *  `childrenAsSegments` rule names a key no Field declares, so it matches no row — a typo, or a
    *  plugin key the Dataset never declared. Unlike a variant, `childrenAsSegments` is not one of
@@ -2431,6 +2465,12 @@ export class GanttShell {
   }
 
   render(): void {
+    // #448: checked here, not in `#paintFor`. The question is "does this renderer ever paint",
+    // answered against every Entry the Dataset holds. It is not "did this frame's own windowed
+    // rows reach it" — a scroll would answer that differently frame to frame.
+    if (this.#frameSettings.barRenderer !== undefined) {
+      this.#reportBarRendererShadowed(this.#frameSettings.barRenderer, this.#options.dataset.entries.all);
+    }
     const frame = this.#layout.computeFrame(
       // #167: the settings half of a `LayoutInput` stands between frames and answers for itself.
       // What this shell contributes is what changed since the last frame — the viewport's geometry,
