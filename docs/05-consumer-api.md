@@ -217,31 +217,45 @@ not a consumer's to set" below for the four channels.
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere — only
 the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in
-specs, docs, or code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects which block
-applies. Resolution runs in one order, the same inside `.fg-container` and outside it: the nearest
-`data-fg-theme` pin, on the element or any ancestor, wins first; else `prefers-color-scheme`
-(`:root:not([data-fg-theme])`) decides; else the light default on `:root` applies. `'auto'` writes
-no `data-fg-theme` attribute, so it is the state that lets an ancestor's pin, or failing that the
-system's, reach the Gantt. `'light'`/`'dark'` write the attribute on the container, which is the
-nearest pin there can be to it, so a pin always wins over an ancestor's pin or the media query — on
-document order at equal specificity, not because either attribute rule is more specific than the
-other. The two attribute blocks select on `[data-fg-theme='light'|'dark']` alone, not on
-`.fg-container`, so a consumer can put the same attribute on a wrapper around its own chrome — a
-toolbar above the Gantt — and every `--fg-*` there means what it means inside; `.fg-container`
-itself declares no colour of its own, so nothing on it blocks that inheritance. The library writes
-the attribute on its own container only; mirroring it onto anything else is the consumer's own call.
-No named
-multi-preset picker beyond light/dark yet — that needs `extensions/`'s `PluginContext`, the only
-I2-safe place a `registerThemePreset`-shaped seam can live.
+specs, docs, or code). `theme: 'auto' | 'light' | 'dark' | ThemeResolver` (default `'auto'`) selects
+which block applies. Resolution runs in one order, the same inside `.fg-container` and outside it:
+the nearest `data-fg-theme` pin, on the element or any ancestor, wins first; else
+`prefers-color-scheme` (`:root:not([data-fg-theme])`) decides; else the light default on `:root`
+applies. `'auto'` writes no `data-fg-theme` attribute, so it is the state that lets an ancestor's
+pin, or failing that the system's, reach the Gantt. `'light'`/`'dark'` write the attribute on the
+container, which is the nearest pin there can be to it, so a pin always wins over an ancestor's pin
+or the media query — on document order at equal specificity, not because either attribute rule is
+more specific than the other. The two attribute blocks select on `[data-fg-theme='light'|'dark']`
+alone, not on `.fg-container`, so a consumer can put the same attribute on a wrapper around its own
+chrome — a toolbar above the Gantt — and every `--fg-*` there means what it means inside;
+`.fg-container` itself declares no colour of its own, so nothing on it blocks that inheritance. The
+library writes the attribute on its own container only; mirroring it onto anything else is the
+consumer's own call. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s
+`PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live.
+
+**A `ThemeResolver` (`() => 'light' | 'dark'`, #433) answers "is the wrapping app dark" from a
+signal `'auto'` cannot read** — a class on `<html>` (Tailwind, Filament, next-themes), or
+`data-bs-theme` (Bootstrap 5.3): `theme: () =>
+document.documentElement.classList.contains('dark') ? 'dark' : 'light'`. It is a *strategy*, not a
+value: a consumer that persists `gantt.theme`, or renders a picker over it, narrows to
+`'auto' | 'light' | 'dark'` first, the same way `harness/gantt-toolbar.ts`'s own `ThemeChoice` does.
+The library writes the resolver's answer to `data-fg-theme`, never the function itself, and watches
+every attribute under the document (not only `data-fg-theme`) while a resolver is installed, since
+it may key off any attribute or class. Keep a resolver cheap and free of side effects — the library
+calls it on any such mutation, not only the one it exists to catch. A resolver that throws, or
+answers anything but `'light'`/`'dark'`, falls back to the built-in `'auto'` answer for that read and
+reports `'theme-resolver-failed'` once per resolver instance.
 
 ### Theme API — resolvedTheme, themeChange, checkResolvedTheme
 
 **`gantt.resolvedTheme` answers `'light'` or `'dark'` — never `'auto'`** (#330): the getter reads
 back what `theme` actually resolved to, the same precedent `range`/`dateLines` already set (a
 getter returns what the library resolved, #248). `themeChange` fires beside it when that answer
-moves, for any of three causes the library can see on its own — a `theme` assignment that changes
-the pin, the OS flipping under `'auto'` with no ancestor pin in the way, or an ancestor's own pin
-changing (#375, watched by a `MutationObserver` scoped to `data-fg-theme`). It has no `before*`
+moves, for any cause the library can see on its own — a `theme` assignment that changes the pin,
+the OS flipping under `'auto'` with no ancestor pin in the way, an ancestor's own pin changing
+(#375, watched by a `MutationObserver` scoped to `data-fg-theme`), or, with a `ThemeResolver`
+installed, any attribute or class change under the document that the resolver reads differently
+(#433 — the same observer, watching more broadly). It has no `before*`
 pair, the same reason `navigationChange` has none: none of these causes is a vetoable gesture, and
 the `theme` half already has its own live setter.
 
