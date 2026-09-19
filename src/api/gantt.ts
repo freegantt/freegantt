@@ -120,7 +120,11 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  the buffer stays mounted while it is one scroll step from view, so a small scroll never shows a
    *  bare frame. Default `{ verticalRows: 2, horizontalPx: 128 }`. */
   overscan?: Overscan;
-  /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
+  /** Live (S1.10). Default `'auto'`: follows the nearest ancestor's `data-fg-theme` pin, else
+   *  `prefers-color-scheme`. A `ThemeResolver` (#433) answers the same question from a wrapping
+   *  app's own dark-mode signal instead: a class on `<html>` (Tailwind, Filament, next-themes), or
+   *  `data-bs-theme` (Bootstrap 5.3). `theme: () =>
+   *  document.documentElement.classList.contains('dark') ? 'dark' : 'light'`. */
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
