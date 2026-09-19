@@ -16,8 +16,11 @@ test('bar labels stay inside a narrow contiguous tile grid, never spilling onto 
 
   // Narrow: none of the forty day-bars has room for "Day N", so none of them paints a label —
   // never `data-label="outside"`, which would mean one day's text sitting on the next day's tile.
-  await expect(page.locator('#gantt .fg-bar[data-label]')).toHaveCount(0);
-  await expect(page.locator('#gantt .fg-bar-label')).toHaveCount(0);
+  // F1 (#435 follow-up): the label child still exists, hidden by the `data-label="none"` CSS rule
+  // (view/styles.ts) rather than left unmounted — the encoding a mid-drag flip needs (index.test.ts).
+  await expect(page.locator('#gantt .fg-bar[data-label="none"]')).toHaveCount(40);
+  await expect(page.locator('#gantt .fg-bar-label')).toHaveCount(40);
+  await expect(page.locator('#gantt .fg-bar-label').first()).toBeHidden();
 
   // Widening every bar (`gantt.fit` reassigned live, I8) crosses the fit line: every bar now has
   // room, so every one paints its label inside — still never outside. At this width the forty tiles
@@ -36,8 +39,8 @@ test('bar labels stay inside a narrow contiguous tile grid, never spilling onto 
       .locator('.fg-bar-label'),
   ).toHaveText('Day 1');
 
-  // Narrowing back live drops every label again, with no page reload and no remount.
+  // Narrowing back live hides every label again, with no page reload and no remount.
   await page.getByRole('button', { name: 'Narrow days' }).click();
-  await expect(page.locator('#gantt .fg-bar[data-label]')).toHaveCount(0);
-  await expect(page.locator('#gantt .fg-bar-label')).toHaveCount(0);
+  await expect(page.locator('#gantt .fg-bar[data-label="none"]')).toHaveCount(40);
+  await expect(page.locator('#gantt .fg-bar-label').first()).toBeHidden();
 });

@@ -29,9 +29,9 @@ export interface ResolvedBarLabel {
 export interface BarRendererContext {
   entry: Entry;
   bar: FrameBar;
-  /** Absent when the consumer asked for no label (`barLabels: 'none'`) — so a renderer reads "this
-   *  bar has a label, here is where it goes" or nothing, and "a label with nowhere to paint" stays
-   *  unrepresentable. */
+  /** Absent when the consumer asked for no label (`barLabels: 'none'`), or when `'insideOrNone'`
+   *  found this bar too narrow to hold one — so a renderer reads "this bar has a label, here is
+   *  where it goes" or nothing, and "a label with nowhere to paint" stays unrepresentable. */
   label?: ResolvedBarLabel;
 }
 /** `undefined` keeps the library's own output for this one bar (D-S5-11). */
@@ -107,8 +107,8 @@ export interface BarLabelSpec {
   /** The Field a bar's label reads — `formatValue` prints it, the same as a Grid cell (#421 C5).
    *  Defaults to `'name'`. */
   field?: FieldKey;
-  /** Which side the label paints on, at whatever fit rule `BarLabelPolicy` states. Defaults to
-   *  `'fitBar'`. */
+  /** Which side the label paints on, at whatever fit rule `BarLabelPolicy` states — or no side at
+   *  all, for `'none'` and for `'insideOrNone'` on a bar too narrow. Defaults to `'fitBar'`. */
   policy?: BarLabelPolicy;
 }
 
