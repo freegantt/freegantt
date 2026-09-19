@@ -16,10 +16,21 @@
 const SPLITTER_RESIZE_STEP_PX = 16;
 
 export interface SplitterAttachment {
-  detach(): void;
+  /** Turns the widget on or off (#432, F1/F5). This is the one place that knows what "a locked
+   *  splitter" is, so a Gantt that starts locked and a Gantt that locks live land in the same DOM
+   *  state.
+   *  On: the pointer and keyboard listeners are live, the handle is a tab stop, and it carries the
+   *  full separator contract — an accessible name, an orientation, and the live `aria-value*` trio.
+   *  Off: no listener can arm a drag, the handle drops out of the tab order, and it disappears from
+   *  the accessibility tree. A widget nobody can operate must not still read as a named, valued
+   *  control (F1) — this sets `aria-hidden="true"` rather than dropping `role="separator"`: the node
+   *  stays the same fixed-width divider either way, and `aria-hidden` says plainly that it now
+   *  carries no operable semantics. */
+  setEnabled(enabled: boolean): void;
   /** Re-reads `hooks` and refreshes the separator's `aria-value*` trio. Call after a width change
    *  this attachment did not itself cause — a programmatic `gantt.gridWidth = …` or a `'fitColumns'`
-   *  re-measure (S5.11). A drag or a keyboard step already calls this on its own. */
+   *  re-measure (S5.11). A drag or a keyboard step already calls this on its own. A no-op while
+   *  disabled: a locked splitter carries no value trio to refresh. */
   syncAria(): void;
 }
 
@@ -40,14 +51,20 @@ export interface SplitterContext {
 /** Pointer capture always. Escape restores `readGridWidth()` from drag start and cancels the drag —
  *  it previews the restored width but commits nothing (U5). Clamping to `minGridWidth` is
  *  `PaneLayout`'s job (`gridWidth`'s setter), not this attachment's — it proposes a raw px delta and
- *  nothing more. */
+ *  nothing more. Starts disabled: the caller's first `setEnabled` call (constructor or live) decides
+ *  the initial state, so there is only ever one path into "enabled" DOM, not a second one for
+ *  construction (#432, F1/F5). */
 export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): SplitterAttachment {
   let dragging = false;
   let pointerId: number | undefined;
   let startWidth = 0;
   let startX = 0;
+  // `undefined`, not `false`: the handle starts with none of the disabled DOM applied either, so the
+  // very first `setEnabled` call — `false` included — still has to run its branch (#432, F1/F5).
+  let enabled: boolean | undefined;
 
   function syncAria(): void {
+    if (!enabled) return;
     handle.setAttribute('aria-valuemin', String(hooks.readMinWidth()));
     handle.setAttribute('aria-valuemax', String(hooks.readMaxWidth()));
     handle.setAttribute('aria-valuenow', String(hooks.readGridWidth()));
@@ -122,23 +139,47 @@ export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): Spl
     }
   }
 
-  handle.addEventListener('pointerdown', onPointerDown);
-  handle.addEventListener('pointermove', onPointerMove);
-  handle.addEventListener('pointerup', onPointerUp);
-  handle.addEventListener('keydown', onSplitterKeyDown);
-  // S5.11: an accessible name and the initial `aria-value*` reading, the moment the widget exists.
-  handle.setAttribute('aria-label', 'Resize grid pane');
-  handle.setAttribute('aria-orientation', 'vertical');
-  syncAria();
-
-  return {
-    detach(): void {
+  /** #432, F1/F5: the one place that decides what "enabled" and "locked" each look like in the DOM.
+   *  Idempotent, so a caller may call it with the answer it already holds. */
+  function setEnabled(next: boolean): void {
+    if (next === enabled) return;
+    enabled = next;
+    if (enabled) {
+      handle.addEventListener('pointerdown', onPointerDown);
+      handle.addEventListener('pointermove', onPointerMove);
+      handle.addEventListener('pointerup', onPointerUp);
+      handle.addEventListener('keydown', onSplitterKeyDown);
+      handle.tabIndex = 0;
+      handle.removeAttribute('data-resize-off');
+      handle.removeAttribute('aria-hidden');
+      // S5.11: an accessible name and the initial `aria-value*` reading, the moment it re-enables.
+      handle.setAttribute('aria-label', 'Resize grid pane');
+      handle.setAttribute('aria-orientation', 'vertical');
+      syncAria();
+    } else {
       if (dragging) endDrag();
       handle.removeEventListener('pointerdown', onPointerDown);
       handle.removeEventListener('pointermove', onPointerMove);
       handle.removeEventListener('pointerup', onPointerUp);
       handle.removeEventListener('keydown', onSplitterKeyDown);
-    },
+      handle.tabIndex = -1;
+      // No listener can arm a drag, so the resize cursor (`.fg-splitter[data-resize-off]`,
+      // styles.ts) would be the one affordance left advertising a gesture that does nothing.
+      handle.setAttribute('data-resize-off', '');
+      // F1: a screen reader must not meet a named, valued widget it cannot operate. `role` stays —
+      // the node is still the same layout divider — but every trace of "you can resize this" goes,
+      // and `aria-hidden` says the node carries no operable semantics at all right now.
+      handle.removeAttribute('aria-label');
+      handle.removeAttribute('aria-orientation');
+      handle.removeAttribute('aria-valuemin');
+      handle.removeAttribute('aria-valuemax');
+      handle.removeAttribute('aria-valuenow');
+      handle.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  return {
+    setEnabled,
     syncAria,
   };
 }

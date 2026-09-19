@@ -27,6 +27,12 @@ async function contentSizerRight(page: import('@playwright/test').Page): Promise
 
 async function dragSplitterBy(page: import('@playwright/test').Page, deltaX: number): Promise<void> {
   const splitter = page.locator('.fg-splitter');
+  // Checking `#lock-grid-checkbox` (below the fold in the default viewport) scrolls the page to
+  // bring it into view, which can carry the splitter itself off-screen — a mouse drag at a
+  // negative/out-of-viewport y lands on no element at all (elementFromPoint returns null) and
+  // silently drags nothing. Scroll the splitter back into view first so every caller, locked or
+  // not, drags the real element.
+  await splitter.scrollIntoViewIfNeeded();
   const box = await splitter.boundingBox();
   if (!box) throw new Error('splitter has no box');
   const startX = box.x + box.width / 2;
@@ -161,7 +167,10 @@ test.describe('gridResizable locks the grid pane (#432)', () => {
     const cursorBefore = await page.locator('.fg-splitter').evaluate((el) => getComputedStyle(el).cursor);
     expect(cursorBefore).toBe('default');
 
-    await dragSplitterBy(page, 200);
+    // Left, not right: this page opens at its columns' own #139 ceiling, so a rightward drag is
+    // already capped by #139 alone and would pass with or without the lock. Leftward (#126) is the
+    // direction #139 always allows — only the lock stops it here.
+    await dragSplitterBy(page, -200);
 
     expect(await gridPane.evaluate((el) => el.clientWidth)).toBe(paneWidthBefore);
   });
@@ -208,16 +217,24 @@ test.describe('gridResizable locks the grid pane (#432)', () => {
     const gridPane = page.locator('#gantt .fg-grid-pane');
     const paneWidthBeforeDrag = await gridPane.evaluate((el) => el.clientWidth);
 
-    await dragSplitterBy(page, 300);
+    // Left, not right: rightward is already capped by #139's own ceiling regardless of the lock
+    // (see the first test in this block), so it proves nothing about whether the drag converted
+    // 'fitColumns' into a fixed width.
+    await dragSplitterBy(page, -300);
     expect(await gridPane.evaluate((el) => el.clientWidth)).toBe(paneWidthBeforeDrag);
 
-    // 'fitColumns' still stands: hiding the Budget column still shrinks the pane. A drag that had
-    // converted it to a fixed width (#157's failure mode) would leave the pane unchanged here
-    // instead, because a fixed width does not re-measure when the column set changes.
+    // A shrink alone proves nothing: #139's ceiling caps a fixed px pane down too when the column
+    // set shrinks, so hiding Budget would shrink the pane even if the drag above had already
+    // converted 'fitColumns' into a fixed width.
     await page.locator('#toggle-budget-btn').click();
     await expect
       .poll(async () => gridPane.evaluate((el) => el.clientWidth))
       .toBeLessThan(paneWidthBeforeDrag);
+
+    // Growing the column set back is the discriminating step: only a standing 'fitColumns'
+    // re-measures upward on its own. A fixed width, once capped down, never grows back by itself.
+    await page.locator('#toggle-budget-btn').click();
+    await expect.poll(async () => gridPane.evaluate((el) => el.clientWidth)).toBe(paneWidthBeforeDrag);
   });
 });
 
