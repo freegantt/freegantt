@@ -158,8 +158,10 @@ export interface GanttOptionsBase<TProps = unknown> {
   /** Live (J1). Where the default bar label paints — ignored once `barRenderer`'s output takes over
    *  a bar's content. `'fitBar'` (the default): inside when the label fits, outside to the right of
    *  the bar when it does not, ellipsised inside as the last resort. `'inside'`/`'outside'` force one
-   *  side, and still fall back to ellipsised-inside when the forced side has no room. `'none'` paints
-   *  no label at all. */
+   *  side, and still fall back to ellipsised-inside when the forced side has no room. `'insideOrNone'`
+   *  paints inside when the label fits and no label at all when it does not — for a grid of
+   *  contiguous bars, where an outside label would paint across the next bar (#435). `'none'` paints
+   *  no label at all, regardless of fit. */
   barLabels?: BarLabels;
   /** Live (S5.4, D-S5-11). Customization ladder level 3 (`plans/02` §4). One function, over every
    *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.

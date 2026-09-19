@@ -221,9 +221,12 @@ function rowParity(index: number): RowParity {
  *  bar-label` rule already carries — when neither clause holds. `'inside'`/`'outside'` force one
  *  answer, but still fall back to inside when the forced side has no room: an `'outside'` label past
  *  `contentWidth` would inflate the pane's own scrollable extent (`e2e/timeline-content-width.spec.ts`),
- *  which no forced mode is worth breaking for. `undefined` textWidth (no 2d context to measure with)
- *  always reads `'inside'` — today's exact behaviour, so a stub DOM never invents pixels it cannot
- *  measure. */
+ *  which no forced mode is worth breaking for. `'insideOrNone'` reads the same "does it fit inside?"
+ *  clause as `'fitBar'`, but a bar that fails it gets no placement at all (`undefined`) instead of
+ *  `'fitBar'`'s outside fallback — the shape a grid of contiguous bars needs, since an outside label
+ *  there paints across the next bar rather than past open pane space (#435). `undefined` textWidth
+ *  (no 2d context to measure with) always reads `'inside'` — today's exact behaviour, so a stub DOM
+ *  never invents pixels it cannot measure. */
 function resolveBarLabelPlacement(
   mode: BarLabelPolicy,
   textWidth: number | undefined,
@@ -234,11 +237,12 @@ function resolveBarLabelPlacement(
 ): BarLabelPlacement | undefined {
   if (mode === 'none') return undefined;
   if (textWidth === undefined || mode === 'inside') return 'inside';
+  const fitsInside = textWidth + 2 * gapPx <= barWidth;
+  if (mode === 'insideOrNone') return fitsInside ? 'inside' : undefined;
+  if (mode === 'fitBar' && fitsInside) return 'inside';
   const fitsOutside = barX + barWidth + gapPx + textWidth <= contentWidth;
   if (mode === 'outside') return fitsOutside ? 'outside' : 'inside';
-  // 'fitBar': inside first, outside only when it does not fit, inside (ellipsised) as the last resort.
-  const fitsInside = textWidth + 2 * gapPx <= barWidth;
-  if (fitsInside) return 'inside';
+  // 'fitBar' remaining: outside when it fits there, inside (ellipsised) as the last resort.
   return fitsOutside ? 'outside' : 'inside';
 }
 
