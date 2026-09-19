@@ -48,11 +48,9 @@ const tilePreset: ViewPreset = {
 
 const isTileRow = (entry: Entry): boolean => entry.id.startsWith('tile-row-');
 
-// No `overscan` key here: `GanttOptions` (`src/api/gantt.ts`) does not carry one.
-// `GanttShellOptions.overscan` (`src/view/gantt-shell.ts:286`) exists one layer down, unreachable
-// from this page or from `e2e/dense-tile-grid.spec.ts` — an app author can neither read nor set the
-// slack the render window keeps past the visible edge. Recorded as a gap in the task report; the
-// e2e spec's bound works around not having this number, it does not restate it.
+// `overscan` (#435) is zero here on purpose: `e2e/dense-tile-grid.spec.ts` asserts the tightest
+// possible bound — the exact visible slice, no culling slack — rather than a headroom guess over
+// the shipped default.
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
@@ -65,6 +63,7 @@ const gantt = new Gantt({
     childrenAsSegments: isTileRow,
   },
   barLabels: 'insideOrNone',
+  overscan: { verticalRows: 0, horizontalPx: 0 },
   a11yLabel: 'Dense tile grid',
 });
 

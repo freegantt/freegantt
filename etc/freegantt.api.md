@@ -1145,6 +1145,9 @@ export class Gantt<TProps = unknown> {
     off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
     // (undocumented)
     on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+    // (undocumented)
+    get overscan(): Overscan;
+    set overscan(o: Overscan);
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
     get plugins(): readonly ChromePlugin<TProps>[];
@@ -1272,6 +1275,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     headerRenderer?: HeaderRenderer;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
+    overscan?: Overscan;
     plugins?: readonly ChromePlugin<TProps>[];
     rowSource?: RowSource;
     scroll?: ScrollAxes;
@@ -1614,6 +1618,14 @@ export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 
 // @public (undocumented)
 export function now(): Instant;
+
+// @public
+export interface Overscan {
+    // (undocumented)
+    horizontalPx?: number;
+    // (undocumented)
+    verticalRows?: number;
+}
 
 // @public
 export type PaneName = 'grid' | 'timeline';
