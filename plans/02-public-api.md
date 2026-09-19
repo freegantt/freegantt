@@ -371,9 +371,14 @@ room; `'insideOrNone'` reads the same fit clause `'fitBar'` does, but a bar that
 label at all rather than `'fitBar'`'s outside fallback — for a consumer painting bars edge to edge
 (a day-tile grid), where an outside label would paint across the next bar rather than into open
 pane space (#435); `'none'` paints no label at all, regardless of fit. The resolved side is
-`data-label` on `.fg-bar` (`'inside'` / `'outside'`, absent for `'none'`, for `'insideOrNone'` on a
-bar too narrow, or for a `barRenderer` result) — a level-2 hook for a consumer stylesheet, styled by
-default through `--fg-bar-label-gap` and `--fg-bar-label-outside-color` (`docs/05-consumer-api.md`).
+`data-label` on `.fg-bar` (`'inside'` / `'outside'`) — a level-2 hook for a consumer stylesheet,
+styled by default through `--fg-bar-label-gap` and `--fg-bar-label-outside-color`
+(`docs/05-consumer-api.md`). `data-label` is absent for `'none'` and for a `barRenderer` result — no
+label child exists either time. `'insideOrNone'` on a bar too narrow is `data-label='none'` instead:
+the label child exists, measured, so a resize drag that widens the bar back across the fit line has
+something to reveal — the hot path only flips the attribute, never mounts a child mid-drag (F1,
+#435 follow-up). `.fg-bar[data-label='none'] .fg-bar-label { display: none }` is the rule that keeps
+it unpainted either way.
 
 **`BarLabelSpec` (`#421` C5) is the expert form: a bar names the Field it prints.** `{ field?:
 FieldKey; placement?: BarLabelPolicy }` — either key alone keeps whichever half is already in force

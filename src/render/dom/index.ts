@@ -196,15 +196,26 @@ type RowBandGeom = {
   height: number;
   parity: RowParity;
 };
+/** The `data-label` token `patch` paints, and whether a `.fg-bar-label` child exists at all (#435
+ *  follow-up, F1). `BarLabelPlacement`'s two values still mean "paints, on this side." `'none'` adds
+ *  a third: the child exists, measured, but must not paint — `'insideOrNone'` on a bar too narrow
+ *  reaches this, not the plain "no child at all" case `undefined` keeps. The split matters on the
+ *  resize hot path (`applyBarPreview`): that path only flips `data-label`, never adds or removes the
+ *  child, so a mode that can flip mid-drag needs a child to already exist, hidden, at the far end of
+ *  the flip — `undefined` cannot express "hidden but present," and deleting the attribute of a bar
+ *  that owns no child mid-drag would leave nothing to reveal on the way back. */
+type BarLabelToken = BarLabelPlacement | 'none';
 type BarGeom = Pick<
   FrameBar,
   'variant' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'span'
 > & {
   /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
-  /** J1: where this frame's label paints, or `undefined` for no label at all (`barLabels: 'none'`,
-   *  or a `barRenderer` result already owns this bar's content). */
-  labelPlacement: BarLabelPlacement | undefined;
+  /** J1: this frame's label token. `undefined` means no label child at all — `barLabels: 'none'`, an
+   *  empty label, or a `barRenderer` result that already owns this bar's content. `'none'` (see
+   *  `BarLabelToken`) means a child exists but does not paint — `'insideOrNone'` on a bar too narrow
+   *  for its label. `'inside'`/`'outside'` paint on that side. */
+  labelPlacement: BarLabelToken | undefined;
 };
 /** 1-based, so the first row reads 'odd' — the same counting `--fg-row-odd-bg` is named for. The
  *  absolute frame row index drives it, never DOM child position: the row layer only holds the
@@ -216,17 +227,14 @@ function rowParity(index: number): RowParity {
   return index % 2 === 0 ? 'odd' : 'even';
 }
 
-/** J1's whole rule, pure arithmetic (no DOM read): `'fitBar'` reads inside when the label fits,
- *  outside to the right when it does not, and falls back to inside — ellipsised, by the CSS `.fg-
- *  bar-label` rule already carries — when neither clause holds. `'inside'`/`'outside'` force one
- *  answer, but still fall back to inside when the forced side has no room: an `'outside'` label past
- *  `contentWidth` would inflate the pane's own scrollable extent (`e2e/timeline-content-width.spec.ts`),
- *  which no forced mode is worth breaking for. `'insideOrNone'` reads the same "does it fit inside?"
- *  clause as `'fitBar'`, but a bar that fails it gets no placement at all (`undefined`) instead of
- *  `'fitBar'`'s outside fallback — the shape a grid of contiguous bars needs, since an outside label
- *  there paints across the next bar rather than past open pane space (#435). `undefined` textWidth
+/** `BarLabelPolicy`'s rule (`layout/renderer.ts`), as pure arithmetic — no DOM read. Two notes the
+ *  policy doc does not need: an `'outside'` placement past `contentWidth` would inflate the pane's
+ *  own scrollable extent (`e2e/timeline-content-width.spec.ts`), which no forced mode is worth
+ *  breaking for, so a forced side with no room still falls back to inside; and `undefined` textWidth
  *  (no 2d context to measure with) always reads `'inside'` — today's exact behaviour, so a stub DOM
- *  never invents pixels it cannot measure. */
+ *  never invents pixels it cannot measure. Returns `undefined` only for `'none'` or for
+ *  `'insideOrNone'` on a bar too narrow — callers map that second case to the `'none'` token
+ *  (`BarLabelToken`), not to "no child," on any bar this function can be asked about twice. */
 function resolveBarLabelPlacement(
   mode: BarLabelPolicy,
   textWidth: number | undefined,
@@ -448,12 +456,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  with no re-measurement, by `applyBarPreview`'s mid-drag flip check — "a label's text width does
    *  not change during a drag" is the fact this cache banks on. `undefined` means either no label
    *  (`barLabels: 'none'`, or a `barRenderer` owns this bar's content) or no 2d context to measure
-   *  with; both read the same as "never flips to outside". */
+   *  with; both read the same as "never flips". A defined width does not promise a painting
+   *  placement: `'insideOrNone'` on a bar too narrow measures the text and still stores `'none'` in
+   *  `labelPlacementByBarId` below, so the two maps disagree on purpose for that one state. */
   const labelWidthByBarId = new Map<BarId, number | undefined>();
-  /** J1: each mounted bar's last-committed label placement — what `restoreBarTransform` puts back on
+  /** J1: each mounted bar's last-committed label token — what `restoreBarTransform` puts back on
    *  `data-label` once a resize preview that flipped it mid-drag clears without a commit. Written in
-   *  `syncBars`'s own `toGeom`, the same cadence `labelWidthByBarId` keeps. */
-  const labelPlacementByBarId = new Map<BarId, BarLabelPlacement | undefined>();
+   *  `syncBars`'s own `toGeom`, the same cadence `labelWidthByBarId` keeps. `'none'` (`BarLabelToken`)
+   *  restores a hidden-but-present child, not an absent attribute. */
+  const labelPlacementByBarId = new Map<BarId, BarLabelToken | undefined>();
   /** The mounted bars of each Entry (#185, #212, ADR 0010) — the Entry→Bars relation both the
    *  Selection and the resize-handle pair are keyed by. A bar draws one Entry (#421, ADR 0026), so
    *  filing it here is the whole of what used to be a Segment→Bars index. `syncBars` is the only
@@ -679,6 +690,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     node.style.width = `${geom.width}px`;
     // J1: a resize preview that flipped the label mid-drag (see applyBarPreview) must not leave that
     // flip stamped once the preview clears without a commit — restore syncBars's own last answer.
+    // `undefined` means this bar owns no label child at all (see BarLabelToken); anything else,
+    // `'none'` included, is a token `patch` already gave this bar's child, so it is safe to restamp.
     const committed = labelPlacementByBarId.get(id);
     if (committed === undefined) delete node.dataset['label'];
     else node.dataset['label'] = committed;
@@ -695,17 +708,22 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     node.style.transform = `translate(${x}px, ${geom.y}px)`;
     if (preview.dWidth === 0) return;
     node.style.width = `${width}px`;
-    // J1: a resize preview can cross the inside/outside fit line mid-drag. Reuse the label width
-    // syncBars already measured — no canvas call on the hot path — and touch the dataset only on an
-    // actual flip, the same diff-and-touch-only posture every other paintedX field in this file keeps.
+    // J1: a resize preview can cross the inside/outside fit line, or (F1, #435 follow-up) the
+    // inside/none fit line `'insideOrNone'` draws, mid-drag. Reuse the label width syncBars already
+    // measured — no canvas call on the hot path — and touch the dataset only on an actual flip, the
+    // same diff-and-touch-only posture every other paintedX field in this file keeps.
     const textWidth = labelWidthByBarId.get(id);
     if (textWidth === undefined) return;
     const entry = entryById(entryIdOfBar(id));
     const policy = entry === undefined ? 'fitBar' : resolveBarLabelPolicy(entry);
     const placement = resolveBarLabelPlacement(policy, textWidth, x, width, barLabelGapPx, contentWidthPx);
-    if (placement === (node.dataset['label'] as BarLabelPlacement | undefined)) return;
-    if (placement === undefined) delete node.dataset['label'];
-    else node.dataset['label'] = placement;
+    // A defined textWidth (the guard above) only reaches `resolveBarLabelPlacement` returning
+    // `undefined` for `'insideOrNone'` on a bar too narrow — `patch` (syncBars) already gave this
+    // bar's child the `'none'` token for that case, so the flip lands on `'none'`, never on a
+    // deleted attribute: the child stays in the DOM, hidden by CSS, ready to reveal on the way back.
+    const token: BarLabelToken = placement ?? 'none';
+    if (token === node.dataset['label']) return;
+    node.dataset['label'] = token;
   }
 
   function paintPreview(previews: readonly BarPreview[] | undefined): void {
@@ -1128,9 +1146,19 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // its markup instead, which is also why the mid-drag restamp below skips such a bar: its
         // label placement is a frame fact for it, not a hot-path one.
         const ownsContent = content !== undefined && paintsItsOwnContent(content);
-        const paintedPlacement = ownsContent ? undefined : resolvedPlacement;
+        // F1 (#435 follow-up): `'insideOrNone'` on a bar too narrow resolves no placement, but a
+        // resize preview can still widen this same bar past the fit line mid-drag (applyBarPreview),
+        // and that hot path only flips `data-label` — it never grows the child `patch` owns. So this
+        // one case gets a child up front, holding the `'none'` token (BarLabelToken), instead of no
+        // child at all: the hot path then has something to reveal. `resolvedPlacement === undefined`
+        // reaches here only for `'none'` or for `'insideOrNone'` too narrow (resolveBarLabelPlacement),
+        // and only the second one owns a measured, non-empty label capable of that flip.
+        const canFlipToLabel = !ownsContent && policy === 'insideOrNone' && bar.label !== '';
+        const labelToken: BarLabelToken | undefined = ownsContent
+          ? undefined
+          : (resolvedPlacement ?? (canFlipToLabel ? 'none' : undefined));
         labelWidthByBarId.set(bar.id, ownsContent ? undefined : textWidth);
-        labelPlacementByBarId.set(bar.id, paintedPlacement);
+        labelPlacementByBarId.set(bar.id, labelToken);
         return {
           variant: bar.variant,
           label: bar.label,
@@ -1141,7 +1169,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           flags: bar.flags,
           a11yLabel: bar.a11yLabel,
           span: bar.span,
-          labelPlacement: paintedPlacement,
+          labelPlacement: labelToken,
           ...(content !== undefined ? { content } : {}),
         };
       },
@@ -1153,17 +1181,20 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         if (geom.span === 'exact') delete node.dataset['span'];
         else node.dataset['span'] = geom.span;
         node.dataset['flag'] = flagTokens(geom.flags);
-        // J1: `undefined` covers both `barLabels: 'none'` and a `barRenderer` result — neither gets a
-        // `data-label` stamp, so `.fg-bar-label`'s placement rules never fire for either case.
+        // J1: `undefined` covers `barLabels: 'none'`, an empty label, and a `barRenderer` result —
+        // none of them get a `data-label` stamp or a label child. `'none'` (BarLabelToken, F1) is
+        // different: `'insideOrNone'` on a bar too narrow still gets the stamp and the child, just
+        // hidden — `.fg-bar[data-label='none'] .fg-bar-label` (view/styles.ts) is what hides it.
         if (geom.labelPlacement === undefined) delete node.dataset['label'];
         else node.dataset['label'] = geom.labelPlacement;
         node.setAttribute('aria-label', geom.a11yLabel);
         node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
         node.style.width = `${geom.width}px`;
         node.style.height = `${geom.height}px`;
-        // `content === undefined && labelPlacement === undefined` only happens for `barLabels: 'none'`
-        // (a barRenderer result took the `geom.content` branch instead) — no label child at all, not
-        // an unplaced one, because 'none' means the bar paints no label.
+        // No child at all only for `labelPlacement === undefined` (`barLabels: 'none'`, an empty
+        // label, or a `barRenderer` result, which took the `geom.content` branch instead). Any other
+        // token, `'none'` included, gets the child — `'none'` just starts it hidden, so a resize
+        // preview that flips `'insideOrNone'` back across the fit line has something to reveal.
         const defaultContent: ElementDescription =
           geom.labelPlacement === undefined
             ? { text: '' }
