@@ -87,6 +87,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - Grid columns are fixed-width (#139). A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it (#126). Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns (#139) — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` (#157) — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
+- `gridResizable: false` (#432) — lock the grid pane: the splitter no longer drags and shows no resize cursor, and no column paints a resizer grip, whatever its own `resizable` says. Default `true`. Live. Locks the gesture, not the value — `gantt.gridWidth = 240` and `gantt.gridColumns = […]` still write. Neither `beforeGridWidthChange` nor `beforeGridColumnsChange` fires for a gesture that can no longer arm — this is what keeps a `gridWidth: 'fitColumns'` pane from turning into a fixed px width on a stray drag.
 - `overscan` (#435) — the culling buffer around the visible window: `verticalRows` whole rows above and below, `horizontalPx` px left and right. Live. Default `{ verticalRows: 2, horizontalPx: 128 }`. See `plans/02-public-api.md`, "The culling buffer (`overscan`)".
 - `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve). Reads back
   resolved, and one setting changes by spreading that value — see
@@ -175,6 +176,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-cell-padding-block` | `4px` | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` |
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
 | `--fg-bar-label-gap` | `8px` | `pixel-property.ts`, read once at `mount()` — `.fg-bar-label` inline padding, and the gap between a bar's right edge and an outside label (J1) |
+| `--fg-z-overlay` | `3` | `.fg-overlay` CSS rule directly (not `pixel-property.ts` — a stacking position, not a layout number). Set above every internal layer (the grid header, the timeline header, a dragged column header, the date cursor line) so a mounted `.fg-popup` — a tooltip or a `contextMenu()` — always paints, and hit-tests, above them. Raise it further when this Gantt sits inside a consumer's own stacking context (#437) |
 
 ### Colour and shadow tokens
 

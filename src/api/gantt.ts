@@ -106,6 +106,15 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  one narrow column, so a drag cannot take the pane to nothing by accident. It bounds the drag
    *  only: an explicit `gridWidth = 0` still collapses the grid pane on purpose. */
   minGridWidth?: number;
+  /** Live (#432). Default `true`: the splitter drags, and a column paints its resizer grip
+   *  whenever its own `resizable` (default `true`) says so. `false` locks the whole grid pane —
+   *  the splitter no longer drags and shows no resize cursor, and no column paints a grip, no
+   *  matter what its own `resizable` says. Neither `beforeGridWidthChange` nor
+   *  `beforeGridColumnsChange` fires for a gesture that can no longer arm: this is a lock, not a
+   *  veto. A programmatic write still lands — `gantt.gridWidth = 240`, `gantt.gridColumns = […]` —
+   *  the same way `capabilities.move: false` never stops a Dataset write. This is what keeps a
+   *  `gridWidth: 'fitColumns'` pane from turning into a fixed px width on a stray drag. */
+  gridResizable?: boolean;
   /** Live (plans/02, "The culling buffer (`overscan`)"). The culling buffer around the visible window: `verticalRows` whole rows
    *  above and below, `horizontalPx` px left and right of the timeline pane. A row or a bar inside
    *  the buffer stays mounted while it is one scroll step from view, so a small scroll never shows a
@@ -306,6 +315,7 @@ export class Gantt<TProps = unknown> {
         'scroll',
         'gridWidth',
         'minGridWidth',
+        'gridResizable',
         'overscan',
         'preset',
         'fit',
@@ -480,12 +490,24 @@ export class Gantt<TProps = unknown> {
     this.#shell.minGridWidth = px;
   }
 
+  /** Live (#435). `gantt.overscan = { verticalRows: 4 }`. See the option's own doc for what the
+   *  buffer holds mounted. */
   get overscan(): Overscan {
     return this.#shell.overscan;
   }
 
   set overscan(o: Overscan) {
     this.#shell.overscan = o;
+  }
+
+  /** Live (#432). `false` locks the splitter and every column's resizer grip; see the option's own
+   *  doc for what "locks" means. */
+  get gridResizable(): boolean {
+    return this.#shell.gridResizable;
+  }
+
+  set gridResizable(resizable: boolean) {
+    this.#shell.gridResizable = resizable;
   }
 
   get gridColumns(): readonly GridColumnInput[] {

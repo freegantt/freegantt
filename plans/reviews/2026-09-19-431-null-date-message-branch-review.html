@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — #431 null-date message</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); color: #e2e8f0; }
+      .card { border: 1px solid #e2e8f0; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-3">
+        <p class="text-xs uppercase tracking-wider text-slate-500">Branch review · freegantt</p>
+        <h1 class="text-3xl font-bold font-serif">#431 — a null <code class="font-mono text-2xl">start</code>/<code class="font-mono text-2xl">end</code> stops sending the reader to look at zones</h1>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="rounded bg-slate-900 text-white px-2 py-1 font-mono">Pawel-IT/issue-431-null-date-message</span>
+          <span class="rounded bg-slate-200 px-2 py-1 font-mono">HEAD 52dfb59c</span>
+          <span class="rounded bg-slate-200 px-2 py-1 font-mono">diff origin/main...HEAD</span>
+          <span class="rounded bg-slate-200 px-2 py-1 font-mono">2026-09-19</span>
+          <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1 font-semibold">pass 2 complete · 7 Confirmed</span>
+        </div>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          One commit. <code>toInstant</code> gains an explicit <code>null</code> fault before the plain-time
+          branch, and a final fall-through fault for anything else the untyped door admits (a boolean, a plain
+          object). The Dataset path is fixed and pinned; the fault text carries two small defects, and the
+          added reason constant duplicates one that already ships.
+        </p>
+      </header>
+
+      <section class="space-y-4">
+        <h2 class="text-lg font-bold">Where the null lands, before and after</h2>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <pre class="mermaid">
+flowchart LR
+  J[consumer row from JSON] --> R[entry-reader.toEntryDates]
+  R --> T[time/toInstant]
+  T -->|before: not string/Date/number| I["instant(null) -> RangeError 'zoneless plain time ... add Z'"]
+  T -->|after: input === null| N["InvalidInstantError 'null is null. An Entry ... omit the property'"]
+  classDef fixed fill:#dcfce7,stroke:#16a34a;
+  class N fixed
+          </pre>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="text-lg font-bold">Findings</h2>
+
+        <article class="bg-white rounded card p-5 seam space-y-3">
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-amber-600">F1</span><span class="text-sm font-normal text-slate-500">message quality · minor · Confirmed</span></h3>
+          <p class="text-sm leading-6">
+            The new fault reads <strong>“null is null.”</strong> <code>NULL_VALUE</code> begins <em>“is null.”</em>,
+            and <code>invalid()</code> prefixes the printed value — for <code>null</code> that value is
+            <code>String(null) === "null"</code>. The tautology is the first thing the reader sees, on a
+            branch whose whole purpose is message quality.
+          </p>
+          <p class="text-xs text-slate-500 font-mono">src/time/input.ts:50-51 (reason), 62-64 (prefix) · src/api/dataset.test.ts:147</p>
+          <pre class="text-xs bg-slate-50 rounded p-3 overflow-x-auto">probe: toInstant('America/Chicago', null, 'construction')
+  -> "construction: null is null. An Entry with no span of its own omits the property instead — …"</pre>
+          <p class="text-sm leading-6"><strong>Fix:</strong> make the reason read as a predicate over the value, e.g. <code>'names no instant. An Entry … omits the property instead …'</code>, so the sentence becomes “null names no instant…”.</p>
+        </article>
+
+        <article class="bg-white rounded card p-5 seam space-y-3">
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F2</span><span class="text-sm font-normal text-slate-500">comment accuracy · nit · Confirmed</span></h3>
+          <p class="text-sm leading-6">
+            The doc comment above the reason constants still says <em>“Three of the four faults below end with this
+            sentence.”</em> The change left <strong>five</strong> reason constants below it —
+            <code>UNREADABLE</code>, <code>NO_SUCH_DATE</code>, <code>NOT_FINITE</code>, <code>NULL_VALUE</code>,
+            <code>NOT_A_DATE_VALUE</code> — three of which append <code>WRITE_A_DATE</code>. The count is stale.
+          </p>
+          <p class="text-xs text-slate-500 font-mono">src/time/input.ts:41</p>
+          <p class="text-sm leading-6"><strong>Fix:</strong> “Three of the five faults below…”.</p>
+        </article>
+
+        <article class="bg-white rounded card p-5 seam space-y-3">
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F3</span><span class="text-sm font-normal text-slate-500">naming · simplicity · minor · Confirmed</span></h3>
+          <p class="text-sm leading-6">
+            <code>NOT_A_DATE_VALUE</code> (<em>“is not a date value. Write an ISO date…”</em>) is a second name for
+            the job <code>UNREADABLE</code> already does (<em>“is not a date this library reads. Write an ISO
+            date…”</em>). Both live in the same file, are read in the same function, and differ only in five words
+            of preamble. A boolean or an object is covered by <code>UNREADABLE</code> just as well.
+          </p>
+          <p class="text-xs text-slate-500 font-mono">src/time/input.ts:43, 54, 143</p>
+          <p class="text-sm leading-6"><strong>Fix:</strong> reuse <code>UNREADABLE</code> in the final <code>throw</code> and delete <code>NOT_A_DATE_VALUE</code>; F2’s count also settles to “three of four”.</p>
+        </article>
+
+        <article class="bg-white rounded card p-5 seam space-y-3">
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F4</span><span class="text-sm font-normal text-slate-500">API · message scope · judgement · Confirmed</span></h3>
+          <p class="text-sm leading-6">
+            <code>NULL_VALUE</code> tells the reader <em>“An Entry with no span of its own omits the property
+            instead.”</em> But <code>time/toInstant</code> is not an Entry-only seam. Its internal callers include
+            <code>gantt.todayLine</code>, <code>gantt.dateLines</code>, <code>zoomToSpan</code> and
+            <code>panToDate</code> (which hands to the shell's <code>panToInstant</code>). A null there now
+            receives Entry advice that names a concept the caller never touched.
+          </p>
+          <p class="text-xs text-slate-500 font-mono">src/time/input.ts:50-51 · src/api/gantt.ts:392, 399, 406, 865, 871</p>
+          <p class="text-sm leading-6"><strong>Options:</strong> keep the Entry wording and accept that <code>toInstant</code> is Entry-facing in practice; or split the reason so the generic layer says only “names no instant — pass a date or omit the property”, leaving Entry-specific guidance in <code>entry-reader</code>.</p>
+        </article>
+
+        <article class="bg-white rounded card p-5 seam space-y-3">
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F5</span><span class="text-sm font-normal text-slate-500">types · minor · Confirmed</span></h3>
+          <p class="text-sm leading-6">
+            <code>invalid(input: InstantInput, …)</code> declares an <code>InstantInput</code>, but the new
+            fall-through hands it a boolean or a plain object at runtime, and <code>null</code> is outside
+            <code>InstantInput</code> too. The function’s job is to format <em>any</em> rejected value — the error it
+            builds already stores <code>value?: unknown</code> (<code>InvalidInstantError</code>).
+          </p>
+          <p class="text-xs text-slate-500 font-mono">src/time/input.ts:61 · src/model/errors.ts:160-167</p>
+          <p class="text-sm leading-6"><strong>Fix:</strong> widen the parameter to <code>unknown</code>, which is the truth at the untyped door.</p>
+        </article>
+
+        <article class="bg-white rounded card p-5 seam space-y-3">
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F6</span><span class="text-sm font-normal text-slate-500">spec location · low · judgement · Confirmed</span></h3>
+          <p class="text-sm leading-6">
+            The issue proposed catching <code>null</code> in the public <code>instant()</code> helper — the function
+            that actually throws the zoneless message. The branch catches it one caller up, in
+            <code>toInstant</code>. The Dataset path is fixed, but <code>instant(null as unknown as string)</code>
+            remains public (<code>api/index.ts:417</code>) and still throws the old misleading <code>RangeError</code>.
+          </p>
+          <p class="text-xs text-slate-500 font-mono">src/time/instant.ts:16-22 · src/time/input.ts:129 · src/api/index.ts:417</p>
+          <p class="text-sm leading-6"><strong>Judgement:</strong> <code>instant</code>’s type already rejects <code>null</code>, and no library path reaches it with null now. Fixing at <code>toInstant</code> is the smaller change; decide whether the public helper deserves the same guard.</p>
+        </article>
+
+        <article class="bg-white rounded card p-5 seam space-y-3">
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F7</span><span class="text-sm font-normal text-slate-500">test quality · minor · Confirmed</span></h3>
+          <p class="text-sm leading-6">
+            Both new null assertions pass a message that opens with the F1 tautology. <code>input.test.ts:77</code>
+            matches the substring <code>null. An Entry…</code> — matching the second <code>null</code> — and
+            <code>dataset.test.ts:148</code> matches <code>/is null\. An Entry/</code>, inside <code>null is null.</code>.
+            Neither pins the sentence, so the defect ships green.
+          </p>
+          <p class="text-xs text-slate-500 font-mono">src/time/input.test.ts:76-78 · src/api/dataset.test.ts:147-157</p>
+          <p class="text-sm leading-6"><strong>Fix:</strong> assert the whole message (or <code>toMatchInlineSnapshot</code>), so the wording itself is pinned.</p>
+        </article>
+      </section>
+
+      <section class="space-y-3">
+        <h2 class="text-lg font-bold">Checked and clean</h2>
+        <ul class="list-disc pl-6 text-sm leading-6 space-y-1">
+          <li>Both ingest doors pass <code>null</code> through (<code>entry-reader.ts:64-67</code>, <code>store.update</code> at <code>entry-reader.ts:212</code>) and both now get the new fault — <code>start</code> and <code>end</code>, via <code>toEndInstant</code>.</li>
+          <li>ADR 0012 (“an unreadable date is still <code>InvalidInstantError</code>”) holds; the fall-through turns a bare <code>RangeError</code> for junk into the documented error type.</li>
+          <li>Rejecting a boolean/object is a real secondary fix: those also fell through to <code>instant()</code> and produced the same zoneless advice.</li>
+          <li>Omitted and explicit-<code>undefined</code> dates still store no key — pinned at <code>dataset.test.ts:127-141</code>.</li>
+          <li><code>harness/main.ts</code> reviewed: it writes no null dates and needs no API the change does not provide — no library gap hiding here.</li>
+          <li>Changed tests pass (75/75); <code>tsc --noEmit</code> and <code>eslint</code> on the changed files are clean; no doc repeats the old wording.</li>
+        </ul>
+      </section>
+
+      <section class="space-y-3">
+        <h2 class="text-lg font-bold">Next</h2>
+        <ol class="list-decimal pl-6 text-sm leading-6 space-y-1">
+          <li>F1 — reword so the message does not say “null is null”, then pin the full sentence (F7).</li>
+          <li>F3 — delete <code>NOT_A_DATE_VALUE</code> and use <code>UNREADABLE</code>; F2 fixes itself.</li>
+          <li>Rule F4/F5/F6 (message scope and the <code>instant()</code> guard) — all judgement calls, none blocking.</li>
+        </ol>
+      </section>
+
+      <footer class="text-xs text-slate-500 border-t border-slate-200 pt-4 space-y-1">
+        <p>Pass 1: single-pass review across naming, simplicity, standards/spec, architecture and API surface against <code>git diff origin/main...HEAD</code>; behavioural claims probed with throwaway tests, then deleted. Findings F1–F7 are unverified until pass 2.</p>
+        <p>Pass 2: a cold sub-agent opened every cited file and returned one verdict per id — <strong>7 Confirmed, 0 Mis-described, 0 Wrong, 0 Unproven</strong>. It corrected one citation: the Gantt method at <code>gantt.ts:871</code> is <code>panToDate</code>; <code>panToInstant</code> is the shell method it calls. Probe confirmed F1's tautology verbatim, F6's live <code>RangeError</code>, and both test files green.</p>
+      </footer>
+    </main>
+  </body>
+</html>
