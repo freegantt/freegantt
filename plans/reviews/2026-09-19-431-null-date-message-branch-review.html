@@ -25,7 +25,7 @@
           <span class="rounded bg-slate-200 px-2 py-1 font-mono">HEAD 52dfb59c</span>
           <span class="rounded bg-slate-200 px-2 py-1 font-mono">diff origin/main...HEAD</span>
           <span class="rounded bg-slate-200 px-2 py-1 font-mono">2026-09-19</span>
-          <span class="rounded bg-amber-100 text-amber-900 px-2 py-1 font-semibold">pass 2 pending</span>
+          <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1 font-semibold">pass 2 complete · 7 Confirmed</span>
         </div>
         <p class="text-sm text-slate-600 max-w-3xl">
           One commit. <code>toInstant</code> gains an explicit <code>null</code> fault before the plain-time
@@ -54,7 +54,7 @@ flowchart LR
         <h2 class="text-lg font-bold">Findings</h2>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-amber-600">F1</span><span class="text-sm font-normal text-slate-500">message quality · minor · pass 2 pending</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-amber-600">F1</span><span class="text-sm font-normal text-slate-500">message quality · minor · Confirmed</span></h3>
           <p class="text-sm leading-6">
             The new fault reads <strong>“null is null.”</strong> <code>NULL_VALUE</code> begins <em>“is null.”</em>,
             and <code>invalid()</code> prefixes the printed value — for <code>null</code> that value is
@@ -68,7 +68,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F2</span><span class="text-sm font-normal text-slate-500">comment accuracy · nit · pass 2 pending</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F2</span><span class="text-sm font-normal text-slate-500">comment accuracy · nit · Confirmed</span></h3>
           <p class="text-sm leading-6">
             The doc comment above the reason constants still says <em>“Three of the four faults below end with this
             sentence.”</em> The change left <strong>five</strong> reason constants below it —
@@ -80,7 +80,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F3</span><span class="text-sm font-normal text-slate-500">naming · simplicity · minor · pass 2 pending</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F3</span><span class="text-sm font-normal text-slate-500">naming · simplicity · minor · Confirmed</span></h3>
           <p class="text-sm leading-6">
             <code>NOT_A_DATE_VALUE</code> (<em>“is not a date value. Write an ISO date…”</em>) is a second name for
             the job <code>UNREADABLE</code> already does (<em>“is not a date this library reads. Write an ISO
@@ -92,20 +92,20 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F4</span><span class="text-sm font-normal text-slate-500">API · message scope · judgement · pass 2 pending</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F4</span><span class="text-sm font-normal text-slate-500">API · message scope · judgement · Confirmed</span></h3>
           <p class="text-sm leading-6">
             <code>NULL_VALUE</code> tells the reader <em>“An Entry with no span of its own omits the property
             instead.”</em> But <code>time/toInstant</code> is not an Entry-only seam. Its internal callers include
             <code>gantt.todayLine</code>, <code>gantt.dateLines</code>, <code>zoomToSpan</code> and
-            <code>panToInstant</code>. A null there now receives Entry advice that names a concept the caller never
-            touched.
+            <code>panToDate</code> (which hands to the shell's <code>panToInstant</code>). A null there now
+            receives Entry advice that names a concept the caller never touched.
           </p>
           <p class="text-xs text-slate-500 font-mono">src/time/input.ts:50-51 · src/api/gantt.ts:392, 399, 406, 865, 871</p>
           <p class="text-sm leading-6"><strong>Options:</strong> keep the Entry wording and accept that <code>toInstant</code> is Entry-facing in practice; or split the reason so the generic layer says only “names no instant — pass a date or omit the property”, leaving Entry-specific guidance in <code>entry-reader</code>.</p>
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F5</span><span class="text-sm font-normal text-slate-500">types · minor · pass 2 pending</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F5</span><span class="text-sm font-normal text-slate-500">types · minor · Confirmed</span></h3>
           <p class="text-sm leading-6">
             <code>invalid(input: InstantInput, …)</code> declares an <code>InstantInput</code>, but the new
             fall-through hands it a boolean or a plain object at runtime, and <code>null</code> is outside
@@ -117,7 +117,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F6</span><span class="text-sm font-normal text-slate-500">spec location · low · judgement · pass 2 pending</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F6</span><span class="text-sm font-normal text-slate-500">spec location · low · judgement · Confirmed</span></h3>
           <p class="text-sm leading-6">
             The issue proposed catching <code>null</code> in the public <code>instant()</code> helper — the function
             that actually throws the zoneless message. The branch catches it one caller up, in
@@ -129,7 +129,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F7</span><span class="text-sm font-normal text-slate-500">test quality · minor · pass 2 pending</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F7</span><span class="text-sm font-normal text-slate-500">test quality · minor · Confirmed</span></h3>
           <p class="text-sm leading-6">
             Both new null assertions pass a message that opens with the F1 tautology. <code>input.test.ts:77</code>
             matches the substring <code>null. An Entry…</code> — matching the second <code>null</code> — and
@@ -164,7 +164,7 @@ flowchart LR
 
       <footer class="text-xs text-slate-500 border-t border-slate-200 pt-4 space-y-1">
         <p>Pass 1: single-pass review across naming, simplicity, standards/spec, architecture and API surface against <code>git diff origin/main...HEAD</code>; behavioural claims probed with throwaway tests, then deleted. Findings F1–F7 are unverified until pass 2.</p>
-        <p>Pass 2: a cold sub-agent opens every cited file and returns one verdict per id — Confirmed, Mis-described, Wrong, or Unproven. This footer updates with those verdicts.</p>
+        <p>Pass 2: a cold sub-agent opened every cited file and returned one verdict per id — <strong>7 Confirmed, 0 Mis-described, 0 Wrong, 0 Unproven</strong>. It corrected one citation: the Gantt method at <code>gantt.ts:871</code> is <code>panToDate</code>; <code>panToInstant</code> is the shell method it calls. Probe confirmed F1's tautology verbatim, F6's live <code>RangeError</code>, and both test files green.</p>
       </footer>
     </main>
   </body>
