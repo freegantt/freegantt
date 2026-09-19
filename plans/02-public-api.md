@@ -364,21 +364,18 @@ barRenderer: ({ entry }) => defaultBar(entry),   // every bar no variant paints
 **Label placement (J1).** `gantt.barLabels` and `EntryVariant.barLabels` both take `BarLabels`
 (`BarLabelPolicy | BarLabelSpec`), live-reconfigurable (I8). The short form is a `BarLabelPolicy`
 string — `'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none'`, default `'fitBar'` — and picks
-only placement, printing `name`. `'fitBar'` paints inside when the label fits, outside to the right
-when it does not, and falls back to an ellipsised inside label as the last resort; `'inside'`/
-`'outside'` force one side and still fall back to ellipsised-inside when the forced side has no
-room; `'insideOrNone'` reads the same fit clause `'fitBar'` does, but a bar that fails it gets no
-label at all rather than `'fitBar'`'s outside fallback — for a consumer painting bars edge to edge
-(a day-tile grid), where an outside label would paint across the next bar rather than into open
-pane space (#435); `'none'` paints no label at all, regardless of fit. The resolved side is
-`data-label` on `.fg-bar` (`'inside'` / `'outside'`) — a level-2 hook for a consumer stylesheet,
-styled by default through `--fg-bar-label-gap` and `--fg-bar-label-outside-color`
-(`docs/05-consumer-api.md`). `data-label` is absent for `'none'` and for a `barRenderer` result — no
-label child exists either time. `'insideOrNone'` on a bar too narrow is `data-label='none'` instead:
-the label child exists, measured, so a resize drag that widens the bar back across the fit line has
-something to reveal — the hot path only flips the attribute, never mounts a child mid-drag (F1,
-#435 follow-up). `.fg-bar[data-label='none'] .fg-bar-label { display: none }` is the rule that keeps
-it unpainted either way.
+only placement, printing `name`; see `BarLabelPolicy`'s own doc comment (`src/layout/renderer.ts`)
+for what each of the five values does. The resolved side is `data-label` on `.fg-bar` (`'inside'` /
+`'outside'`) — a level-2 hook for a consumer stylesheet, styled by default through
+`--fg-bar-label-gap` and `--fg-bar-label-outside-color` (`docs/05-consumer-api.md`). `data-label` is
+absent for `'none'` and for a `barRenderer` result — no label child exists either time.
+`'insideOrNone'` on a bar too narrow is `data-label='hidden'` instead: the label child exists,
+measured, so a resize drag that widens the bar back across the fit line has something to reveal —
+the hot path only flips the attribute, never mounts a child mid-drag (F1, #435 follow-up). The token
+is named for what the DOM shows (present, unpainted), not for the `'none'` policy value that
+produces it — the two meet a consumer writing a `[data-label=...]` stylesheet selector, and reusing
+one word there would read backwards (R1, pass-2 branch review). `.fg-bar[data-label='hidden']
+.fg-bar-label { display: none }` is the rule that keeps it unpainted either way.
 
 **`BarLabelSpec` (`#421` C5) is the expert form: a bar names the Field it prints.** `{ field?:
 FieldKey; placement?: BarLabelPolicy }` — either key alone keeps whichever half is already in force
@@ -387,7 +384,7 @@ FieldKey; placement?: BarLabelPolicy }` — either key alone keeps whichever hal
 placement. `EntryVariant.barLabels` overrides `GanttOptions.barLabels` per row the Variant resolves
 to, the same override order every other per-variant key follows.
 
-A `barRenderer` result owns its bar's content, so the library injects no label child and stamps no `data-label` for it. It still reads the same answer: `ctx.label` carries the resolved `{ text, placement }` for that bar at that width, and is absent under `barLabels: 'none'`. So a consumer who customises a bar keeps fit-based labelling and never needs a text ruler — the library measures once, in one place, for its own label and a renderer's alike.
+A `barRenderer` result owns its bar's content, so the library injects no label child and stamps no `data-label` for it. It still reads the same answer: `ctx.label` carries the resolved `{ text, placement }` for that bar at that width, and is absent under `barLabels: 'none'` and under `'insideOrNone'` on a bar too narrow for its label. So a consumer who customises a bar keeps fit-based labelling and never needs a text ruler — the library measures once, in one place, for its own label and a renderer's alike.
 
 **Actions.** The `capabilities` config takes a boolean or a per-entry predicate for each gesture (`move`, `resize`, `linkCreate`, `select`), layered over the resolved Variant's own `capabilities` (ADR 0018), which is layered over the library rule. A predicate at any level may answer `undefined` for "no opinion", and the answer falls to the next level. One resolution both hides the affordance and refuses the gesture — pointer and keyboard alike (I14) — so a non-resizable entry simply has no handles, rather than handles that scold. `select` has no affordance to hide; `select: false` (or a predicate that returns false) refuses pointer and keyboard selection, and the entry skips it in a shift-range. The public `gantt.selectedEntryIds` setter (`selectedSegmentIds` retired, #421, ADR 0025) does not consult the capability — it is the programmatic path, matching `entries.update` under `move: false`. Context-menu items and commands carry a `when(entry)` clause, so a Variant (`when: ({ variant }) => ...`) or any predicate ships its own action set.
 
