@@ -126,6 +126,15 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
     ],
   },
+  'theme-resolver': {
+    demonstrates:
+      'A ThemeResolver answers "is the wrapping app dark" from a class on <html>, the way Tailwind, ' +
+      'Filament, and next-themes signal it. No data-fg-theme pin exists on this page at all.',
+    config: [
+      "theme: () => document.documentElement.classList.contains('dark') ? 'dark' : 'light'",
+    ],
+    specLinks: [{ label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` }],
+  },
   'large-dataset': {
     demonstrates:
       'Five thousand entries render at a fixed frame cost. The DOM holds only the rows the viewport ' +
