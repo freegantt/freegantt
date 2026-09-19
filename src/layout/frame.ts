@@ -204,7 +204,7 @@ export interface FrameHeader {
   bands: readonly FrameHeaderBand[];
 }
 
-/** Live-reconfigurable culling buffer (plans/02 §1.1) — vertical in whole rows (culls through the
+/** Live-reconfigurable culling buffer (plans/02 "The culling buffer (`overscan`)") — vertical in whole rows (culls through the
  * height index, and must keep doing so when S4 makes row heights vary); horizontal in px (no rows to
  * count). Default `{ verticalRows: 2, horizontalPx: 128 }`. */
 export interface Overscan {

@@ -20,6 +20,7 @@ import type {
   ViewPreset,
   RowSource,
   ResolvedRowSource,
+  Overscan,
 } from '../layout/index.js';
 import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
@@ -114,6 +115,11 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  the same way `capabilities.move: false` never stops a Dataset write. This is what keeps a
    *  `gridWidth: 'fitColumns'` pane from turning into a fixed px width on a stray drag. */
   gridResizable?: boolean;
+  /** Live (plans/02, "The culling buffer (`overscan`)"). The culling buffer around the visible window: `verticalRows` whole rows
+   *  above and below, `horizontalPx` px left and right of the timeline pane. A row or a bar inside
+   *  the buffer stays mounted while it is one scroll step from view, so a small scroll never shows a
+   *  bare frame. Default `{ verticalRows: 2, horizontalPx: 128 }`. */
+  overscan?: Overscan;
   /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
@@ -165,10 +171,8 @@ export interface GanttOptionsBase<TProps = unknown> {
   /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
   /** Live (J1). Where the default bar label paints — ignored once `barRenderer`'s output takes over
-   *  a bar's content. `'fitBar'` (the default): inside when the label fits, outside to the right of
-   *  the bar when it does not, ellipsised inside as the last resort. `'inside'`/`'outside'` force one
-   *  side, and still fall back to ellipsised-inside when the forced side has no room. `'none'` paints
-   *  no label at all. */
+   *  a bar's content. Short form is a `BarLabelPolicy` (see its own doc for the five values);
+   *  default `'fitBar'`. */
   barLabels?: BarLabels;
   /** Live (S5.4, D-S5-11). Customization ladder level 3 (`plans/02` §4). One function, over every
    *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.
@@ -312,6 +316,7 @@ export class Gantt<TProps = unknown> {
         'gridWidth',
         'minGridWidth',
         'gridResizable',
+        'overscan',
         'preset',
         'fit',
         'theme',
@@ -483,6 +488,16 @@ export class Gantt<TProps = unknown> {
 
   set minGridWidth(px: number) {
     this.#shell.minGridWidth = px;
+  }
+
+  /** Live (#435). `gantt.overscan = { verticalRows: 4 }`. See the option's own doc for what the
+   *  buffer holds mounted. */
+  get overscan(): Overscan {
+    return this.#shell.overscan;
+  }
+
+  set overscan(o: Overscan) {
+    this.#shell.overscan = o;
   }
 
   /** Live (#432). `false` locks the splitter and every column's resizer grip; see the option's own

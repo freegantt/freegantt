@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from '../data/dataset-state.js';
 import type { ResolveBarLabelBind, ResolveBarLabelPorts } from './bar-labels.js';
-import { resolveBarLabelText } from './bar-labels.js';
+import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
 
 function dataset(): DatasetState {
   return new DatasetState({
@@ -102,5 +102,23 @@ describe('resolveBarLabelText', () => {
     const text = resolveBarLabelText(entry, { field: 'name' }, undefined, ports, bind());
 
     expect(text).toBe('Task 1');
+  });
+});
+
+describe('resolveBarLabelPolicy', () => {
+  // #435 follow-up, F3: `render/dom`'s own unit tests inject a policy directly, bypassing this
+  // function and the `mergeBarLabels` shell it sits over — so the expert form's own route to
+  // `'insideOrNone'` (`{ policy: 'insideOrNone' }`, not the plain string) went unpinned. This is
+  // that route, through the real merge, not a stand-in for it.
+  it("the expert form's own policy key reaches 'insideOrNone' through the merge shell", () => {
+    const policy = resolveBarLabelPolicy({ field: 'name', policy: 'insideOrNone' }, undefined);
+
+    expect(policy).toBe('insideOrNone');
+  });
+
+  it("a variant's own expert-form policy overrides the Gantt's 'insideOrNone'", () => {
+    const policy = resolveBarLabelPolicy('insideOrNone', { policy: 'outside' });
+
+    expect(policy).toBe('outside');
   });
 });

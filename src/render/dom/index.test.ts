@@ -2152,6 +2152,85 @@ describe('render/dom backend', () => {
       restoreRuler();
     });
 
+    it('barLabels: "insideOrNone" paints inside when the label fits (#435)', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('inside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('barLabels: "insideOrNone" paints no label at all on a bar too narrow for it, never outside (#435)', () => {
+      // The same geometry the "moves the label outside" test above uses — plenty of room past the
+      // bar's right edge — proves this is a different rule from `'fitBar'`, not the same one under a
+      // new name: `'fitBar'` paints 'outside' here; `'insideOrNone'` must not.
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000));
+
+      // F1 (#435 follow-up): the token is `'hidden'`, not an absent attribute — the label child
+      // exists, measured, so a resize preview that widens this bar back past the fit line has
+      // something to reveal (applyBarPreview never mounts a child mid-drag). `.fg-bar[data-label=
+      // 'hidden'] .fg-bar-label { display: none }` (view/styles.ts) is what keeps it unpainted here.
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('hidden');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('a barRenderer sees no label under insideOrNone on a bar too narrow, same as under "none" (F3, #435 follow-up)', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => ({
+          renderer: (ctx) => ({ text: ctx.label === undefined ? 'no label' : 'a label' }),
+        }),
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000));
+
+      // The policy doc (`layout/renderer.ts`'s own `BarLabelPolicy`) claims a barRenderer sees no
+      // `ctx.label` under `'insideOrNone'` on a bar too narrow, one answer with `'none'` — this pins
+      // that claim; the two existing `resolveBarLabelPolicy: () => 'none'` tests above do not.
+      expect(timeline.querySelector('.fg-bar')?.textContent).toBe('no label');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
     it('a resize preview that crosses the fit line flips data-label, and a cancelled preview restores it', () => {
       withStubRuler();
       const backend = paintingBackend([sampleEntries[0]!]);
@@ -2183,6 +2262,112 @@ describe('render/dom backend', () => {
       // Clearing the preview (a cancelled drag) restores syncBars's own last committed answer.
       backend.applyState({ preview: [] });
       expect(bar.dataset['label']).toBe('inside');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it("F1 (#435 follow-up): a shrink past insideOrNone's fit line hides the label mid-drag, not just on commit", () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      const frame = frameFor(0, 200, 2000);
+      backend.sync(frame);
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      const id = frame.bars[0]!.id;
+      expect(bar.dataset['label']).toBe('inside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      // Shrinks the 200px bar to 20px, crossing insideOrNone's fit line mid-drag — no frame, no
+      // canvas call, `patch` never runs. Before F1's fix, `data-label` was deleted here but the
+      // label child survived, so `.fg-bar-label`'s default rule (overflow: hidden; text-overflow:
+      // ellipsis) kept painting it, clipped, inside the now-too-narrow bar — the exact 'inside' look
+      // #435 exists to avoid.
+      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: -180, extra: false }] });
+      expect(bar.dataset['label']).toBe('hidden');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      // Widens it back past the fit line, relative to the committed 200px base (a preview delta is
+      // always against `syncBars`'s own geometry, not the previous preview) — 100px still fits.
+      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: -100, extra: false }] });
+      expect(bar.dataset['label']).toBe('inside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('F1 (#435 follow-up): a bar that starts too narrow for insideOrNone still owns a hidden label child, ready for a widening drag', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      const frame = frameFor(0, 20, 2000);
+      backend.sync(frame);
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      const id = frame.bars[0]!.id;
+      expect(bar.dataset['label']).toBe('hidden');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      // Widens the 20px bar to 200px, crossing the fit line mid-drag. `applyBarPreview` only flips
+      // `data-label`; the child patch already gave this bar on commit (hidden by CSS) is what
+      // reveals — no node is created here (F1, [S3-A3]'s zero-allocation hot path).
+      let mutations = 0;
+      const observer = new MutationObserver((records) => {
+        for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
+      });
+      observer.observe(timeline, { childList: true, subtree: true });
+      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: 180, extra: false }] });
+      observer.disconnect();
+      expect(mutations).toBe(0);
+      expect(bar.dataset['label']).toBe('inside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('insideOrNone on a bar with no name mounts no hidden label child (R7, pass-2 branch review)', () => {
+      // `canFlipToLabel`'s `bar.label !== ''` guard exists so an empty label never spends a hidden
+      // child it can never fill — pin it so a refactor that drops the guard shows up here, not as an
+      // empty `.fg-bar-label` span shipped silently on every unnamed bar.
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000, () => ''));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('');
 
       backend.destroy();
       grid.remove();

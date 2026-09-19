@@ -29,9 +29,9 @@ export interface ResolvedBarLabel {
 export interface BarRendererContext {
   entry: Entry;
   bar: FrameBar;
-  /** Absent when the consumer asked for no label (`barLabels: 'none'`) — so a renderer reads "this
-   *  bar has a label, here is where it goes" or nothing, and "a label with nowhere to paint" stays
-   *  unrepresentable. */
+  /** Absent when the consumer asked for no label (`barLabels: 'none'`), or when `'insideOrNone'`
+   *  found this bar too narrow to hold one — so a renderer reads "this bar has a label, here is
+   *  where it goes" or nothing, and "a label with nowhere to paint" stays unrepresentable. */
   label?: ResolvedBarLabel;
 }
 /** `undefined` keeps the library's own output for this one bar (D-S5-11). */
@@ -88,13 +88,17 @@ export interface ResolvedRenderer<TRenderer> {
  *  and falls back to inside, ellipsised, when neither fits — a family with the shipped
  *  `range: 'fitDataset'` and `gridWidth: 'fitColumns'`. `'inside'` and `'outside'` force one placement
  *  regardless of fit (ellipsised inside, or clipped at the pane edge outside — the same load-bearing
- *  fallback `'fitBar'`'s third clause takes). `'none'` paints no label at all, and a `barRenderer`
- *  sees no `ctx.label` either — one answer to "did the consumer ask for a label", for the library's
- *  own paint and for a renderer's alike.
+ *  fallback `'fitBar'`'s third clause takes). `'insideOrNone'` also reads the fit predicate `'fitBar'`
+ *  already computes, but spends a bar that doesn't fit on no label at all rather than on an outside
+ *  placement — a consumer painting contiguous bars edge to edge (a day-tile grid, #435) cannot let a
+ *  label escape into the next bar the way `'fitBar'`'s and `'outside'`'s fallbacks both do. `'none'`
+ *  paints no label at all regardless of fit, and — like `'insideOrNone'` on a bar that doesn't fit —
+ *  a `barRenderer` sees no `ctx.label` either: one answer to "did the consumer ask for a label", for
+ *  the library's own paint and for a renderer's alike.
  *
  *  Named `Policy`, not `BarLabels`: this is one Gantt-wide or per-variant setting's policy half
  *  (#421 C5). `BarLabels` below is the wider public type a consumer actually writes. */
-export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none';
 
 /** The expert form of `barLabels`: which Field prints, and where it paints. Both keys are optional,
  *  so `{ field: 'hours' }` alone keeps whichever policy is already in force, and
@@ -103,8 +107,8 @@ export interface BarLabelSpec {
   /** The Field a bar's label reads — `formatValue` prints it, the same as a Grid cell (#421 C5).
    *  Defaults to `'name'`. */
   field?: FieldKey;
-  /** Which side the label paints on, at whatever fit rule `BarLabelPolicy` states. Defaults to
-   *  `'fitBar'`. */
+  /** Which side the label paints on, at whatever fit rule `BarLabelPolicy` states — or no side at
+   *  all, for `'none'` and for `'insideOrNone'` on a bar too narrow. Defaults to `'fitBar'`. */
   policy?: BarLabelPolicy;
 }
 

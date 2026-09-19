@@ -5,6 +5,8 @@ export type HarnessPageId =
   | 'hierarchy'
   | 'scroll-sync'
   | 'grid-scroll'
+  | 'bar-label-fit'
+  | 'dense-tile-grid'
   | 'timeline-navigation'
   | 'large-dataset'
   | 'mutation'
@@ -24,6 +26,8 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'hierarchy', label: 'Hierarchy & rows', file: 'hierarchy.html' },
   { id: 'scroll-sync', label: 'Scroll sync', file: 'scroll-sync.html' },
   { id: 'grid-scroll', label: 'Grid pane scroll', file: 'grid-scroll.html' },
+  { id: 'bar-label-fit', label: 'Bar label fit', file: 'bar-label-fit.html' },
+  { id: 'dense-tile-grid', label: 'Dense tile grid virtualization', file: 'dense-tile-grid.html' },
   { id: 'timeline-navigation', label: 'Timeline & navigation', file: 'zoom.html' },
   { id: 'large-dataset', label: 'Large dataset', file: 'large-dataset.html' },
   { id: 'mutation', label: 'Mutation & live binding', file: 'data.html' },
@@ -45,6 +49,10 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'scroll-sync';
     case 'grid-scroll.html':
       return 'grid-scroll';
+    case 'bar-label-fit.html':
+      return 'bar-label-fit';
+    case 'dense-tile-grid.html':
+      return 'dense-tile-grid';
     case 'zoom.html':
       return 'timeline-navigation';
     case 'large-dataset.html':
