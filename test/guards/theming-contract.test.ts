@@ -99,13 +99,15 @@ interface ExternalDefault {
   file: string;
   pattern: RegExp;
   unit: 'px' | '';
-  /** #437: `--fg-z-overlay`'s default is computed (`INTERNAL_Z_RAISED + 1`, styles.ts), not a
-   *  literal the pattern can capture whole — this runs on the captured number before it is
-   *  compared to the doc, so the guard checks the same arithmetic the sheet itself runs. */
-  transform?: (raw: number) => number;
+  /** #437: most entries below are one literal a pattern captures whole (`match[1]`). A token whose
+   *  default is computed, not written as a literal, needs its computation read out of the pattern's
+   *  own capture groups instead — so this runs the pattern's *own* match, and must derive the result
+   *  only from numbers the pattern captured, never from a number this test writes itself. That is
+   *  what makes the guard check the arithmetic the sheet runs, not a copy of it. */
+  resolve?: (match: RegExpExecArray) => number;
 }
 
-const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
+const INTERPOLATED_STRUCTURAL_TOKENS: Record<string, ExternalDefault> = {
   '--fg-row-height': {
     file: 'src/view/frame-settings.ts',
     pattern: /export const DEFAULT_ROW_HEIGHT = (\d+(?:\.\d+)?);/,
@@ -165,18 +167,25 @@ const INTERPOLATED_PIXEL_TOKENS: Record<string, ExternalDefault> = {
   },
   // #437: a stacking position, not a pixel length — same posture as the two entries above (a local,
   // un-exported `const` in styles.ts is the value's only source). `DEFAULT_OVERLAY_Z_INDEX` is
-  // `INTERNAL_Z_RAISED + 1`, not its own literal (styles.ts's own comment says why), so this
-  // pattern matches `INTERNAL_Z_RAISED`'s line and `transform` runs the same `+ 1`.
+  // `Math.max(...Object.values(INTERNAL_Z)) + 1`, not its own literal, so the pattern below captures
+  // both operands the sheet actually adds — every number inside the `INTERNAL_Z` object literal (its
+  // own group), and the `+ 1` on `DEFAULT_OVERLAY_Z_INDEX`'s own line (a second group) — and `resolve`
+  // runs that same `Math.max(...) + N` on the captured numbers. A tier `INTERNAL_Z` gains later is
+  // still inside the first group, so it raises the computed default with no change needed here.
   '--fg-z-overlay': {
     file: 'src/view/styles.ts',
-    pattern: /const INTERNAL_Z_RAISED = (\d+);/,
+    pattern:
+      /const INTERNAL_Z = \{([\s\S]*?)\} as const;[\s\S]*?const DEFAULT_OVERLAY_Z_INDEX = Math\.max\(\.\.\.Object\.values\(INTERNAL_Z\)\) \+ (\d+);/,
     unit: '',
-    transform: (raw) => raw + 1,
+    resolve: (match) => {
+      const tiers = [...match[1]!.matchAll(/:\s*(\d+)/g)].map((tier) => Number(tier[1]));
+      return Math.max(...tiers) + Number(match[2]);
+    },
   },
 };
 
 // #392: the colour section's own two theme-independent, unitless tokens — same posture as
-// INTERPOLATED_PIXEL_TOKENS above (a local, un-exported `const` in styles.ts is the value's only
+// INTERPOLATED_STRUCTURAL_TOKENS above (a local, un-exported `const` in styles.ts is the value's only
 // source, so this map, not `metricDeclared`'s unexpanded `${…}` template text, is what resolves it).
 const INTERPOLATED_COLOUR_TOKENS: Record<string, ExternalDefault> = {
   '--fg-ghost-opacity': {
@@ -199,8 +208,7 @@ function resolveExternalDefault(token: string, def: ExternalDefault): string {
       `theming-contract guard: expected to find ${token}'s default in ${def.file} matching ${def.pattern}, but did not — the guard's own source reference is stale`,
     );
   }
-  const raw = Number(match[1]);
-  const resolved = def.transform ? def.transform(raw) : raw;
+  const resolved = def.resolve ? def.resolve(match) : Number(match[1]);
   return `${resolved}${def.unit}`;
 }
 
@@ -212,8 +220,8 @@ function resolveExternalDefault(token: string, def: ExternalDefault): string {
  *  is unreachable — that property always already has a value by the time the rule reads it — so
  *  the inline literal is dead and must never be preferred over the value `:root` actually ships. */
 function resolvePixelTokenDefault(token: string): string {
-  if (token in INTERPOLATED_PIXEL_TOKENS)
-    return resolveExternalDefault(token, INTERPOLATED_PIXEL_TOKENS[token]!);
+  if (token in INTERPOLATED_STRUCTURAL_TOKENS)
+    return resolveExternalDefault(token, INTERPOLATED_STRUCTURAL_TOKENS[token]!);
   const literal = metricDeclared.get(token) ?? baseVarFallback.get(token) ?? baseDeclared.get(token);
   if (literal === undefined) {
     throw new Error(`theming-contract guard: no known default source for ${token}`);

@@ -29,13 +29,15 @@ test('hovering a bar opens a tooltip with the entry name and dates', async ({ pa
 });
 
 // #437: a right-click on the timeline pane's own background, with no bar under the pointer, opens
-// the "Collapse all"/"Expand all" menu anchored at the pane's own top-left corner (D-S5-14) — the
-// same point the sticky grid header and timeline header occupy. No `scrollIntoView` call runs
-// first, so this needs none of the scroll-race care the file banner above warns about; the click
-// lands on an already-visible point. Before #437, `.fg-overlay` carried no z-index and lost to
-// `.fg-grid-header`'s (styles.ts) — the menu painted, but the header painted over it, and the
-// covered part refused every click. `document.elementFromPoint()` is what a real pointer resolves
-// against, so it is the one check that tells "painted" from "clickable" apart.
+// the "Collapse all"/"Expand all" menu anchored at the clicked point (the mouse path, D-S5-14 —
+// `Shift+F10`'s keyboard path anchors at the pane's own top-left corner instead, context-menu.ts).
+// The click lands near the pane top, the same vertical band the sticky grid header and timeline
+// header occupy. No `scrollIntoView` call runs first, so this needs none of the scroll-race care
+// the file banner above warns about; the click lands on an already-visible point. Before #437,
+// `.fg-overlay` carried no z-index and lost to the sticky timeline header, `.fg-header`
+// (styles.ts) — the menu painted, but the header painted over it, and the covered part refused
+// every click. `document.elementFromPoint()` is what a real pointer resolves against, so it is the
+// one check that tells "painted" from "clickable" apart.
 test('[#437] a context menu opened near a pane top paints, and hit-tests, above the sticky header', async ({
   page,
 }) => {

@@ -75,7 +75,8 @@ function syncOneLayer(
 }
 
 /** Mounts one layer below `barLayer` (`underBars`) and one above it (`overBars`) — DOM order alone
- *  gives the paint order, the same way `.fg-overlay` sits above both panes with no z-index. Neither
+ *  gives the paint order here, unlike `.fg-overlay`, which owns an explicit stacking position above
+ *  both panes (styles.ts, #437) precisely because DOM order alone cannot reach it. Neither
  *  wrapper carries `aria-hidden` itself (only the decoration nodes inside do, via `createHiddenDiv`)
  *  — a plain container, like `.fg-bars` beside it, needs none; `e2e/harness.spec.ts`'s own D1 test
  *  finds the content sizer by "the first `aria-hidden` child of the timeline pane", which an

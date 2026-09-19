@@ -43,15 +43,17 @@
 // its own container.
 //
 // Two kinds of `--fg-*` property share the prefix, and only one kind is a consumer's to read or set
-// (#383). A CONSUMER TOKEN — every metric and colour this sheet's own rules read as
-// `var(--fg-x, default)` — is declared outright, once, on `:root` (the metrics block below, beside
+// (#383). A CONSUMER TOKEN — every metric, colour, and stacking position this sheet's own rules read
+// as `var(--fg-x, default)` — is declared outright, once, on `:root` (the metrics block below, beside
 // the colour blocks above), for the same reason colour lives there and not on `.fg-container`: a
 // bare `var(--fg-x)` in a consumer's own rule then resolves to the shipped default from any element
 // in the document, and any closer declaration — a wrapper, `.fg-container`, an inline style — still
 // wins by ordinary inheritance proximity. Before this, only three metrics (`--fg-indent-width`,
 // `--fg-bar-label-gap`, `--fg-bar-opacity`) were declared anywhere; every other consumer token lived
 // only as the fallback half of a library rule's own `var(...)`, unreadable from a consumer's separate
-// rule or from `getComputedStyle`. A PER-ELEMENT CHANNEL is the other kind, and it is never declared
+// rule or from `getComputedStyle`. `--fg-z-overlay` (#437) is the one stacking position among them —
+// a bare integer, not a length or a colour, but declared and read back the same way. A PER-ELEMENT
+// CHANNEL is the other kind, and it is never declared
 // here or anywhere else: the library writes it inline, on one element, because a single stylesheet
 // rule cannot express what it carries — a column's own flex-grow, a row's own depth. Its
 // `var(--fg-x, default)` fallback *is* its unset case; a consumer declaration would only fight the
@@ -84,18 +86,21 @@ const DEFAULT_GHOST_OPACITY = 0.4;
 const DEFAULT_PENDING_OPACITY = 0.6;
 
 // #437: two internal stacking tiers sit above the panes' own painted content (which carries no
-// z-index and stacks in DOM order alone). INTERNAL_Z_BASE lifts an element that must clear the plain,
-// unlifted paint in its own pane — the grid header above the grid rows, the timeline header above the
-// ticks, a bar's own resize handle above the bar body. INTERNAL_Z_RAISED lifts an element that must
-// clear INTERNAL_Z_BASE too: a dragged column header rides above the header it was dragged out of, and
-// the date cursor line and its label ride above both panes' headers as they cross them. Neither is a
-// `--fg-*` token: a consumer has no rule of the library's own to hold clear of, only the Overlay below
-// them (--fg-z-overlay, below). DEFAULT_OVERLAY_Z_INDEX is computed from the higher tier, not written
-// as its own literal, so a third internal tier can only raise this default by raising INTERNAL_Z_RAISED
-// itself — it can never drift out of step with what it must clear.
-const INTERNAL_Z_BASE = 1;
-const INTERNAL_Z_RAISED = 2;
-const DEFAULT_OVERLAY_Z_INDEX = INTERNAL_Z_RAISED + 1;
+// z-index and stacks in DOM order alone). INTERNAL_Z.paneChrome lifts an element that must clear the
+// plain, unlifted paint in its own pane — the grid header above the grid rows, the timeline header
+// above the ticks, a bar's own resize handle above the bar body. INTERNAL_Z.abovePaneChrome lifts an
+// element that must clear paneChrome too: a dragged column header rides above the header it was
+// dragged out of, and the date cursor line and its label ride above both panes' headers as they cross
+// them. Neither is a `--fg-*` token: a consumer has no rule of the library's own to hold clear of,
+// only the Overlay below them (--fg-z-overlay, below). DEFAULT_OVERLAY_Z_INDEX is the highest value
+// in INTERNAL_Z plus one, read from the object itself rather than one named tier, so a future third
+// tier joins INTERNAL_Z and is cleared the moment it does — nobody has to remember to raise this
+// constant by hand.
+const INTERNAL_Z = {
+  paneChrome: 1,
+  abovePaneChrome: 2,
+} as const;
+const DEFAULT_OVERLAY_Z_INDEX = Math.max(...Object.values(INTERNAL_Z)) + 1;
 
 const LIGHT_COLOR_TOKENS = `
   --fg-pane-bg: #FFFFFF;
@@ -297,7 +302,7 @@ ${DARK_COLOR_TOKENS}
    width: --fg-grid-content-width (D-S1.8-13, #126) — falls back to 100% (today's layout, unchanged)
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
-.fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: ${INTERNAL_Z_BASE}; color: var(--fg-header-text); }
+.fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: ${INTERNAL_Z.paneChrome}; color: var(--fg-header-text); }
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
    grid text never sits flush against a column's own edge or its neighbour's. */
@@ -337,7 +342,7 @@ ${DARK_COLOR_TOKENS}
    The wash stays part transparent on purpose: the drop indicator is painted on the target cell
    *under* this one, and the pointer sits over that target for most of a drag — an opaque cell hides
    the very line that says where the column lands. */
-.fg-col-header[data-dragging] { z-index: ${INTERNAL_Z_RAISED}; cursor: grabbing; background: color-mix(in srgb, var(--fg-header-bg) 55%, transparent); box-shadow: var(--fg-popup-shadow); }
+.fg-col-header[data-dragging] { z-index: ${INTERNAL_Z.abovePaneChrome}; cursor: grabbing; background: color-mix(in srgb, var(--fg-header-bg) 55%, transparent); box-shadow: var(--fg-popup-shadow); }
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; width: var(--fg-grid-content-width, 100%); }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
@@ -345,7 +350,7 @@ ${DARK_COLOR_TOKENS}
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
    (closes the S1.8 debt, D-S1.12-15). */
-.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: ${INTERNAL_Z_BASE}; height: auto; overflow: visible; }
+.fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: ${INTERNAL_Z.paneChrome}; height: auto; overflow: visible; }
 /* #225: the S1.12 width clip moves here so .fg-header stays overflow: visible. */
 .fg-header-bands { display: flex; flex-direction: column; overflow: hidden; }
 .fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); min-height: 0; }
@@ -474,7 +479,7 @@ ${DARK_COLOR_TOKENS}
 /* D-S3-8: one shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */
-.fg-bar-handle { position: absolute; top: 0; left: -4px; width: 8px; cursor: ew-resize; touch-action: none; z-index: ${INTERNAL_Z_BASE}; }
+.fg-bar-handle { position: absolute; top: 0; left: -4px; width: 8px; cursor: ew-resize; touch-action: none; z-index: ${INTERNAL_Z.paneChrome}; }
 /* In flow, below the sticky header — the same origin .fg-bars and .fg-row-bands sit at. Absolute at
    the pane's own top-left instead, the sizer declared a scroll extent one header short of where the
    content it sizes actually ends, and the last row could never scroll fully into view. */
@@ -505,19 +510,19 @@ ${DARK_COLOR_TOKENS}
    above. */
 .fg-date-line-label[data-placement='belowHeader'] { top: 100%; }
 /* S3.8, D-S3-15: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
-.fg-cursor-line { position: absolute; top: 0; z-index: ${INTERNAL_Z_RAISED}; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
+.fg-cursor-line { position: absolute; top: 0; z-index: ${INTERNAL_Z.abovePaneChrome}; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
 /* #319: the shared rule above gives every label top: 0, which collided with the header's own
    ticks the same way the Date line label's did before #225. The Cursor line label has no placement
    option of its own (it is a hot-path hover readout, never a Frame decoration) — one rule, always
    below the bands. */
-.fg-cursor-line-label { z-index: ${INTERNAL_Z_RAISED}; pointer-events: none; top: 100%; }
+.fg-cursor-line-label { z-index: ${INTERNAL_Z.abovePaneChrome}; pointer-events: none; top: 100%; }
 /* S5.3, D-S5-8: the one overlay layer, above both panes. DOM order alone does not reach here —
    .fg-container creates no stacking context of its own, so .fg-grid-header, .fg-header, a dragged
    column header, and the cursor line all compete with this layer on z-index alone, not paint order
    (#437: a context menu opened near a pane's own header painted under it, and the part underneath
    was not clickable — document.elementFromPoint() returned the header, not the menu). --fg-z-overlay
-   (default ${DEFAULT_OVERLAY_Z_INDEX}, above every internal tier — see INTERNAL_Z_BASE/INTERNAL_Z_RAISED
-   near the top of this file) is what wins that competition, and a consumer embedding a Gantt inside
+   (default ${DEFAULT_OVERLAY_Z_INDEX}, above every internal tier — see INTERNAL_Z near the top of
+   this file) is what wins that competition, and a consumer embedding a Gantt inside
    its own stacking context can move the whole layer by setting the one property. pointer-events: none
    so an empty overlay never blocks the panes underneath; a mounted .fg-popup opts back in. */
 .fg-overlay { position: absolute; inset: 0; z-index: var(--fg-z-overlay, ${DEFAULT_OVERLAY_Z_INDEX}); pointer-events: none; overflow: visible; }
