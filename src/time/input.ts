@@ -38,18 +38,29 @@ function isDateOnly(input: InstantInput): boolean {
 // no prefix beats a wrong one. Every caller should still name itself; the ones in `src/api/gantt.ts`
 // do not yet.
 
-/** What to write instead. Two of the three faults below end with this sentence. */
+/** What to write instead. Three of the five faults below end with this sentence. */
 const WRITE_A_DATE = 'Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.';
+/** Covers every value `InstantInput`'s type does not admit and that no other fault below already
+ *  names — an unparsable string, a boolean, a plain object, an array. A string, a `Date` and a
+ *  number reach their own fault first, so this is the untyped door's catch-all (#431). */
 const UNREADABLE = `is not a date this library reads. ${WRITE_A_DATE}`;
 const NO_SUCH_DATE = 'names a date the calendar does not have. Write a date the calendar has.';
 const NOT_FINITE = `is not a finite count of epoch milliseconds. ${WRITE_A_DATE}`;
+/** `null` names no instant, and it is not a zone problem — the zoneless-time fault in `instant()`
+ *  does not apply and must not fire for it (#431). `toInstant` also reads `gantt.todayLine`,
+ *  `gantt.dateLines`, `zoomToSpan` and `panToDate` (`src/api/gantt.ts`), so the wording stays true
+ *  for any of those callers, not only an Entry's `start`/`end` — Entry-specific advice belongs to
+ *  the caller that knows it is one, not to this shared reader. The prefix in `invalid()` already
+ *  prints the value, so this sentence does not repeat "null". */
+const NULL_VALUE =
+  'names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.';
 
 /** Builds the fault one bad value produces. The value is a member as well as a sentence: a bulk
  *  loader catches this and names the row it came from, instead of parsing our wording (#237).
  *
  *  A string is quoted, so an empty string and a stray space are both visible. Everything else prints
  *  as itself — `String(new Date(NaN))` is already the words "Invalid Date". */
-function invalid(input: InstantInput, reason: string, operation: string | undefined): InvalidInstantError {
+function invalid(input: unknown, reason: string, operation: string | undefined): InvalidInstantError {
   const wrote = typeof input === 'string' ? JSON.stringify(input) : String(input);
   const where = operation === undefined ? '' : `${operation}: `;
   return new InvalidInstantError(`${where}${wrote} ${reason}`, input);
@@ -117,13 +128,22 @@ export function toInstant(zone: string, input: InstantInput, operation?: string)
       throw invalid(input, UNREADABLE, operation);
     }
   }
-  if (input instanceof Date && Number.isNaN(input.getTime())) {
-    throw invalid(input, UNREADABLE, operation);
+  if (input === null) {
+    throw invalid(input, NULL_VALUE, operation);
   }
-  if (typeof input === 'number' && !Number.isFinite(input)) {
-    throw invalid(input, NOT_FINITE, operation);
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) throw invalid(input, UNREADABLE, operation);
+    return instant(input);
   }
-  return instant(input);
+  if (typeof input === 'number') {
+    if (!Number.isFinite(input)) throw invalid(input, NOT_FINITE, operation);
+    return instant(input);
+  }
+  // TypeScript's InstantInput rules out everything else, but a consumer feeding this from JSON or an
+  // untyped record has no compiler left by the time it gets here — a boolean or a plain object lands
+  // here at runtime (#431). It gets the same fault as an unparsable string: both are a value this
+  // library cannot read as a date.
+  throw invalid(input, UNREADABLE, operation);
 }
 
 /**

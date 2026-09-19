@@ -68,6 +68,24 @@ describe('toInstant()', () => {
     expect(() => toInstant(CHICAGO, Number.NaN)).toThrow(InvalidInstantError);
   });
 
+  it('rejects null with its own fault, not the zoneless-time one (#431)', () => {
+    // A row deserialized from a database often carries `start: null` in place of a missing column.
+    // `null` is not `InstantInput` at the type level, so this is the untyped door: JSON.parse, a
+    // spread record, anything the compiler has already lost sight of by the time it reaches here.
+    expect(() => toInstant(CHICAGO, null as unknown as string)).toThrow(InvalidInstantError);
+    expect(() => toInstant(CHICAGO, null as unknown as string)).toThrow(
+      'null names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.',
+    );
+    // The message must not send the reader to look at zones or offsets — that is the one thing that
+    // is not wrong here.
+    expect(() => toInstant(CHICAGO, null as unknown as string)).not.toThrow(/offset|zone/i);
+  });
+
+  it('rejects a boolean or a plain object as a value naming no date (#431)', () => {
+    expect(() => toInstant(CHICAGO, true as unknown as string)).toThrow(InvalidInstantError);
+    expect(() => toInstant(CHICAGO, {} as unknown as string)).toThrow(InvalidInstantError);
+  });
+
   it("names the caller's own call, never toInstant (#237, #239)", () => {
     // `toInstant` is reached from `entries.add`, an `EditExtender` cascade and more, so one baked-in
     // prefix would send every caller but one to a call they never made.
