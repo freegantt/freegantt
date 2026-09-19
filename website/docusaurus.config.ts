@@ -23,11 +23,11 @@ const config: Config = {
     v4: true,
   },
 
-  url: 'https://pawel-it.github.io',
-  baseUrl: '/FreeGantt/',
+  url: 'https://freegantt.github.io',
+  baseUrl: '/',
 
-  organizationName: 'Pawel-IT',
-  projectName: 'FreeGantt',
+  organizationName: 'freegantt',
+  projectName: 'freegantt',
 
   onBrokenLinks: 'throw',
 
@@ -47,7 +47,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           // A link that leaves `docs/` has no page to land on, so it becomes the file on GitHub.
           beforeDefaultRemarkPlugins: [linkOutsideDocsToGitHub],
-          editUrl: ({ docPath }) => `https://github.com/Pawel-IT/FreeGantt/blob/main/docs/${docPath}`,
+          editUrl: ({ docPath }) => `https://github.com/freegantt/freegantt/blob/main/docs/${docPath}`,
           routeBasePath: '/',
           // A page states when it was last made true. `last_update.date` in the front matter is that
           // statement; a page with none falls back to its last commit date.
@@ -142,7 +142,7 @@ const config: Config = {
           label: 'API reference',
         },
         {
-          href: 'https://github.com/Pawel-IT/FreeGantt',
+          href: 'https://github.com/freegantt/freegantt',
           label: 'GitHub',
           position: 'right',
         },
@@ -161,7 +161,7 @@ const config: Config = {
         },
         {
           title: 'More',
-          items: [{ label: 'GitHub', href: 'https://github.com/Pawel-IT/FreeGantt' }],
+          items: [{ label: 'GitHub', href: 'https://github.com/freegantt/freegantt' }],
         },
       ],
       copyright: `Copyright © ${new Date().getFullYear()} FreeGantt. Built with Docusaurus.`,

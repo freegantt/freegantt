@@ -1,14 +1,33 @@
 {
   "name": "freegantt",
   "version": "0.1.0",
+  "description": "Framework-free TypeScript Gantt and timeline library",
   "type": "module",
   "sideEffects": [
     "src/view/styles.ts"
   ],
   "license": "MIT",
+  "author": "FreeGantt",
+  "homepage": "https://github.com/freegantt/freegantt#readme",
+  "bugs": {
+    "url": "https://github.com/freegantt/freegantt/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/freegantt/freegantt.git"
+  },
+  "keywords": [
+    "gantt",
+    "timeline",
+    "typescript",
+    "scheduler"
+  ],
   "engines": {
     "node": ">=20"
   },
+  "main": "./dist/api/index.js",
+  "module": "./dist/api/index.js",
+  "types": "./dist/api/index.d.ts",
   "packageManager": "pnpm@11.22.0",
   "exports": {
     ".": {
@@ -38,6 +57,7 @@
     "docs": "pnpm --dir website install && pnpm --dir website start --host 0.0.0.0",
     "docs:build": "pnpm --dir website install && pnpm --dir website build",
     "build": "node scripts/build.mjs",
+    "prepublishOnly": "vite build --config vite.lib.config.ts && node scripts/check-lib-build.mjs",
     "api-report": "node scripts/api-report.mjs",
     "check-doc-examples": "node scripts/check-doc-examples.mjs",
     "bundle-probe": "node scripts/bundle-probe.mjs",
