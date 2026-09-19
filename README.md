@@ -568,15 +568,16 @@ To customize dark mode instead of just light mode, scope the override to the dar
 
 ## Further reading
 
-| Doc                           | Audience                                                                       |
-| ----------------------------- | ------------------------------------------------------------------------------ |
-| `plans/02-public-api.md`      | Full consumer API — events, errors, serialization, customization ladder        |
-| `docs/05-consumer-api.md`     | Consumer API index and S4 surface summary                                      |
-| `CONTEXT.md`                  | Glossary (Entry, Field, Row, Row source, Rollup, …)                            |
-| `plans/03-slices.md`          | Delivery roadmap and acceptance criteria                                       |
-| `etc/freegantt.api.md`        | Generated TypeScript export report (api-extractor)                             |
-| `docs/06-plugin-authoring.md` | Plugin authoring guide — `ChromePlugin`, `DataPlugin`, every registration seam |
-| `website/` (`pnpm docs`)      | Docusaurus site — architecture, guides, ADRs, and generated API reference      |
+| Doc                               | Audience                                                                       |
+| --------------------------------- | ------------------------------------------------------------------------------ |
+| `plans/02-public-api.md`          | Full consumer API — events, errors, serialization, customization ladder        |
+| `docs/05-consumer-api.md`         | Consumer API index and S4 surface summary                                      |
+| `CONTEXT.md`                      | Glossary (Entry, Field, Row, Row source, Rollup, …)                            |
+| `plans/03-slices.md`              | Delivery roadmap and acceptance criteria                                       |
+| `etc/freegantt.api.md`            | Generated TypeScript export report (api-extractor)                             |
+| `docs/09-integration-pitfalls.md` | Integration traps — theme, zoom notification, overscan, row click              |
+| `docs/06-plugin-authoring.md`     | Plugin authoring guide — `ChromePlugin`, `DataPlugin`, every registration seam |
+| `website/` (`pnpm docs`)          | Docusaurus site — architecture, guides, ADRs, and generated API reference      |
 
 ## Development
 
