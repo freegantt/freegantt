@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const DOCS_DIR = path.join(REPO_ROOT, 'docs');
-const BLOB_BASE = 'https://github.com/Pawel-IT/FreeGantt/blob/main/';
+const BLOB_BASE = 'https://github.com/freegantt/freegantt/blob/main/';
 
 // TypeDoc writes the reference from `src/`, and `etc/freegantt.api.md` is the same export list in
 // one file. A doc that cites the file means the reference, so the site sends a reader there.
