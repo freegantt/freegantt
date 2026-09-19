@@ -2460,6 +2460,121 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     gantt.destroy();
   });
 
+  // #448: `barRenderer` is the catch-all `#paintFor`'s ladder reaches only when the resolved
+  // variant has no `paint` of its own. Assign one to a Gantt whose entries all resolve to a
+  // painting variant, and it silently never runs — these four tests pin the warning that now says
+  // so, and the false positives a naive per-frame check would have introduced.
+  describe("'bar-renderer-shadowed': barRenderer painting no bars is reported (#448)", () => {
+    const paint = (): Promise<unknown> => new Promise((resolve) => requestAnimationFrame(resolve));
+
+    it('reports once, the moment every entry already resolves to a painting variant', async () => {
+      const container = document.createElement('div');
+      const dataset = new Dataset({ entries: [sampleEntries[0]!.toInput()], timeZone: 'UTC' });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        variants: [{ name: 'v', when: () => true, paint: () => ({ text: 'v' }) }],
+      });
+      const reports: ErrorReport[] = [];
+      // Subscribed before `barRenderer` is assigned: the constructor's own first paint runs
+      // synchronously, and a handler added after that call would miss the check it triggers.
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+      gantt.barRenderer = () => ({ text: 'never painted' });
+
+      await paint();
+      await paint();
+
+      const shadowed = reports.filter((report) => report.code === 'bar-renderer-shadowed');
+      expect(shadowed).toHaveLength(1);
+      expect(shadowed[0]?.severity).toBe('warning');
+      expect(shadowed[0]?.by).toBe('core');
+      expect(shadowed[0]?.message).toContain('barRenderer');
+      expect(shadowed[0]?.message).toContain('paint');
+
+      gantt.destroy();
+    });
+
+    it('does not fire while a scroll only changes which already-painting rows sit in the frame', async () => {
+      // A frame drawing only variant-painted rows is not proof the renderer never paints — the
+      // rest of the Dataset may still reach it off-window. So the check reads the whole Dataset
+      // (`dataset.entries.all`), the same array `render()` already holds, never the frame's own
+      // windowed rows, and a repeated render with nothing changed must report nothing new.
+      const container = document.createElement('div');
+      const dataset = new Dataset({
+        entries: [sampleEntries[0]!.toInput(), sampleEntries[1]!.toInput()],
+        timeZone: 'UTC',
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        variants: [
+          { name: 'v', when: (entry) => entry.id === sampleEntries[0]!.id, paint: () => ({ text: 'v' }) },
+        ],
+      });
+      const reports: ErrorReport[] = [];
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+      gantt.barRenderer = () => ({ text: 'reaches entry-2' });
+
+      await paint();
+      await paint();
+      await paint();
+
+      expect(reports.filter((report) => report.code === 'bar-renderer-shadowed')).toHaveLength(0);
+      gantt.destroy();
+    });
+
+    it('does not fire for a barRenderer assigned before any entries exist', async () => {
+      const container = document.createElement('div');
+      const dataset = new Dataset({ entries: [], timeZone: 'UTC' });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        variants: [{ name: 'v', when: () => true, paint: () => ({ text: 'v' }) }],
+        barRenderer: () => ({ text: 'never painted' }),
+      });
+      const reports: ErrorReport[] = [];
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+
+      await paint();
+      expect(reports.filter((report) => report.code === 'bar-renderer-shadowed')).toHaveLength(0);
+
+      // An empty Dataset answers nothing, so the check is not spent on it — once an Entry exists
+      // to ask about, the same assigned renderer is checked for real.
+      dataset.entries.add(sampleEntries[0]!.toInput());
+      await paint();
+      expect(reports.filter((report) => report.code === 'bar-renderer-shadowed')).toHaveLength(1);
+
+      gantt.destroy();
+    });
+
+    it('does not fire when barRenderer is set to undefined', async () => {
+      const container = document.createElement('div');
+      const dataset = new Dataset({ entries: [sampleEntries[0]!.toInput()], timeZone: 'UTC' });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        variants: [{ name: 'v', when: () => true, paint: () => ({ text: 'v' }) }],
+        barRenderer: () => ({ text: 'never painted' }),
+      });
+      const reports: ErrorReport[] = [];
+      gantt.on('error', (report) => {
+        reports.push(report);
+      });
+      gantt.barRenderer = undefined;
+
+      await paint();
+
+      expect(reports.filter((report) => report.code === 'bar-renderer-shadowed')).toHaveLength(0);
+      gantt.destroy();
+    });
+  });
+
   it("a milestone variant's own paint draws a diamond, and dropping it repaints with no bar remount (I8)", async () => {
     const container = document.createElement('div');
     const dataset = new Dataset({

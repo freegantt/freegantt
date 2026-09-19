@@ -76,6 +76,11 @@ export type BuiltInReportCode =
   // consumer (D-S5-41). The cost is avoided by asking, not by building: with no report sink wired,
   // the rule walk stops at the first yes and never looks for a second.
   | 'variant-matched-twice'
+  // #448: `barRenderer` is the catch-all a resolved variant with no `paint` falls through to. When
+  // every Entry in the Dataset resolves to a variant that paints, `barRenderer` never runs and
+  // nothing says why. Checked once per assignment, against the whole Dataset, not per frame — a
+  // frame that shows only variant-painted rows while others sit off-window is not the same thing.
+  | 'bar-renderer-shadowed'
   // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule matches no
   // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
   // down, and a plugin whose key the Dataset never declared is the same case.
