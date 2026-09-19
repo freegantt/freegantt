@@ -346,6 +346,9 @@ ${DARK_COLOR_TOKENS}
 .fg-rows-clip { position: relative; flex: 1 1 auto; overflow: hidden; width: var(--fg-grid-content-width, 100%); }
 .fg-rows { position: relative; height: 100%; }
 .fg-splitter { flex-shrink: 0; cursor: col-resize; background: var(--fg-splitter-color); }
+/* #432: gridResizable false — the splitter still paints, but no listener arms a drag, so the
+   resize cursor would otherwise be the one affordance left advertising a gesture that does nothing. */
+.fg-splitter[data-resize-off] { cursor: default; }
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
