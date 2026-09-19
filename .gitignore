@@ -2,7 +2,14 @@ node_modules/
 dist/
 dist-harness/
 temp/
+tmp/
 *.local
+.env
+.env.*
+!.env.example
+
+# Machine-local GitHub App / Orca session config. It names this host.
+.github/github-app.yml
 .DS_Store
 test-results/
 playwright-report/
