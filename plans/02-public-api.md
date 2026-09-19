@@ -363,12 +363,16 @@ barRenderer: ({ entry }) => defaultBar(entry),   // every bar no variant paints
 
 **Label placement (J1).** `gantt.barLabels` and `EntryVariant.barLabels` both take `BarLabels`
 (`BarLabelPolicy | BarLabelSpec`), live-reconfigurable (I8). The short form is a `BarLabelPolicy`
-string — `'fitBar' | 'inside' | 'outside' | 'none'`, default `'fitBar'` — and picks only placement,
-printing `name`. `'fitBar'` paints inside when the label fits, outside to the right when it does
-not, and falls back to an ellipsised inside label as the last resort; `'inside'`/`'outside'` force
-one side and still fall back to ellipsised-inside when the forced side has no room; `'none'` paints
-no label at all. The resolved side is `data-label` on `.fg-bar` (`'inside'` / `'outside'`, absent
-for `'none'` or a `barRenderer` result) — a level-2 hook for a consumer stylesheet, styled by
+string — `'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none'`, default `'fitBar'` — and picks
+only placement, printing `name`. `'fitBar'` paints inside when the label fits, outside to the right
+when it does not, and falls back to an ellipsised inside label as the last resort; `'inside'`/
+`'outside'` force one side and still fall back to ellipsised-inside when the forced side has no
+room; `'insideOrNone'` reads the same fit clause `'fitBar'` does, but a bar that fails it gets no
+label at all rather than `'fitBar'`'s outside fallback — for a consumer painting bars edge to edge
+(a day-tile grid), where an outside label would paint across the next bar rather than into open
+pane space (#435); `'none'` paints no label at all, regardless of fit. The resolved side is
+`data-label` on `.fg-bar` (`'inside'` / `'outside'`, absent for `'none'`, for `'insideOrNone'` on a
+bar too narrow, or for a `barRenderer` result) — a level-2 hook for a consumer stylesheet, styled by
 default through `--fg-bar-label-gap` and `--fg-bar-label-outside-color` (`docs/05-consumer-api.md`).
 
 **`BarLabelSpec` (`#421` C5) is the expert form: a bar names the Field it prints.** `{ field?:

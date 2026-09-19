@@ -83,7 +83,7 @@ export function barIdFromDataset(value: string | undefined): BarId | undefined;
 export type BarLabelPlacement = 'inside' | 'outside';
 
 // @public
-export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none';
 
 // @public
 export type BarLabels = BarLabelPolicy | BarLabelSpec;

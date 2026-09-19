@@ -2152,6 +2152,56 @@ describe('render/dom backend', () => {
       restoreRuler();
     });
 
+    it('barLabels: "insideOrNone" paints inside when the label fits (#435)', () => {
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 200, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBe('inside');
+      expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
+    it('barLabels: "insideOrNone" paints no label at all on a bar too narrow for it, never outside (#435)', () => {
+      // The same geometry the "moves the label outside" test above uses — plenty of room past the
+      // bar's right edge — proves this is a different rule from `'fitBar'`, not the same one under a
+      // new name: `'fitBar'` paints 'outside' here; `'insideOrNone'` must not.
+      withStubRuler();
+      const backend = createDomBackend({
+        entryById: entryLookup,
+        resolveBarRenderer: () => undefined,
+        resolveGridCellRenderer: () => undefined,
+        resolveHeaderRenderer: () => undefined,
+        resolveBarLabelPolicy: () => 'insideOrNone',
+      });
+      const { grid, timeline } = mountSurfaces();
+      backend.mount({ grid, timeline });
+      backend.sync(frameFor(0, 20, 2000));
+
+      const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
+      expect(bar.dataset['label']).toBeUndefined();
+      expect(bar.querySelector('.fg-bar-label')).toBeNull();
+      expect(bar.textContent).toBe('');
+
+      backend.destroy();
+      grid.remove();
+      timeline.remove();
+      restoreRuler();
+    });
+
     it('a resize preview that crosses the fit line flips data-label, and a cancelled preview restores it', () => {
       withStubRuler();
       const backend = paintingBackend([sampleEntries[0]!]);
