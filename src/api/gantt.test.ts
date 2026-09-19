@@ -28,6 +28,7 @@ import type {
   EntryInput,
   ErrorReport,
   ChromePlugin,
+  GridColumn,
   GridColumnInput,
   PluginContext,
   TimeUnit,
@@ -1822,6 +1823,31 @@ describe('Gantt gridResizable (#432)', () => {
 
     const header = container.querySelector<HTMLElement>('.fg-col-header')!;
     expect(header.hasAttribute('data-resizable-off')).toBe(true);
+    gantt.destroy();
+  });
+
+  // F4 (branch review, 2026-09-19): a locked Gantt paints every grip off, but a programmatic
+  // column write's own `from` must still report the consumer's real, authored `resizable` — never
+  // a `resizable: false` the lock forced into a stored resolution and the consumer never wrote.
+  it('gridColumnsChange reports the authored resizable, not the lock, in both from and to', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      gridResizable: false,
+      gridColumns: ['name', 'start'],
+    });
+    const changed = vi.fn();
+    gantt.on('gridColumnsChange', changed);
+
+    gantt.hideGridColumn('start');
+
+    expect(changed).toHaveBeenCalledTimes(1);
+    const [{ from, to }] = changed.mock.calls[0] as [{ from: GridColumn[]; to: GridColumn[] }];
+    const fromName = from.find((c) => c.field === 'name')!;
+    const toName = to.find((c) => c.field === 'name')!;
+    expect(fromName.resizable).toBe(true);
+    expect(toName.resizable).toBe(true);
     gantt.destroy();
   });
 });
