@@ -146,6 +146,81 @@ test('dragging the splitter re-fits the axis with no other call (U4)', async ({ 
   expect(Math.abs(contentRightAfter - paneWidthAfter)).toBeLessThan(2);
 });
 
+// #432: `gridResizable: false` locks both grid-pane resize affordances at once — the splitter and
+// every column's own resizer grip. This is a lock, not a veto: the grip stops painting and the
+// splitter stops advertising a cursor it cannot act on, rather than firing an event only to refuse
+// it. The harness wires this to `#lock-grid-checkbox` (harness/main.ts).
+test.describe('gridResizable locks the grid pane (#432)', () => {
+  test('a locked splitter does not drag, and shows no resize cursor', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+    await page.locator('#lock-grid-checkbox').check();
+
+    const gridPane = page.locator('#gantt .fg-grid-pane');
+    const paneWidthBefore = await gridPane.evaluate((el) => el.clientWidth);
+    const cursorBefore = await page.locator('.fg-splitter').evaluate((el) => getComputedStyle(el).cursor);
+    expect(cursorBefore).toBe('default');
+
+    await dragSplitterBy(page, 200);
+
+    expect(await gridPane.evaluate((el) => el.clientWidth)).toBe(paneWidthBefore);
+  });
+
+  test("an unlocked splitter keeps today's behaviour: it drags and shows a resize cursor", async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+    expect(await page.locator('#lock-grid-checkbox').isChecked()).toBe(false);
+
+    const cursor = await page.locator('.fg-splitter').evaluate((el) => getComputedStyle(el).cursor);
+    expect(cursor).toBe('col-resize');
+
+    const gridPane = page.locator('#gantt .fg-grid-pane');
+    const paneWidthBefore = await gridPane.evaluate((el) => el.clientWidth);
+    await dragSplitterBy(page, -80);
+    expect(await gridPane.evaluate((el) => el.clientWidth)).not.toBe(paneWidthBefore);
+  });
+
+  test('a locked grid paints no column resizer grip', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+    const grip = page.locator('#gantt .fg-col-header').first().locator('.fg-column-resizer');
+    expect(await grip.evaluate((el) => getComputedStyle(el).display)).not.toBe('none');
+
+    await page.locator('#lock-grid-checkbox').check();
+
+    // The lock lands through the normal frame path (`#bindColumns` → the next render), not
+    // synchronously with the checkbox change.
+    await expect.poll(async () => grip.evaluate((el) => getComputedStyle(el).display)).toBe('none');
+  });
+
+  // #157/#432: the harness's own Gantt opens with `gridWidth: 'fitColumns'`, sized to its columns.
+  // A splitter drag has always converted that standing instruction into the fixed px width it was
+  // dragged to (#157) — the very failure mode #432 exists to close off. With the lock on, a drag
+  // attempt must leave 'fitColumns' governing the pane, so a later column addition still grows it.
+  test('a locked splitter cannot convert gridWidth: fitColumns into a fixed width', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+    await page.locator('#lock-grid-checkbox').check();
+
+    const gridPane = page.locator('#gantt .fg-grid-pane');
+    const paneWidthBeforeDrag = await gridPane.evaluate((el) => el.clientWidth);
+
+    await dragSplitterBy(page, 300);
+    expect(await gridPane.evaluate((el) => el.clientWidth)).toBe(paneWidthBeforeDrag);
+
+    // 'fitColumns' still stands: hiding the Budget column still shrinks the pane. A drag that had
+    // converted it to a fixed width (#157's failure mode) would leave the pane unchanged here
+    // instead, because a fixed width does not re-measure when the column set changes.
+    await page.locator('#toggle-budget-btn').click();
+    await expect
+      .poll(async () => gridPane.evaluate((el) => el.clientWidth))
+      .toBeLessThan(paneWidthBeforeDrag);
+  });
+});
+
 // U1: both panes stay pixel-aligned during and after a drag, not just before it (I9) — the grid
 // pane's row layer and the timeline pane's bars both read `top`/`y` from the same `frame.rows`, so a
 // drag that changes only horizontal geometry must never disturb that vertical agreement.
