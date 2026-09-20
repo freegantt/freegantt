@@ -38,7 +38,7 @@ function isDateOnly(input: InstantInput): boolean {
 // no prefix beats a wrong one. Every caller should still name itself; the ones in `src/api/gantt.ts`
 // do not yet.
 
-/** What to write instead. Three of the five faults below end with this sentence. */
+/** What to write instead. Two of the four faults below end with this sentence. */
 const WRITE_A_DATE = 'Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.';
 /** Covers every value `InstantInput`'s type does not admit and that no other fault below already
  *  names — an unparsable string, a boolean, a plain object, an array. A string, a `Date` and a
@@ -47,21 +47,39 @@ const UNREADABLE = `is not a date this library reads. ${WRITE_A_DATE}`;
 const NO_SUCH_DATE = 'names a date the calendar does not have. Write a date the calendar has.';
 const NOT_FINITE = `is not a finite count of epoch milliseconds. ${WRITE_A_DATE}`;
 /** `null` names no instant, and it is not a zone problem — the zoneless-time fault in `instant()`
- *  does not apply and must not fire for it (#431). `toInstant` also reads `gantt.todayLine`,
- *  `gantt.dateLines`, `zoomToSpan` and `panToDate` (`src/api/gantt.ts`), so the wording stays true
- *  for any of those callers, not only an Entry's `start`/`end` — Entry-specific advice belongs to
- *  the caller that knows it is one, not to this shared reader. The prefix in `invalid()` already
- *  prints the value, so this sentence does not repeat "null". */
+ *  does not apply and must not fire for it (#431). The remediation stays caller-agnostic, like
+ *  `UNREADABLE`, `NO_SUCH_DATE` and `NOT_FINITE`: `toInstant` also reads `gantt.todayLine`,
+ *  `gantt.dateLines`, `zoomToSpan` and `panToDate` (`src/api/gantt.ts`), and those callers hand a
+ *  loose value straight in with no property or key to leave out. "Omit the key instead" is advice
+ *  only an Entry's `start`/`end` can follow, so it belongs to the caller that knows it is one
+ *  (`data/entry-reader.ts`), never to this shared reader. */
 const NULL_VALUE =
-  'names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.';
+  'names no instant. An absent date is a value left out, not a null one. Write a date, or leave it out.';
+
+/** How the bad value reads back to the consumer who wrote it. `String` alone is not enough now that
+ *  the door is untyped (#431): a plain object prints as "[object Object]" and an array prints as the
+ *  empty string, so a JSON-sourced `start: {}` would name nothing at all and a `start: []` would
+ *  leave a bare gap before the reason. A string is quoted, so an empty string and a stray space are
+ *  both visible. Everything else prints as itself — `String(new Date(NaN))` is already the words
+ *  "Invalid Date". A structure that cannot be serialized at all (a cycle, a BigInt) falls back to
+ *  its own type name, because a thrown message is worse than a vague one. */
+function wroteAsText(input: unknown): string {
+  if (typeof input === 'string') return JSON.stringify(input);
+  // A `Date` prints itself, never its JSON: `JSON.stringify(new Date(NaN))` is the word "null",
+  // which would name the wrong fault outright — the one fault whose own message is `NULL_VALUE`.
+  if (input === null || input instanceof Date || typeof input !== 'object') return String(input);
+  try {
+    return JSON.stringify(input) ?? Object.prototype.toString.call(input);
+  } catch {
+    return Object.prototype.toString.call(input);
+  }
+}
 
 /** Builds the fault one bad value produces. The value is a member as well as a sentence: a bulk
  *  loader catches this and names the row it came from, instead of parsing our wording (#237).
- *
- *  A string is quoted, so an empty string and a stray space are both visible. Everything else prints
- *  as itself — `String(new Date(NaN))` is already the words "Invalid Date". */
+ *  `wroteAsText` above owns how the value reads back. */
 function invalid(input: unknown, reason: string, operation: string | undefined): InvalidInstantError {
-  const wrote = typeof input === 'string' ? JSON.stringify(input) : String(input);
+  const wrote = wroteAsText(input);
   const where = operation === undefined ? '' : `${operation}: `;
   return new InvalidInstantError(`${where}${wrote} ${reason}`, input);
 }

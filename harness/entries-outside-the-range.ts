@@ -47,6 +47,6 @@ const entries: EntryInput[] = [
 ];
 
 const dataset = new Dataset({ entries, timeZone: 'UTC' });
-const gantt = new Gantt({ container: '#gantt', dataset, range: { start: rangeStart, end: rangeEnd } });
-
-window.__gantt = gantt;
+// `e2e/timeline-content-width.spec.ts` asserts on the DOM alone, so this page publishes no
+// `window.__gantt` seam: an `__gantt` on a harness page means a spec depends on it.
+new Gantt({ container: '#gantt', dataset, range: { start: rangeStart, end: rangeEnd } });

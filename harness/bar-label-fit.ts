@@ -60,8 +60,6 @@ const gantt = new Gantt({
   a11yLabel: 'Bar label fit',
 });
 
-window.__gantt = gantt;
-
 document.querySelector<HTMLButtonElement>('#narrow-days')!.addEventListener('click', () => {
   gantt.fit = pxPerMsFor(NARROW_DAY_WIDTH_PX);
 });
