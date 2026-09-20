@@ -350,6 +350,10 @@ ${DARK_COLOR_TOKENS}
    resize cursor would otherwise be the one affordance left advertising a gesture that does nothing. */
 .fg-splitter[data-resize-off] { cursor: default; }
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
+/* #440: a pane that shares its scroll axis holds its width steady, so a neighbour's vertical
+   scrollbar cannot move the date under a given screen x. view/scroll-attachment.ts toggles the
+   class; a lone Gantt never carries it and keeps the full width. */
+.fg-timeline-pane.fg-shared-axis { scrollbar-gutter: stable; }
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
    (closes the S1.8 debt, D-S1.12-15). */
