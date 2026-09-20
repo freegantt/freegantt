@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { attachScroll } from './scroll-attachment.js';
-import { Viewport } from '../layout/index.js';
+import { ScrollAxis, Viewport } from '../layout/index.js';
 import type { DatasetBinding } from '../layout/index.js';
 import type { Entry, Instant } from '../model/index.js';
 import { entryDouble } from '../layout/entry-double.js';
@@ -112,5 +112,82 @@ describe('attachScroll', () => {
     element.dispatchEvent(new Event('scroll'));
     // Listener removed: the native event no longer reaches the model.
     expect(viewport.scroll.x.state.position).toBe(0);
+  });
+});
+
+// #440: two panes on one axis must agree about how far right they can go, and they only agree when
+// they are the same width. The gutter is what makes a pane's width independent of its own rows.
+describe('attachScroll reserveScrollbarGutter', () => {
+  function paneOn(scroll: { x?: ScrollAxis; y?: ScrollAxis }): {
+    element: HTMLElement;
+    reserve: () => void;
+  } {
+    const viewport = new Viewport({ scroll });
+    const handle = viewport.bind(dataset, () => {});
+    handle.setContentSize({ width: 1000, height: 1000 });
+    handle.setPaneSize({ width: 100, height: 100 });
+    const element = el();
+    const attachment = attachScroll(element, viewport);
+    return { element, reserve: () => attachment.reserveScrollbarGutter() };
+  }
+
+  it('a lone Gantt keeps its full pane width', () => {
+    const pane = paneOn({ x: new ScrollAxis() });
+
+    pane.reserve();
+
+    expect(pane.element.classList.contains('fg-shared-axis')).toBe(false);
+  });
+
+  it('two Gantts sharing one x axis both reserve the gutter', () => {
+    const shared = new ScrollAxis();
+    const top = paneOn({ x: shared });
+    const bottom = paneOn({ x: shared });
+
+    top.reserve();
+    bottom.reserve();
+
+    expect(top.element.classList.contains('fg-shared-axis')).toBe(true);
+    expect(bottom.element.classList.contains('fg-shared-axis')).toBe(true);
+  });
+
+  it('a pane that mounted alone reserves the gutter once a second Gantt joins its axis', () => {
+    const shared = new ScrollAxis();
+    const first = paneOn({ x: shared });
+    first.reserve();
+    expect(first.element.classList.contains('fg-shared-axis')).toBe(false);
+
+    paneOn({ x: shared });
+    first.reserve();
+
+    expect(first.element.classList.contains('fg-shared-axis')).toBe(true);
+  });
+
+  // The gutter reserves inline space, which is the vertical scrollbar's. A shared y axis misaligns
+  // through the *horizontal* scrollbar instead, so paying 15px of width there buys nothing.
+  it('a shared y axis alone does not cost the pane any width', () => {
+    const sharedY = new ScrollAxis();
+    const top = paneOn({ y: sharedY });
+    const bottom = paneOn({ y: sharedY });
+
+    top.reserve();
+    bottom.reserve();
+
+    expect(top.element.classList.contains('fg-shared-axis')).toBe(false);
+    expect(bottom.element.classList.contains('fg-shared-axis')).toBe(false);
+  });
+
+  it('gives the width back when the neighbour goes away', () => {
+    const shared = new ScrollAxis();
+    const survivor = paneOn({ x: shared });
+    const viewport = new Viewport({ scroll: { x: shared } });
+    const leaving = viewport.bind(dataset, () => {});
+    survivor.reserve();
+    expect(survivor.element.classList.contains('fg-shared-axis')).toBe(true);
+
+    leaving.unbind();
+    survivor.reserve();
+
+    expect(survivor.element.classList.contains('fg-shared-axis')).toBe(false);
   });
 });

@@ -169,7 +169,7 @@ D9 read: _"Sharing a `ScrollModel` links both axes (S1.5, D-S1.5-3) — **partia
 
 `ScrollModel` fuses the two directions into one object. It owns one `#position: Point` and one `BoundValue` whose resolved value is `{position, max}` — four numbers, compared as a unit by `sameScrollState`. Two Gantts sharing it bind into the **same** `BoundValue`, so both directions travel together. **That is the object's shape, not a policy**, which is why no configuration can take half of it.
 
-**The unit becomes one axis.** A scroll axis owns `{ position, max }` for one direction: one binding set, one `resolve`, one `equals`, **one lifetime**. A Gantt holds two of them — an x source and a y source — and a caller aims each one independently.
+**The unit becomes one axis.** A scroll axis owns `{ position, max, bindingCount }` for one direction: one binding set, one `resolve`, one `equals`, **one lifetime**. A Gantt holds two of them — an x source and a y source — and a caller aims each one independently.
 
 The consequence is that **the library ships no sharing modes.** Share x, share y, share both, share neither: all four are the caller pointing two references, not four code paths.
 

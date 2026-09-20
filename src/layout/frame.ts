@@ -41,10 +41,13 @@ export const DEFAULT_MIN_BAR_WIDTH_PX = 12;
 export const DEFAULT_BAR_HEIGHT_PX = 18;
 
 /** What `barSpan` did to a bar's painted `[x, x + width)` extent (F12) — `'exact'` for the entry's
- *  own span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for a Bar
- *  that carries its own `box` (ADR 0022). Named once so `barSpan`'s return type and `FrameBar.span`
- *  read one type instead of repeating the union. */
-export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
+ *  own span, painted whole; `'clipped'` for that same span cut at a content edge, so `x`/`width`
+ *  are not the entry's own start/end (#436 branch review F2 — a plugin that wants the entry's real
+ *  dates reads the entry, not this geometry); `'minimum'` for one `barSpan` widened to reach
+ *  `minBarWidthPx`, and possibly shifted or width-capped to stay inside the content; `'fixed'` for
+ *  a Bar that carries its own `box` (ADR 0022), also possibly shifted or width-capped. Named once
+ *  so `barSpan`'s return type and `FrameBar.span` read one type instead of repeating the union. */
+export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 /** A Bar's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart.
@@ -61,7 +64,29 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
  * same midpoint the floor above centres on, so the two rules never disagree — they answer the same
  * question only when `start === end`. This is not "centred on the Bar's start": a fixed-width box
  * on a real span would land in two different places depending on which sentence a reader followed,
- * so both rules read the span's midpoint. */
+ * so both rules read the span's midpoint.
+ *
+ * D-S1.8-1 holds for a widened box the same as for the tick lines that already obey it: a box this
+ * function widens or fixes never paints past `[0, scale.contentWidth]`. A bar whose own instant sits
+ * at or past the content's edge is shifted inward instead of left centred past it — an entry at the
+ * range end must still read as "at the end", not slide back to make room, so the shift only ever
+ * closes the gap the centred box would have opened past the edge.
+ *
+ * A real duration span answers D-S1.8-1 a different way, and must: it carries the entry's own real
+ * `start`/`end`, not a floor this function invented, so shifting it would misstate where the entry
+ * actually falls. A Dataset wider than its own `range` (the normal shape for a caller prefetching so
+ * pan/zoom never re-fetches) can hand `placeFrame` an entry that starts, ends, or both, outside
+ * `[0, contentWidth)` — the overscan buffer (`DEFAULT_OVERSCAN.horizontalPx`) pulls it into the
+ * culled window without ever checking that bound, and an unclamped box painted there widens
+ * the pane's own native `scrollWidth` past the content sizer, the same harm a header band's cell
+ * already guards against with its own intersection clip (`bands` below). `barSpan` trims a real
+ * duration box to its intersection with `[0, contentWidth)` for the same reason a band cell is
+ * trimmed and not shifted: a real duration bar straddling the edge has a truthful in-range portion
+ * to show, and trimming shows exactly that without lying about the part outside. A box with no
+ * intersection at all — a `bar.start` past `contentWidth`, or a `bar.end` before `0` — trims to
+ * `width: 0`; `placeFrame` drops it rather than paint an entry the caller's own `range` excludes.
+ * A trim that actually moved `x` or `width` is reported as `'clipped'`, not `'exact'` — `'exact'`
+ * promises the entry's own untouched start/end (#436 branch review F2). */
 export function barSpan(
   // The whole `Bar`, not a `Pick` (#295) — a literal missing `box` would typecheck against a
   // `Pick` and silently drop a fixed box's width, which is exactly the bug this signature closes.
@@ -71,22 +96,93 @@ export function barSpan(
 ): { x: number; width: number; span: BarSpanKind } {
   const x = scale.xForInstant(bar.start);
   const end = scale.xForInstant(bar.end);
+  const rawWidth = Math.max(0, end - x);
+
+  // Membership first, decided on the entry's own true extent — before any floor, fixed width, or
+  // shift touches it. A widened or fixed box's *shift* (`clampBoxToContent` below) pulls its left
+  // edge back onto the content unconditionally; run it on a box whose entry never belonged on
+  // screen at all and it silently paints that record at a visible edge instead of leaving it off —
+  // a misplaced date is worse than #436's overflow, because an overflow is at least visible. A
+  // zero-length entry is a point, kept through its own closing instant (ADR 0012's "at the range
+  // end" is `x === contentWidth`, still in). A real span is the usual half-open interval test; an
+  // entry whose interval has no overlap with `[0, contentWidth)` at all never reaches the floor
+  // below (`'minimum'`'s own membership question — the floor is `barSpan`'s invention, so the
+  // entry's own extent decides it).
+  const inContent = rawWidth === 0 ? x >= 0 && x <= scale.contentWidth : x < scale.contentWidth && end > 0;
+
   if (bar.box !== undefined) {
     // A fixed box skips the floor on purpose (ADR 0022 — `diamond()`'s own width is the design, not
     // a value to widen). Clamped once, here, so the returned `width` and `fixedBoxX`'s position both
     // read the same finite, non-negative value — a negative (#296) or non-finite (#297) `widthPx`
-    // never reaches either.
-    const width = clampBoxWidth(bar.box.widthPx);
-    return { x: fixedBoxX(x, end, bar.box.anchor, width), width, span: 'fixed' };
+    // never reaches either. Also capped at `contentWidth` itself (#436 branch review F1): an
+    // uncapped width still pins `x` to `0` and paints past the edge once the box is wider than the
+    // content, the exact defect this whole function exists to close.
+    const width = Math.min(clampBoxWidth(bar.box.widthPx), scale.contentWidth);
+    const boxX = fixedBoxX(x, end, bar.box.anchor, width);
+    // Membership needs both questions answered, ANDed (#436 branch review F5 — an anchor-instant
+    // test alone disagrees with the floored-bar path for the same entry, and a box-extent test
+    // alone would keep a zero-length entry parked past `contentWidth`, the case #436 is about):
+    // `inContent` asks the truthful question about the *record* (its own span, the same test every
+    // other branch below reads); `boxOverlapsContent` asks whether the box `anchor` places actually
+    // has any body inside `[0, contentWidth)` at all — a box anchored past the far edge (`'end'` on
+    // a span ending 500px past it) can have a span that overlaps while its own drawn body does not.
+    // A zero-width box (`widthPx` clamped from a negative or non-finite one, #296/#297) is a point,
+    // not an interval, so it reads the same inclusive boundary the point-shaped `inContent` test
+    // above already reads — a box sitting exactly on the content's own last instant stays in.
+    const boxOverlapsContent =
+      width === 0 ? boxX >= 0 && boxX <= scale.contentWidth : boxX < scale.contentWidth && boxX + width > 0;
+    if (!inContent || !boxOverlapsContent) return { x: 0, width: 0, span: 'fixed' };
+    return { x: clampBoxToContent(boxX, width, scale.contentWidth), width, span: 'fixed' };
   }
-  const width = Math.max(0, end - x);
   // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
   // span has its start for a midpoint; a 5px bar the floor widens to 12px keeps its own centre
   // instead of sliding left onto its start.
-  if (width < minBarWidthPx) {
-    return { x: x - (minBarWidthPx - width) / 2, width: minBarWidthPx, span: 'minimum' };
+  if (rawWidth < minBarWidthPx) {
+    if (!inContent) return { x: 0, width: 0, span: 'minimum' };
+    // Capped at `contentWidth` itself (#436 branch review F1), same reasoning as the fixed box
+    // above: an uncapped `minBarWidthPx` still pins `x` to `0` and paints past the edge in a pane
+    // narrower than the floor.
+    const width = Math.min(minBarWidthPx, scale.contentWidth);
+    const centredX = x - (width - rawWidth) / 2;
+    return {
+      x: clampBoxToContent(centredX, width, scale.contentWidth),
+      width,
+      span: 'minimum',
+    };
   }
-  return { x, width, span: 'exact' };
+  // No separate membership gate needed here: `clipToContent` already answers the same question for
+  // a real interval — no overlap with `[0, contentWidth)` trims straight to `width: 0`. A trim that
+  // actually cuts the span (its `x` or `width` moved) is reported as `'clipped'`, not `'exact'`
+  // (#436 branch review F2): `'exact'` promises the entry's own real start/end, and a reader —
+  // `render/dom/index.ts`'s stamp, or a plugin's `barRenderer` — must be able to tell the two apart.
+  const clipped = clipToContent(x, rawWidth, scale.contentWidth);
+  const wasClipped = clipped.x !== x || clipped.width !== rawWidth;
+  return { ...clipped, span: wasClipped ? 'clipped' : 'exact' };
+}
+
+/** Trims a box to its intersection with `[0, contentWidth)`, the same formula a header band's cell
+ *  already applies to itself below — an `'exact'` box carries the entry's own real extent, so it is
+ *  cut back to the truthful part inside the content, never shifted (that would misstate the entry's
+ *  own start/end). A box with no intersection at all trims to `width: 0`; `placeFrame` reads that as
+ *  "nothing to paint" and drops the bar, the same as a fully off-content header cell drops itself. */
+function clipToContent(x: number, width: number, contentWidth: number): { x: number; width: number } {
+  const clippedX = Math.max(x, 0);
+  const clippedRight = Math.min(x + width, contentWidth);
+  return { x: clippedX, width: Math.max(0, clippedRight - clippedX) };
+}
+
+/** Shifts a box's left edge inward so `[x, x + width)` stays inside `[0, contentWidth]`, the same
+ *  edge a widened or fixed box (`barSpan`) must never paint past (D-S1.8-1). Shifting, not
+ *  re-centring, keeps a box that already fits untouched and moves one that doesn't the shortest
+ *  distance back onto the content — an entry pinned to the range end still reads as at the end.
+ *  `width` must already be capped at `contentWidth` by the caller (#436 branch review F1) — this
+ *  function only ever moves `x`, so a `width` wider than `contentWidth` would still pin `x` to `0`
+ *  and paint straight past the far edge, the fault this docblock used to claim could not happen. A
+ *  width that is capped, on the other hand, can never push `maxX` negative, so the box never
+ *  reports an `x` past `0` on the left either. */
+function clampBoxToContent(x: number, width: number, contentWidth: number): number {
+  const maxX = Math.max(0, contentWidth - width);
+  return Math.min(Math.max(x, 0), maxX);
 }
 
 /** A fixed box's width, floored at 0 and never non-finite. The one place `widthPx` is read off a
@@ -141,13 +237,18 @@ export interface FrameBar {
   height: number;
   flags: BarFlags;
   /** What `barSpan` did to this bar's painted `[x, x + width)` extent: `'exact'` for the entry's own
-   *  span, `'minimum'` for one `barSpan` widened to reach `minBarWidthPx`, `'fixed'` for a Bar that
-   *  carries its own `box` (ADR 0022). One value, because a bar is never both floored and fixed —
-   *  `data-span` is one attribute slot, so the type mirrors the DOM it feeds.
+   *  span, painted whole; `'clipped'` for that same span cut at a content edge — `x`/`width` are
+   *  not the entry's own start/end here, so a reader that wants the real dates reads the Entry, not
+   *  this geometry (#436 branch review F2); `'minimum'` for one `barSpan` widened to reach
+   *  `minBarWidthPx`, and `'fixed'` for a Bar that carries its own `box` (ADR 0022) — both of those
+   *  two may also be shifted or width-capped to stay inside the content (D-S1.8-1). One value,
+   *  because a bar is never two of these at once — `data-span` is one attribute slot, so the type
+   *  mirrors the DOM it feeds.
    *
    *  States a fact about the paint, not a judgement on the variant (plans/01 §2.5 bans a variant
-   *  check here); a consumer tells a floored or fixed bar apart by pairing this with `variant`.
-   *  `render/` stamps it as `data-span="minimum"` or `data-span="fixed"` (`02` §4). */
+   *  check here); a consumer tells a clipped, floored, or fixed bar apart by pairing this with
+   *  `variant`. `render/` stamps it as `data-span="clipped"`, `"minimum"`, or `"fixed"` (`02` §4) —
+   *  `'exact'` alone carries no attribute, since it is the paint a reader assumes by default. */
   span: BarSpanKind;
   /** What a screen reader announces: `${label}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, span)}`,
    * or the dates alone when `label` is `''` (#421 C5) — a nameless Entry still reads its dates, never
@@ -178,7 +279,9 @@ export type FrameDecoration = DateLineDecoration | RangeBand | RowStripe;
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
   x: number;
-  /** To the next boundary at this band's step — what a band cell is drawn with (D-S1.7-4). */
+  /** To the next boundary at this band's step, clipped to `contentWidth` (D-S1.7-4) — the last
+   *  cell in a band is shorter than its own step when the step's next boundary falls past the
+   *  content edge, so this is not always a full step's width. */
   width: number;
   label: string;
 }
@@ -502,6 +605,11 @@ export function placeFrame(
     for (const producedBar of rowBars) {
       const { x, width, span } = barSpan(producedBar, scale, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
+      // An 'exact' box already trimmed to `[0, contentWidth)` (barSpan) reports `width: 0` when the
+      // entry's own span has no intersection with the content at all — an entry outside the
+      // caller's own `range`, pulled into the culled window only by the overscan buffer. Nothing to
+      // paint, so it never becomes a FrameBar (#436).
+      if (width <= 0) continue;
       // #421 C5, Q36: the Bar's own `label` wins when a producer set one — the most specific
       // answer available, per-bar and authored. Absent, `barLabelFor` (the Gantt's own Field,
       // resolved and formatted) fills it; absent that too (a `layout/` test with no `view/`), ''.
@@ -528,8 +636,17 @@ export function placeFrame(
     }
   }
 
+  // The overscan buffer widens the cull window past both ends of the dataset's own range, but a
+  // band tick or a tick line only ever has a home inside `[0, contentWidth)` (D-S1.8-1: the
+  // timeline's content is `contentWidth` wide, full stop). Clamping the query span here, not just
+  // the ticks it returns, stops `scale.ticks` from walking cursors the content never needed —
+  // `ticks()` still emits the one cell straddling each bound, so a partial leading or trailing
+  // cell still reaches `bands` below for its own box-intersection clip.
   const horizontalSpan = cullHorizontally
-    ? { x: hLeft, width: hRight - hLeft }
+    ? {
+        x: Math.max(hLeft, 0),
+        width: Math.max(0, Math.min(hRight, scale.contentWidth) - Math.max(hLeft, 0)),
+      }
     : { x: 0, width: scale.contentWidth };
 
   // A coarse band's boundary (a year, say) is often well behind the visible pane — the calendar
@@ -567,8 +684,21 @@ export function placeFrame(
         const remainder = tick.x + tick.width - labelLeftClamp;
         const straddlesClamp = tick.x < labelLeftClamp && remainder >= tickBoxFloorPx;
         const x = straddlesClamp ? labelLeftClamp : tick.x;
-        return { x, width: Math.max(0, tick.width - (x - tick.x)), label: format(tick.instant) };
-      }),
+        const width = Math.max(0, tick.width - (x - tick.x));
+        // A band cell is a box, not a point (unlike `tickLines` below), so it needs an
+        // intersection with `[0, contentWidth)`, not the point test that would drop a leading
+        // or trailing cell a reader can plainly see most of. Left un-clamped, a cell that
+        // straddles either content bound paints past it, and that painted node is what widens
+        // the pane's own native `scrollWidth` past the content sizer (D-S1.8-1) — the same harm
+        // `tickLines` already guards against for a tick *line*. Trimming the box here runs after
+        // the straddle clamp above, so the two compose: that clamp can only move `x` rightward
+        // to keep a label inside the visible pane, and this clip only pulls the box back inside
+        // the content — neither can undo the other's work.
+        const clippedX = Math.max(x, 0);
+        const clippedRight = Math.min(x + width, scale.contentWidth);
+        const clippedWidth = Math.max(0, clippedRight - clippedX);
+        return { x: clippedX, width: clippedWidth, label: format(tick.instant) };
+      }).filter((cell) => cell.width > 0),
     };
   });
 
