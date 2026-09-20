@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Branch review — #433 theme push (ADR 0029)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      .seam { stroke-dasharray: 5 4; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .finding h3 { scroll-margin-top: 1rem; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+      <header class="space-y-3">
+        <p class="text-xs uppercase tracking-wider text-slate-500">FreeGantt · branch review · pass 1</p>
+        <h1 class="text-3xl font-serif">#433 — the app pushes the theme (ADR 0029)</h1>
+        <div class="text-sm text-slate-600 mono space-y-0.5">
+          <p>branch <span class="text-slate-900">Pawel-IT/issue-433-theme-resolver</span> · head <span class="text-slate-900">1b2f10d7</span></p>
+          <p>base <span class="text-slate-900">origin/main</span> · merge-base <span class="text-slate-900">421bd9b9</span></p>
+          <p>diff <span class="text-slate-900">git diff 421bd9b9...HEAD</span> · 6 commits · 15 files</p>
+        </div>
+        <p class="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-3 py-2 inline-block">
+          Gate: <span class="mono">verify:full PASS — all 16 checks green, test:e2e included (78s).</span>
+        </p>
+        <p class="text-sm text-slate-600 max-w-3xl">
+          The whole branch, not the last commit. Net <span class="mono">src/</span> change against main is
+          comments only; the substance is the ADR, the rewritten docs, and the
+          <span class="mono">harness/theme-push</span> first consumer. The strip is clean: no
+          <span class="mono">ThemeResolver</span>, no <span class="mono">theme-resolver-failed</span>, no
+          widened observer survives in <span class="mono">src/</span>.
+        </p>
+      </header>
+
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif">Verdict</h2>
+        <div class="rounded-lg border border-slate-200 bg-white p-5 space-y-3 text-sm">
+          <p>
+            The ADR's core reasoning holds: the wrapping app already resolves a dark-mode signal, a push
+            costs it one line, and the pull design bought an observer, a re-entrancy guard and a public
+            error code. The strip removes all of that. But the branch carries <strong>resolver-era residue
+            in three places</strong> (the toolbar's duplicate <span class="mono">ThemeChoice</span>, the
+            ADR's overclaim about self-mutation, the stale resolver review), and the new harness page
+            <strong>repeats a hand-tuned-token pattern AGENTS.md names by number</strong>. Nothing is High:
+            no src behaviour ships wrong. Nine findings, all Medium or Low. Pass 2 confirmed all nine.
+          </p>
+        </div>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif">The branch in one picture</h2>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">Before — resolver (removed)</p>
+            <div class="space-y-2 text-xs mono">
+              <div class="border border-red-300 rounded px-2 py-1">app <span class="text-red-600">class="dark"</span></div>
+              <div class="text-center text-slate-400">│ observer: every attribute, subtree</div>
+              <div class="border border-red-300 rounded px-2 py-1">theme = () =&gt; app.dark?</div>
+              <div class="text-center text-slate-400">↻ #applyTheme writes data-fg-theme</div>
+              <div class="border border-red-300 rounded px-2 py-1">re-enters the observer</div>
+            </div>
+          </div>
+          <div class="rounded-lg border border-slate-200 bg-white p-4">
+            <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">After — push (ships)</p>
+            <div class="space-y-2 text-xs mono">
+              <div class="border border-emerald-300 rounded px-2 py-1">app toggle</div>
+              <div class="text-center text-slate-400">│ isDark ? 'dark' : 'light'</div>
+              <div class="border border-emerald-300 rounded px-2 py-1">gantt.theme = …</div>
+              <div class="text-center text-slate-400">and / or</div>
+              <div class="border border-emerald-300 rounded px-2 py-1">wrapper data-fg-theme = …</div>
+              <div class="border border-slate-300 rounded px-2 py-1">observer: data-fg-theme only</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="findings" class="space-y-8">
+        <h2 class="text-xl font-serif">Findings</h2>
+
+        <article id="F1" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">F1 · Medium</span>
+            <h3 class="font-semibold">The harness toolbar still carries a resolver-era duplicate of <span class="mono">Theme</span></h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            harness/gantt-toolbar.ts:17 · :33 · :65 · :69 · :79 · :207
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> the strip made <span class="mono">theme</span> three literals again, so
+            the public <span class="mono">Theme</span> is <span class="mono">'auto' | 'light' | 'dark'</span>.
+            The toolbar nevertheless keeps a private <span class="mono">ThemeChoice</span> with that exact
+            shape and a comment rationalising it ("named again here so this file states its own contract").
+            On main the file imported <span class="mono">Theme</span>. This is the clearest thing the
+            resolver left behind.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> import <span class="mono">Theme</span> from <span class="mono">freegantt</span>
+            again, delete <span class="mono">ThemeChoice</span> and its comment, and let the five signatures
+            use the public name.
+          </p>
+        </article>
+
+        <article id="F2" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">F2 · Medium</span>
+            <h3 class="font-semibold">ADR 0029's consequences overclaim: the library's own write still wakes its own observer</h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            docs/adr/0029-the-app-pushes-the-theme.md:79–82 · src/view/gantt-shell.ts:1104–1107 · :1117–1122 · :2048–2057
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> the ADR says "With no observer on attributes we do not own, there is
+            <em>no mutation of ours that can wake a read of ours</em>." The first clause is true; the second
+            is not. The library writes <span class="mono">data-fg-theme</span> in
+            <span class="mono">#applyTheme</span> (gantt-shell.ts:2054–2056) and still observes
+            <span class="mono">data-fg-theme</span> under the root (gantt-shell.ts:1117–1122). Its own later
+            <span class="mono">gantt.theme = …</span> write re-enters the observer — the code comment at
+            gantt-shell.ts:1104–1107 says exactly that. The re-entrancy <em>class</em> is gone because the
+            observer callback no longer invokes a consumer function, not because no self-mutation wakes the
+            watch. The accepted record should state that reason.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> reword to "the observer now calls only <span class="mono">resolveTheme</span>
+            and writes nothing, so a self-write settles after one no-op wake instead of re-entering a
+            consumer callback."
+          </p>
+        </article>
+
+        <article id="F3" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">F3 · Medium</span>
+            <h3 class="font-semibold">A resolver-era review is committed on the branch, un-annotated</h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            plans/reviews/2026-09-19-433-theme-resolver-branch-review.md:1 · :9–11 · :99–115
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> the file's verdict says "Two real problems ship: a failing
+            <span class="mono">ThemeResolver</span> loops forever (F1), and the widened observer is unscoped
+            (F2)" — about a design ADR 0029 overturned and the next commit deleted. Its pass-2 table is
+            empty. A reader landing on the branch sees a live defect list for code that no longer exists,
+            with no note that the design was overturned.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> either delete the file, or add a one-line banner at the top: superseded by
+            ADR 0029; F1–F2 describe the removed <span class="mono">ThemeResolver</span> and are closed by
+            the strip, not by the fixes proposed.
+          </p>
+        </article>
+
+        <article id="F4" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">F4 · Low</span>
+            <h3 class="font-semibold">"three causes" was weakened to "any cause" for the resolver, and not restored</h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            docs/05-consumer-api.md:261–262 · CONTEXT.md:540
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> main reads "for any of <em>three</em> causes"; the branch reads "for any
+            cause". The edit existed to admit the resolver's wide observer; with the resolver gone there are
+            again exactly three causes (theme write, OS flip, ancestor pin), and both sentences still list
+            those three. CONTEXT.md:540 also says the observer is "narrowed to
+            <span class="mono">data-fg-theme</span> alone", phrasing that only reads as a narrowing against
+            the deleted wide watch.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> restore "three causes" in both, and CONTEXT's main wording "watching
+            <span class="mono">data-fg-theme</span> under the root node".
+          </p>
+        </article>
+
+        <article id="F5" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-amber-100 text-amber-800">F5 · Medium</span>
+            <h3 class="font-semibold">The first-consumer page repeats the hand-tuned pane width instead of <span class="mono">gridWidth: 'fitColumns'</span></h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            harness/theme-push.html:12–18 · harness/theme-push.ts:27–41
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> the page copies the old template's
+            <span class="mono">--fg-grid-pane-width: 220px</span> and
+            <span class="mono">--fg-row-height: 32px</span>, and passes no
+            <span class="mono">gridWidth</span>. AGENTS.md names <span class="mono">--fg-grid-pane-width</span>
+            hand-tuned to one column set as one of the three exact API gaps the harness exists to surface
+            (#157); <span class="mono">harness/main.ts:86</span> and
+            <span class="mono">harness/planner.ts:207</span> already pass
+            <span class="mono">gridWidth: 'fitColumns'</span>. The new page is the library's model consumer,
+            so it should not spread the pattern.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> pass <span class="mono">gridWidth: 'fitColumns'</span> and drop
+            <span class="mono">--fg-grid-pane-width</span>; drop <span class="mono">--fg-row-height</span>
+            unless the page deliberately wants 32px (default is 36).
+          </p>
+        </article>
+
+        <article id="F6" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">F6 · Low</span>
+            <h3 class="font-semibold">The page's e2e seam uses a double cast instead of the harness's <span class="mono">declare global</span> pattern</h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            harness/theme-push.ts:47–48 · e2e/theme-push.spec.ts:12–14 · cf. harness/zoom.ts:24–29, harness/hierarchy.ts:27–33
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> the pages that own a seam declare it with
+            <span class="mono">declare global { interface Window { … } }</span>
+            (harness/zoom.ts:24, harness/hierarchy.ts:27, harness/data.ts:28,
+            harness/dense-tile-grid.ts:70); pages with no extra global — main.ts, planner.ts,
+            bar-label-fit.ts — rely on one of those declarations. This page instead writes
+            <span class="mono">(window as unknown as { __gantt: Gantt; __ganttPinned: Gantt })</span>, which
+            discards type checking and re-declares <span class="mono">__gantt</span> (already declared
+            globally by other pages). The e2e then narrows the same global to
+            <span class="mono">{ resolvedTheme }</span>, which is probably why the cast exists: a proper
+            declaration would collide.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> add the standard <span class="mono">declare global</span> for
+            <span class="mono">__ganttPinned: Gantt</span>, assign directly, and let the spec read
+            <span class="mono">window.__ganttPinned.resolvedTheme</span> against the same type.
+          </p>
+        </article>
+
+        <article id="F7" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">F7 · Low</span>
+            <h3 class="font-semibold">The page asserts an app dark-mode signal that nothing on the page consumes</h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            harness/theme-push.html:53–56 · harness/theme-push.ts:22 · :60
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> the intro calls the <span class="mono">dark</span> class on
+            <span class="mono">&lt;html&gt;</span> "this page's own signal", but no rule on this page keys off
+            <span class="mono">.dark</span>; <span class="mono">harness-nav.css</span> and
+            <span class="mono">harness-chrome.css</span> read <span class="mono">[data-theme]</span> and
+            <span class="mono">prefers-color-scheme</span>. So the demo toggles a class nobody can see, and
+            only the two Gantts change. The ADR's whole premise is that the app has a real signal; the page
+            should show it.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> style the page chrome off the same class (or off
+            <span class="mono">data-theme</span> set in the same handler), so a reader sees the app flip and
+            the Gantts follow. Then the <span class="mono">classList.remove('dark')</span> reset at
+            theme-push.ts:22 stops being a no-op.
+          </p>
+        </article>
+
+        <article id="F8" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">F8 · Low</span>
+            <h3 class="font-semibold">The ADR's survey of framework signals leaks into the consumer reference</h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            docs/05-consumer-api.md:237–238 · docs/adr/0029-the-app-pushes-the-theme.md:16–18
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> docs/05 — the consumer API reference — names Tailwind, Filament,
+            next-themes and Bootstrap 5.3. These are not banned Gantt vendor names, so no guard fires, but
+            the repo's posture is that product evidence lives in the ADR and a spec states the decision.
+            The mechanism ("a class on <span class="mono">&lt;html&gt;</span>, or
+            <span class="mono">data-bs-theme</span>") needs no brand list; the ADR already carries it.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> drop the parenthetical brands in docs/05, or point the reader at ADR 0029
+            for the survey.
+          </p>
+        </article>
+
+        <article id="F9" class="finding rounded-lg border border-slate-200 bg-white p-5 space-y-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-semibold px-2 py-0.5 rounded bg-slate-200 text-slate-700">F9 · Low</span>
+            <h3 class="font-semibold">The ADR's "a function never becomes a config value" leans on a serialisation reason that does not apply</h3>
+          </div>
+          <p class="text-xs mono text-slate-600">
+            docs/adr/0029-the-app-pushes-the-theme.md:74–77
+          </p>
+          <p class="text-sm">
+            <strong>Problem:</strong> the paragraph cites CONTEXT.md's Aggregator rule — "a name serializes
+            into a document and a function does not". A Gantt <span class="mono">theme</span> is runtime
+            config; it is never written into a document. The real cost of the resolver was the observer and
+            its re-entrancy, which the Consequences section already states. Borrowed authority weakens an
+            otherwise sound argument. Pass 2 also found the attribution is wrong: the quoted phrase is not
+            in CONTEXT.md's Aggregator entry (CONTEXT.md:96 says a name is data the registry can refuse, not
+            that it serialises) — it is AGENTS.md:33.
+          </p>
+          <p class="text-sm">
+            <strong>Fix:</strong> cut the serialisation appeal, or say plainly that the same "a config value
+            is data, not behaviour" preference is being applied by analogy — and correct the attribution to
+            AGENTS.md.
+          </p>
+        </article>
+      </section>
+
+      <section class="space-y-4">
+        <h2 class="text-xl font-serif">Axes checked and found sound</h2>
+        <ul class="text-sm space-y-2 list-disc pl-5">
+          <li><strong>Strip completeness.</strong> No <span class="mono">ThemeResolver</span>,
+            <span class="mono">#resolveWithResolver</span>, <span class="mono">theme-resolver-failed</span>,
+            side-effecting <span class="mono">resolvedTheme</span> getter, or widened observer config survives
+            in <span class="mono">src/</span>. <span class="mono">etc/freegantt.api.md</span> is net-zero
+            against main; <span class="mono">Theme</span> is three literals at src/api/gantt.ts:123–126.</li>
+          <li><strong>API surface.</strong> The call sites read as the job: <span class="mono">gantt.theme = 'dark'</span>
+            and <span class="mono">data-fg-theme</span> on an ancestor. No new hook or handle an app author
+            must set to get the default; no kind or field added through an <span class="mono">if</span> chain.</li>
+          <li><strong>One story across the docs.</strong> ADR 0029, CONTEXT.md's Theme/Resolved theme entries,
+            docs/05's new paragraph, src/api/gantt.ts:123, and src/view/gantt-shell.ts:174–176 all say the same
+            thing: three literals, the app pushes, the library reads what the app writes.</li>
+          <li><strong>Harness build input.</strong> The new guard (test/guards/harness-build-input.test.ts)
+            pins every <span class="mono">harness/*.html</span> to a <span class="mono">rollupOptions.input</span>
+            entry and closes the drift that shipped <span class="mono">dense-tile-grid</span> and this page
+            without one.</li>
+          <li><strong>The e2e.</strong> The flip counts (0 / 2 / 4) follow from #376's no-event-before-constructor
+            rule and the one-emit-per-answer-move rule; it depends on Playwright's default
+            <span class="mono">colorScheme: 'light'</span>, which playwright.config.ts does not override, so it
+            is currently stable.</li>
+          <li><strong>harness/main.ts</strong> (reviewed though unchanged): already uses
+            <span class="mono">gridWidth: 'fitColumns'</span>, holds no theme compensation, and adds no second
+            source of truth.</li>
+          <li><strong>Guards.</strong> <span class="mono">sentence-length</span>,
+            <span class="mono">vendor-names</span>, <span class="mono">retired-words</span>,
+            <span class="mono">adr-index</span>, and the full <span class="mono">verify:full</span> gate all pass.</li>
+        </ul>
+      </section>
+
+      <section id="pass2" class="space-y-4">
+        <h2 class="text-xl font-serif">Pass 2 verification</h2>
+        <p class="text-sm text-slate-600">
+          A cold <span class="mono">reviewer-planner</span> sub-agent opens every cited file and returns one
+          verdict per id (<span class="mono">Confirmed</span>, <span class="mono">Mis-described</span>,
+          <span class="mono">Wrong</span>, <span class="mono">Unproven</span>). Verdicts are recorded below on
+          their return.
+        </p>
+        <table class="w-full text-sm border border-slate-200 rounded overflow-hidden">
+          <thead class="bg-slate-100 text-left">
+            <tr><th class="px-3 py-2 w-16">Id</th><th class="px-3 py-2 w-32">Verdict</th><th class="px-3 py-2">Note</th></tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <tr><td class="px-3 py-2 mono">F1</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">main imported <span class="mono">Theme</span>; the branch's literal-only <span class="mono">ThemeChoice</span> is resolver residue.</td></tr>
+            <tr><td class="px-3 py-2 mono">F2</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">The ADR's own code comment admits the self-wake the sentence denies.</td></tr>
+            <tr><td class="px-3 py-2 mono">F3</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Branch-added, live-defect verdict, empty pass-2 table, no banner.</td></tr>
+            <tr><td class="px-3 py-2 mono">F4</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Main said "three causes"; src/view/event-bus.ts:144 still does.</td></tr>
+            <tr><td class="px-3 py-2 mono">F5</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">32px/220px hard-coded; no <span class="mono">gridWidth</span>; default row height 36.</td></tr>
+            <tr><td class="px-3 py-2 mono">F6</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Pass 2 corrected "every sibling page" — see the softened wording above.</td></tr>
+            <tr><td class="px-3 py-2 mono">F7</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">No <span class="mono">.dark</span> selector anywhere in the harness.</td></tr>
+            <tr><td class="px-3 py-2 mono">F8</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">The ADR already carries the brand survey docs/05 repeats.</td></tr>
+            <tr><td class="px-3 py-2 mono">F9</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Plus a missed defect: the phrase is AGENTS.md:33, not CONTEXT.md.</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

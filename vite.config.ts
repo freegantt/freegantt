@@ -39,6 +39,7 @@ export default defineConfig({
         'mount-destroy': page('mount-destroy.html'),
         'dense-tile-grid': page('dense-tile-grid.html'),
         'entries-outside-the-range': page('entries-outside-the-range.html'),
+        'theme-push': page('theme-push.html'),
       },
     },
   },

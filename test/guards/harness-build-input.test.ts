@@ -4,9 +4,10 @@
 // server serves every file under `root` regardless of the input map, so the gap is invisible until
 // someone runs `pnpm build` and looks.
 //
-// `dense-tile-grid.html` sat outside the map unnoticed, and a second page repeated the miss during
-// review. A gap nobody can see from the dev server earns a guard, the same call
-// `file-inventory.test.ts` already made for `docs/architecture/files.md`.
+// That happened twice with nobody noticing: `dense-tile-grid.html` predates this guard, and
+// `theme-push.html` (#433) shipped without an entry until review caught it. A gap nobody can see
+// from the dev server earns a guard, the same call `file-inventory.test.ts` already made for
+// `docs/architecture/files.md`.
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';

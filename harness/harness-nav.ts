@@ -14,7 +14,8 @@ export type HarnessPageId =
   | 'planner'
   | 'plugins'
   | 'mount-destroy'
-  | 'entries-outside-the-range';
+  | 'entries-outside-the-range'
+  | 'theme-push';
 
 type HarnessPage = {
   readonly id: HarnessPageId;
@@ -41,6 +42,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
     label: 'Entries outside the range (#436)',
     file: 'entries-outside-the-range.html',
   },
+  { id: 'theme-push', label: 'Theme push', file: 'theme-push.html' },
 ];
 
 function detectCurrentPage(pathname: string): HarnessPageId {
@@ -75,6 +77,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'mount-destroy';
     case 'entries-outside-the-range.html':
       return 'entries-outside-the-range';
+    case 'theme-push.html':
+      return 'theme-push';
     default:
       return 'generic-demo';
   }

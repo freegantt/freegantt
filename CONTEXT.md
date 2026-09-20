@@ -533,7 +533,7 @@ The one stylesheet the library ever writes, injected once per document by `ensur
 _Avoid_: Default styles, styles.css (there is no separate package export — see D-S1.10-8)
 
 **Theme**:
-`Gantt.theme`'s own value — `'auto' | 'light' | 'dark'` (default `'auto'`, live, S1.10, D-S1.10-4). `'light'`/`'dark'` write `data-fg-theme` on the container, which wins over everything else; `'auto'` writes no attribute, letting the nearest ancestor's own pin decide, else `prefers-color-scheme`.
+`Gantt.theme`'s own value — `'auto' | 'light' | 'dark'` (default `'auto'`, live, S1.10, D-S1.10-4). `'light'`/`'dark'` write `data-fg-theme` on the container, which wins over everything else; `'auto'` writes no attribute, letting the nearest ancestor's own pin decide, else `prefers-color-scheme`. ADR 0029: an app with its own dark-mode signal pushes the answer — `gantt.theme = isDark ? 'dark' : 'light'`, or pin `data-fg-theme` on an ancestor once — instead of the library asking the app for it.
 _Avoid_: `resolvedTheme` (that is a different question — see Resolved theme, next)
 
 **Resolved theme**:
