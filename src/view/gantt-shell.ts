@@ -399,9 +399,9 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
  *  its one caller, checks `bars.length > 0` first.
  *
  *  A Bar `barSpan` drops reports `{x: 0, width: 0}` (#436) — a fabricated point, not a real box at
- *  the origin, so folding it into the union would drag `reveal` toward `0` for an entry that draws
- *  one dropped bar and one real one, and send it there outright when every bar is dropped (#436
- *  branch review F3). Skipped here for that reason. Returns `undefined` when every bar was
+ *  the origin. Folding it into the union would drag `reveal` toward `0` for an entry with one
+ *  dropped bar and one real one. It would send `reveal` to `0` outright when every bar is dropped
+ *  (#436 branch review F3). Skipped here for that reason. Returns `undefined` when every bar was
  *  dropped, so the caller falls back to the entry's own dates (`fallbackSpanBar`) instead of
  *  reading a union of nothing. */
 function unionSpan(
@@ -2289,8 +2289,8 @@ export class GanttShell {
     const bars = this.#layout.barsForEntry(ownerId);
     const scale = this.#viewport.timeScale;
     const minBarWidthPx = this.#frameSettings.minBarWidthPx;
-    // `unionSpan` answers `undefined` when every produced Bar was dropped by `barSpan` (#436) —
-    // an entry entirely past the range end still needs a target, so this falls back to its own
+    // `unionSpan` answers `undefined` when every produced Bar was dropped by `barSpan` (#436).
+    // An entry entirely past the range end still needs a target. This falls back to its own
     // dates, the same stand-in `fallbackSpanBar` already gives an entry with no Bar at all.
     const union = bars.length > 0 ? unionSpan(bars, scale, minBarWidthPx) : undefined;
     const { x, width } = union ?? barSpan(fallbackSpanBar(ownerId, start, end), scale, minBarWidthPx);
