@@ -690,14 +690,12 @@ export function placeFrame(
         // or trailing cell a reader can plainly see most of. Left un-clamped, a cell that
         // straddles either content bound paints past it, and that painted node is what widens
         // the pane's own native `scrollWidth` past the content sizer (D-S1.8-1) — the same harm
-        // `tickLines` already guards against for a tick *line*. Trimming the box here runs after
+        // `tickLines` already guards against for a tick *line*. It is the one `clipToContent`
+        // an 'exact' bar box already takes, not a second copy of the rule. Trimming here runs after
         // the straddle clamp above, so the two compose: that clamp can only move `x` rightward
         // to keep a label inside the visible pane, and this clip only pulls the box back inside
         // the content — neither can undo the other's work.
-        const clippedX = Math.max(x, 0);
-        const clippedRight = Math.min(x + width, scale.contentWidth);
-        const clippedWidth = Math.max(0, clippedRight - clippedX);
-        return { x: clippedX, width: clippedWidth, label: format(tick.instant) };
+        return { ...clipToContent(x, width, scale.contentWidth), label: format(tick.instant) };
       }).filter((cell) => cell.width > 0),
     };
   });

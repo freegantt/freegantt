@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTimeScale, pxPerMsForPreset } from './scale.js';
+import { createTimeScale, pxPerMsForPreset, pxPerMsForUnitWidth } from './scale.js';
 import { dayPreset } from './presets.js';
 import { instant } from './instant.js';
 import type { TickStep, ViewPreset } from './scale.js';
@@ -116,5 +116,50 @@ describe('pxPerMsForPreset', () => {
   it('refuses a preset that does not advance rather than returning Infinity', () => {
     const stalledPreset: ViewPreset = { ...dayPreset, tickIncrement: 0 };
     expect(() => pxPerMsForPreset(timeZone, stalledPreset, rangeStart)).toThrow(/does not advance/);
+  });
+});
+
+describe('pxPerMsForUnitWidth', () => {
+  const HOUR_MS = 1000 * 60 * 60;
+
+  it('resolves a stated unit width against the calendar, not against a fixed constant (#15)', () => {
+    // 2026-03-08 is the spring-forward day in Chicago: that local day lasts 23 hours, not 24. An
+    // author writing the pixels-per-millisecond form by hand computes `widthPx / 86_400_000` and
+    // paints this day 4% too wide. This is the whole reason the shorthand exists.
+    const shortDay = instant('2026-03-08T06:00:00Z'); // local midnight, CST
+    const resolved = pxPerMsForUnitWidth(timeZone, { unit: 'day', widthPx: 96 }, shortDay);
+
+    expect(resolved).toBeCloseTo(96 / (23 * HOUR_MS), 12);
+    expect(resolved).not.toBeCloseTo(96 / (24 * HOUR_MS), 12);
+  });
+
+  it('measures the same unit differently on a long day, a short day and an ordinary one', () => {
+    const width = { unit: 'day', widthPx: 96 } as const;
+    const longDay = pxPerMsForUnitWidth(timeZone, width, instant('2026-11-01T05:00:00Z')); // 25h
+    const shortDay = pxPerMsForUnitWidth(timeZone, width, instant('2026-03-08T06:00:00Z')); // 23h
+    const plainDay = pxPerMsForUnitWidth(timeZone, width, instant('2026-09-01T05:00:00Z')); // 24h
+
+    // A longer day spreads the same 96 pixels over more milliseconds, so its density is lower.
+    expect(longDay).toBeLessThan(plainDay);
+    expect(plainDay).toBeLessThan(shortDay);
+    expect(plainDay).toBeCloseTo(96 / (24 * HOUR_MS), 12);
+  });
+
+  it('defaults increment to 1, and divides a stated width across a longer step', () => {
+    const at = instant('2026-09-01T05:00:00Z');
+    expect(pxPerMsForUnitWidth(timeZone, { unit: 'day', widthPx: 14 }, at)).toBe(
+      pxPerMsForUnitWidth(timeZone, { unit: 'day', increment: 1, widthPx: 14 }, at),
+    );
+    // "A fortnight is 90 pixels" is half the density of "a week is 90 pixels".
+    const fortnight = pxPerMsForUnitWidth(timeZone, { unit: 'week', increment: 2, widthPx: 90 }, at);
+    const week = pxPerMsForUnitWidth(timeZone, { unit: 'week', widthPx: 90 }, at);
+    expect(fortnight).toBeCloseTo(week / 2, 12);
+  });
+
+  it('refuses a step that stands still rather than dividing by zero', () => {
+    const at = instant('2026-09-01T05:00:00Z');
+    expect(() => pxPerMsForUnitWidth(timeZone, { unit: 'day', increment: 0, widthPx: 14 }, at)).toThrow(
+      /fit \{ unit: 'day' \} does not advance/,
+    );
   });
 });

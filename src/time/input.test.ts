@@ -74,7 +74,7 @@ describe('toInstant()', () => {
     // spread record, anything the compiler has already lost sight of by the time it reaches here.
     expect(() => toInstant(CHICAGO, null as unknown as string)).toThrow(InvalidInstantError);
     expect(() => toInstant(CHICAGO, null as unknown as string)).toThrow(
-      'null names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.',
+      'null names no instant. An absent date is a value left out, not a null one. Write a date, or leave it out.',
     );
     // The message must not send the reader to look at zones or offsets — that is the one thing that
     // is not wrong here.
@@ -84,6 +84,23 @@ describe('toInstant()', () => {
   it('rejects a boolean or a plain object as a value naming no date (#431)', () => {
     expect(() => toInstant(CHICAGO, true as unknown as string)).toThrow(InvalidInstantError);
     expect(() => toInstant(CHICAGO, {} as unknown as string)).toThrow(InvalidInstantError);
+  });
+
+  it('shows what was actually written, for a value String() renders as nothing useful', () => {
+    // The untyped door routes a whole JSON value here now, and `String` answers "[object Object]"
+    // for a record and the empty string for an array — neither shows the consumer their own data.
+    expect(() => toInstant(CHICAGO, { date: '2026-09-08' } as unknown as string)).toThrow(
+      '{"date":"2026-09-08"} is not a date this library reads.',
+    );
+    expect(() => toInstant(CHICAGO, [] as unknown as string)).toThrow('[] is not a date this library reads.');
+    // A Date prints itself: its own JSON is the word "null", which names a different fault.
+    expect(() => toInstant(CHICAGO, new Date('nope'))).toThrow(
+      'Invalid Date is not a date this library reads.',
+    );
+    // A structure JSON cannot serialize still produces a fault, never a second throw from inside it.
+    const cycle: Record<string, unknown> = {};
+    cycle['self'] = cycle;
+    expect(() => toInstant(CHICAGO, cycle as unknown as string)).toThrow(InvalidInstantError);
   });
 
   it("names the caller's own call, never toInstant (#237, #239)", () => {

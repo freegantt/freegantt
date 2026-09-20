@@ -947,6 +947,11 @@ export class GanttShell {
       snap: () => this.snap,
       selectedEntryIds: () => this.selectedEntryIds,
       entryById: (id) => this.#options.dataset.entries.get(id),
+      // The bar a preview moves is part 0, the one `barId(entryId)` names and the one the pointer
+      // and keyboard paths both address. `barsForEntry` answers from the frame that is on screen,
+      // box and variant included, so the preview measures the same Bar the commit repaints.
+      barForEntry: (id) => this.#layout.barsForEntry(id).find((bar) => bar.id === barId(id)),
+      minBarWidthPx: () => this.#frameSettings.minBarWidthPx,
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
       entriesMovedBy: (entry) => this.#capabilities.entriesMovedBy(entry),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,

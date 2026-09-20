@@ -8,8 +8,15 @@
 // fields; it never does date math of its own.
 
 import type { DateOnlyEndRule, Instant, InstantInput, PlainTimeInput } from '../model/index.js';
-import { InvalidInstantError, InvalidPlainTimeError } from '../model/index.js';
+import { InvalidPlainTimeError } from '../model/index.js';
 import { addMs, instant } from './instant.js';
+import {
+  NOT_FINITE,
+  NO_SUCH_DATE,
+  NULL_VALUE,
+  UNREADABLE,
+  invalidInstant as invalid,
+} from './instant-fault.js';
 import { addDays, fromPlain, toPlain } from './zone.js';
 
 /** A calendar date with no time of day — `'2026-09-08'`. */
@@ -26,44 +33,6 @@ const PLAIN_DATE_TIME = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(
  * `number` always carry a time of day. */
 function isDateOnly(input: InstantInput): boolean {
   return typeof input === 'string' && DATE_ONLY.test(input);
-}
-
-// The name the consumer knows their own call by, for the message a bad value produces (#237, #239).
-// `toInstant` is reached from `entries.add`, `entries.update`, an `EditExtender` cascade,
-// `gantt.dateLines` and more. A prefix baked in here would tell all but one of those callers about a
-// call they never made, which is the wrong-door fault #237 exists to close. So the name comes from
-// the caller, exactly as `data/entry-reader.ts` threads its own `EditOrigin`.
-//
-// The parameter is optional, because a caller that names nothing gets a message with no prefix, and
-// no prefix beats a wrong one. Every caller should still name itself; the ones in `src/api/gantt.ts`
-// do not yet.
-
-/** What to write instead. Three of the five faults below end with this sentence. */
-const WRITE_A_DATE = 'Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.';
-/** Covers every value `InstantInput`'s type does not admit and that no other fault below already
- *  names — an unparsable string, a boolean, a plain object, an array. A string, a `Date` and a
- *  number reach their own fault first, so this is the untyped door's catch-all (#431). */
-const UNREADABLE = `is not a date this library reads. ${WRITE_A_DATE}`;
-const NO_SUCH_DATE = 'names a date the calendar does not have. Write a date the calendar has.';
-const NOT_FINITE = `is not a finite count of epoch milliseconds. ${WRITE_A_DATE}`;
-/** `null` names no instant, and it is not a zone problem — the zoneless-time fault in `instant()`
- *  does not apply and must not fire for it (#431). `toInstant` also reads `gantt.todayLine`,
- *  `gantt.dateLines`, `zoomToSpan` and `panToDate` (`src/api/gantt.ts`), so the wording stays true
- *  for any of those callers, not only an Entry's `start`/`end` — Entry-specific advice belongs to
- *  the caller that knows it is one, not to this shared reader. The prefix in `invalid()` already
- *  prints the value, so this sentence does not repeat "null". */
-const NULL_VALUE =
-  'names no instant. A missing date is an absent property, not a null one. Write a date, or leave the key out.';
-
-/** Builds the fault one bad value produces. The value is a member as well as a sentence: a bulk
- *  loader catches this and names the row it came from, instead of parsing our wording (#237).
- *
- *  A string is quoted, so an empty string and a stray space are both visible. Everything else prints
- *  as itself — `String(new Date(NaN))` is already the words "Invalid Date". */
-function invalid(input: unknown, reason: string, operation: string | undefined): InvalidInstantError {
-  const wrote = typeof input === 'string' ? JSON.stringify(input) : String(input);
-  const where = operation === undefined ? '' : `${operation}: `;
-  return new InvalidInstantError(`${where}${wrote} ${reason}`, input);
 }
 
 /**

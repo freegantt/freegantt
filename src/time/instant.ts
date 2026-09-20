@@ -1,25 +1,57 @@
 // time/ owns all zone-aware date arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
 
 import type { Instant } from '../model/index.js';
+import { NOT_FINITE, NULL_VALUE, UNREADABLE, ZONELESS, invalidInstant } from './instant-fault.js';
 
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = MS_PER_SECOND * 60;
 const MS_PER_HOUR = MS_PER_MINUTE * 60;
 const MS_PER_DAY = MS_PER_HOUR * 24;
 
-/** Matches an ISO 8601 string carrying an explicit offset or `Z` — never a zoneless plain time. */
+/** Matches an ISO 8601 string carrying an explicit offset or `Z` — never a zoneless plain time.
+ *  A suffix test only, so a string can clear it and still name no date: `'laterZ'` ends in `Z`. */
 const OFFSET_ISO = /(Z|[+-]\d{2}:?\d{2})$/;
 
+/** Whether the string opens like an ISO calendar date. Enough to tell a real wall-clock reading that
+ *  is merely missing its zone (`'2026-09-08T14:30'`) from a value that names no date at all
+ *  (`'next tuesday'`) — only the first deserves the zoneless remedy. This is not `input.ts`'s
+ *  grammar and must not grow into a copy of it: that grammar captures the parts to build a Plain
+ *  from, and this asks one yes-or-no question. */
+const OPENS_LIKE_A_DATE = /^\d{4}-\d{2}-\d{2}/;
+
+/**
+ * The Instant an absolute value names. `instant()` resolves no zone, so it takes only values that
+ * already name a moment: a `Date`, epoch milliseconds, or a string carrying `Z` or a numeric offset.
+ * A wall-clock reading with no zone is not one of them — read that through the dataset's zone
+ * instead, which every Dataset write already does.
+ *
+ * Every refusal is an `InvalidInstantError` carrying the value the consumer wrote, in the same
+ * vocabulary `toInstant` uses (`instant-fault.ts`). It used to be a bare `RangeError` that named a
+ * zone problem for every input it did not like, including `null` — which is the one thing a missing
+ * date is not (#431 F6). It also used to answer `NaN` rather than refuse, for `new Date('nope')`,
+ * for `Number.NaN`, and for any unparsable string ending in `Z`: a `NaN` Instant flows on and
+ * surfaces much later as an unpainted bar, with nothing left pointing at the value that caused it.
+ */
 export function instant(value: Date | number | string): Instant {
-  if (value instanceof Date) return value.getTime() as Instant;
-  if (typeof value === 'number') return value as Instant;
-  if (!OFFSET_ISO.test(value)) {
-    throw new RangeError(
-      `instant(): "${value}" is a zoneless plain time — it names no instant until a zone resolves it. ` +
-        'Pass a string with an explicit offset or "Z", or use fromPlain(zone, parts).',
-    );
+  if (value instanceof Date) {
+    const ms = value.getTime();
+    if (Number.isNaN(ms)) throw invalidInstant(value, UNREADABLE);
+    return ms as Instant;
   }
-  return new Date(value).getTime() as Instant;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw invalidInstant(value, NOT_FINITE);
+    return value as Instant;
+  }
+  // The declared type rules the rest out, but a consumer feeding this from JSON or an untyped record
+  // has no compiler left by the time it gets here (#431).
+  if (value === null || value === undefined) throw invalidInstant(value, NULL_VALUE);
+  if (typeof value !== 'string') throw invalidInstant(value, UNREADABLE);
+  if (!OFFSET_ISO.test(value)) {
+    throw invalidInstant(value, OPENS_LIKE_A_DATE.test(value) ? ZONELESS : UNREADABLE);
+  }
+  const ms = new Date(value).getTime();
+  if (Number.isNaN(ms)) throw invalidInstant(value, UNREADABLE);
+  return ms as Instant;
 }
 
 export function now(): Instant {

@@ -17,6 +17,7 @@ import { barId, spansTime } from '../model/index.js';
 import { addMs, diffMs, formatDate, stepBy, snapInstant, stepsBetween } from '../time/index.js';
 import type { SnapUnit } from '../time/index.js';
 import { barSpan } from './frame.js';
+import type { Bar } from './bars/bar.js';
 import type { TimeScale } from '../time/index.js';
 
 export interface DraftInput {
@@ -162,10 +163,22 @@ export interface PreviewOffsetsInput {
   /** Committed entries `proposed`/`extra` are diffed against — one lookup per row, not a dataset scan. */
   entries: readonly Entry[];
   scale: TimeScale;
+  /** The Gantt's own resolved bar floor (`--fg-bar-min-width`, `view/frame-settings.ts`), the value
+   *  `placeFrame` hands `barSpan` for the committed frame. Required, not defaulted: taking
+   *  `barSpan`'s own module default here instead would agree with the commit only for a consumer
+   *  who never sets the token, and disagree by exactly the override for everyone who does — the
+   *  preview/commit jump this whole function exists to close (#436 branch review F4). */
+  minBarWidthPx: number;
+  /** The committed Bar this preview moves — the one `barId(entryId)` names, part 0. It is the
+   *  template both `barSpan` calls read, so a Bar carrying a fixed `box` (ADR 0022 — `diamond()`)
+   *  is measured on its own box path rather than on the span-and-floor path a hand-built literal
+   *  would silently take (`barSpan`'s own signature doc warns about exactly that literal, #295).
+   *  `undefined` for an entry that paints no Bar, which previews nothing. */
+  barForEntry: (id: EntryId) => Bar | undefined;
 }
 
 export function previewOffsets(input: PreviewOffsetsInput): readonly BarPreview[] {
-  const { proposed, extra, entries, scale } = input;
+  const { proposed, extra, entries, scale, minBarWidthPx, barForEntry } = input;
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const out: BarPreview[] = [];
 
@@ -189,14 +202,19 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly BarPreview[
     // `render/dom/index.ts`) can go on adding a plain offset to the committed geometry with no
     // clip of its own to apply.
     const id0 = barId(id);
-    const before = barSpan(
-      { id: id0, entryId: id, variant: '', start: original.start, end: original.end },
-      scale,
-    );
-    const after = barSpan(
-      { id: id0, entryId: id, variant: '', start: drafted.start, end: drafted.end },
-      scale,
-    );
+    // The committed Bar is the template, not a literal assembled here: it carries this bar's own
+    // `box` and `variant`, which decide which path `barSpan` takes at all. Both calls read the same
+    // template, so the pair still measures one formula against itself — only the dates differ.
+    const painted = barForEntry(id);
+    if (painted === undefined) return;
+    const before = barSpan({ ...painted, start: original.start, end: original.end }, scale, minBarWidthPx);
+    const after = barSpan({ ...painted, start: drafted.start, end: drafted.end }, scale, minBarWidthPx);
+    // `barSpan` reports a dropped box as `{ x: 0, width: 0 }` — a fabricated point, not a real box
+    // at the origin, which is why `unionSpan` and `placeFrame` both skip it too (#436). A delta
+    // formed from that sentinel is not a translation: dragging a bar off the content's right edge
+    // would read `dx = -before.x` and teleport the painted node back to `x ≈ 0`, collapsed to
+    // nothing, mid-drag. No painted geometry on either side means no offset to paint.
+    if (before.width === 0 || after.width === 0) return;
     out.push({ barId: id0, dx: after.x - before.x, dWidth: after.width - before.width, extra: isExtra });
   }
 
