@@ -50,7 +50,7 @@ bound Gantt clamps it locally to its own content. A Gantt holds two, `{ x, y }` 
 instance as one Gantt's `x` and another's `x` syncs that direction only.
 
 - **panTo(position)** — Clamps to `[0, max]` at write time and nowhere else.
-- **get state: ScrollAxisState** — `{ position, max }` together, frozen.
+- **get state: ScrollAxisState** — `{ position, max, bindingCount }` together, frozen.
 - **`bindScrollAxis(axis, binding, onChange)` → ScrollAxisBindingHandle** — free function, not a
   class method (ADR 0007): `unbind()`, `setContentSize()`, `setPaneSize()`.
 

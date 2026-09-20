@@ -319,6 +319,7 @@ gap, not a rename.
 | `.fg-container` | Root of one Gantt. Theme pin and token inheritance start here. |
 | `.fg-grid-pane` | Left pane. Grid columns, row labels, cells. |
 | `.fg-timeline-pane` | Right pane. Header, bars, decorations, date lines. |
+| `.fg-shared-axis` | On `.fg-timeline-pane` when this Gantt shares a `ScrollAxis` on `x`. Reserves a scrollbar gutter, so every pane on that axis keeps one width. Needs `scrollbar-gutter`; an engine without it falls back to today's behaviour, where the two panes stop up to a scrollbar's width apart. |
 | `.fg-splitter` | Drag handle between the two panes. |
 | `.fg-overlay` | Popup mount layer above both panes. `pointer-events: none` until a `.fg-popup` opts in. |
 | `.fg-grid-header` | Column header row in the grid pane. |
