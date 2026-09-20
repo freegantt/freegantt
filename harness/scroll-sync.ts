@@ -3,7 +3,7 @@
 // `TimeScaleModel`, matching D9's "x, y, or both"), with the second chart holding far fewer rows
 // than the first — the U3 clamp/pin case happy-dom cannot express.
 //
-// Three pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
+// Four pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
 // existing S1.5 checks). #xonly-a/#xonly-b share only x (D-S6-1): each keeps a private y, so a
 // vertical scroll on one never reaches the other, even though the two hold different row counts.
 // #yonly-a/#yonly-b share only y (D-S6-1): each keeps a private x, so a horizontal scroll on one
