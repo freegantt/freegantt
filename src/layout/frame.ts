@@ -61,7 +61,27 @@ export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
  * same midpoint the floor above centres on, so the two rules never disagree — they answer the same
  * question only when `start === end`. This is not "centred on the Bar's start": a fixed-width box
  * on a real span would land in two different places depending on which sentence a reader followed,
- * so both rules read the span's midpoint. */
+ * so both rules read the span's midpoint.
+ *
+ * D-S1.8-1 holds for a widened box the same as for the tick lines that already obey it: a box this
+ * function widens or fixes never paints past `[0, scale.contentWidth]`. A bar whose own instant sits
+ * at or past the content's edge is shifted inward instead of left centred past it — an entry at the
+ * range end must still read as "at the end", not slide back to make room, so the shift only ever
+ * closes the gap the centred box would have opened past the edge.
+ *
+ * An `'exact'` span answers D-S1.8-1 a different way, and must: it carries the entry's own real
+ * `start`/`end`, not a floor this function invented, so shifting it would misstate where the entry
+ * actually falls. A Dataset wider than its own `range` (the normal shape for a caller prefetching so
+ * pan/zoom never re-fetches) can hand `placeFrame` an entry that starts, ends, or both, outside
+ * `[0, contentWidth)` — the overscan buffer (`DEFAULT_OVERSCAN.horizontalPx`) pulls it into the
+ * culled window without ever checking that bound, and an unclamped 'exact' box painted there widens
+ * the pane's own native `scrollWidth` past the content sizer, the same harm a header band's cell
+ * already guards against with its own intersection clip (`bands` below). `barSpan` trims an
+ * `'exact'` box to its intersection with `[0, contentWidth)` for the same reason a band cell is
+ * trimmed and not shifted: a real duration bar straddling the edge has a truthful in-range portion
+ * to show, and trimming shows exactly that without lying about the part outside. A box with no
+ * intersection at all — a `bar.start` past `contentWidth`, or a `bar.end` before `0` — trims to
+ * `width: 0`; `placeFrame` drops it rather than paint an entry the caller's own `range` excludes. */
 export function barSpan(
   // The whole `Bar`, not a `Pick` (#295) — a literal missing `box` would typecheck against a
   // `Pick` and silently drop a fixed box's width, which is exactly the bug this signature closes.
@@ -71,22 +91,75 @@ export function barSpan(
 ): { x: number; width: number; span: BarSpanKind } {
   const x = scale.xForInstant(bar.start);
   const end = scale.xForInstant(bar.end);
+  const rawWidth = Math.max(0, end - x);
+
+  // Membership first, decided on the entry's own true extent — before any floor, fixed width, or
+  // shift touches it. A widened or fixed box's *shift* (`clampBoxToContent` below) pulls its left
+  // edge back onto the content unconditionally; run it on a box whose entry never belonged on
+  // screen at all and it silently paints that record at a visible edge instead of leaving it off —
+  // a misplaced date is worse than #436's overflow, because an overflow is at least visible. A
+  // zero-length entry is a point, kept through its own closing instant (ADR 0012's "at the range
+  // end" is `x === contentWidth`, still in). A real span is the usual half-open interval test; an
+  // entry whose interval has no overlap with `[0, contentWidth)` at all never reaches the floor
+  // below (`'minimum'`'s own membership question — the floor is `barSpan`'s invention, so the
+  // entry's own extent decides it).
+  const inContent = rawWidth === 0 ? x >= 0 && x <= scale.contentWidth : x < scale.contentWidth && end > 0;
+
   if (bar.box !== undefined) {
     // A fixed box skips the floor on purpose (ADR 0022 — `diamond()`'s own width is the design, not
     // a value to widen). Clamped once, here, so the returned `width` and `fixedBoxX`'s position both
     // read the same finite, non-negative value — a negative (#296) or non-finite (#297) `widthPx`
     // never reaches either.
     const width = clampBoxWidth(bar.box.widthPx);
-    return { x: fixedBoxX(x, end, bar.box.anchor, width), width, span: 'fixed' };
+    // A fixed box is not drawn across the span (`inContent` above answers a question this box
+    // never asks) — it is drawn at one instant, and `anchor` picks which: `fixedBoxX` already
+    // reads the same instant to place the box, so membership reads it too, before that placement.
+    // `fixedWidthBar(12, 'end')` on an entry that starts inside the content and ends 500px past it
+    // is the case this closes: the *span* overlaps `[0, contentWidth)`, but the box is drawn at
+    // `end`, off-screen, and the old span-based `inContent` kept it, painting the diamond shifted
+    // onto the content's right edge — a narrower version of the same lie #436 already fixed once.
+    const anchorX = fixedBoxAnchorX(x, end, bar.box.anchor);
+    if (!(anchorX >= 0 && anchorX <= scale.contentWidth)) return { x: 0, width: 0, span: 'fixed' };
+    const boxX = fixedBoxX(x, end, bar.box.anchor, width);
+    return { x: clampBoxToContent(boxX, width, scale.contentWidth), width, span: 'fixed' };
   }
-  const width = Math.max(0, end - x);
   // Centred on the span's own midpoint, so a floored bar keeps the instant it points at. A zero-width
   // span has its start for a midpoint; a 5px bar the floor widens to 12px keeps its own centre
   // instead of sliding left onto its start.
-  if (width < minBarWidthPx) {
-    return { x: x - (minBarWidthPx - width) / 2, width: minBarWidthPx, span: 'minimum' };
+  if (rawWidth < minBarWidthPx) {
+    if (!inContent) return { x: 0, width: 0, span: 'minimum' };
+    const centredX = x - (minBarWidthPx - rawWidth) / 2;
+    return {
+      x: clampBoxToContent(centredX, minBarWidthPx, scale.contentWidth),
+      width: minBarWidthPx,
+      span: 'minimum',
+    };
   }
-  return { x, width, span: 'exact' };
+  // No separate membership gate needed here: `clipToContent` already answers the same question for
+  // a real interval — no overlap with `[0, contentWidth)` trims straight to `width: 0`.
+  return { ...clipToContent(x, rawWidth, scale.contentWidth), span: 'exact' };
+}
+
+/** Trims a box to its intersection with `[0, contentWidth)`, the same formula a header band's cell
+ *  already applies to itself below — an `'exact'` box carries the entry's own real extent, so it is
+ *  cut back to the truthful part inside the content, never shifted (that would misstate the entry's
+ *  own start/end). A box with no intersection at all trims to `width: 0`; `placeFrame` reads that as
+ *  "nothing to paint" and drops the bar, the same as a fully off-content header cell drops itself. */
+function clipToContent(x: number, width: number, contentWidth: number): { x: number; width: number } {
+  const clippedX = Math.max(x, 0);
+  const clippedRight = Math.min(x + width, contentWidth);
+  return { x: clippedX, width: Math.max(0, clippedRight - clippedX) };
+}
+
+/** Shifts a box's left edge inward so `[x, x + width)` stays inside `[0, contentWidth]`, the same
+ *  edge a widened or fixed box (`barSpan`) must never paint past (D-S1.8-1). Shifting, not
+ *  re-centring, keeps a box that already fits untouched and moves one that doesn't the shortest
+ *  distance back onto the content — an entry pinned to the range end still reads as at the end. A
+ *  box wider than the content itself (a pathologically narrow pane) pins to the left edge instead
+ *  of the right, so it never reports a negative `x`. */
+function clampBoxToContent(x: number, width: number, contentWidth: number): number {
+  const maxX = Math.max(0, contentWidth - width);
+  return Math.min(Math.max(x, 0), maxX);
 }
 
 /** A fixed box's width, floored at 0 and never non-finite. The one place `widthPx` is read off a
@@ -111,6 +184,20 @@ function fixedBoxX(x: number, end: number, anchor: BarAnchor, width: number): nu
       return end - width;
     case 'center':
       return (x + end) / 2 - width / 2;
+  }
+}
+
+// The instant a fixed box is drawn at — the same one `fixedBoxX` places its edge against, before
+// that edge is offset by the box's own width. This is what decides a fixed box's membership: the
+// box has no extent of its own to test, only this one instant.
+function fixedBoxAnchorX(x: number, end: number, anchor: BarAnchor): number {
+  switch (anchor) {
+    case 'start':
+      return x;
+    case 'end':
+      return end;
+    case 'center':
+      return (x + end) / 2;
   }
 }
 
@@ -502,6 +589,11 @@ export function placeFrame(
     for (const producedBar of rowBars) {
       const { x, width, span } = barSpan(producedBar, scale, minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
+      // An 'exact' box already trimmed to `[0, contentWidth)` (barSpan) reports `width: 0` when the
+      // entry's own span has no intersection with the content at all — an entry outside the
+      // caller's own `range`, pulled into the culled window only by the overscan buffer. Nothing to
+      // paint, so it never becomes a FrameBar (#436).
+      if (width <= 0) continue;
       // #421 C5, Q36: the Bar's own `label` wins when a producer set one — the most specific
       // answer available, per-bar and authored. Absent, `barLabelFor` (the Gantt's own Field,
       // resolved and formatted) fills it; absent that too (a `layout/` test with no `view/`), ''.

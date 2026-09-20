@@ -72,3 +72,54 @@ new Gantt({
   scroll: { y: sharedY },
   a11yLabel: 'Y-only Gantt B',
 });
+
+// #436: `fit: 'pane'` (the default, no `fit` given) makes contentWidth === paneWidth, so the shared
+// ScrollAxis above never runs this combination — its own comment says so. Two Gantts, one shared x
+// ScrollAxis, at the default fit, one of them carrying a zero-length entry parked on the range's own
+// end (the shape that used to float a bar's floored box, and its label, past contentWidth and open a
+// native scroll range the axis could never see). `e2e/scroll-sync.spec.ts` reads both panes' own
+// scrollWidth to prove neither can scroll at all — the only way two panes sharing an axis whose max
+// is always 0 can never desync.
+const paneFitRangeStart = new Date('2026-01-01T00:00:00Z');
+const paneFitRangeEnd = new Date(paneFitRangeStart.getTime() + 3 * 24 * 60 * 60 * 1000);
+const paneFitEntries = [
+  {
+    id: 'pf-a',
+    name: 'A',
+    start: paneFitRangeStart,
+    end: new Date(paneFitRangeStart.getTime() + 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'pf-b',
+    name: 'B',
+    start: new Date(paneFitRangeStart.getTime() + 24 * 60 * 60 * 1000),
+    end: new Date(paneFitRangeStart.getTime() + 2 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'pf-c',
+    name: 'C',
+    start: new Date(paneFitRangeStart.getTime() + 2 * 24 * 60 * 60 * 1000),
+    end: paneFitRangeEnd,
+  },
+  // Zero-length, on the range's own end (ADR 0012) — the exact shape #436 needs.
+  { id: 'pf-d', name: 'D milestone with a long label', start: paneFitRangeEnd, end: paneFitRangeEnd },
+];
+const paneFitADataset = new Dataset({ entries: paneFitEntries, timeZone: 'UTC' });
+const paneFitBDataset = new Dataset({ entries: paneFitEntries, timeZone: 'UTC' });
+const paneFitRange = { start: paneFitRangeStart, end: paneFitRangeEnd };
+const sharedPaneFitX = new ScrollAxis();
+
+new Gantt({
+  container: '#pane-fit-a',
+  dataset: paneFitADataset,
+  range: paneFitRange,
+  scroll: { x: sharedPaneFitX },
+  a11yLabel: 'Pane-fit Gantt A',
+});
+new Gantt({
+  container: '#pane-fit-b',
+  dataset: paneFitBDataset,
+  range: paneFitRange,
+  scroll: { x: sharedPaneFitX },
+  a11yLabel: 'Pane-fit Gantt B',
+});

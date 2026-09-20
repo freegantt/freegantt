@@ -41,6 +41,25 @@ function barOf(entry: Entry, box?: FixedBarBox): Bar {
 }
 
 const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!), pxPerMs: 1 / 1000 });
+// #436: barSpan now trims an 'exact' box to its own intersection with `[0, contentWidth)` (D-S1.8-1)
+// regardless of the viewport's own horizontal culling — `scale`'s range above is only entry[0]'s own
+// span, on purpose, for the tests that read one bar's own position. A test asserting "one bar per
+// entry" for the whole fixture needs a scale wide enough to actually contain every entry, or the
+// same trim would (correctly) drop the ones the narrower `scale` never covered.
+const wideScale = createTimeScale({
+  timeZone: 'UTC',
+  range: {
+    start: sampleEntries.reduce<Instant>(
+      (min, e) => ((e.start as Instant) < min ? (e.start as Instant) : min),
+      sampleEntries[0]!.start as Instant,
+    ),
+    end: sampleEntries.reduce<Instant>(
+      (max, e) => ((e.end as Instant) > max ? (e.end as Instant) : max),
+      sampleEntries[0]!.end as Instant,
+    ),
+  },
+  pxPerMs: 1 / 1000,
+});
 const preset = dayPreset;
 const visible = { x: 0, y: 0, width: 0, height: 0 };
 const TIGHT = { verticalRows: 0, horizontalPx: 0 };
@@ -50,7 +69,7 @@ describe('computeFrame', () => {
   it('emits one row and one bar per entry, positioned by time (S0 scope)', () => {
     const frame = computeFrame({
       entries: sampleEntries,
-      scale,
+      scale: wideScale,
       preset,
       visible,
       rowHeight: 32,
@@ -141,7 +160,7 @@ describe('computeFrame', () => {
   it('produces deterministic Bar.id across repeated passes (I8)', () => {
     const first = computeFrame({
       entries: sampleEntries,
-      scale,
+      scale: wideScale,
       preset,
       visible,
       rowHeight: 32,
@@ -151,7 +170,7 @@ describe('computeFrame', () => {
     });
     const second = computeFrame({
       entries: sampleEntries,
-      scale,
+      scale: wideScale,
       preset,
       visible,
       rowHeight: 32,
@@ -1133,30 +1152,55 @@ describe('computeFrame row sources (S4.6)', () => {
   });
 });
 
+// `scale`'s own range is exactly `sampleEntries[0]`'s span, so that entry's start sits at the
+// content's own left edge (x === 0). A midpoint-centring test run on it there would be testing the
+// content-edge clamp (below), not the centring rule. `paddedScale` gives the same entry 50px of
+// content on each side, so the plain midpoint tests read the interior, unclamped case.
+const paddedScale = createTimeScale({
+  timeZone: 'UTC',
+  range: { start: scale.instantForX(-50), end: scale.instantForX(scale.contentWidth + 50) },
+  pxPerMs: 1 / 1000,
+});
+
 describe('barSpan — a minimum painted bar width (#212 follow-up: a zero-width bar is unclickable)', () => {
   it('floors a zero-width span at minBarWidthPx and stamps span: minimum', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { x, width, span } = barSpan(barOf(zeroWidthSpan), scale);
+    const { x, width, span } = barSpan(barOf(zeroWidthSpan), paddedScale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(span).toBe('minimum');
-    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
+    expect(x + width / 2).toBe(paddedScale.xForInstant(zeroWidthSpan.start as Instant));
   });
 
   it('honours a custom minBarWidthPx', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { width } = barSpan(barOf(zeroWidthSpan), scale, 40);
+    const { width } = barSpan(barOf(zeroWidthSpan), paddedScale, 40);
     expect(width).toBe(40);
   });
 
   it('centres a floored, non-zero-width bar on its own midpoint, not on its start', () => {
     // 5px wide at this scale: narrow enough to floor, wide enough that a start-centred box would
     // slide the bar 2.5px left of where it belongs.
-    const startX = scale.xForInstant(sampleEntries[0]!.start as Instant);
-    const narrowSpan = entryDoubleLike(sampleEntries[0]!, { end: scale.instantForX(startX + 5) });
-    const { x, width, span } = barSpan(barOf(narrowSpan), scale);
+    const startX = paddedScale.xForInstant(sampleEntries[0]!.start as Instant);
+    const narrowSpan = entryDoubleLike(sampleEntries[0]!, { end: paddedScale.instantForX(startX + 5) });
+    const { x, width, span } = barSpan(barOf(narrowSpan), paddedScale);
     expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
     expect(span).toBe('minimum');
     expect(x + width / 2).toBe(startX + 2.5);
+  });
+
+  it('shifts a floored box inward instead of centring it past the content edge (#436)', () => {
+    // sampleEntries[0] spans the whole of `scale`'s content, so its own start sits at x === 0 and
+    // its own end at x === contentWidth — a zero-width span at either instant is a bar pinned to
+    // the content's own edge, the case #436 lost.
+    const atStart = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
+    const startResult = barSpan(barOf(atStart), scale);
+    expect(startResult.x).toBe(0);
+    expect(startResult.width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
+
+    const atEnd = entryDoubleLike(sampleEntries[0]!, { start: sampleEntries[0]!.end! });
+    const endResult = barSpan(barOf(atEnd), scale);
+    expect(endResult.x + endResult.width).toBe(scale.contentWidth);
+    expect(endResult.width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
   });
 
   it('leaves an ordinary bar wide enough already unfloored, with span: exact', () => {
@@ -1194,8 +1238,15 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
 
   it('centres on the span’s own midpoint for anchor: center — the same midpoint a floored bar centres on', () => {
     const zeroWidthSpan = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
-    const { x, width } = barSpan(barOf(zeroWidthSpan, { widthPx: 13, anchor: 'center' }), scale);
-    expect(x + width / 2).toBe(scale.xForInstant(zeroWidthSpan.start as Instant));
+    const { x, width } = barSpan(barOf(zeroWidthSpan, { widthPx: 13, anchor: 'center' }), paddedScale);
+    expect(x + width / 2).toBe(paddedScale.xForInstant(zeroWidthSpan.start as Instant));
+  });
+
+  it('shifts a fixed centered box inward instead of past the content edge, the same as a floored bar (#436)', () => {
+    const atStart = entryDoubleLike(sampleEntries[0]!, { end: sampleEntries[0]!.start! });
+    const { x, width } = barSpan(barOf(atStart, { widthPx: 13, anchor: 'center' }), scale);
+    expect(x).toBe(0);
+    expect(width).toBe(13);
   });
 
   it('aligns its left edge to the span’s start for anchor: start', () => {
@@ -1248,4 +1299,102 @@ describe('barSpan — a fixed painted box the time scale does not size (ADR 0022
       expect(x).toBe((startX + end) / 2);
     },
   );
+});
+
+// #436 (coordinator correction): a widened or fixed box's own shift (`clampBoxToContent`) pulls its
+// left edge back onto the content unconditionally — run it on an entry that never belonged on
+// screen at all and it silently paints that record at a visible edge, a worse defect than the
+// overflow it replaces (a misplacement is invisible; an overflow is not). `scale`'s own range is
+// exactly `sampleEntries[0]`'s span, so `scale.contentWidth` is that entry's own duration in px —
+// `scale.instantForX(scale.contentWidth + 1)` names an instant one px past the content's own edge,
+// the shape the overscan buffer alone (never the culled visible window) pulls into `placeFrame`'s
+// scan (`DEFAULT_OVERSCAN.horizontalPx`, `plans/01` §7 is not this — this is the pure layout seam).
+describe('barSpan — membership decided before any floor, fixed width, or shift (#436)', () => {
+  it('drops a zero-length entry parked past contentWidth, rather than shifting it onto the edge', () => {
+    const pastEdge = scale.instantForX(scale.contentWidth + 1);
+    const outside = entryDoubleLike(sampleEntries[0]!, { start: pastEdge, end: pastEdge });
+    const { width } = barSpan(barOf(outside), scale);
+    expect(width).toBe(0);
+  });
+
+  it('drops a zero-length entry parked before content start, rather than shifting it onto the edge', () => {
+    const beforeStart = scale.instantForX(-1);
+    const outside = entryDoubleLike(sampleEntries[0]!, { start: beforeStart, end: beforeStart });
+    const { width } = barSpan(barOf(outside), scale);
+    expect(width).toBe(0);
+  });
+
+  it('drops a fixed-box (diamond) entry parked past contentWidth, rather than shifting it onto the edge', () => {
+    const pastEdge = scale.instantForX(scale.contentWidth + 1);
+    const outside = entryDoubleLike(sampleEntries[0]!, { start: pastEdge, end: pastEdge });
+    const { width } = barSpan(barOf(outside, { widthPx: 13, anchor: 'center' }), scale);
+    expect(width).toBe(0);
+  });
+
+  it('drops a fixed-box (end anchor) entry whose span straddles contentWidth but whose anchor instant is past it', () => {
+    // The residual case the span test alone missed: `x` sits inside the content, so the old
+    // span-based `inContent` said "kept" — but this box is drawn at `end` (anchor: 'end'), and
+    // `end` is 500px past `contentWidth`. `fixedBoxX` would place it there, and the shift would
+    // then paint the diamond shifted onto the content's own right edge instead of dropping it.
+    const straddling = entryDoubleLike(sampleEntries[0]!, {
+      start: scale.instantForX(1),
+      end: scale.instantForX(scale.contentWidth + 500),
+    });
+    const { width } = barSpan(barOf(straddling, { widthPx: 12, anchor: 'end' }), scale);
+    expect(width).toBe(0);
+  });
+
+  it('drops a fixed-box (start anchor) entry whose span starts past contentWidth', () => {
+    const pastStart = entryDoubleLike(sampleEntries[0]!, {
+      start: scale.instantForX(scale.contentWidth + 10),
+      end: scale.instantForX(scale.contentWidth + 30),
+    });
+    const { width } = barSpan(barOf(pastStart, { widthPx: 12, anchor: 'start' }), scale);
+    expect(width).toBe(0);
+  });
+
+  it('keeps a zero-length entry exactly on the last instant — one bar, right edge at contentWidth, not past it', () => {
+    const atEnd = entryDoubleLike(sampleEntries[0]!, { start: sampleEntries[0]!.end! });
+    const { x, width } = barSpan(barOf(atEnd), scale);
+    expect(x + width).toBe(scale.contentWidth);
+    expect(width).toBe(DEFAULT_MIN_BAR_WIDTH_PX);
+  });
+
+  it('trims a real-duration entry straddling contentWidth, x unchanged, right edge at contentWidth', () => {
+    const straddling = entryDoubleLike(sampleEntries[0]!, {
+      start: scale.instantForX(scale.contentWidth - 20),
+      end: scale.instantForX(scale.contentWidth + 20),
+    });
+    const { x, width, span } = barSpan(barOf(straddling), scale);
+    expect(x).toBe(scale.contentWidth - 20);
+    expect(x + width).toBe(scale.contentWidth);
+    expect(span).toBe('exact');
+  });
+
+  it('drops a real-duration entry entirely past contentWidth, pulled in only by overscan', () => {
+    const outside = entryDoubleLike(sampleEntries[0]!, {
+      start: scale.instantForX(scale.contentWidth + 10),
+      end: scale.instantForX(scale.contentWidth + 30),
+    });
+    const { width } = barSpan(barOf(outside), scale);
+    expect(width).toBe(0);
+  });
+
+  it('never paints an out-of-content bar as a FrameBar, end to end through computeFrame', () => {
+    const pastEdge = scale.instantForX(scale.contentWidth + 10);
+    const outside = entryDoubleLike(sampleEntries[0]!, { id: 'outside-436', start: pastEdge, end: pastEdge });
+    const frame = computeFrame({
+      entries: [sampleEntries[0]!, outside],
+      scale,
+      preset,
+      // A wide-open viewport plus the shipped default overscan is exactly the shape that pulls
+      // `outside` into the culled window without a `contentWidth` bound of its own (#436).
+      visible: { x: 0, y: 0, width: scale.contentWidth, height: 64 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    expect(frame.bars.some((bar) => bar.entryId === outside.id)).toBe(false);
+  });
 });
