@@ -10,7 +10,7 @@
 // never reaches the other.
 
 import './harness-nav.ts';
-import { Gantt, Dataset, ScrollAxis, TimeScaleModel } from 'freegantt';
+import { Gantt, Dataset, ScrollAxis, TimeScaleModel, MS } from 'freegantt';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
@@ -75,30 +75,30 @@ new Gantt({
 
 // #436: `fit: 'pane'` (the default, no `fit` given) makes contentWidth === paneWidth, so the shared
 // ScrollAxis above never runs this combination — its own comment says so. Two Gantts, one shared x
-// ScrollAxis, at the default fit, one of them carrying a zero-length entry parked on the range's own
-// end (the shape that used to float a bar's floored box, and its label, past contentWidth and open a
-// native scroll range the axis could never see). `e2e/scroll-sync.spec.ts` reads both panes' own
-// scrollWidth to prove neither can scroll at all — the only way two panes sharing an axis whose max
-// is always 0 can never desync.
+// ScrollAxis, at the default fit, both loading the same fixture, which carries a zero-length entry
+// parked on the range's own end (the shape that used to float a bar's floored box, and its label,
+// past contentWidth and open a native scroll range the axis could never see). `e2e/scroll-sync.spec.ts`
+// reads both panes' own scrollWidth to prove neither can scroll at all — the only way two panes
+// sharing an axis whose max is always 0 can never desync.
 const paneFitRangeStart = new Date('2026-01-01T00:00:00Z');
-const paneFitRangeEnd = new Date(paneFitRangeStart.getTime() + 3 * 24 * 60 * 60 * 1000);
+const paneFitRangeEnd = new Date(paneFitRangeStart.getTime() + 3 * MS.DAY);
 const paneFitEntries = [
   {
     id: 'pf-a',
     name: 'A',
     start: paneFitRangeStart,
-    end: new Date(paneFitRangeStart.getTime() + 24 * 60 * 60 * 1000),
+    end: new Date(paneFitRangeStart.getTime() + MS.DAY),
   },
   {
     id: 'pf-b',
     name: 'B',
-    start: new Date(paneFitRangeStart.getTime() + 24 * 60 * 60 * 1000),
-    end: new Date(paneFitRangeStart.getTime() + 2 * 24 * 60 * 60 * 1000),
+    start: new Date(paneFitRangeStart.getTime() + MS.DAY),
+    end: new Date(paneFitRangeStart.getTime() + 2 * MS.DAY),
   },
   {
     id: 'pf-c',
     name: 'C',
-    start: new Date(paneFitRangeStart.getTime() + 2 * 24 * 60 * 60 * 1000),
+    start: new Date(paneFitRangeStart.getTime() + 2 * MS.DAY),
     end: paneFitRangeEnd,
   },
   // Zero-length, on the range's own end (ADR 0012) — the exact shape #436 needs.

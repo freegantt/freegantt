@@ -72,7 +72,7 @@ exports[`computeFrame > matches the golden snapshot for the fixture dataset 1`] 
     "rowId": "entry-3",
     "span": "exact",
     "variant": "leaf",
-    "width": 172800,
+    "width": 345600,
     "x": 259200,
     "y": 71,
   },

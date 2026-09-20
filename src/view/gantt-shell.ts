@@ -393,22 +393,31 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
   return el;
 }
 
-/** The union `[min x, max(x + width))` of every Bar's own `barSpan` (#295). It is
- *  `GanttShell.reveal`'s target when an entry draws several Bars. Revealing the entry then shows
- *  every one of them, not only the first bar. Takes at least one Bar: `#revealEntrySpan`, its one
- *  caller, checks `bars.length > 0` first. */
+/** The union `[min x, max(x + width))` of every Bar's own `barSpan` (#295) — every *painted* one.
+ *  It is `GanttShell.reveal`'s target when an entry draws several Bars. Revealing the entry then
+ *  shows every one of them, not only the first bar. Takes at least one Bar: `#revealEntrySpan`,
+ *  its one caller, checks `bars.length > 0` first.
+ *
+ *  A Bar `barSpan` drops reports `{x: 0, width: 0}` (#436) — a fabricated point, not a real box at
+ *  the origin, so folding it into the union would drag `reveal` toward `0` for an entry that draws
+ *  one dropped bar and one real one, and send it there outright when every bar is dropped (#436
+ *  branch review F3). Skipped here for that reason. Returns `undefined` when every bar was
+ *  dropped, so the caller falls back to the entry's own dates (`fallbackSpanBar`) instead of
+ *  reading a union of nothing. */
 function unionSpan(
   bars: readonly Bar[],
   scale: TimeScale,
   minBarWidthPx: number,
-): { x: number; width: number } {
+): { x: number; width: number } | undefined {
   let minX = Number.POSITIVE_INFINITY;
   let maxEnd = Number.NEGATIVE_INFINITY;
   for (const bar of bars) {
     const { x, width } = barSpan(bar, scale, minBarWidthPx);
+    if (width === 0) continue;
     minX = Math.min(minX, x);
     maxEnd = Math.max(maxEnd, x + width);
   }
+  if (minX === Number.POSITIVE_INFINITY) return undefined;
   return { x: minX, width: maxEnd - minX };
 }
 
@@ -2280,10 +2289,11 @@ export class GanttShell {
     const bars = this.#layout.barsForEntry(ownerId);
     const scale = this.#viewport.timeScale;
     const minBarWidthPx = this.#frameSettings.minBarWidthPx;
-    const { x, width } =
-      bars.length > 0
-        ? unionSpan(bars, scale, minBarWidthPx)
-        : barSpan(fallbackSpanBar(ownerId, start, end), scale, minBarWidthPx);
+    // `unionSpan` answers `undefined` when every produced Bar was dropped by `barSpan` (#436) —
+    // an entry entirely past the range end still needs a target, so this falls back to its own
+    // dates, the same stand-in `fallbackSpanBar` already gives an entry with no Bar at all.
+    const union = bars.length > 0 ? unionSpan(bars, scale, minBarWidthPx) : undefined;
+    const { x, width } = union ?? barSpan(fallbackSpanBar(ownerId, start, end), scale, minBarWidthPx);
     this.#revealRect(rowIndex, x, width);
   }
 

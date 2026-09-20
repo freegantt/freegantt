@@ -689,7 +689,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('stamps data-span="minimum" on a floored bar only — any zero-width span carries it, an ordinary bar does not (ADR 0013: core has no milestone of its own)', () => {
+  it('stamps data-span="minimum" on a floored bar only — any zero-width span carries it, an ordinary bar does not (ADR 0013: core has no milestone of its own; contentWidth: Infinity bypasses the #436 content bound on purpose)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -729,7 +729,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('stamps data-span="fixed" on a Bar whose variant states a `box` (ADR 0022), at the box’s own width', () => {
+  it('stamps data-span="fixed" on a Bar whose variant states a `box` (ADR 0022), at the box’s own width (contentWidth: Infinity bypasses the #436 content bound on purpose)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
