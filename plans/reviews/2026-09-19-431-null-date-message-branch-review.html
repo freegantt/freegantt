@@ -26,7 +26,7 @@
           <span class="rounded bg-slate-200 px-2 py-1 font-mono">diff origin/main...HEAD</span>
           <span class="rounded bg-slate-200 px-2 py-1 font-mono">2026-09-19</span>
           <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1 font-semibold">pass 2 complete · 7 Confirmed</span>
-          <span class="rounded bg-sky-100 text-sky-900 px-2 py-1 font-semibold">6 of 7 applied since</span>
+          <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1 font-semibold">7 of 7 applied since</span>
         </div>
         <p class="text-sm text-slate-600 max-w-3xl">
           One commit. <code>toInstant</code> gains an explicit <code>null</code> fault before the plain-time
@@ -53,7 +53,7 @@ flowchart LR
 
       <section class="space-y-4">
         <h2 class="text-lg font-bold">Findings</h2>
-        <p class="text-sm leading-6 text-slate-600">This report records the fixed point it reviewed (<code>HEAD 52dfb59c</code>), so every quote below is of the code as it stood then. Six of the seven have been applied since, and each one says so on its own heading — read the badge before the quote, or you will hunt for a fault that is no longer there. Only <strong>F6</strong> is still true of the shipped code.</p>
+        <p class="text-sm leading-6 text-slate-600">This report records the fixed point it reviewed (<code>HEAD 52dfb59c</code>), so every quote below is of the code as it stood then. Six of the seven have been applied since, and each one says so on its own heading — read the badge before the quote, or you will hunt for a fault that is no longer there. All seven have been applied. <strong>F6</strong> was the last, and it was answered yes: the public <code>instant()</code> helper now refuses <code>null</code> in the same vocabulary <code>toInstant</code> uses, and no longer reports a missing date as a zone problem. Nothing on this page still describes the shipped code.</p>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
           <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-amber-600">F1</span><span class="text-sm font-normal text-slate-500">message quality · minor · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — <code>NULL_VALUE</code> no longer restates the value; it reads “names no instant…”.</span></h3>
@@ -119,7 +119,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F6</span><span class="text-sm font-normal text-slate-500">spec location · low · judgement · Confirmed</span><span class="text-xs font-semibold rounded bg-amber-100 text-amber-900 px-2 py-0.5">Open</span><span class="text-xs font-normal text-slate-500"> — <code>instant(null)</code> still throws the zoneless <code>RangeError</code>. The judgement below is still the open question.</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F6</span><span class="text-sm font-normal text-slate-500">spec location · low · judgement · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — <code>instant(null)</code> still throws the zoneless <code>RangeError</code>. The judgement below is still the open question.</span></h3>
           <p class="text-sm leading-6">
             The issue proposed catching <code>null</code> in the public <code>instant()</code> helper — the function
             that actually throws the zoneless message. The branch catches it one caller up, in

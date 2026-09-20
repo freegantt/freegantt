@@ -69,7 +69,9 @@ So the reader searches the model, finds nothing, and concludes no notification e
 **One real limit.** The `NavigationChange` payload carries `presetId`, `fit`, `canZoomIn` and
 `canZoomOut`. It carries no time span. A zoom control built from presets has everything it needs. A
 zoom control built from explicit `range` windows can detect that the user left its ladder, because
-`fit` becomes a number. It cannot learn which window now shows without reading that back itself.
+`fit` stops being the preset's. It cannot learn which window now shows without reading that back
+itself. Test `fit` by shape, not by `typeof`: a zoom gesture writes a `number`, and a consumer
+stating a tile width writes a `TimeUnitWidth` object (#15).
 
 **Do not shadow `freegantt.zoomIn` to learn that zoom happened.** Re-registering a command id is
 legal and it works, but it is the wrong tool. Shadow a built-in to change what zoom *means*, never
@@ -121,6 +123,10 @@ Under `fit: 'pane'`, `pxPerMs` is `width / spanMs` (`src/layout/viewport/time-sc
 So `contentWidth` equals the pane width by construction, and the window always overshoots. Pane-fit
 does not merely allow this. Pane-fit guarantees it, and it is the *mild* case, because the overshoot
 is capped at the overscan constant.
+
+A `TimeUnitWidth` fit (`{ unit: 'day', widthPx: 14 }`) ignores the measured pane exactly as
+`'preset'` does, so it sits in the severe band of that table whenever the pane is wider than the
+content it resolves to.
 
 `ScrollAxis` binds the correct `contentWidth`, so `max` stays 0. The overflow is therefore clipped
 and the user cannot scroll to it.

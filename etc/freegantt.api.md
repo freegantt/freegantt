@@ -1431,7 +1431,7 @@ export type Instant = number & {
     readonly __brand: 'Instant';
 };
 
-// @public (undocumented)
+// @public
 export function instant(value: Date | number | string): Instant;
 
 // @public
