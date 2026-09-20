@@ -120,7 +120,10 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  the buffer stays mounted while it is one scroll step from view, so a small scroll never shows a
    *  bare frame. Default `{ verticalRows: 2, horizontalPx: 128 }`. */
   overscan?: Overscan;
-  /** Live (S1.10). Default `'auto'`: follows `prefers-color-scheme`. */
+  /** Live (S1.10). Default `'auto'`: follows the nearest ancestor's `data-fg-theme` pin, else
+   *  `prefers-color-scheme`. ADR 0029: an app with its own dark-mode signal pushes the answer —
+   *  `gantt.theme = isDark ? 'dark' : 'light'` in its own toggle — or pins `data-fg-theme` on a
+   *  wrapper once. The library never asks the app; it only reads what the app writes. */
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;

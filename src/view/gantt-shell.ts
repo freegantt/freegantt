@@ -170,8 +170,10 @@ export type AttachColumnGestures = (
   ctx: ColumnGestureContext,
 ) => Detachable;
 
-/** S1.10, D-S1.10-4: theming's only preset axis for this step — `'auto'` follows
- * `prefers-color-scheme` (no `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. */
+/** S1.10, D-S1.10-4: theming's only preset axis — `'auto'` follows `prefers-color-scheme` (no
+ * `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. ADR 0029: the app pushes the
+ * answer; it writes `gantt.theme` or pins `data-fg-theme` on an ancestor. The library never calls
+ * back into the app to ask. */
 export type Theme = 'auto' | 'light' | 'dark';
 
 const DEFAULT_THEME: Theme = 'auto';
