@@ -71,15 +71,24 @@ signals we define or the platform defines. Neither is a guess at a convention so
 
 ## Consequences
 
-**A function never becomes a config value.** `CONTEXT.md` already holds the reason, for Aggregators:
+**A function never becomes a config value.** `AGENTS.md` already holds the reason, for Aggregators:
 *a name serializes into a document and a function does not*. A `ThemeResolver` broke that for a key
 whose whole job is to name a colour. The three literals serialize; a closure over an app's store
 does not.
 
-**The re-entrancy class is gone, not guarded.** With no observer on attributes we do not own, there
-is no mutation of ours that can wake a read of ours. The `theme-resolver-failed` error code, the
-reported-once `WeakSet`, and the side-effecting getter all go with it — surface that existed only to
-survive the design.
+`theme` is runtime config, not a document field, so this reason needs its own evidence, not a
+borrowed one. `harness/gantt-toolbar.ts` has `storeTheme`/`readStoredTheme`: the toolbar writes the
+app's theme choice to `localStorage` and reads it back on load. Three literals round-trip through
+that store with no help. A `ThemeResolver` closure cannot: a function is not a value `JSON.stringify`
+can carry, so the toolbar could persist only the closure's last computed answer, never the rule that
+produced it.
+
+**The re-entrancy class is gone, not guarded.** The observer still watches `data-fg-theme`, and the
+library's own write in `#applyTheme` still re-enters it (`src/view/gantt-shell.ts:1104-1107`). What
+changed is what the callback does: it now only reads the resolved theme and, if the answer moved,
+fires an event. It writes nothing back, so a self-write cannot trigger a second write, and the loop
+has nowhere to start. The `theme-resolver-failed` error code, the reported-once `WeakSet`, and the
+side-effecting getter all go with it — surface that existed only to survive the design.
 
 **We do less than `'auto'` promises, on purpose.** An app that changes its `dark` class without
 telling us shows a stale Gantt until it does. That is the same contract AG Grid and Bootstrap ship,

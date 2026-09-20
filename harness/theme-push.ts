@@ -17,6 +17,15 @@ import { Gantt, Dataset } from 'freegantt';
 import { sampleEntryInputs } from '../fixtures/sample-dataset.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
+declare global {
+  interface Window {
+    __gantt: Gantt;
+    /** Two Gantts on this page, so this second global names the pinned one — `zoom.ts` and
+     *  `dense-tile-grid.ts` set the same `window.__gantt` pattern for one Gantt each. */
+    __ganttPinned: Gantt;
+  }
+}
+
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'theme-push');
 
 document.documentElement.classList.remove('dark');
@@ -28,6 +37,7 @@ const pushedGantt = new Gantt({
   container: '#gantt-pushed',
   dataset,
   theme: 'light',
+  gridWidth: 'fitColumns',
   a11yLabel: 'Gantt, theme pushed directly',
 });
 
@@ -37,15 +47,16 @@ const pinnedGantt = new Gantt({
   container: '#gantt-pinned',
   dataset,
   theme: 'auto',
+  gridWidth: 'fitColumns',
   a11yLabel: 'Gantt, theme pinned on a wrapper',
 });
 
-// e2e fixture hook, the same shape `zoom.html`/`mount-destroy.html` already expose. Two Gantts on
+// e2e fixture hook, the same shape `zoom.ts`/`dense-tile-grid.ts` already expose. Two Gantts on
 // this page, so `__ganttPinned` names the second one — `pushedGantt`'s own `data-fg-theme` write is
 // visible on `#gantt-pushed` directly, but `pinnedGantt`'s `'auto'` answer never writes an attribute
 // of its own; a test reads its `resolvedTheme` here instead.
-(window as unknown as { __gantt: Gantt; __ganttPinned: Gantt }).__gantt = pushedGantt;
-(window as unknown as { __gantt: Gantt; __ganttPinned: Gantt }).__ganttPinned = pinnedGantt;
+window.__gantt = pushedGantt;
+window.__ganttPinned = pinnedGantt;
 
 const flipsReadout = document.querySelector<HTMLOutputElement>('[data-testid="theme-flips"]')!;
 let flips = 0;

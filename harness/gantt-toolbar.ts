@@ -14,7 +14,7 @@
 // `Gantt` and its `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
-import type { Gantt, PresetRef, SnapSetting } from 'freegantt';
+import type { Gantt, PresetRef, SnapSetting, Theme } from 'freegantt';
 import { isTimeUnit } from 'freegantt';
 
 export interface GanttToolbarOptions {
@@ -28,11 +28,7 @@ export interface GanttToolbarOptions {
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 
-/** The three choices this toolbar's segmented control offers. Same shape as the public `Theme`,
- *  named again here so this file states its own contract. */
-type ThemeChoice = 'auto' | 'light' | 'dark';
-
-const THEME_CHOICES: readonly { readonly value: ThemeChoice; readonly label: string }[] = [
+const THEME_CHOICES: readonly { readonly value: Theme; readonly label: string }[] = [
   { value: 'auto', label: 'Auto' },
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
@@ -62,11 +58,11 @@ const SNAP_CHOICES: readonly { readonly value: string; readonly label: string }[
   { value: 'week', label: 'Week' },
 ];
 
-function isTheme(value: string | null | undefined): value is ThemeChoice {
+function isTheme(value: string | null | undefined): value is Theme {
   return value === 'auto' || value === 'light' || value === 'dark';
 }
 
-function readStoredTheme(): ThemeChoice {
+function readStoredTheme(): Theme {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     return isTheme(stored) ? stored : 'auto';
@@ -76,7 +72,7 @@ function readStoredTheme(): ThemeChoice {
   }
 }
 
-function storeTheme(choice: ThemeChoice): void {
+function storeTheme(choice: Theme): void {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, choice);
   } catch {
@@ -204,7 +200,7 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
   // The theme reaches two places: the Gantt's own token layer, and the page around it. The library
   // writes `data-fg-theme` on its container from `gantt.theme`; the page's own tokens key off
   // `data-theme` on the document element, so the page writes that half.
-  function applyTheme(choice: ThemeChoice): void {
+  function applyTheme(choice: Theme): void {
     gantt.theme = choice;
     if (choice === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', choice);

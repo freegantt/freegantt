@@ -1,3 +1,6 @@
+> Superseded by ADR 0029. F1–F2 describe the removed `ThemeResolver`. The strip closes them, not
+> the fixes this review proposes.
+
 # Branch review — #433 ThemeResolver (PR #452)
 
 - **Branch:** `Pawel-IT/issue-433-theme-resolver`

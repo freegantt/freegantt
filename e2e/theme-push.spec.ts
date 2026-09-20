@@ -9,12 +9,6 @@ import { test, expect } from '@playwright/test';
 // writes no attribute of its own, so the test reads `resolvedTheme` off `window.__ganttPinned`
 // instead of an attribute that was never going to be there.
 
-declare global {
-  interface Window {
-    __ganttPinned: { resolvedTheme: 'light' | 'dark' };
-  }
-}
-
 test('one toggle pushes the theme both ways: a direct write and a data-fg-theme pin', async ({ page }) => {
   await page.goto('/theme-push.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
@@ -24,7 +18,9 @@ test('one toggle pushes the theme both ways: a direct write and a data-fg-theme 
   const resolvedPinnedTheme = () => page.evaluate(() => window.__ganttPinned.resolvedTheme);
 
   await expect(pushedContainer).toHaveAttribute('data-fg-theme', 'light');
-  await expect(pinnedWrapper).not.toHaveAttribute('data-fg-theme');
+  // The markup pins the wrapper to `'light'` on load, so both recipes agree from the start
+  // (ADR 0029) regardless of the OS colour scheme the test runs under.
+  await expect(pinnedWrapper).toHaveAttribute('data-fg-theme', 'light');
   expect(await resolvedPinnedTheme()).toBe('light');
 
   const flipsReadout = page.getByTestId('theme-flips');

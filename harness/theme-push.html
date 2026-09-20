@@ -9,9 +9,14 @@
         font-family: system-ui, sans-serif;
         margin: 2rem;
       }
+      /* The app's own dark-mode signal (ADR 0029). The toggle flips this class, and the page's own
+         chrome follows it here. The two Gantts below follow the same toggle, each by its own
+         recipe. A reader sees the app move first, and the library move with it. */
+      html.dark body {
+        background: #1a1a1a;
+        color: #eee;
+      }
       .gantt-demo {
-        --fg-row-height: 32px;
-        --fg-grid-pane-width: 220px;
         --fg-bar-label-gap: 6px;
         border: 1px solid #ccc;
         height: 40vh;
@@ -65,7 +70,7 @@
       <div id="gantt-pushed" class="gantt-demo" data-testid="gantt-pushed"></div>
 
       <h2>Recipe 2 — pin <code>data-fg-theme</code> on a wrapper, Gantt on <code>'auto'</code></h2>
-      <div id="pinned-wrapper" data-testid="pinned-wrapper">
+      <div id="pinned-wrapper" data-testid="pinned-wrapper" data-fg-theme="light">
         <div id="gantt-pinned" class="gantt-demo" data-testid="gantt-pinned"></div>
       </div>
     </main>
