@@ -118,7 +118,10 @@ describe('attachScroll', () => {
 // #440: two panes on one axis must agree about how far right they can go, and they only agree when
 // they are the same width. The gutter is what makes a pane's width independent of its own rows.
 describe('attachScroll reserveScrollbarGutter', () => {
-  function paneOn(scroll: { x: ScrollAxis }): { element: HTMLElement; reserve: () => void } {
+  function paneOn(scroll: { x?: ScrollAxis; y?: ScrollAxis }): {
+    element: HTMLElement;
+    reserve: () => void;
+  } {
     const viewport = new Viewport({ scroll });
     const handle = viewport.bind(dataset, () => {});
     handle.setContentSize({ width: 1000, height: 1000 });
@@ -158,6 +161,20 @@ describe('attachScroll reserveScrollbarGutter', () => {
     first.reserve();
 
     expect(first.element.classList.contains('fg-shared-axis')).toBe(true);
+  });
+
+  // The gutter reserves inline space, which is the vertical scrollbar's. A shared y axis misaligns
+  // through the *horizontal* scrollbar instead, so paying 15px of width there buys nothing.
+  it('a shared y axis alone does not cost the pane any width', () => {
+    const sharedY = new ScrollAxis();
+    const top = paneOn({ y: sharedY });
+    const bottom = paneOn({ y: sharedY });
+
+    top.reserve();
+    bottom.reserve();
+
+    expect(top.element.classList.contains('fg-shared-axis')).toBe(false);
+    expect(bottom.element.classList.contains('fg-shared-axis')).toBe(false);
   });
 
   it('gives the width back when the neighbour goes away', () => {

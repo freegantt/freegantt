@@ -64,14 +64,18 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
   // align them by making the last scrollbar's width of content unreachable in the narrow pane, which
   // trades a cosmetic gap for invisible data — and it would delete D-S1.5-1's designed fallback,
   // where the short chart pins and the tall one keeps going (S1.5 README U3). So the divergence goes
-  // at its source: every pane on a shared axis reserves the gutter whether it needs one or not, the
-  // widths agree, and one maximum serves both.
+  // at its source: every pane on a shared x axis reserves the gutter whether it needs one or not,
+  // the widths agree, and one maximum serves both.
   //
-  // Only when shared: a lone Gantt keeps the full width, because nothing can disagree with it.
+  // A lone Gantt keeps its full width, because nothing can disagree with it. A shared *y* axis gets
+  // nothing here either: `scrollbar-gutter` reserves the inline-end gutter, which is the vertical
+  // scrollbar's. Measured on Chromium 2026-09-19 — `stable` left `clientHeight` untouched. Two panes
+  // on a shared y axis can still drift through a horizontal scrollbar changing their heights. That
+  // is a different mechanism, and this property does not reach it.
   let gutterReserved: boolean | undefined;
 
   function reserveScrollbarGutter(): void {
-    const shared = viewport.scroll.x.state.bindingCount > 1 || viewport.scroll.y.state.bindingCount > 1;
+    const shared = viewport.scroll.x.state.bindingCount > 1;
     if (shared === gutterReserved) return;
     gutterReserved = shared;
     element.classList.toggle(SHARED_AXIS_CLASS, shared);

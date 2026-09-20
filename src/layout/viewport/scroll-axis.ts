@@ -31,17 +31,17 @@ export interface ScrollAxisBindingHandle {
   setPaneSize(px: number): void;
 }
 
-/** The resolved state — both halves of it, so there is one path to the resolution and one thing to
- * notify about. */
+/** The resolved state — all of it in one object, so there is one path to the resolution and one
+ * thing to notify about. */
 export interface ScrollAxisState {
   /** Where the caller asked to be. May exceed `max` after a shrink — see D-S1.5-2. */
   readonly position: number;
   /** How far `panTo` may ask: the loosest bound any bound Gantt needs (D-S1.5-1). Not a claim
    * about any one chart's scroller — each clamps its own. */
   readonly max: number;
-  /** How many Gantts this direction currently serves. `1` for the ordinary un-shared axis; `2` or
-   * more once two charts line up on one timeline. `view/` reads it to keep every bound pane the same
-   * width — see `reserveScrollbarGutter` (issue #440). */
+  /** How many bindings this direction currently holds. One Gantt contributes one binding per
+   * direction, so `1` is the ordinary un-shared axis and `2` or more means two charts line up on one
+   * timeline. `view/` reads it to keep every pane on a shared axis the same width (issue #440). */
   readonly bindingCount: number;
 }
 
@@ -85,7 +85,7 @@ export class ScrollAxis {
   #position: number;
   /** The bindings, the state resolved from them, and the D-S1.5-4 notification contract — the same
    * object `TimeScaleModel` binds through (`bound-value.ts`). This axis supplies only what is its
-   * own: how to resolve `{position, max}`, and what counts as a change. */
+   * own: how to resolve `{position, max, bindingCount}`, and what counts as a change. */
   #state = new BoundValue<MutableBinding, ScrollAxisState>({
     resolve: (bindings) => this.#resolve(bindings),
     equals: sameScrollAxisState,
