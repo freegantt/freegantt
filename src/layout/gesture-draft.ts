@@ -16,6 +16,7 @@ import type {
 import { barId, spansTime } from '../model/index.js';
 import { addMs, diffMs, formatDate, stepBy, snapInstant, stepsBetween } from '../time/index.js';
 import type { SnapUnit } from '../time/index.js';
+import { barSpan } from './frame.js';
 import type { TimeScale } from '../time/index.js';
 
 export interface DraftInput {
@@ -179,11 +180,24 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly BarPreview[
     if (!spansTime(original)) return;
     const drafted = spanAfterEdit(original, edit);
     if (!spansTime(drafted)) return;
-    const x0 = scale.xForInstant(original.start);
-    const x1 = scale.xForInstant(drafted.start);
-    const width0 = scale.xForInstant(original.end) - x0;
-    const width1 = scale.xForInstant(drafted.end) - x1;
-    out.push({ barId: barId(id), dx: x1 - x0, dWidth: width1 - width0, extra: isExtra });
+    // Read through `barSpan` — the one formula the commit's own frame paints from (#436 branch
+    // review F4) — rather than the entry's raw start/end delta. A straddling bar's painted width
+    // is not its true duration (`barSpan` trims an `'exact'` box to `[0, contentWidth)`), so a
+    // delta measured on the untrimmed dates disagrees with the trim the very next frame applies:
+    // the live preview under- or over-shoots, then jumps to the correct size on commit. Diffing
+    // two `barSpan` calls instead reports the *painted* delta, so `applyBarPreview` (I5 hot path,
+    // `render/dom/index.ts`) can go on adding a plain offset to the committed geometry with no
+    // clip of its own to apply.
+    const id0 = barId(id);
+    const before = barSpan(
+      { id: id0, entryId: id, variant: '', start: original.start, end: original.end },
+      scale,
+    );
+    const after = barSpan(
+      { id: id0, entryId: id, variant: '', start: drafted.start, end: drafted.end },
+      scale,
+    );
+    out.push({ barId: id0, dx: after.x - before.x, dWidth: after.width - before.width, extra: isExtra });
   }
 
   for (const [id, edit] of proposed) pushOffset(id, edit, false);

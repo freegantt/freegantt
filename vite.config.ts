@@ -38,6 +38,7 @@ export default defineConfig({
         plugins: page('plugins.html'),
         'mount-destroy': page('mount-destroy.html'),
         'dense-tile-grid': page('dense-tile-grid.html'),
+        'entries-outside-the-range': page('entries-outside-the-range.html'),
       },
     },
   },
