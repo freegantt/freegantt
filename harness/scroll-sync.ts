@@ -3,11 +3,14 @@
 // `TimeScaleModel`, matching D9's "x, y, or both"), with the second chart holding far fewer rows
 // than the first — the U3 clamp/pin case happy-dom cannot express.
 //
-// Three pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
+// Five pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
 // existing S1.5 checks). #xonly-a/#xonly-b share only x (D-S6-1): each keeps a private y, so a
 // vertical scroll on one never reaches the other, even though the two hold different row counts.
 // #yonly-a/#yonly-b share only y (D-S6-1): each keeps a private x, so a horizontal scroll on one
-// never reaches the other.
+// never reaches the other. #gutter-a/#gutter-b share only x and deliberately disagree about
+// vertical overflow — the #440 case, where one pane's scrollbar used to make it 15px narrower than
+// its partner and the two stopped at different places on the right. #pane-fit-a/#pane-fit-b share
+// only x at the default `fit: 'pane'`, where the axis max is always 0 (#436).
 
 import './harness-nav.ts';
 import { Gantt, Dataset, ScrollAxis, TimeScaleModel, MS } from 'freegantt';
@@ -71,6 +74,31 @@ new Gantt({
   dataset: yOnlyBDataset,
   scroll: { y: sharedY },
   a11yLabel: 'Y-only Gantt B',
+});
+
+// #440: the pair that disagrees about vertical overflow. #gutter-a holds every demo row and
+// overflows its 240px box; #gutter-b holds three rows and does not. With a classic scrollbar that
+// makes #gutter-a's pane narrower than #gutter-b's, and two panes of different widths on one axis
+// stop at different places. Both reserve the gutter instead, so the widths agree.
+const gutterADataset = new Dataset({ entries: demoEntryInputs, timeZone: 'UTC' });
+const gutterBDataset = new Dataset({ entries: demoEntryInputs.slice(0, 3), timeZone: 'UTC' });
+
+const gutterScale = new TimeScaleModel({ fit: 'preset' });
+const gutterX = new ScrollAxis();
+
+new Gantt({
+  container: '#gutter-a',
+  dataset: gutterADataset,
+  scale: gutterScale,
+  scroll: { x: gutterX },
+  a11yLabel: 'Overflowing Gantt',
+});
+new Gantt({
+  container: '#gutter-b',
+  dataset: gutterBDataset,
+  scale: gutterScale,
+  scroll: { x: gutterX },
+  a11yLabel: 'Short Gantt without a scrollbar',
 });
 
 // #436: `fit: 'pane'` (the default, no `fit` given) makes contentWidth === paneWidth, so the shared

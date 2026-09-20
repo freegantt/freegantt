@@ -204,6 +204,74 @@ test('[S6-A4] two Gantts sharing only y move together in y and stay private in x
   expect(afterX.b.x).toBe(before.b.x);
 });
 
+// #440: two Gantts on one x axis used to stop at different places on the right, because an
+// `overflow: auto` pane that overflows vertically loses its scrollbar's width from `clientWidth`,
+// and the narrower pane gets the larger maximum. Every pane on a shared axis now reserves the
+// gutter, so the widths agree.
+//
+// Headless Chromium draws overlay scrollbars, which take no width, so it cannot stage the unequal
+// widths the reporter sees — `::-webkit-scrollbar` and `--disable-features=OverlayScrollbar` were
+// both measured here and neither brings classic scrollbars back. What this check does prove is the
+// part that carries the fix: the gutter reaches both panes of a shared axis, their widths and
+// maxima stay equal, and neither runs out before the other. The pane-width arithmetic itself lives
+// in src/layout/viewport/scroll-axis.test.ts, where it needs no browser.
+test('two panes on one x axis keep one width and one maximum (#440)', async ({ page }) => {
+  await page.goto('/scroll-sync.html');
+  await expect(page.locator('#gutter-a .fg-bar').first()).toBeVisible();
+  await expect(page.locator('#gutter-b .fg-bar').first()).toBeVisible();
+
+  function panes() {
+    return page.evaluate(() => {
+      function read(id: string) {
+        const pane = document.querySelector(`#${id} .fg-timeline-pane`)!;
+        return {
+          clientWidth: pane.clientWidth,
+          scrollLeft: pane.scrollLeft,
+          maxScrollLeft: pane.scrollWidth - pane.clientWidth,
+          contentHeight: pane.scrollHeight,
+          paneHeight: pane.clientHeight,
+          gutter: getComputedStyle(pane).scrollbarGutter,
+        };
+      }
+      return { a: read('gutter-a'), b: read('gutter-b') };
+    });
+  }
+
+  const before = await panes();
+
+  // The fixture only means anything if the two panes disagree about vertical overflow.
+  expect(before.a.contentHeight).toBeGreaterThan(before.a.paneHeight);
+  expect(before.b.contentHeight).toBeLessThan(before.a.contentHeight / 2);
+
+  // Both reserve the gutter: only #gutter-a shows a scrollbar, and both pay for one.
+  expect(before.a.gutter).toBe('stable');
+  expect(before.b.gutter).toBe('stable');
+  expect(before.a.clientWidth).toBe(before.b.clientWidth);
+  expect(before.a.maxScrollLeft).toBe(before.b.maxScrollLeft);
+
+  // Drive the overflowing pane to the far right. Its partner reaches the same place.
+  await page.evaluate(() => {
+    const pane = document.querySelector('#gutter-a .fg-timeline-pane')!;
+    pane.scrollLeft = pane.scrollWidth;
+    pane.dispatchEvent(new Event('scroll'));
+  });
+
+  await expect.poll(async () => (await panes()).b.scrollLeft).toBeGreaterThan(0);
+  const after = await panes();
+  expect(after.a.scrollLeft).toBe(after.b.scrollLeft);
+});
+
+test('a Gantt that shares no axis keeps its whole pane width (#440)', async ({ page }) => {
+  await page.goto('/index.html');
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  const gutter = await page.evaluate(
+    () => getComputedStyle(document.querySelector('.fg-timeline-pane')!).scrollbarGutter,
+  );
+
+  expect(gutter).toBe('auto');
+});
+
 // #436: #pane-fit-a/#pane-fit-b share only the x ScrollAxis, at `fit: 'pane'` (the default) — the
 // one combination every pair above opts out of ("#436" comment in harness/scroll-sync.ts). At this
 // fit, contentWidth === paneWidth by construction, so the shared ScrollAxis's own max is always 0:
