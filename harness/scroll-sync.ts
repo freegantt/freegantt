@@ -3,16 +3,17 @@
 // `TimeScaleModel`, matching D9's "x, y, or both"), with the second chart holding far fewer rows
 // than the first — the U3 clamp/pin case happy-dom cannot express.
 //
-// Four pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
+// Five pairs live on this page. #tall/#short share both axes (D-S1.5-3's fused case, kept for the
 // existing S1.5 checks). #xonly-a/#xonly-b share only x (D-S6-1): each keeps a private y, so a
 // vertical scroll on one never reaches the other, even though the two hold different row counts.
 // #yonly-a/#yonly-b share only y (D-S6-1): each keeps a private x, so a horizontal scroll on one
 // never reaches the other. #gutter-a/#gutter-b share only x and deliberately disagree about
 // vertical overflow — the #440 case, where one pane's scrollbar used to make it 15px narrower than
-// its partner and the two stopped at different places on the right.
+// its partner and the two stopped at different places on the right. #pane-fit-a/#pane-fit-b share
+// only x at the default `fit: 'pane'`, where the axis max is always 0 (#436).
 
 import './harness-nav.ts';
-import { Gantt, Dataset, ScrollAxis, TimeScaleModel } from 'freegantt';
+import { Gantt, Dataset, ScrollAxis, TimeScaleModel, MS } from 'freegantt';
 import { demoEntryInputs } from '../fixtures/demo-dataset.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
@@ -98,4 +99,55 @@ new Gantt({
   scale: gutterScale,
   scroll: { x: gutterX },
   a11yLabel: 'Short Gantt without a scrollbar',
+});
+
+// #436: `fit: 'pane'` (the default, no `fit` given) makes contentWidth === paneWidth, so the shared
+// ScrollAxis above never runs this combination — its own comment says so. Two Gantts, one shared x
+// ScrollAxis, at the default fit, both loading the same fixture, which carries a zero-length entry
+// parked on the range's own end (the shape that used to float a bar's floored box, and its label,
+// past contentWidth and open a native scroll range the axis could never see). `e2e/scroll-sync.spec.ts`
+// reads both panes' own scrollWidth to prove neither can scroll at all — the only way two panes
+// sharing an axis whose max is always 0 can never desync.
+const paneFitRangeStart = new Date('2026-01-01T00:00:00Z');
+const paneFitRangeEnd = new Date(paneFitRangeStart.getTime() + 3 * MS.DAY);
+const paneFitEntries = [
+  {
+    id: 'pf-a',
+    name: 'A',
+    start: paneFitRangeStart,
+    end: new Date(paneFitRangeStart.getTime() + MS.DAY),
+  },
+  {
+    id: 'pf-b',
+    name: 'B',
+    start: new Date(paneFitRangeStart.getTime() + MS.DAY),
+    end: new Date(paneFitRangeStart.getTime() + 2 * MS.DAY),
+  },
+  {
+    id: 'pf-c',
+    name: 'C',
+    start: new Date(paneFitRangeStart.getTime() + 2 * MS.DAY),
+    end: paneFitRangeEnd,
+  },
+  // Zero-length, on the range's own end (ADR 0012) — the exact shape #436 needs.
+  { id: 'pf-d', name: 'D milestone with a long label', start: paneFitRangeEnd, end: paneFitRangeEnd },
+];
+const paneFitADataset = new Dataset({ entries: paneFitEntries, timeZone: 'UTC' });
+const paneFitBDataset = new Dataset({ entries: paneFitEntries, timeZone: 'UTC' });
+const paneFitRange = { start: paneFitRangeStart, end: paneFitRangeEnd };
+const sharedPaneFitX = new ScrollAxis();
+
+new Gantt({
+  container: '#pane-fit-a',
+  dataset: paneFitADataset,
+  range: paneFitRange,
+  scroll: { x: sharedPaneFitX },
+  a11yLabel: 'Pane-fit Gantt A',
+});
+new Gantt({
+  container: '#pane-fit-b',
+  dataset: paneFitBDataset,
+  range: paneFitRange,
+  scroll: { x: sharedPaneFitX },
+  a11yLabel: 'Pane-fit Gantt B',
 });

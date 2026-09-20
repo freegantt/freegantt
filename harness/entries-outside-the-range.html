@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — #436 entries outside the range</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .fg-gantt {
+        height: 160px;
+        width: 1116px;
+        border: 1px solid #ccc;
+        margin-block-end: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — entries outside the range (#436)</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        Three day-long entries and a fourth, zero-length one parked exactly on the range's own end — the shape
+        that floors a bar's painted width and centres it on its own instant (<code>frame.ts</code>'s
+        <code>barSpan</code>). At <code>fit: 'pane'</code>, the default, this instant sits at the content's
+        own right edge, so the floored box has nowhere to grow into without leaving
+        <code>[0, contentWidth]</code> — the case <code>e2e/timeline-content-width.spec.ts</code> and
+        <code>e2e/scroll-sync.spec.ts</code>'s own <code>fit: 'pane'</code> pair both read.
+      </p>
+      <div id="gantt" class="fg-gantt"></div>
+    </main>
+    <script type="module" src="./entries-outside-the-range.ts"></script>
+  </body>
+</html>

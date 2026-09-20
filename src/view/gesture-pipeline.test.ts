@@ -264,9 +264,13 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     session.preview(150); // would push start past end — clamped in layout/gesture-draft.ts
     await new Promise((resolve) => requestAnimationFrame(resolve));
     const preview = applied.at(-1) as readonly { dx: number; dWidth: number }[];
-    // Clamped to the fixed end (200): start moves the full remaining span, width collapses to 0.
-    expect(preview[0]?.dx).toBe(100);
-    expect(preview[0]?.dWidth).toBe(-100);
+    // Clamped to the fixed end (200): start moves to meet it, so the drafted span is zero-length.
+    // `previewOffsets` reads that through `barSpan` (#436 branch review F4), which paints a
+    // zero-length span as a centred, floored box (12px, `DEFAULT_MIN_BAR_WIDTH_PX`) rather than a
+    // literal 0px point — so the reported delta is the painted one (94, -88), not the raw one
+    // (100, -100) a bare start/end diff would give.
+    expect(preview[0]?.dx).toBe(94);
+    expect(preview[0]?.dWidth).toBe(-88);
   });
 
   it('passes suspendSnap through to the resolved preset snap', async () => {
