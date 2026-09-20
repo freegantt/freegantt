@@ -528,8 +528,17 @@ export function placeFrame(
     }
   }
 
+  // The overscan buffer widens the cull window past both ends of the dataset's own range, but a
+  // band tick or a tick line only ever has a home inside `[0, contentWidth)` (D-S1.8-1: the
+  // timeline's content is `contentWidth` wide, full stop). Clamping the query span here, not just
+  // the ticks it returns, stops `scale.ticks` from walking cursors the content never needed —
+  // `ticks()` still emits the one cell straddling each bound, so a partial leading or trailing
+  // cell still reaches `bands` below for its own box-intersection clip.
   const horizontalSpan = cullHorizontally
-    ? { x: hLeft, width: hRight - hLeft }
+    ? {
+        x: Math.max(hLeft, 0),
+        width: Math.max(0, Math.min(hRight, scale.contentWidth) - Math.max(hLeft, 0)),
+      }
     : { x: 0, width: scale.contentWidth };
 
   // A coarse band's boundary (a year, say) is often well behind the visible pane — the calendar
@@ -567,8 +576,21 @@ export function placeFrame(
         const remainder = tick.x + tick.width - labelLeftClamp;
         const straddlesClamp = tick.x < labelLeftClamp && remainder >= tickBoxFloorPx;
         const x = straddlesClamp ? labelLeftClamp : tick.x;
-        return { x, width: Math.max(0, tick.width - (x - tick.x)), label: format(tick.instant) };
-      }),
+        const width = Math.max(0, tick.width - (x - tick.x));
+        // A band cell is a box, not a point (unlike `tickLines` below), so it needs an
+        // intersection with `[0, contentWidth)`, not the point test that would drop a leading
+        // or trailing cell a reader can plainly see most of. Left un-clamped, a cell that
+        // straddles either content bound paints past it, and that painted node is what widens
+        // the pane's own native `scrollWidth` past the content sizer (D-S1.8-1) — the same harm
+        // `tickLines` already guards against for a tick *line*. Trimming the box here runs after
+        // the straddle clamp above, so the two compose: that clamp can only move `x` rightward
+        // to keep a label inside the visible pane, and this clip only pulls the box back inside
+        // the content — neither can undo the other's work.
+        const clippedX = Math.max(x, 0);
+        const clippedRight = Math.min(x + width, scale.contentWidth);
+        const clippedWidth = Math.max(0, clippedRight - clippedX);
+        return { x: clippedX, width: clippedWidth, label: format(tick.instant) };
+      }).filter((cell) => cell.width > 0),
     };
   });
 

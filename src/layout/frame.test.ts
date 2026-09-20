@@ -843,6 +843,62 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     }
   });
 
+  it('clips a band cell straddling the content edge, so the overscan buffer cannot widen the pane (#436, D-S1.8-1)', () => {
+    // Parked at the right edge, same as the tick-line case above — the finest band's own cell can
+    // straddle `contentWidth` here too, and a header *cell* is a box, not a point: it must be
+    // trimmed to the content edge, not dropped, or the left half of a real leading/trailing cell
+    // vanishes along with the overflow.
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: dayAndWeekHeaders,
+      visible: { x: gridScale.contentWidth - 200, y: 0, width: 200, height: 400 },
+      overscan: { verticalRows: 0, horizontalPx: 300 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    for (const band of frame.header.bands) {
+      expect(band.ticks.length).toBeGreaterThan(0);
+      for (const cell of band.ticks) {
+        expect(cell.x).toBeGreaterThanOrEqual(0);
+        expect(cell.x + cell.width).toBeLessThanOrEqual(gridScale.contentWidth);
+      }
+    }
+  });
+
+  it('clips every band cell to the content even when the pane itself is wider than the content (#436, fit: "preset")', () => {
+    // A `fit: 'preset'` Gantt keeps the preset's own zoom regardless of pane size (plans/01 §5), so
+    // a short dataset in a wide pane makes `visible.width` exceed `contentWidth` outright — the
+    // whole content is "visible" before the overscan buffer even runs. That buffer then pushes the
+    // cull window far past both content edges, the severe case #436 reports (up to 100% overflow).
+    const wideVisible = {
+      x: 0,
+      y: 0,
+      width: gridScale.contentWidth * 2,
+      height: 400,
+    };
+    const frame = computeFrame({
+      entries: gridEntries,
+      scale: gridScale,
+      preset: dayAndWeekHeaders,
+      visible: wideVisible,
+      overscan: { verticalRows: 0, horizontalPx: 128 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    for (const band of frame.header.bands) {
+      expect(band.ticks.length).toBeGreaterThan(0);
+      for (const cell of band.ticks) {
+        expect(cell.x).toBeGreaterThanOrEqual(0);
+        expect(cell.x + cell.width).toBeLessThanOrEqual(gridScale.contentWidth);
+      }
+    }
+  });
+
   it('marks no line major on a single-band preset — no coarser band to align to', () => {
     const frame = computeFrame({
       entries: gridEntries,
@@ -906,9 +962,11 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
     pxPerMs: 1 / minuteMs,
   });
   // visible.x = 130 puts the clamp line (labelLeftClamp = max(visible.x, 0)) at x=130. With
-  // horizontalPx: 200 buffering the tick scan, the ticks at x=-120,-60,0,60 are pulled in by
-  // overscan but sit fully left of 130 (fully behind); the tick at x=120 (width 60) straddles
-  // 130 — its cell spans the clamp line, so it alone gets stuck to the visible edge.
+  // horizontalPx: 200 buffering the tick scan, the ticks at x=0,60 are pulled in by overscan but
+  // sit fully left of 130 (fully behind) — the scan itself never reaches further left than x=0
+  // (#436, D-S1.8-1: content starts at 0, so the query span clamps there too). The tick at x=120
+  // (width 60) straddles 130 — its cell spans the clamp line, so it alone gets stuck to the
+  // visible edge.
   const visible = { x: 130, y: 0, width: 200, height: 0 };
   const overscan = { verticalRows: 0, horizontalPx: 200 };
 
@@ -927,9 +985,9 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
     const ticks = frame.header.bands[0]!.ticks;
 
     // Fully behind the clamp line (tick.x + tick.width <= 130): true x untouched.
-    const farBehind = ticks.find((t) => t.x === -120);
+    const farBehind = ticks.find((t) => t.x === 0);
     const behind = ticks.find((t) => t.x === 60);
-    expect(farBehind).toMatchObject({ x: -120, width: 60 });
+    expect(farBehind).toMatchObject({ x: 0, width: 60 });
     expect(behind).toMatchObject({ x: 60, width: 60 });
 
     // Straddles the clamp line (tick.x=120 < 130 < tick.x+width=180): x clamped to 130, width
