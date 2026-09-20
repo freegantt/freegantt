@@ -696,7 +696,15 @@ describe('render/dom backend', () => {
 
     // `scale` above stubs `xForInstant` flat to 0, so every bar would come out zero-width and this
     // test could not tell an ordinary bar from a floored one. One real px-per-ms scale here instead.
-    const realScale: TimeScale = { ...scale, xForInstant: (instant) => instant, pxPerMs: 1 };
+    // contentWidth: Infinity — this stub's `xForInstant` is the identity, so a real epoch-ms
+    // instant reads back as its own huge x; #436's membership gate would otherwise drop every
+    // bar here, and this test cares about the span-kind stamp, not the content-width invariant.
+    const realScale: TimeScale = {
+      ...scale,
+      xForInstant: (instant) => instant,
+      pxPerMs: 1,
+      contentWidth: Infinity,
+    };
     const ordinary = sampleEntries[0]!;
     // A Bar's span comes from the Entry's own start/end now (ADR 0026), so a zero-width Entry edit
     // is enough on its own to floor the bar — no second, segment-shaped edit to keep in step.
@@ -726,7 +734,13 @@ describe('render/dom backend', () => {
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
 
-    const realScale: TimeScale = { ...scale, xForInstant: (instant) => instant, pxPerMs: 1 };
+    // contentWidth: Infinity — same reason as the span-kind test above (#436).
+    const realScale: TimeScale = {
+      ...scale,
+      xForInstant: (instant) => instant,
+      pxPerMs: 1,
+      contentWidth: Infinity,
+    };
     const t1 = sampleEntries[0]!;
     const variantRegistry = createVariantRegistry({ fieldFor: () => undefined });
     variantRegistry.addPluginVariant({

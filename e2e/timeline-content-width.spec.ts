@@ -44,3 +44,51 @@ test('[timeline-content-width] the pane never scrolls past contentWidth on a sho
     await assertNoOverscroll();
   }
 });
+
+// #436: a zero-length entry parked on the range's own end floors its painted box at
+// minBarWidthPx, centred on its own instant (barSpan, layout/frame.ts) — centred past
+// contentWidth's own right edge, with nothing to shift it back, before this fix. At `fit: 'pane'`
+// (the default), contentWidth === paneWidth by construction, so the pane's ScrollAxis computes a
+// max of 0 and can never see the native scroll range that overhang opens — the two-Gantt desync
+// `harness/scroll-sync.ts` never had a fixture to catch (see its own `fit: 'pane'` pair, added for
+// this same issue).
+test('[timeline-content-width] a zero-length entry at the range end never scrolls the pane past contentWidth (#436)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/entries-outside-the-range.html');
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  const pane = page.locator('.fg-timeline-pane');
+  const { scrollWidth, clientWidth } = await pane.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+});
+
+// #436 (severe case): a Dataset wider than its own `range` — the normal shape for a caller
+// prefetching so pan/zoom never re-fetches — used to paint entries the overscan buffer alone pulls
+// past `contentWidth`'s own edge, with no bound of its own (`layout/frame.ts`'s `barSpan`, the
+// 'exact' span path). `harness/entries-outside-the-range.html` carries both shapes: `straddling`
+// (starts inside `range`, ends past it — trimmed, not dropped) and `out-after` (entirely past
+// `range.end` — dropped outright, never a FrameBar).
+test('[timeline-content-width] entries outside the dataset range never widen the pane past contentWidth (#436)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/entries-outside-the-range.html');
+  await expect(page.locator('.fg-bar').first()).toBeVisible();
+
+  // The wholly out-of-range entry never becomes a bar at all — nothing for a reader to click on
+  // outside the range the caller asked to see. `data-bar-id` (not `data-entry-id`, which the row
+  // still carries) is the bar's own identity (`dom-contract.ts`).
+  await expect(page.locator('[data-bar-id^="out-after:"]')).toHaveCount(0);
+
+  const pane = page.locator('.fg-timeline-pane');
+  const { scrollWidth, clientWidth } = await pane.evaluate((el) => ({
+    scrollWidth: el.scrollWidth,
+    clientWidth: el.clientWidth,
+  }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+});
