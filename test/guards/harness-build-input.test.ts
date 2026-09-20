@@ -5,7 +5,7 @@
 // someone runs `pnpm build` and looks.
 //
 // That happened twice with nobody noticing: `dense-tile-grid.html` predates this guard, and
-// `theme-resolver.html` (#433) shipped without an entry until review caught it. Two pages of drift
+// `theme-push.html` (#433) shipped without an entry until review caught it. Two pages of drift
 // earns a guard, the same call `file-inventory.test.ts` already made for `docs/architecture/files.md`.
 
 import { describe, expect, it } from 'vitest';

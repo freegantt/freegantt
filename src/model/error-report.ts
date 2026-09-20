@@ -81,11 +81,6 @@ export type BuiltInReportCode =
   // nothing says why. Checked once per assignment, against the whole Dataset, not per frame — a
   // frame that shows only variant-painted rows while others sit off-window is not the same thing.
   | 'bar-renderer-shadowed'
-  // #433: a `ThemeResolver` (`view/gantt-shell.ts`'s `Theme`) threw, or answered something other
-  // than `'light'`/`'dark'`. `#applyTheme` falls back to the built-in `'auto'` answer for that one
-  // read and reports it once per resolver instance, so a bad resolver degrades instead of breaking
-  // the Gantt.
-  | 'theme-resolver-failed'
   // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule matches no
   // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
   // down, and a plugin whose key the Dataset never declared is the same case.

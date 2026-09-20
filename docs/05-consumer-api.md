@@ -217,7 +217,7 @@ not a consumer's to set" below for the four channels.
 
 Colour defaults are sourced from an existing, unnamed palette this team maintains elsewhere — only
 the *values* cross over, never the palette's name (CLAUDE.md: vendor product names never appear in
-specs, docs, or code). `theme: 'auto' | 'light' | 'dark' | ThemeResolver` (default `'auto'`) selects
+specs, docs, or code). `theme: 'auto' | 'light' | 'dark'` (default `'auto'`) selects
 which block applies. Resolution runs in one order, the same inside `.fg-container` and outside it:
 the nearest `data-fg-theme` pin, on the element or any ancestor, wins first; else
 `prefers-color-scheme` (`:root:not([data-fg-theme])`) decides; else the light default on `:root`
@@ -233,18 +233,26 @@ library writes the attribute on its own container only; mirroring it onto anythi
 consumer's own call. No named multi-preset picker beyond light/dark yet — that needs `extensions/`'s
 `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live.
 
-**A `ThemeResolver` (`() => 'light' | 'dark'`, #433) answers "is the wrapping app dark" from a
-signal `'auto'` cannot read** — a class on `<html>` (Tailwind, Filament, next-themes), or
-`data-bs-theme` (Bootstrap 5.3): `theme: () =>
-document.documentElement.classList.contains('dark') ? 'dark' : 'light'`. It is a *strategy*, not a
-value: a consumer that persists `gantt.theme`, or renders a picker over it, narrows to
-`'auto' | 'light' | 'dark'` first, the same way `harness/gantt-toolbar.ts`'s own `ThemeChoice` does.
-The library writes the resolver's answer to `data-fg-theme`, never the function itself, and watches
-every attribute under the document (not only `data-fg-theme`) while a resolver is installed, since
-it may key off any attribute or class. Keep a resolver cheap and free of side effects — the library
-calls it on any such mutation, not only the one it exists to catch. A resolver that throws, or
-answers anything but `'light'`/`'dark'`, falls back to the built-in `'auto'` answer for that read and
-reports `'theme-resolver-failed'` once per resolver instance.
+**The app pushes the theme; the library never asks it back** (ADR 0029). A wrapping app usually
+carries its own dark-mode signal — a class on `<html>` (Tailwind, Filament, next-themes), or
+`data-bs-theme` (Bootstrap 5.3) — and it is rarely the two signals `theme: 'auto'` reads. The app's
+own toggle already knows the answer, so it costs one more line to push it: either write
+`gantt.theme` directly
+
+```ts
+gantt.theme = isDark ? 'dark' : 'light';
+```
+
+or pin an ancestor once and never touch the Gantt again
+
+```html
+<div data-fg-theme="dark"><div id="gantt"></div></div>
+```
+
+mirroring the same class in the app's own toggle. `harness/theme-push.html` demonstrates both.
+`'auto'` keeps reading an ancestor's `data-fg-theme` pin and then `prefers-color-scheme` — both
+signals the library defines or the platform defines, never a guess at a convention some framework
+holds.
 
 ### Theme API — resolvedTheme, themeChange, checkResolvedTheme
 
@@ -252,10 +260,8 @@ reports `'theme-resolver-failed'` once per resolver instance.
 back what `theme` actually resolved to, the same precedent `range`/`dateLines` already set (a
 getter returns what the library resolved, #248). `themeChange` fires beside it when that answer
 moves, for any cause the library can see on its own — a `theme` assignment that changes the pin,
-the OS flipping under `'auto'` with no ancestor pin in the way, an ancestor's own pin changing
-(#375, watched by a `MutationObserver` scoped to `data-fg-theme`), or, with a `ThemeResolver`
-installed, any attribute or class change under the document that the resolver reads differently
-(#433 — the same observer, watching more broadly). It has no `before*`
+the OS flipping under `'auto'` with no ancestor pin in the way, or an ancestor's own pin changing
+(#375, watched by a `MutationObserver` scoped to `data-fg-theme`). It has no `before*`
 pair, the same reason `navigationChange` has none: none of these causes is a vetoable gesture, and
 the `theme` half already has its own live setter.
 

@@ -28,10 +28,8 @@ export interface GanttToolbarOptions {
 
 const THEME_STORAGE_KEY = 'freegantt-harness-theme';
 
-/** The three choices this toolbar's segmented control offers — never a `ThemeResolver` (#433):
- *  this harness signals dark mode through `data-fg-theme`/`data-theme` itself, so it never needs
- *  one. A narrower type than the public `Theme` on purpose, so a resolver stays out of every
- *  function below that only ever handles one of these three. */
+/** The three choices this toolbar's segmented control offers. Same shape as the public `Theme`,
+ *  named again here so this file states its own contract. */
 type ThemeChoice = 'auto' | 'light' | 'dark';
 
 const THEME_CHOICES: readonly { readonly value: ThemeChoice; readonly label: string }[] = [
