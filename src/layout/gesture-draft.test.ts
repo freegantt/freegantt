@@ -4,6 +4,7 @@ import type { Entry, Instant, ProposedEdit } from '../model/index.js';
 import { entryId, barId } from '../model/index.js';
 import { entryDouble } from './entry-double.js';
 import { instant, createTimeScale, MS } from '../time/index.js';
+import { barSpan } from './frame.js';
 
 const ZONE = 'America/New_York';
 const scale = createTimeScale({
@@ -213,6 +214,34 @@ describe('previewOffsets', () => {
     const proposed = new Map([[entryId('missing'), envelopeEdit(a.start, a.end)]]);
     const previews = previewOffsets({ proposed, extra: new Map(), entries: [a], scale });
     expect(previews).toEqual([]);
+  });
+
+  it('drags a bar past the content edge without the preview disagreeing with the commit (#436 branch review F4)', () => {
+    // `c` starts fully inside the content and paints its true (`'exact'`) width. The drag resizes
+    // its end past `range.end`, so the drafted bar straddles the content edge and the commit clips
+    // it (`'clipped'`) to `[c.start, contentWidth)`. A naive delta measured on the raw dates would
+    // report a `dWidth` wide enough to paint the untrimmed duration; the fix reads both ends
+    // through `barSpan`, so the preview offset is the trimmed delta the commit itself will apply.
+    const c = entry('c', '2026-06-25T00:00:00Z', '2026-06-28T00:00:00Z');
+    const proposed = new Map([[c.id, edgeEdit('end', instant('2026-07-05T00:00:00Z'))]]);
+    const [preview] = previewOffsets({ proposed, extra: new Map(), entries: [c], scale });
+
+    const committedGeom = barSpan(
+      { id: barId(c.id), entryId: c.id, variant: '', start: c.start!, end: c.end! },
+      scale,
+    );
+    const draftedGeom = barSpan(
+      { id: barId(c.id), entryId: c.id, variant: '', start: c.start!, end: instant('2026-07-05T00:00:00Z') },
+      scale,
+    );
+    expect(draftedGeom.span).toBe('clipped');
+
+    // The preview applies as a plain offset on top of the committed geometry (`applyBarPreview`'s
+    // own arithmetic, I5 hot path) — that result must equal what the next frame paints.
+    expect({
+      x: committedGeom.x + (preview?.dx ?? NaN),
+      width: committedGeom.width + (preview?.dWidth ?? NaN),
+    }).toEqual({ x: draftedGeom.x, width: draftedGeom.width });
   });
 });
 

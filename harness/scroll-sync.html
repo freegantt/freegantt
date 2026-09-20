@@ -38,6 +38,13 @@
       #yonly-b {
         height: 240px;
       }
+      #pane-fit-a {
+        height: 160px;
+        margin-bottom: 1rem;
+      }
+      #pane-fit-b {
+        height: 160px;
+      }
       /* Colour/background/border/border-radius for .fg-header/.fg-tick/.fg-row/.fg-bar, and their
          top/left origin, now ship in the library's own base stylesheet (S1.10/S1.11, view/styles.ts)
          — this harness keeps only the typography that stays legitimately harness-owned (D-S1.11-8). */
@@ -83,6 +90,14 @@
       </p>
       <div id="yonly-a" class="fg-gantt"></div>
       <div id="yonly-b" class="fg-gantt"></div>
+      <h2>x-only sharing at the default fit (#436)</h2>
+      <p>
+        Two more Gantts sharing only the x ScrollAxis, at <code>fit: 'pane'</code> — the default every other
+        pair above opts out of. Each carries the same 3-day dataset with a zero-length entry parked on the
+        range's own end.
+      </p>
+      <div id="pane-fit-a" class="fg-gantt"></div>
+      <div id="pane-fit-b" class="fg-gantt"></div>
     </main>
     <script type="module" src="./scroll-sync.ts"></script>
   </body>

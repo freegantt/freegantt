@@ -110,7 +110,7 @@ export interface BarRendererContext {
 }
 
 // @public
-export type BarSpanKind = 'exact' | 'minimum' | 'fixed';
+export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
