@@ -379,7 +379,7 @@ One Gantt's _data_ contribution to a shared pure model, supplied when it joins �
 _Avoid_: Attach (reserved for the DOM side), subscribe, register
 
 **Bound value**:
-The value a viewport model resolves from every current Binding, together with the contract for telling those bindings about it (`layout/viewport/bound-value.ts`, D-S1.5-4): bind always notifies the newcomer, every other notification fires iff the resolved value changed. One collection serves both jobs — the bindings and their reactions are the same map. TimeScaleModel's is `{timeZone, range, pxPerMs}`; each ScrollAxis's is `{position, max}`. Scoped to `layout/viewport/`'s models by decision (`plans/01` §8.2 D-A), not a general notify primitive.
+The value a viewport model resolves from every current Binding, together with the contract for telling those bindings about it (`layout/viewport/bound-value.ts`, D-S1.5-4): bind always notifies the newcomer, every other notification fires iff the resolved value changed. One collection serves both jobs — the bindings and their reactions are the same map. TimeScaleModel's is `{timeZone, range, pxPerMs}`; each ScrollAxis's is `{position, max, bindingCount}` — the count is in the resolved value so that an arriving neighbour notifies the panes already bound (#440). Scoped to `layout/viewport/`'s models by decision (`plans/01` §8.2 D-A), not a general notify primitive.
 _Avoid_: Observable, signal, store, subscription (those name `data/`'s reactivity, which is a different mechanism with a different owner)
 
 **Scale binding**:

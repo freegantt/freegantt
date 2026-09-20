@@ -880,6 +880,122 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
+  it('reveal(entryId) on an entry entirely past range.end scrolls toward it, not to the far left (#436 branch review F3)', () => {
+    // `barSpan` drops a bar entirely outside `[0, contentWidth)` and reports a fabricated
+    // `{x: 0, width: 0}` (#436). Folding that into `unionSpan` used to send `reveal` to the far
+    // left — the same direction a real reveal target at `x: 0` would ask for, so the bug reads as
+    // "reveal did nothing" from a rest position, and only shows up moving away from one. This test
+    // starts mid-scroll and asserts `reveal` moves further right, toward the entry's own dates
+    // (`fallbackSpanBar`), not back to the left edge.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scrollX = new ScrollAxis();
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
+      const farPast: StoredEntry = {
+        id: entryId('far-past'),
+        name: 'far past',
+        start: instant('2026-09-20T00:00:00Z'),
+        end: instant('2026-09-21T00:00:00Z'),
+        props: {},
+      };
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([farPast]),
+        scroll: { x: scrollX },
+        scale,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 50, height: 100 });
+
+      scrollX.panTo(200);
+      const beforeReveal = scrollX.state.position;
+      expect(beforeReveal).toBeGreaterThan(0);
+
+      shell.reveal(entryId('far-past'));
+      expect(scrollX.state.position).toBeGreaterThan(beforeReveal);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reveal(entryId) unions only the painted bars, skipping one a variant produced but barSpan dropped (#436 branch review F3)', () => {
+    // Two Bars for one Entry: one lands entirely outside the content and is dropped
+    // (`{x: 0, width: 0}`), the other paints in range. The union must read the painted one only —
+    // folding the dropped bar's fabricated origin in would widen the union toward `0` and pull
+    // `reveal` further left than the real bar needs.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scrollX = new ScrollAxis();
+      const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.01 });
+      const entry: StoredEntry = {
+        id: entryId('two-bars'),
+        name: 'two bars',
+        start: instant('2026-09-02T00:00:00Z'),
+        end: instant('2026-09-03T00:00:00Z'),
+        props: {},
+      };
+      const inRangeStart = entry.start as Instant;
+      const inRangeEnd = entry.end as Instant;
+      const outOfRangeStart = instant('2026-09-20T00:00:00Z');
+      const outOfRangeEnd = instant('2026-09-21T00:00:00Z');
+      const shell = new GanttShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset([entry]),
+        scroll: { x: scrollX },
+        scale,
+        variants: [
+          {
+            name: 'two-bars',
+            when: () => true,
+            bars: (e) => [
+              {
+                id: barId(e.id, 0),
+                entryId: e.id,
+                variant: 'two-bars',
+                label: '',
+                start: inRangeStart,
+                end: inRangeEnd,
+              },
+              {
+                id: barId(e.id, 1),
+                entryId: e.id,
+                variant: 'two-bars',
+                label: '',
+                start: outOfRangeStart,
+                end: outOfRangeEnd,
+              },
+            ],
+          },
+        ],
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 50, height: 100 });
+
+      const inRangeX = scale.scale.xForInstant(inRangeStart);
+      const inRangeWidth = Math.max(
+        DEFAULT_MIN_BAR_WIDTH_PX,
+        scale.scale.xForInstant(inRangeEnd) - scale.scale.xForInstant(inRangeStart),
+      );
+
+      shell.reveal(entryId('two-bars'));
+      // The dropped second bar contributes nothing: the target is exactly the in-range bar's own
+      // rectangle, not widened by a fabricated `{x: 0, ...}` at the union's low end.
+      expect(scrollX.state.position).toBe(inRangeX + inRangeWidth - 50);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // Retired (ADR 0026, #421): `reveal(segmentId)` used to target one Segment's own painted box, and
   // fall back to that Segment's own dates when no bar drew it. `reveal()` only ever takes an Entry id
   // now, and `Bar` carries no per-Segment identity to target, so neither scenario exists to test.

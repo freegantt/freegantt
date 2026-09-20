@@ -5,8 +5,9 @@
 // someone runs `pnpm build` and looks.
 //
 // That happened twice with nobody noticing: `dense-tile-grid.html` predates this guard, and
-// `theme-push.html` (#433) shipped without an entry until review caught it. Two pages of drift
-// earns a guard, the same call `file-inventory.test.ts` already made for `docs/architecture/files.md`.
+// `theme-push.html` (#433) shipped without an entry until review caught it. A gap nobody can see
+// from the dev server earns a guard, the same call `file-inventory.test.ts` already made for
+// `docs/architecture/files.md`.
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';

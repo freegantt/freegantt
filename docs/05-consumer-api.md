@@ -10,6 +10,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`plans/02-public-api.md`](../plans/02-public-api.md) | Full public API design — events, errors, serialization, customization ladder |
 | [`CONTEXT.md`](../CONTEXT.md) | Glossary — one word per concept (Entry, Field, Row, Row source, Rollup, …) |
 | [`etc/freegantt.api.md`](../etc/freegantt.api.md) | Generated TypeScript export list (api-extractor); the same public surface is also browsable as generated API docs on the Docusaurus site (`pnpm docs`) |
+| [`docs/09-integration-pitfalls.md`](09-integration-pitfalls.md) | Traps real integrators hit — theme and an application's `dark` class, the zoom notification, `overscan`, the row click |
 | [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
 | [`docs/07-row-source-updates.md`](07-row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
 
@@ -338,6 +339,7 @@ gap, not a rename.
 | `.fg-container` | Root of one Gantt. Theme pin and token inheritance start here. |
 | `.fg-grid-pane` | Left pane. Grid columns, row labels, cells. |
 | `.fg-timeline-pane` | Right pane. Header, bars, decorations, date lines. |
+| `.fg-shared-axis` | On `.fg-timeline-pane` when this Gantt shares a `ScrollAxis` on `x`. Reserves a scrollbar gutter, so every pane on that axis keeps one width. Needs `scrollbar-gutter`; an engine without it falls back to today's behaviour, where the two panes stop up to a scrollbar's width apart. |
 | `.fg-splitter` | Drag handle between the two panes. |
 | `.fg-overlay` | Popup mount layer above both panes. `pointer-events: none` until a `.fg-popup` opts in. |
 | `.fg-grid-header` | Column header row in the grid pane. |

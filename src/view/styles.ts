@@ -350,6 +350,10 @@ ${DARK_COLOR_TOKENS}
    resize cursor would otherwise be the one affordance left advertising a gesture that does nothing. */
 .fg-splitter[data-resize-off] { cursor: default; }
 .fg-timeline-pane { position: relative; flex: 1 1 auto; min-width: 0; overflow: auto; background: var(--fg-pane-bg); }
+/* #440: a pane that shares its scroll axis holds its width steady, so a neighbour's vertical
+   scrollbar cannot move the date under a given screen x. view/scroll-attachment.ts toggles the
+   class; a lone Gantt never carries it and keeps the full width. */
+.fg-timeline-pane.fg-shared-axis { scrollbar-gutter: stable; }
 /* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
    (closes the S1.8 debt, D-S1.12-15). */
@@ -431,17 +435,29 @@ ${DARK_COLOR_TOKENS}
    --fg-bar-fill override (set on this element, e.g. by barRenderer) only reaches the painted
    colour if the mix reads --fg-bar-fill at this element too. --fg-bar-opacity stays declared on
    .fg-container alone and inherits down unchanged. */
-.fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, ${DEFAULT_BAR_RADIUS_PX}px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; }
+/* overflow: hidden (#436): a resize handle sits in barLayer, a sibling of every .fg-bar, never a
+   child of one, so this clip cannot reach it — the only child this contains is an 'inside' label
+   past the bar's own floored width, the same D-S1.8-1 obligation .fg-header-bands already keeps for
+   ticks. The data-label='outside' override just above opts the one child meant to escape back out. */
+.fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, ${DEFAULT_BAR_RADIUS_PX}px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; overflow: hidden; }
 /* J1: the default label — a keyed child (render/dom/index.ts), not bare text, so it can be
    positioned and coloured on its own once a barLabels placement pushes it outside the bar.
    min-width: 0 is what lets a flex child shrink below its own text's natural width at all; without
-   it text-overflow never gets the chance to run. */
+   it text-overflow never gets the chance to run. Shrinking stops at this label's own padding-inline
+   (2 x DEFAULT_BAR_LABEL_GAP_PX, 16px) no matter how far — a box's content can shrink to 0 but its
+   padding still paints, so a bar floored narrower than that (DEFAULT_MIN_BAR_WIDTH_PX, 12px) still
+   has a label wider than itself. .fg-bar's own overflow: hidden (#436), not a narrower box here, is
+   what keeps that label from painting past the bar. */
 .fg-bar-label { min-width: 0; padding-inline: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* data-label='outside' (render/dom/index.ts's own resolveBarLabelPlacement) — the label leaves the
    bar's own box and paints on the pane beside it, in the pane's own ink rather than the bar fill's
    label colour, with no ellipsis: resolveBarLabelPlacement only ever chooses 'outside' when the full
    label already fits past the bar's right edge. */
 .fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); }
+/* .fg-bar's own overflow: hidden (below) exists to contain an 'inside' label past the bar's own
+   floored width (#436) — an 'outside' label is the one child meant to leave that box on purpose,
+   so this one case opts back out of the clip its own ancestor rule turns on. */
+.fg-bar[data-label='outside'] { overflow: visible; }
 /* data-label='hidden' (F1, #435 follow-up: render/dom/index.ts's own BarLabelToken) — barLabels:
    'insideOrNone' on a bar too narrow for its label. Named for what the DOM shows, not for the
    'none' policy value that produces it — this child exists and is measured, only unpainted (R1,
