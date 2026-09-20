@@ -2048,6 +2048,7 @@ export class ScrollAxis {
 
 // @public
 export interface ScrollAxisState {
+    readonly bindingCount: number;
     readonly max: number;
     readonly position: number;
 }

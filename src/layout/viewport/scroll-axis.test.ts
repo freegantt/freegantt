@@ -59,14 +59,17 @@ describe('ScrollAxis', () => {
     expect(calls).toBe(1);
   });
 
-  it('a bind that changes nothing notifies nobody else', () => {
+  // A *bind* is not in this test's reach any more: arriving changes `bindingCount`, which every
+  // already-bound pane needs (#440, see `bindingCount` below). A resize that moves nothing still is.
+  it('a resize that changes nothing notifies nobody else', () => {
     const axis = new ScrollAxis();
     let calls = 0;
     bindScrollAxis(axis, { content: 100, pane: 100 }, () => calls++);
+    const other = bindScrollAxis(axis, { content: 100, pane: 100 }, noop);
     calls = 0;
 
-    // Second binding with an identical, non-loosening extent: max stays 0, position stays 0.
-    bindScrollAxis(axis, { content: 100, pane: 100 }, noop);
+    // A non-loosening extent on the other binding: max stays 0, position stays 0, count stays 2.
+    other.setContentSize(80);
     expect(calls).toBe(0);
   });
 
@@ -157,5 +160,46 @@ describe('ScrollAxis', () => {
       expect(axis.state.position).toBe(40);
       expect(axis.state.max).toBe(900);
     });
+  });
+});
+
+// #440: `view/` keeps every pane on a shared axis the same width, and this is how it asks.
+describe('ScrollAxis bindingCount', () => {
+  it('counts the Gantts bound to this direction', () => {
+    const axis = new ScrollAxis();
+    expect(axis.state.bindingCount).toBe(0);
+
+    const first = bindScrollAxis(axis, { content: 1000, pane: 776 }, () => {});
+    expect(axis.state.bindingCount).toBe(1);
+
+    const second = bindScrollAxis(axis, { content: 1000, pane: 761 }, () => {});
+    expect(axis.state.bindingCount).toBe(2);
+
+    second.unbind();
+    expect(axis.state.bindingCount).toBe(1);
+    first.unbind();
+    expect(axis.state.bindingCount).toBe(0);
+  });
+
+  it('a second binding notifies the first, so an already-mounted pane learns it is now shared', () => {
+    const axis = new ScrollAxis();
+    let notifications = 0;
+    bindScrollAxis(axis, { content: 1000, pane: 776 }, () => {
+      notifications += 1;
+    });
+    notifications = 0;
+
+    // Same `max` on both bindings, so `bindingCount` is the only thing that moves.
+    bindScrollAxis(axis, { content: 1000, pane: 776 }, () => {});
+
+    expect(notifications).toBe(1);
+  });
+
+  it('max stays the loosest bound — counting bindings does not change D-S1.5-1', () => {
+    const axis = new ScrollAxis();
+    bindScrollAxis(axis, { content: 1000, pane: 776 }, () => {});
+    bindScrollAxis(axis, { content: 1000, pane: 761 }, () => {});
+
+    expect(axis.state.max).toBe(239);
   });
 });

@@ -2508,6 +2508,10 @@ export class GanttShell {
     if (this.#paneLayout.setHeaderBandCount(frame.header.bands.length)) this.#applyRowsViewportSize();
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
+    // #440: does a neighbour share our axis? If so this pane holds its width steady, so the two
+    // agree about how far right they can go. Re-checked here because a second Gantt may bind the
+    // axis long after this one mounted.
+    this.#scrollAttachment.reserveScrollbarGutter();
     this.#scrollAttachment.writePosition();
     // #126: independent of the timeline's content width above. The grid pane's own horizontal
     // scroller reaches fixed-width columns that overflow `gridWidth`, unrelated to the time axis.

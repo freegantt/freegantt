@@ -39,6 +39,10 @@ export interface ScrollAxisState {
   /** How far `panTo` may ask: the loosest bound any bound Gantt needs (D-S1.5-1). Not a claim
    * about any one chart's scroller — each clamps its own. */
   readonly max: number;
+  /** How many Gantts this direction currently serves. `1` for the ordinary un-shared axis; `2` or
+   * more once two charts line up on one timeline. `view/` reads it to keep every bound pane the same
+   * width — see `reserveScrollbarGutter` (issue #440). */
+  readonly bindingCount: number;
 }
 
 /** What `GanttOptions.scroll` takes. Omitting a direction keeps it private (D-S6-1) — the library
@@ -68,7 +72,7 @@ interface MutableBinding {
 }
 
 function sameScrollAxisState(a: ScrollAxisState, b: ScrollAxisState): boolean {
-  return a.position === b.position && a.max === b.max;
+  return a.position === b.position && a.max === b.max && a.bindingCount === b.bindingCount;
 }
 
 /** Per-instance state `bindScrollAxis` needs but which is not on the published type (issue #84,
@@ -116,12 +120,12 @@ export class ScrollAxis {
    *  chart's scroller. */
   #resolve(bindings: Iterable<MutableBinding>): ScrollAxisState {
     let max = 0;
-    let bound = false;
+    let bindingCount = 0;
     for (const binding of bindings) {
-      bound = true;
+      bindingCount += 1;
       max = Math.max(max, Math.max(0, binding.content - binding.pane));
     }
-    return Object.freeze({ position: this.#position, max: bound ? max : 0 });
+    return Object.freeze({ position: this.#position, max: bindingCount > 0 ? max : 0, bindingCount });
   }
 }
 

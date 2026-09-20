@@ -37,6 +37,14 @@
       }
       #yonly-b {
         height: 240px;
+        margin-bottom: 1rem;
+      }
+      #gutter-a {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #gutter-b {
+        height: 240px;
       }
       /* Colour/background/border/border-radius for .fg-header/.fg-tick/.fg-row/.fg-bar, and their
          top/left origin, now ship in the library's own base stylesheet (S1.10/S1.11, view/styles.ts)
@@ -83,6 +91,14 @@
       </p>
       <div id="yonly-a" class="fg-gantt"></div>
       <div id="yonly-b" class="fg-gantt"></div>
+      <h2>Unequal vertical overflow on one x axis (#440)</h2>
+      <p>
+        Two more Gantts sharing only the x ScrollAxis. The first holds every row and overflows its box; the
+        second holds three rows and does not. Both panes reserve a scrollbar gutter, so one pane's scrollbar
+        cannot make it narrower than the other and the two stop at the same place on the right.
+      </p>
+      <div id="gutter-a" class="fg-gantt"></div>
+      <div id="gutter-b" class="fg-gantt"></div>
     </main>
     <script type="module" src="./scroll-sync.ts"></script>
   </body>
