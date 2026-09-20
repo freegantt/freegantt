@@ -234,8 +234,8 @@ consumer's own call. No named multi-preset picker beyond light/dark yet — that
 `PluginContext`, the only I2-safe place a `registerThemePreset`-shaped seam can live.
 
 **The app pushes the theme; the library never asks it back** (ADR 0029). A wrapping app usually
-carries its own dark-mode signal — a class on `<html>` (Tailwind, Filament, next-themes), or
-`data-bs-theme` (Bootstrap 5.3) — and it is rarely the two signals `theme: 'auto'` reads. The app's
+carries its own dark-mode signal — a class on `<html>`, or an attribute a framework writes there —
+and it is rarely the two signals `theme: 'auto'` reads (survey and evidence in ADR 0029). The app's
 own toggle already knows the answer, so it costs one more line to push it: either write
 `gantt.theme` directly
 
@@ -259,9 +259,9 @@ holds.
 **`gantt.resolvedTheme` answers `'light'` or `'dark'` — never `'auto'`** (#330): the getter reads
 back what `theme` actually resolved to, the same precedent `range`/`dateLines` already set (a
 getter returns what the library resolved, #248). `themeChange` fires beside it when that answer
-moves, for any cause the library can see on its own — a `theme` assignment that changes the pin,
-the OS flipping under `'auto'` with no ancestor pin in the way, or an ancestor's own pin changing
-(#375, watched by a `MutationObserver` scoped to `data-fg-theme`). It has no `before*`
+moves, for any of three causes the library can see on its own — a `theme` assignment that changes
+the pin, the OS flipping under `'auto'` with no ancestor pin in the way, or an ancestor's own pin
+changing (#375, watched by a `MutationObserver` scoped to `data-fg-theme`). It has no `before*`
 pair, the same reason `navigationChange` has none: none of these causes is a vetoable gesture, and
 the `theme` half already has its own live setter.
 
