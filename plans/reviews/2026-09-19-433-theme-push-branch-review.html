@@ -42,7 +42,7 @@
             in three places</strong> (the toolbar's duplicate <span class="mono">ThemeChoice</span>, the
             ADR's overclaim about self-mutation, the stale resolver review), and the new harness page
             <strong>repeats a hand-tuned-token pattern AGENTS.md names by number</strong>. Nothing is High:
-            no src behaviour ships wrong. Eight findings, all Medium or Low.
+            no src behaviour ships wrong. Nine findings, all Medium or Low. Pass 2 confirmed all nine.
           </p>
         </div>
       </section>
@@ -205,8 +205,11 @@
             harness/theme-push.ts:47–48 · e2e/theme-push.spec.ts:12–14 · cf. harness/zoom.ts:24–29, harness/hierarchy.ts:27–33
           </p>
           <p class="text-sm">
-            <strong>Problem:</strong> every sibling page declares its test seam with
-            <span class="mono">declare global { interface Window { … } }</span>. This page instead writes
+            <strong>Problem:</strong> the pages that own a seam declare it with
+            <span class="mono">declare global { interface Window { … } }</span>
+            (harness/zoom.ts:24, harness/hierarchy.ts:27, harness/data.ts:28,
+            harness/dense-tile-grid.ts:70); pages with no extra global — main.ts, planner.ts,
+            bar-label-fit.ts — rely on one of those declarations. This page instead writes
             <span class="mono">(window as unknown as { __gantt: Gantt; __ganttPinned: Gantt })</span>, which
             discards type checking and re-declares <span class="mono">__gantt</span> (already declared
             globally by other pages). The e2e then narrows the same global to
@@ -279,11 +282,14 @@
             into a document and a function does not". A Gantt <span class="mono">theme</span> is runtime
             config; it is never written into a document. The real cost of the resolver was the observer and
             its re-entrancy, which the Consequences section already states. Borrowed authority weakens an
-            otherwise sound argument.
+            otherwise sound argument. Pass 2 also found the attribution is wrong: the quoted phrase is not
+            in CONTEXT.md's Aggregator entry (CONTEXT.md:96 says a name is data the registry can refuse, not
+            that it serialises) — it is AGENTS.md:33.
           </p>
           <p class="text-sm">
             <strong>Fix:</strong> cut the serialisation appeal, or say plainly that the same "a config value
-            is data, not behaviour" preference is being applied by analogy.
+            is data, not behaviour" preference is being applied by analogy — and correct the attribution to
+            AGENTS.md.
           </p>
         </article>
       </section>
@@ -332,15 +338,15 @@
             <tr><th class="px-3 py-2 w-16">Id</th><th class="px-3 py-2 w-32">Verdict</th><th class="px-3 py-2">Note</th></tr>
           </thead>
           <tbody class="divide-y divide-slate-100 bg-white">
-            <tr><td class="px-3 py-2 mono">F1</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F2</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F3</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F4</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F5</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F6</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F7</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F8</td><td class="px-3 py-2">—</td><td></td></tr>
-            <tr><td class="px-3 py-2 mono">F9</td><td class="px-3 py-2">—</td><td></td></tr>
+            <tr><td class="px-3 py-2 mono">F1</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">main imported <span class="mono">Theme</span>; the branch's literal-only <span class="mono">ThemeChoice</span> is resolver residue.</td></tr>
+            <tr><td class="px-3 py-2 mono">F2</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">The ADR's own code comment admits the self-wake the sentence denies.</td></tr>
+            <tr><td class="px-3 py-2 mono">F3</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Branch-added, live-defect verdict, empty pass-2 table, no banner.</td></tr>
+            <tr><td class="px-3 py-2 mono">F4</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Main said "three causes"; src/view/event-bus.ts:144 still does.</td></tr>
+            <tr><td class="px-3 py-2 mono">F5</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">32px/220px hard-coded; no <span class="mono">gridWidth</span>; default row height 36.</td></tr>
+            <tr><td class="px-3 py-2 mono">F6</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Pass 2 corrected "every sibling page" — see the softened wording above.</td></tr>
+            <tr><td class="px-3 py-2 mono">F7</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">No <span class="mono">.dark</span> selector anywhere in the harness.</td></tr>
+            <tr><td class="px-3 py-2 mono">F8</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">The ADR already carries the brand survey docs/05 repeats.</td></tr>
+            <tr><td class="px-3 py-2 mono">F9</td><td class="px-3 py-2 text-emerald-700">Confirmed</td><td class="px-3 py-2">Plus a missed defect: the phrase is AGENTS.md:33, not CONTEXT.md.</td></tr>
           </tbody>
         </table>
       </section>
