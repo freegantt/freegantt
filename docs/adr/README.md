@@ -40,6 +40,7 @@ frontmatter.
 | [0026](0026-the-segment-retires.md) | The Segment retires | accepted | `Segment` is deleted as a type; a former Segment is an ordinary child `Entry` |
 | [0027](0027-a-spanning-entry-draws-a-bar.md) | A spanning Entry draws a Bar | accepted | A spanning Entry draws one Bar; a segmented parent draws no Bar of its own |
 | [0028](0028-a-plugins-impossible-proposal-is-a-refusal.md) | A plugin's impossible proposal is a refusal | accepted | An extender proposing an impossible value is refused at `warning` with `by` naming it; an extender that throws is a `'error'` fault |
+| [0029](0029-the-app-pushes-the-theme.md) | The app pushes the theme; the library never asks | accepted | `theme` is three literals; the app writes `gantt.theme` or pins `data-fg-theme`, and the library never calls back or watches attributes it does not own |
 
 ## The gap at 0014
 
