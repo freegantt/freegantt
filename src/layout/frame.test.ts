@@ -475,9 +475,13 @@ describe('computeFrame', () => {
   });
 
   it('matches the golden snapshot for the fixture dataset', () => {
+    // `wideScale`, not `scale` (#436 branch review Focus 4): `scale`'s own range is only
+    // `sampleEntries[0]`'s span, so `entry-3` would be clipped and the golden record would pin a
+    // clipped width instead of the fixture's real one — a reader could mistake a 4-day entry for a
+    // 2-day one. `wideScale` spans every fixture entry, so this records the fixture's real paint.
     const frame = computeFrame({
       entries: sampleEntries.slice(0, 3),
-      scale,
+      scale: wideScale,
       preset,
       visible,
       rowHeight: 32,
@@ -1353,6 +1357,40 @@ describe('barSpan — membership decided before any floor, fixed width, or shift
     expect(width).toBe(0);
   });
 
+  it('caps a floored width at contentWidth, so a narrow pane never paints past its own edge (#436 branch review F1)', () => {
+    // `clampBoxToContent` only ever moves `x` — a `minBarWidthPx` wider than `contentWidth` still
+    // pinned `x` to `0` and painted the uncapped width straight past the far edge before this fix.
+    const insideContent = entryDoubleLike(sampleEntries[0]!, { start: sampleEntries[0]!.start! });
+    const { x, width } = barSpan(barOf(insideContent), scale, scale.contentWidth + 1000);
+    expect(width).toBe(scale.contentWidth);
+    expect(x + width).toBe(scale.contentWidth);
+  });
+
+  it('caps a fixed box width at contentWidth, so a narrow pane never paints past its own edge (#436 branch review F1)', () => {
+    const insideContent = entryDoubleLike(sampleEntries[0]!, { start: sampleEntries[0]!.start! });
+    const { x, width } = barSpan(
+      barOf(insideContent, { widthPx: scale.contentWidth + 1000, anchor: 'center' }),
+      scale,
+    );
+    expect(width).toBe(scale.contentWidth);
+    expect(x + width).toBe(scale.contentWidth);
+  });
+
+  it('keeps a fixed box (start anchor) whose anchor sits just left of the origin, when its body still overlaps the content (#436 branch review F5)', () => {
+    // The anchor-instant-only test (this branch's first attempt at F5) dropped this case, even
+    // though the floored-bar path for the same entry keeps and clamps it. A box-extent test alone
+    // would instead have kept a zero-length entry parked past `contentWidth` — the case #436 is
+    // about — so both tests run, ANDed: the entry's own span (`inContent`) and the box's own body.
+    const nearLeft = entryDoubleLike(sampleEntries[0]!, {
+      start: scale.instantForX(-2),
+      end: scale.instantForX(11),
+    });
+    const { x, width, span } = barSpan(barOf(nearLeft, { widthPx: 13, anchor: 'start' }), scale);
+    expect(span).toBe('fixed');
+    expect(width).toBe(13);
+    expect(x).toBe(0);
+  });
+
   it('keeps a zero-length entry exactly on the last instant — one bar, right edge at contentWidth, not past it', () => {
     const atEnd = entryDoubleLike(sampleEntries[0]!, { start: sampleEntries[0]!.end! });
     const { x, width } = barSpan(barOf(atEnd), scale);
@@ -1368,7 +1406,9 @@ describe('barSpan — membership decided before any floor, fixed width, or shift
     const { x, width, span } = barSpan(barOf(straddling), scale);
     expect(x).toBe(scale.contentWidth - 20);
     expect(x + width).toBe(scale.contentWidth);
-    expect(span).toBe('exact');
+    // #436 branch review F2: a trim changes the geometry, so it is reported as `'clipped'`, not
+    // `'exact'` — `'exact'` promises the entry's own untouched start/end.
+    expect(span).toBe('clipped');
   });
 
   it('drops a real-duration entry entirely past contentWidth, pulled in only by overscan', () => {
