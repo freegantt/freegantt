@@ -271,3 +271,27 @@ test('a Gantt that shares no axis keeps its whole pane width (#440)', async ({ p
 
   expect(gutter).toBe('auto');
 });
+
+// #436: #pane-fit-a/#pane-fit-b share only the x ScrollAxis, at `fit: 'pane'` (the default) — the
+// one combination every pair above opts out of ("#436" comment in harness/scroll-sync.ts). At this
+// fit, contentWidth === paneWidth by construction, so the shared ScrollAxis's own max is always 0:
+// the only way #pane-fit-a and #pane-fit-b can never desync is if neither pane can natively scroll
+// at all. A zero-length entry parked on the range's own end used to float a bar (and its label)
+// past contentWidth and open a real, if small, native scroll range the axis could never see — this
+// asserts that range stays exactly zero.
+test('[timeline-content-width] two Gantts sharing an x ScrollAxis at fit: pane never open a native scroll range (#436)', async ({
+  page,
+}) => {
+  await page.goto('/scroll-sync.html');
+  await expect(page.locator('#pane-fit-a .fg-bar').first()).toBeVisible();
+
+  const panes = await page.evaluate(() => {
+    const read = (selector: string) => {
+      const el = document.querySelector(selector)!;
+      return { scrollWidth: el.scrollWidth, clientWidth: el.clientWidth };
+    };
+    return { a: read('#pane-fit-a .fg-timeline-pane'), b: read('#pane-fit-b .fg-timeline-pane') };
+  });
+  expect(panes.a.scrollWidth).toBeLessThanOrEqual(panes.a.clientWidth);
+  expect(panes.b.scrollWidth).toBeLessThanOrEqual(panes.b.clientWidth);
+});
