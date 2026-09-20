@@ -14,7 +14,7 @@ export type HarnessPageId =
   | 'planner'
   | 'plugins'
   | 'mount-destroy'
-  | 'theme-resolver';
+  | 'theme-push';
 
 type HarnessPage = {
   readonly id: HarnessPageId;
@@ -36,7 +36,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'planner', label: 'Planner (design)', file: 'planner.html' },
   { id: 'plugins', label: 'Plugin runtime', file: 'plugins.html' },
   { id: 'mount-destroy', label: 'Mount & destroy', file: 'mount-destroy.html' },
-  { id: 'theme-resolver', label: 'Theme resolver', file: 'theme-resolver.html' },
+  { id: 'theme-push', label: 'Theme push', file: 'theme-push.html' },
 ];
 
 function detectCurrentPage(pathname: string): HarnessPageId {
@@ -69,8 +69,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'plugins';
     case 'mount-destroy.html':
       return 'mount-destroy';
-    case 'theme-resolver.html':
-      return 'theme-resolver';
+    case 'theme-push.html':
+      return 'theme-push';
     default:
       return 'generic-demo';
   }

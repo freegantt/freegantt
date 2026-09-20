@@ -126,12 +126,14 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
     ],
   },
-  'theme-resolver': {
+  'theme-push': {
     demonstrates:
-      'A ThemeResolver answers "is the wrapping app dark" from a class on <html>, the way Tailwind, ' +
-      'Filament, and next-themes signal it. No data-fg-theme pin exists on this page at all.',
+      'The app pushes its own dark-mode answer to the Gantt; the library never asks. One toggle ' +
+      'writes gantt.theme directly, and mirrors data-fg-theme onto a wrapper for a second Gantt on ' +
+      "'auto'.",
     config: [
-      "theme: () => document.documentElement.classList.contains('dark') ? 'dark' : 'light'",
+      "gantt.theme = isDark ? 'dark' : 'light'",
+      "wrapper.setAttribute('data-fg-theme', isDark ? 'dark' : 'light')",
     ],
     specLinks: [{ label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` }],
   },

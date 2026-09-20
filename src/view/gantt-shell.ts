@@ -170,26 +170,11 @@ export type AttachColumnGestures = (
   ctx: ColumnGestureContext,
 ) => Detachable;
 
-/** A consumer's own answer to "is the wrapping app dark right now" (#433). Core owns the observer.
- *  It owns the `matchMedia` listener, the `themeChange` emission and the teardown. A `ThemeResolver`
- *  supplies only the missing predicate. Use one when the wrapping app signals dark mode some other
- *  way. Two examples: a class on `<html>` (Tailwind, Filament, next-themes), or `data-bs-theme`
- *  (Bootstrap 5.3). Call site: `theme: () =>
- *  document.documentElement.classList.contains('dark') ? 'dark' : 'light'`. It answers
- *  `ResolvedTheme` only, never `'auto'` — a resolver answers a question, it does not ask one back.
- *  A resolver that throws, or returns anything else, falls back to the built-in `'auto'` answer for
- *  that read. It also raises `'theme-resolver-failed'` once (`#resolveWithResolver`).
- *
- *  Keep it cheap and free of side effects. Installing one widens `#themePinObserver` to every
- *  attribute under the document (`#observeThemePin`). The library then calls this function again on
- *  any unrelated attribute or class churn anywhere under the root. That includes churn that has
- *  nothing to do with the change it exists to catch. */
-export type ThemeResolver = () => ResolvedTheme;
-
-/** S1.10, D-S1.10-4: theming's preset axis — `'auto'` follows `prefers-color-scheme` (no
- * `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. A `ThemeResolver` (#433) pins the
- * same way, from a predicate the consumer supplies instead of a literal. */
-export type Theme = 'auto' | 'light' | 'dark' | ThemeResolver;
+/** S1.10, D-S1.10-4: theming's only preset axis — `'auto'` follows `prefers-color-scheme` (no
+ * `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. ADR 0029: the app pushes the
+ * answer; it writes `gantt.theme` or pins `data-fg-theme` on an ancestor. The library never calls
+ * back into the app to ask. */
+export type Theme = 'auto' | 'light' | 'dark';
 
 const DEFAULT_THEME: Theme = 'auto';
 const DEFAULT_A11Y_LABEL = 'Gantt';
@@ -544,9 +529,6 @@ export class GanttShell {
   #raiseError: RaiseError = createErrorRaiser(this.#events);
   /** #448: where a shadowed `barRenderer` is reported. Built once; `render()` is its only caller. */
   #reportBarRendererShadowed = this.#createBarRendererShadowedReport();
-  /** #433: where a failing `ThemeResolver` is reported. Built once; `#resolveWithResolver` is its
-   *  only caller. */
-  #reportThemeResolverFailed = this.#createThemeResolverFailedReport();
   /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is. Built once, from
    *  this shell's own `on`/`off` below. A plugin never sees the rest of this class's public surface
    *  the way handing it `this` directly would. */
@@ -617,15 +599,8 @@ export class GanttShell {
   /** #375. An ancestor's own `data-fg-theme` pin is a supported way to resolve this Gantt's theme
    *  (#271). A wrapping app can change that pin with no write of this Gantt's own — a whole-chrome
    *  dark-mode switch, say. `attributeFilter` keeps this cheap: it wakes only on a `data-fg-theme`
-   *  write, anywhere under the root node, never on unrelated DOM churn. #433: a `ThemeResolver`
-   *  breaks that assumption on purpose. It answers off a class or an attribute of the wrapping
-   *  app's own choosing. So `#observeThemePin` drops the filter while one is installed — see its
-   *  own comment for the cost/benefit. */
+   *  write, anywhere under the root node, never on unrelated DOM churn. */
   #themePinObserver: MutationObserver;
-  /** #433. The node `#themePinObserver` watches. Held so `#observeThemePin` can re-`observe()` it
-   *  with a wider or narrower config, as `theme` switches into or out of a `ThemeResolver`. Doing
-   *  that needs no recomputing of the root-node walk `#observeThemePin`'s first call already did. */
-  #themePinTarget!: Node;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
   /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
@@ -1124,11 +1099,12 @@ export class GanttShell {
     // `undefined`. `#emit` (below) is what keeps construction's own write silent now. This ordering
     // is a correctness question for the field, not a leak-prevention trick for the event.
     this.#reportedTheme = resolveTheme(this.#container, this.#matchMedia);
+    if (options.theme !== undefined) this.theme = options.theme;
+    else this.#applyTheme();
     // #375: an ancestor's own pin (#271) can move this Gantt's resolved theme with no write of its
-    // own. `#observeThemePin` wakes this on a `data-fg-theme` write (or, with a `ThemeResolver`
-    // installed, #433: any attribute write) anywhere under the watched root. That includes the
-    // library's own write in `#applyTheme` below, which re-enters here and emits nothing, because
-    // the computed answer didn't move.
+    // own. `attributeFilter` wakes this only on a `data-fg-theme` write, anywhere under the watched
+    // root. That includes the library's own write in `#applyTheme`, which re-enters here and emits
+    // nothing, because the computed answer didn't move.
     // The root to watch: `getRootNode()` answers whatever root `#container` has right now. A
     // container built inside a detached tree keeps an `Element`/`Document` root today, before the
     // app ever mounts it. Any ancestor it gains on mount is still an ancestor of that same root.
@@ -1136,18 +1112,15 @@ export class GanttShell {
     // is the one exception: it stays its own boundary (a `DOCUMENT_FRAGMENT_NODE`), matching
     // `resolveTheme`'s own `closest()` walk, which never crosses it either.
     const themePinRoot = this.#container.getRootNode();
-    this.#themePinTarget =
+    const themePinTarget =
       themePinRoot.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? themePinRoot : this.#container.ownerDocument;
     this.#themePinObserver = new MutationObserver(() => this.#syncResolvedTheme());
+    this.#themePinObserver.observe(themePinTarget, {
+      attributes: true,
+      subtree: true,
+      attributeFilter: ['data-fg-theme'],
+    });
     this.#teardown.add(() => this.#themePinObserver.disconnect());
-    // Built before `theme` is ever assigned. A `ThemeResolver` option reaches the `theme` setter
-    // below, and that setter calls `#observeThemePin`. That call needs `#themePinObserver`/
-    // `#themePinTarget` to already exist.
-    if (options.theme !== undefined) this.theme = options.theme;
-    else {
-      this.#applyTheme();
-      this.#observeThemePin();
-    }
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
     // #376: last line, on purpose — a constructor-supplied plugin's own subscription, installed by
     // `plugins=` above, starts hearing real changes only from here. Everything above it was wiring.
@@ -1881,33 +1854,6 @@ export class GanttShell {
     };
   }
 
-  /** Where a failing `ThemeResolver` is reported (#433). `#resolveWithResolver` calls a
-   *  consumer-supplied `theme` function on every `#applyTheme`. That is every `theme` write, and
-   *  every `data-fg-theme`/attribute mutation `#themePinObserver` wakes on. A resolver that throws,
-   *  or answers something other than `'light'`/`'dark'`, falls back to the built-in `'auto'` answer
-   *  for that one read. This says why the paint might not match the wrapping app's own switch.
-   *
-   *  The `WeakSet` is keyed on the resolver function itself, the same shape
-   *  `#createBarRendererShadowedReport` already uses. A resolver that fails on every call — a typo
-   *  in a class name, say — reports once, not once per mutation. Assigning a new resolver is a new
-   *  assignment, and gets its own report if it also fails.
-   *
-   *  Not behind `isDevMode()`, for the reason D-S5-41 already found on `'scale-options-ignored'`. */
-  #createThemeResolverFailedReport(): (resolver: ThemeResolver, reason: unknown) => void {
-    const reported = new WeakSet<ThemeResolver>();
-    return (resolver, reason) => {
-      if (reported.has(resolver)) return;
-      reported.add(resolver);
-      const detail = reason instanceof Error ? reason.message : String(reason);
-      const message =
-        `The 'theme' resolver threw or did not answer 'light'/'dark' (${detail}). ` +
-        `Falling back to the built-in 'auto' answer until a different resolver is assigned.`;
-      this.#raiseError({ code: 'theme-resolver-failed', message, severity: 'warning', by: 'core' }, () =>
-        console.warn(`FreeGantt: ${message}`),
-      );
-    };
-  }
-
   /** Where an `UnknownRowSourceField` is reported (Q29, ADR-adjacent to `J59`). A
    *  `childrenAsSegments` rule names a key no Field declares, so it matches no row — a typo, or a
    *  plugin key the Dataset never declared. Unlike a variant, `childrenAsSegments` is not one of
@@ -2098,83 +2044,16 @@ export class GanttShell {
   /** Live (S1.10, D-S1.10-4). `'auto'` writes no attribute, letting `prefers-color-scheme` (or an
    *  ancestor's own pin, #271) decide. `'light'`/`'dark'` pin `data-fg-theme` on this container
    *  instead, which wins over both. `.fg-container` declares no colour tokens of its own to contest
-   *  it. (#271 fixed the opposite bug: it used to, and always won even under an ancestor's pin.)
-   *
-   *  A `ThemeResolver` (#433) pins the same way, from its own answer. `#applyTheme` runs it and
-   *  writes *that* answer, never the function itself. `styles.ts` keys colour tokens off the
-   *  written value, and a resolver is not one of them. `#observeThemePin` widens or narrows what
-   *  `#themePinObserver` watches to match. That is what still catches a resolver keyed off a
-   *  wrapping app's own class or attribute, not `data-fg-theme`. */
+   *  it. (#271 fixed the opposite bug: it used to, and always won even under an ancestor's pin.) */
   set theme(value: Theme) {
     this.#theme = value;
     this.#applyTheme();
-    this.#observeThemePin();
     this.#syncResolvedTheme();
   }
 
-  /** #433. One question, asked in four places: is `theme` a `ThemeResolver`, or one of the three
-   *  literal answers? A type predicate so each caller narrows `this.#theme` to `ThemeResolver`
-   *  itself, with no repeated `typeof` check to keep in sync. */
-  #themeIsResolver(theme: Theme): theme is ThemeResolver {
-    return typeof theme === 'function';
-  }
-
   #applyTheme(): void {
-    if (this.#themeIsResolver(this.#theme)) {
-      // #433: write only on a real change. The widened observer (`#observeThemePin`) wakes on
-      // this very attribute. An unconditional write here would re-enter itself forever, because a
-      // same-value `setAttribute` still queues a mutation record; there is no short-circuit for it.
-      const next = this.#resolveWithResolver(this.#theme);
-      if (this.#container.getAttribute('data-fg-theme') !== next) {
-        this.#container.setAttribute('data-fg-theme', next);
-      }
-    } else if (this.#theme === 'auto') {
-      this.#container.removeAttribute('data-fg-theme');
-    } else {
-      this.#container.setAttribute('data-fg-theme', this.#theme);
-    }
-  }
-
-  /** #433. Runs a `ThemeResolver` and validates its answer. A resolver that throws, or returns
-   *  anything but `'light'`/`'dark'`, falls back to the answer `'auto'` would give this same
-   *  container. That answer is the nearest ancestor pin, else the OS. It also reports once per
-   *  resolver instance
-   *  (`#reportThemeResolverFailed`). A bad resolver must not leave `data-fg-theme` unwritten. It
-   *  must not take the Gantt down either; the built-in answer is always a safe one to paint.
-   *
-   *  The fallback read starts at the container's *parent*, never the container itself.
-   *  `resolveTheme`'s `closest()` walk would otherwise find this same container's own last-written
-   *  pin first. A failing resolver would then read its own stale answer back forever. "The
-   *  fallback" and "the last write" would be the same attribute, so the write in `#applyTheme`
-   *  would never settle. Reading from the parent finds a real ancestor pin, or the OS, exactly as
-   *  `'auto'` itself would if this container's own pin did not exist. */
-  #resolveWithResolver(resolver: ThemeResolver): ResolvedTheme {
-    try {
-      const answer = resolver();
-      if (answer === 'light' || answer === 'dark') return answer;
-      throw new Error(`returned ${JSON.stringify(answer)} instead of 'light' or 'dark'`);
-    } catch (reason) {
-      this.#reportThemeResolverFailed(resolver, reason);
-      return resolveTheme(this.#container.parentElement ?? this.#container, this.#matchMedia);
-    }
-  }
-
-  /** #433. (Re)watches `#themePinTarget` for the write this Gantt is currently listening for. The
-   *  narrow `attributeFilter` stays the default: `resolveTheme`'s own pin lookup only ever reads
-   *  `data-fg-theme`, so nothing else under the root can move the answer. A `ThemeResolver` breaks
-   *  that assumption on purpose. It can key off `class="dark"`, `data-bs-theme`, anything the
-   *  wrapping app writes. So installing one drops the filter and watches every attribute instead.
-   *  `#syncResolvedTheme` already compares the resolved answer, and fires nothing when it did not
-   *  move. So the wider watch costs one extra predicate call per unrelated mutation, never a
-   *  spurious event. Switching `theme` back to `'auto'`/`'light'`/`'dark'` restores the narrow
-   *  filter, so the common case never pays for the resolver path. */
-  #observeThemePin(): void {
-    this.#themePinObserver.observe(
-      this.#themePinTarget,
-      this.#themeIsResolver(this.#theme)
-        ? { attributes: true, subtree: true }
-        : { attributes: true, subtree: true, attributeFilter: ['data-fg-theme'] },
-    );
+    if (this.#theme === 'auto') this.#container.removeAttribute('data-fg-theme');
+    else this.#container.setAttribute('data-fg-theme', this.#theme);
   }
 
   /** #330/#375. `'auto'` answers the nearest explicit pin up the tree, else the OS. `'light'`/`'dark'`
@@ -2182,17 +2061,8 @@ export class GanttShell {
    *  every read, never cached. An ancestor's own pin (#271) can move this answer with no write of
    *  this Gantt's own. A cached copy would go stale under exactly that case (#375). The read
    *  itself is always synchronously correct. Only `themeChange`'s timing differs by cause — see
-   *  `#syncResolvedTheme`.
-   *
-   *  #433: a `ThemeResolver` answers live, off DOM state `resolveTheme`'s own pin lookup never
-   *  reads (a class, `data-bs-theme`). So a resolver's answer is not something this container's own
-   *  pin can go stale against, the way an ancestor's pin can. There is no "container's own pin" to
-   *  read until something runs the resolver. `#applyTheme` is that something. It re-runs the
-   *  resolver, and (re)writes this container's own pin to its answer, which `resolveTheme` then
-   *  reads back like any other pin. Refreshing here, not only from `#syncResolvedTheme`, is what
-   *  keeps a direct `gantt.resolvedTheme` read live too, with no assignment in between. */
+   *  `#syncResolvedTheme`. */
   get resolvedTheme(): ResolvedTheme {
-    if (this.#themeIsResolver(this.#theme)) this.#applyTheme();
     return resolveTheme(this.#container, this.#matchMedia);
   }
 
@@ -2214,15 +2084,8 @@ export class GanttShell {
    *  covers an already-`'light'` Gantt pinned to `'light'` again, or an OS flip an ancestor's pin
    *  shadows. A `theme` write reaches here synchronously. An ancestor's pin reaches here on the
    *  `MutationObserver`'s own later task, so that cause's event lands one task after the DOM write
-   *  that caused it. `resolvedTheme` itself has already answered correctly by then, either way.
-   *
-   *  #433: when `theme` is a `ThemeResolver`, `#applyTheme` re-runs it and rewrites this
-   *  container's own pin before the read below. That is the same refresh `resolvedTheme`'s own
-   *  getter runs; see that getter's comment. It is what lets a `ThemeResolver` wake from
-   *  `#themePinObserver`'s widened watch (`#observeThemePin`). The mutation this method reacts to
-   *  is never `data-fg-theme` itself, so nothing else would re-run the resolver at all. */
+   *  that caused it. `resolvedTheme` itself has already answered correctly by then, either way. */
   #syncResolvedTheme(): void {
-    if (this.#themeIsResolver(this.#theme)) this.#applyTheme();
     const next = resolveTheme(this.#container, this.#matchMedia);
     if (next === this.#reportedTheme) return;
     const from = this.#reportedTheme;

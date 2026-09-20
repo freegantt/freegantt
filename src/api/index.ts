@@ -129,7 +129,6 @@ export type {
 export type { TargetKind } from '../model/index.js';
 export type {
   Theme,
-  ThemeResolver,
   ResolvedTheme,
   GridWidth,
   ViewportGestures,
