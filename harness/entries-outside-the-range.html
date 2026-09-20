@@ -29,6 +29,13 @@
         <code>[0, contentWidth]</code> — the case <code>e2e/timeline-content-width.spec.ts</code> and
         <code>e2e/scroll-sync.spec.ts</code>'s own <code>fit: 'pane'</code> pair both read.
       </p>
+      <p>
+        Two further entries cover the same leak for a Dataset wider than its own range — the normal shape for
+        a caller prefetching so pan and zoom never re-fetch. One straddles <code>range.end</code> and paints
+        its truthful in-range half, trimmed at the edge. One sits wholly past <code>range.end</code> and never
+        becomes a bar at all: the third assertion in <code>e2e/timeline-content-width.spec.ts</code> reads
+        exactly that pair.
+      </p>
       <div id="gantt" class="fg-gantt"></div>
     </main>
     <script type="module" src="./entries-outside-the-range.ts"></script>

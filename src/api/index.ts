@@ -218,6 +218,7 @@ export type {
   TimeScale,
   TimeScaleModelOptions,
   TimeScaleFit,
+  TimeUnitWidth,
   PresetRef,
   ShippedPresetId,
   ScrollAxisState,

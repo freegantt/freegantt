@@ -324,6 +324,34 @@ describe('TimeScaleModel', () => {
       );
     });
 
+    it('a TimeUnitWidth paints one unit at the stated width (#15)', () => {
+      // 200px clears dayPreset's own density floor, so what comes back is the stated width and not
+      // the floor. The app author never writes a pixels-per-millisecond number, and never divides by
+      // a day length that a DST day does not have.
+      const model = new TimeScaleModel({ fit: { unit: 'day', widthPx: 200 } });
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+
+      expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start!)).toBeCloseTo(200);
+      // It ignores the measured pane exactly as 'preset' and an explicit number do.
+      expect(model.scale.contentWidth).toBeCloseTo(5 * 200); // Sep 1 through Sep 6
+    });
+
+    it('resolves the stated width against the calendar at the range start (#15)', () => {
+      // A TimeScale has one pxPerMs for its whole span, so the stated width lands exactly on the
+      // unit at `range.start` — the same anchor `fit: 'preset'` already resolves against. Here that
+      // anchor is local midnight on Chicago's spring-forward day, which lasts 23 hours. The author
+      // writes 200 and gets 200. The naive `200 / 86_400_000` would have painted it 4% narrow.
+      const springForward = [entry('t1', '2026-03-08T06:00:00Z', '2026-03-11T05:00:00Z')];
+      const chicago = new TimeScaleModel({ fit: { unit: 'day', widthPx: 200 } });
+      bindTimeScale(chicago, { timeZone: 'America/Chicago', entries: springForward, paneWidth: 800 }, noop);
+
+      const shortDay = instant('2026-03-08T06:00:00Z');
+      expect(chicago.scale.widthForDuration({ value: 1, unit: 'day' }, shortDay)).toBeCloseTo(200);
+      // 200px over 23 hours is a higher density than 200px over 24 — the constant's wrong answer.
+      expect(chicago.scale.pxPerMs).toBeGreaterThan(200 / MS.DAY);
+      expect(chicago.scale.pxPerMs).toBeCloseTo(200 / (23 * MS.HOUR), 12);
+    });
+
     it('a fit write notifies iff the resolved scale changed', () => {
       const model = new TimeScaleModel();
       let calls = 0;
@@ -336,6 +364,30 @@ describe('TimeScaleModel', () => {
       calls = 0;
       model.fit = 0.5;
       expect(calls).toBe(0);
+    });
+
+    it('a re-stated TimeUnitWidth is a no-op, though it is a fresh object every time', () => {
+      // Every config key is live, so an app re-states its whole config on each render. A literal
+      // cannot be compared by identity, and an invalidation per write would rebuild the scale for
+      // nothing.
+      const model = new TimeScaleModel();
+      let calls = 0;
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
+      calls = 0;
+
+      model.fit = { unit: 'day', widthPx: 200 };
+      expect(calls).toBe(1);
+
+      calls = 0;
+      model.fit = { unit: 'day', widthPx: 200 };
+      expect(calls).toBe(0);
+
+      // An omitted increment and an explicit 1 state the same density, so neither is a change.
+      model.fit = { unit: 'day', increment: 1, widthPx: 200 };
+      expect(calls).toBe(0);
+
+      model.fit = { unit: 'day', widthPx: 201 };
+      expect(calls).toBe(1);
     });
   });
 

@@ -9,27 +9,20 @@
 // normal shape for a caller prefetching so pan/zoom never re-fetches) hands `placeFrame` entries
 // the overscan buffer alone pulls into the culled window, with no `contentWidth` bound of its own.
 // `out-after` sits entirely past `range.end`; `straddling` starts inside and ends past it. Both
-// prove the same pane never natively scrolls past `contentWidth`, for a different reason than `d`.
+// prove the same pane never natively scrolls past `contentWidth`, for a different reason than the
+// shared fixture's `end-milestone`.
 import './harness-nav.ts';
 import { Gantt, Dataset, MS } from 'freegantt';
 import type { EntryInput } from 'freegantt';
+import { milestoneOnRangeEndEntries, milestoneOnRangeEndSpan } from '../fixtures/milestone-on-range-end.js';
 
-const rangeStart = new Date('2026-01-01T00:00:00Z');
-const rangeEnd = new Date(rangeStart.getTime() + 3 * MS.DAY);
+// The first mechanism's shape is the shared one — three day-long entries and a zero-length
+// milestone on the range's own end. `harness/scroll-sync.ts` proves the same shape against a shared
+// ScrollAxis; this page adds the two entries only it needs.
+const rangeEnd = milestoneOnRangeEndSpan.end;
 
 const entries: EntryInput[] = [
-  { id: 'a', name: 'A', start: rangeStart, end: new Date(rangeStart.getTime() + MS.DAY) },
-  {
-    id: 'b',
-    name: 'B',
-    start: new Date(rangeStart.getTime() + MS.DAY),
-    end: new Date(rangeStart.getTime() + 2 * MS.DAY),
-  },
-  { id: 'c', name: 'C', start: new Date(rangeStart.getTime() + 2 * MS.DAY), end: rangeEnd },
-  // The zero-length entry #436 needs: parked exactly on the range's own end (ADR 0012 — start ===
-  // end is a milestone, not an error), with a label long enough that the fallback 'inside'
-  // placement (`resolveBarLabelPlacement`) has nowhere to grow it either.
-  { id: 'd', name: 'D milestone with a long label', start: rangeEnd, end: rangeEnd },
+  ...milestoneOnRangeEndEntries,
   // Straddles `range.end`: the truthful in-range half must still paint, trimmed at the edge.
   {
     id: 'straddling',
@@ -47,6 +40,6 @@ const entries: EntryInput[] = [
 ];
 
 const dataset = new Dataset({ entries, timeZone: 'UTC' });
-const gantt = new Gantt({ container: '#gantt', dataset, range: { start: rangeStart, end: rangeEnd } });
-
-window.__gantt = gantt;
+// `e2e/timeline-content-width.spec.ts` asserts on the DOM alone, so this page publishes no
+// `window.__gantt` seam: an `__gantt` on a harness page means a spec depends on it.
+new Gantt({ container: '#gantt', dataset, range: milestoneOnRangeEndSpan });

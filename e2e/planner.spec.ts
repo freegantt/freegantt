@@ -115,3 +115,44 @@ test('the new-task button says it is not wired rather than doing half a job', as
   await expect(page.locator('#readout')).toContainText('not wired up yet');
   expect(await page.locator('#gantt .fg-row').count()).toBe(before);
 });
+
+// #436 follow-up: the bar clip is the library's own label's, so it must not reach a bar whose
+// content a `barRenderer` owns. This page is that case — `phaseBar` emits its own
+// `.demo-bar-label-outside` child at `left: 100%` (harness/planner.html), and a renderer-owned bar
+// carries no `data-label` at all (`ownsContent` ⇒ no token, render/dom/index.ts), so the
+// `[data-label='outside']` escape hatch can never reach it. A clip on `.fg-bar` itself swallowed
+// these labels whole. Same paint-tree query as the #325 test in e2e/grid-scroll.spec.ts, and for
+// the same reason: the element keeps correct text and a correct box while clipped, so `toBeVisible`
+// and `getBoundingClientRect` both report a healthy label either way.
+//
+// Two details this page adds over #325's. The demo label is `pointer-events: none`
+// (harness/planner.html), which drops it out of `elementFromPoint` whether it paints or not, so the
+// probe opts it back in for the one call and restores it. And the second half asserts the negative:
+// with the old clip put back by hand, the same probe must report the label gone. Without that, a
+// probe broken in any other way would report this test green forever.
+test('a barRenderer that places a child outside the bar is not clipped by the library (#436)', async ({
+  page,
+}) => {
+  await page.goto('/planner.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const outsideLabel = page.locator('#gantt .demo-bar-label-outside').first();
+  expect(await page.locator('#gantt .demo-bar-label-outside').count()).toBeGreaterThan(0);
+
+  const isPaintedAtItsOwnBox = (clipTheBar: boolean) =>
+    outsideLabel.evaluate((label, clip: boolean) => {
+      const bar = label.closest('.fg-bar') as HTMLElement;
+      // A renderer-owned bar is exactly the case with no token to hang an escape hatch on.
+      if (bar.dataset['label'] !== undefined) throw new Error('expected a bar with no data-label');
+      if (clip) bar.style.overflow = 'hidden';
+      (label as HTMLElement).style.pointerEvents = 'auto';
+      const rect = label.getBoundingClientRect();
+      const atPoint = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      (label as HTMLElement).style.pointerEvents = '';
+      bar.style.overflow = '';
+      return atPoint !== null && label.contains(atPoint);
+    }, clipTheBar);
+
+  await expect.poll(() => isPaintedAtItsOwnBox(false)).toBe(true);
+  await expect.poll(() => isPaintedAtItsOwnBox(true)).toBe(false);
+});

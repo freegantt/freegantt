@@ -11,7 +11,7 @@ import type {
   StoredEntry,
 } from '../model/index.js';
 import { entryDouble } from '../layout/entry-double.js';
-import type { TimeScale, ViewPreset } from '../layout/index.js';
+import type { Bar, TimeScale, ViewPreset } from '../layout/index.js';
 import type { EntryMove } from './event-bus.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
@@ -63,6 +63,17 @@ function storedMap(...rows: readonly StoredEntry[]): ReadonlyMap<EntryId, Stored
   return new Map(rows.map((row) => [row.id, row]));
 }
 
+/** The Bar an ordinary span row paints, for whatever roster a test wired: no `box`, so `barSpan`
+ *  takes the span-and-floor path. Stands in for the frame the shell reads through
+ *  `FrameLayout.barsForEntry`. A test about a fixed box (ADR 0022) overrides `barForEntry` itself. */
+function spanBarFor(roster: ReadonlyMap<EntryId, Entry>): (id: EntryId) => Bar | undefined {
+  return (id) => {
+    const entry = roster.get(id);
+    if (entry?.start === undefined || entry.end === undefined) return undefined;
+    return { id: barId(id), entryId: id, variant: '', start: entry.start, end: entry.end };
+  };
+}
+
 function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   deps: GesturePipelineDeps;
   emitted: [string, unknown][];
@@ -80,6 +91,9 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     snap: () => 'none',
     selectedEntryIds: () => [],
     entryById: (id) => entries.get(id),
+    // The committed Bar the preview measures against (#436 branch review F4).
+    barForEntry: spanBarFor(entries),
+    minBarWidthPx: () => 12,
     canGesture: () => true,
     // ADR 0013: an ordinary bar writes itself. The fixtures here are childless, and a test that
     // wants a parent bar's drag overrides this with the descendants below it.
@@ -104,7 +118,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
  *  entry, every capability granted, no multi-selection. */
 function withRoster(entries: readonly Entry[], overrides: Partial<GesturePipelineDeps> = {}) {
   const byId = new Map(entries.map((e) => [e.id, e]));
-  return makeDeps({ entryById: (id) => byId.get(id), ...overrides });
+  return makeDeps({ entryById: (id) => byId.get(id), barForEntry: spanBarFor(byId), ...overrides });
 }
 
 describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {

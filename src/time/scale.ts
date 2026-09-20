@@ -128,14 +128,20 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
   return { range, timeZone, pxPerMs, xForInstant, instantForX, widthForDuration, ticks, contentWidth };
 }
 
-function tickMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
-  const tickMs = stepBy(zone, at, preset.tickUnit, preset.tickIncrement) - at;
-  if (tickMs <= 0) {
-    throw new RangeError(
-      `TimeScale: preset "${preset.id}" does not advance (${preset.tickIncrement}${preset.tickUnit})`,
-    );
+/** How long one step of `step` lasts, starting at `at` in `zone`. Calendar stepping, so a day is 23
+ * or 25 hours across a DST transition and a month is 28 to 31 days — never a fixed constant.
+ * `subject` names whoever stated the step, so a cadence that stands still says whose it was. */
+function msForOneStep(zone: string, at: Instant, step: TickStep, subject: string): number {
+  const ms = stepBy(zone, at, step.unit, step.increment) - at;
+  if (ms <= 0) {
+    throw new RangeError(`TimeScale: ${subject} does not advance (${step.increment}${step.unit})`);
   }
-  return tickMs;
+  return ms;
+}
+
+function tickMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
+  const step = { unit: preset.tickUnit, increment: preset.tickIncrement };
+  return msForOneStep(zone, at, step, `preset "${preset.id}"`);
 }
 
 /** The zoom a preset implies on its own: one tick occupies its `preferredTickWidthPx`. This is what a
@@ -145,6 +151,35 @@ function tickMsForPreset(zone: string, preset: ViewPreset, at: Instant): number 
  * 23 or 25 hours across a DST transition, not always 24. */
 export function pxPerMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
   return preset.preferredTickWidthPx / tickMsForPreset(zone, preset, at);
+}
+
+/** What a caller states when they want one unit of time to paint at a fixed width: "a day tile is 14
+ * pixels wide". The `Gantt`/`TimeScaleModel` `fit` key takes this directly.
+ *
+ * It exists because the pixels-per-millisecond form of `fit` cannot be written by hand safely. An
+ * author reaching for it computes `14 / 86_400_000`, which asserts that every day is 24 hours — false
+ * in every zone that observes DST, and false for a month or a year in every zone at all. The zone and
+ * the anchor instant that settle the real length are the library's (`plans/02`: core fills zone math),
+ * so the author states the unit and the width, and `pxPerMsForUnitWidth` resolves it.
+ *
+ * A TimeScale carries one `pxPerMs` for its whole span, so the width lands exactly on the unit at
+ * `range.start` and every other unit follows its own calendar length from there — a 23-hour day
+ * paints narrower than its neighbours, which is what a reader of a DST week expects to see. This is
+ * the anchor `fit: 'preset'` already resolves against. */
+export interface TimeUnitWidth {
+  readonly unit: TimeUnit;
+  /** How many units share `widthPx`. Defaults to 1 — `{ unit: 'week', increment: 2, widthPx: 90 }`
+   *  reads "a fortnight is 90 pixels". */
+  readonly increment?: number;
+  /** Pixels one `increment` of `unit` occupies. */
+  readonly widthPx: number;
+}
+
+/** The density a `TimeUnitWidth` states, resolved in `zone` at `at`. The same calendar stepping
+ * `pxPerMsForPreset` uses, for the same reason: the answer differs on a DST day. */
+export function pxPerMsForUnitWidth(zone: string, width: TimeUnitWidth, at: Instant): number {
+  const step = { unit: width.unit, increment: width.increment ?? 1 };
+  return width.widthPx / msForOneStep(zone, at, step, `fit { unit: '${width.unit}' }`);
 }
 
 /** The density floor this preset implies: one tick occupies at least `minTickWidthPx`. Falls back to

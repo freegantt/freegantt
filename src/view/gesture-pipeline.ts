@@ -12,7 +12,7 @@ import {
   previewOffsets,
   spanAfterEdit,
 } from '../layout/index.js';
-import type { BarPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
+import type { Bar, BarPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
 import type {
   Entry,
   StoredEntry,
@@ -66,6 +66,14 @@ export interface GesturePipelineDeps {
    *  order. */
   selectedEntryIds(): readonly EntryId[];
   entryById(id: EntryId): Entry | undefined;
+  /** The committed Bar an entry's preview moves — part 0, the one `barId(entryId)` names (#436
+   *  branch review F4). `previewOffsets` measures the drag against this Bar rather than a literal
+   *  it builds itself, so a fixed `box` (ADR 0022) is measured on its own path. */
+  barForEntry(id: EntryId): Bar | undefined;
+  /** The Gantt's own resolved bar floor, the number `placeFrame` already paints the committed frame
+   *  with. A preview that took `barSpan`'s module default instead would agree with the commit only
+   *  for a consumer who never overrides `--fg-bar-min-width`. */
+  minBarWidthPx(): number;
   /** One resolution (I14, D-S3-9) — `GanttShell#canGesture`, the same answer the pointer-selection
    *  path and the affordance ids resolve through, never re-derived here. `edge` narrows a `'resize'`
    *  question to one handle (#142); every other capability ignores it. */
@@ -681,6 +689,8 @@ export class GesturePipeline {
       extra,
       entries,
       scale: this.#deps.timeScale(),
+      minBarWidthPx: this.#deps.minBarWidthPx(),
+      barForEntry: (id) => this.#deps.barForEntry(id),
     });
   }
 

@@ -146,6 +146,7 @@ export type {
   DateFormat,
   PresetRef,
   ShippedPresetId,
+  TimeUnitWidth,
 } from '../time/index.js';
 export { ZOOM_PRESETS, isTimeUnit } from '../time/index.js';
 export { Viewport } from './viewport/viewport.js';

@@ -26,6 +26,7 @@
           <span class="rounded bg-slate-200 px-2 py-1 font-mono">diff origin/main...HEAD</span>
           <span class="rounded bg-slate-200 px-2 py-1 font-mono">2026-09-19</span>
           <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1 font-semibold">pass 2 complete · 7 Confirmed</span>
+          <span class="rounded bg-emerald-100 text-emerald-900 px-2 py-1 font-semibold">7 of 7 applied since</span>
         </div>
         <p class="text-sm text-slate-600 max-w-3xl">
           One commit. <code>toInstant</code> gains an explicit <code>null</code> fault before the plain-time
@@ -52,9 +53,10 @@ flowchart LR
 
       <section class="space-y-4">
         <h2 class="text-lg font-bold">Findings</h2>
+        <p class="text-sm leading-6 text-slate-600">This report records the fixed point it reviewed (<code>HEAD 52dfb59c</code>), so every quote below is of the code as it stood then. Six of the seven have been applied since, and each one says so on its own heading — read the badge before the quote, or you will hunt for a fault that is no longer there. All seven have been applied. <strong>F6</strong> was the last, and it was answered yes: the public <code>instant()</code> helper now refuses <code>null</code> in the same vocabulary <code>toInstant</code> uses, and no longer reports a missing date as a zone problem. Nothing on this page still describes the shipped code.</p>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-amber-600">F1</span><span class="text-sm font-normal text-slate-500">message quality · minor · Confirmed</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-amber-600">F1</span><span class="text-sm font-normal text-slate-500">message quality · minor · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — <code>NULL_VALUE</code> no longer restates the value; it reads “names no instant…”.</span></h3>
           <p class="text-sm leading-6">
             The new fault reads <strong>“null is null.”</strong> <code>NULL_VALUE</code> begins <em>“is null.”</em>,
             and <code>invalid()</code> prefixes the printed value — for <code>null</code> that value is
@@ -68,7 +70,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F2</span><span class="text-sm font-normal text-slate-500">comment accuracy · nit · Confirmed</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F2</span><span class="text-sm font-normal text-slate-500">comment accuracy · nit · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — with a corrected figure: the reason constants are four, and two append <code>WRITE_A_DATE</code>, so the comment reads “two of the four”, not the “three of four” proposed here.</span></h3>
           <p class="text-sm leading-6">
             The doc comment above the reason constants still says <em>“Three of the four faults below end with this
             sentence.”</em> The change left <strong>five</strong> reason constants below it —
@@ -80,7 +82,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F3</span><span class="text-sm font-normal text-slate-500">naming · simplicity · minor · Confirmed</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F3</span><span class="text-sm font-normal text-slate-500">naming · simplicity · minor · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — <code>NOT_A_DATE_VALUE</code> is gone; the fall-through throws <code>UNREADABLE</code>.</span></h3>
           <p class="text-sm leading-6">
             <code>NOT_A_DATE_VALUE</code> (<em>“is not a date value. Write an ISO date…”</em>) is a second name for
             the job <code>UNREADABLE</code> already does (<em>“is not a date this library reads. Write an ISO
@@ -92,7 +94,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F4</span><span class="text-sm font-normal text-slate-500">API · message scope · judgement · Confirmed</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F4</span><span class="text-sm font-normal text-slate-500">API · message scope · judgement · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — the shared reason is caller-agnostic now; Entry-specific advice stays with <code>data/entry-reader.ts</code>.</span></h3>
           <p class="text-sm leading-6">
             <code>NULL_VALUE</code> tells the reader <em>“An Entry with no span of its own omits the property
             instead.”</em> But <code>time/toInstant</code> is not an Entry-only seam. Its internal callers include
@@ -105,7 +107,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F5</span><span class="text-sm font-normal text-slate-500">types · minor · Confirmed</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F5</span><span class="text-sm font-normal text-slate-500">types · minor · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — <code>invalid(input: unknown, …)</code>, and <code>wroteAsText</code> renders a non-primitive as its JSON rather than “[object Object]”.</span></h3>
           <p class="text-sm leading-6">
             <code>invalid(input: InstantInput, …)</code> declares an <code>InstantInput</code>, but the new
             fall-through hands it a boolean or a plain object at runtime, and <code>null</code> is outside
@@ -117,7 +119,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F6</span><span class="text-sm font-normal text-slate-500">spec location · low · judgement · Confirmed</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-violet-600">F6</span><span class="text-sm font-normal text-slate-500">spec location · low · judgement · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — <code>instant(null)</code> still throws the zoneless <code>RangeError</code>. The judgement below is still the open question.</span></h3>
           <p class="text-sm leading-6">
             The issue proposed catching <code>null</code> in the public <code>instant()</code> helper — the function
             that actually throws the zoneless message. The branch catches it one caller up, in
@@ -129,7 +131,7 @@ flowchart LR
         </article>
 
         <article class="bg-white rounded card p-5 seam space-y-3">
-          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F7</span><span class="text-sm font-normal text-slate-500">test quality · minor · Confirmed</span></h3>
+          <h3 class="font-bold flex flex-wrap items-center gap-2"><span class="text-sky-600">F7</span><span class="text-sm font-normal text-slate-500">test quality · minor · Confirmed</span><span class="text-xs font-semibold rounded bg-emerald-100 text-emerald-900 px-2 py-0.5">Applied</span><span class="text-xs font-normal text-slate-500"> — both tests assert the whole sentence.</span></h3>
           <p class="text-sm leading-6">
             Both new null assertions pass a message that opens with the F1 tautology. <code>input.test.ts:77</code>
             matches the substring <code>null. An Entry…</code> — matching the second <code>null</code> — and

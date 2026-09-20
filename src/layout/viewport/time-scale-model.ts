@@ -16,18 +16,23 @@ import {
   instant,
   minPxPerMsForPreset,
   pxPerMsForPreset,
+  pxPerMsForUnitWidth,
   resolvePreset,
 } from '../../time/index.js';
-import type { PresetRef, TimeScale, TimeScaleOptions, ViewPreset } from '../../time/index.js';
+import type { PresetRef, TimeScale, TimeScaleOptions, TimeUnitWidth, ViewPreset } from '../../time/index.js';
 import type { Entry, Instant, TimeSpan } from '../../model/index.js';
 import { BoundValue } from './bound-value.js';
 
 /** The density mode — what `pxPerMs` resolves to (S1.9, D-S1.9-2; renamed from `TimeScaleZoom`,
  *  issue #84 — "zoom" was one word for this mode, the `zoomTo` density knob, and the `zoomBy`
  *  gesture). `'pane'` (default) fits the measured pane width; `'preset'` ignores it and uses the
- *  preset's own density; an explicit `number` is pixels per millisecond, what `Viewport.zoomTo`/
- *  `zoomBy` write. */
-export type TimeScaleFit = 'pane' | 'preset' | number;
+ *  preset's own density; a `TimeUnitWidth` states one unit's width in pixels ("a day is 14px"); an
+ *  explicit `number` is pixels per millisecond, what `Viewport.zoomTo`/`zoomBy` write.
+ *
+ *  The `number` form is the expert one, and `TimeUnitWidth` is the shorthand an app author reaches
+ *  for. Both land on the same `pxPerMs`, but only one of them can be written by hand without
+ *  asserting that a day is always 24 hours (#15) — see `TimeUnitWidth`. */
+export type TimeScaleFit = 'pane' | 'preset' | number | TimeUnitWidth;
 
 /** What a caller states about how time should be displayed, to construct a TimeScaleModel
  *  (plans/02 §5; renamed from `TimeScaleIntent`, issue #84 — a caller states options, not
@@ -54,6 +59,15 @@ export interface ScaleBinding {
   /** Measured width (px) of the pane the Gantt renders its timeline into; `0` when unmeasured
    * (detached container, `display:none`, pre-paint). Unmeasured is not degenerate — see `pxPerMsForPreset`. */
   readonly paneWidth: number;
+}
+
+/** Two fits that resolve alike. A `TimeUnitWidth` arrives as a fresh literal on every assignment, so
+ * an identity check alone would invalidate the scale on a write that changed nothing — every config
+ * key is live, and `gantt.fit = { unit: 'day', widthPx: 14 }` in a render loop must stay free. */
+function sameFit(a: TimeScaleFit, b: TimeScaleFit): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object') return false;
+  return a.unit === b.unit && (a.increment ?? 1) === (b.increment ?? 1) && a.widthPx === b.widthPx;
 }
 
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
@@ -185,10 +199,11 @@ export class TimeScaleModel {
     return this.#fit;
   }
 
-  /** Live. `'pane'` (default) fits the measured pane width; `'preset'` ignores it; an explicit
-   *  `number` is `pxPerMs` (D-S1.9-2). */
+  /** Live. `'pane'` (default) fits the measured pane width; `'preset'` ignores it; a
+   *  `TimeUnitWidth` states one unit's width in pixels; an explicit `number` is `pxPerMs`
+   *  (D-S1.9-2). */
   set fit(f: TimeScaleFit) {
-    if (this.#fit === f) return;
+    if (sameFit(this.#fit, f)) return;
     this.#fit = f;
     this.#scaleOptions.invalidate();
   }
@@ -247,17 +262,21 @@ export class TimeScaleModel {
    *  exists to prevent. `'pane'` is otherwise the pre-S1.9 formula, unchanged — a refinement of the
    *  preset's own density when there is a pane to fit, not a precondition for having one. */
   #resolvePxPerMs(timeZone: string, rangeStart: Instant, width: number, spanMs: number): number {
-    const requested =
-      typeof this.#fit === 'number'
-        ? this.#fit
-        : this.#fit === 'preset'
-          ? pxPerMsForPreset(timeZone, this.#preset, rangeStart)
-          : width > 0 && spanMs > 0
-            ? width / spanMs
-            : pxPerMsForPreset(timeZone, this.#preset, rangeStart);
+    const requested = this.#requestedPxPerMs(timeZone, rangeStart, width, spanMs);
     const floor = minPxPerMsForPreset(timeZone, this.#preset, rangeStart);
     const ceiling = spanMs > 0 ? MAX_CONTENT_PX / spanMs : Infinity;
     return Math.min(Math.max(requested, floor), ceiling);
+  }
+
+  /** What the caller asked for, before the floor and the ceiling. `'pane'` falls back to the preset
+   *  when there is nothing measurable to fit — an unmeasured container is not degenerate. */
+  #requestedPxPerMs(timeZone: string, rangeStart: Instant, width: number, spanMs: number): number {
+    const fit = this.#fit;
+    if (typeof fit === 'number') return fit;
+    if (typeof fit === 'object') return pxPerMsForUnitWidth(timeZone, fit, rangeStart);
+    if (fit === 'preset') return pxPerMsForPreset(timeZone, this.#preset, rangeStart);
+    if (width > 0 && spanMs > 0) return width / spanMs;
+    return pxPerMsForPreset(timeZone, this.#preset, rangeStart);
   }
 }
 

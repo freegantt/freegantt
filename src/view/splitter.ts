@@ -162,7 +162,11 @@ export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): Spl
       handle.removeEventListener('pointermove', onPointerMove);
       handle.removeEventListener('pointerup', onPointerUp);
       handle.removeEventListener('keydown', onSplitterKeyDown);
-      handle.tabIndex = -1;
+      // The attribute goes, rather than pointing at -1: `tabindex="-1"` still leaves the node
+      // programmatically focusable, and `aria-hidden` below must never sit on a focusable node
+      // (axe's `aria-hidden-focus`). A Gantt built with `gridResizable: false` runs this branch in
+      // its own constructor, so an a11y sweep would meet the violation on the first paint.
+      handle.removeAttribute('tabindex');
       // No listener can arm a drag, so the resize cursor (`.fg-splitter[data-resize-off]`,
       // styles.ts) would be the one affordance left advertising a gesture that does nothing.
       handle.setAttribute('data-resize-off', '');

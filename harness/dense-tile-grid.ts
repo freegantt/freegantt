@@ -14,9 +14,17 @@ import type { Entry, EntryInput, ViewPreset } from 'freegantt';
 // `e2e/dense-tile-grid.spec.ts`'s bound: `ROW_COUNT` rows at `--fg-row-height: 20px` (the harness
 // page's own CSS) don't fit `#gantt`'s 300px height, and `TILE_COUNT` tiles at `TILE_WIDTH_PX` each
 // don't fit its 700px width (minus the grid pane).
-export const ROW_COUNT = 50;
-export const TILE_COUNT = 250;
-export const TILE_WIDTH_PX = 10;
+// Module-private, like every other harness fixture's constants: importing this module would run
+// the page body against a DOM that is not there, so `e2e/dense-tile-grid.spec.ts` reads the three
+// numbers back through the `window.__*` seams below instead.
+const ROW_COUNT = 50;
+const TILE_COUNT = 250;
+// 14px, not a narrower pitch, because the shipped bar floor is 12px (`--fg-bar-min-width`, whose
+// fallback is `DEFAULT_MIN_BAR_WIDTH_PX`). Below it every tile would take `barSpan`'s `'minimum'`
+// path — widened to 12 and re-centred on its own slot — so adjacent tiles would overhang each other
+// and the page would not be the strip of contiguous tiles this fixture claims to draw. The same
+// 14px `harness/bar-label-fit.ts` picks, for the same reason.
+const TILE_WIDTH_PX = 14;
 
 const ORIGIN = new Date('2026-01-01T00:00:00Z');
 
@@ -33,10 +41,8 @@ for (let r = 0; r < ROW_COUNT; r++) {
 
 const dataset = new Dataset({ entries, timeZone: 'UTC' });
 
-// Same explicit pixels-per-millisecond `fit` `harness/bar-label-fit.ts` uses, and for the same
-// reason: the shipped `dayPreset` floors density above this page's tile width.
-const pxPerMsFor = (dayWidthPx: number): number => dayWidthPx / MS.DAY;
-
+// Same stated tile width `harness/bar-label-fit.ts` uses, and for the same reason: the shipped
+// `dayPreset` floors density above this page's tile width, so this page brings its own preset.
 const tilePreset: ViewPreset = {
   id: 'dense-tile-grid-day-tile',
   tickUnit: 'day',
@@ -46,7 +52,11 @@ const tilePreset: ViewPreset = {
   minTickWidthPx: TILE_WIDTH_PX,
 };
 
-const isTileRow = (entry: Entry): boolean => entry.id.startsWith('tile-row-');
+// Names the 50 parents, and only those: the id prefix alone also matches every one of their
+// 12,750 tile children (`tile-row-0-day-5`). `resolveEntriesSource` happens to ask the has-children
+// question first, so a leaf never reaches this rule — an implementation detail a fixture should not
+// quietly depend on.
+const isTileRow = (entry: Entry): boolean => entry.id.startsWith('tile-row-') && entry.children().length > 0;
 
 // `overscan` (#435) is zero here on purpose: `e2e/dense-tile-grid.spec.ts` asserts the tightest
 // possible bound — the exact visible slice, no culling slack — rather than a headroom guess over
@@ -55,7 +65,7 @@ const gantt = new Gantt({
   container: '#gantt',
   dataset,
   preset: tilePreset,
-  fit: pxPerMsFor(TILE_WIDTH_PX),
+  fit: { unit: 'day', widthPx: TILE_WIDTH_PX },
   range: { start: ORIGIN, end: new Date(ORIGIN.getTime() + TILE_COUNT * MS.DAY) },
   rowSource: {
     source: 'entries',

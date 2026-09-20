@@ -7038,12 +7038,17 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
   }
 
   /** Moves `x` — never grabbed — whenever a move on `a` is proposed. Absolute instants, so no
-   *  arithmetic on an `Instant` happens outside `time/` (I10). */
+   *  arithmetic on an `Instant` happens outside `time/` (I10).
+   *
+   *  The target stays inside the Dataset's own range on purpose (#436 branch review F6). A cascade
+   *  that lands past `range.end` paints no bar at all, so there is no ghost geometry to assert —
+   *  `previewOffsets` reports no offset for a side `barSpan` dropped, rather than forming a delta
+   *  from the dropped sentinel and teleporting the node to `x ≈ 0`, collapsed, mid-drag. */
   const cascadeOntoX: EditExtender = ({ proposed }) => {
     const moved = proposed.get(entryId('a'));
     if (!moved || moved.start === undefined) return new Map();
     return new Map([
-      [entryId('x'), { start: instant('2026-09-08T00:00:00Z'), end: instant('2026-09-09T00:00:00Z') }],
+      [entryId('x'), { start: instant('2026-09-03T00:00:00Z'), end: instant('2026-09-04T00:00:00Z') }],
     ]);
   };
 

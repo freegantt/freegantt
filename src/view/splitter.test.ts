@@ -124,7 +124,9 @@ describe('attachSplitter', () => {
 
       attachment.setEnabled(false);
 
-      expect(handle.tabIndex).toBe(-1);
+      // The attribute is absent, not -1: `aria-hidden` on a focusable node is axe's
+      // `aria-hidden-focus` violation, and `tabindex="-1"` is still focusable.
+      expect(handle.hasAttribute('tabindex')).toBe(false);
       expect(handle.getAttribute('data-resize-off')).toBe('');
       expect(handle.getAttribute('aria-hidden')).toBe('true');
       expect(handle.getAttribute('aria-label')).toBeNull();

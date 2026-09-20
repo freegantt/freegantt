@@ -814,6 +814,23 @@ const deliveries = new Gantt({ container: '#top',    dataset: deliverySchedule, 
 const workforce  = new Gantt({ container: '#bottom', dataset: staffing,         scale, scroll: { x } });
 ```
 
+### `fit` — how dense the axis is
+
+`fit` lives on both a `Gantt` and a `TimeScaleModel`, and is live on each. It takes four shapes:
+
+```ts
+gantt.fit = 'pane';                            // default — the whole range fills the measured pane
+gantt.fit = 'preset';                          // the showing preset's own density, pane ignored
+gantt.fit = { unit: 'day', widthPx: 14 };      // one day paints 14px wide
+gantt.fit = 0.000162;                          // expert: pixels per millisecond
+```
+
+The third is the one an app author writes. "A day tile is 14 pixels" is the sentence they have, and the library owns the arithmetic that turns it into a density. Stating it as a `number` means writing `14 / 86_400_000`, which claims every day is 24 hours — wrong in every zone that observes DST, and wrong for a month or a year in every zone at all. The `number` form stays, because `zoomTo`/`zoomBy` write it and a caller who already holds a density should not have to dress it up (#15).
+
+A scale carries one density across its whole span, so a stated width lands exactly on the unit at `range.start` and each later unit follows its own calendar length — a 23-hour day paints narrower than the days beside it, which is what a reader of a DST week expects. `increment` defaults to 1: `{ unit: 'week', increment: 2, widthPx: 90 }` reads "a fortnight is 90 pixels".
+
+Every mode passes through the preset's `minTickWidthPx` floor and `MAX_CONTENT_PX` ceiling. A page that wants tiles below the shipped floor states its own preset, the same "a new zoom level is never a library edit" knob as any other — see `harness/bar-label-fit.ts`.
+
 The two Gantts hold **different** datasets — D9's own example is a delivery-schedule Gantt above a workforce Gantt. What is shared is the time axis and the scroll, never the data. Two Gantts *may* bind one `Dataset`: nothing forbids it, a second Gantt is simply a second subscriber to `dataset.on('change')` (D-S2-24), and it costs the library nothing. It is not a case the library designs around or tests, and a consumer who wants it owns the arrangement.
 
 Omit `scale`/`scroll` and the Gantt creates private ones — single-Gantt users never meet the concept. Passing shared instances is the *entire* sync API: no link manager, no event plumbing. `ScrollModel`, which fused both directions into one object, is retired (S6, D-S6-1); `ScrollAxis` is one direction, so `scroll: { x?, y? }` shares exactly the directions a caller supplies. The example above shares `x` and leaves `y` private on each Gantt — sharing `y` too, or instead, is `scroll: { x, y }` or `scroll: { y }`. Whichever direction is shared, a shorter chart's own row (or content) count clamps the shared position locally, so it pins at its own last row while a taller chart keeps going, with zero remembered state.

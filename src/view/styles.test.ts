@@ -247,6 +247,24 @@ describe('ensureBaseStyles', () => {
     expect(outsideRule).not.toContain('ellipsis');
   });
 
+  // #436: the clip that contains a too-wide 'inside' label keys on the token, never on `.fg-bar`
+  // itself. A bar whose content a `barRenderer` owns carries no `data-label` (render/dom/index.ts's
+  // `ownsContent`), so a clip on the element would reach a child the consumer placed on purpose and
+  // no escape hatch could reach it back — the #325 defect, one seam further out.
+  // e2e/planner.spec.ts holds the paint-tree half of this; here is the rule that produces it.
+  it("clips only a bar carrying the library's own inside label, never the bar itself (#436)", () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const barRule = css.split('\n').find((line) => line.startsWith('.fg-bar {'));
+    const clipRule = css.split('\n').find((line) => line.startsWith(".fg-bar[data-label='inside'] {"));
+
+    expect(barRule).toBeDefined();
+    expect(barRule).not.toContain('overflow');
+    expect(clipRule).toBeDefined();
+    expect(clipRule).toContain('overflow: hidden');
+  });
+
   // ADR 0013 retired core's milestone diamond (`.fg-bar-diamond`) end to end — the base sheet never
   // wrote it, so the three tests that once read it here stayed gone. ADR 0022 brought the class back
   // as a shipped `diamond()` Variant, but its rules live on the Variant's own `css`
