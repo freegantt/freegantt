@@ -30,7 +30,7 @@ export {
   formatHour,
   dropRepeatedGranularity,
 } from './format.js';
-export { createTimeScale, pxPerMsForPreset, minPxPerMsForPreset } from './scale.js';
+export { createTimeScale, pxPerMsForPreset, minPxPerMsForPreset, pxPerMsForUnitWidth } from './scale.js';
 export { snapInstant, stepsBetween } from './snap.js';
 export type { SnapUnit } from './snap.js';
 export type {
@@ -38,6 +38,7 @@ export type {
   TimeScaleOptions,
   ViewPreset,
   ViewPresetHeader,
+  TimeUnitWidth,
   TickStep,
   SnapSetting,
   Tick,

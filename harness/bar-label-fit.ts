@@ -25,7 +25,7 @@ const entries: EntryInput[] = [{ id: ROW_ENTRY_ID, name: 'Fulfillment row' }, ..
 
 const dataset = new Dataset({ entries, timeZone: 'UTC' });
 
-// Explicit pixels-per-millisecond `fit` (`TimeScaleFit`'s third mode), not the default `'pane'` —
+// A stated tile width (`TimeScaleFit`'s `TimeUnitWidth` mode), not the default `'pane'` —
 // this page wants one day-tile's width to stay the same however wide the browser window is, so the
 // "narrow" and "wide" buttons below always cross the same fit line. The shipped `dayPreset` floors
 // density at its own `minTickWidthPx` (96, for a full "Sep 21, 2026" tick label — `time/presets.ts`),
@@ -34,7 +34,6 @@ const dataset = new Dataset({ entries, timeZone: 'UTC' });
 // floor — the same "a new zoom level is never a library edit" knob `plans/02` already covers.
 const NARROW_DAY_WIDTH_PX = 14; // too narrow for "Day 12" — no side ever has room for it
 const WIDE_DAY_WIDTH_PX = 120; // wide enough that the label sits inside with room to spare
-const pxPerMsFor = (dayWidthPx: number): number => dayWidthPx / MS.DAY;
 
 const tilePreset: ViewPreset = {
   id: 'bar-label-fit-day-tile',
@@ -49,7 +48,7 @@ const gantt = new Gantt({
   container: '#gantt',
   dataset,
   preset: tilePreset,
-  fit: pxPerMsFor(NARROW_DAY_WIDTH_PX),
+  fit: { unit: 'day', widthPx: NARROW_DAY_WIDTH_PX },
   range: { start: children[0]!.start!, end: children[DAY_COUNT - 1]!.end! },
   rowSource: {
     source: 'entries',
@@ -61,8 +60,8 @@ const gantt = new Gantt({
 });
 
 document.querySelector<HTMLButtonElement>('#narrow-days')!.addEventListener('click', () => {
-  gantt.fit = pxPerMsFor(NARROW_DAY_WIDTH_PX);
+  gantt.fit = { unit: 'day', widthPx: NARROW_DAY_WIDTH_PX };
 });
 document.querySelector<HTMLButtonElement>('#widen-days')!.addEventListener('click', () => {
-  gantt.fit = pxPerMsFor(WIDE_DAY_WIDTH_PX);
+  gantt.fit = { unit: 'day', widthPx: WIDE_DAY_WIDTH_PX };
 });

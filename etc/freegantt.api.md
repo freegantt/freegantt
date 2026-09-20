@@ -2179,7 +2179,7 @@ export interface TimeScale {
 }
 
 // @public
-export type TimeScaleFit = 'pane' | 'preset' | number;
+export type TimeScaleFit = 'pane' | 'preset' | number | TimeUnitWidth;
 
 // @public (undocumented)
 export class TimeScaleModel {
@@ -2226,6 +2226,14 @@ export interface TimeSpanInput {
 
 // @public (undocumented)
 export type TimeUnit = 'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year';
+
+// @public
+export interface TimeUnitWidth {
+    readonly increment?: number;
+    // (undocumented)
+    readonly unit: TimeUnit;
+    readonly widthPx: number;
+}
 
 // @public
 export interface TooltipColumn {

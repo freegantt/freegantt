@@ -41,10 +41,8 @@ for (let r = 0; r < ROW_COUNT; r++) {
 
 const dataset = new Dataset({ entries, timeZone: 'UTC' });
 
-// Same explicit pixels-per-millisecond `fit` `harness/bar-label-fit.ts` uses, and for the same
-// reason: the shipped `dayPreset` floors density above this page's tile width.
-const pxPerMsFor = (dayWidthPx: number): number => dayWidthPx / MS.DAY;
-
+// Same stated tile width `harness/bar-label-fit.ts` uses, and for the same reason: the shipped
+// `dayPreset` floors density above this page's tile width, so this page brings its own preset.
 const tilePreset: ViewPreset = {
   id: 'dense-tile-grid-day-tile',
   tickUnit: 'day',
@@ -67,7 +65,7 @@ const gantt = new Gantt({
   container: '#gantt',
   dataset,
   preset: tilePreset,
-  fit: pxPerMsFor(TILE_WIDTH_PX),
+  fit: { unit: 'day', widthPx: TILE_WIDTH_PX },
   range: { start: ORIGIN, end: new Date(ORIGIN.getTime() + TILE_COUNT * MS.DAY) },
   rowSource: {
     source: 'entries',
