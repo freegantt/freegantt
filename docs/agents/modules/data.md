@@ -1,0 +1,3 @@
+- Every mutation goes through a transaction → the extension hook (once) → one changeset (`{from, to}` per field). No exceptions, gestures included (one transaction per gesture, at commit). The extension hook is the identity function when no scheduling plugin is installed, so this is not conditioned on scheduling being present — the shape holds either way.
+- Undo records user edits + engine cascades atomically (when a scheduling plugin is installed and contributes cascades).
+- No module-level singletons anywhere; two Gantt instances on one page must be fully independent.
