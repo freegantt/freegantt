@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — an owning parent (#470)</title>
+    <link rel="stylesheet" href="./harness-nav.css" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        --fg-bar-label-gap: 6px;
+        border: 1px solid #ccc;
+        height: 30vh;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+      #controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      #log {
+        margin-top: 1rem;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        padding: 0.5rem;
+      }
+      #log div {
+        padding: 1px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — an owning parent (#470)</h1>
+      <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+      <p>
+        Phase declares <code>{ key: 'start', rollUp: 'none' }</code> and the same for <code>end</code> — a
+        Dataset-wide opt-out of the Rollup for both date Fields. Phase keeps the dates it is given: drag its
+        bar and it moves like an ordinary bar, its two children with it. Drag its end handle and only Phase's
+        own <code>end</code> changes — the children keep their span, because a resize never stretches a
+        subtree (#470).
+      </p>
+      <div id="page-brief"></div>
+      <div id="controls">
+        <button id="undo-btn" type="button">Undo</button>
+      </div>
+      <div id="gantt"></div>
+      <div id="log" role="log" aria-label="Changeset log"></div>
+    </main>
+    <script type="module" src="./owning-parent.ts"></script>
+  </body>
+</html>

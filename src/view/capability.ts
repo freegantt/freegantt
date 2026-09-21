@@ -10,7 +10,7 @@
 // per Field. `Capabilities.edit` answered per Entry. The cell editor kept a third rule per cell. No
 // two of them could meet. A bar move wrote `start` and `end` and asked neither Field.
 
-import { libraryWriteRule, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
+import { libraryWriteRule, resolveWriteTarget, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
 import type { Entry, Field, FieldKey } from '../model/index.js';
 import type { CapabilityRule, GestureCapability, Capabilities, WriteRule } from '../model/index.js';
@@ -37,9 +37,12 @@ export interface ResolvedCapabilities {
   /** #256: the one answer to "may this Field's value change on this Entry". Every writer asks it:
    *  the cell editor, the resize drag, the move drag and the keyboard nudge. */
   canWrite(entry: Entry, field: FieldKey): WriteVerdict;
-  /** ADR 0013: which Entries a move of this bar writes. An ordinary bar writes itself. A parent's
-   *  own `start`/`end` roll up from its children. So a parent bar writes the dated descendants below
-   *  it instead, and the Rollup moves the parent's own envelope at commit.
+  /** ADR 0013, amended #470: which Entries a move of this bar writes. An ordinary bar writes itself.
+   *  A parent whose `start`/`end` roll up from its children always writes the dated descendants
+   *  below it, and the Rollup moves its own envelope at commit. A parent that owns its dates is an
+   *  ordinary bar too: a Field there declares `rollUp: 'none'`. That move writes the parent's own
+   *  dates **and** the dated descendants below it, so the whole grabbed subtree lands where the drag
+   *  showed it.
    *
    *  Empty means the move writes nothing, and that is exactly what `can('move', entry)` refuses. */
   entriesMovedBy(entry: Entry): readonly Entry[];
@@ -84,10 +87,9 @@ function hasSomewhereToWrite(field: Field | undefined): field is Field {
  *  left to special-case a gesture off of (ADR 0013). `canWrite` below decides whether that gesture
  *  can carry its write out.
  *
- *  A parent is *not* named here, and needs no name. Its `start` and `end` both roll up, so it writes
- *  no date of its own. What a parent bar's move writes is the subtree below it (ADR 0013), and
- *  `entriesMovedBy` answers that. Resize stays closed on a parent: one edge of a derived envelope
- *  names no descendant to resize. */
+ *  A parent is *not* named here, and needs no name. Whether it owns the dates it moves and resizes
+ *  is `canWrite`'s question, gated by `ownsField` (#470). This function stays one answer for every
+ *  Entry, deriving or owning alike. */
 function gestureIsOffered(): boolean {
   return true;
 }
@@ -167,11 +169,25 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     return libraryWriteRule(entry.hasChildren, declared);
   };
 
-  /** The leaf rule, unchanged since #256: a bar that holds its own dates moves when both of them may
-   *  change. It asks about the Fields, never about the values, so a dateless leaf answers the same
-   *  as a dated one. */
+  /** #470: does this row own the Field at all? `resolveWriteTarget` answers from the Field and
+   *  structure alone. It answers before `capabilities.edit` or a variant's own `edit` gets a say,
+   *  because `canWrite` puts those first. So this sits **above** `canWrite` on purpose. A consumer
+   *  who answers `edit: true` must not make a deriving parent's cell look ownable: that cell still
+   *  commits into `DerivedFieldNotWritableError`. Every reader of this question uses the one
+   *  resolver (I14), and this is `view/`'s. */
+  const ownsField = (entry: Entry, field: FieldKey): boolean =>
+    resolveWriteTarget(entry.hasChildren, fieldFor(field)) === 'entry';
+
+  /** The leaf rule, unchanged since #256: a bar that holds its own dates moves when it owns both of
+   *  them and both may change. It asks about the Fields, never about the values, so a dateless leaf
+   *  answers the same as a dated one. `ownsField` is a no-op for a leaf, because a childless row
+   *  always owns its own Fields. On a row with children, it is what lets an owning parent's own bar
+   *  move like an ordinary one (#470). */
   const movesItsOwnDates = (entry: Entry): boolean =>
-    canWrite(entry, 'start').ok && canWrite(entry, 'end').ok;
+    ownsField(entry, 'start') &&
+    canWrite(entry, 'start').ok &&
+    ownsField(entry, 'end') &&
+    canWrite(entry, 'end').ok;
 
   /** ADR 0013: a descendant travels with the parent bar when every date it holds may change. It is
    *  not the leaf rule above. A child with a `start` and no `end` moves that `start`. A closed `end`
@@ -180,13 +196,24 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     (entry.start === undefined || canWrite(entry, 'start').ok) &&
     (entry.end === undefined || canWrite(entry, 'end').ok);
 
+  /** #470: does this row own every date it holds? The descendant walk below passes over an
+   *  intermediate row that derives, the way `descendant.hasChildren` used to. The test is ownership
+   *  now, not structure. So a Dataset that opts a Field out of the Rollup moves an intermediate
+   *  owning row with the rest, instead of always skipping it. */
+  const ownsTheDatesItHolds = (entry: Entry): boolean =>
+    (entry.start === undefined || ownsField(entry, 'start')) &&
+    (entry.end === undefined || ownsField(entry, 'end'));
+
   const entriesMovedBy = (entry: Entry): readonly Entry[] => {
     if (!entry.hasChildren) return movesItsOwnDates(entry) ? [entry] : NOTHING_MOVES;
     const moved: Entry[] = [];
+    // #470: the leaf rule above reads an owning parent as an ordinary bar. Its own dates move with
+    // its subtree, on top of the translate ADR 0013 already gives that subtree.
+    if (movesItsOwnDates(entry)) moved.push(entry);
     for (const descendant of entry.descendants()) {
-      // A descendant with children of its own derives its dates the same way this parent does.
-      // The walk passes over it, and reaches the dated rows below it.
-      if (descendant.hasChildren) continue;
+      // A descendant that derives the dates it holds is passed over, and the walk reaches the rows
+      // below it. One that owns them moves with the rest (#470) — a leaf always does.
+      if (!ownsTheDatesItHolds(descendant)) continue;
       // "Children with neither date are skipped" (ADR 0013) — there is nothing to translate.
       if (descendant.start === undefined && descendant.end === undefined) continue;
       // One locked descendant refuses the whole gesture. A parent bar that moved part of its own

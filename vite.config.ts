@@ -40,6 +40,7 @@ export default defineConfig({
         'dense-tile-grid': page('dense-tile-grid.html'),
         'entries-outside-the-range': page('entries-outside-the-range.html'),
         'theme-push': page('theme-push.html'),
+        'owning-parent': page('owning-parent.html'),
       },
     },
   },
