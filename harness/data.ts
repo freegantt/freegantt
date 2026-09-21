@@ -16,7 +16,16 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from 'freegantt';
-import type { DatasetEventMap, StoredEntry, EntryEdit, EntryEdits, EntryId, RollUpContext } from 'freegantt';
+import type {
+  DatasetEventMap,
+  StoredEntry,
+  EntryEdit,
+  EntryEdits,
+  EntryId,
+  RollUpContext,
+  ComputeContext,
+  GridColumnInput,
+} from 'freegantt';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -42,10 +51,10 @@ declare global {
 // and nothing in this app may change it. Cost declares nothing, so it stays open to both doors.
 // ADR 0013: a rolling-up parent's cell is read-only unless the page says what a write to it means.
 // `money` rolls up with `sum`, so the write that reverses a sum is a split — read `writeToChildren`
-// as the Aggregator backwards. This page splits evenly and puts the rounding remainder on the last
-// child, so the Rollup reads back exactly the number the button asked for. A page that wanted a
-// split by duration, or by each child's current share, would write that here instead; the library
-// ships no guessed default, because there is none to defend.
+// as the Aggregator backwards. This page splits by each child's own leaf count — a subtree with
+// three leaves takes three shares of the total, not one even share — and puts the rounding remainder
+// on the last child, so the Rollup reads back exactly the number the button asked for. Both this and
+// `leafCount` below read `ctx.leaves(row).length`; neither walks the tree itself (#466 step 5).
 const COST_FIELDS = {
   fieldTypes: {
     money: {
@@ -57,18 +66,22 @@ const COST_FIELDS = {
       ): EntryEdits | undefined {
         const children = ctx.children(parent);
         if (total === undefined || children.length === 0) return undefined;
-        const share = Math.floor(total / children.length);
+        const leafCounts = children.map((child) => ctx.leaves(child).length);
+        const totalLeaves = leafCounts.reduce((sum, count) => sum + count, 0);
         const edits = new Map<EntryId, EntryEdit>();
+        let distributed = 0;
         children.forEach((child, index) => {
           const last = index === children.length - 1;
-          edits.set(child.id, { cost: last ? total - share * (children.length - 1) : share });
+          const share = last ? total - distributed : Math.floor((total * leafCounts[index]!) / totalLeaves);
+          distributed += share;
+          edits.set(child.id, { cost: share });
         });
         return edits;
       },
     },
   },
   fields: [
-    { key: 'cost' as const, type: 'money' },
+    { key: 'cost' as const, type: 'money', column: { header: 'Cost', align: 'end' as const } },
     // #142 gave the core-Field override its first call site, and #256 its first e2e. `'api'` is what
     // this page always meant by it: the toolbar moves a bar by a day, and the End cell and the End
     // resize handle both stay dead.
@@ -76,12 +89,24 @@ const COST_FIELDS = {
     // The lock. A contract id comes in with the entry and nothing here may rewrite it, so
     // `entries.update()` refuses it as flatly as the grid does.
     { key: 'contractId' as const, editable: false },
+    // A `compute` Field has no stored home (ADR 0005): its value is read on every frame, never
+    // written back. `ctx.leaves(entry).length` is the bottom-row count under this row — 1 for a leaf,
+    // the same number `writeToChildren` above splits cost by.
+    {
+      key: 'leafCount' as const,
+      compute: (entry: StoredEntry, ctx: ComputeContext) => ctx.leaves(entry).length,
+      column: { header: 'Leaves', align: 'end' as const, width: 80 },
+    },
   ],
 };
 
 // S4.2: a small tree proves cost rolls up through ancestors in one changeset; undo reverts all rows.
 // ADR 0013: "Phase" derives because it has children. It authors no classification, and no dates —
-// the Rollup fills its span from Task A and Task B.
+// the Rollup fills its span from Task A and Task B's own subtrees.
+//
+// #466 step 5: Task B carries two children of its own, so the tree has one more level than "every
+// row is a leaf of the phase" would show — `leafCount` reads 1 at Task A, 2 at Task B, 3 at Phase,
+// and a cost split by leaf count gives Task B two shares against Task A's one.
 const ROLLUP_TREE = [
   { id: 'phase', name: 'Phase' },
   {
@@ -92,13 +117,22 @@ const ROLLUP_TREE = [
     end: '2026-01-10',
     props: { cost: 100, contractId: 'C-4417' },
   },
+  { id: 'task-b', name: 'Task B', parentId: 'phase' },
   {
-    id: 'task-b',
-    name: 'Task B',
-    parentId: 'phase',
+    id: 'task-b1',
+    name: 'Task B1',
+    parentId: 'task-b',
     start: '2026-01-15',
-    end: '2026-01-20',
+    end: '2026-01-18',
     props: { cost: 200, contractId: 'C-4418' },
+  },
+  {
+    id: 'task-b2',
+    name: 'Task B2',
+    parentId: 'task-b',
+    start: '2026-01-18',
+    end: '2026-01-20',
+    props: { cost: 200, contractId: 'C-4419' },
   },
 ];
 
@@ -114,7 +148,11 @@ const dataset = new Dataset<{ cost: number; contractId?: string }>({
   ...COST_FIELDS,
   plugins: [locks],
 });
-const gantt = new Gantt({ container: '#gantt', dataset });
+// The library's own default (`name`, `start`, `end`), plus this page's own Fields — `cost` was
+// always readable here; `leafCount` is what #466 step 5 adds a column for.
+const GRID_COLUMNS: readonly GridColumnInput[] = ['name', 'start', 'end', 'cost', 'leafCount'];
+
+const gantt = new Gantt({ container: '#gantt', dataset, gridColumns: GRID_COLUMNS });
 window.__dataset = dataset;
 
 const toolbar = document.querySelector<HTMLDivElement>('#toolbar')!;
