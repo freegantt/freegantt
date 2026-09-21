@@ -13,3 +13,13 @@ export type WriteRefusalReason = Extract<BuiltInReportCode, 'derived-value'>;
  *  this off `ctx.interaction.canWrite`. */
 export type WriteVerdict =
   { readonly ok: true } | { readonly ok: false; readonly reason?: WriteRefusalReason };
+
+/** Where a write to one cell lands (ADR 0013, amendment 2026-09-11). `'entry'` lands where the
+ *  write aimed; `'children'` is a Field that declared `writeToChildren`, so the write is refused at
+ *  the row and redirected to its children through that policy; `'refused'` is a rolling-up cell with
+ *  no `writeToChildren` — it lands nowhere. `data/write-rule.ts`'s `resolveWriteTarget` computes it;
+ *  `EditRequest.writeTarget` (`edit-request.ts`) publishes it to a plugin author, ruled 2026-09-21
+ *  (#466): today `'children'` and `'refused'` both mean "dropped" for a cascade, so a boolean would
+ *  be truthful, and lossy the moment a cascade can address `'children'` on its own — a published
+ *  surface cannot narrow later, so the three-value answer ships now. */
+export type WriteTarget = 'entry' | 'children' | 'refused';

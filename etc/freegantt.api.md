@@ -646,8 +646,10 @@ export interface EditRequest {
     readonly addedEntryIds: ReadonlySet<EntryId>;
     entries: ReadonlyMap<EntryId, StoredEntry>;
     entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
+    hasChildren(id: EntryId | string): boolean;
     proposed: ProposedEdits;
     readonly removedEntryIds: ReadonlySet<EntryId>;
+    writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;
 }
 
 // @public
@@ -2384,6 +2386,9 @@ export type WriteRefusalReason = FieldWriteRefusalReason;
 
 // @public
 export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
+
+// @public
+export type WriteTarget = 'entry' | 'children' | 'refused';
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteVerdict" needs to be exported by the entry point index.d.ts
 //

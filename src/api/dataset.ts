@@ -8,7 +8,6 @@ import type {
   DatasetEventMap,
   DateOnlyEndRule,
   DurationMeasure,
-  EditRequest,
   ProposedEdits,
   EntryInput,
   EntryStore as EntryStoreContract,
@@ -19,6 +18,7 @@ import type {
   PluginStoreView,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
+import { createEditRequest } from '../data/edit-request.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
@@ -331,11 +331,28 @@ export class Dataset<TProps = unknown> {
  *  extender's extra edits during a drag (D-S3-18) and never writes through it; a commit calls the
  *  same occupant again, for real, inside the transaction. `api/gantt.ts` is the one caller — an app
  *  author never proposes an `EditRequest`, so a method here would have no honest caller outside it.
- *  Exported from `api/` only, never from `api/index.ts`. */
-export function extraEditsFor<TProps>(dataset: Dataset<TProps>, request: EditRequest): ProposedEdits {
+ *  Exported from `api/` only, never from `api/index.ts`.
+ *
+ *  Takes the draft, and builds the `EditRequest` here (#466) — `view/`'s `GesturePipelineDeps` and
+ *  `GanttShellOptions` both narrowed to this same shape, because `GanttShell` binds to `model/`'s
+ *  narrow `Dataset`, which carries no `hierarchySource`/`committedChildIds`/`fields` to build one
+ *  with. This function reaches the full `DatasetState` through the friend map above, so it is where
+ *  the request gets built — the one place `data/edit-request.ts`'s `createEditRequest` is called for
+ *  the preview path, mirroring `build-commit-change-set.ts`'s call on the commit path. */
+export function extraEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedEdits): ProposedEdits {
   const state = datasetState.get(dataset);
   if (!state) {
     throw new Error('extraEditsFor: dataset was not constructed through the Dataset constructor');
   }
-  return state.extraEditsFor(request);
+  return state.extraEditsFor(
+    createEditRequest({
+      entries: state.entries.committedById(),
+      proposed: draft,
+      added: [],
+      removed: [],
+      hierarchySource: state.hierarchySource,
+      committedChildIds: state.entries.committedChildIds(),
+      fields: state.fields,
+    }),
+  );
 }

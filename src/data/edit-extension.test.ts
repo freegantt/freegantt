@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_ENTRY_IDS, identityExtender } from './edit-extension.js';
+import { identityExtender } from './edit-extension.js';
+import { createEditRequest } from './edit-request.js';
+import { storedParentSource } from './hierarchy-source.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId } from '../model/index.js';
@@ -7,6 +9,9 @@ import type { StoredEntry, EntryEdit, EntryId, Instant } from '../model/index.js
 import { mergeEntryEdits } from './edit-extension.js';
 import { proposedKeysOf } from './fields/field-access.js';
 import type { EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from './edit-extension.js';
+
+/** No Field lookup is under test here — every request below asks nothing that reads one. */
+const noFields = { get: () => undefined };
 
 function entry(id: string): StoredEntry {
   return {
@@ -27,13 +32,17 @@ describe('identityExtender', () => {
     const t1 = entry('t1');
     const proposed = new Map<EntryId, ProposedEdit>([[t1.id, proposedEdit({ name: 'Framing' })]]);
     const entries = new Map([[t1.id, t1]]);
-    const result = identityExtender({
-      entries,
-      proposed,
-      entryAfterEdits: (id) => entries.get(entryId(id)),
-      addedEntryIds: EMPTY_ENTRY_IDS,
-      removedEntryIds: EMPTY_ENTRY_IDS,
-    });
+    const result = identityExtender(
+      createEditRequest({
+        entries,
+        proposed,
+        added: [],
+        removed: [],
+        hierarchySource: storedParentSource,
+        committedChildIds: new Map(),
+        fields: noFields,
+      }),
+    );
     expect(result.size).toBe(0);
   });
 });
@@ -42,13 +51,15 @@ describe('identityExtender', () => {
 // calls it at one site — what changes is only how a second plugin arrives.
 describe('DatasetState.setExtender (D-S5-23)', () => {
   const requestEntries = new Map<EntryId, StoredEntry>();
-  const request = {
+  const request = createEditRequest({
     entries: requestEntries,
     proposed: new Map() as ProposedEdits,
-    entryAfterEdits: (id: EntryId) => requestEntries.get(id),
-    addedEntryIds: EMPTY_ENTRY_IDS,
-    removedEntryIds: EMPTY_ENTRY_IDS,
-  };
+    added: [],
+    removed: [],
+    hierarchySource: storedParentSource,
+    committedChildIds: new Map(),
+    fields: noFields,
+  });
 
   /** One wrapper that runs the current occupant, then adds a name of its own to the result. */
   function appends(name: string): (next: EditExtender) => EditExtender {
@@ -117,13 +128,15 @@ describe('composing two extenders that write one Entry (#197)', () => {
     // `EditRequest.entries` is the pre-transaction snapshot, so it carries stored values and never
     // a live row (D-S5-45, ADR 0017).
     const entries = new Map([[target, state.entries.storedValues.get(target)!]]);
-    const request = {
+    const request = createEditRequest({
       entries,
       proposed: new Map() as ProposedEdits,
-      entryAfterEdits: (id: EntryId) => entries.get(id),
-      addedEntryIds: EMPTY_ENTRY_IDS,
-      removedEntryIds: EMPTY_ENTRY_IDS,
-    };
+      added: [],
+      removed: [],
+      hierarchySource: storedParentSource,
+      committedChildIds: new Map(),
+      fields: noFields,
+    });
     return { loose: state.editExtender(request), stored: state.extraEditsFor(request) };
   }
 

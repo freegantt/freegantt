@@ -2,7 +2,6 @@
 // edits → extension hook → rollup → fold. The only module that imports `rollup.ts` on the commit path
 // (`rollup-is-removable`).
 
-import { entryId } from '../model/index.js';
 import type {
   ChangeOrigin,
   ChangeSet,
@@ -16,8 +15,8 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
-import { EMPTY_ENTRY_IDS } from './edit-extension.js';
 import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.js';
+import { createEditRequest } from './edit-request.js';
 import type { ErrorBus } from './error-reporting.js';
 import {
   buildCascadeDroppedReport,
@@ -25,7 +24,6 @@ import {
   raiseErrorOn,
 } from './error-reporting.js';
 import type { EditsReading } from './entry-reader.js';
-import { buildEffectiveEntries } from './entry-tree.js';
 import { mergeProposedEditsByEntry, entryAfterEdit, proposedKeysOf } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -130,28 +128,24 @@ export function buildCommitChangeSet(
   const removedEntities = data.entries.pendingRemoved();
   const added = addedEntities.map((row) => row.entity);
   const removed = removedEntities.map((row) => row.entity);
-  // #235: net effect, not a call log — an Entry this transaction both adds and removes is in
-  // neither set, because `added`/`removed` above already reflect net pending state.
-  const addedEntryIds = added.length === 0 ? EMPTY_ENTRY_IDS : new Set(added.map((entity) => entity.id));
-  const removedEntryIds =
-    removed.length === 0 ? EMPTY_ENTRY_IDS : new Set(removed.map((entity) => entity.id));
-
   // The extender's cascade is read against the state its own edit lands on — committed entries
   // overlaid with this transaction's body edits, plus the entries this transaction itself adds — not
   // against `byId` alone (#212 R2 fix-plan review, finding A). `byId` is pre-transaction: an entry the
   // body just added is absent from it, and an entry whose span the body just rewrote still shows its
-  // old one there.
-  const effectiveForExtender = buildEffectiveEntries(byId, added, removed, proposed);
-  // The hook is judged against `effectiveForExtender` above, so it must be able to read that same
-  // state, not just `byId` (D-S5-45) — `entryAfterEdits` is that map's own `.get`, already built for
-  // this reconciliation, so this costs nothing extra at commit.
-  const extenderReading = data.extraEditsReadingFor({
-    entries: byId,
-    proposed,
-    entryAfterEdits: (id) => effectiveForExtender.get(entryId(id)),
-    addedEntryIds,
-    removedEntryIds,
-  });
+  // old one there. `createEditRequest` (#466) is the one place this reconciliation, `hasChildren` and
+  // `writeTarget` are built — the commit path and the preview path (`gesture-pipeline.ts`) both call
+  // it, so neither can answer those two questions differently.
+  const extenderReading = data.extraEditsReadingFor(
+    createEditRequest({
+      entries: byId,
+      proposed,
+      added,
+      removed,
+      hierarchySource: data.hierarchySource,
+      committedChildIds: data.entries.committedChildIds(),
+      fields: data.fields,
+    }),
+  );
   const extenderEdits: ProposedEdits = extenderReading.stored;
   guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
 

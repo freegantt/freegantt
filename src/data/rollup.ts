@@ -8,14 +8,20 @@
 import type { StoredEntry, EntryId, FieldUpdated, HierarchySource } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import type { ProposedEdits } from './edit-extension.js';
-import { ancestorsOf, buildEffectiveEntries, childIdsByParent, depthOf } from './entry-tree.js';
+import {
+  ancestorsOf,
+  buildEffectiveEntries,
+  childIdsByParent,
+  commitMovesNoRow,
+  depthOf,
+  parentIdIn,
+} from './entry-tree.js';
 import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
 import type { ParentIndex } from './hierarchy-source.js';
 import {
   createRollUpContext,
   editProposesField,
   entryAfterEdit,
-  proposedKeysOf,
   readField,
   readingChildrenFrom,
   readingHypotheticalRows,
@@ -183,31 +189,6 @@ export interface RollUpResult {
 }
 
 const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], cascadeDropped: [] });
-
-/** A checked parent index, read back as a `HierarchySource` — the shape every walk in
- *  `entry-tree.ts` takes (ADR 0020). */
-function parentIdIn(parentById: ReadonlyMap<EntryId, EntryId>): HierarchySource {
-  return (entry) => parentById.get(entry.id);
-}
-
-/** True when this commit's `added`, `removed` and `merged` edits leave every row's place in the
- *  tree untouched: no Entry is added or removed, and no edit proposes `parentId`.
- *
- *  Only asked under core's own hierarchy source (`storedParentSource` reads `parentId` and nothing
- *  else). A plugin's source is an arbitrary function that may read any field, so no commit can be
- *  proven not to move a row under it — that source keeps today's re-check on every commit. Whether a
- *  source could declare the keys it reads is #426, out of scope here. */
-function commitMovesNoRow(
-  added: readonly StoredEntry[],
-  removed: readonly StoredEntry[],
-  merged: ProposedEdits,
-): boolean {
-  if (added.length > 0 || removed.length > 0) return false;
-  for (const edit of merged.values()) {
-    if (proposedKeysOf(edit).has('parentId')) return false;
-  }
-  return true;
-}
 
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
