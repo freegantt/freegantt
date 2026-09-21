@@ -134,7 +134,7 @@ export type Field<TValue = unknown> =
        *
        *  A core Field (`start`, `name`, ...) is declared by the library and cannot be redeclared, so a
        *  consumer overrides only this key on one through `DatasetOptions.fields`/`ctx.fields.register`
-       *  — `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` names the one key that merge accepts;
+       *  — `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` names the keys merge accepts;
        *  naming any other key on a core Field's key throws (`IllegalCoreFieldOverrideError`).
        *  `dataset.setFieldEditable(key, editable)` changes it after setup; nothing else may. */
       editable?: FieldEditable | boolean;

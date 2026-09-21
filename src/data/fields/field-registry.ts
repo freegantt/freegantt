@@ -86,10 +86,10 @@ function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField 
   return toStoredEditable({ ...merged, ...(column !== undefined ? { column } : {}) });
 }
 
-/** #142: the only keys a consumer declaration may carry when it names a core Field's key. A core
- *  Field is the library's own — it cannot be redeclared — but this one key is a fact about the
- *  Dataset, not about the Field's identity, so a consumer may still state it. The next key added
- *  here is the whole change; nothing else in `#mergeCoreFieldOverride` needs to know its name. */
+/** #142/#470: the only keys a consumer declaration may carry when it names a core Field's key. A
+ *  core Field is the library's own — it cannot be redeclared — but these keys are facts about the
+ *  Dataset, not about the Field's identity, so a consumer may still state them. `#mergeCoreFieldOverride`
+ *  iterates this list; a key added here needs no other line changed, and no key names itself twice. */
 /** Does this Field take part in the Rollup? `'none'` is a declared opt-out, not an absent key
  *  (`register({ key: 'locked', rollUp: 'none' })`), so an absent key and an opted-out one both
  *  answer `false`. One predicate, because two readers ask: the Rollup pass itself, and #256's
@@ -143,7 +143,7 @@ export function requireResolvedIndex(
   return index;
 }
 
-const CORE_FIELD_OVERRIDABLE_KEYS = ['editable'] as const;
+const CORE_FIELD_OVERRIDABLE_KEYS = ['editable', 'rollUp'] as const;
 
 /** The first key on `field`, other than `key` itself, that `CORE_FIELD_OVERRIDABLE_KEYS` does not
  *  name — `undefined` when every key `field` carries is legal to override. Reads the object's own
@@ -249,10 +249,19 @@ export class FieldRegistry {
     }
     const core = this.#byKey.get(key);
     if (core === undefined) throw new DuplicateFieldKeyError(key); // unreachable: core Fields add first.
-    const merged = toStoredEditable({
-      ...core,
-      ...(field.editable !== undefined ? { editable: field.editable } : {}),
-    });
+    const overridden = field as unknown as Record<string, unknown>;
+    const overrides: Record<string, unknown> = {};
+    for (const overridableKey of CORE_FIELD_OVERRIDABLE_KEYS) {
+      const value = overridden[overridableKey];
+      if (value !== undefined) overrides[overridableKey] = value;
+    }
+    const merged = toStoredEditable({ ...core, ...overrides });
+    // Same check `#add` runs for an ordinary declaration (:233) — an override reaches the
+    // Aggregator table by the same door a fresh Field does, so `rollUp: 'notAnAggregator'` is
+    // refused here too, not only when it happens to be a brand-new key.
+    if (merged.rollUp !== undefined && this.#aggregators[merged.rollUp] === undefined) {
+      throw new UnknownAggregatorError(merged.rollUp);
+    }
     const coreIndex = requireResolvedIndex(this.#resolved, core, key);
     this.#byKey.set(key, merged);
     this.#resolved[coreIndex] = merged;

@@ -122,7 +122,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
   });
 });
 
-describe("#142 a consumer may override a core Field's editable, and nothing else", () => {
+describe("#142/#470 a consumer may override a core Field's editable and rollUp, and nothing else", () => {
   // ADR 0015: `false` is an input alias, so the stored Field holds the enum and every reader — the
   // write door, the grid, and `dataset.fields.all` — reads one word back.
   it("{ key: start, editable: false } merges onto the core Field, and stores as 'never'", () => {
@@ -136,10 +136,35 @@ describe("#142 a consumer may override a core Field's editable, and nothing else
     expect(keys.indexOf('start')).toBe(1); // after 'name', ahead of 'end'.
   });
 
-  it('a core-key declaration carrying a key other than editable throws IllegalCoreFieldOverrideError', () => {
-    expect(() => new FieldRegistry({ fields: [{ key: 'start', rollUp: 'none' }] })).toThrow(
+  it('a core-key declaration carrying a key other than editable or rollUp throws IllegalCoreFieldOverrideError', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'start', compare: () => 0 }] })).toThrow(
       IllegalCoreFieldOverrideError,
     );
+  });
+
+  it("{ key: start, rollUp: none } is legal and merges onto core's declaration", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'start', rollUp: 'none' }] });
+    expect(registry.get('start')?.rollUp).toBe('none');
+    // core's own keys ride along unchanged — only rollUp moved.
+    expect(registry.get('start')?.type).toBe('date');
+  });
+
+  it('a core-key override naming an unknown Aggregator throws UnknownAggregatorError', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'start', rollUp: 'notAnAggregator' }] })).toThrow(
+      UnknownAggregatorError,
+    );
+  });
+
+  it('overriding rollUp on the same core key twice throws DuplicateFieldKeyError', () => {
+    expect(
+      () =>
+        new FieldRegistry({
+          fields: [
+            { key: 'start', rollUp: 'none' },
+            { key: 'start', rollUp: 'min' },
+          ],
+        }),
+    ).toThrow(DuplicateFieldKeyError);
   });
 
   it("{ key: start, type: text } throws IllegalCoreFieldOverrideError — a consumer cannot redeclare a core Field's type", () => {
