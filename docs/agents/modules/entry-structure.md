@@ -1,0 +1,2 @@
+- An Entry has no stored classification. Derivation and the default look follow children. Seams (producer, renderer, capabilities) key on structure or on plugin-owned ids — no `if (kind === ...)` chains in core.
+- Capabilities gate gestures *and* affordances from one resolution (I14).
