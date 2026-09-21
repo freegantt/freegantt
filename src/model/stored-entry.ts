@@ -12,7 +12,7 @@ import type { Instant, InstantInput, TimeSpan } from './time.js';
  *
  *  It is not a second concept. It is one row, with no questions attached.
  *
- *  An app author meets it in `DatasetOptions.aggregators`, in a Field's `compute` and `distribute`,
+ *  An app author meets it in `DatasetOptions.aggregators`, in a Field's `compute` and `writeToChildren`,
  *  and on `ChangeSet.added[].entity` / `.removed[].entity`. */
 export interface StoredEntry<TProps = Record<string, unknown>> {
   id: EntryId;

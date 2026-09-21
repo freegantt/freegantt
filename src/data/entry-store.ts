@@ -476,8 +476,8 @@ export class EntryStore implements EntryStoreContract {
         const reading = toEditReading(own, this.#context, current, this.#registry, operation);
         this.stageUpdate(token, key, reading.stored);
       }
-      // Each distributed edit lands through the door it would have come in by, so a child that is
-      // itself a rolling-up parent distributes again, or refuses. The walk ends at the leaves.
+      // Each edit lands through the door it would have come in by, so a child that is itself
+      // a rolling-up parent writes to its own children again, or refuses. The walk ends at the leaves.
       for (const edits of toChildren) {
         for (const [childId, childEdit] of edits) this.#updateFrom(operation, childId, childEdit);
       }
@@ -502,8 +502,8 @@ export class EntryStore implements EntryStoreContract {
     if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
   }
 
-  /** Splits one patch into what lands on `id` itself and what its Fields distribute to the children
-   *  (ADR 0013, amendment 2026-09-11). Every Field resolves, and every `distribute` runs, **before**
+  /** Splits one patch into what lands on `id` itself and what its Fields write to the children
+   *  (ADR 0013, amendment 2026-09-11). Every Field resolves, and every `writeToChildren` runs, **before**
    *  anything stages: a mixed patch such as `{ name, cost }` with a refused `cost` writes neither
    *  half, because a partial apply would leave a transaction in a state no `before*` event described.
    *
@@ -522,19 +522,20 @@ export class EntryStore implements EntryStoreContract {
     for (const [field, value] of Object.entries(edit)) {
       const declared = this.#registry.get(field)!;
       if (resolveWriteTarget(true, declared) === 'entry') continue;
-      if (!declared.distribute) throw new DerivedFieldNotWritableError(field, id, operation);
+      if (!declared.writeToChildren) throw new DerivedFieldNotWritableError(field, id, operation);
       children ??= this.storedChildrenOf(id);
       // Called on its own declaration, never detached from it — the same way `equals` and
-      // `formatValue` are called, so a `distribute` written as a method still reads its own Field.
+      // `formatValue` are called, so a `writeToChildren` written as a method still reads its own Field.
       const parent = this.storedEntry(id)!;
-      const edits = declared.distribute(
+      const edits = declared.writeToChildren(
         value,
         parent,
         createRollUpContext(this.#access, parent, children, field),
       );
       // An edit aimed back at the Entry being written is refused: that cell is the Rollup's, and a
-      // `distribute` that returned one would distribute again forever. A decline — `undefined`, or
-      // nothing to write — is refused with the same error an absent `distribute` gives.
+      // `writeToChildren` that returned one would write to the parent again forever. A decline —
+      // `undefined`, or nothing to write — is refused with the same error an absent `writeToChildren`
+      // gives.
       if (edits === undefined || edits.size === 0 || edits.has(id)) {
         throw new DerivedFieldNotWritableError(field, id, operation);
       }

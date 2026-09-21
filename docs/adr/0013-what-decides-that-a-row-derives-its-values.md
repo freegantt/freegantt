@@ -8,6 +8,8 @@ open: nothing. The parent bar drag ships (Build 3g). Q9 is answered: a parent ba
 
 > **Narrowed on 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) (proposed).** Read every *"core does not ship a diamond"* below as the sentence this record produced in 2026-09-10, not as the rule today. Core ships `diamond()` among its shipped variants; no row wears it until a rule claims it; and core still reads no stored word to decide a look. This record's own decision — an Entry carries no stored classification — stands untouched.
 
+> **Vocabulary note, added 2026-09-21.** This record predates the `distribute` → `writeToChildren` rename. Read every `distribute` below as `writeToChildren`, and `FieldDistributor` as `FieldWriteToChildren`. **Do not rewrite the body.**
+
 **Lands after [0016](0016-the-library-holds-no-save-format.md), [0012](0012-dates-are-optional-on-every-kind.md) and [0011](0011-consumer-values-live-in-props.md).** The working material is [`plans/field-redesign/0013-what-decides-derivation/`](../../plans/field-redesign/0013-what-decides-derivation/README.md). **No schema number** — ADR 0016 deleted the Document.
 
 ## Context

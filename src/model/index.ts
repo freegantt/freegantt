@@ -65,7 +65,7 @@ export type {
   FormatContext,
   RollUpContext,
   Aggregator,
-  FieldDistributor,
+  FieldWriteToChildren,
   GridColumn,
   GridColumnInput,
   GridColumnBase,

@@ -326,9 +326,9 @@ describe('rollup (§1.5)', () => {
 });
 
 describe('a derived cell is read-only until the Field says what a write means (ADR 0013 amendment)', () => {
-  /** A Dataset with one rolling-up consumer Field. `distribute`, when given, is what a write to a
+  /** A Dataset with one rolling-up consumer Field. `writeToChildren`, when given, is what a write to a
    *  rolling-up parent's `cost` cell means. */
-  function costDataset(distribute?: Field<number>['distribute']): DatasetState {
+  function costDataset(writeToChildren?: Field<number>['writeToChildren']): DatasetState {
     return new DatasetState({
       timeZone: 'UTC',
       entries: [
@@ -336,11 +336,18 @@ describe('a derived cell is read-only until the Field says what a write means (A
         { id: 'c1', name: 'c1', parentId: 'p1', start: 0, end: 1, props: { cost: 10 } },
         { id: 'c2', name: 'c2', parentId: 'p1', start: 0, end: 1, props: { cost: 20 } },
       ],
-      fields: [{ key: 'cost', rollUp: 'sum', editable: true, ...(distribute ? { distribute } : {}) }],
+      fields: [
+        {
+          key: 'cost',
+          rollUp: 'sum',
+          editable: true,
+          ...(writeToChildren ? { writeToChildren } : {}),
+        },
+      ],
     });
   }
 
-  it('a parent cell with no distribute is refused standalone, and refused inside a transaction', () => {
+  it('a parent cell with no writeToChildren is refused standalone, and refused inside a transaction', () => {
     // The point of the exercise (Q7): permission follows the thing written, never the call that
     // wrapped it. `dataset.transaction()` is public, so a bypass here is a bypass for everyone.
     const standalone = costDataset();
@@ -366,7 +373,7 @@ describe('a derived cell is read-only until the Field says what a write means (A
     expect(batchedWithCompany.entries.get('p1')?.read('cost')).toBe(30);
   });
 
-  it('a Field that declares distribute writes the children, and the Rollup reads the cell back', () => {
+  it('a Field that declares writeToChildren writes the children, and the Rollup reads the cell back', () => {
     const state = costDataset((total, _parent, ctx) => {
       const children = ctx.children();
       const share = (total as number) / children.length;
@@ -380,7 +387,7 @@ describe('a derived cell is read-only until the Field says what a write means (A
     expect(state.entries.get('p1')?.read('cost')).toBe(900);
   });
 
-  it('the distributed writes and their rolled-up parent land in one changeset, and one undo step', () => {
+  it('the writes to children and their rolled-up parent land in one changeset, and one undo step', () => {
     const state = costDataset(
       (total, _parent, ctx) =>
         new Map(
@@ -400,7 +407,7 @@ describe('a derived cell is read-only until the Field says what a write means (A
     );
   });
 
-  it('a distribute that declines refuses the write, with the same error an absent one gives', () => {
+  it('a writeToChildren that declines refuses the write, with the same error an absent one gives', () => {
     const state = costDataset(() => undefined);
     expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
     expect(state.entries.get('p1')?.read('cost')).toBe(30);
@@ -410,7 +417,7 @@ describe('a derived cell is read-only until the Field says what a write means (A
     expect(empty.entries.get('p1')?.read('cost')).toBe(30);
   });
 
-  it('a distribute that writes back to the parent is refused — that cell is the Rollup’s', () => {
+  it('a writeToChildren that writes back to the parent is refused — that cell is the Rollup’s', () => {
     const state = costDataset(() => new Map([[entryId('p1'), { cost: 900 }]]));
     expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
     expect(state.entries.get('p1')?.read('cost')).toBe(30);
@@ -424,7 +431,7 @@ describe('a derived cell is read-only until the Field says what a write means (A
     expect(state.entries.get('p1')?.name).toBe('p1');
   });
 
-  it('a leaf writes its own rolling-up cell, with or without a distribute', () => {
+  it('a leaf writes its own rolling-up cell, with or without a writeToChildren', () => {
     const state = costDataset();
     state.entries.update('c1', { cost: 99 });
     expect(state.entries.get('c1')?.read('cost')).toBe(99);

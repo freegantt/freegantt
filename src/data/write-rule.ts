@@ -23,8 +23,8 @@ export const WRITABLE: FieldWriteVerdict = Object.freeze({ ok: true });
 export const NOT_WRITABLE: FieldWriteVerdict = Object.freeze({ ok: false });
 export const DERIVED: FieldWriteVerdict = Object.freeze({ ok: false, reason: 'derived-value' as const });
 
-/** Where a write to one cell lands. `'children'` is a Field that declared `distribute`; `'refused'`
- *  is one that did not, on a cell the Rollup owns. */
+/** Where a write to one cell lands. `'children'` is a Field that declared `writeToChildren`;
+ *  `'refused'` is one that did not, on a cell the Rollup owns. */
 export type WriteTarget = 'entry' | 'children' | 'refused';
 
 /** Where does a write to this Field, on an Entry with or without children, land? (ADR 0013,
@@ -40,7 +40,7 @@ export type WriteTarget = 'entry' | 'children' | 'refused';
  *  `view/capability.ts` decides whether the cell offers an editor at all. */
 export function resolveWriteTarget(hasChildren: boolean, field: Field): WriteTarget {
   if (!hasChildren || !rollsUp(field)) return 'entry';
-  return field.distribute ? 'children' : 'refused';
+  return field.writeToChildren ? 'children' : 'refused';
 }
 
 /** May a person change this value by hand — the cell editor, a bar handle, a bar move? The **grid
@@ -68,7 +68,7 @@ export function isApiEditable(field: Field): boolean {
  *  words, and they are the words the cell editor has always shown. `rollsUp` is the Rollup pass's own
  *  test, so this refuses exactly the set that pass would overwrite.
  *
- *  A Field that declares `distribute` says what a write to that cell means, so the cell opens again
+ *  A Field that declares `writeToChildren` says what a write to that cell means, so the cell opens again
  *  — the write lands on the children (ADR 0013 amendment). `editable` still has the last word:
  *  a policy for the write does not make the value editable.
  *
