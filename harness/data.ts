@@ -16,16 +16,7 @@
 
 import './harness-nav.ts';
 import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from 'freegantt';
-import type {
-  DatasetEventMap,
-  StoredEntry,
-  EntryEdit,
-  EntryEdits,
-  EntryId,
-  RollUpContext,
-  ComputeContext,
-  GridColumnInput,
-} from 'freegantt';
+import type { DatasetEventMap, Entry, StoredEntry, ComputeContext, GridColumnInput } from 'freegantt';
 import { mountTimelineToolbar } from './timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
@@ -49,36 +40,12 @@ declare global {
 // All three states sit below, and two doors read them (ADR 0015). End is `'api'`: the Move buttons
 // shift it, and no user may drag or type it. `contractId` is `'never'`: it arrives with the entry
 // and nothing in this app may change it. Cost declares nothing, so it stays open to both doors.
-// ADR 0013: a rolling-up parent's cell is read-only unless the page says what a write to it means.
-// `money` rolls up with `sum`, so the write that reverses a sum is a split — read `writeToChildren`
-// as the Aggregator backwards. This page splits by each child's own leaf count — a subtree with
-// three leaves takes three shares of the total, not one even share — and puts the rounding remainder
-// on the last child, so the Rollup reads back exactly the number the button asked for. Both this and
-// `leafCount` below read `ctx.leaves(row).length`; neither walks the tree itself (#466 step 5).
+// ADR 0013: a rolling-up parent's cell is read-only, and #470 retired the seam that let a Field
+// reopen it — the split is this page's own policy now, in `splitCostOverLeaves` below, not a Field
+// declaration.
 const COST_FIELDS = {
   fieldTypes: {
-    money: {
-      rollUp: 'sum' as const,
-      writeToChildren(
-        total: number | undefined,
-        parent: StoredEntry,
-        ctx: RollUpContext,
-      ): EntryEdits | undefined {
-        const children = ctx.children(parent);
-        if (total === undefined || children.length === 0) return undefined;
-        const leafCounts = children.map((child) => ctx.leaves(child).length);
-        const totalLeaves = leafCounts.reduce((sum, count) => sum + count, 0);
-        const edits = new Map<EntryId, EntryEdit>();
-        let distributed = 0;
-        children.forEach((child, index) => {
-          const last = index === children.length - 1;
-          const share = last ? total - distributed : Math.floor((total * leafCounts[index]!) / totalLeaves);
-          distributed += share;
-          edits.set(child.id, { cost: share });
-        });
-        return edits;
-      },
-    },
+    money: { rollUp: 'sum' as const },
   },
   fields: [
     { key: 'cost' as const, type: 'money', column: { header: 'Cost', align: 'end' as const } },
@@ -90,8 +57,8 @@ const COST_FIELDS = {
     // `entries.update()` refuses it as flatly as the grid does.
     { key: 'contractId' as const, editable: false },
     // A `compute` Field has no stored home (ADR 0005): its value is read on every frame, never
-    // written back. `ctx.leaves(entry).length` is the bottom-row count under this row — 1 for a leaf,
-    // the same number `writeToChildren` above splits cost by.
+    // written back. `ctx.leaves(entry).length` is the bottom-row count under this row — 1 for a
+    // leaf, the same weight `splitCostOverLeaves` below reads back off `entry.read('leafCount')`.
     {
       key: 'leafCount' as const,
       compute: (entry: StoredEntry, ctx: ComputeContext) => ctx.leaves(entry).length,
@@ -142,7 +109,15 @@ const ROLLUP_TREE = [
 // fresh one at construction.
 const locks = lockEntries();
 
-const dataset = new Dataset<{ cost: number; contractId?: string }>({
+/** This page's own Field values (ADR 0011) — `cost` and `leafCount` are what `splitCostOverLeaves`
+ *  below reads and writes; `contractId` is read-only here. */
+interface DataPageProps {
+  cost: number;
+  contractId?: string;
+  leafCount: number;
+}
+
+const dataset = new Dataset<DataPageProps>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
@@ -292,12 +267,30 @@ function move(deltaMs: number): void {
 moveBackBtn.addEventListener('click', () => move(-MS.DAY));
 moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
+// ADR 0013: a rolling-up parent's cell is the Rollup's, never a caller's — #470 retired the one
+// seam that let a Field reopen it, so this button now writes the split itself, over public API.
+// It weighs each leaf by its own `leafCount` (the compute Field above, always 1 for a true leaf),
+// with the rounding remainder on the last leaf, so the sum reads back exactly what the button asked
+// for once the Rollup re-aggregates it. `entry.descendants()` is the one walk this needs.
+function splitCostOverLeaves(entry: Entry<DataPageProps>, total: number): void {
+  const leaves = entry.hasChildren ? entry.descendants().filter((row) => !row.hasChildren) : [entry];
+  const weights = leaves.map((leaf) => leaf.read('leafCount') ?? 1);
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  let distributed = 0;
+  leaves.forEach((leaf, index) => {
+    const last = index === leaves.length - 1;
+    const share = last ? total - distributed : Math.floor((total * weights[index]!) / totalWeight);
+    distributed += share;
+    dataset.entries.update(leaf.id, { cost: share });
+  });
+}
+
 costBtn.addEventListener('click', () => {
   const entries = gantt.selectedEntries;
   if (entries.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
-      for (const selected of entries) dataset.entries.update(selected.id, { cost: 500 });
+      for (const selected of entries) splitCostOverLeaves(selected, 500);
     });
   });
 });
