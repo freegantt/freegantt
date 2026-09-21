@@ -374,8 +374,8 @@ describe('a derived cell is read-only until the Field says what a write means (A
   });
 
   it('a Field that declares writeToChildren writes the children, and the Rollup reads the cell back', () => {
-    const state = costDataset((total, _parent, ctx) => {
-      const children = ctx.children();
+    const state = costDataset((total, parent, ctx) => {
+      const children = ctx.children(parent);
       const share = (total as number) / children.length;
       return new Map(children.map((child) => [child.id, { cost: share }]));
     });
@@ -389,9 +389,11 @@ describe('a derived cell is read-only until the Field says what a write means (A
 
   it('the writes to children and their rolled-up parent land in one changeset, and one undo step', () => {
     const state = costDataset(
-      (total, _parent, ctx) =>
+      (total, parent, ctx) =>
         new Map(
-          ctx.children().map((child) => [child.id, { cost: (total as number) / ctx.children().length }]),
+          ctx
+            .children(parent)
+            .map((child) => [child.id, { cost: (total as number) / ctx.children(parent).length }]),
         ),
     );
     const seen = changeSets(state);

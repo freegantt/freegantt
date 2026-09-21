@@ -461,7 +461,7 @@ describe('the Rollup context reads each row through its own children (F22)', () 
         { id: 'a3', name: 'a3', parentId: 'a' },
       ],
       fields: [
-        { key: 'kidCount', compute: (_entry, ctx) => ctx.children().length },
+        { key: 'kidCount', compute: (entry, ctx) => ctx.children(entry).length },
         { key: 'kidSum', rollUp: 'sumKidCounts' },
       ],
       aggregators: {
@@ -478,6 +478,43 @@ describe('the Rollup context reads each row through its own children (F22)', () 
     expect(state.entries.get('a')!.read('kidCount')).toBe(3);
     expect(state.entries.get('b')!.read('kidCount')).toBe(0);
     expect(state.entries.get('p')!.read('kidSum')).toBe(3);
+  });
+});
+
+// #466 step 1's own trap: `readingChildrenFrom` (`field-access.ts`) rebinds the pass's tree, and a
+// plain sibling `hasChildren` would keep answering off the store while `children` already answers
+// off the pass's effective tree — two answers to one question, on exactly the commit that moves a
+// row. `checkAgreement` below never trusts either answer; it asks both, inside the pass, for every
+// row the commit touches.
+describe('the rebinding trap: ctx.hasChildren and ctx.children agree inside the pass (#466 step 1)', () => {
+  it('a commit that moves a row: every row the pass reaches answers both questions the same way', () => {
+    const mismatches: string[] = [];
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'root', name: 'root' },
+        { id: 'a', name: 'a', parentId: 'root' },
+        { id: 'b', name: 'b', parentId: 'root' },
+        { id: 'a1', name: 'a1', parentId: 'a' },
+      ],
+      fields: [{ key: 'cost', rollUp: 'checkAgreement' }],
+      aggregators: {
+        checkAgreement: (parent, ctx) => {
+          for (const row of [parent, ...ctx.descendants(parent)]) {
+            if (ctx.hasChildren(row) !== ctx.children(row).length > 0) mismatches.push(String(row.id));
+          }
+          return 0;
+        },
+      },
+    });
+
+    // `a1` moves from `a` to `b`: `a` is demoted (its `hasChildren` must flip from true to false)
+    // and `b` is promoted (its `hasChildren` must flip from false to true) on this one commit.
+    state.entries.update('a1', { parentId: 'b' });
+
+    expect(mismatches).toEqual([]);
+    expect(state.entries.get('a')!.hasChildren).toBe(false);
+    expect(state.entries.get('b')!.hasChildren).toBe(true);
   });
 });
 

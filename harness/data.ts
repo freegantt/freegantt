@@ -52,10 +52,10 @@ const COST_FIELDS = {
       rollUp: 'sum' as const,
       writeToChildren(
         total: number | undefined,
-        _parent: StoredEntry,
+        parent: StoredEntry,
         ctx: RollUpContext,
       ): EntryEdits | undefined {
-        const children = ctx.children();
+        const children = ctx.children(parent);
         if (total === undefined || children.length === 0) return undefined;
         const share = Math.floor(total / children.length);
         const edits = new Map<EntryId, EntryEdit>();

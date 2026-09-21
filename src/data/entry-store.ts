@@ -157,8 +157,8 @@ export class EntryStore implements EntryStoreContract {
     this.#raiseError = raiseError;
     this.#context = context;
     this.#registry = registry;
-    // The store is the tree a Field read walks: a `compute` Field asking `ctx.children()` outside a
-    // Rollup pass means the row the store holds now (#214).
+    // The store is the tree a Field read walks: a `compute` Field asking `ctx.children(row)` outside
+    // a Rollup pass means the row the store holds now (#214).
     this.#access = readingParentFrom(
       readingChildrenFrom(
         access,

@@ -247,9 +247,12 @@ export interface CommandTarget extends ActedOn {
 
 // @public
 export interface ComputeContext extends FieldContext {
-    children(): readonly StoredEntry[];
+    children(row: StoredEntry): readonly StoredEntry[];
+    descendants(row: StoredEntry): readonly StoredEntry[];
     duration(): Duration | undefined;
+    hasChildren(row: StoredEntry): boolean;
     hierarchyParentId(): EntryId | undefined;
+    leaves(row: StoredEntry): readonly StoredEntry[];
     read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
 }
 

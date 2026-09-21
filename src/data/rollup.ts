@@ -267,8 +267,10 @@ export function rollUpFields(
       : childIdsByParent(committed, parentOfPrior);
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched, parentOfEffective);
   const computed = new Map<EntryId, StoredEntry>();
-  // A `compute` Field inside this pass asks `ctx.children()` and must see the pass's own effective
-  // children — the store does not hold the value this bottom-up walk just gave a child (ADR 0017).
+  // A `compute` Field inside this pass asks `ctx.children(row)` and must see the pass's own
+  // effective children — the store does not hold the value this bottom-up walk just gave a child
+  // (ADR 0017). `readingChildrenFrom`'s default `hasChildren` follows the same effective tree
+  // (#466), so `ctx.hasChildren(row)` cannot disagree with `ctx.children(row).length > 0` here.
   // `ctx.hierarchyParentId()` gets the same treatment (ADR 0024): the pass's own effective parent,
   // never the store's committed one, which may not have this edit's hierarchy change yet.
   const passAccess = readingParentFrom(

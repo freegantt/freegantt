@@ -8,7 +8,8 @@ import type { Instant, InstantInput, TimeSpan } from './time.js';
  *  `hasChildren`. This type answers none of them, and that is deliberate. A pass may hold a row no
  *  store holds — the Rollup's own effective tree is one — so the questions belong to the pass, and
  *  every pass that hands a `StoredEntry` hands the answers beside it: an Aggregator reads
- *  `ctx.read(key)` and `ctx.children()`, a `compute` Field reads `ComputeContext` the same way.
+ *  `ctx.read(key)`, `ctx.children(row)`, `ctx.descendants(row)`, `ctx.leaves(row)` and
+ *  `ctx.hasChildren(row)`, a `compute` Field reads `ComputeContext` the same way (#466).
  *
  *  It is not a second concept. It is one row, with no questions attached.
  *
