@@ -237,6 +237,15 @@ untouched here: `update()` reads the derived arm only.
   a consumer cannot propose a deriving parent's rolling-up field in the first place.
 - **A consumer who wants the old bypass writes the policy.** That is the whole point: the write that
   used to land silently now lands where the consumer said it should, or does not land.
+- **The extension hook is a door this amendment never ruled on.** `toEditsReading`
+  (`src/data/entry-reader.ts`) checks that the Field is declared, and nothing else. So a cascade
+  neither splits a `distribute` cell (the key is `writeToChildren` since #467) nor meets `editable`'s
+  thresholds, where `entries.update()` does both. Both disagreements are tracked in
+  [#469](https://github.com/freegantt/freegantt/issues/469).
+- **[#470](https://github.com/freegantt/freegantt/issues/470) proposes reversing the `distribute`
+  half of this amendment**, and keeping the permission rule above. A consumer who wants to own a
+  parent's value declares `rollUp: 'none'` and owns the Field, so a derived cell has one rule again:
+  the Rollup owns it.
 
 ## Considered options
 
