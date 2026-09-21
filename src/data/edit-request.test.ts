@@ -1,15 +1,67 @@
 import { describe, expect, it } from 'vitest';
 import { createEditRequest } from './edit-request.js';
 import { storedParentSource } from './hierarchy-source.js';
+import { resolveWriteTarget } from './write-rule.js';
 import { entryId } from '../model/index.js';
-import type { Instant, ProposedEdit, ProposedEdits, StoredEntry } from '../model/index.js';
+import type { Field, Instant, ProposedEdit, ProposedEdits, StoredEntry } from '../model/index.js';
 
 /** No Field lookup is under test here — every request below asks nothing that reads one. */
 const noFields = { get: () => undefined };
 
-function entry(id: string, start: number, end: number): StoredEntry {
-  return { id: entryId(id), name: id, start: start as Instant, end: end as Instant, props: {} };
+function entry(id: string, start: number, end: number, parentId?: string): StoredEntry {
+  return {
+    id: entryId(id),
+    name: id,
+    start: start as Instant,
+    end: end as Instant,
+    props: {},
+    ...(parentId === undefined ? {} : { parentId: entryId(parentId) }),
+  };
 }
+
+/** `Depot` with one child `Van 1`, plus the unrelated leaf `Crate A`. */
+function depotTree(): ReadonlyMap<ReturnType<typeof entryId>, StoredEntry> {
+  return new Map([
+    [entryId('depot'), entry('depot', 0, 100)],
+    [entryId('van-1'), entry('van-1', 0, 100, 'depot')],
+    [entryId('crate-a'), entry('crate-a', 0, 100)],
+  ]);
+}
+
+function lookupOf(...fields: readonly Field[]): { get: (key: string) => Field | undefined } {
+  const byKey = new Map(fields.map((field) => [field.key, field] as const));
+  return { get: (key) => byKey.get(key) };
+}
+
+function requestOver(
+  entries: ReadonlyMap<ReturnType<typeof entryId>, StoredEntry>,
+  fields: { get: (key: string) => Field | undefined },
+  over: {
+    added?: readonly StoredEntry[];
+    removed?: readonly StoredEntry[];
+    proposed?: ProposedEdits;
+  } = {},
+): ReturnType<typeof createEditRequest> {
+  return createEditRequest({
+    entries,
+    proposed: over.proposed ?? (new Map() as ProposedEdits),
+    added: over.added ?? [],
+    removed: over.removed ?? [],
+    hierarchySource: storedParentSource,
+    committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
+    fields,
+  });
+}
+
+const cost: Field = { key: 'cost', rollUp: 'sum' };
+const spreadCost: Field = {
+  key: 'spreadCost',
+  rollUp: 'sum',
+  // What it writes is `entry-store.mutation.test.ts`'s concern; here only that it is declared at all,
+  // because that is the one fact `resolveWriteTarget` reads to answer `'children'`.
+  writeToChildren: () => new Map(),
+};
+const note: Field = { key: 'note' };
 
 function proposedEdit(patch: Record<string, unknown>): ProposedEdit {
   return { __brand: 'ProposedEdit', props: {}, proposedKeys: new Set(Object.keys(patch)), ...patch };
@@ -69,5 +121,68 @@ describe('createEditRequest', () => {
 
     expect(walks).toBe(0);
     expect(seen?.start).toBe(0);
+  });
+
+  it('sees a row added in this same transaction become a parent (hasChildren)', () => {
+    // The committed index says `Crate A` is a leaf. This transaction hangs a row under it, so the
+    // answer an extender reads must be the effective one, not the committed one.
+    const request = requestOver(depotTree(), noFields, {
+      added: [entry('crate-a-lid', 0, 100, 'crate-a')],
+    });
+
+    expect(request.hasChildren('crate-a')).toBe(true);
+  });
+
+  it('sees a parent lose its last child in this same transaction (hasChildren)', () => {
+    const entries = depotTree();
+    const request = requestOver(entries, noFields, {
+      removed: [entries.get(entryId('van-1'))!],
+    });
+
+    expect(request.hasChildren('depot')).toBe(false);
+  });
+});
+
+describe('createEditRequest writeTarget', () => {
+  it('refuses a rolling-up Field on a row with children, and lands it on a leaf', () => {
+    const request = requestOver(depotTree(), lookupOf(cost));
+
+    expect(request.writeTarget('depot', 'cost')).toBe('refused');
+    expect(request.writeTarget('van-1', 'cost')).toBe('entry');
+  });
+
+  it('sends a writeToChildren Field on a row with children down to the children', () => {
+    const request = requestOver(depotTree(), lookupOf(spreadCost));
+
+    expect(request.writeTarget('depot', 'spreadCost')).toBe('children');
+  });
+
+  it('lands a Field that does not roll up on the entry, children or not', () => {
+    const request = requestOver(depotTree(), lookupOf(note));
+
+    expect(request.writeTarget('depot', 'note')).toBe('entry');
+    expect(request.writeTarget('van-1', 'note')).toBe('entry');
+  });
+
+  it('reads the tree this transaction leaves behind, not the committed one', () => {
+    // `Crate A` is a committed leaf, so `cost` would land on it. Hanging a row under it inside this
+    // same transaction makes it derive, and the refusal follows the structure (ADR 0013).
+    const request = requestOver(depotTree(), lookupOf(cost), {
+      added: [entry('crate-a-lid', 0, 100, 'crate-a')],
+    });
+
+    expect(request.writeTarget('crate-a', 'cost')).toBe('refused');
+  });
+
+  it('hands back the resolver\u2019s own answer for an undeclared key, never one of its own (#466)', () => {
+    // An undeclared key is carried and opaque, so it owns no parent's cell and a write lands on the
+    // entry. That rule is `resolveWriteTarget`'s, and this reader must not restate it — three
+    // readers of one resolver, one answer (I14). Asserting against the resolver, not against the
+    // literal `'entry'`, is what makes this test fail if a reader grows a fourth rule.
+    const request = requestOver(depotTree(), noFields);
+
+    expect(request.writeTarget('depot', 'nobodyDeclaredThis')).toBe(resolveWriteTarget(true, undefined));
+    expect(request.writeTarget('van-1', 'nobodyDeclaredThis')).toBe(resolveWriteTarget(false, undefined));
+    expect(request.writeTarget('depot', 'nobodyDeclaredThis')).toBe('entry');
   });
 });

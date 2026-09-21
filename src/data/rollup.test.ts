@@ -3,8 +3,8 @@ import { DatasetState } from './dataset-state.js';
 import * as entryTree from './entry-tree.js';
 import * as hierarchySource from './hierarchy-source.js';
 import { AggregatorFailedError, entryId } from '../model/index.js';
-import type { ChangeSet, EntryEdits, ErrorReport } from '../model/index.js';
-import { toEndInstant, toInstant } from '../time/index.js';
+import type { ChangeSet, EntryEdits, ErrorReport, Instant } from '../model/index.js';
+import { MS, diffMs, toEndInstant, toInstant } from '../time/index.js';
 
 function treeDataset(
   entries: {
@@ -704,5 +704,117 @@ describe('the Rollup fast path skips re-deriving the committed tree (#421 C4)', 
     expect(checks).toBe(1); // the store's own baseline call, and nothing from rollup.ts, however large the tree
     expect(childIndexBuilds).toBe(0);
     expect(costOf(large, 'p0')).toBe(51);
+  });
+});
+
+// #466 cases 3 and 4, and the non-case that guards the API from growing. One tree answers all three:
+// `Depot` holds `Van 1` (which holds `Crate A` and `Crate B`, four days apart) and the leaf `Van 2`,
+// away on its own. Three leaves, three levels, and one gap nobody works through.
+describe('a pass reads the leaves of any row it hands you (#466 cases 3 and 4)', () => {
+  const at = (iso: string): string => `2026-01-${iso}T00:00:00Z`;
+
+  /** `work` totals each leaf's own duration; `leafCount` counts them. Both read `ctx.leaves(entry)`
+   *  about the row they are handed, which is the whole point — a `compute` Field runs on every row,
+   *  a rolling-up parent included, and gets its own subtree each time. */
+  function depotDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'depot', name: 'Depot' },
+        { id: 'van-1', name: 'Van 1', parentId: 'depot' },
+        { id: 'crate-a', name: 'Crate A', parentId: 'van-1', start: at('01'), end: at('03') },
+        { id: 'crate-b', name: 'Crate B', parentId: 'van-1', start: at('07'), end: at('09') },
+        { id: 'van-2', name: 'Van 2', parentId: 'depot', start: at('20'), end: at('21') },
+      ],
+      fields: [
+        {
+          key: 'work',
+          compute: (entry, ctx) =>
+            ctx
+              .leaves(entry)
+              .reduce(
+                (total, leaf) =>
+                  leaf.start === undefined || leaf.end === undefined
+                    ? total
+                    : total + diffMs(leaf.end, leaf.start),
+                0,
+              ),
+        },
+        { key: 'leafCount', compute: (entry, ctx) => ctx.leaves(entry).length },
+      ],
+    });
+  }
+
+  /** A row's own span, in days — the envelope the Rollup already computes, for comparison. */
+  const spanDays = (start: Instant | undefined, end: Instant | undefined): number =>
+    start === undefined || end === undefined ? Number.NaN : diffMs(end, start) / MS.DAY;
+
+  it('totals the work of a row’s leaves, which is strictly less than the row’s own span', () => {
+    // Case 3. The span is the envelope the Rollup already computes — every leaf's work, plus the gaps
+    // between them. So the two numbers answer two different questions and must not be equal, and a
+    // `leaves` that walked the wrong way would make them agree.
+    const state = depotDataset();
+    const depot = state.entries.get('depot')!;
+    const van1 = state.entries.get('van-1')!;
+
+    // Three leaves: two days, two days, one day.
+    expect(depot.read('work')).toBe(5 * MS.DAY);
+    expect(spanDays(depot.start, depot.end)).toBe(20);
+    expect(depot.read('work')).toBeLessThan(diffMs(depot.end!, depot.start!));
+
+    // And one level down, where the four-day gap between the crates is the whole difference.
+    expect(van1.read('work')).toBe(4 * MS.DAY);
+    expect(spanDays(van1.start, van1.end)).toBe(8);
+    expect(van1.read('work')).toBeLessThan(diffMs(van1.end!, van1.start!));
+  });
+
+  it('a leaf’s work is its own span — the two numbers meet only at the bottom', () => {
+    // The self-inclusion rule, read as a number: `leaves(Crate A)` is `[Crate A]`, so a leaf works
+    // through the whole of its own span and has no gap to lose.
+    const state = depotDataset();
+    const crateA = state.entries.get('crate-a')!;
+
+    expect(crateA.read('work')).toBe(diffMs(crateA.end!, crateA.start!));
+    expect(crateA.read('work')).toBe(2 * MS.DAY);
+  });
+
+  it('counts the leaves of a parent at depth 0 and at depth 1, and of a leaf itself', () => {
+    // Case 4.
+    const state = depotDataset();
+
+    expect(state.entries.get('depot')!.read('leafCount')).toBe(3);
+    expect(state.entries.get('van-1')!.read('leafCount')).toBe(2);
+    expect(state.entries.get('van-2')!.read('leafCount')).toBe(1);
+    expect(state.entries.get('crate-a')!.read('leafCount')).toBe(1);
+  });
+
+  it('the non-case: an Aggregator reading numericValues alone still totals three levels (#466)', () => {
+    // This test exists so nobody adds API for a case the bottom-up pass already answers. An
+    // Aggregator sees its own children's finished values, so summing one level deep sums the whole
+    // subtree — no walk, no `descendants`, no `leaves`. The three tree words are for the row a pass
+    // is *handed*, never for reaching the recursion the pass is already doing.
+    let levelsRead = 0;
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'depot', name: 'Depot' },
+        { id: 'van-1', name: 'Van 1', parentId: 'depot' },
+        { id: 'crate-a', name: 'Crate A', parentId: 'van-1', props: { cost: 1 } },
+        { id: 'crate-b', name: 'Crate B', parentId: 'van-1', props: { cost: 2 } },
+        { id: 'van-2', name: 'Van 2', parentId: 'depot', props: { cost: 3 } },
+      ],
+      fields: [{ key: 'cost', rollUp: 'totalOneLevel' }],
+      aggregators: {
+        totalOneLevel: (_parent, ctx) => {
+          levelsRead += 1;
+          return ctx.numericValues('cost').reduce((total, value) => total + value, 0);
+        },
+      },
+    });
+
+    expect(state.entries.get('van-1')!.read('cost')).toBe(3);
+    expect(state.entries.get('depot')!.read('cost')).toBe(6);
+    // Two parents, so the Aggregator ran twice — once per level, never once per descendant.
+    expect(levelsRead).toBe(2);
   });
 });

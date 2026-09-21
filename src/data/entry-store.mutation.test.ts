@@ -387,6 +387,51 @@ describe('a derived cell is read-only until the Field says what a write means (A
     expect(state.entries.get('p1')?.read('cost')).toBe(900);
   });
 
+  it('a writeToChildren splits by leaf count over a depth-2 tree, and the Rollup reads the total back (#466)', () => {
+    // Case 2 of #466. The split weighs each child by how many leaves it carries, which is what
+    // `ctx.leaves` is for: `Van 1` carries two, and `Van 2` is a leaf and so carries itself — one, not
+    // zero (the self-inclusion rule). Without it `Van 2` would be paid nothing and the total would not
+    // read back.
+    //
+    // It also pins the walk `#updateFrom` runs: the 600 aimed at `Van 1` is itself a write to a
+    // rolling-up parent's cell, so that Field splits again over its own two children. Nothing here
+    // recurses by hand — each edit re-enters the one door, and the walk ends at the leaves.
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'depot', name: 'Depot', start: 0, end: 1 },
+        { id: 'van-1', name: 'Van 1', parentId: 'depot', start: 0, end: 1 },
+        { id: 'crate-a', name: 'Crate A', parentId: 'van-1', start: 0, end: 1, props: { cost: 1 } },
+        { id: 'crate-b', name: 'Crate B', parentId: 'van-1', start: 0, end: 1, props: { cost: 2 } },
+        { id: 'van-2', name: 'Van 2', parentId: 'depot', start: 0, end: 1, props: { cost: 3 } },
+      ],
+      fields: [
+        {
+          key: 'cost',
+          rollUp: 'sum',
+          editable: true,
+          writeToChildren: (total, parent, ctx) => {
+            const children = ctx.children(parent);
+            const leafCount = (row: (typeof children)[number]): number => ctx.leaves(row).length;
+            const leaves = children.reduce((sum, child) => sum + leafCount(child), 0);
+            const perLeaf = (total as number) / leaves;
+            return new Map(children.map((child) => [child.id, { cost: perLeaf * leafCount(child) }]));
+          },
+        },
+      ],
+    });
+
+    state.entries.update('depot', { cost: 900 });
+
+    // Three leaves, 300 each — and `Van 2` was paid its own share as one leaf.
+    expect(state.entries.get('crate-a')?.read('cost')).toBe(300);
+    expect(state.entries.get('crate-b')?.read('cost')).toBe(300);
+    expect(state.entries.get('van-2')?.read('cost')).toBe(300);
+    // The Rollup read back exactly the number the write asked for, at both levels.
+    expect(state.entries.get('van-1')?.read('cost')).toBe(600);
+    expect(state.entries.get('depot')?.read('cost')).toBe(900);
+  });
+
   it('the writes to children and their rolled-up parent land in one changeset, and one undo step', () => {
     const state = costDataset(
       (total, parent, ctx) =>

@@ -245,8 +245,15 @@ interface ComputeContext extends FieldContext {
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
   /** This row's duration, through `time/` and the Dataset's `measureDuration`. */
   duration(): Duration | undefined;
-  /** The children of the row this pass is computing. It walks, so it carries parentheses. */
-  children(): readonly StoredEntry[];
+  /** One step down from any row this pass hands you. Amended 2026-09-21 (#466) — it took no
+   *  argument when this ADR was written, and structure now goes down. */
+  children(row: StoredEntry): readonly StoredEntry[];
+  /** All the way down, never `row` itself. */
+  descendants(row: StoredEntry): readonly StoredEntry[];
+  /** The bottom rows of `row`'s subtree, `row` included when `row` is a leaf. */
+  leaves(row: StoredEntry): readonly StoredEntry[];
+  /** True when `row` derives (ADR 0013). */
+  hasChildren(row: StoredEntry): boolean;
 }
 
 interface RollUpContext extends ComputeContext {

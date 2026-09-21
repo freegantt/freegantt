@@ -345,7 +345,9 @@ members, which is what the slice gate asks for.
 | 3 | `src/data/rollup.property.test.ts` | fast-check over random trees: the total over `leaves(root)` equals the sum of every leaf's own duration, and never the root's span |
 | — | `src/data/rollup.test.ts` | **The non-case, pinned.** A consumer Aggregator reading `ctx.numericValues(key)` alone totals a depth-3 tree correctly — no walk, no leaves. The bottom-up pass does that recursion, and this test exists so nobody adds API for it |
 | 4 | `src/data/rollup.test.ts` | A `compute` Field reading `ctx.leaves(entry).length`, on a parent at depth 0 and depth 1 |
-| 1 | `src/data/edit-extension.test.ts` | `hasChildren(id)` sees an add that promotes a row in the same transaction; `rollUpOwns` is `true` for `start` on a parent, `false` on a leaf, `false` for a Field with `rollUp: 'none'`; an extender that checks it first raises no `derived-values-dropped` report |
+| 1 | `src/data/edit-extension.test.ts` | `hasChildren(id)` sees an add that promotes a row in the same transaction; `writeTarget` is `'refused'` for `start` and `cost` on a parent, `'entry'` on a leaf, `'entry'` for a Field with `rollUp: 'none'`; an extender that writes blind raises one `derived-values-dropped` report, and the same cascade aimed by `writeTarget` raises none |
+| 4 | `src/data/edit-request.test.ts` | `writeTarget` over the `Depot` tree: `'refused'`, `'children'`, `'entry'`; the effective tree, not the committed one; and an **undeclared key** takes `resolveWriteTarget`'s own answer rather than one this reader invented |
+| 1 | `src/api/dataset.test.ts` | The preview path (`extraEditsFor`) and the commit path (`entries.update`) hand one extender the same six tree answers, on a draft that moves no row and on a draft that moves one |
 | 1 | `src/view/gesture-pipeline` tests | The preview path and the commit path answer `hasChildren` the same way for the same draft |
 
 ## Docs and spec

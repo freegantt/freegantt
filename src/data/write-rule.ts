@@ -37,8 +37,13 @@ export const DERIVED: FieldWriteVerdict = Object.freeze({ ok: false, reason: 'de
  *  Three readers ask, and they must agree (I14): `entries.update()` decides a write with it,
  *  `view/capability.ts` decides whether the cell offers an editor at all, and `EditRequest.writeTarget`
  *  (#466) hands a plugin author this same answer unchanged — no fourth value, no reinterpretation. */
-export function resolveWriteTarget(hasChildren: boolean, field: Field): FieldWriteTarget {
-  if (!hasChildren || !rollsUp(field)) return 'entry';
+export function resolveWriteTarget(hasChildren: boolean, field: Field | undefined): FieldWriteTarget {
+  // An undeclared key takes the same answer as a declared Field that does not roll up: it lands on
+  // the entry. Declaring a key is a handling contract, so an undeclared one is carried and opaque
+  // (ADR 0011) — it has no `rollUp` to own a parent's cell with. The rule lives here, once, because
+  // three readers ask this question and a caller that answered `'entry'` on its own would be a
+  // fourth rule nobody could see (I14, #466).
+  if (!hasChildren || field === undefined || !rollsUp(field)) return 'entry';
   return field.writeToChildren ? 'children' : 'refused';
 }
 

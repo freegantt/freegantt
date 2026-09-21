@@ -12,6 +12,7 @@ import type {
   HierarchySource,
   ProposedEdits,
   StoredEntry,
+  WriteTarget,
 } from '../model/index.js';
 import { EMPTY_ENTRY_IDS } from './edit-extension.js';
 import {
@@ -79,10 +80,12 @@ export function createEditRequest(options: CreateEditRequestOptions): EditReques
     return (effectiveChildIds().get(entryId(id))?.length ?? 0) > 0;
   }
 
-  function writeTarget(id: EntryId | string, field: FieldKey) {
-    const fieldDeclaration = fields.get(field);
-    if (fieldDeclaration === undefined) return 'entry' as const;
-    return resolveWriteTarget(hasChildren(id), fieldDeclaration);
+  /** The resolver's own answer, unchanged — no fourth value and no reinterpretation, because
+   *  `entries.update()` and `view/capability.ts` already ask it and a third reader must not
+   *  disagree with them (I14). An undeclared key is the resolver's case to answer, not this
+   *  function's. */
+  function writeTarget(id: EntryId | string, field: FieldKey): WriteTarget {
+    return resolveWriteTarget(hasChildren(id), fields.get(field));
   }
 
   return {

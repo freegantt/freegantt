@@ -12,7 +12,7 @@ issue plans land here as they're opened.
   answer whether it has children, so a cascade, a `writeToChildren` policy and an Aggregator cannot
   tell a leaf from a derived parent. Planned, not built: a pass answers about any row it
   hands you (`ctx.children(row)`, `ctx.hasChildren(row)`, `ctx.descendants(row)`), and an
-  `EditRequest` answers by id (`hasChildren(id)`, `rollUpOwns(id, field)`). Plan:
+  `EditRequest` answers by id (`hasChildren(id)`, `writeTarget(id, field)`). Plan:
   [466-tree-questions-on-a-pass.md](./466-tree-questions-on-a-pass.md).
 
 **Closed:**
