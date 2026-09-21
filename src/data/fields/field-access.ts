@@ -192,7 +192,9 @@ export function readingHypotheticalRows(access: FieldAccess): FieldAccess {
  *  A plain sibling default would keep the store's own `hasChildren` after this call replaces the
  *  tree, so `ctx.children(row)` and `ctx.hasChildren(row)` would answer off two different trees —
  *  exactly on the commits the Rollup exists for (#466). A caller that already holds a cheaper answer
- *  (the Rollup's pre-built child list, for one) passes the third argument and skips the walk. */
+ *  passes the third argument and skips building the list — the store does, from its own cached child
+ *  index (`data/entry-store.ts`). The Rollup passes two arguments and keeps this default, so its
+ *  answer stays on the effective tree it just rebound. */
 export function readingChildrenFrom(
   access: FieldAccess,
   childrenOf: (id: EntryId) => readonly StoredEntry[],
@@ -252,7 +254,9 @@ export function measureEntryDuration(
  * (`live-entry.ts:117-135` is the shape copied): how deep a tree goes is the consumer's to author,
  * and a stack overflow answers no question. `seen` visits each row once, so a source that loops
  * terminates instead of walking forever. A child is recorded the moment its parent's children are
- * read, which is what keeps this in level order for the common case (*the three words*, #466).
+ * read, so siblings stay together — but `pending` is a stack, so one node's whole subtree comes out
+ * before its next sibling, and that is not level order. Nothing may depend on the order
+ * (*the three words*, #466); `Entry.descendants()` walks this same shape.
  */
 function descendantsOf(
   root: StoredEntry,
@@ -345,8 +349,11 @@ export function createRollUpContext(
   // The pass's own `children` answers `parent`'s id from this pre-built, pre-fetched list, and every
   // other row from `access.storedChildrenOf` — both read `effectiveEntry`, so the two cannot
   // disagree (#466). `descendants` and `leaves` walk through this same member, never
-  // `access.storedChildrenOf` directly, so all four members read one list at depth 1 and one tree
-  // below it — reach past this override and depth 1 answers from a second list instead.
+  // `access.storedChildrenOf` directly, and `hasChildren` reads this same member's length, so all
+  // four members read one list at depth 1 and one tree below it — reach past this override and depth
+  // 1 answers from a second list instead. `hasChildren` is overridden here and not inherited on
+  // purpose: `createComputeContext` sends it to `access.hasChildren`, which is the store's cached
+  // index, and that would rest agreement on two implementations rather than on one list (#466).
   const children = (row: StoredEntry): readonly StoredEntry[] =>
     row.id === parent.id ? rollUpChildren : access.storedChildrenOf(row.id);
   return {
@@ -354,6 +361,7 @@ export function createRollUpContext(
     children,
     descendants: (row: StoredEntry): readonly StoredEntry[] => descendantsOf(row, children),
     leaves: (row: StoredEntry): readonly StoredEntry[] => leavesOf(row, children),
+    hasChildren: (row: StoredEntry): boolean => children(row).length > 0,
     field,
     values(key: FieldKey = field): readonly unknown[] {
       return rollUpChildren.map((child) => readFieldByKey(child, key, access));

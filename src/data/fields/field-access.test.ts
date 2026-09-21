@@ -276,6 +276,19 @@ describe('createRollUpContext values/numericValues (issue #124)', () => {
     expect(rollUpCtx.numericValues()).toEqual([]);
   });
 
+  it('hasChildren reads the pass\u2019s own list, never the access\u2019s cached index (#466)', () => {
+    // An access whose cached `hasChildren` disagrees with the list the pass holds: the store answers
+    // `true` from its own index, and the Rollup hands this parent no children at all.
+    const disagreeing = readingChildrenFrom(
+      access,
+      () => [],
+      () => true,
+    );
+    const rollUpCtx = createRollUpContext(disagreeing, parent, [], cost.key);
+    expect(rollUpCtx.children(parent)).toEqual([]);
+    expect(rollUpCtx.hasChildren(parent)).toBe(false);
+  });
+
   it('routes through the same read path as the pass\u2019s own read (D-S4-8)', () => {
     const one = [children[0]!];
     const rollUpCtx = createRollUpContext(access, parent, one, cost.key);

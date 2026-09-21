@@ -260,7 +260,9 @@ export interface FieldContext {
 }
 
 /** What a `compute` Field runs inside. Built per pass, and two kinds of question live on it
- *  (ADR 0017, *What a hypothetical row reads with*, amended #466).
+ *  (ADR 0017, *What a hypothetical row reads with*). That ADR section still describes the zero-arg
+ *  `children()` this surface replaced — #466 step 6 amends it, and until then this block is the
+ *  current account of the surface.
  *
  *  A value question — `read(key)`, `duration()`, `hierarchyParentId()` — stays bound to the row the
  *  pass is computing: a bottom-up pass has written only what it has reached, so a value asked of any
@@ -295,14 +297,16 @@ export interface FieldContext {
  *  effective child — which is why the pass answers these and `entry.read(key)`/`entry.children()`
  *  cannot: those read the store, and this row may not be in it yet.
  *
- *  Every member here takes a row, so rule 4 (ADR 0017, cost read off the parentheses) says nothing
- *  about cost on this surface — each member's own doc states its cost instead. */
+ *  Every *structure* member takes a row, so across those four rule 4 (ADR 0017, cost read off the
+ *  parentheses) cannot tell a cheap read from a walk — all four carry parentheses either way. The
+ *  value members take no row and still compute, so they carry parentheses for rule 4's own reason.
+ *  Each member's own doc states its cost. */
 export interface ComputeContext extends FieldContext {
   /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. Bound to
-   *  the row this pass is computing; not a structure question, so it takes no row (rule 2). */
+   *  the row this pass is computing; not a structure question, so it takes no row (a value question, above). */
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
   /** This row's duration, through `time/` and the Dataset's `measureDuration`. Bound to the row this
-   *  pass is computing (rule 2). */
+   *  pass is computing (a value question, above). */
   duration(): Duration | undefined;
   /** One step down: `Depot` → Van 1, Van 2. One tree read, no allocation beyond the array returned.
    *
@@ -324,15 +328,16 @@ export interface ComputeContext extends FieldContext {
    *  `descendants`'s result. */
   leaves(row: StoredEntry): readonly StoredEntry[];
   /** True when `row` derives (ADR 0013): `hasChildren(Van 1)` is `true`, `hasChildren(Crate A)` is
-   *  `false`. Reads `children(row).length > 0`, so it costs what `children(row)` costs on this pass:
-   *  one map read against the store's tree, and one built list on a Rollup pass, which maps its
-   *  effective children per call. It agrees with `children(row)` by construction, and that agreement
-   *  is why it does not read a cheaper index. Mirrors `Entry.hasChildren` on the live row, which is a
-   *  property because it reads a cached index instead (ADR 0017 rule 4). */
+   *  `false`. The cost follows the binding, and there are three: the store reads a cached child index
+   *  and never builds the list (`data/entry-store.ts`), a Rollup pass reads the length of the very
+   *  list `children(row)` hands back, and the bare default derives it from `children(row)`. All three
+   *  agree with `children(row).length > 0`, so a caller never has to know which one answered. Mirrors
+   *  `Entry.hasChildren` on the live row, which is a property because it reads a cached index and
+   *  allocates nothing (ADR 0017 rule 4). */
   hasChildren(row: StoredEntry): boolean;
   /** The tree's answer to this row's parent, through the checked hierarchy source (ADR 0020) — the
    *  same answer `entry.parent()?.id` gives, never `read('parentId')`'s stored value (ADR 0024).
-   *  Bound to the row this pass is computing (rule 2). */
+   *  Bound to the row this pass is computing (a value question, above). */
   hierarchyParentId(): EntryId | undefined;
 }
 
