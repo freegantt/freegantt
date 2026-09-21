@@ -324,8 +324,11 @@ export interface ComputeContext extends FieldContext {
    *  `descendants`'s result. */
   leaves(row: StoredEntry): readonly StoredEntry[];
   /** True when `row` derives (ADR 0013): `hasChildren(Van 1)` is `true`, `hasChildren(Crate A)` is
-   *  `false`. One tree read, no allocation — reads `children(row).length > 0`. Mirrors
-   *  `Entry.hasChildren` on the live row; this is the pass's own tree instead of the store's. */
+   *  `false`. Reads `children(row).length > 0`, so it costs what `children(row)` costs on this pass:
+   *  one map read against the store's tree, and one built list on a Rollup pass, which maps its
+   *  effective children per call. It agrees with `children(row)` by construction, and that agreement
+   *  is why it does not read a cheaper index. Mirrors `Entry.hasChildren` on the live row, which is a
+   *  property because it reads a cached index instead (ADR 0017 rule 4). */
   hasChildren(row: StoredEntry): boolean;
   /** The tree's answer to this row's parent, through the checked hierarchy source (ADR 0020) — the
    *  same answer `entry.parent()?.id` gives, never `read('parentId')`'s stored value (ADR 0024).

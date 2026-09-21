@@ -276,10 +276,14 @@ export function readingChildrenFrom(
 `entry-store.ts:163` now passes the third argument, `(id) => this.#hasChildren(id)`. That one
 binding is what the slot is for: the store's own answer reads the committed index and skips building
 an overlay Entry per staged edit, which `storedChildrenOf` cannot (`entry-store.ts:410`), and the
-consumer door asks it on every write. **The Rollup passes two arguments and keeps the default.** Its
-child list is pre-built in `byParent` (`rollup.ts:261`), so the default reads that list's own
-`length` with no allocation, and a third argument there would only restate it. No public surface
-moves yet.
+consumer door asks it on every write. **The Rollup passes two arguments and keeps the default.** It
+keeps it for agreement, not for cost: `byParent` (`rollup.ts:261`) holds child *ids*, and the pass's
+`childrenOf` maps them through `effectiveEntry` and filters the misses (`rollup.ts:277-281`), so the
+default allocates two arrays per call. Reading `byParent`'s own `length` instead would be cheaper and
+wrong — the filter drops a removed child, so a parent whose last child went away would answer
+`hasChildren: true` while `children(row)` answered `[]`, which is the disagreement `rollup.ts:272`
+exists to prevent. Cost is stated on the member's own doc, not assumed away. No public surface moves
+yet.
 
 **2 — the four pass members.** `src/model/field.ts`, `src/data/fields/field-access.ts`.
 `children` takes a row. `hasChildren(row)` reads `access.hasChildren(row.id)`. `descendants(row)` is
