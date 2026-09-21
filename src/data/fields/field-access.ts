@@ -134,6 +134,9 @@ export interface FieldAccess {
   /** Which Entry the checked hierarchy names as `entry`'s parent (ADR 0020) — the same answer
    *  `entry.parent()?.id` gives on a live row, never `entry.parentId`'s stored value (ADR 0024). */
   parentIdOf(entry: StoredEntry): EntryId | undefined;
+  /** Does `id` have a child, on this same tree — `EntrySource.hasChildren` (`live-entry.ts`) asks
+   *  the same question by the same name, on the live row. */
+  hasChildren(id: EntryId): boolean;
   memo?(): FieldReadMemo | undefined;
 }
 
@@ -146,17 +149,22 @@ export interface FieldAccessOptions {
   measureDuration?: DurationMeasure;
   storedChildrenOf?: (id: EntryId) => readonly StoredEntry[];
   parentIdOf?: (entry: StoredEntry) => EntryId | undefined;
+  hasChildren?: (id: EntryId) => boolean;
   memo?: () => FieldReadMemo | undefined;
 }
 
 /** Call: `createFieldAccess({ fields: registry, timeZone: 'UTC' })`. */
 export function createFieldAccess(options: FieldAccessOptions): FieldAccess {
+  // A caller that names no tree must not get a `hasChildren` that reads a different one — so the
+  // default reads the **resolved** `storedChildrenOf`, never `options.storedChildrenOf`.
+  const storedChildrenOf = options.storedChildrenOf ?? ((): readonly StoredEntry[] => NO_CHILDREN);
   return {
     fields: options.fields,
     timeZone: options.timeZone,
     measureDuration: options.measureDuration ?? 'span',
-    storedChildrenOf: options.storedChildrenOf ?? ((): readonly StoredEntry[] => NO_CHILDREN),
+    storedChildrenOf,
     parentIdOf: options.parentIdOf ?? NO_PARENT,
+    hasChildren: options.hasChildren ?? ((id): boolean => storedChildrenOf(id).length > 0),
     ...(options.memo !== undefined ? { memo: options.memo } : {}),
   };
 }
@@ -178,12 +186,19 @@ export function readingHypotheticalRows(access: FieldAccess): FieldAccess {
   return { ...access, memo: () => undefined };
 }
 
-/** The same access, reading the tree a pass holds instead of the one the store holds. */
+/** The same access, reading the tree a pass holds instead of the one the store holds.
+ *
+ *  `hasChildren` defaults off the **new** `childrenOf`, never the access it is rebinding away from.
+ *  A plain sibling default would keep the store's own `hasChildren` after this call replaces the
+ *  tree, so `ctx.children(row)` and `ctx.hasChildren(row)` would answer off two different trees —
+ *  exactly on the commits the Rollup exists for (#466). A caller that already holds a cheaper answer
+ *  (the Rollup's pre-built child list, for one) passes the third argument and skips the walk. */
 export function readingChildrenFrom(
   access: FieldAccess,
-  storedChildrenOf: (id: EntryId) => readonly StoredEntry[],
+  childrenOf: (id: EntryId) => readonly StoredEntry[],
+  hasChildren: (id: EntryId) => boolean = (id): boolean => childrenOf(id).length > 0,
 ): FieldAccess {
-  return { ...access, storedChildrenOf };
+  return { ...access, storedChildrenOf: childrenOf, hasChildren };
 }
 
 /** The same access, answering `hierarchyParentId` from the tree a pass holds instead of the store's

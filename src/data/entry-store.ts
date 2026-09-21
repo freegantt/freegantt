@@ -160,7 +160,11 @@ export class EntryStore implements EntryStoreContract {
     // The store is the tree a Field read walks: a `compute` Field asking `ctx.children()` outside a
     // Rollup pass means the row the store holds now (#214).
     this.#access = readingParentFrom(
-      readingChildrenFrom(access, (id) => this.storedChildrenOf(id)),
+      readingChildrenFrom(
+        access,
+        (id) => this.storedChildrenOf(id),
+        (id) => this.#hasChildren(id),
+      ),
       (entry) => this.parentIdOf(entry),
     );
     this.#live = new LiveEntries({

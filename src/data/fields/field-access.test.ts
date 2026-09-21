@@ -10,6 +10,7 @@ import {
   entryAfterEdit,
   proposedKeysOf,
   readField,
+  readingChildrenFrom,
   withProposedKeys,
   writeField,
   writeOntoEntry,
@@ -131,6 +132,38 @@ describe('readField / writeField (D-S4-2)', () => {
   it('proposedKeysOf reads the keys an edit states it writes', () => {
     expect(proposedKeysOf(edit({ name: 'a' })).size).toBe(1);
     expect(proposedKeysOf(withProposedKeys(edit(), [])).size).toBe(0);
+  });
+});
+
+// #466 step 1: `readingChildrenFrom` rebinds the tree, and `hasChildren` must follow it — a plain
+// sibling default would answer off the access it is rebinding away from, and the pass's two
+// structural questions would disagree on the same commit.
+describe('readingChildrenFrom rebinds hasChildren with the tree, never the access it replaces', () => {
+  const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+  const store = createFieldAccess({
+    fields: registry,
+    timeZone: 'UTC',
+    storedChildrenOf: (id) => (id === entryId('storeParent') ? [span()] : []),
+  });
+
+  it('the default hasChildren reads the new tree, not the store the access came from', () => {
+    const passChildren = new Map<string, StoredEntry[]>([['passParent', [span()]]]);
+    const rebound = readingChildrenFrom(store, (id) => passChildren.get(String(id)) ?? []);
+
+    // The store says `storeParent` has a child and `passParent` has none; the rebound access must
+    // answer the opposite, off the pass's own tree.
+    expect(rebound.hasChildren(entryId('passParent'))).toBe(true);
+    expect(rebound.hasChildren(entryId('storeParent'))).toBe(false);
+  });
+
+  it('a caller holding a cheaper answer may pass hasChildren directly, skipping the walk', () => {
+    const rebound = readingChildrenFrom(
+      store,
+      () => [],
+      (id) => id === entryId('promoted'),
+    );
+    expect(rebound.hasChildren(entryId('promoted'))).toBe(true);
+    expect(rebound.hasChildren(entryId('other'))).toBe(false);
   });
 });
 
