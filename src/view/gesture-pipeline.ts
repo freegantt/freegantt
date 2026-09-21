@@ -25,16 +25,13 @@ import type {
   Refusable,
   ProposedEdits,
 } from '../model/index.js';
-import { EntryNotFoundError, InvertedSpanError, entryId, barId, spansTime } from '../model/index.js';
-import { EMPTY_ENTRY_IDS } from '../data/edit-extension.js';
-import type { EditRequest } from '../data/edit-extension.js';
+import { EntryNotFoundError, InvertedSpanError, barId, spansTime } from '../model/index.js';
 import type { BeforeGestureEvent } from '../data/error-reporting.js';
 import {
   buildCommitFaultReport,
   buildGestureDroppedReport,
   buildRefusalReport,
 } from '../data/error-reporting.js';
-import { entryAfterEdits } from '../data/entry-tree.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
 import type {
@@ -91,11 +88,17 @@ export interface GesturePipelineDeps {
    *  runs again, for real, inside `data/transaction.ts`'s own commit; this never writes anything.
    *  `undefined` previews no ghost extras, same as `data/edit-extension.ts`'s `identityExtender` —
    *  which is also what a Dataset with no plugin installed hands over (S5.10, D-S5-23). Renamed from
-   *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own). */
-  extraEditsFor?: (request: EditRequest) => ProposedEdits;
-  /** What `extraEditsFor`'s `EditRequest.entries` reads — the *committed* Entries keyed by id, never
-   *  the in-flight draft (D-S5-45). An installed extender may cascade to an Entry outside the
-   *  caller's own draft, so `entryById` alone cannot answer it.
+   *  `extend` to `extraEditsFor` at #209 Q5, alongside the seam it mirrors (`api/Dataset`'s own).
+   *
+   *  Takes the draft, not an `EditRequest` (#466): this pipeline holds committed entries and the
+   *  in-flight draft, never `hierarchySource`/`committedChildIds`/`fields` — `GanttShell` binds to
+   *  `model/`'s narrow `Dataset`, which does not carry those. `api/gantt.ts` wires this to
+   *  `api/dataset.ts`'s `extraEditsFor`, which reaches the full `DatasetState` and builds the
+   *  `EditRequest` there, through `data/edit-request.ts`'s `createEditRequest` — the one place that
+   *  object is built (commit path and preview path alike). */
+  extraEditsFor?: (draft: ProposedEdits) => ProposedEdits;
+  /** What `#measuredFrom` fingerprints the rows a held draft was built from against — the *committed*
+   *  Entries keyed by id, never the in-flight draft (D-S5-45).
    *
    *  `#extraFor` calls this once per rAF frame for the whole length of a drag, so the supplier owes
    *  it a cached map and not a fresh copy of the Dataset (I5). `GanttShell` keys its cache on
@@ -694,15 +697,14 @@ export class GesturePipeline {
     });
   }
 
-  /** D-S3-18, S3.6: `extra = extraEditsFor({ entries: committed, proposed: draft })` — the exact
-   *  pseudocode the decision names, run on the pipeline's own rAF (`#preview`'s caller) rather than on
-   *  every `pointermove`. No wired seam (P1's default) means no ghost, which is what an unoccupied
-   *  hook writes anyway — behaviorally identical to before this hook existed. The seam hands over
-   *  storage-shaped, already-reconciled edits: `api/Dataset.extraEditsFor` (this dep's own supplier,
-   *  `data/dataset-state.ts`) reads the occupant's loose writes through `toEditsReading`, the same
-   *  call the commit path makes (ADR 0026 — `start`/`end` are ordinary Fields now, so there is no
-   *  envelope reconciliation left for this file to redo). So a drag previews exactly what it commits
-   *  (#212 R2 fix-plan review) with no second pass here.
+  /** D-S3-18, S3.6: `extra = extraEditsFor(draft)`, run on the pipeline's own rAF (`#preview`'s
+   *  caller) rather than on every `pointermove`. No wired seam (P1's default) means no ghost, which
+   *  is what an unoccupied hook writes anyway — behaviorally identical to before this hook existed.
+   *  `api/gantt.ts` wires this dep to `api/dataset.ts`'s `extraEditsFor`, which builds the
+   *  `EditRequest` (`data/edit-request.ts`'s `createEditRequest`, #466) and reads the occupant's loose
+   *  writes through `toEditsReading`, the same call the commit path makes (ADR 0026 — `start`/`end`
+   *  are ordinary Fields now, so there is no envelope reconciliation left for this file to redo). So a
+   *  drag previews exactly what it commits (#212 R2 fix-plan review) with no second pass here.
    *
    *  #332: a bug in the extender itself (a bare `Error`, `UnknownFieldError`, an inverted span) still
    *  throws out of `extraEditsFor`. The `try` below catches it, the one place on this rAF path that
@@ -712,14 +714,7 @@ export class GesturePipeline {
     const extraEditsFor = this.#deps.extraEditsFor;
     if (extraEditsFor === undefined) return NO_EXTRA_EDITS;
     try {
-      const entries = this.#deps.committedEntriesById();
-      return extraEditsFor({
-        entries,
-        proposed: draft,
-        entryAfterEdits: (id) => entryAfterEdits(entries, draft, entryId(id)),
-        addedEntryIds: EMPTY_ENTRY_IDS,
-        removedEntryIds: EMPTY_ENTRY_IDS,
-      });
+      return extraEditsFor(draft);
     } catch (error) {
       this.#reportExtenderFault(error);
       return NO_EXTRA_EDITS;

@@ -6,30 +6,12 @@
 // types a plugin author holds but never constructs.
 
 import type { EntryId } from './ids.js';
-import type { EditExtender } from './stored-entry.js';
 
 /** A plugin's own identity, unique within the `plugins` list that installs it (D-S5-3). */
 export type PluginId = string;
 
 /** What `setup()` returns: releases whatever that plugin's own setup acquired. Called at most once. */
 export type Disposer = () => void;
-
-/**
- * How installing an extender composes (D-S5-23). `next` is the hook's current occupant — the identity
- * function when nothing has claimed it yet.
- *
- * ```ts
- * ctx.edits.setExtender(() => myExtender);                                  // replace
- * ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)));  // tap in
- * ```
- *
- * `mergeEntryEdits` is exported from the package (#197). A spread merges the two maps wrongly: two
- * extenders that write the same Entry lose the earlier write.
- *
- * `data/` still holds one field and calls it at one site (D-S2-6). Wrapping order is the order
- * `requires` resolves, never the `plugins` array's own order (D-S5-31).
- */
-export type ExtenderWrapper = (next: EditExtender) => EditExtender;
 
 /** Another plugin's store, read-only (D-S5-30). Dropping `set`/`remove` is what makes ownership
  *  legible at the call site: a reviewer never has to check by hand which plugin a store call owns. */

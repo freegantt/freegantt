@@ -26,8 +26,16 @@ export { moveEntryTo } from './dataset-plugin.js';
 // `moveEntryTo` (D-S5-50) builds one of; EntryEdits is the map of those, which `mergeEntryEdits`
 // (#197) takes and returns. ProposedEdit is the read side — what `EditRequest.proposed` holds — and
 // ProposedEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
-// a helper over it, needs to name the read side too).
-export type { EditRequest, EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from '../model/index.js';
+// a helper over it, needs to name the read side too). WriteTarget is what `EditRequest.writeTarget`
+// (#466) answers — a plugin author who reads it needs to name the answer too.
+export type {
+  EditRequest,
+  EditExtender,
+  EntryEdits,
+  ProposedEdit,
+  ProposedEdits,
+  WriteTarget,
+} from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
 // S5.12, D-S5-42: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
 // emitter identity. Beside `attemptMutation` because it is the same kind of helper — the boilerplate

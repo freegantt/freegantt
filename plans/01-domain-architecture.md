@@ -307,22 +307,42 @@ interface GridColumn {
   // #142: editable lives on the Field only, not here — a Grid column carries no override of its own.
 }
 
-/** Registered by name, never passed inline — a name serializes, a function does not. */
+/** Registered by name, never passed inline — a name serializes, a function does not. The parent is
+ *  the row this pass is computing; there is no separate `children` argument (ADR 0017) — read them
+ *  off the context instead, bottom-up already done. */
 type Aggregator<TValue = unknown> = (
-  children: readonly Entry[],      // already rolled up; the walk is bottom-up
-  parent: Entry,
+  parent: StoredEntry,
   ctx: RollUpContext,
 ) => TValue | undefined;           // undefined = no opinion, leave the stored value alone — except on a rolling-up parent, where it means no value (ADR 0013)
 
-/** Compute and store access. No locale. Duration is a compute Field; aggregators call `read(entry, 'duration')`. */
+/** Ambient only — no row, no tree. `FormatContext` and `ComputeContext` both extend it. */
 interface FieldContext {
   readonly timeZone: string;
-  read<T>(entry: Entry, key: FieldKey): T | undefined;
 }
 
-/** FieldContext plus the Field currently rolling up. Shipped Aggregators read `ctx.field`. */
-interface RollUpContext extends FieldContext {
+/** What a `compute` Field runs inside (ADR 0017, amended 2026-09-21 — #466). `read`, `duration()`
+ *  and `hierarchyParentId()` are value questions, bound to the row this pass is computing and taking
+ *  no argument. `children`, `descendants`, `leaves` and `hasChildren` are structure questions,
+ *  answered about *any* row the pass hands out — a Rollup's effective child, a post-edit row, or the
+ *  bound row itself — because structure is the same fact at every depth. */
+interface ComputeContext extends FieldContext {
+  read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
+  duration(): Duration | undefined;
+  hierarchyParentId(): EntryId | undefined;
+  children(row: StoredEntry): readonly StoredEntry[];      // one step down
+  descendants(row: StoredEntry): readonly StoredEntry[];   // all the way down; never includes `row`
+  leaves(row: StoredEntry): readonly StoredEntry[];        // the subtree's bottom rows; includes `row` when `row` is a leaf
+  hasChildren(row: StoredEntry): boolean;                  // mirrors `children(row).length > 0`
+}
+
+/** ComputeContext plus the Field currently rolling up. Shipped Aggregators read `ctx.field`.
+ *  `values`/`numericValues`/`durations` read the pass's own child list — never `parent.children()` —
+ *  so a Rollup child answers with the value this same bottom-up pass just gave it. */
+interface RollUpContext extends ComputeContext {
   readonly field: FieldKey;
+  values(key?: FieldKey): readonly unknown[];
+  numericValues(key?: FieldKey): readonly number[];
+  durations(): readonly (Duration | undefined)[];
 }
 
 /** Built only at Gantt column-resolve time. `formatValue` reads this, never a Dataset locale. */
@@ -337,7 +357,7 @@ Rules:
 - **Core fields are ordinary declarations.** `name`, `start` (`min`), `end` (`max`), and `duration` (computed from `start` and `end` through `time/`, I10) ship in the registry a consumer adds to. `parentId` ships with no `column` defaults. There is no `kind` Field and no `props` Field. There is no separate path for core, which is what makes a `cost` column and a `start` column the same code. **`progress` is not in this list** — it is scheduling-plugin data under `scheduling:progress` (ADR 0008). `weightedMeanByDuration` still ships as an Aggregator name. Duration returns `undefined` when a date is absent (ADR 0012). One unit: millisecond.
 - **A Grid column names a Field.** `Field.column` is optional defaults for the bare-key shorthand. A column object supplies presentation. Default `gridColumns` is `['name', 'start', 'end']` (ADR 0012). The date path is the grid: the date editor opens on a blank cell and writes one Field. Plugin Field keys in `gridColumns` carry their prefix (`scheduling:progress`). A Field with no `column` still rolls up and still appears in the changeset. A bare key with no defaults throws `FieldColumnNotDefinedError`.
 - **Stored or computed follows the declaration.** A core key or a `props` key has a stored home, so its rolled-up parent value is stored — changeset, undo — exactly as the Span rollup already does for `start`/`end`. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A `compute` Field has no home, so its parent value is computed on read, cached against **dataset revision** in S4 (D-S4-10 — coarser, never stale), and is never stored. A per-entry subtree-revision key returns at S6 if the spike says so. A consumer who wants an aggregate the store never holds declares a computed field; there is no flag to set.
-- **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on dataset revision (S4) or subtree revision (S6), which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business. The duration arm must not call `ctx.read(entry, 'duration')`.
+- **A computed field reads the dataset only, never view state.** No zoom, no visible range, no selection. Its cache is then keyed on dataset revision (S4) or subtree revision (S6), which is what makes the value the same for every reader of that dataset. A value that depends on the view is not a field — it is a renderer's business. The duration arm must not call `ctx.read('duration')`.
 - **`props` is opaque unless you declare a key.** Undeclared keys keep §6's rule — carried by reference, never walked, compared by `===`. `update()` never names an undeclared key (`UnknownFieldError`). A write to a declared key emits a changeset row keyed on the **field key**, never a whole-bag row. Plugin keys share this bag under a prefix.
 - **Edits name fields, not shapes.** `update('t1', { start: X, cost: 500 })` is one transaction, one changeset and one undo step across a core field and a consumer field. Nested `props:` at `update()` is refused. A key that is not registered is an `UnknownFieldError` — never a silent write.
 - **Rollup precedence is §7's rule, unchanged.** The rollup yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. Bottom-up, one pass, so nested parents settle together. Structure says which **entries** derive (has children); the registry says how each **field** derives. The two are orthogonal and both are needed.

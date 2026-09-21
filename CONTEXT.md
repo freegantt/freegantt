@@ -49,12 +49,32 @@ The tree of Entries, as the Hierarchy source answers it (ADR 0020). Core's own s
 _Avoid_: `autoGroup`; a stored Kind or Variant derived from "has children"; "the tree is `parentId`" (it is what the source answers); "`read('parentId')` answers the tree" (ADR 0024 reversed this — it answers the stored field, like any other key)
 
 **Hierarchy source**:
-The function that answers which Entry is the parent of another — `(entry: StoredEntry) => EntryId | string | undefined` (ADR 0020). Core's own is `(entry) => entry.parentId`, registered like any other with no special claim on the seam. A data plugin composes onto it through `ctx.hierarchy.setSource`, so a second plugin answers over the first's tree. It reads a `StoredEntry`, never the live `Entry`: the live row's `parent()`, `children()`, `depth` and `descendants()` are all built from this answer. One Entry in, one parent id out — never the whole dataset, which is what keeps a child query O(children + edits). An id no Entry holds reads as a root, and a chain that loops is broken at the link that closes it; both raise a Fault once per revision and neither throws. The Rollup follows the same source, so a plugin that changes the tree has changed the Rollup and the two can never disagree. This source's checked answer is what `hierarchyParentId` reads by key (ADR 0024).
+The function that answers which Entry is the parent of another — `(entry: StoredEntry) => EntryId | string | undefined` (ADR 0020). Core's own is `(entry) => entry.parentId`, registered like any other with no special claim on the seam. A data plugin composes onto it through `ctx.hierarchy.setSource`, so a second plugin answers over the first's tree. It reads a `StoredEntry`, never the live `Entry`: the live row's `parent()`, `children()`, `depth` and `descendants()` are all built from this answer. One Entry in, one parent id out — never the whole dataset, which is what keeps a child query O(children + edits). An id no Entry holds reads as a root, and a chain that loops is broken at the link that closes it; both raise a Fault once per revision and neither throws. The Rollup follows the same source, so a plugin that changes the tree has changed the Rollup and the two can never disagree. This source's checked answer is what `hierarchyParentId` reads by key (ADR 0024). "Child," "descendant" and "leaf" carry one meaning across this source, `Entry` and a pass's `ComputeContext` — see **Child / Descendant / Leaf**.
 _Avoid_: a second seam for the Rollup; a source that takes the dataset; grouping (`{ source: 'group' }` is a Row source and stays one)
 
 **`hierarchyParentId`**:
 The core Field that reads the Hierarchy source's checked answer by key — `entry.read('hierarchyParentId')` equals `entry.parent()?.id` (ADR 0024). `compute`d, never stored, so it has no write door and never appears in a `ChangeSet` or `toInput()`. It exists because `parent()` has no by-key door: a Grid column, a serializer, or a `values()` fold holds a `FieldKey`, not a member name. Not to be confused with `parentId`, the stored field `entry.read('parentId')` answers — the two agree except under a plugin-owned Hierarchy source, a dangling `parentId`, or a cycle, where they disagree on purpose.
 _Avoid_: reading it as a second `parentId`; writing it (`entries.update()` refuses a `compute` Field, `ComputedFieldCannotBeWrittenError`)
+
+**Child / Descendant / Leaf**:
+Three questions about one row's place in the tree, and one tree makes the difference legible (ADR 0017 amendment, #466):
+
+```
+Depot
+├── Van 1
+│   ├── Crate A
+│   └── Crate B
+└── Van 2
+```
+
+| Asked about `Depot`  | Answer                         | In one phrase        |
+| -------------------- | ------------------------------ | -------------------- |
+| `children(Depot)`    | Van 1, Van 2                   | one step down        |
+| `descendants(Depot)` | Van 1, Van 2, Crate A, Crate B | all the way down     |
+| `leaves(Depot)`      | Van 2, Crate A, Crate B        | the bottom rows only |
+
+Van 1 is a descendant and is not a leaf, because Van 1 has children of its own. Van 2 is both. **`leaves(row)` includes `row` itself when `row` is a leaf, and `descendants(row)` never includes `row`** — `leaves(Van 2)` is `[Van 2]`, not `[]`, while `descendants(Van 2)` is `[]`. `descendants` names a relationship _to_ a row, so the row is not its own descendant; `leaves` names the bottom rows _of a subtree_, and a subtree of one leaf has one leaf. `Entry` (`children()`, `descendants()`) and a pass's `ComputeContext`/`RollUpContext` (`children(row)`, `descendants(row)`, `leaves(row)`) both answer these three questions, under these three words and no others.
+_Avoid_: `descendants(row).filter(r => !hasChildren(r))` for "leaves" — that is the walk `leaves` exists so nobody writes twice; a second name for any of the three at any altitude (`childrenOf`, `hasChildrenOf`)
 
 **Dependency**:
 A first-class entity linking a predecessor Entry to a successor Entry with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on an Entry. Owned by the `entryDependencies()` plugin, not `model/` (ADR 0002; S5.0 grill, issue #111) — it exists only when that plugin is installed and lives in its reserved store, not on `Entry` or in core. The default scheduling plugin reads it through a read-only cross-plugin store view; it does not own it.
@@ -222,7 +242,7 @@ The row-level nesting of the timeline grid (parent/child rows via `parentId`). D
 _Avoid_: Group (say "row grouping" or "a parent Entry"); reading `Row.kind: 'header'` as a parent Entry
 
 **Rollup**:
-The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It is a leaf with one importer (`data/transaction.ts`). Default is on. An Entry derives when it has children (ADR 0013) — a segmented parent (`childrenAsSegments`, #421) is an ordinary rolling-up parent to this pass; `data/` has no notion of a segmented row, so nothing here changes for one. `rollUpKinds` is deleted. A Field with `rollUp: 'none'` or with no `rollUp` skips that Field only. The pass walks the ancestor chains of touched entries only, deepest first (D-S4-8) — one path for shipped and consumer Aggregators alike. It yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is `start` as `min` and `end` as `max` over the children — not `sum` of Instants. A direct `start`/`end` write on a rolling-up parent is refused (`DerivedFieldNotWritableError`) — its span is never its own to set.
+The bottom-up pass in the commit path that derives a parent's value for a Field from its children's, using that Field's Aggregator. It is a core step, not a resolver: it runs whether or not a plugin is installed, and nothing installable can displace it (D-S2-22). It is a leaf with one importer (`data/transaction.ts`). Default is on. An Entry derives when it has children (ADR 0013) — a segmented parent (`childrenAsSegments`, #421) is an ordinary rolling-up parent to this pass; `data/` has no notion of a segmented row, so nothing here changes for one. `rollUpKinds` is deleted. A Field with `rollUp: 'none'` or with no `rollUp` skips that Field only. The pass walks the ancestor chains of touched entries only, deepest first (D-S4-8) — one path for shipped and consumer Aggregators alike. It yields to a field the caller proposed in the same transaction and wins over one the extension hook proposed. One pass settles nested parents, because the walk is bottom-up. The **Span rollup** is `start` as `min` and `end` as `max` over the children — not `sum` of Instants. A direct `start`/`end` write on a rolling-up parent is refused (`DerivedFieldNotWritableError`) — its span is never its own to set. A `RollUpContext`'s `children(row)`/`descendants(row)`/`leaves(row)` answer about any row the pass hands out, per **Child / Descendant / Leaf**.
 _Avoid_: Group rollup (the pass is not tied to a stored kind, nor to spans — it is per Field, over any parent), rollup pass (says "when," not "what"), aggregation (Aggregator is the function; Rollup is the pass)
 
 **Grid column**:

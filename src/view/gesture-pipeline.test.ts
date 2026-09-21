@@ -1134,10 +1134,12 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     expect(walks).toBe(0);
   });
 
-  it('answers entryAfterEdits with one .get, never a dataset walk, even when the hook writes nothing', async () => {
-    // D-S5-45: the hook can read `entryAfterEdits` on every frame to see this transaction's own body
-    // edit — that read must cost one lookup, not a copy of the roster, whether or not the hook goes on
-    // to write anything (the "writes nothing" half of this idea is `never copies the dataset` above).
+  it('never copies the dataset on a preview frame just because an extension hook is wired', async () => {
+    // #466 narrowed `extraEditsFor` to `(draft) => ProposedEdits` — request-building (and the
+    // `entryAfterEdits` one-lookup cost D-S5-45 names) moved to `data/edit-request.ts`'s
+    // `createEditRequest`, pinned there in `edit-request.test.ts`. This file's own concern is the
+    // half that stays here: wiring a hook at all must not force a roster copy (`never copies the
+    // dataset on a preview frame when no extension hook is installed`, above, is the other half).
     const roster = new Map([[entryId('a'), storedRow('a', 0, 100)]]);
     let walks = 0;
     const walk = roster[Symbol.iterator].bind(roster);
@@ -1146,11 +1148,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
       return walk();
     };
 
-    let sawStart: Instant | undefined;
-    const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = (request) => {
-      sawStart = request.entryAfterEdits(entryId('a'))?.start;
-      return new Map();
-    };
+    const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = () => new Map();
 
     const { deps } = withRoster([entry('a', 0, 100)], { extraEditsFor, committedEntriesById: () => roster });
     const pipeline = new GesturePipeline(deps);
@@ -1160,7 +1158,6 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(walks).toBe(0);
-    expect(sawStart).not.toBe(0 as unknown as Instant);
   });
 });
 

@@ -19,7 +19,7 @@ many — and the hook always sees the whole batch at once, never one edit at a t
 | `EntryEdit` | `Partial<EntryInput>` minus `id` | **The write shape.** One Entry's proposed field changes, dates loose — the same object `dataset.entries.update(id, edit)` takes |
 | `EntryEdits` | `ReadonlyMap<EntryId, EntryEdit>` | A batch of those, keyed by Entry — what an extender returns, whether the batch holds one entry or many |
 | `ProposedEdit` / `ProposedEdits` | dates as `Instant`, `proposedKeys` stated | **The read shape.** The same edit after core read it. A plugin author reads one off `request.proposed` and never builds one |
-| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state (D-S5-45), and the two sets below |
+| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds, hasChildren, writeTarget }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state (D-S5-45), the two sets below, and two structural questions by id (#466) — `hasChildren(id)` and `writeTarget(id, field)` (`WriteTarget`), so a cascade can check before it writes instead of learning after the fact from a `derived-values-dropped` report |
 | `EditExtender` | `(request: EditRequest) => EntryEdits` | The function occupying the hook — `identityExtender` when nothing is installed |
 
 There is no wrapper type around the extender's return value. An extender returns extra writes, in the

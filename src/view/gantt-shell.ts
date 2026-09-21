@@ -109,7 +109,6 @@ import type {
   ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
-import type { EditRequest } from '../data/edit-extension.js';
 import { resolveCapabilities } from './capability.js';
 import type { Capabilities, GestureCapability, ResolvedCapabilities } from './capability.js';
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
@@ -349,8 +348,13 @@ export interface GanttShellOptions {
    *  own `extraEditsFor` here (S5.10, #209 Q5). That occupant is the identity function until a
    *  Dataset plugin composes onto it (D-S5-23). A test that constructs `GanttShell` directly passes
    *  its own, the same shape `commitEntryEdits` already uses. The real hook still runs again, for
-   *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself. */
-  extraEditsFor?: (request: EditRequest) => ProposedEdits;
+   *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself.
+   *
+   *  Takes the draft, not an `EditRequest` (#466): `GanttShell` binds to `model/`'s narrow `Dataset`,
+   *  which carries no `hierarchySource`/`committedChildIds`/`fields`, so it cannot build the request
+   *  itself. `api/dataset.ts`'s `extraEditsFor` builds it, through `data/edit-request.ts`'s
+   *  `createEditRequest`, before this ever runs. */
+  extraEditsFor?: (draft: ProposedEdits) => ProposedEdits;
   /** Internal (D-S4-24, ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
    *  inject a replacement. */
   variantRegistry?: VariantRegistry;

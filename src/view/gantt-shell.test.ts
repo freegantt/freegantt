@@ -1640,10 +1640,12 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
   });
 });
 
-// T1-6 (#246 S2-3): the map a drag preview hands `extraEditsFor` (I5) must not be rebuilt on every
-// rAF frame. `entries.storedValues` is the store's own index, so there is no copy and nothing to
-// rebuild — the shell's hand-rolled memo is gone (ADR 0017, `J20`). `extraEditsFor` is the one caller
-// in this shell that asks for it, so a drag preview with that hook wired is the only way to reach it.
+// T1-6 (#246 S2-3): the map a drag preview reads through `committedEntriesById()` (I5) must not be
+// rebuilt on every rAF frame. `entries.storedValues` is the store's own index, so there is no copy
+// and nothing to rebuild — the shell's hand-rolled memo is gone (ADR 0017, `J20`). Request-building
+// moved to `api/dataset.ts`'s `extraEditsFor` (#466), so `extraEditsFor` itself now sees only the
+// draft; this samples the same public `entries.storedValues` index `#measuredFrom` reads internally,
+// once per frame, wiring an `extraEditsFor` hook only to get one call per preview frame to sample at.
 describe("GanttShell's committed stored rows (I5, #246 S2-3)", () => {
   it('hands one Map identity to every preview frame, across a commit, with no copy (J20)', async () => {
     const dataset = new DatasetState({
@@ -1659,10 +1661,8 @@ describe("GanttShell's committed stored rows (I5, #246 S2-3)", () => {
     const shell = new GanttShell({
       container,
       dataset,
-      // Any hook at all is enough: `#extraFor` asks for `committedEntriesById()` whenever one is
-      // wired, whatever it returns (view/gesture-pipeline.ts).
-      extraEditsFor: (request) => {
-        seenMaps.push(request.entries);
+      extraEditsFor: () => {
+        seenMaps.push(dataset.entries.storedValues);
         return new Map();
       },
       wiring: {

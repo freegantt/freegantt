@@ -1,7 +1,7 @@
 // data/ — shared entry-tree helpers for hierarchy and rollup passes (S4 review C2).
 
 import type { HierarchySource, StoredEntry, EntryId, ProposedEdits } from '../model/index.js';
-import { entryAfterEdit } from './fields/field-access.js';
+import { entryAfterEdit, proposedKeysOf } from './fields/field-access.js';
 import { parentIdFrom } from './hierarchy-source.js';
 
 export function buildEffectiveEntries(
@@ -102,4 +102,31 @@ export function ancestorsOf(
     parentId = current === undefined ? undefined : parentIdFrom(parentIdOf, current);
   }
   return result;
+}
+
+/** A checked parent index, read back as a `HierarchySource` — the shape every walk in this file
+ *  takes (ADR 0020). Shared by `rollup.ts` and `edit-request.ts` (#421 C4, #466), so both read one
+ *  implementation of "wrap a checked `ParentIndex` as a source" rather than two. */
+export function parentIdIn(parentById: ReadonlyMap<EntryId, EntryId>): HierarchySource {
+  return (entry) => parentById.get(entry.id);
+}
+
+/** True when this commit's `added`, `removed` and `edits` leave every row's place in the tree
+ *  untouched: no Entry is added or removed, and no edit proposes `parentId`.
+ *
+ *  Only worth asking under core's own hierarchy source (`storedParentSource` reads `parentId` and
+ *  nothing else) — a plugin's source is an arbitrary function that may read any field, so no commit
+ *  can be proven not to move a row under it. `rollup.ts` and `edit-request.ts` both guard this call
+ *  with that same `tree.source === storedParentSource` check rather than repeating it here, because
+ *  only they hold the tree whose source is in question (#421 C4, #466). */
+export function commitMovesNoRow(
+  added: readonly StoredEntry[],
+  removed: readonly StoredEntry[],
+  edits: ProposedEdits,
+): boolean {
+  if (added.length > 0 || removed.length > 0) return false;
+  for (const edit of edits.values()) {
+    if (proposedKeysOf(edit).has('parentId')) return false;
+  }
+  return true;
 }

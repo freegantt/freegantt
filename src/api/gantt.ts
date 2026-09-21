@@ -367,7 +367,7 @@ export class Gantt<TProps = unknown> {
       // `interaction/extender-preview.test.ts`'s "#167" case fails if this ever becomes a stored
       // value — it composes a second occupant after the shell exists, which no public route allows,
       // so `api/gantt.test.ts`'s "#186" suite cannot reach that case and does not claim to.
-      extraEditsFor: (request) => extraEditsFor(options.dataset, request),
+      extraEditsFor: (draft) => extraEditsFor(options.dataset, draft),
       wiring: {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,

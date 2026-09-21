@@ -21,9 +21,8 @@ export type {
   ProposedEdit,
   ProposedEdits,
   EntryEdits,
-  EditRequest,
-  EditExtender,
 } from './stored-entry.js';
+export type { EditRequest, EditExtender, ExtenderWrapper } from './edit-request.js';
 // The span invariant's one home (ADR 0012). A value export, and the only one `model/` holds outside
 // ids.ts and errors.ts — see `spansTime`'s own comment for why the carve-out admits it.
 export { spansTime } from './stored-entry.js';
@@ -31,9 +30,9 @@ export type { HierarchySource, HierarchySourceWrapper } from './hierarchy-source
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { ElementDescription } from './render.js';
 export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';
-export type { PluginId, Disposer, ExtenderWrapper, PluginStore, PluginStoreView } from './plugin.js';
+export type { PluginId, Disposer, PluginStore, PluginStoreView } from './plugin.js';
 export type { KeyChord, TargetKind } from './command.js';
-export type { WriteVerdict, WriteRefusalReason } from './write-verdict.js';
+export type { WriteVerdict, WriteRefusalReason, WriteTarget } from './write-verdict.js';
 // ADR 0018: one vocabulary for the consumer's own `capabilities` and a variant's own `capabilities`.
 export type { CapabilityRule, WriteRule, GestureCapability, Capabilities } from './capabilities.js';
 export type {
