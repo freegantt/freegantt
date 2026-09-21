@@ -2184,6 +2184,11 @@ export class GanttShell {
     this.#viewport.range = r;
   }
 
+  /** Live — delegates straight to `Viewport.visibleSpan` (issue #461). */
+  get visibleSpan(): TimeSpan {
+    return this.#viewport.visibleSpan;
+  }
+
   get fit(): TimeScaleFit {
     return this.#viewport.fit;
   }
@@ -2372,6 +2377,7 @@ export class GanttShell {
       fit: this.#viewport.fit,
       canZoomIn: this.#viewport.canZoomIn,
       canZoomOut: this.#viewport.canZoomOut,
+      visibleSpan: this.#viewport.visibleSpan,
     });
   }
 

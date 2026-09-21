@@ -4,7 +4,7 @@ import { Viewport } from './viewport.js';
 import type { DatasetBinding } from './viewport.js';
 import { TimeScaleModel } from './time-scale-model.js';
 import { ScrollAxis } from './scroll-axis.js';
-import { diffMs, instant } from '../../time/index.js';
+import { diffMs, instant, MS } from '../../time/index.js';
 import type { Entry } from '../../model/index.js';
 import { entryDouble } from '../entry-double.js';
 
@@ -462,5 +462,113 @@ describe('Viewport.reveal (S1.9, D-S1.9-6)', () => {
       expect(calls).toBe(1);
       expect(viewport.timeScale.range.end).toEqual(instant('2027-06-30T00:00:00Z'));
     });
+  });
+});
+
+describe('Viewport.visibleSpan (issue #461)', () => {
+  // A pinned range and an exact `fit` (px per ms, not a preset) so every edge here is hand-verifiable:
+  // 1px == 1 minute, so a 400px pane reads as exactly 400 minutes, no rounding to chase.
+  const pinnedRange = { start: instant('2026-01-01T00:00:00Z'), end: instant('2026-01-02T00:00:00Z') };
+  const pxPerMs = 1 / MS.MINUTE;
+
+  function exactViewport(
+    width: number,
+    height = 200,
+  ): { viewport: Viewport; handle: ReturnType<Viewport['bind']>; calls: () => number } {
+    const viewport = new Viewport({ scale: new TimeScaleModel({ range: pinnedRange, fit: pxPerMs }) });
+    let calls = 0;
+    const handle = viewport.bind(dataset, () => calls++);
+    handle.setPaneSize({ width, height });
+    handle.setContentSize({ width: viewport.timeScale.contentWidth, height: 5000 });
+    calls = 0;
+    return { viewport, handle, calls: () => calls };
+  }
+
+  it('at rest, starts exactly at the content range start (D-S1.8-1: no time outside the content)', () => {
+    const { viewport } = exactViewport(400);
+    expect(viewport.visibleSpan.start).toBe(pinnedRange.start);
+  });
+
+  it("is pixel-derived off `visible`'s own edges — exact `instantForX`, never snapped to a tick", () => {
+    const { viewport } = exactViewport(400);
+    viewport.scroll.x.panTo(37); // an arbitrary, non-tick-aligned offset
+    const { start, end } = viewport.visibleSpan;
+    expect(start).toBe(viewport.timeScale.instantForX(viewport.visible.x));
+    expect(end).toBe(viewport.timeScale.instantForX(viewport.visible.x + viewport.visible.width));
+  });
+
+  it('half-open: `end` is exclusive, exactly the pane width ahead of `start` in the scale’s own unit', () => {
+    const { viewport } = exactViewport(400); // 400px @ 1px/min == 400 minutes
+    const { start, end } = viewport.visibleSpan;
+    expect(diffMs(end, start)).toBe(400 * MS.MINUTE);
+  });
+
+  it('pan moves the span and leaves its width (duration) unchanged', () => {
+    const { viewport } = exactViewport(400);
+    const before = viewport.visibleSpan;
+
+    viewport.scroll.x.panTo(120);
+    const after = viewport.visibleSpan;
+
+    expect(after.start).not.toBe(before.start);
+    expect(diffMs(after.end, after.start)).toBe(diffMs(before.end, before.start));
+  });
+
+  it('zoom in narrows the span; zoom out widens it', () => {
+    const { viewport } = exactViewport(400);
+    const atRest = diffMs(viewport.visibleSpan.end, viewport.visibleSpan.start);
+
+    viewport.zoomBy(2); // denser: the same pane now covers less time
+    expect(diffMs(viewport.visibleSpan.end, viewport.visibleSpan.start)).toBeLessThan(atRest);
+
+    viewport.zoomBy(0.125); // coarser than the original rest state
+    expect(diffMs(viewport.visibleSpan.end, viewport.visibleSpan.start)).toBeGreaterThan(atRest);
+  });
+
+  it('scrolling to either end clamps the span to the content range — there is no time outside the content', () => {
+    const { viewport } = exactViewport(400);
+
+    viewport.scroll.x.panTo(0);
+    expect(viewport.visibleSpan.start).toBe(pinnedRange.start);
+
+    viewport.scroll.x.panTo(viewport.scroll.x.state.max);
+    expect(viewport.visibleSpan.end).toBe(pinnedRange.end);
+  });
+
+  it('a wide pane under a narrow content range clamps to content on both edges, no wider (`fit: "pane"` case)', () => {
+    // The pane (2000px) is wider than the pinned day's own content (1440px @ 1px/min), the same
+    // shape a `fit: 'pane'` Gantt sees when its content is narrower than the measured pane.
+    const { viewport } = exactViewport(2000);
+    expect(viewport.visibleSpan).toEqual(pinnedRange);
+  });
+
+  it('a zero-width pane answers the degenerate span {start, end} at the clamped left edge — not "everything visible"', () => {
+    const { viewport, handle } = exactViewport(400);
+    viewport.scroll.x.panTo(120);
+    const leftEdgeBefore = viewport.visibleSpan.start;
+
+    handle.setPaneSize({ width: 0, height: 200 });
+
+    const span = viewport.visibleSpan;
+    expect(span.start).toBe(span.end);
+    // `visible.width > 0` disabling culling (`layout/frame.ts`) is a renderer convenience meaning
+    // "cull nothing" — reusing it here would claim the whole content is visible, which is false.
+    expect(span.start).toBe(leftEdgeBefore);
+  });
+
+  it('per Gantt, not per scale model: two Viewports sharing one ScrollAxis but different pane widths report different spans', () => {
+    const sharedX = new ScrollAxis();
+    const sharedScale = new TimeScaleModel({ range: pinnedRange, fit: pxPerMs });
+    const narrow = new Viewport({ scale: sharedScale, scroll: { x: sharedX } });
+    const wide = new Viewport({ scale: sharedScale, scroll: { x: sharedX } });
+    const narrowHandle = narrow.bind(dataset, noop);
+    const wideHandle = wide.bind(dataset, noop);
+    narrowHandle.setContentSize({ width: narrow.timeScale.contentWidth, height: 1000 });
+    wideHandle.setContentSize({ width: wide.timeScale.contentWidth, height: 1000 });
+    narrowHandle.setPaneSize({ width: 200, height: 200 });
+    wideHandle.setPaneSize({ width: 800, height: 200 });
+
+    expect(narrow.visibleSpan.start).toBe(wide.visibleSpan.start); // same shared scroll position
+    expect(narrow.visibleSpan.end).not.toBe(wide.visibleSpan.end); // different pane width
   });
 });

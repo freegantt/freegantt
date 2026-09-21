@@ -719,7 +719,10 @@ export class Gantt<TProps = unknown> {
   }
 
   /** Getter returns the resolved `TimeSpan` — matching how `Dataset` reads `EntryInput` once at
-   *  ingest (D-S1.12-8). */
+   *  ingest (D-S1.12-8).
+   *
+   *  This is the whole scrollable **content** extent, never the window. Read `visibleSpan` for what
+   *  is on screen right now (issue #461). */
   get range(): 'fitDataset' | TimeSpan {
     return this.#shell.range;
   }
@@ -728,6 +731,20 @@ export class Gantt<TProps = unknown> {
    *  `start`/`end`, read through the dataset's zone. */
   set range(r: 'fitDataset' | { start: InstantInput; end: InstantInput }) {
     this.#shell.range = this.#toRange(r);
+  }
+
+  /** The time span on screen right now (issue #461). `range` is the whole scrollable **content**
+   *  extent instead. A pan, a zoom, a pane resize or a splitter drag moves this and leaves `range`
+   *  alone.
+   *
+   *  Half-open, `end` exclusive, like every other stored span. Clamped to the content extent,
+   *  because there is no time outside the content. Pixel-derived: an edge lands where the pane's
+   *  own edge lands, mid-tick, never snapped.
+   *
+   *  This excludes the overscan buffer. `DecorationContext.span` includes it on purpose
+   *  (`layout/decoration.ts`), so that one reads wider. The two are not interchangeable. */
+  get visibleSpan(): TimeSpan {
+    return this.#shell.visibleSpan;
   }
 
   get fit(): TimeScaleFit {
