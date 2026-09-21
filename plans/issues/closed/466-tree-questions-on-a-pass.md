@@ -1,6 +1,6 @@
 # #466 — a pass answers about any row it hands you
 
-**Reported:** 2026-09-21. **Status:** planned, not built. Labels: `enhancement`, `api change`.
+**Reported:** 2026-09-21. **Status:** shipped in #468, merged 2026-09-21. Labels: `enhancement`, `api change`.
 
 ## What the issue is
 
