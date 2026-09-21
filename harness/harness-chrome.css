@@ -396,6 +396,14 @@ nav.harness-site-nav a[aria-current='page'] {
   white-space: nowrap;
 }
 
+/* `gantt.visibleSpan` (issue #461) — a plain reading, no control, so it takes no border/height. */
+.toolbar-readout {
+  color: var(--ink-2);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* The zoom cluster reads as one measure: two steppers with the current preset between them. */
 .zoom-measure {
   display: inline-flex;

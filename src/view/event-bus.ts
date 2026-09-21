@@ -15,6 +15,7 @@ import type {
   GridColumn,
   Instant,
   Refusable,
+  TimeSpan,
 } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 import type { ResolvedTheme } from './theme.js';
@@ -66,12 +67,19 @@ export interface EntryFieldEdit {
   readonly to: unknown;
 }
 
-/** One Viewport Batch completed. Chrome re-reads these, or reads the live Gantt getters. */
+/** One Viewport Batch completed. Chrome re-reads these, or reads the live Gantt getters.
+ *
+ *  `span` is `Gantt.visibleSpan` at the moment of this fire (issue #461) — the window, not the
+ *  content extent (`range`). It moves on every pan tick as well as on preset/fit/zoom changes, so
+ *  a fire this payload used to report as identical to the last one (pure scrolling) now carries the
+ *  new window. No library-side throttling: a consumer doing expensive work on this event throttles
+ *  or snaps it itself. */
 export interface NavigationChange {
   readonly presetId: string;
   readonly fit: TimeScaleFit;
   readonly canZoomIn: boolean;
   readonly canZoomOut: boolean;
+  readonly span: TimeSpan;
 }
 
 /** #330. `Gantt.resolvedTheme` moved — a `theme` assignment that changes the pin, or the OS

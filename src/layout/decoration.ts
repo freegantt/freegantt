@@ -20,7 +20,12 @@ export interface DecorationContext {
    *  `[0, contentWidth]` (#436). The bound is not a narrowing a provider has to work around: a
    *  decoration placed outside the content paints past the timeline's own edge and widens the
    *  pane's native `scrollWidth` past the content sizer, the harm D-S1.8-1 exists to stop. So the
-   *  span a provider reads is exactly the span it is allowed to paint over. */
+   *  span a provider reads is exactly the span it is allowed to paint over.
+   *
+   *  Not the same number as `Gantt.visibleSpan` (issue #461): that one excludes overscan on
+   *  purpose, because it answers what the reader has on screen, not what a plugin may paint into.
+   *  This `span` is strictly wider under the default overscan — do not read the two as
+   *  interchangeable. */
   span: TimeSpan;
   /** The rows in that window, so a provider can shade a row instead of a date range. */
   rows: readonly FrameRow[];

@@ -34,7 +34,7 @@ import type {
   TimeUnit,
 } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
-import { instant } from '../time/index.js';
+import { diffMs, instant } from '../time/index.js';
 
 /** What a row's dates read now. A "before" reading is a value, never a row: one `Entry` per id, and
  *  every read is live, so a held row always agrees with itself (ADR 0017 rule 2). */
@@ -1076,6 +1076,182 @@ describe('Gantt navigationChange (S1.12)', () => {
       expect(seen).toEqual(['month']);
 
       gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('Gantt.visibleSpan (issue #461)', () => {
+  it('is a defined, non-throwing TimeSpan immediately after construction — before any pane measurement arrives', () => {
+    // No FakeResizeObserver.fire() call in this test: this is deliberately BEFORE the first real
+    // measurement a browser's own ResizeObserver would deliver. `#phase` is `'live'` by the time the
+    // constructor returns (gantt-shell.ts), so nothing about the pre-measure phase leaks here — the
+    // getter just answers off whatever Viewport state exists, same as any other live read.
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+
+    const span = gantt.visibleSpan;
+    expect(span.start).toBeTypeOf('number');
+    expect(span.end).toBeTypeOf('number');
+    expect(span.start).toBeLessThanOrEqual(span.end);
+
+    gantt.destroy();
+  });
+
+  it('navigationChange carries `span`, and it matches `gantt.visibleSpan` at the moment it fires', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'weekAndMonth',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      let seen: { start: number; end: number } | undefined;
+      gantt.on('navigationChange', (payload) => {
+        seen = payload.span;
+      });
+      gantt.zoomIn();
+
+      expect(seen).toBeDefined();
+      expect(seen).toEqual(gantt.visibleSpan);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('zoomIn narrows the span; zoomOut widens it back', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'weekAndMonth',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const atRest = diffMs(gantt.visibleSpan.end, gantt.visibleSpan.start);
+      gantt.zoomIn();
+      const zoomedIn = diffMs(gantt.visibleSpan.end, gantt.visibleSpan.start);
+      expect(zoomedIn).toBeLessThan(atRest);
+
+      gantt.zoomOut();
+      gantt.zoomOut();
+      const zoomedOut = diffMs(gantt.visibleSpan.end, gantt.visibleSpan.start);
+      expect(zoomedOut).toBeGreaterThan(zoomedIn);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('a resize that widens the pane (a splitter drag, in a real browser) moves the span and fires navigationChange', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'day',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+      const before = gantt.visibleSpan;
+
+      let fired = 0;
+      let lastSpan: { start: number; end: number } | undefined;
+      gantt.on('navigationChange', (payload) => {
+        fired++;
+        lastSpan = payload.span;
+      });
+
+      // happy-dom does no layout (dragSplitter's own comment, above): a real splitter drag reflows
+      // the timeline pane and the browser's own ResizeObserver reports the new size. Firing it here
+      // is that reflow, simulated the same way every other pane-size test in this file does.
+      FakeResizeObserver.instances[0]!.fire({ width: 600, height: 100 });
+
+      expect(fired).toBeGreaterThan(0);
+      expect(lastSpan).toEqual(gantt.visibleSpan);
+      expect(gantt.visibleSpan.end).not.toBe(before.end);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('under fit: "pane" with content narrower than the pane, the span equals the content range and no wider', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const narrowEntries = [{ id: 'only', name: 'Only', start: '2026-01-01', end: '2026-01-02' }];
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: narrowEntries, timeZone: 'UTC' }),
+        fit: 'pane',
+        range: 'fitDataset',
+      });
+      // A pane far wider than one day's own content at any legible density.
+      FakeResizeObserver.instances[0]!.fire({ width: 2000, height: 100 });
+
+      // `gantt.range` reads back the literal `'fitDataset'` sentinel, not the resolved span (the
+      // getter's own doc), so this compares against the one entry's own dates directly. A date-only
+      // `end` is inclusive by default (`dateOnlyEnd`, `data/entry-reader.ts`), so the entry's stored
+      // half-open end is one day past its authored `'2026-01-02'` — 2026-01-03.
+      expect(gantt.visibleSpan).toEqual({
+        start: instant('2026-01-01T00:00:00Z'),
+        end: instant('2026-01-03T00:00:00Z'),
+      });
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('two Gantts on one shared ScrollAxis, with different pane widths, report different spans', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const scroll = new ScrollAxis();
+      const sharedScale = new TimeScaleModel({ range: 'fitDataset', fit: 'preset', preset: 'day' });
+      const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+
+      const narrowContainer = document.createElement('div');
+      const narrowGantt = new Gantt({
+        container: narrowContainer,
+        dataset,
+        scale: sharedScale,
+        scroll: { x: scroll },
+      });
+      const wideContainer = document.createElement('div');
+      const wideGantt = new Gantt({
+        container: wideContainer,
+        dataset,
+        scale: sharedScale,
+        scroll: { x: scroll },
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+      FakeResizeObserver.instances[1]!.fire({ width: 900, height: 100 });
+
+      expect(narrowGantt.visibleSpan.start).toBe(wideGantt.visibleSpan.start);
+      expect(narrowGantt.visibleSpan.end).not.toBe(wideGantt.visibleSpan.end);
+
+      narrowGantt.destroy();
+      wideGantt.destroy();
     } finally {
       vi.unstubAllGlobals();
     }

@@ -15,7 +15,7 @@
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
 import type { Gantt, PresetRef, SnapSetting, Theme } from 'freegantt';
-import { isTimeUnit } from 'freegantt';
+import { formatDate, formatEndInclusive, isTimeUnit } from 'freegantt';
 
 export interface GanttToolbarOptions {
   gantt: Gantt;
@@ -158,7 +158,19 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
   // Where is now?
   const todayBtn = button('Today', 'Mod+Home');
 
-  bar.append(group(undoBtn, redoBtn), group(collapseBtn, expandBtn), group(zoomMeasure), group(todayBtn));
+  // What time span is on screen? `gantt.visibleSpan` (issue #461) — the window, never `range`'s
+  // content extent — read fresh on every `navigationChange`, which already fires on pan, zoom and
+  // preset change alike (one Viewport Batch, S1.12).
+  const spanReadout = document.createElement('span');
+  spanReadout.className = 'toolbar-readout';
+
+  bar.append(
+    group(undoBtn, redoBtn),
+    group(collapseBtn, expandBtn),
+    group(zoomMeasure),
+    group(todayBtn),
+    group(spanReadout),
+  );
 
   // What do dragged edges land on?
   let snapSelect: HTMLSelectElement | undefined;
@@ -228,6 +240,9 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
     zoomInBtn.disabled = !gantt.canZoomIn;
     presetSelect.value = gantt.preset.id;
     if (snapSelect) snapSelect.value = snapValue(gantt.snap);
+    const span = gantt.visibleSpan;
+    const zone = dataset.timeZone;
+    spanReadout.textContent = `Showing ${formatDate(zone, span.start)} – ${formatEndInclusive(zone, span)}`;
   }
 
   undoBtn.addEventListener('click', () => gantt.commands.run('freegantt.undo'));

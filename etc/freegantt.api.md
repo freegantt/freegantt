@@ -1190,6 +1190,7 @@ export class Gantt<TProps = unknown> {
     set variants(next: readonly EntryVariant<TProps>[]);
     get viewportGestures(): ViewportGestures;
     set viewportGestures(next: ViewportGestures);
+    get visibleSpan(): TimeSpan;
     // (undocumented)
     zoomBy(factor: number, anchorX?: number): void;
     zoomIn(anchorX?: number): void;
@@ -1613,6 +1614,8 @@ export interface NavigationChange {
     readonly fit: TimeScaleFit;
     // (undocumented)
     readonly presetId: string;
+    // (undocumented)
+    readonly span: TimeSpan;
 }
 
 // @public

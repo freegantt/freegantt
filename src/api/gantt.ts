@@ -730,6 +730,19 @@ export class Gantt<TProps = unknown> {
     this.#shell.range = this.#toRange(r);
   }
 
+  /** The time span on screen right now — not `range`, which is the whole scrollable **content**
+   *  extent (`'fitDataset'` or an authored `TimeSpan`). Panning, zooming, resizing the pane, or
+   *  dragging the grid/timeline splitter all move this without touching `range` (issue #461).
+   *
+   *  Half-open (`end` exclusive, same storage rule as everywhere else) and clamped to `range`'s own
+   *  content extent — there is no time outside the content. Pixel-derived: an edge lands wherever
+   *  the pane's own edge lands, mid-tick, never snapped. Excludes the overscan buffer, so it reads
+   *  narrower than a `DecorationProvider`'s own `DecorationContext.span`, which is overscan-widened
+   *  on purpose (`layout/decoration.ts`) — the two are not the same number. */
+  get visibleSpan(): TimeSpan {
+    return this.#shell.visibleSpan;
+  }
+
   get fit(): TimeScaleFit {
     return this.#shell.fit;
   }
