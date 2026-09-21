@@ -405,6 +405,10 @@ _Avoid_: Viewport (Viewport is the object that resolves this, not the region its
 The live-reconfigurable culling buffer a Viewport applies before handing `visible` to `computeFrame`: `verticalRows` (through the row-height index, since row heights vary from S5) and `horizontalPx` (bars and header ticks only — rows stay vertical-only). Default `{ verticalRows: 2, horizontalPx: 128 }`; a zero value disables culling on that axis. Not exported from `api/` (issue #84) — an app author doesn't think in these units, and no real caller had asked for the knob; it stays live and internal to `layout/`/`view/` until one does.
 _Avoid_: Buffer, padding, margin
 
+**Visible span**:
+What **Visible**'s pixels stand for in time — the window the reader has on screen, published as `gantt.visibleSpan` and on `navigationChange`'s payload under that same name (issue #461). Half-open, clamped to the content extent, pixel-derived and never tick-aligned. It **excludes Overscan**, which is what separates it from `DecorationContext.span`: that one is deliberately overscan-widened, because a decoration provider paints into the buffer and a reader does not see it. A zero-width pane, and the moment before the first pane measurement, both answer a degenerate span — no pixels stand for no time.
+_Avoid_: Range (Range is the whole scrollable content extent — the confusion that made #459 unaskable), visible range, viewport span (Viewport is the object, and `viewport` was the retired name of Visible), Span on its own (`DecorationContext.span` already holds that word, and the two are different numbers)
+
 **Header band**:
 One row of the time-axis header, emitted per `ViewPreset.headers` entry, coarsest first (e.g. months over weeks). Each band carries its own `unit`/`increment` and Ticks; `render/dom` keys bands by index and ticks within a band, so a preset with one header renders one `.fg-band` wrapper.
 _Avoid_: Header row (Header band is the term of art; "row" is reserved for grid Rows)

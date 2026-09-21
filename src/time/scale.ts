@@ -75,6 +75,11 @@ export interface TimeScale {
    *  zone — the cell covering `span.x` is emitted even when its own `x` is left of `span`. Whole-range
    *  callers pass `{ x: 0, width: contentWidth }` — and are greppable. */
   ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+  /** What time a pixel extent stands for. Clamps to `[0, contentWidth]` first (D-S1.8-1: there is no
+   *  time outside the content), so a caller hands over whatever pixels it has and never repeats the
+   *  bound itself. Half-open, like every other span. A zero-width extent answers a degenerate span,
+   *  which is the honest reading: no pixels stand for no time. */
+  spanForPixels(span: PixelSpan): TimeSpan;
   /** Px extent of the whole range at this zoom — what the x `ScrollAxis` binds as its content width. */
   readonly contentWidth: number;
 }
@@ -125,7 +130,24 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
 
   const contentWidth = Math.max(0, xForInstant(range.end) - xForInstant(range.start));
 
-  return { range, timeZone, pxPerMs, xForInstant, instantForX, widthForDuration, ticks, contentWidth };
+  function spanForPixels(span: PixelSpan): TimeSpan {
+    const clampToContent = (x: number) => Math.min(Math.max(x, 0), contentWidth);
+    const left = clampToContent(span.x);
+    const right = clampToContent(span.x + span.width);
+    return { start: instantForX(left), end: instantForX(right) };
+  }
+
+  return {
+    range,
+    timeZone,
+    pxPerMs,
+    xForInstant,
+    instantForX,
+    widthForDuration,
+    ticks,
+    spanForPixels,
+    contentWidth,
+  };
 }
 
 /** How long one step of `step` lasts, starting at `at` in `zone`. Calendar stepping, so a day is 23

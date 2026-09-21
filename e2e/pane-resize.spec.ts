@@ -300,3 +300,21 @@ test('both panes stay pixel-aligned after a splitter drag (U1)', async ({ page }
     );
   }
 });
+
+test('a splitter drag moves the visible span (#461)', async ({ page }) => {
+  // The one acceptance bullet happy-dom cannot prove: a splitter drag reflows the timeline pane,
+  // the browser's own ResizeObserver reports the new size, and `gantt.visibleSpan` follows. The
+  // toolbar readout is that value painted, so asserting on it proves the getter and the harness
+  // wiring in one move.
+  await page.goto('/');
+  const readout = page.locator('.toolbar-readout');
+  await expect(readout).not.toHaveText('');
+
+  const before = await readout.textContent();
+
+  // Widen the timeline pane by pulling the splitter left. `range` never changes here — only what
+  // the pane can show does, which is the whole distinction this readout exists to make visible.
+  await dragSplitterBy(page, -200);
+
+  await expect(readout).not.toHaveText(before ?? '');
+});

@@ -25,6 +25,8 @@ import type { Entry, Instant, TimeSpan } from '../model/index.js';
 import { entryDouble, entryDoubleLike, entryDoubles, entryValuesOf } from './entry-double.js';
 import { entryBar, wholeEntryBar } from './bars/bar.js';
 import type { FixedBarBox, Bar } from './bars/bar.js';
+import { Viewport } from './viewport/viewport.js';
+import { TimeScaleModel } from './viewport/time-scale-model.js';
 
 /** Every fixture entry this file reads is authored with both dates — this asserts what the
  *  fixture already guarantees, the same load-bearing-cast idiom `src/` itself uses (ADR 0012). */
@@ -1436,5 +1438,44 @@ describe('barSpan — membership decided before any floor, fixed width, or shift
       variants: variantRegistry,
     });
     expect(frame.bars.some((bar) => bar.entryId === outside.id)).toBe(false);
+  });
+});
+
+describe('Viewport.visibleSpan vs DecorationContext.span (issue #461)', () => {
+  it('is strictly narrower on both edges than the same frame’s overscan-widened decoration span', () => {
+    const viewport = new Viewport({
+      scale: new TimeScaleModel({ range: 'fitDataset', fit: 'preset', preset: 'day' }),
+    });
+    const handle = viewport.bind({ entries: sampleEntries, timeZone: 'UTC' }, () => {});
+    handle.setPaneSize({ width: 400, height: 100 });
+    handle.setContentSize({ width: viewport.timeScale.contentWidth, height: 5000 });
+    // Away from both content edges, so the default overscan buffer is never clamped away — the
+    // one condition under which the two spans could coincide.
+    viewport.scroll.x.panTo(viewport.scroll.x.state.max / 2);
+
+    let seenSpan: TimeSpan | undefined;
+    computeFrame({
+      entries: sampleEntries,
+      scale: viewport.timeScale,
+      preset,
+      visible: viewport.visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      decorationProviders: [
+        {
+          layer: 'underBars',
+          provider: (ctx) => {
+            seenSpan = ctx.span;
+            return [];
+          },
+        },
+      ],
+    });
+
+    expect(seenSpan).toBeDefined();
+    expect(viewport.visibleSpan.start).toBeGreaterThan(seenSpan!.start);
+    expect(viewport.visibleSpan.end).toBeLessThan(seenSpan!.end);
   });
 });

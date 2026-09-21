@@ -26,6 +26,7 @@ const linearScale: TimeScale = {
   instantForX: (x) => x as Instant,
   widthForDuration: () => 0,
   ticks: () => [],
+  spanForPixels: (s) => ({ start: s.x as Instant, end: (s.x + s.width) as Instant }),
   contentWidth: 1000,
 };
 

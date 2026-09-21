@@ -14,6 +14,7 @@ const scale: TimeScale = {
   instantForX: () => sampleEntries[0]!.start!,
   widthForDuration: () => 0,
   ticks: () => [],
+  spanForPixels: () => ({ start: sampleEntries[0]!.start!, end: sampleEntries[0]!.start! }),
   // Infinity, not 0 (#436): this smoke test only checks that a frame round-trips through the null
   // backend, not that bars sit inside a pane — a real 0-width pane correctly paints no bars at all
   // (barSpan caps a floored bar's width at contentWidth), which this stub does not mean to exercise.

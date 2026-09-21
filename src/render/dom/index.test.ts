@@ -32,6 +32,7 @@ const scale: TimeScale = {
   instantForX: () => sampleEntries[0]!.start!,
   widthForDuration: () => 100,
   ticks: () => [{ instant: sampleEntries[0]!.start!, x: 0, width: 24 }],
+  spanForPixels: () => ({ start: sampleEntries[0]!.start!, end: sampleEntries[0]!.start! }),
   contentWidth: 100,
 };
 const preset: ViewPreset = {
@@ -1927,6 +1928,7 @@ describe('render/dom backend', () => {
         instantForX: () => sampleEntries[0]!.start!,
         widthForDuration: () => barWidth,
         ticks: () => [{ instant: sampleEntries[0]!.start!, x: 0, width: 24 }],
+        spanForPixels: () => ({ start: sampleEntries[0]!.start!, end: sampleEntries[0]!.start! }),
         contentWidth: contentWidthPx,
       };
     }

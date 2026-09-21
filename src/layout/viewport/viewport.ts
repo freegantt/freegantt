@@ -268,6 +268,21 @@ export class Viewport {
     };
   }
 
+  /** `visible`'s own pixels read as time (issue #461). Excludes overscan — this is what the reader
+   *  has on screen, not what the renderer keeps warm past either edge (contrast
+   *  `DecorationContext.span`, which IS overscan-widened, `layout/decoration.ts`). Pixel-derived,
+   *  not tick-aligned: an edge lands mid-tick, same as `visible` itself.
+   *
+   *  Two states answer the degenerate span `{ start: s, end: s }` at the clamped left edge: a
+   *  zero-width pane (a `display: none` container), and the moment before the first pane
+   *  measurement arrives, when `#paneSize` is still `ZERO_SIZE`. Both say the same true thing —
+   *  nothing is on screen. `visible.width > 0` disabling culling (`layout/frame.ts`) is a renderer
+   *  convenience — "cull nothing" — and reusing it here would instead claim the whole content is on
+   *  screen, which is a lie. */
+  get visibleSpan(): TimeSpan {
+    return this.timeScale.spanForPixels(this.visible);
+  }
+
   /** Several writes, one consumer reaction. Re-entrant, flushes in a `finally` (conventions §5).
    *  First caller is S1.9's `zoomTo` (D-S1.7-10). */
   batch(run: () => void): void {
