@@ -11,8 +11,8 @@ issue plans land here as they're opened.
 - [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived
   cell: the Rollup owns it, or the consumer owns the Field. Steps 1–4 shipped: `writeToChildren`
   is gone from the Field surface, a consumer may declare `rollUp: 'none'` on a core Field, and the
-  parent-move rule reads the write resolver instead of `hasChildren`. Step 5 (docs and spec) is
-  in progress; the plan stays open until the branch merges. Plan:
+  parent-move rule reads the write resolver instead of `hasChildren`. Step 5 brought the ADRs and
+  the spec up to date. The plan stays open until the branch merges. Plan:
   [470-uniform-rollup.md](./470-uniform-rollup.md).
 
 **Closed:**
