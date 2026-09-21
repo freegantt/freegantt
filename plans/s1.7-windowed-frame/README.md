@@ -446,7 +446,7 @@ The move is also where the name gets fixed rather than carried forward unchanged
 | Two Gantts share a scroll, the shorter renders blank | The window is the locally clamped position (D-S1.7-2), same value the element is written with. |
 | `Viewport.visible` and the element disagree by the row-label gutter | The shell no longer converts coordinates at all (D-S1.7-3); the backend owns the gutter and always did. |
 | The host has to know when to re-measure | It never does: `attachPaneSize` (#8) → `setPaneSize` → three destinations. |
-| Someone adds `overscan` to `GanttOptions` and it silently is not live | Not a `GanttOptions` key at S1.7 (D-S1.7-7). |
+| Someone adds `overscan` to `GanttOptions` and it silently is not live | **Superseded by #435's follow-up (`2051b57c`).** `overscan` is now a live `GanttOptions` key and an accessor pair (`src/api/gantt.ts:118,498`). D-S1.7-7 held only at S1.7, when the key lived on `Viewport` alone |
 | A stray `duration * pxPerMs` appears in `layout/` | `no-time-to-pixel-math`, landed before the code (D-S1.7-9). |
 
 ---

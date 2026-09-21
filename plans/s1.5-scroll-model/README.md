@@ -307,9 +307,9 @@ export interface GanttOptions {
 | Foot-gun | Answer |
 |---|---|
 | Host computes `rowIndex × rowHeight` to jump to an entry | `gantt.reveal(entryId)` (§4). `panTo(px)` is the primitive underneath. |
-| Host must call `setContent` after every render or rows go silently unreachable | Not public. Pushed by the render cycle inside `view/`. |
-| Host must call `setPane` on resize | Not public. Pushed by the pane-size attachment's `ResizeObserver` (#8). |
-| Host calls `model.bind()` and leaks a binding nothing unbinds | `@internal`, absent from `plans/02`, and the only call sites in the repo are in `view/`. |
+| Host must call `setContent` after every render or rows go silently unreachable | **Superseded by S1.7 §3.6/§3.8** — the method is gone from `src/`; `Viewport` pushes the window from the render cycle and the attachment writes `writePosition()` now. The row's point holds: the host never calls it. |
+| Host must call `setPane` on resize | **Superseded by S1.7 §3.6/§3.8** — the method is gone from `src/`; `attachPaneSize`'s `ResizeObserver` calls `setPaneSize` (#8). The host still calls nothing. |
+| Host calls `model.bind()` and leaks a binding nothing unbinds | **Superseded by S1.7 and D-S6-1** — the `ScrollModel` this row names is retired; `bind()` now lives on the per-direction `ScrollAxis`. Still `@internal`, absent from `plans/02`, and called only in `view/`. |
 | `batch(run)` throws, hold flag sticks, every later write is silently swallowed | Flush in `finally`. Tested. |
 | Two synced native scrollers drift a frame apart | There is only one native scroller (D-D). The grid pane follows by transform. |
 

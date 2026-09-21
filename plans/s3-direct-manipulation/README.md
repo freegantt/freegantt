@@ -75,7 +75,7 @@ Read these before touching `src/`.
 3. **`EntrySelectionContext` in S3.1 is intentional** — grows into full `EntryGestureContext` in S3.3; do not replace `entry-gestures.ts`, extend it on one pointer stream.
 4. **Add `InteractionState` fields incrementally** — S3.1 added selection; S3.2 added hover/handles; preview/cursor/pending come later.
 5. **Selection is Gantt state, not Dataset** — `[S3-A1]` covers move/resize/nudge only; selection has its own event pair and opens no transaction.
-6. **Run the full check sequence** after each step: `pnpm vitest run`, `tsc --noEmit`, `eslint src harness`, `depcruise`, `node scripts/guard-red-test.mjs`.
+6. **Run `pnpm verify:full` after each step**, and report its verdict line. S3 listed the checks one by one; `verify:full` is the one gate now, and it runs the browser check the hand-written list never did (CLAUDE.md, `docs/04` §5).
 7. **`.slice` bumps only at S3.8** — not before the gate is green.
 
 ---
@@ -194,17 +194,17 @@ Full prose for each decision lives in the step file that implements it. Use this
 | Foot-gun | Answer |
 |---|---|
 | Consumer mutates entry inside `beforeEntryMove` | `TxToken` + `MutationDuringNotificationError` |
-| Dragging a `'group'` "works" then snaps back | `move` false for `derivedSpanKinds`; never arms |
+| Dragging a `'group'` "works" then snaps back | **Superseded by ADR 0013 and ADR 0027.** There is no `kind` and no `derivedSpanKinds`. A parent draws a bar and the bar drags; `e2e/parent-bar-drag.spec.ts` pins it. `capabilities.move` is still what decides whether a gesture arms |
 | DST silently shifts bar | Calendar delta through `time/` (D-S3-3) |
 | Async `beforeEntryMove` never resolves | Stays pending; no timeout that commits. A new gesture on the same or another bar, Escape, or `destroy()` discards the hold — reports it, writes nothing (#272, #273) |
 | Extender ghost for scrolled-out entry | No node to paint; commit unaffected |
 | Ctrl+wheel zooms browser | `passive: false` + `preventDefault()` |
 | Arrows pan when user meant nudge | Selection mode switch; Escape clears |
-| Dense chart unscrollable on touch | `touch-action: none` on bars only; long-press arms |
+| A dense Gantt is unscrollable on touch | `touch-action: none` on bars only; long-press arms |
 | Ten nudges need ten undo | True — coalescing needs History merge policy (§9) |
 | Two Gantts fight over selection | Selection is per-Gantt (D-S3-10) |
 | Handler expects extender cascade in move payload | User edit only; cascade is `beforeChange` on Dataset |
-| `gantt.selectedSegmentIds = ['t1']` type error | Setter accepts `SegmentId \| string` (`selectedIds` retired in #212, ADR 0010) |
+| `gantt.selectedEntryIds = ['t1']` type error | Setter accepts `EntryId \| string`. S3 spelled this `selectedIds`, #212 made it `selectedSegmentIds`, and ADR 0025 and ADR 0026 brought it back to the Entry |
 
 ---
 

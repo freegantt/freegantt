@@ -249,16 +249,16 @@ Read these before you touch `src/`.
 
 1. **`layout/` must not import `data/`.** The Field registry lives in `data/`; the resolved columns reach `layout/` as plain data on `LayoutInput`. `depcruise` catches a direct import; `LayoutInput.columns` is the fix.
 2. **`data/` must not import `view/` or `layout/`.** A `Field.column` sub-object is plain data that `data/` carries and never interprets. A renderer is code that `data/` must never hold — keep it on the Gantt (S5).
-3. **Field source routes through `SOURCE_STRATEGY` in `data/fields/source-strategy.ts`.** A second routing table anywhere is the finding, not a style nit.
+3. **Superseded by ADR 0011.** S4 routed Field source through `SOURCE_STRATEGY` in `data/fields/source-strategy.ts`. There is no `source` key and no strategy table now: a Field has one address per key, and `data/fields/field-access.ts` holds it. A second routing table anywhere is still the finding, not a style nit.
 4. **`computeFrame` is composition after S4.6.** Do not add a branch to it. Add a stage, or change the stage that owns the concern.
-5. **Never split an `ItemId` inline.** Use `model/ids.ts`'s builder and its new reader. S3's `entryFor(itemId)` already depends on this.
+5. **Never split a bar id inline.** Use `model/ids.ts`'s `barId()` and its readers `entryIdOfBar()` / `partIndexOfBar()`. S4 called the type `ItemId`; ADR 0026 retired the Segment and ADR 0027 renamed the drawn thing, so the type is `BarId`.
 6. **Collapse, filter and sort are view state.** None of them may reach the Rollup, the changeset, or the Document. `[S4-A6]` and D-S4-11 both test this.
-7. **`kind` stays authored.** The only automated write to it is `autoGroup`'s promotion, on by default; `{ autoGroup: false }` turns that write off.
+7. **Superseded by ADR 0013.** S4 kept `kind` authored and had `autoGroup` promote a parent. An Entry carries no stored classification now — it derives when it has children — so there is no `kind` to write and no `autoGroup` to turn off.
 8. **Review `harness/main.ts` on every commit**, changed or not (CLAUDE.md). Code there that re-derives what the library computes is an API gap to close in `src/`.
-9. **Run the full check sequence** after each step: `pnpm vitest run`, `tsc --noEmit`, `eslint src harness`, `depcruise`, `node scripts/guard-red-test.mjs`.
+9. **Run `pnpm verify:full` after each step**, and report its verdict line. S4 listed the checks one by one; `verify:full` is the one gate now, and it runs the browser check the hand-written list never did (CLAUDE.md, `docs/04` §5).
 10. **`.slice` bumps only at S4.11** — not before the gate is green.
-11. **`data/transaction.ts` is the only importer of `data/rollup.ts`.** Do not add `api/roll-up.ts` or a constructor `rollUp` function. `'none'` is `rollUpKinds`, not a second option.
-12. **Omitted `source` is `meta[field.key]`, never a new key on `Entry`.** A top-level `cost` on ingest still drops. Core Fields set `source` explicitly. `toJSON` writes the resolved source.
+11. **`data/rollup.ts` keeps a named importer set.** S4 had one, `data/transaction.ts`; ADR 0013's four-stage commit pipeline added `data/build-commit-change-set.ts`, and `rollup-is-removable` in `.dependency-cruiser.cjs` names both. Do not add `api/roll-up.ts` or a constructor `rollUp` function. `rollUpKinds` is gone with `kind` (ADR 0013) — a Field opts out with `rollUp: 'none'`.
+12. **Superseded by ADR 0011 and ADR 0016.** S4 resolved an omitted `source` to `meta[field.key]` and had `toJSON` write it back. A consumer value lives at `entry.props[key]` with no `source` to omit, a core key reads and writes the Entry directly, and there is no save format to write it into. A top-level `cost` on ingest still drops.
 13. **Sort comparers bind from declared Fields** (`FieldCompare`), not from `gridColumns`. Hiding a column does not change order.
 14. **`{ source: 'custom' }` takes `CustomRow[]`.** Adapt in `custom-source.ts`. Do not publish `PlannedRow`.
 
@@ -268,26 +268,26 @@ Read these before you touch `src/`.
 
 | Foot-gun | Answer |
 |---|---|
-| A consumer field is written but never rolls up | After type merge the Field has no `rollUp` or `'none'`, or the parent's Kind is not in `rollUpKinds` (including `'none'`) (D-S4-3, D-S4-6) |
+| A consumer field is written but never rolls up | After type merge the Field has no `rollUp`, or its `rollUp` is `'none'` (D-S4-3). The parent half is superseded by ADR 0013: there is no `kind` and no `rollUpKinds`, so any Entry with children rolls up |
 | `update('t1', { meta: {...} })` loses a declared value | **Superseded by ADR 0011.** There is no `props` key on `update()`. S4 shipped a whole-bag write that also emitted per-key rows (D-S4-2). |
-| An aggregate appears in the Document that the consumer did not want | The Field is `entry`- or `meta`-sourced. A `compute` source never reaches the Document (ADR 0005) |
+| An aggregate appears in the Document that the consumer did not want | **Superseded by ADR 0016** — there is no Document. The live half stands: a stored Field's aggregate lands in `entry.props`, a `compute` Field's has no home and is computed on read (ADR 0011, ADR 0013) |
 | A consumer Aggregator reads the zoom level | Forbidden. A computed Field reads the Dataset only; its cache key assumes it (D-S4-10) |
 | A drag reverts with no message | It does not: an Aggregator that throws raises `AggregatorFailedError` out of the commit (D-S4-9) |
 | Collapsing a parent changes its rolled-up value | It cannot. Collapse is `view/` state and never reaches `data/` (D-S4-11) |
 | A filtered-out child stops counting toward its parent's sum | It still counts. Filter is a row-resolution question (D-S4-11, D-S4-29) |
-| Pack mode makes `contentHeight` cost O(n) per render | It costs one pack per row per revision, memoized. The height index is the only forcing caller (D-S4-26) |
+| Pack mode makes `contentHeight` cost O(n) per render | **Superseded by ADR 0026** — the Segment retired, a row holds one bar, and `heightMode: 'pack'` went with it. `RowHeightIndex` is still the only forcing caller of the height sum (D-S4-26) |
 | Switching `rows` scrolls the user to the top | Scroll is a pixel position, clamped against the new content height (D-S4-27) |
 | Two Gantts on one Dataset fight over collapse | Collapse is per Gantt, like selection (D-S4-22) |
-| `Row.kind: 'header'` is read as "a `'group'` Entry" | It is not. A `'group'` Entry produces a `Row.kind: 'entry'` row (D-S4-23) |
-| A drag on one bar moves only that Segment | It depends on the Selection, by construction: a click on that bar selected only that Segment, so it alone moves and the envelope follows; a grid-row click selected every Segment of the row, so a drag steps them all by the same delta instead (D-S4-30, ADR 0010, `spec-211-gesture-units.md`). One Segment moves through `entries.update(id, { segments })` |
-| I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.props.cost` (ADR 0011; S4 stored it as `entry.meta.cost`, D-S4-35). Use `update({ cost })` or `entries.read`. |
+| `Row.kind: 'header'` is read as "a `'group'` Entry" | It is not, and after ADR 0013 there is no `'group'` Entry to confuse it with. `PlannedRowKind` is row vocabulary — a group-source header row against an entry row — and it says nothing about the Entry (D-S4-23) |
+| A drag on one bar moves only that Segment | **Superseded by ADR 0025 and ADR 0026.** The Segment retired and the Selection holds Entries, so a row holds one bar and a drag moves the Entry. The D-S4-30 rule that Selection owns what a drag paints survives the rename |
+| I declared `cost` but `entry.cost` is undefined | Correct. The Field key is the API; storage is `entry.props.cost` (ADR 0011; S4 stored it as `entry.meta.cost`, D-S4-35). Use `update({ cost })` or `entry.read('cost')` (ADR 0017). |
 | A top-level `cost` on the JSON entry never appears | Unknown top-level keys drop. Put the value in `props`, or write it through `update({ cost })` after construction (ADR 0011; S4 said the old bag name, D-S4-35). |
-| Two Fields silently share `meta.cost` | They cannot. That is `DuplicateFieldSourceError` at construction (D-S4-35). |
+| Two Fields silently share `meta.cost` | **Superseded by ADR 0011.** Two Fields cannot share an address when the key *is* the address, so `DuplicateFieldSourceError` went with `source`. A duplicate *key* is still refused at construction, as `DuplicateFieldKeyError`. |
 | `{ field: 'cost', header: 'Budget' }` drops the Field's `align: 'end'` | It should not. The object form merges per-key over the Field's `column` defaults (D-S4-12). |
 | A grouped view shows per-team sums in header cells | It does not. Group headers show the label in column 0 and blank cells elsewhere (D-S4-23, D-S4-11). |
-| `derivedSpanKinds` still works | It does not. The option is renamed with no alias; a `schema: 1` Document still reads (D-S4-6, D-S4-16) |
+| `derivedSpanKinds` still works | It does not, and neither does the `rollUpKinds` that replaced it: ADR 0013 retired both with `kind`. The `schema: 1` half is superseded by ADR 0016 — there is no Document to read (D-S4-6, D-S4-16) |
 | `sort: { field: 'cost' }` with `gridColumns: ['name']` ignores Field-type `compare` | It must not. Sort reads `fieldCompares`, not visible columns (D-S4-13, D-S4-28). |
-| `fromJSON(doc, { fields: [{ key: 'cost', rollUp: 'none' }] })` replaces Document `rollUp: 'sum'` | It does not. Same-key merge keeps Document `rollUp` / `type` / `column` / `source` (D-S4-15). |
+| `fromJSON(doc, { fields: [{ key: 'cost', rollUp: 'none' }] })` replaces Document `rollUp: 'sum'` | **Superseded by ADR 0016** — `fromJSON` and the Document are gone, so nothing merges against a stored declaration. D-S4-15's same-key merge now applies only where two declarations of one key meet in `Dataset.fields`. |
 
 ---
 
