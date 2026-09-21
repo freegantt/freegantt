@@ -231,7 +231,7 @@ So the import graph is the one that ships today — `layout/ → model/`. What c
 
 ## What a hypothetical row reads with — ruled 2026-09-11
 
-**The read binds to the pass, and the pass carries its own row.** Every question a `compute` Field or an Aggregator asks is about the one row it is computing, so nothing on the context takes an entry argument.
+**The read binds to the pass, and the pass carries its own row.** Every question a `compute` Field or an Aggregator asks is about the one row it is computing, so nothing on the context takes an entry argument. *Amended 2026-09-21: a **structural** question — does a row have children, what are its children, descendants or leaves — is the same fact at every depth, so four members now take the row they ask about. `read`, `duration()` and `hierarchyParentId()` are unchanged by that amendment: a **value** question stays bound to the pass's own row. See [the amendment](#amendment-2026-09-21--a-pass-answers-about-any-row-it-hands-you).*
 
 ```ts
 /** Ambient. One per Dataset, reused by every read. */
@@ -279,7 +279,7 @@ interface FormatContext extends FieldContext {
 **Two shapes were refused.**
 
 - **An `Entry`-shaped view over the hypothetical row.** It saves the promised call site, and it costs more than it saves: two things implement `Entry`, a reader cannot tell which one they hold, and `entry.parent()` walks out of the pass into the store and mixes two states with no warning.
-- **No children at all.** A `compute` Field stays a one-row function, and #214 stays open. That gives up the reason this ADR was written.
+- **No children at all.** A `compute` Field stays a one-row function, and #214 stays open. That gives up the reason this ADR was written. *Amended 2026-09-21: #214 closes with `ctx.children(row)`, not with a shape refused here — the walk stays on the pass, off any row it hands out, and never on the `compute` Field's own `entry` argument.*
 
 **One condition on `duration()`.** It computes from `start` and `end` through `time/`. It must not route through `read('duration')` and the Field registry, or the circle has only moved. The Field declaration delegates **to** the computation, never the reverse. It cannot delegate to `entry.duration()` either: `readField` hands a `compute` a row the store does not hold, so the argument is a `StoredEntry` and has no such member. **One computation, three doors** — the core `duration` Field's own `compute` calls it, `entry.duration()` on the live row calls it, and `ctx.duration()` inside a pass calls it. Each door hands it a different row; none of them hands it a Field key.
 
@@ -304,5 +304,79 @@ A `'day'` duration reaching `formatDuration` divides days by 86,400,000. **One p
 **What the gap costs today, measured 2026-09-11.** `harness/planner.ts` pays it six times: `entry.props as PlannerEntryProps` at `:69`, `:85` and `:174`, and `fieldValue as Instant` at `:104`, `:114` and `:116`. Every one is a consumer restating a type the library already knows.
 
 **The shape of the answer, if the author takes it.** `Entry<TProps>` already carries `TProps`, so the work is to thread it through the two renderer contexts that name an entry — `ColumnCellRendererContext` and the Gantt-wide `CellRendererContext` — and to type `read<K>` off it. `fieldValue: unknown` then goes: `entry.read(key)` answers `FieldValue<TProps, K> | undefined` and the six casts go with it.
+
+## Amendment, 2026-09-21 — a pass answers about any row it hands you
+
+**Why this amendment exists.** `ComputeContext.children()` answered for the bound row only. A
+`writeToChildren` that must weigh every child at once, and a `compute` Field that must total its own
+subtree, both needed to ask the same structural question about a row the pass merely *hands out* —
+not the row it is computing. [#466](https://github.com/Pawel-IT/FreeGantt/issues/466) closes that.
+
+### Two rules
+
+1. **Each surface keeps the door it already has.** A pass hands out rows, so a pass takes a row:
+   `ctx.children(row)`, `ctx.descendants(row)`, `ctx.leaves(row)`, `ctx.hasChildren(row)`. An
+   `EditRequest` already answers by id (`entryAfterEdits(id)`), so it takes an id:
+   `request.hasChildren(id)`, `request.writeTarget(id, field)`.
+2. **Structure goes down; values stay bound.** Structure — whether a row has children, what its
+   children, descendants or leaves are — is the same fact at every depth, so a pass answers it for
+   any row it hands out. A value is not: a bottom-up pass has written only what it has reached, so
+   `read(key)` and `duration()` keep answering the bound row and nothing else. No question on this
+   surface gains a sibling name — `ctx.children()` plus a hypothetical `ctx.childrenOf(row)` would be
+   two names for one question, the mistake bug #7 already records.
+
+**Why the entry argument comes back, for structure alone.** *What a hypothetical row reads with*
+(above) took the entry argument off `read` and `duration()` on purpose: those answer the pass's own
+bound row, and a second row argument there would let a caller ask for a value the pass has not
+written yet, order-dependent and silent about it. Structure carries no such trap: `children(row)`,
+`descendants(row)`, `leaves(row)` and `hasChildren(row)` all read off the index the pass built once
+for the whole tree (`rollup.ts`'s `byParent`, mirrored by `EntryStore#hasChildren`), so asking about a
+row other than the one being computed returns the same answer regardless of pass order. The argument
+returns because the question it answers cannot go stale mid-pass; `read` and `duration()` stay bound
+because theirs can.
+
+**A third sentence on rule 4.** ADR 0017's rule 4 — a member that does no work is a property, a
+member that computes, walks or allocates carries parentheses — was written for `Entry`, where each
+member's own arity states its own cost. On the pass surface every member takes a row, so the
+parentheses say nothing about cost by themselves: `hasChildren(row)` answers through whichever of
+its three bindings is live (`src/model/field.ts`'s own doc states the three), and `leaves(row)` is
+always a subtree walk — different members, same parentheses. **The rule keeps its full force on
+`Entry`; on the pass surface, each member's own doc block states its cost instead** — the parentheses
+answer "does this take a row", not "how much does it cost".
+
+### The surfaces
+
+```ts
+interface ComputeContext extends FieldContext {
+  read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined; // unchanged — the bound row
+  duration(): Duration | undefined;                                // unchanged — the bound row
+  hierarchyParentId(): EntryId | undefined;                        // unchanged — the bound row
+  children(row: StoredEntry): readonly StoredEntry[];   // one level down from `row`
+  descendants(row: StoredEntry): readonly StoredEntry[]; // all the way down; never includes `row`
+  leaves(row: StoredEntry): readonly StoredEntry[];      // the subtree's bottom rows; includes `row` when `row` is a leaf
+  hasChildren(row: StoredEntry): boolean;                // cost follows the binding — see field.ts
+}
+
+interface EditRequest {
+  // … entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds
+  hasChildren(id: EntryId | string): boolean;
+  writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;
+}
+```
+
+`RollUpContext` adds nothing structural — `field`, `values()`, `numericValues()` and `durations()`
+stay bound to the parent this pass is rolling up.
+
+**`leaves(row)` ships beside `descendants(row)`, and is not built from it.** A `descendants(row)`
+call with a `!hasChildren(row)` filter beside it answers the same question at the cost of a second
+walk and a second name at every call site — an API gap this amendment closes, not a shape to leave
+for a consumer to re-derive. `leaves(row)` includes `row` itself when `row` is a leaf;
+`descendants(row)` never includes `row`. That asymmetry is deliberate: `descendants` names a
+relationship *to* a row, so the row is not its own descendant, while `leaves` names the bottom rows
+*of a subtree*, and a subtree of one leaf has one leaf.
+
+*What a hypothetical row reads with* (above) is otherwise unchanged: `ComputeContext.children()`'s
+signature is the one member this amendment widens; `descendants`, `leaves` and `hasChildren` are new
+members beside it, and `read`, `duration()` and `hierarchyParentId()` keep taking no argument at all.
 
 **Why it is still open.** `model/field.ts` declares `ColumnCellRendererContext` and `model/` may not import `layout/` (`model-is-leaf`). A generic on a `model/` type is free, but every seam that builds one of these contexts has to pass the argument, and `layout/renderer.ts` builds the Gantt-wide one. That is a reach across three layers on a hot path, and it earns its own decision rather than a paragraph here. **Build 1 does not close it. Build 1 files it as a `Q` entry and leaves the six casts in place**, so the evidence stays visible.

@@ -260,9 +260,9 @@ export interface FieldContext {
 }
 
 /** What a `compute` Field runs inside. Built per pass, and two kinds of question live on it
- *  (ADR 0017, *What a hypothetical row reads with*). That ADR section still describes the zero-arg
- *  `children()` this surface replaced — #466 step 6 amends it, and until then this block is the
- *  current account of the surface.
+ *  (ADR 0017, *What a hypothetical row reads with*, amended 2026-09-21 — #466). The amendment's
+ *  rule 1 is why a structure question takes the row it asks about and a value question does not;
+ *  rule 2 is the value/structure split itself.
  *
  *  A value question — `read(key)`, `duration()`, `hierarchyParentId()` — stays bound to the row the
  *  pass is computing: a bottom-up pass has written only what it has reached, so a value asked of any
@@ -303,10 +303,10 @@ export interface FieldContext {
  *  Each member's own doc states its cost. */
 export interface ComputeContext extends FieldContext {
   /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. Bound to
-   *  the row this pass is computing; not a structure question, so it takes no row (a value question, above). */
+   *  the row this pass is computing; not a structure question, so it takes no row (ADR 0017 amendment, rule 2). */
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
   /** This row's duration, through `time/` and the Dataset's `measureDuration`. Bound to the row this
-   *  pass is computing (a value question, above). */
+   *  pass is computing (ADR 0017 amendment, rule 2). */
   duration(): Duration | undefined;
   /** One step down: `Depot` → Van 1, Van 2. One tree read, no allocation beyond the array returned.
    *
@@ -337,7 +337,7 @@ export interface ComputeContext extends FieldContext {
   hasChildren(row: StoredEntry): boolean;
   /** The tree's answer to this row's parent, through the checked hierarchy source (ADR 0020) — the
    *  same answer `entry.parent()?.id` gives, never `read('parentId')`'s stored value (ADR 0024).
-   *  Bound to the row this pass is computing (a value question, above). */
+   *  Bound to the row this pass is computing (ADR 0017 amendment, rule 2). */
   hierarchyParentId(): EntryId | undefined;
 }
 
