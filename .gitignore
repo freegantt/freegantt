@@ -22,3 +22,4 @@ coverage/
 # Worktrees created by scripts/create-worktree.sh — a full second checkout each, never committed.
 .worktrees/
 measurements/
+.claude/worktrees/

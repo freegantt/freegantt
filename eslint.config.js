@@ -90,6 +90,7 @@ export default tseslint.config(
       'eslint/rules/fixtures/**',
       '.agents/skills/**',
       '.worktrees/**',
+      '.claude/worktrees/**',
       'website/**',
     ],
   },
