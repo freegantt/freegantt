@@ -304,27 +304,28 @@ export interface ComputeContext extends FieldContext {
   /** This row's duration, through `time/` and the Dataset's `measureDuration`. Bound to the row this
    *  pass is computing (rule 2). */
   duration(): Duration | undefined;
-  /** `row`'s children, one level down. One tree read, no allocation beyond the returned array.
+  /** One step down: `Depot` → Van 1, Van 2. One tree read, no allocation beyond the array returned.
    *
    *  Exactly one level, and that is load-bearing for a Rollup: a parent's value already aggregates
    *  its subtree when the bottom-up pass reaches it, so reaching past one level here would double
    *  count a grandchild both under its parent and again under its grandparent. `descendants` and
    *  `leaves` are how a consumer reaches past one level, under their own names. */
   children(row: StoredEntry): readonly StoredEntry[];
-  /** Every row under `row`, at every depth, in a worklist order — a subtree walk, one tree read per
-   *  node found. Mirrors `Entry.descendants()` on the live row; this is the pass's own tree instead
-   *  of the store's. */
+  /** All the way down, never `row` itself: `Depot` → Van 1, Van 2, Crate A, Crate B. A subtree walk,
+   *  one tree read per node found. Mirrors `Entry.descendants()` on the live row; this is the pass's
+   *  own tree instead of the store's. */
   descendants(row: StoredEntry): readonly StoredEntry[];
-  /** The rows under `row` with no children of their own — a subtree walk, one tree read per node
-   *  found, same cost as `descendants`. A node whose fetched children list is empty is the leaf; this
-   *  never asks `hasChildren` and never filters `descendants`'s result.
+  /** The bottom rows of `row`'s subtree: `Depot` → Van 2, Crate A, Crate B. A leaf answers itself:
+   *  `leaves(Van 2)` is `[Van 2]`, not `[]`, while `descendants(Van 2)` is `[]`. A subtree of one
+   *  leaf has one leaf.
    *
-   *  Includes `row` itself when `row` is a leaf: `leaves(Van 2)` is `[Van 2]`, not `[]`, while
-   *  `descendants(Van 2)` is `[]`. A subtree of one leaf has one leaf. */
+   *  A subtree walk, one tree read per node found, same cost as `descendants`. A node whose fetched
+   *  children list is empty is the leaf; this never asks `hasChildren` and never filters
+   *  `descendants`'s result. */
   leaves(row: StoredEntry): readonly StoredEntry[];
-  /** Does `row` have a child? One tree read, no allocation — reads `children(row).length > 0`.
-   *  Mirrors `Entry.hasChildren` on the live row; this is the pass's own tree instead of the
-   *  store's. */
+  /** True when `row` derives (ADR 0013): `hasChildren(Van 1)` is `true`, `hasChildren(Crate A)` is
+   *  `false`. One tree read, no allocation — reads `children(row).length > 0`. Mirrors
+   *  `Entry.hasChildren` on the live row; this is the pass's own tree instead of the store's. */
   hasChildren(row: StoredEntry): boolean;
   /** The tree's answer to this row's parent, through the checked hierarchy source (ADR 0020) — the
    *  same answer `entry.parent()?.id` gives, never `read('parentId')`'s stored value (ADR 0024).
