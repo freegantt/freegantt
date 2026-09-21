@@ -18,7 +18,6 @@ import type {
   EntryId,
   EntryInput,
   EntryEdit,
-  EntryEdits,
   FieldKey,
   HierarchySource,
   HierarchySourceWrapper,
@@ -44,7 +43,6 @@ import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import {
   createFieldAccess,
-  createRollUpContext,
   measureEntryDuration,
   mergeProposedEdits,
   entryAfterEdit,
@@ -471,20 +469,13 @@ export class EntryStore implements EntryStoreContract {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, operation);
       for (const field of Object.keys(edit)) this.#assertFieldTakesThisWrite(field, operation);
-      const { own, toChildren } = this.#splitDerivedWrites(key, edit, operation);
+      this.#assertNoDerivedWrite(key, edit, operation);
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), operation);
       }
       const current = this.storedEntry(key)!;
-      if (Object.keys(own).length > 0) {
-        const reading = toEditReading(own, this.#context, current, this.#registry, operation);
-        this.stageUpdate(token, key, reading.stored);
-      }
-      // Each edit lands through the door it would have come in by, so a child that is itself
-      // a rolling-up parent writes to its own children again, or refuses. The walk ends at the leaves.
-      for (const edits of toChildren) {
-        for (const [childId, childEdit] of edits) this.#updateFrom(operation, childId, childEdit);
-      }
+      const reading = toEditReading(edit, this.#context, current, this.#registry, operation);
+      this.stageUpdate(token, key, reading.stored);
       return this.get(key)!;
     });
   }
@@ -498,7 +489,7 @@ export class EntryStore implements EntryStoreContract {
    *  the API threshold, which refuses the lock and nothing else.
    *
    *  It asks about the Field, never about the Entry. Whether *this* Entry's cell is the Rollup's own
-   *  is `#splitDerivedWrites`, below. */
+   *  is `#assertNoDerivedWrite`, below. */
   #assertFieldTakesThisWrite(field: string, operation: string): void {
     const declared = this.#registry.get(field);
     if (declared === undefined) throw new UnknownFieldError(field, operation);
@@ -506,47 +497,22 @@ export class EntryStore implements EntryStoreContract {
     if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
   }
 
-  /** Splits one patch into what lands on `id` itself and what its Fields write to the children
-   *  (ADR 0013, amendment 2026-09-11). Every Field resolves, and every `writeToChildren` runs, **before**
-   *  anything stages: a mixed patch such as `{ name, cost }` with a refused `cost` writes neither
-   *  half, because a partial apply would leave a transaction in a state no `before*` event described.
+  /** Refuses a write aimed at a rolling-up parent's cell (ADR 0013). Every Field in the patch
+   *  resolves before anything stages: a mixed patch such as `{ name, cost }` with a refused `cost`
+   *  throws before `name` lands, because a partial apply would leave a transaction in a state no
+   *  `before*` event described.
    *
    *  The answer reads the Field declaration and one structural fact, through the one resolver
    *  `view/capability.ts` also reads. It asks nothing about the call — whether it opened this
    *  transaction or joined one a consumer already had open makes no difference to what is allowed. */
-  #splitDerivedWrites(
-    id: EntryId,
-    edit: EntryEdit,
-    operation: string,
-  ): { own: EntryEdit; toChildren: readonly EntryEdits[] } {
-    if (!this.#hasChildren(id)) return { own: edit, toChildren: [] };
-    const own: Record<string, unknown> = { ...edit };
-    const toChildren: EntryEdits[] = [];
-    let children: readonly StoredEntry[] | undefined;
-    for (const [field, value] of Object.entries(edit)) {
-      const declared = this.#registry.get(field)!;
-      if (resolveWriteTarget(true, declared) === 'entry') continue;
-      if (!declared.writeToChildren) throw new DerivedFieldNotWritableError(field, id, operation);
-      children ??= this.storedChildrenOf(id);
-      // Called on its own declaration, never detached from it — the same way `equals` and
-      // `formatValue` are called, so a `writeToChildren` written as a method still reads its own Field.
-      const parent = this.storedEntry(id)!;
-      const edits = declared.writeToChildren(
-        value,
-        parent,
-        createRollUpContext(this.#access, parent, children, field),
-      );
-      // An edit aimed back at the Entry being written is refused: that cell is the Rollup's, and a
-      // `writeToChildren` that returned one would write to the parent again forever. A decline —
-      // `undefined`, or nothing to write — is refused with the same error an absent `writeToChildren`
-      // gives.
-      if (edits === undefined || edits.size === 0 || edits.has(id)) {
+  #assertNoDerivedWrite(id: EntryId, edit: EntryEdit, operation: string): void {
+    if (!this.#hasChildren(id)) return;
+    for (const field of Object.keys(edit)) {
+      const declared = this.#registry.get(field);
+      if (resolveWriteTarget(true, declared) === 'refused') {
         throw new DerivedFieldNotWritableError(field, id, operation);
       }
-      toChildren.push(edits);
-      delete own[field];
     }
-    return { own, toChildren };
   }
 
   remove(id: EntryId | string): void {
