@@ -8,6 +8,8 @@ open: nothing this redesign answers. **`Q2`** — whether the renderer contexts 
 
 > **Vocabulary note, added 2026-09-17 ([#421](https://github.com/Pawel-IT/FreeGantt/issues/421)).** This record predates the `Item`→`Bar` rename ([ADR 0026](0026-the-segment-retires.md)). Read every `Item` below as `Bar`. **Do not rewrite the body.**
 
+> **Vocabulary note, added 2026-09-21.** This record predates the `distribute` → `writeToChildren` rename. Read every `distribute` below as `writeToChildren`, and `FieldDistributor` as `FieldWriteToChildren`. **Do not rewrite the body.**
+
 # The Entry answers questions about itself
 
 **This is the first of four ADRs that give one row one object.** [0018](0018-a-variant-is-a-rule-not-an-id-list.md) makes the variant a rule. [0019](0019-one-plugin-one-install-site.md) gives a plugin one install site. [0020](0020-a-plugin-may-own-the-hierarchy.md) lets a plugin say what the tree is. This one comes first, because all three of the others read questions off the row.

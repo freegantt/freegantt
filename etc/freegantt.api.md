@@ -874,7 +874,7 @@ export type Field<TValue = unknown> = {
     type?: FieldTypeName | FieldType<TValue>;
     rollUp?: AggregatorName;
     editable?: FieldEditable | boolean;
-    distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
+    writeToChildren?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
@@ -893,7 +893,7 @@ export type Field<TValue = unknown> = {
     equals?: never;
     parseValue?: never;
     inputType?: never;
-    distribute?: never;
+    writeToChildren?: never;
 };
 
 // @public
@@ -908,9 +908,6 @@ export interface FieldContext {
     // (undocumented)
     readonly timeZone: string;
 }
-
-// @public
-export type FieldDistributor<TValue = unknown> = (value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext) => EntryEdits | undefined;
 
 // @public
 export type FieldEditable = 'never' | 'api' | 'anywhere';
@@ -943,7 +940,6 @@ export interface FieldType<TValue = unknown> {
     column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
-    distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
     editable?: FieldEditable | boolean;
     // (undocumented)
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
@@ -954,6 +950,7 @@ export interface FieldType<TValue = unknown> {
     // (undocumented)
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
     rollUp?: AggregatorName;
+    writeToChildren?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
 }
 
 // @public (undocumented)
@@ -975,6 +972,9 @@ export interface FieldUpdated {
 
 // @public
 export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldValues ? CoreFieldValues[K] : K extends keyof TProps ? TProps[K] : unknown;
+
+// @public
+export type FieldWriteToChildren<TValue = unknown> = (value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext) => EntryEdits | undefined;
 
 // @public (undocumented)
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';

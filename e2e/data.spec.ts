@@ -107,7 +107,7 @@ test('[S2-A4] undo logs an [undo]-tagged row whose to is the original value', as
 });
 
 // ADR 0013 amendment: a rolling-up parent's cell is read-only until the Field says what a write to
-// it means. `harness/data.ts` gives `money` a `distribute` that splits evenly, so "Set cost 500" on
+// it means. `harness/data.ts` gives `money` a `writeToChildren` that splits evenly, so "Set cost 500" on
 // the phase row writes the children and the Rollup reads 500 back off them.
 test('Set cost 500 on a rolling-up parent splits to its children and rolls back up (ADR 0013)', async ({
   page,

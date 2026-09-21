@@ -41,16 +41,16 @@ declare global {
 // shift it, and no user may drag or type it. `contractId` is `'never'`: it arrives with the entry
 // and nothing in this app may change it. Cost declares nothing, so it stays open to both doors.
 // ADR 0013: a rolling-up parent's cell is read-only unless the page says what a write to it means.
-// `money` rolls up with `sum`, so the write that reverses a sum is a split — read `distribute` as the
-// Aggregator backwards. This page splits evenly and puts the rounding remainder on the last child,
-// so the Rollup reads back exactly the number the button asked for. A page that wanted a split by
-// duration, or by each child's current share, would write that here instead; the library ships no
-// guessed default, because there is none to defend.
+// `money` rolls up with `sum`, so the write that reverses a sum is a split — read `writeToChildren`
+// as the Aggregator backwards. This page splits evenly and puts the rounding remainder on the last
+// child, so the Rollup reads back exactly the number the button asked for. A page that wanted a
+// split by duration, or by each child's current share, would write that here instead; the library
+// ships no guessed default, because there is none to defend.
 const COST_FIELDS = {
   fieldTypes: {
     money: {
       rollUp: 'sum' as const,
-      distribute(
+      writeToChildren(
         total: number | undefined,
         _parent: StoredEntry,
         ctx: RollUpContext,

@@ -142,11 +142,15 @@ export type Field<TValue = unknown> =
        *  and that cell is read-only — refused standalone and refused inside `dataset.transaction()`
        *  alike, because permission follows the thing written, never the call that wrapped it.
        *
-       *  Written out as a method rather than as `FieldDistributor<TValue>`, for the reason `equals`
+       *  Written out as a method rather than as `FieldWriteToChildren<TValue>`, for the reason `equals`
        *  and `compare` are: `TValue` sits in a parameter here, so a property would make
        *  `Field<number>` stop being assignable to `Field<unknown>`, and the registry holds bare
-       *  `Field`. `FieldDistributor` is the type a consumer writes one against. */
-      distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
+       *  `Field`. `FieldWriteToChildren` is the type a consumer writes one against. */
+      writeToChildren?(
+        value: TValue | undefined,
+        parent: StoredEntry,
+        ctx: RollUpContext,
+      ): EntryEdits | undefined;
       // `compute` is genuinely absent here, not `compute?: never`: `'compute' in field` is the
       // discriminant `hasSomewhereToWrite` and the write resolver both ask, and TypeScript's `in`
       // narrowing only excludes an arm that never declares the key at all — a `never`-typed optional
@@ -207,8 +211,8 @@ export type Field<TValue = unknown> =
       equals?: never;
       parseValue?: never;
       inputType?: never;
-      /** A `compute` Field has no cell to write, so it has no write to distribute. */
-      distribute?: never;
+      /** A `compute` Field has no cell to write, so it has no write to children. */
+      writeToChildren?: never;
     };
 
 /** A stored-Field bundle applied by name (`registerType`, `type: 'percent'`) or inline
@@ -223,10 +227,14 @@ export interface FieldType<TValue = unknown> {
   rollUp?: AggregatorName;
   /** Read `Field.editable` for the three states. A Field naming this type may override it. */
   editable?: FieldEditable | boolean;
-  /** One distribution policy for every Field on this type — which is why `FieldDistributor` reads
-   *  the Field key off `ctx.field` rather than closing over one. A method, not a property, for the
-   *  variance reason `Field.distribute` states. */
-  distribute?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
+  /** One write-to-children policy for every Field on this type — which is why `FieldWriteToChildren`
+   *  reads the Field key off `ctx.field` rather than closing over one. A method, not a property, for
+   *  the variance reason `Field.writeToChildren` states. */
+  writeToChildren?(
+    value: TValue | undefined,
+    parent: StoredEntry,
+    ctx: RollUpContext,
+  ): EntryEdits | undefined;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;
   compare?(a: TValue | undefined, b: TValue | undefined): number;
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
@@ -294,19 +302,19 @@ export interface RollUpContext extends ComputeContext {
  *  Aggregator below backwards: the same three arguments, and the value the Aggregator produced comes
  *  back as the first one.
  *
- *  Declaring this is how a consumer names the distribution policy — split evenly, by duration, by
- *  current share. With no `distribute`, that cell is read-only and the write is refused from every
- *  direction, batched or not (`DerivedFieldNotWritableError`): the library ships no guessed default,
- *  because there is none to defend.
+ *  Declaring this is how a consumer names the write-to-children policy — split evenly, by duration,
+ *  by current share. With no `writeToChildren`, that cell is read-only and the write is refused from
+ *  every direction, batched or not (`DerivedFieldNotWritableError`): the library ships no guessed
+ *  default, because there is none to defend.
  *
  *  It writes the **children**, never the parent: nothing but the Rollup writes a rolling-up parent's
  *  cell, and the Rollup reads that cell back off what this returns. An edit aimed at the parent is
  *  refused. Each returned edit lands through the door it would have come in by, so a child that is
- *  itself a rolling-up parent distributes again, or refuses.
+ *  itself a rolling-up parent writes to its own children again, or refuses.
  *
  *  `undefined` — or an empty map — **declines**, and the write is refused with the same error an
- *  absent `distribute` gives. A policy with nothing to write is a policy that says no. */
-export type FieldDistributor<TValue = unknown> = (
+ *  absent `writeToChildren` gives. A policy with nothing to write is a policy that says no. */
+export type FieldWriteToChildren<TValue = unknown> = (
   value: TValue | undefined,
   parent: StoredEntry,
   ctx: RollUpContext,
