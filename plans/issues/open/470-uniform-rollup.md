@@ -137,6 +137,11 @@ step. A `leafCount` compute Field already ships (#466), so the weights need no n
   precedent). Out of scope here.
 - A parent that owns its dates may disagree with its children's envelope. That is the consumer's
   declaration, and it needs no diagnostic.
+- **Undo needs no new knob.** `transaction<T>(body: () => T): T` takes no options, and
+  `ChangeOrigin` is `'user' | 'undo' | 'redo'` — a write cannot be kept off the undo stack. It does
+  not have to be: an `EditExtender`'s writes join the user's transaction, so a consumer who keeps a
+  parent's value current on every child change still spends one undo step per user action. Writing
+  from an event handler is not the alternative — `mutation-during-notification` throws.
 - `start`/`end` stay date-shaped in `view/`: a bar is a span on a time axis, so the code that paints
   time knows which two Fields a bar is drawn from. `data/` keeps treating every Field the same, and
   `view/`'s permission question still goes through the one resolver (I14).
