@@ -8,14 +8,19 @@ issue plans land here as they're opened.
 **Open:**
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
-- [#466](https://github.com/freegantt/freegantt/issues/466) — a `StoredEntry` cannot
-  answer whether it has children, so a cascade, a `writeToChildren` policy and an Aggregator cannot
-  tell a leaf from a derived parent. Planned, not built: a pass answers about any row it
-  hands you (`ctx.children(row)`, `ctx.hasChildren(row)`, `ctx.descendants(row)`), and an
-  `EditRequest` answers by id (`hasChildren(id)`, `writeTarget(id, field)`). Plan:
-  [466-tree-questions-on-a-pass.md](./466-tree-questions-on-a-pass.md).
+- [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived
+  cell: the Rollup owns it, or the consumer owns the Field. Planned, not built: `writeToChildren`
+  leaves the Field surface, a consumer may declare `rollUp: 'none'` on a core Field, and the
+  parent-move rule reads the write resolver instead of `hasChildren`. Plan:
+  [470-uniform-rollup.md](./470-uniform-rollup.md).
 
 **Closed:**
+
+- [#466](https://github.com/freegantt/freegantt/issues/466) — a `StoredEntry` could not
+  answer whether it has children. Shipped in #468: a pass answers `children`, `descendants`,
+  `leaves` and `hasChildren` about any row it hands you, and an `EditRequest` answers by id
+  (`hasChildren(id)`, `writeTarget(id, field)`). ADR 0017 carries the row-argument amendment. See
+  [../closed/466-tree-questions-on-a-pass.md](../closed/466-tree-questions-on-a-pass.md).
 
 - [#404](https://github.com/Pawel-IT/FreeGantt/issues/404) — ship shading as a first-party plugin.
   `timeShading()` ships from `'freegantt'` with five `TimeCover` builders (`daysOfWeek`, `hours`,
