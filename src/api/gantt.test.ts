@@ -1207,10 +1207,11 @@ describe('Gantt.visibleSpan (issue #461)', () => {
       // A pane far wider than one day's own content at any legible density.
       FakeResizeObserver.instances[0]!.fire({ width: 2000, height: 100 });
 
-      // `gantt.range` reads back the literal `'fitDataset'` sentinel, not the resolved span (the
-      // getter's own doc), so this compares against the one entry's own dates directly. A date-only
-      // `end` is inclusive by default (`dateOnlyEnd`, `data/entry-reader.ts`), so the entry's stored
-      // half-open end is one day past its authored `'2026-01-02'` — 2026-01-03.
+      // `range: 'fitDataset'` reads back as that same word, by its own type (D-S1.12-8 resolves
+      // *loose dates* to `Instant`s; the sentinel stays a sentinel), so this compares against the
+      // one entry's own dates directly. A date-only `end` is inclusive by default (`dateOnlyEnd`,
+      // `data/entry-reader.ts`), so the entry's stored half-open end is one day past its authored
+      // `'2026-01-02'` — 2026-01-03.
       expect(gantt.visibleSpan).toEqual({
         start: instant('2026-01-01T00:00:00Z'),
         end: instant('2026-01-03T00:00:00Z'),
