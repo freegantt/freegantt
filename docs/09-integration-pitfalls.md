@@ -16,7 +16,10 @@ the answer from the same starting point.
 
 ## 1. `theme: 'auto'` does not follow an application's own `dark` class
 
-**Issue #433. Fix in flight — this section describes the shipped 0.1.0 behaviour.**
+**Issue #433. Closed by a ruling, not a code change — [ADR 0029](adr/0029-the-app-pushes-the-theme.md).**
+The application resolves its own dark-mode signal and **pushes** the answer. The library never calls
+back to ask, and never watches an attribute or a class it does not own. So the behaviour below is the
+decided behaviour, and the workaround below is the supported answer.
 
 `resolveTheme` (`src/view/theme.ts:26-27`) reads two sources, and only two:
 
@@ -30,7 +33,7 @@ The result is not a small mismatch. A user on a light operating system who turns
 dark gets a light Gantt on a dark page. The grid pane renders near-black text on a near-black
 background, and the left rail becomes unreadable.
 
-**What works today.** Mirror the application's signal onto `data-fg-theme` on any ancestor. One write at
+**The answer.** Mirror the application's signal onto `data-fg-theme` on any ancestor. One write at
 the application root reaches every Gantt below it (#271).
 
 ```js
@@ -99,45 +102,36 @@ same function. That false negative buys zero false positives.
 
 ---
 
-## 4. `overscan` widens what the frame asks for, and the frame does not clamp it
+## 4. `overscan` widens what the frame asks for, and nothing it widens paints past the content
 
-**Issue #436. Open — fix queued. Read this before you tune `overscan`.**
+**Issue #436. Fixed and shipped — read this before you tune `overscan`.**
 
 `overscan` is public on the `Gantt`, as a constructor option and a live accessor pair. It landed in
 `2051b57c` and it is **not** in `0.1.0`.
 
-`buildFrame` derives its cull window from the visible pane plus `overscan.horizontalPx`
-(`src/layout/frame.ts:460-461`), then hands that window to `scale.ticks()`. Nothing clamps the
-window to `[0, contentWidth]`. `ticks()` honours the request literally, so it returns real ticks
-outside the range, and the header paints them.
+`buildFrame` still derives its cull window from the visible pane plus `overscan.horizontalPx`, and
+that window is still unclamped. **That part is the feature.** The buffer exists to pull in the tick
+and the bar just off the edge, so a scroll of one pixel has them already built.
 
-The severity scales with how far the pane exceeds the content:
+What #436 reported was the consequence, and that is now closed: the frame *painted* what the buffer
+pulled in, past `[0, contentWidth)`, and a painted node past the content sizer widens the pane's own
+native `scrollWidth`. Two Gantts on a shared `ScrollAxis` then disagreed about how far right the
+timeline goes, because the axis binds `contentWidth` and the browser had measured something wider.
 
-| fit | content | pane | overscan | ticks for a 7-day range | right overflow |
-|---|---|---|---|---|---|
-| `'preset'` | 700 | 1224 | 128 | **16** | **700px** |
-| `'pane'` | 1224 | 1224 | 128 | 9 | 175px |
-| `'pane'` | 1224 | 1224 | 0 | 7 | 0 |
+The fix clips output, not the window (`src/layout/frame.ts`):
 
-Under `fit: 'pane'`, `pxPerMs` is `width / spanMs` (`src/layout/viewport/time-scale-model.ts:256`).
-So `contentWidth` equals the pane width by construction, and the window always overshoots. Pane-fit
-does not merely allow this. Pane-fit guarantees it, and it is the *mild* case, because the overshoot
-is capped at the overscan constant.
+- A header band cell takes its intersection with `[0, contentWidth)` and is dropped at zero width.
+- A tick line is a point, so it is kept only while `0 <= x < contentWidth`.
+- A real duration bar is trimmed to its intersection, and reports `span: 'clipped'` rather than
+  `'exact'` — `'exact'` promises the entry's own untouched start and end. A bar with no intersection
+  at all is dropped, not shifted inward to a visible edge.
 
-A `TimeUnitWidth` fit (`{ unit: 'day', widthPx: 14 }`) ignores the measured pane exactly as
-`'preset'` does, so it sits in the severe band of that table whenever the pane is wider than the
-content it resolves to.
+`e2e/timeline-content-width.spec.ts` states this in a real engine, which is the only place a native
+`scrollWidth` can be read honestly.
 
-`ScrollAxis` binds the correct `contentWidth`, so `max` stays 0. The overflow is therefore clipped
-and the user cannot scroll to it.
-
-**Do not set `horizontalPx: 0` to work around this.** It looks free at pane-fit only, where there is
-no horizontal scrolling for the buffer to smooth. At any zoom where the tick-width floor binds, the
-content exceeds the pane, and the buffer does real work. Making the value conditional on which
-constraint binds is consumer-side compensation for a library bug. Wait for the clamp.
-
-**Measuring this from a browser under-reports it by about half.** Each affected frame also emits a
-tick at negative `x`. Left-to-right layout clips that one, and `scrollWidth` never counts it.
+**What this means for you.** Tune `overscan` for how far ahead you want the frame built, and nothing
+else. A larger buffer costs ticks and bars per frame. It no longer costs overflow, so you do not
+need a consumer-side compensation, and `fit: 'pane'` no longer guarantees an overshoot.
 
 ---
 

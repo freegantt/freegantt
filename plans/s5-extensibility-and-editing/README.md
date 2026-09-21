@@ -326,14 +326,14 @@ Read these before you touch `src/`.
 
 1. **`extensions/` may import `api/` and `model/` only.** No `data/`, no `layout/`, no `render/`, no `view/`, no `interaction/`. If a built-in needs something it cannot reach, the public API has a gap — fix the gap, do not widen the rule (`plans/01` §10, D-S5-5).
 2. **The shell gains one wiring list.** Plugin attach points go in `GanttShell`'s wiring list and nowhere else. Do not grow tree-collapse, column or gesture policy back into `gantt-shell.ts` (c4 §7).
-3. **A renderer never enters `data/`.** S4's D-S4-14 stands. `cellRenderer` is on `GridColumn` (the Gantt's), not on `Field` (the Dataset's).
+3. **A renderer never enters `data/`.** S4's D-S4-14 stands. The per-column renderer is on `GridColumn` (the Gantt's), not on `Field` (the Dataset's). S5 called the key `cellRenderer`; it ships as `columnRenderer`, beside the Gantt-wide `gridCellRenderer`.
 4. **The reconciler does not grow.** `ElementDescription` is bounded by attr/class/style/text + keyed children. A renderer that needs a lifecycle hook means the design is wrong — stop and discuss (CLAUDE.md).
 5. **No new runtime dependency.** A popup positioner, a focus trap and a date input are all hand-rolled here. `plans/04` §1.1 lists what was already rejected; add a row before proposing anything.
 6. **One transaction per edit, at commit.** The inline editor writes on Enter or blur, never per keystroke (I6).
 7. **Commands are the a11y seam.** Add a pointer affordance and its command in the same change; the chord is then a binding, not a second implementation (D-S5-26).
 8. **`interaction/` still never imports `scheduling/`.** S5 adds no scheduling anything. `Interactions.linkCreate` stays off the type until S7 (I11).
 9. **Review `harness/main.ts` on every commit**, changed or not (CLAUDE.md). This slice's harness pages are also the example gallery, so a workaround there is doubly visible.
-10. **Run the full check sequence** after each step: `pnpm vitest run`, `tsc --noEmit`, `eslint src harness`, `depcruise`, `node scripts/guard-red-test.mjs`, `pnpm api-report`.
+10. **Run `pnpm verify:full` after each step**, and report its verdict line. S5 listed the checks one by one; `verify:full` is the one gate now, and it runs the browser check the hand-written list never did (CLAUDE.md, `docs/04` §5).
 11. **`.slice` bumps only at S5.13** — not before the gate is green.
 12. **Every new public key must work on the day it appears** (I11). `editable`, `resizable`, `movable` join `GridColumn` in the step that honours them, not in S5.1.
 
@@ -353,7 +353,7 @@ Read these before you touch `src/`.
 | `beforeEntryEdit` returning `false` still opens the editor | It does not, and the veto path is the same one `beforeEntryMove` uses (D-S5-19) |
 | A weekend-shading plugin computes days with `86400000` | I10 forbids it in `src/`, and a consumer has `dataset.time` instead. The harness plugin uses the façade (D-S5-16) |
 | Column reorder rewrites the Dataset | It cannot. Columns are Gantt view state; the Field registry never changes (ADR 0005, D-S5-18) |
-| A consumer kind needs a core edit for its capabilities | It does not. `registerKindDefaults` is the fourth seam, beside producer, renderer and commands (D-S5-22) |
+| A consumer kind needs a core edit for its capabilities | **Renamed by ADR 0013, ADR 0018 and ADR 0022.** There is no stored `kind`, so `registerKindDefaults` became the variant: a rule that claims a row and answers about itself, carrying its own `capabilities`. The D-S5-22 point stands — the look-and-capability seam is registered, never a core edit |
 | Two plugins are listed in the "wrong" order because one `requires` the other | There is no wrong order. The host sorts by `requires` before `setup` runs; array position is not the install order (D-S5-31) |
 | A plugin reserves a store and another plugin writes into it through `store.read()` | It cannot. `PluginStoreView` has no `set`/`remove` — only the reserving plugin's own `store.reserve()` handle can write (D-S5-30) |
 | Installing a Dataset plugin turns off the Rollup | It cannot. The Rollup is step 5 of the commit sequence, not the hook (D-S2-22) |
@@ -362,7 +362,7 @@ Read these before you touch `src/`.
 | A chord fires while the user is typing in the cell editor | It does not. The keymap resolver ignores key events whose target is editable (`input`, `textarea`, `contenteditable`) or mid-IME-composition, unless the binding opts in (D-S5-7; issue #137 F7) |
 | A `GanttPlugin` needs another `GanttPlugin`'s registration and lists itself first | Nothing enforces order for Gantt plugins — unlike `DatasetPlugin`, there is no `requires`. Setup runs in `plugins` array order; a plugin documents its own prerequisite and the consumer orders the array (D-S5-1; issue #137 F18) |
 | A second Dataset plugin overwrites the first one's extender | It wraps it. Composition order follows `requires`-resolved setup order, never the `plugins` array position (D-S5-23, D-S5-31) |
-| A plugin writes its per-entry flag into `entry.meta` | It must not — that is the host/plugin collision ADR 0002 named. Reserve a `PluginStore` (D-S5-24) |
+| A plugin writes its per-entry flag into `entry.props` | It must not — that is the host/plugin collision ADR 0002 named. Reserve a `PluginStore` (D-S5-24). S5 said `entry.meta`; the bag is `props` after ADR 0011, and the rule is unchanged |
 | `role="row"` on both panes makes a screen reader read every row twice | It would. Only the grid pane carries row and cell roles (D-S5-25) |
 | The built-ins ship in every bundle | They must not. They are values a consumer imports; `[S5-A6]` probes the built output (D-S5-2, D-S5-28) |
 

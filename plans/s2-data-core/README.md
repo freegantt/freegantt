@@ -872,9 +872,9 @@ Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `EditExtender
 | Someone adds a second reactivity path (`gantt.setEntries`, a `dataset.version` poll) | There is one subscription and one fan-out (D-S2-20); a second one is a review finding against #1's R4, and `GanttShellOptions` has no entries key to tempt anyone |
 | A second file imports `alien-signals` | B7 allowlists exactly `src/data/reactivity.ts` |
 | A second file calls `requestAnimationFrame` | B10 allowlists exactly `src/view/frame-scheduler.ts` |
-| `toJSON` gains a derived field (`rowCount`, a cached span) | B9 bans `Row`/`Item`/`GeometryFrame` references and `layout/`/`view/` imports inside `src/data/serialization/**` |
+| `toJSON` gains a derived field (`rowCount`, a cached span) | **Superseded by ADR 0016** — `toJSON`, `fromJSON` and `src/data/serialization/**` are deleted, so B9 guards a path that no longer exists. The authored-vs-derived rule it enforced still holds; persistence is the consumer's job now |
 | A new public type ships with nothing behind it | B8 (`no-not-implemented`) plus the `api-report` diff, which makes every surface addition a reviewed line |
-| `toJSON` starts emitting keys in `Object.keys` order after a refactor | `[S2-A2]` compares strings, not objects (D-S2-12) |
+| `toJSON` starts emitting keys in `Object.keys` order after a refactor | **Superseded by ADR 0016** — there is no save format to order. D-S2-12's point, that a stable text comparison catches order drift a deep-equal misses, is the part worth carrying |
 | Undo restores the user's edit but not the engine's cascade | `[S2-A1]` runs with an injected non-identity extender as well as without it (D-S2-6) |
 | The changeset log in the harness is written by re-reading the dataset instead of reading the changeset | `[S2-A4]` asserts `from` **and** `to` per field; a re-read cannot produce `from` |
 | A mutation inside a `change` handler half-applies | `MutationDuringNotificationError` throws before anything is written (D-S2-9) |
@@ -885,7 +885,7 @@ Not added, deliberately: `DatasetOptions.plugins`, `declareStore`, `EditExtender
 | A "small" import creeps into a leaf's importer set — `layout/` reading the history for a badge, a plugin importing `span-rollup.ts` | The rule names one importer per leaf, so widening the set is an edit to `.dependency-cruiser.cjs` that a reviewer sees (D-S2-23) |
 | A `ChangeOrigin` arm ships with nothing producing it | S2 ships `'user' \| 'undo' \| 'redo'`; `'engine'` and `'load'` arrive with their producers (D-S2-11) |
 | A new `Entry` field ships without a comparison rule, so no-op edits on it churn a frame and an undo entry | The comparator map is `satisfies Record<CoreFieldKey, FieldComparator>` — adding a field to `Entry` fails `typecheck` until it is given one (D-S2-7). The check is exhaustive over the **core** set only; a field S4 declares carries its own `equals` and defaults to `Object.is` (D-S2-26) |
-| A `kind === 'group'` literal appears in `data/` or `layout/` | `no-kind-literal` (`no-restricted-syntax`), scoped to the DOM-free layers: the kind set is data (`derivedSpanKinds`) read by a seam. Enforces a CLAUDE.md hard rule that has no guard today — see §7 |
+| A `kind === 'group'` literal appears in `data/` or `layout/` | `freegantt/no-kind-literal`, scoped to `src/data/**` and `src/layout/**`. S2 wrote it to keep a kind set (`derivedSpanKinds`) behind a seam; ADR 0013 then removed stored classification altogether, so the rule now guards that `kind` never comes back |
 | `.slice` gets bumped in the same PR as the gate | The gate script never writes `.slice`; the bump is its own reviewed commit (D-S1.11-10, unchanged) |
 
 ---
