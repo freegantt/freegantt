@@ -9,9 +9,10 @@ issue plans land here as they're opened.
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 - [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived
-  cell: the Rollup owns it, or the consumer owns the Field. Planned, not built: `writeToChildren`
-  leaves the Field surface, a consumer may declare `rollUp: 'none'` on a core Field, and the
-  parent-move rule reads the write resolver instead of `hasChildren`. Plan:
+  cell: the Rollup owns it, or the consumer owns the Field. Steps 1–4 shipped: `writeToChildren`
+  is gone from the Field surface, a consumer may declare `rollUp: 'none'` on a core Field, and the
+  parent-move rule reads the write resolver instead of `hasChildren`. Step 5 (docs and spec) is
+  in progress; the plan stays open until the branch merges. Plan:
   [470-uniform-rollup.md](./470-uniform-rollup.md).
 
 **Closed:**
