@@ -58,7 +58,8 @@ const COST_FIELDS = {
     { key: 'contractId' as const, editable: false },
     // A `compute` Field has no stored home (ADR 0005): its value is read on every frame, never
     // written back. `ctx.leaves(entry).length` is the bottom-row count under this row — 1 for a
-    // leaf, the same weight `splitCostOverLeaves` below reads back off `entry.read('leafCount')`.
+    // leaf. The Leaves column shows why a deeper branch takes more of the cost `splitCostOverLeaves`
+    // spreads below: the split gives every leaf one share.
     {
       key: 'leafCount' as const,
       compute: (entry: StoredEntry, ctx: ComputeContext) => ctx.leaves(entry).length,
@@ -109,8 +110,8 @@ const ROLLUP_TREE = [
 // fresh one at construction.
 const locks = lockEntries();
 
-/** This page's own Field values (ADR 0011) — `cost` and `leafCount` are what `splitCostOverLeaves`
- *  below reads and writes; `contractId` is read-only here. */
+/** This page's own Field values (ADR 0011) — `cost` is what `splitCostOverLeaves` below writes,
+ *  `leafCount` is computed for the Leaves column, and `contractId` is read-only here. */
 interface DataPageProps {
   cost: number;
   contractId?: string;
@@ -269,19 +270,19 @@ moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 
 // ADR 0013: a rolling-up parent's cell is the Rollup's, never a caller's — #470 retired the one
 // seam that let a Field reopen it, so this button now writes the split itself, over public API.
-// It weighs each leaf by its own `leafCount` (the compute Field above, always 1 for a true leaf),
-// with the rounding remainder on the last leaf, so the sum reads back exactly what the button asked
-// for once the Rollup re-aggregates it. `entry.descendants()` is the one walk this needs.
+// Every leaf takes an equal share, and the rounding remainder lands on the last one, so the sum
+// reads back exactly what the button asked for once the Rollup re-aggregates it. A deeper subtree
+// therefore takes more of the total than a shallow sibling, because it holds more leaves.
+// `entry.descendants()` is the one walk this needs, and a leaf keeps the whole total.
 function splitCostOverLeaves(entry: Entry<DataPageProps>, total: number): void {
   const leaves = entry.hasChildren ? entry.descendants().filter((row) => !row.hasChildren) : [entry];
-  const weights = leaves.map((leaf) => leaf.read('leafCount') ?? 1);
-  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const share = Math.floor(total / leaves.length);
   let distributed = 0;
   leaves.forEach((leaf, index) => {
     const last = index === leaves.length - 1;
-    const share = last ? total - distributed : Math.floor((total * weights[index]!) / totalWeight);
-    distributed += share;
-    dataset.entries.update(leaf.id, { cost: share });
+    const amount = last ? total - distributed : share;
+    distributed += amount;
+    dataset.entries.update(leaf.id, { cost: amount });
   });
 }
 
