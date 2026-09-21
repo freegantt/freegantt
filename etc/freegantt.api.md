@@ -247,9 +247,12 @@ export interface CommandTarget extends ActedOn {
 
 // @public
 export interface ComputeContext extends FieldContext {
-    children(): readonly StoredEntry[];
+    children(row: StoredEntry): readonly StoredEntry[];
+    descendants(row: StoredEntry): readonly StoredEntry[];
     duration(): Duration | undefined;
+    hasChildren(row: StoredEntry): boolean;
     hierarchyParentId(): EntryId | undefined;
+    leaves(row: StoredEntry): readonly StoredEntry[];
     read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
 }
 
@@ -643,8 +646,10 @@ export interface EditRequest {
     readonly addedEntryIds: ReadonlySet<EntryId>;
     entries: ReadonlyMap<EntryId, StoredEntry>;
     entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
+    hasChildren(id: EntryId | string): boolean;
     proposed: ProposedEdits;
     readonly removedEntryIds: ReadonlySet<EntryId>;
+    writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;
 }
 
 // @public
@@ -2381,6 +2386,9 @@ export type WriteRefusalReason = FieldWriteRefusalReason;
 
 // @public
 export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
+
+// @public
+export type WriteTarget = 'entry' | 'children' | 'refused';
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteVerdict" needs to be exported by the entry point index.d.ts
 //

@@ -10,6 +10,7 @@ import { GanttShell } from '../view/gantt-shell.js';
 import type { GanttShellOptions } from '../view/gantt-shell.js';
 import { attachEntryGestures } from './entry-gestures.js';
 import { DatasetState } from '../data/index.js';
+import { createEditRequest } from '../data/edit-request.js';
 import type { EditExtender } from '../data/edit-extension.js';
 import { entryId } from '../model/index.js';
 import type { Instant } from '../model/index.js';
@@ -99,7 +100,22 @@ function buildShell(options: { extender?: EditExtender; shell?: Partial<GanttShe
         return true;
       },
     },
-    ...(options.extender ? { extraEditsFor: (request) => state.extraEditsFor(request) } : {}),
+    ...(options.extender
+      ? {
+          extraEditsFor: (draft) =>
+            state.extraEditsFor(
+              createEditRequest({
+                entries: state.entries.committedById(),
+                proposed: draft,
+                added: [],
+                removed: [],
+                hierarchySource: state.hierarchySource,
+                committedChildIds: state.entries.committedChildIds(),
+                fields: state.fields,
+              }),
+            ),
+        }
+      : {}),
     ...options.shell,
   });
   const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -183,7 +199,20 @@ describe('[S3-A4] extender preview', () => {
     // The arrow closes over `built`, and is only ever called from a later drag. So it reads whatever
     // occupies the Dataset's hook at that moment, which is the whole point.
     const built: ReturnType<typeof buildShell> = buildShell({
-      shell: { extraEditsFor: (request) => built.state.extraEditsFor(request) },
+      shell: {
+        extraEditsFor: (draft) =>
+          built.state.extraEditsFor(
+            createEditRequest({
+              entries: built.state.entries.committedById(),
+              proposed: draft,
+              added: [],
+              removed: [],
+              hierarchySource: built.state.hierarchySource,
+              committedChildIds: built.state.entries.committedChildIds(),
+              fields: built.state.fields,
+            }),
+          ),
+      },
     });
     // Composed after the shell already exists — exactly what `Gantt.plugins = [...]` does later.
     built.state.setExtender(() => makeCascadeExtender());

@@ -8,7 +8,8 @@ import type { Instant, InstantInput, TimeSpan } from './time.js';
  *  `hasChildren`. This type answers none of them, and that is deliberate. A pass may hold a row no
  *  store holds — the Rollup's own effective tree is one — so the questions belong to the pass, and
  *  every pass that hands a `StoredEntry` hands the answers beside it: an Aggregator reads
- *  `ctx.read(key)` and `ctx.children()`, a `compute` Field reads `ComputeContext` the same way.
+ *  `ctx.read(key)`, `ctx.children(row)`, `ctx.descendants(row)`, `ctx.leaves(row)` and
+ *  `ctx.hasChildren(row)`, a `compute` Field reads `ComputeContext` the same way (#466).
  *
  *  It is not a second concept. It is one row, with no questions attached.
  *
@@ -187,41 +188,8 @@ export type ProposedEdits = ReadonlyMap<EntryId, ProposedEdit>;
  *  and never states its own proposed keys. */
 export type EntryEdits = ReadonlyMap<EntryId, EntryEdit>;
 
-/** What the extension hook reads (D4, D-S2-6). It carries the same three members on a preview call
- *  and on the real commit call, which is why an extender can never refuse a write — see D-S5-24's
- *  refusal note: a lock plugin vetoes in `beforeChange`, never here. */
-export interface EditRequest {
-  /** Current store snapshot, before this transaction's edits — what a cascade reads to compute a
-   *  delta (what moved, and by how much). Unlike `entryAfterEdits` below, this never reflects this
-   *  transaction's own body edits (D-S5-45). */
-  entries: ReadonlyMap<EntryId, StoredEntry>;
-  /** What the caller asked to change — storage-shaped and complete, the same as `entries` above
-   *  (`plans/02`, "core fills zone math"): a cascade compares it against `entries` with no
-   *  normalizing step of its own. */
-  proposed: ProposedEdits;
-  /** `id` as this transaction's own body edits leave it: committed state overlaid with `proposed`
-   *  (and, at commit, this transaction's own adds). `undefined` when `id` names no entry there either.
-   *  `entries.get(id)` is the wrong read for judging an in-flight edit against current shape — it
-   *  still shows an Entry's dates as they were before this transaction rewrote them, so a cascade
-   *  reasoning from it can propose a write core then refuses against the shape it actually has
-   *  (D-S5-45). A per-id lookup, not a second map on this object: the drag preview calls this every
-   *  rAF frame and must not copy the dataset to answer it (I5). */
-  entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
-  /** The Entries this transaction adds, by id — empty on a drag preview, and empty whenever the
-   *  transaction adds none. Read one with `entryAfterEdits(id)`: an added Entry is not in `entries`
-   *  above, which stays the pre-transaction snapshot (D-S5-45). Net effect, not a call log: an Entry
-   *  added and removed in the same transaction is in neither set (#235). */
-  readonly addedEntryIds: ReadonlySet<EntryId>;
-  /** The Entries this transaction removes, by id — descendants included, because `entries.remove`
-   *  removes the whole subtree and core fills the descendant walk. Read one off `entries` above,
-   *  which still holds it: `entryAfterEdits(id)` answers `undefined` for every id in here (#235). */
-  readonly removedEntryIds: ReadonlySet<EntryId>;
-}
-
-/** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so
- *  `ExtenderWrapper` — the type a plugin author writes against — can name it (D-S5-23).
- *
- *  What it returns is read by the same rules `dataset.entries.update(id, edit)` obeys (#209): a Field
- *  no Dataset declares is refused (`UnknownFieldError`). `moveEntryTo` is the door a cascade uses to
- *  slide an Entry's whole span. An id nothing in the transaction knows is skipped. */
-export type EditExtender = (request: EditRequest) => EntryEdits;
+// `EditRequest`/`EditExtender` moved to `edit-request.ts` (#466): `EditRequest.writeTarget` names
+// both `FieldKey` and `WriteTarget`, and `write-verdict.ts` already reaches `field-key.ts` through
+// `error-report.ts` → `field.ts`, so nothing upstream of that chain — this file included — can import
+// `WriteTarget` without cycling back. `edit-request.ts` sits below all three and depends on nothing
+// that depends on it.

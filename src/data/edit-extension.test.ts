@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_ENTRY_IDS, identityExtender } from './edit-extension.js';
+import { identityExtender } from './edit-extension.js';
+import { createEditRequest } from './edit-request.js';
+import { storedParentSource } from './hierarchy-source.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId } from '../model/index.js';
-import type { StoredEntry, EntryEdit, EntryId, Instant } from '../model/index.js';
+import type { ErrorReport, StoredEntry, EntryEdit, EntryId, Instant, WriteTarget } from '../model/index.js';
 import { mergeEntryEdits } from './edit-extension.js';
 import { proposedKeysOf } from './fields/field-access.js';
 import type { EditExtender, EntryEdits, ProposedEdit, ProposedEdits } from './edit-extension.js';
+
+/** No Field lookup is under test here — every request below asks nothing that reads one. */
+const noFields = { get: () => undefined };
 
 function entry(id: string): StoredEntry {
   return {
@@ -27,13 +32,17 @@ describe('identityExtender', () => {
     const t1 = entry('t1');
     const proposed = new Map<EntryId, ProposedEdit>([[t1.id, proposedEdit({ name: 'Framing' })]]);
     const entries = new Map([[t1.id, t1]]);
-    const result = identityExtender({
-      entries,
-      proposed,
-      entryAfterEdits: (id) => entries.get(entryId(id)),
-      addedEntryIds: EMPTY_ENTRY_IDS,
-      removedEntryIds: EMPTY_ENTRY_IDS,
-    });
+    const result = identityExtender(
+      createEditRequest({
+        entries,
+        proposed,
+        added: [],
+        removed: [],
+        hierarchySource: storedParentSource,
+        committedChildIds: new Map(),
+        fields: noFields,
+      }),
+    );
     expect(result.size).toBe(0);
   });
 });
@@ -42,13 +51,15 @@ describe('identityExtender', () => {
 // calls it at one site — what changes is only how a second plugin arrives.
 describe('DatasetState.setExtender (D-S5-23)', () => {
   const requestEntries = new Map<EntryId, StoredEntry>();
-  const request = {
+  const request = createEditRequest({
     entries: requestEntries,
     proposed: new Map() as ProposedEdits,
-    entryAfterEdits: (id: EntryId) => requestEntries.get(id),
-    addedEntryIds: EMPTY_ENTRY_IDS,
-    removedEntryIds: EMPTY_ENTRY_IDS,
-  };
+    added: [],
+    removed: [],
+    hierarchySource: storedParentSource,
+    committedChildIds: new Map(),
+    fields: noFields,
+  });
 
   /** One wrapper that runs the current occupant, then adds a name of its own to the result. */
   function appends(name: string): (next: EditExtender) => EditExtender {
@@ -117,13 +128,15 @@ describe('composing two extenders that write one Entry (#197)', () => {
     // `EditRequest.entries` is the pre-transaction snapshot, so it carries stored values and never
     // a live row (D-S5-45, ADR 0017).
     const entries = new Map([[target, state.entries.storedValues.get(target)!]]);
-    const request = {
+    const request = createEditRequest({
       entries,
       proposed: new Map() as ProposedEdits,
-      entryAfterEdits: (id: EntryId) => entries.get(id),
-      addedEntryIds: EMPTY_ENTRY_IDS,
-      removedEntryIds: EMPTY_ENTRY_IDS,
-    };
+      added: [],
+      removed: [],
+      hierarchySource: storedParentSource,
+      committedChildIds: new Map(),
+      fields: noFields,
+    });
     return { loose: state.editExtender(request), stored: state.extraEditsFor(request) };
   }
 
@@ -218,5 +231,98 @@ describe('composing three extenders that write one Entry (#238)', () => {
       .map((row) => row.field)
       .sort();
     expect(onTarget).toEqual(['name', 'parentId', 'tag']);
+  });
+});
+
+// #466 case 1. Before this, an extender could only guess where its write would land. It wrote, and
+// core either took the value or dropped it and raised `derived-values-dropped` — a warning the plugin
+// author could read but not prevent. `writeTarget` is what turns that warning into a question the
+// extender can ask first, and the two tests below are the before and the after.
+describe('an extender asks where its write lands before it writes (#466 case 1)', () => {
+  /** `Depot` holds the leaf `Van 1`; `cost` rolls up, and `spare` does not. */
+  function depotDataset(extender: EditExtender): { state: DatasetState; reports: ErrorReport[] } {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'depot', name: 'Depot', start: 0, end: 1 },
+        { id: 'van-1', name: 'Van 1', parentId: 'depot', start: 0, end: 1, props: { cost: 10 } },
+      ],
+      fields: [
+        { key: 'cost', rollUp: 'sum' },
+        { key: 'spare', rollUp: 'none' },
+      ],
+      editExtender: extender,
+    });
+    const reports: ErrorReport[] = [];
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+    return { state, reports };
+  }
+
+  it('answers refused on a rolling-up parent, entry on a leaf, and entry for rollUp: none', () => {
+    const seen = new Map<string, WriteTarget>();
+    const { state } = depotDataset((request) => {
+      seen.set('depot.cost', request.writeTarget('depot', 'cost'));
+      seen.set('van-1.cost', request.writeTarget('van-1', 'cost'));
+      seen.set('depot.spare', request.writeTarget('depot', 'spare'));
+      // `start` is an ordinary rolling-up Field now (ADR 0026), so the parent's own cell is the
+      // Rollup's there too — a plugin author reads one rule, not one rule plus a core exception.
+      seen.set('depot.start', request.writeTarget('depot', 'start'));
+      return new Map();
+    });
+
+    state.entries.update('van-1', { name: 'Van One' });
+
+    expect([...seen]).toEqual([
+      ['depot.cost', 'refused'],
+      ['van-1.cost', 'entry'],
+      ['depot.spare', 'entry'],
+      ['depot.start', 'refused'],
+    ]);
+  });
+
+  it('a blind write to a rolling-up parent cell is dropped, and raises one report', () => {
+    const { state, reports } = depotDataset(() => new Map([[entryId('depot'), { cost: 999 }]]));
+
+    state.entries.update('van-1', { name: 'Van One' });
+
+    expect(state.entries.get('depot')?.read('cost')).toBe(10); // the Rollup's answer, not 999
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('derived-values-dropped');
+  });
+
+  it('an extender that asks first writes the child instead, and raises no report at all', () => {
+    const { state, reports } = depotDataset((request) => {
+      // The same cascade, now aimed by the answer rather than by a guess.
+      if (request.writeTarget('depot', 'cost') === 'entry') {
+        return new Map([[entryId('depot'), { cost: 999 }]]);
+      }
+      return new Map([[entryId('van-1'), { cost: 999 }]]);
+    });
+
+    state.entries.update('van-1', { name: 'Van One' });
+
+    expect(state.entries.get('van-1')?.read('cost')).toBe(999);
+    expect(state.entries.get('depot')?.read('cost')).toBe(999); // rolled up, not authored
+    expect(reports).toEqual([]);
+  });
+
+  it('sees an add that promotes a row to a parent inside the same transaction', () => {
+    // The add and the cascade share one transaction, so the extender must read the tree this commit
+    // leaves behind: `Van 1` gains a child here, and its `cost` cell becomes the Rollup's mid-flight.
+    const seen: WriteTarget[] = [];
+    const { state, reports } = depotDataset((request) => {
+      seen.push(request.writeTarget('van-1', 'cost'));
+      expect(request.hasChildren('van-1')).toBe(true);
+      return new Map();
+    });
+
+    state.transaction(() => {
+      state.entries.add({ id: 'crate-a', name: 'Crate A', parentId: 'van-1', props: { cost: 4 } });
+    });
+
+    expect(seen).toEqual(['refused']);
+    expect(reports).toEqual([]);
   });
 });

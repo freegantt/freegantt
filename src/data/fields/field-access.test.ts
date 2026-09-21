@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { entryId } from '../../model/index.js';
 import type { ChangeSet, Field, StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
+  createComputeContext,
   createFieldAccess,
   createRollUpContext,
   editProposesField,
@@ -10,6 +11,7 @@ import {
   entryAfterEdit,
   proposedKeysOf,
   readField,
+  readingChildrenFrom,
   withProposedKeys,
   writeField,
   writeOntoEntry,
@@ -134,6 +136,119 @@ describe('readField / writeField (D-S4-2)', () => {
   });
 });
 
+// #466 step 1: `readingChildrenFrom` rebinds the tree, and `hasChildren` must follow it — a plain
+// sibling default would answer off the access it is rebinding away from, and the pass's two
+// structural questions would disagree on the same commit.
+// #466's own tree, from *The three words*:
+//
+//   Depot
+//   ├── Van 1
+//   │   ├── Crate A
+//   │   └── Crate B
+//   └── Van 2
+//
+// A pass answers about the row it computes, and about any row it hands you — one tree, three words.
+describe('the pass surface answers children/descendants/leaves/hasChildren about any row (#466)', () => {
+  const row = (id: string, parentId?: string): StoredEntry => ({
+    id: entryId(id),
+    name: id,
+    props: {},
+    ...(parentId !== undefined ? { parentId: entryId(parentId) } : {}),
+  });
+  const depot = row('Depot');
+  const van1 = row('Van 1', 'Depot');
+  const van2 = row('Van 2', 'Depot');
+  const crateA = row('Crate A', 'Van 1');
+  const crateB = row('Crate B', 'Van 1');
+  const names = (rows: readonly StoredEntry[]): string[] => rows.map((r) => r.name!);
+
+  const byParent = new Map<string, StoredEntry[]>([
+    [String(depot.id), [van1, van2]],
+    [String(van1.id), [crateA, crateB]],
+  ]);
+  const registry = new FieldRegistry({ fields: [] });
+  const access = createFieldAccess({
+    fields: registry,
+    timeZone: 'UTC',
+    storedChildrenOf: (id) => byParent.get(String(id)) ?? [],
+  });
+  const ctx = createComputeContext(access, depot);
+
+  it('children(row) answers one step down', () => {
+    expect(names(ctx.children(depot))).toEqual(['Van 1', 'Van 2']);
+    expect(names(ctx.children(van1))).toEqual(['Crate A', 'Crate B']);
+    expect(ctx.children(van2)).toEqual([]);
+  });
+
+  it('descendants(row) answers all the way down, in the table’s order', () => {
+    expect(names(ctx.descendants(depot))).toEqual(['Van 1', 'Van 2', 'Crate A', 'Crate B']);
+    expect(names(ctx.descendants(van1))).toEqual(['Crate A', 'Crate B']);
+    expect(ctx.descendants(van2)).toEqual([]);
+  });
+
+  it('leaves(row) answers the bottom rows only — Van 1 is a descendant and not a leaf', () => {
+    expect(names(ctx.leaves(depot)).sort()).toEqual(['Crate A', 'Crate B', 'Van 2']);
+    expect(names(ctx.leaves(van1)).sort()).toEqual(['Crate A', 'Crate B']);
+  });
+
+  it('the self-inclusion rule: leaves(Van 2) is [Van 2], descendants(Van 2) is []', () => {
+    expect(names(ctx.leaves(van2))).toEqual(['Van 2']);
+    expect(ctx.descendants(van2)).toEqual([]);
+  });
+
+  it('hasChildren(row) agrees with children(row).length > 0 on every row — the mirror, pinned', () => {
+    for (const entry of [depot, van1, van2, crateA, crateB]) {
+      expect(ctx.hasChildren(entry)).toBe(ctx.children(entry).length > 0);
+    }
+    expect(ctx.hasChildren(depot)).toBe(true);
+    expect(ctx.hasChildren(van2)).toBe(false);
+  });
+
+  it('a source that loops terminates instead of walking forever', () => {
+    const looping = new Map<string, StoredEntry[]>([
+      [String(depot.id), [van1]],
+      [String(van1.id), [depot]], // closes the loop back to the root
+    ]);
+    const loopingAccess = createFieldAccess({
+      fields: registry,
+      timeZone: 'UTC',
+      storedChildrenOf: (id) => looping.get(String(id)) ?? [],
+    });
+    const loopingCtx = createComputeContext(loopingAccess, depot);
+    expect(names(loopingCtx.descendants(depot))).toEqual(['Van 1']);
+    expect(names(loopingCtx.leaves(depot))).toEqual([]);
+  });
+});
+
+describe('readingChildrenFrom rebinds hasChildren with the tree, never the access it replaces', () => {
+  const registry = new FieldRegistry({ fields: [{ key: 'cost' }] });
+  const store = createFieldAccess({
+    fields: registry,
+    timeZone: 'UTC',
+    storedChildrenOf: (id) => (id === entryId('storeParent') ? [span()] : []),
+  });
+
+  it('the default hasChildren reads the new tree, not the store the access came from', () => {
+    const passChildren = new Map<string, StoredEntry[]>([['passParent', [span()]]]);
+    const rebound = readingChildrenFrom(store, (id) => passChildren.get(String(id)) ?? []);
+
+    // The store says `storeParent` has a child and `passParent` has none; the rebound access must
+    // answer the opposite, off the pass's own tree.
+    expect(rebound.hasChildren(entryId('passParent'))).toBe(true);
+    expect(rebound.hasChildren(entryId('storeParent'))).toBe(false);
+  });
+
+  it('a caller holding a cheaper answer may pass hasChildren directly, skipping the walk', () => {
+    const rebound = readingChildrenFrom(
+      store,
+      () => [],
+      (id) => id === entryId('promoted'),
+    );
+    expect(rebound.hasChildren(entryId('promoted'))).toBe(true);
+    expect(rebound.hasChildren(entryId('other'))).toBe(false);
+  });
+});
+
 describe('createRollUpContext values/numericValues (issue #124)', () => {
   const registry = new FieldRegistry({
     fieldTypes: { money: { rollUp: 'sum' } },
@@ -159,6 +274,19 @@ describe('createRollUpContext values/numericValues (issue #124)', () => {
     const empty = [span(), span({ cost: 'x' })];
     const rollUpCtx = createRollUpContext(access, parent, empty, cost.key);
     expect(rollUpCtx.numericValues()).toEqual([]);
+  });
+
+  it('hasChildren reads the pass\u2019s own list, never the access\u2019s cached index (#466)', () => {
+    // An access whose cached `hasChildren` disagrees with the list the pass holds: the store answers
+    // `true` from its own index, and the Rollup hands this parent no children at all.
+    const disagreeing = readingChildrenFrom(
+      access,
+      () => [],
+      () => true,
+    );
+    const rollUpCtx = createRollUpContext(disagreeing, parent, [], cost.key);
+    expect(rollUpCtx.children(parent)).toEqual([]);
+    expect(rollUpCtx.hasChildren(parent)).toBe(false);
   });
 
   it('routes through the same read path as the pass\u2019s own read (D-S4-8)', () => {
@@ -223,9 +351,9 @@ describe('the ComputeContext a compute Field runs inside (ADR 0017, #214)', () =
       fields: [
         {
           key: 'childNames',
-          compute: (_entry, ctx) =>
+          compute: (entry, ctx) =>
             ctx
-              .children()
+              .children(entry)
               .map((c) => c.name)
               .join(','),
         },
@@ -246,9 +374,9 @@ describe('the ComputeContext a compute Field runs inside (ADR 0017, #214)', () =
       fields: [
         {
           key: 'childNames',
-          compute: (_entry, ctx) =>
+          compute: (entry, ctx) =>
             ctx
-              .children()
+              .children(entry)
               .map((c) => c.name)
               .join(','),
         },

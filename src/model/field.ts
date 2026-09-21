@@ -198,7 +198,8 @@ export type Field<TValue = unknown> =
       /** Runs on **every** row a read touches, a rolling-up parent included (ADR 0011, decision 10):
        *  read a stored value off `entry`, and read a Field — a core key, `duration`, or another
        *  Field's own `compute` arm — through `ctx.read(key)`. A computed value may also depend on
-       *  the tree: `ctx.children()` (#214). `entry` is a `StoredEntry` because the row may be
+       *  the tree: `ctx.children(entry)`, `ctx.descendants(entry)`, `ctx.leaves(entry)` or
+       *  `ctx.hasChildren(entry)` (#214, #466). `entry` is a `StoredEntry` because the row may be
        *  hypothetical — a post-edit row, or a Rollup's effective child.
        *  Named `compute`, not `get`: `get` already names three unrelated jobs in this codebase. */
       compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
@@ -258,19 +259,85 @@ export interface FieldContext {
   readonly timeZone: string;
 }
 
-/** What a `compute` Field runs inside. Built per pass, bound to the row being computed, so **no
- *  member takes an entry argument** (ADR 0017, *What a hypothetical row reads with*). The row the
- *  pass holds may be one the store does not hold — a post-edit row, or a Rollup's effective child —
- *  which is why the pass answers these and `entry.read(key)` cannot. */
+/** What a `compute` Field runs inside. Built per pass, and two kinds of question live on it
+ *  (ADR 0017, *What a hypothetical row reads with*, amended 2026-09-21 — #466). The amendment's
+ *  rule 1 is why a structure question takes the row it asks about and a value question does not;
+ *  rule 2 is the value/structure split itself.
+ *
+ *  A value question — `read(key)`, `duration()`, `hierarchyParentId()` — stays bound to the row the
+ *  pass is computing: a bottom-up pass has written only what it has reached, so a value asked of any
+ *  other row would answer with whatever that row held before this pass touched it.
+ *
+ *  A structure question — `children`, `descendants`, `leaves`, `hasChildren` — answers about *any*
+ *  row the pass hands out, because structure is the same fact at every depth. Each of these four
+ *  takes the row to ask about. One tree answers all four:
+ *
+ *  ```
+ *  Depot
+ *  ├── Van 1
+ *  │   ├── Crate A
+ *  │   └── Crate B
+ *  └── Van 2
+ *  ```
+ *
+ *  | Asked about `Depot` | Answer | In one phrase |
+ *  |---|---|---|
+ *  | `children(Depot)` | Van 1, Van 2 | one step down |
+ *  | `descendants(Depot)` | Van 1, Van 2, Crate A, Crate B | all the way down |
+ *  | `leaves(Depot)` | Van 2, Crate A, Crate B | the bottom rows only |
+ *
+ *  Van 1 is a descendant and is not a leaf, because Van 1 has children of its own. Van 2 is both.
+ *  `hasChildren(Van 1)` is `true`; `hasChildren(Crate A)` is `false`.
+ *
+ *  `leaves(row)` includes `row` itself when `row` is a leaf: `leaves(Van 2)` is `[Van 2]`, not `[]`.
+ *  `descendants(row)` never includes `row` — a row is not its own descendant, but it can be its own
+ *  subtree's only leaf. `leaves(Van 2)` is `[Van 2]` while `descendants(Van 2)` is `[]`.
+ *
+ *  The row the pass holds may be one the store does not hold — a post-edit row, or a Rollup's
+ *  effective child — which is why the pass answers these and `entry.read(key)`/`entry.children()`
+ *  cannot: those read the store, and this row may not be in it yet.
+ *
+ *  Every *structure* member takes a row, so across those four rule 4 (ADR 0017, cost read off the
+ *  parentheses) cannot tell a cheap read from a walk — all four carry parentheses either way. The
+ *  value members take no row and still compute, so they carry parentheses for rule 4's own reason.
+ *  Each member's own doc states its cost. */
 export interface ComputeContext extends FieldContext {
-  /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. */
+  /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. Bound to
+   *  the row this pass is computing; not a structure question, so it takes no row (ADR 0017 amendment, rule 2). */
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
-  /** This row's duration, through `time/` and the Dataset's `measureDuration`. */
+  /** This row's duration, through `time/` and the Dataset's `measureDuration`. Bound to the row this
+   *  pass is computing (ADR 0017 amendment, rule 2). */
   duration(): Duration | undefined;
-  /** The children of the row this pass is computing. It walks, so it carries parentheses. */
-  children(): readonly StoredEntry[];
+  /** One step down: `Depot` → Van 1, Van 2. One tree read, no allocation beyond the array returned.
+   *
+   *  Exactly one level, and that is load-bearing for a Rollup: a parent's value already aggregates
+   *  its subtree when the bottom-up pass reaches it, so reaching past one level here would double
+   *  count a grandchild both under its parent and again under its grandparent. `descendants` and
+   *  `leaves` are how a consumer reaches past one level, under their own names. */
+  children(row: StoredEntry): readonly StoredEntry[];
+  /** All the way down, never `row` itself: `Depot` → Van 1, Van 2, Crate A, Crate B. A subtree walk,
+   *  one tree read per node found. Mirrors `Entry.descendants()` on the live row; this is the pass's
+   *  own tree instead of the store's. */
+  descendants(row: StoredEntry): readonly StoredEntry[];
+  /** The bottom rows of `row`'s subtree: `Depot` → Van 2, Crate A, Crate B. A leaf answers itself:
+   *  `leaves(Van 2)` is `[Van 2]`, not `[]`, while `descendants(Van 2)` is `[]`. A subtree of one
+   *  leaf has one leaf.
+   *
+   *  A subtree walk, one tree read per node found, same cost as `descendants`. A node whose fetched
+   *  children list is empty is the leaf; this never asks `hasChildren` and never filters
+   *  `descendants`'s result. */
+  leaves(row: StoredEntry): readonly StoredEntry[];
+  /** True when `row` derives (ADR 0013): `hasChildren(Van 1)` is `true`, `hasChildren(Crate A)` is
+   *  `false`. The cost follows the binding, and there are three: the store reads a cached child index
+   *  and never builds the list (`data/entry-store.ts`), a Rollup pass reads the length of the very
+   *  list `children(row)` hands back, and the bare default derives it from `children(row)`. All three
+   *  agree with `children(row).length > 0`, so a caller never has to know which one answered. Mirrors
+   *  `Entry.hasChildren` on the live row, which is a property because it reads a cached index and
+   *  allocates nothing (ADR 0017 rule 4). */
+  hasChildren(row: StoredEntry): boolean;
   /** The tree's answer to this row's parent, through the checked hierarchy source (ADR 0020) — the
-   *  same answer `entry.parent()?.id` gives, never `read('parentId')`'s stored value (ADR 0024). */
+   *  same answer `entry.parent()?.id` gives, never `read('parentId')`'s stored value (ADR 0024).
+   *  Bound to the row this pass is computing (ADR 0017 amendment, rule 2). */
   hierarchyParentId(): EntryId | undefined;
 }
 

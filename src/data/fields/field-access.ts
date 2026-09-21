@@ -134,6 +134,9 @@ export interface FieldAccess {
   /** Which Entry the checked hierarchy names as `entry`'s parent (ADR 0020) — the same answer
    *  `entry.parent()?.id` gives on a live row, never `entry.parentId`'s stored value (ADR 0024). */
   parentIdOf(entry: StoredEntry): EntryId | undefined;
+  /** Does `id` have a child, on this same tree — `EntrySource.hasChildren` (`live-entry.ts`) asks
+   *  the same question by the same name, on the live row. */
+  hasChildren(id: EntryId): boolean;
   memo?(): FieldReadMemo | undefined;
 }
 
@@ -146,17 +149,22 @@ export interface FieldAccessOptions {
   measureDuration?: DurationMeasure;
   storedChildrenOf?: (id: EntryId) => readonly StoredEntry[];
   parentIdOf?: (entry: StoredEntry) => EntryId | undefined;
+  hasChildren?: (id: EntryId) => boolean;
   memo?: () => FieldReadMemo | undefined;
 }
 
 /** Call: `createFieldAccess({ fields: registry, timeZone: 'UTC' })`. */
 export function createFieldAccess(options: FieldAccessOptions): FieldAccess {
+  // A caller that names no tree must not get a `hasChildren` that reads a different one — so the
+  // default reads the **resolved** `storedChildrenOf`, never `options.storedChildrenOf`.
+  const storedChildrenOf = options.storedChildrenOf ?? ((): readonly StoredEntry[] => NO_CHILDREN);
   return {
     fields: options.fields,
     timeZone: options.timeZone,
     measureDuration: options.measureDuration ?? 'span',
-    storedChildrenOf: options.storedChildrenOf ?? ((): readonly StoredEntry[] => NO_CHILDREN),
+    storedChildrenOf,
     parentIdOf: options.parentIdOf ?? NO_PARENT,
+    hasChildren: options.hasChildren ?? ((id): boolean => storedChildrenOf(id).length > 0),
     ...(options.memo !== undefined ? { memo: options.memo } : {}),
   };
 }
@@ -178,12 +186,21 @@ export function readingHypotheticalRows(access: FieldAccess): FieldAccess {
   return { ...access, memo: () => undefined };
 }
 
-/** The same access, reading the tree a pass holds instead of the one the store holds. */
+/** The same access, reading the tree a pass holds instead of the one the store holds.
+ *
+ *  `hasChildren` defaults off the **new** `childrenOf`, never the access it is rebinding away from.
+ *  A plain sibling default would keep the store's own `hasChildren` after this call replaces the
+ *  tree, so `ctx.children(row)` and `ctx.hasChildren(row)` would answer off two different trees —
+ *  exactly on the commits the Rollup exists for (#466). A caller that already holds a cheaper answer
+ *  passes the third argument and skips building the list — the store does, from its own cached child
+ *  index (`data/entry-store.ts`). The Rollup passes two arguments and keeps this default, so its
+ *  answer stays on the effective tree it just rebound. */
 export function readingChildrenFrom(
   access: FieldAccess,
-  storedChildrenOf: (id: EntryId) => readonly StoredEntry[],
+  childrenOf: (id: EntryId) => readonly StoredEntry[],
+  hasChildren: (id: EntryId) => boolean = (id): boolean => childrenOf(id).length > 0,
 ): FieldAccess {
-  return { ...access, storedChildrenOf };
+  return { ...access, storedChildrenOf: childrenOf, hasChildren };
 }
 
 /** The same access, answering `hierarchyParentId` from the tree a pass holds instead of the store's
@@ -232,8 +249,68 @@ export function measureEntryDuration(
   return { value: total, unit: 'millisecond' };
 }
 
-/** What a `compute` Field runs inside — bound to one row, so no member takes an entry (ADR 0017). */
+/**
+ * Every row under `root`, reached through `childrenOf` — a worklist, never recursion
+ * (`live-entry.ts:117-135` is the shape copied): how deep a tree goes is the consumer's to author,
+ * and a stack overflow answers no question. `seen` visits each row once, so a source that loops
+ * terminates instead of walking forever. A child is recorded the moment its parent's children are
+ * read, so siblings stay together — but `pending` is a stack, so one node's whole subtree comes out
+ * before its next sibling, and that is not level order. Nothing may depend on the order
+ * (*the three words*, #466); `Entry.descendants()` walks this same shape.
+ */
+function descendantsOf(
+  root: StoredEntry,
+  childrenOf: (row: StoredEntry) => readonly StoredEntry[],
+): readonly StoredEntry[] {
+  const found: StoredEntry[] = [];
+  const seen = new Set<EntryId>([root.id]);
+  const pending: StoredEntry[] = [root];
+  while (pending.length > 0) {
+    for (const child of childrenOf(pending.pop()!)) {
+      if (seen.has(child.id)) continue;
+      seen.add(child.id);
+      found.push(child);
+      pending.push(child);
+    }
+  }
+  return found;
+}
+
+/**
+ * The same walk as `descendantsOf`, keeping a node whose own fetched children list is empty — that
+ * emptiness **is** the leaf test, so this never asks `hasChildren` and never filters
+ * `descendantsOf`'s result (#466). One tree read per node visited, same as `descendantsOf`.
+ *
+ * `root` is kept when `root` itself is childless: `leaves(row)` names the bottom rows *of a
+ * subtree*, and a subtree of one leaf has one leaf. This is why `leaves(row)` can include `row`
+ * while `descendantsOf` never does — a row is not its own descendant, but it can be its own
+ * subtree's only leaf.
+ */
+function leavesOf(
+  root: StoredEntry,
+  childrenOf: (row: StoredEntry) => readonly StoredEntry[],
+): readonly StoredEntry[] {
+  const found: StoredEntry[] = [];
+  const seen = new Set<EntryId>([root.id]);
+  const pending: StoredEntry[] = [root];
+  while (pending.length > 0) {
+    const row = pending.pop()!;
+    const rowChildren = childrenOf(row);
+    if (rowChildren.length === 0) found.push(row);
+    for (const child of rowChildren) {
+      if (seen.has(child.id)) continue;
+      seen.add(child.id);
+      pending.push(child);
+    }
+  }
+  return found;
+}
+
+/** What a `compute` Field runs inside. A value question — `read`, `duration`, `hierarchyParentId` —
+ *  stays bound to `entry`. A structure question — `children`, `descendants`, `leaves`,
+ *  `hasChildren` — answers about any row the pass hands out (ADR 0017, amended #466). */
 export function createComputeContext(access: FieldAccess, entry: StoredEntry): ComputeContext {
+  const children = (row: StoredEntry): readonly StoredEntry[] => access.storedChildrenOf(row.id);
   return {
     timeZone: access.timeZone,
     // `key` on this row, through the Field registry (ADR 0024): `read('parentId')` answers the
@@ -246,9 +323,10 @@ export function createComputeContext(access: FieldAccess, entry: StoredEntry): C
     duration(): Duration | undefined {
       return measureEntryDuration(entry, access);
     },
-    children(): readonly StoredEntry[] {
-      return access.storedChildrenOf(entry.id);
-    },
+    children,
+    descendants: (row: StoredEntry): readonly StoredEntry[] => descendantsOf(row, children),
+    leaves: (row: StoredEntry): readonly StoredEntry[] => leavesOf(row, children),
+    hasChildren: (row: StoredEntry): boolean => access.hasChildren(row.id),
     hierarchyParentId(): EntryId | undefined {
       return access.parentIdOf(entry);
     },
@@ -261,29 +339,43 @@ export function createComputeContext(access: FieldAccess, entry: StoredEntry): C
 export function createRollUpContext(
   access: FieldAccess,
   parent: StoredEntry,
-  children: readonly StoredEntry[],
+  rollUpChildren: readonly StoredEntry[],
   field: FieldKey,
 ): RollUpContext {
   // `access` reads each row through its own children, and both callers already hand one that does —
   // the Rollup's pass access, and the store's. A second binding that answered `children` for every
   // id would tell a child's own `compute` Field about the parent (F22).
+  //
+  // The pass's own `children` answers `parent`'s id from this pre-built, pre-fetched list, and every
+  // other row from `access.storedChildrenOf` — both read `effectiveEntry`, so the two cannot
+  // disagree (#466). `descendants` and `leaves` walk through this same member, never
+  // `access.storedChildrenOf` directly, and `hasChildren` reads this same member's length, so all
+  // four members read one list at depth 1 and one tree below it — reach past this override and depth
+  // 1 answers from a second list instead. `hasChildren` is overridden here and not inherited on
+  // purpose: `createComputeContext` sends it to `access.hasChildren`, which is the store's cached
+  // index, and that would rest agreement on two implementations rather than on one list (#466).
+  const children = (row: StoredEntry): readonly StoredEntry[] =>
+    row.id === parent.id ? rollUpChildren : access.storedChildrenOf(row.id);
   return {
     ...createComputeContext(access, parent),
-    children: (): readonly StoredEntry[] => children,
+    children,
+    descendants: (row: StoredEntry): readonly StoredEntry[] => descendantsOf(row, children),
+    leaves: (row: StoredEntry): readonly StoredEntry[] => leavesOf(row, children),
+    hasChildren: (row: StoredEntry): boolean => children(row).length > 0,
     field,
     values(key: FieldKey = field): readonly unknown[] {
-      return children.map((child) => readFieldByKey(child, key, access));
+      return rollUpChildren.map((child) => readFieldByKey(child, key, access));
     },
     numericValues(key: FieldKey = field): readonly number[] {
       const out: number[] = [];
-      for (const child of children) {
+      for (const child of rollUpChildren) {
         const value = readFieldByKey(child, key, access);
         if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
       }
       return out;
     },
     durations(): readonly (Duration | undefined)[] {
-      return children.map((child) => measureEntryDuration(child, access));
+      return rollUpChildren.map((child) => measureEntryDuration(child, access));
     },
   };
 }

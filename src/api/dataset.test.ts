@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Dataset } from './dataset.js';
+import { Dataset, extraEditsFor } from './dataset.js';
 import { fieldRowsOf } from '../data/change-set.js';
 import {
   changeSetId,
@@ -15,6 +15,7 @@ import {
   UnknownFieldError,
 } from './index.js';
 import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput } from './index.js';
+import type { EditRequest, ProposedEdit, ProposedEdits, WriteTarget } from '../model/index.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -837,5 +838,108 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
 
     expect(reloaded.field('risk')).toBeDefined();
     expect(reloaded.entries.get('t1')?.read('risk')).toBe('high');
+  });
+});
+
+/** Every tree answer an extender can read off one `EditRequest`, in one object — so a disagreement
+ *  between two callers shows up as one failed comparison rather than six. */
+interface TreeAnswers {
+  readonly depotHasChildren: boolean;
+  readonly vanHasChildren: boolean;
+  readonly crateHasChildren: boolean;
+  readonly depotCost: WriteTarget;
+  readonly vanCost: WriteTarget;
+  readonly undeclared: WriteTarget;
+}
+
+function treeAnswersOf(request: EditRequest): TreeAnswers {
+  return {
+    depotHasChildren: request.hasChildren('depot'),
+    vanHasChildren: request.hasChildren('van-1'),
+    crateHasChildren: request.hasChildren('crate-a'),
+    depotCost: request.writeTarget('depot', 'cost'),
+    vanCost: request.writeTarget('van-1', 'cost'),
+    undeclared: request.writeTarget('depot', 'nobodyDeclaredThis'),
+  };
+}
+
+/** A branded draft, the shape the gesture pipeline hands the preview path (ADR 0011: nobody outside
+ *  core builds one, so a test states the brand rather than reaching for a door that does not exist). */
+function proposedDraft(id: string, patch: Record<string, unknown>): ProposedEdits {
+  const edit: ProposedEdit = {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(Object.keys(patch)),
+    ...patch,
+  };
+  return new Map([[entryId(id), edit]]);
+}
+
+describe('the preview path and the commit path read one tree (#466)', () => {
+  // Step 3's whole premise: `extraEditsFor` (preview, every drag frame) and `entries.update()`
+  // (commit, once) build their `EditRequest` through the one `createEditRequest`. If either grew its
+  // own construction back, an extender would see one tree while dragging and a different one on drop
+  // — the class of bug no assertion on either path alone can catch.
+  function datasetRecording(into: TreeAnswers[]): Dataset {
+    const records: DataPlugin = {
+      id: 'demo.records-the-tree',
+      data(ctx) {
+        ctx.edits.setExtender((next) => (request) => {
+          into.push(treeAnswersOf(request));
+          return next(request);
+        });
+      },
+    };
+    return new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'cost', rollUp: 'sum' }],
+      entries: [
+        { id: 'depot', name: 'Depot' },
+        { id: 'van-1', name: 'Van 1', parentId: 'depot' },
+        { id: 'crate-a', name: 'Crate A' },
+      ],
+      plugins: [records],
+    });
+  }
+
+  it('agrees on a draft that moves no row — the committed index answers both', () => {
+    const seen: TreeAnswers[] = [];
+    const dataset = datasetRecording(seen);
+
+    extraEditsFor(dataset, proposedDraft('van-1', { name: 'Van One' }));
+    dataset.entries.update('van-1', { name: 'Van One' });
+
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).toEqual(seen[0]);
+    // And the answers are the tree's own, not an empty default that would agree by accident.
+    expect(seen[0]).toEqual({
+      depotHasChildren: true,
+      vanHasChildren: false,
+      crateHasChildren: false,
+      depotCost: 'refused',
+      vanCost: 'entry',
+      undeclared: 'entry',
+    });
+  });
+
+  it('agrees on a draft that moves a row — both rebuild the effective index instead', () => {
+    // `Van 1` leaves `Depot` and lands under `Crate A`, so three of the six answers change. This is
+    // the draft that defeats the "this commit moves no row" shortcut (#421 C4) on both paths at once.
+    const seen: TreeAnswers[] = [];
+    const dataset = datasetRecording(seen);
+
+    extraEditsFor(dataset, proposedDraft('van-1', { parentId: entryId('crate-a') }));
+    dataset.entries.update('van-1', { parentId: 'crate-a' });
+
+    expect(seen).toHaveLength(2);
+    expect(seen[1]).toEqual(seen[0]);
+    expect(seen[0]).toEqual({
+      depotHasChildren: false,
+      vanHasChildren: false,
+      crateHasChildren: true,
+      depotCost: 'entry',
+      vanCost: 'entry',
+      undeclared: 'entry',
+    });
   });
 });
