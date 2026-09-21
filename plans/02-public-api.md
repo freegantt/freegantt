@@ -231,7 +231,7 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | — | `error` (every refusal and every recovered fault; **the one name on both buses**) |
 | — | `scheduleDiagnostics` (engine findings) |
 
-`navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters. The payload also carries `span` — `gantt.visibleSpan` at that moment (issue #461) — so a fire from plain scrolling, which never moves `presetId`/`fit`/`canZoom*`, still carries new information.
+`navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters. The payload also carries `visibleSpan` — the getter's own name, because bare `span` already means `DecorationContext.span` (issue #461) — so a fire from plain scrolling, which never moves `presetId`/`fit`/`canZoom*`, still carries new information.
 
 `gantt.range` is the whole scrollable **content** extent (`'fitDataset'` or an authored `TimeSpan`); `gantt.visibleSpan` is what is on screen right now — narrower, and it moves on pan/zoom/resize without `range` changing at all (issue #461).
 

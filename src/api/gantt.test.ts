@@ -1083,23 +1083,40 @@ describe('Gantt navigationChange (S1.12)', () => {
 });
 
 describe('Gantt.visibleSpan (issue #461)', () => {
-  it('is a defined, non-throwing TimeSpan immediately after construction — before any pane measurement arrives', () => {
+  it('answers a degenerate span before any pane measurement arrives — nothing is on screen yet', () => {
     // No FakeResizeObserver.fire() call in this test: this is deliberately BEFORE the first real
-    // measurement a browser's own ResizeObserver would deliver. `#phase` is `'live'` by the time the
-    // constructor returns (gantt-shell.ts), so nothing about the pre-measure phase leaks here — the
-    // getter just answers off whatever Viewport state exists, same as any other live read.
-    const container = document.createElement('div');
-    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    // measurement a browser's own ResizeObserver would deliver, so `Viewport`'s `#paneSize` is still
+    // `ZERO_SIZE`. The decided answer (#461) is the same one a `display: none` pane gets — a
+    // degenerate span, because no pixels stand for no time. It is NOT the whole content range: that
+    // is `frame.ts`'s "cull nothing" convenience, and reporting it here would claim a reader can see
+    // a window that has never been painted.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      });
 
-    const span = gantt.visibleSpan;
-    expect(span.start).toBeTypeOf('number');
-    expect(span.end).toBeTypeOf('number');
-    expect(span.start).toBeLessThanOrEqual(span.end);
+      const beforeMeasure = gantt.visibleSpan;
+      expect(beforeMeasure.start).toBe(beforeMeasure.end);
 
-    gantt.destroy();
+      // Where that degenerate span sits: at the content's own start, not at an invented origin.
+      // Nothing has scrolled, so the first measured window opens at the very same instant — which
+      // names the pre-measure edge without this test hard-coding an epoch of its own.
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+      const afterMeasure = gantt.visibleSpan;
+      expect(afterMeasure.start).toBe(beforeMeasure.start);
+      expect(afterMeasure.end).toBeGreaterThan(afterMeasure.start);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
-  it('navigationChange carries `span`, and it matches `gantt.visibleSpan` at the moment it fires', () => {
+  it('navigationChange carries `visibleSpan`, and it matches `gantt.visibleSpan` at the moment it fires', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
     try {
@@ -1114,7 +1131,7 @@ describe('Gantt.visibleSpan (issue #461)', () => {
 
       let seen: { start: number; end: number } | undefined;
       gantt.on('navigationChange', (payload) => {
-        seen = payload.span;
+        seen = payload.visibleSpan;
       });
       gantt.zoomIn();
 
@@ -1174,7 +1191,7 @@ describe('Gantt.visibleSpan (issue #461)', () => {
       let lastSpan: { start: number; end: number } | undefined;
       gantt.on('navigationChange', (payload) => {
         fired++;
-        lastSpan = payload.span;
+        lastSpan = payload.visibleSpan;
       });
 
       // happy-dom does no layout (dragSplitter's own comment, above): a real splitter drag reflows

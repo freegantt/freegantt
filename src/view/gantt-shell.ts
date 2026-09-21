@@ -2377,7 +2377,7 @@ export class GanttShell {
       fit: this.#viewport.fit,
       canZoomIn: this.#viewport.canZoomIn,
       canZoomOut: this.#viewport.canZoomOut,
-      span: this.#viewport.visibleSpan,
+      visibleSpan: this.#viewport.visibleSpan,
     });
   }
 

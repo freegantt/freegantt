@@ -268,23 +268,19 @@ export class Viewport {
     };
   }
 
-  /** `visible`'s left/right edges read through the bound `TimeScale` (issue #461). Excludes
-   *  overscan — this is what the reader has on screen, not what the renderer keeps warm past either
-   *  edge (contrast `DecorationContext.span`, which IS overscan-widened, `layout/decoration.ts`).
-   *  Clamped to `[0, contentWidth]` (D-S1.8-1: there is no time outside the content) and
-   *  pixel-derived, not tick-aligned — an edge lands mid-tick, same as `visible` itself.
+  /** `visible`'s own pixels read as time (issue #461). Excludes overscan — this is what the reader
+   *  has on screen, not what the renderer keeps warm past either edge (contrast
+   *  `DecorationContext.span`, which IS overscan-widened, `layout/decoration.ts`). Pixel-derived,
+   *  not tick-aligned: an edge lands mid-tick, same as `visible` itself.
    *
-   *  A zero-width pane (e.g. a `display: none` container) answers the degenerate span
-   *  `{ start: s, end: s }` at the clamped left edge. `visible.width > 0` disabling culling
-   *  (`layout/frame.ts`) is a renderer convenience — "cull nothing" — and reusing it here would
-   *  claim the whole content is on screen, which is a lie: nothing is. */
+   *  Two states answer the degenerate span `{ start: s, end: s }` at the clamped left edge: a
+   *  zero-width pane (a `display: none` container), and the moment before the first pane
+   *  measurement arrives, when `#paneSize` is still `ZERO_SIZE`. Both say the same true thing —
+   *  nothing is on screen. `visible.width > 0` disabling culling (`layout/frame.ts`) is a renderer
+   *  convenience — "cull nothing" — and reusing it here would instead claim the whole content is on
+   *  screen, which is a lie. */
   get visibleSpan(): TimeSpan {
-    const scale = this.timeScale;
-    const v = this.visible;
-    const clampToContent = (x: number) => Math.min(Math.max(x, 0), scale.contentWidth);
-    const left = clampToContent(v.x);
-    const right = clampToContent(v.x + v.width);
-    return { start: scale.instantForX(left), end: scale.instantForX(right) };
+    return this.timeScale.spanForPixels(this.visible);
   }
 
   /** Several writes, one consumer reaction. Re-entrant, flushes in a `finally` (conventions §5).

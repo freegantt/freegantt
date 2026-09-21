@@ -1615,7 +1615,7 @@ export interface NavigationChange {
     // (undocumented)
     readonly presetId: string;
     // (undocumented)
-    readonly span: TimeSpan;
+    readonly visibleSpan: TimeSpan;
 }
 
 // @public
@@ -2173,6 +2173,7 @@ export interface TimeScale {
     readonly pxPerMs: number;
     // (undocumented)
     readonly range: TimeSpan;
+    spanForPixels(span: PixelSpan): TimeSpan;
     ticks(step: TickStep, span: PixelSpan): readonly Tick[];
     readonly timeZone: string;
     // (undocumented)

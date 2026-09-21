@@ -735,10 +735,7 @@ export function placeFrame(
   const decorationRunner = decorations ?? new DecorationRunner();
   const { underBars, overBars } = decorationRunner.run({
     providers: input.decorationProviders ?? [],
-    span: {
-      start: scale.instantForX(horizontalSpan.x),
-      end: scale.instantForX(horizontalSpan.x + horizontalSpan.width),
-    },
+    span: scale.spanForPixels(horizontalSpan),
     rows,
     timeZone: scale.timeZone,
     tickUnit: finestBand?.unit ?? preset.tickUnit,
