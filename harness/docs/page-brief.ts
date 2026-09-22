@@ -67,6 +67,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'A Dataset plugin locks an entry and refuses every edit to it',
       'Plugins over the public contract: a custom bar kind, an over-budget row, a chord command, and a popup',
       'JSON export and import round-trip the whole Dataset',
+      'A custom tickIncrement > 1 preset and snap, anchored on the calendar so gridlines hold still on a pan',
     ],
     config: [
       "dataset.entries.update(id, { name: '…' })",
@@ -74,6 +75,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       "gantt.on('beforeEntryMove', (event) => event.refuse('…'))",
       'new Dataset({ entries, plugins: [lockEntries()] })',
       'gantt.installPlugin(bufferKind())',
+      "gantt.snap = { unit: 'hour', increment: 6 }",
     ],
     specLinks: [
       { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },

@@ -16,7 +16,10 @@ import {
   SUPPORTED_TIME_UNITS,
   isTimeUnit,
   isCoarserThan,
+  tickFloor,
+  nextTick,
 } from './zone.js';
+import { diffMs, addMs } from './instant.js';
 import { UnsupportedUnitError } from '../model/index.js';
 import type { TimeUnit } from '../model/index.js';
 
@@ -269,5 +272,109 @@ describe('resolveDefaultTimeZone (#129)', () => {
     } finally {
       restore();
     }
+  });
+});
+
+// #489: a stride that leaves its own anchor container (day × 10 leaves week, hour × 30 leaves day,
+// minute × 90 leaves hour) must count on in whole `increment` steps, never reset to the container it
+// lands in — a reset silently shortens the stated increment down to the container's own span.
+describe('nextTick / tickFloor: a stride bigger than its anchor container (#489)', () => {
+  const NON_FITTING: readonly { unit: TimeUnit; increment: number }[] = [
+    { unit: 'day', increment: 10 }, // anchor: week (7 days)
+    { unit: 'hour', increment: 30 }, // anchor: day (24 hours)
+    { unit: 'minute', increment: 90 }, // anchor: hour (60 minutes)
+  ];
+
+  it('day × 10 spaces ticks 10 calendar days apart, not the 7-day week it starts in', () => {
+    const chicago = 'America/Chicago'; // a DST zone, so the 10-day stride crosses a spring-forward
+    const at = instant('2026-03-05T12:00:00Z');
+    const b1 = tickFloor(chicago, at, 'day', 10);
+    const b2 = nextTick(chicago, b1, 'day', 10);
+    expect(diffDays(chicago, b1, b2)).toBe(10);
+  });
+
+  it('hour × 30 spaces ticks 30 hours apart, not the 24-hour day it starts in', () => {
+    const chicago = 'America/Chicago';
+    const at = instant('2026-06-15T09:00:00Z');
+    const b1 = tickFloor(chicago, at, 'hour', 30);
+    const b2 = nextTick(chicago, b1, 'hour', 30);
+    expect(diffMs(b2, b1)).toBe(30 * 60 * 60 * 1000);
+  });
+
+  it('minute × 90 spaces ticks 90 minutes apart, not the 60-minute hour it starts in', () => {
+    const chicago = 'America/Chicago';
+    const at = instant('2026-06-15T09:00:00Z');
+    const b1 = tickFloor(chicago, at, 'minute', 90);
+    const b2 = nextTick(chicago, b1, 'minute', 90);
+    expect(diffMs(b2, b1)).toBe(90 * 60 * 1000);
+  });
+
+  it('property: consecutive ticks are exactly `increment` units apart, across zones and DST', () => {
+    const zones = ['America/Chicago', 'America/New_York', 'Europe/London', 'Australia/Lord_Howe', 'UTC'];
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...NON_FITTING),
+        fc.constantFrom(...zones),
+        fc.integer({ min: instant('2025-01-01T00:00:00Z'), max: instant('2027-01-01T00:00:00Z') }),
+        ({ unit, increment }, zone, atMs) => {
+          const b1 = tickFloor(zone, instant(atMs), unit, increment);
+          const b2 = nextTick(zone, b1, unit, increment);
+          if (unit === 'day') {
+            expect(diffDays(zone, b1, b2)).toBe(increment);
+          } else {
+            const msPerUnit = unit === 'hour' ? 60 * 60 * 1000 : 60 * 1000;
+            expect(diffMs(b2, b1)).toBe(increment * msPerUnit);
+          }
+        },
+      ),
+    );
+  });
+
+  it('property: two overlapping tickFloor walks agree on every shared boundary (the pan-shift check)', () => {
+    const zones = ['America/Chicago', 'Europe/London', 'UTC'];
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...NON_FITTING),
+        fc.constantFrom(...zones),
+        fc.integer({ min: instant('2025-01-01T00:00:00Z'), max: instant('2027-01-01T00:00:00Z') }),
+        fc.integer({ min: 1, max: 5 }),
+        ({ unit, increment }, zone, atMs, ticksApart) => {
+          const anchorA = tickFloor(zone, instant(atMs), unit, increment);
+          let cursor = anchorA;
+          for (let i = 0; i < ticksApart; i++) cursor = nextTick(zone, cursor, unit, increment);
+          // Flooring from a later instant that shares the same tick lattice must land back on a tick
+          // this walk already produced — the lattice does not shift depending on where you enter it.
+          const anchorB = tickFloor(zone, cursor, unit, increment);
+          expect(anchorB).toBe(cursor);
+        },
+      ),
+    );
+  });
+
+  it('increment: 1 is unchanged — tickFloor still answers the plain unit floor', () => {
+    const zones = ['America/Chicago', 'Europe/London', 'UTC'];
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...zones),
+        fc.constantFrom<TimeUnit>('minute', 'hour', 'day', 'week', 'month', 'year'),
+        fc.integer({ min: instant('2025-01-01T00:00:00Z'), max: instant('2027-01-01T00:00:00Z') }),
+        (zone, unit, atMs) => {
+          expect(tickFloor(zone, instant(atMs), unit, 1)).toBe(startOf(zone, instant(atMs), unit));
+        },
+      ),
+    );
+  });
+
+  it('a millisecond snap stays cheap: tickFloor never walks tick by tick (perf, #489)', () => {
+    // Before the arithmetic rewrite, tickFloor walked one tick at a time from its anchor container's
+    // own start — up to 60,000 iterations for `{ millisecond, 1 }`, anchored on the minute `at` falls
+    // in. That walk would cost milliseconds per call, so calling it thousands of times (one render, one
+    // pointer move) would be seconds of work. The arithmetic rewrite costs one `startOf`/`stepBy` pair
+    // regardless of `at` or `increment` — cheap enough that 10,000 calls stay well under a frame budget.
+    const zone = 'UTC';
+    const at = instant('2026-06-15T09:00:00.777Z');
+    const start = performance.now();
+    for (let i = 0; i < 10_000; i++) tickFloor(zone, addMs(at, i), 'millisecond', 1);
+    expect(performance.now() - start).toBeLessThan(500);
   });
 });

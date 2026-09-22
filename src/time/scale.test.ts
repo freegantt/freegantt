@@ -1,8 +1,12 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { createTimeScale, pxPerMsForPreset, pxPerMsForUnitWidth } from './scale.js';
 import { dayPreset } from './presets.js';
 import { instant } from './instant.js';
+import { snapInstant } from './snap.js';
+import { startOf } from './zone.js';
 import type { TickStep, ViewPreset } from './scale.js';
+import type { TimeUnit } from '../model/index.js';
 
 const timeZone = 'America/Chicago';
 // Midnight in America/Chicago (CDT, UTC-5) on the day this range starts — already unit-aligned, so
@@ -97,6 +101,102 @@ describe('createTimeScale', () => {
     expect(() =>
       scale.ticks({ unit: 'year', increment: 1 }, { x: 0, width: scale.contentWidth }),
     ).not.toThrow();
+  });
+});
+
+// #489: the anchor fix — one tick walk (`time/zone.ts`'s `tickFloor`) that `ticks()`, `snapInstant`
+// and `nextTickBoundary` all read, so a gridline never drifts during a pan and a drag always settles
+// on a boundary a gridline drew.
+describe('ticks() anchoring (#489)', () => {
+  const zones = ['America/Chicago', 'America/New_York', 'Europe/London', 'Australia/Lord_Howe', 'UTC'];
+  // 2025-01-01..2027-01-01 spans every zone's own DST transitions in that window (Lord Howe's
+  // included, a 30-minute-offset transition zone.test.ts's own property tests already lean on).
+  const anyInstantMs = fc.integer({
+    min: instant('2025-01-01T00:00:00Z'),
+    max: instant('2027-01-01T00:00:00Z'),
+  });
+
+  it('ticks() from any two overlapping windows agree on every shared instant (the pan-shift #489 fixes)', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...zones),
+        fc.constantFrom<TimeUnit>('hour', 'day'),
+        fc.integer({ min: 2, max: 6 }),
+        anyInstantMs,
+        fc.integer({ min: 0, max: 20 * 24 }), // window A's start, hours after rangeStart
+        fc.integer({ min: 0, max: 20 * 24 }), // window B's start, hours after rangeStart
+        fc.integer({ min: 6, max: 20 * 24 }), // window width, in hours
+        (zone, unit, increment, rangeStartMs, aOffsetHours, bOffsetHours, widthHours) => {
+          const hourPx = 4;
+          const scale = createTimeScale({
+            timeZone: zone,
+            range: { start: instant(rangeStartMs), end: instant(rangeStartMs + 30 * 24 * 60 * 60 * 1000) },
+            pxPerMs: hourPx / (60 * 60 * 1000),
+          });
+          const step: TickStep = { unit, increment };
+          const spanA = { x: aOffsetHours * hourPx, width: widthHours * hourPx };
+          const spanB = { x: bOffsetHours * hourPx, width: widthHours * hourPx };
+          const overlapStart = Math.max(spanA.x, spanB.x);
+          const overlapEnd = Math.min(spanA.x + spanA.width, spanB.x + spanB.width);
+          if (overlapEnd <= overlapStart) return; // the two windows don't overlap — nothing to compare
+          const inOverlap = (tick: { x: number; width: number }) =>
+            tick.x < overlapEnd && tick.x + tick.width > overlapStart;
+          const byX = (ticks: readonly { x: number; width: number; instant: number }[]) =>
+            new Map(ticks.filter(inOverlap).map((tick) => [tick.x, tick.instant]));
+          const ticksA = byX(scale.ticks(step, spanA));
+          const ticksB = byX(scale.ticks(step, spanB));
+          for (const [x, i] of ticksA) {
+            if (ticksB.has(x)) expect(ticksB.get(x)).toBe(i);
+          }
+        },
+      ),
+    );
+  });
+
+  it('ticks({ increment: 1 }, ...) still starts at the window edge’s own unit floor (unchanged)', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...zones),
+        fc.constantFrom<TimeUnit>('minute', 'hour', 'day', 'week', 'month', 'year'),
+        anyInstantMs,
+        (zone, unit, atMs) => {
+          const scale = createTimeScale({
+            timeZone: zone,
+            range: { start: instant(atMs), end: instant(atMs + 30 * 24 * 60 * 60 * 1000) },
+            pxPerMs: 1,
+          });
+          const ticks = scale.ticks({ unit, increment: 1 }, { x: 0, width: 1 });
+          expect(ticks[0]?.instant).toBe(startOf(zone, instant(atMs), unit));
+        },
+      ),
+    );
+  });
+
+  it('snapInstant always answers an instant scale.ticks() itself draws, at any increment (one tick walk)', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(...zones),
+        fc.constantFrom<TimeUnit>('minute', 'hour', 'day'),
+        fc.integer({ min: 1, max: 6 }),
+        anyInstantMs,
+        (zone, unit, increment, atMs) => {
+          const step = { unit, increment };
+          const snapped = snapInstant(zone, instant(atMs), step);
+          // A window wide enough either side of `at` to certainly hold both flanking boundaries: the
+          // widest anchor container any of these units resets against is a week ('day' anchors to
+          // 'week'), so two weeks either side is ample margin.
+          const bufferMs = 14 * 24 * 60 * 60 * 1000;
+          const scale = createTimeScale({
+            timeZone: zone,
+            range: { start: instant(atMs - bufferMs), end: instant(atMs + bufferMs) },
+            pxPerMs: 1,
+          });
+          const drawn = new Set(scale.ticks(step, { x: 0, width: scale.contentWidth }).map((t) => t.instant));
+          expect(drawn.has(snapped)).toBe(true);
+        },
+      ),
+      { numRuns: 40 },
+    );
   });
 });
 

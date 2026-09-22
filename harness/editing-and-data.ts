@@ -22,6 +22,7 @@ import type {
 import { demoTreeEntryInputs, demoFieldOptions, SEGMENTED_PARENT_ID } from '../fixtures/demo-dataset.js';
 import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
+import { zoomPresetsWithSixHour } from './six-hour-preset.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { bufferKind } from './plugins/buffer-kind.js';
@@ -106,6 +107,11 @@ const gantt = new Gantt({
   gridCellRenderer: overBudgetCell,
 });
 gantt.panToToday();
+
+// #489: proof the anchor fix holds. Zoom past "Hour" (two zoom-outs) to reach it, or pick it
+// straight off the time-scale picker below. `mountGanttToolbar` reads `gantt.zoomPresets` once, at
+// mount time, so this runs first.
+gantt.zoomPresets = zoomPresetsWithSixHour(gantt);
 
 // A test seam, the same one every other harness page exposes.
 window.__dataset = dataset;

@@ -424,8 +424,23 @@ describe('TimeScaleModel', () => {
     it('preset = throws UnknownPresetError for an id outside the shipped set', () => {
       const model = new TimeScaleModel();
       expect(() => {
-        model.preset = 'fortnight' as never;
+        model.preset = 'fortnight';
       }).toThrow(UnknownPresetError);
+    });
+
+    // #489: this model shares across `Gantt` instances (each with a possibly different
+    // `zoomPresets` ladder of its own), so it has no ladder to search — unlike `Viewport.preset`,
+    // a custom id here is unknown even after it exists on some Gantt's own zoomPresets.
+    it('preset = stays shipped-only — a ladder-only id is still UnknownPresetError, naming no ladder', () => {
+      const model = new TimeScaleModel();
+      try {
+        model.preset = 'sixHour';
+        expect.unreachable('expected UnknownPresetError');
+      } catch (error) {
+        const unknown = error as UnknownPresetError;
+        expect(unknown.ladderIds).toEqual([]);
+        expect(unknown.shippedIds.length).toBeGreaterThan(0);
+      }
     });
 
     it('range = notifies iff the resolved scale changed, and is a no-op at the current value', () => {

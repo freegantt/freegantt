@@ -227,6 +227,7 @@ export type {
   TimeScaleFit,
   TimeUnitWidth,
   PresetRef,
+  PresetId,
   ShippedPresetId,
   ScrollAxisState,
   ScrollAxes,
@@ -440,11 +441,20 @@ export {
   formatHour,
   isTimeUnit,
   isCoarserThan,
+  // #489: the tick tools the library's own grid and drag-snap read, published so a custom `SnapRule`
+  // (below) or a hand-rolled Cursor-line label can build on the same calendar math instead of
+  // re-deriving it. `snapInstant` answers "which drawn tick is `at` nearest to"; `nextTickBoundary`
+  // answers "where's the next one strictly after `at`" — the arm-a-timer question `snapInstant`
+  // alone can't, since it may answer `at`'s own tick.
+  snapInstant,
+  nextTickBoundary,
 } from '../time/index.js';
 export type {
   ViewPreset,
   ViewPresetHeader,
   SnapSetting,
+  SnapUnit,
+  SnapRule,
   Tick,
   TickStep,
   DateFormat,

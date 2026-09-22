@@ -432,19 +432,23 @@ A pointer drag on a `move`-capable bar previews at full pixel resolution — the
 bar tracks the cursor with no drift — and snaps only the value it writes on release, so the visible
 motion is always smooth even when the committed `start`/`end` lands on a calendar boundary.
 
-Where a drag snaps to comes from the active `ViewPreset`'s `snap` field, live-reconfigurable like
-any other config:
+Where a drag snaps to comes from `gantt.snap`, live-reconfigurable and independent of the active
+`ViewPreset` — it survives a zoom on its own, and a caller who states nothing gets `'none'`: free,
+unsnapped dragging.
 
 ```ts
-gantt.preset = { ...gantt.preset, snap: 'none' }; // free placement, no snapping at all
-gantt.preset = { ...gantt.preset, snap: 'tick' }; // default: whatever the preset's own tick is
-gantt.preset = { ...gantt.preset, snap: { unit: 'hour', increment: 2 } }; // every 2 hours
+import { nextTickBoundary } from 'freegantt';
+
+gantt.snap = 'none'; // default: free placement, no snapping at all
+gantt.snap = 'tick'; // whatever the showing preset's own tick is
+gantt.snap = { unit: 'hour', increment: 2 }; // every 2 hours, anchored on the calendar (#489)
+gantt.snap = (zone, at) => nextTickBoundary(zone, at, 'hour', 6); // a custom SnapRule
 ```
 
 Holding **Alt** during a drag suspends snapping for that one gesture, regardless of the configured
-`snap` — useful for fine placement without changing the preset. The harness (`harness/generic.html`)
-has a "Snap" control (Auto / Off / Hour / Day / Week, plus an increment) wired to this same
-`gantt.preset` assignment — try it against a live drag at `pnpm dev`.
+`snap` — useful for fine placement without changing it. The harness (`harness/generic.html`) has a
+"Snap" control (Tick / Off / Hour / Day / Week) wired to this same `gantt.snap` assignment — try it
+against a live drag at `pnpm dev`.
 
 ## Plugins
 

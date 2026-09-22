@@ -1492,19 +1492,21 @@ export class GanttShell {
     this.#refreshAffordances();
   }
 
-  /** D-S3-24: what a drag snaps to right now — this Gantt's own setting when it states one, else
-   *  the showing preset's, else `'tick'`. A gesture resolves `'tick'` against the preset it is
-   *  measuring. */
+  /** D-S3-24, reversed by #489: what a drag snaps to right now — this Gantt's own setting when it
+   *  states one, else `'none'`. A consumer who never states `gantt.snap` gets free dragging; a
+   *  preset no longer switches snapping on by itself. A gesture resolves `'tick'` against the
+   *  preset it is measuring. */
   get snap(): SnapSetting {
-    return this.#snap ?? this.#viewport.preset.snap ?? 'tick';
+    return this.#snap ?? 'none';
   }
 
-  /** Live (D-S3-24). The next drag reads it; nothing repaints. `undefined` hands the answer back to
-   *  the showing preset. A concrete `{ unit, increment }` is checked here. A bad unit or a
-   *  non-advancing increment throws on assignment. Otherwise it would surface two gestures later,
-   *  inside a drag (#201). `isTimeUnit` lets a caller check the unit before it reaches this setter. */
+  /** Live (D-S3-24). The next drag reads it; nothing repaints. `undefined` turns snapping off again.
+   *  A concrete `{ unit, increment }` is checked here. A bad unit or a non-advancing increment
+   *  throws on assignment. Otherwise it would surface two gestures later, inside a drag (#201).
+   *  `isTimeUnit` lets a caller check the unit before it reaches this setter. A custom `SnapRule`
+   *  function is not checked here — the consumer's own rule decides. */
   set snap(next: SnapSetting | undefined) {
-    if (next !== undefined && next !== 'tick' && next !== 'none') {
+    if (next !== undefined && next !== 'tick' && next !== 'none' && typeof next !== 'function') {
       if (!isTimeUnit(next.unit)) {
         throw new UnsupportedUnitError(String(next.unit), 'gantt.snap');
       }

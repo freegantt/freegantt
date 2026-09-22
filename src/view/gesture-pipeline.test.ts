@@ -289,7 +289,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   });
 
   it('passes suspendSnap through to the resolved preset snap', async () => {
-    const preset = vi.fn(() => ({ snap: 'tick', tickUnit: 'hour', tickIncrement: 1 }) as ViewPreset);
+    const preset = vi.fn(() => ({ tickUnit: 'hour', tickIncrement: 1 }) as ViewPreset);
     const { deps, applied } = withRoster([entry('a', 0, 100)], { preset });
     const pipeline = new GesturePipeline(deps);
     const session = pipeline.session(entryId('a'), { kind: 'move' })!;

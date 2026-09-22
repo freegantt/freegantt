@@ -99,6 +99,23 @@ test('export writes the document, and import round-trips the entry count', async
   expect(lines[0]).toMatch(/imported \d+ entries/);
 });
 
+// #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`,
+// not only the shipped table — the picker's one line (`harness/gantt-toolbar.ts`,
+// `gantt.preset = presetSelect.value`) needs no special case for the custom "sixHour" rung
+// `harness/editing-and-data.ts` splices in.
+test('picking the custom "Every 6 hours" rung switches preset with no error', async ({ page }) => {
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.getByLabel('Time scale').selectOption({ label: 'Every 6 hours' });
+
+  await expect.poll(() => page.evaluate(() => window.__gantt.preset.id)).toBe('sixHour');
+  expect(pageErrors).toEqual([]);
+});
+
 test('the buffer + risk kind plugins toggle off and on', async ({ page }) => {
   await page.goto('/editing-and-data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();

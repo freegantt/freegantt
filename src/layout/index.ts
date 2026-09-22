@@ -149,6 +149,7 @@ export type {
   HeaderFormat,
   DateFormat,
   PresetRef,
+  PresetId,
   ShippedPresetId,
   TimeUnitWidth,
 } from '../time/index.js';

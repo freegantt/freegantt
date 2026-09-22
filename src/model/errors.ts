@@ -182,20 +182,36 @@ export class InvalidPlainTimeError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-preset'` — a `PresetRef` string outside the shipped set, from `resolvePreset`
- * (S1.9, D-S1.9-3). The shipped set is small and fixed, so the message lists it. */
+/** `code: 'unknown-preset'` — a `PresetId` string outside every table `resolvePreset` searched
+ * (S1.9, D-S1.9-3; ladder search added #489). `gantt.preset` searches this Gantt's own
+ * `zoomPresets` before the shipped table (#489 owner ruling); `gantt.zoomPresets` and a shared
+ * `TimeScaleModel`'s own `preset` have no ladder to search and stay shipped-only. `ladderIds` is
+ * empty for those two doors — the message then names only the shipped table, honestly reporting
+ * that no ladder search ran. `operation` names the actual door, the same reason `InvalidPresetError`
+ * takes it (C3/#482 review). */
 export class UnknownPresetError extends FreeGanttError {
   readonly presetId: string;
-  readonly available: readonly string[];
+  readonly ladderIds: readonly string[];
+  readonly shippedIds: readonly string[];
+  readonly operation: string;
 
-  constructor(presetId: string, available: readonly string[]) {
+  constructor(
+    presetId: string,
+    ladderIds: readonly string[],
+    shippedIds: readonly string[],
+    operation: string,
+  ) {
     super(
       'unknown-preset' satisfies BuiltInThrownCode,
-      `gantt.preset: there is no preset called "${presetId}". The shipped presets are: ${available.join(', ')}.`,
+      ladderIds.length === 0
+        ? `${operation}: there is no preset called "${presetId}". The shipped presets are: ${shippedIds.join(', ')}.`
+        : `${operation}: there is no preset called "${presetId}". Checked this Gantt's zoomPresets (${ladderIds.join(', ')}) and the shipped presets (${shippedIds.join(', ')}).`,
     );
     this.name = 'UnknownPresetError';
     this.presetId = presetId;
-    this.available = available;
+    this.ladderIds = ladderIds;
+    this.shippedIds = shippedIds;
+    this.operation = operation;
   }
 }
 

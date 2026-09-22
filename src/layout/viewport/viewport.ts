@@ -187,7 +187,11 @@ export class Viewport {
     // — the surface this setter's own caller actually wrote — rather than `TimeScaleModel.preset`'s
     // generic `preset` (C3/#482 review). `this.scale.preset` re-resolves the same, already-valid
     // object below; that second pass cannot throw.
-    const resolved = resolvePreset(ref, 'gantt.preset');
+    //
+    // Searches this Gantt's own `zoomPresets` before the shipped table (#489 owner ruling) — a
+    // custom rung a consumer spliced into their own ladder then resolves the same way a shipped id
+    // does, so `gantt.preset = presetSelect.value` never needs to know which table an id came from.
+    const resolved = resolvePreset(ref, 'gantt.preset', this.#zoomPresets);
     this.batch(() => {
       this.scale.preset = resolved;
       this.#reclampToContentWidth();
@@ -329,16 +333,10 @@ export class Viewport {
   }
 
   /** Ladder position by `preset.id`, not object identity — a spread clone of a shipped preset
-   *  (e.g. `{ ...gantt.preset, snap }`) must still step and report `canZoom*` correctly. */
+   *  (e.g. `{ ...gantt.preset, preferredTickWidthPx: 40 }`) must still step and report `canZoom*`
+   *  correctly. */
   #zoomPresetIndex(): number {
     return this.#zoomPresets.findIndex((preset) => preset.id === this.scale.preset.id);
-  }
-
-  /** When stepping the ladder, carry `snap` from the active preset so a customization survives the
-   *  swap to the next canonical `zoomPresets` entry. */
-  #presetWithCarriedSnap(target: ViewPreset, current: ViewPreset): ViewPreset {
-    if (current.snap === undefined) return target;
-    return { ...target, snap: current.snap };
   }
 
   /** True unless the current preset is the finest entry of `zoomPresets`, or is not in it at all —
@@ -361,7 +359,7 @@ export class Viewport {
     if (index === -1 || next < 0 || next >= this.#zoomPresets.length) return;
     const anchorInstant = this.timeScale.instantForX(this.scroll.x.state.position + anchorX);
     this.batch(() => {
-      this.scale.preset = this.#presetWithCarriedSnap(this.#zoomPresets[next]!, this.scale.preset);
+      this.scale.preset = this.#zoomPresets[next]!;
       this.#pushContentWidth();
       this.scroll.x.panTo(this.timeScale.xForInstant(anchorInstant) - anchorX);
     });

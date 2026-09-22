@@ -289,12 +289,14 @@ export class GesturePipeline {
    *  current instant — what `nudge()` feeds `#draftFor` as `dxPx` so a keyboard step reuses the exact
    *  same pixel-then-snap math a mouse drag's `commit()` already runs, instead of a second, parallel
    *  calendar-stepping path. Falls back to the preset's own tick when `suspendSnap` clears `snap` to
-   *  `'none'` — a keyboard nudge always has *some* unit to size a step by, even unsnapped. */
+   *  `'none'`, or when `snap` is a custom `SnapRule` with no unit of its own to size a step by — a
+   *  keyboard nudge always has *some* unit to step in, even unsnapped. */
   #stepPx(gesture: EntryGesture, anchor: Entry, suspendSnap: boolean | undefined): number {
     const snap = this.#resolveSnap(suspendSnap);
     const preset = this.#deps.preset();
-    const unit = snap === 'none' ? preset.tickUnit : snap.unit;
-    const increment = snap === 'none' ? preset.tickIncrement : snap.increment;
+    const hasOwnUnit = snap !== 'none' && typeof snap !== 'function';
+    const unit = hasOwnUnit ? snap.unit : preset.tickUnit;
+    const increment = hasOwnUnit ? snap.increment : preset.tickIncrement;
     // A gesture exists only for an Entry with a grip to grab, which means it already spans
     // (`spansTime`, ADR 0012). This was a cast until Q5 gave the rule one home; it now asks the
     // question. A non-spanning anchor sizes its step at zero, which moves nothing — the cast sized

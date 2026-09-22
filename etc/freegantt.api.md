@@ -1616,6 +1616,9 @@ export interface NavigationChange {
 }
 
 // @public
+export function nextTickBoundary(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant;
+
+// @public
 export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 
 // @public (undocumented)
@@ -1823,7 +1826,10 @@ export interface PopupSurface {
 }
 
 // @public
-export type PresetRef = ShippedPresetId | ViewPreset;
+export type PresetId = ShippedPresetId | (string & {});
+
+// @public
+export type PresetRef = PresetId | ViewPreset;
 
 // @public (undocumented)
 export const presets: Readonly<Record<ShippedPresetId, ViewPreset>>;
@@ -2086,7 +2092,19 @@ export interface Size {
 }
 
 // @public
-export type SnapSetting = TickStep | 'tick' | 'none';
+export function snapInstant(zone: string, at: Instant, snap: SnapUnit): Instant;
+
+// @public
+export type SnapRule = (zone: string, at: Instant) => Instant;
+
+// @public
+export type SnapSetting = TickStep | 'tick' | 'none' | SnapRule;
+
+// @public
+export type SnapUnit = {
+    unit: TimeUnit;
+    increment: number;
+} | 'none' | SnapRule;
 
 // @public
 export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover;
@@ -2303,11 +2321,15 @@ export class UnknownGridColumnError extends FreeGanttError {
 
 // @public
 export class UnknownPresetError extends FreeGanttError {
-    constructor(presetId: string, available: readonly string[]);
+    constructor(presetId: string, ladderIds: readonly string[], shippedIds: readonly string[], operation: string);
     // (undocumented)
-    readonly available: readonly string[];
+    readonly ladderIds: readonly string[];
+    // (undocumented)
+    readonly operation: string;
     // (undocumented)
     readonly presetId: string;
+    // (undocumented)
+    readonly shippedIds: readonly string[];
 }
 
 // @public
@@ -2348,7 +2370,6 @@ export interface ViewPreset {
     id: string;
     minTickWidthPx?: number;
     preferredTickWidthPx: number;
-    snap?: SnapSetting;
     // (undocumented)
     tickIncrement: number;
     tickUnit: TimeUnit;
