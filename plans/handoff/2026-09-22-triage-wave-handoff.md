@@ -6,7 +6,7 @@ information lives, and what the owner still has to decide.
 ## 0. Start here
 
 1. Ask the owner the open questions in §4. Each has a recommendation.
-2. Ask the owner: "May I push the five branches and open a pull request for each?" (§4, item 10).
+2. Ask the owner: "May I push the five branches and open a pull request for each?" (§4, item 9).
 3. Then work the list in §3, in order.
 
 ## 1. Where the information lives
@@ -98,8 +98,7 @@ regenerate the API report (`pnpm build`, then `pnpm api-report`). Do not hand-me
 | 6 | **#393.** Publish JS constants for the `--fg-*` pixel defaults? | **No. Close as wontfix.** A stylesheet can override a token (ADR 0021), and then the constant is wrong. Add a live getter if a consumer needs a value. |
 | 7 | **#253.** `Resolved*` or `*Input`? | **Keep both, and write down which applies when** (`plans/02` §2.1 and `CONTEXT.md`). List the misfits, such as `ResolvedTheme`, for the 1.0 API review. |
 | 8 | **#92.** Separate entry points for tree shaking? | **No for now. Close with the evidence:** the plugins already tree-shake (`scripts/bundle-probe.mjs`), and `preserveModules` measured +1.89 kB. |
-| 9 | **#93.** The gap to the right of the chart | **Reproduce it on main first.** The default fit cannot gap now. If an explicit fit still gaps, draw empty ticks past the end of `range` rather than widening the ticks. |
-| 10 | **Push and pull requests.** May the agent push the five branches and open pull requests? | Yes. Until then the close comments cite commits nobody else can see. |
+| 9 | **Push and pull requests.** May the agent push the five branches and open pull requests? | Yes. Until then the close comments cite commits nobody else can see. |
 
 ## 5. The owner's questions this session, with the answers
 
@@ -129,6 +128,26 @@ consumer never builds the library during install. A git dependency is a stopgap 
 publish (#442). npm runs only `prepare` for a git install, so `prepare` also builds until then.
 The build takes about 3 s.
 
+**Ruling after this answer:** the library publishes to the public npm registry (comment on #442).
+So the `prepare` build from #400 is a temporary stopgap. Remove it once the consumer installs from
+the registry, and give the `prepare` script a comment that says so (comment on #400).
+
+**Q-D. "If a consumer refreshes data, must they remount the chart? Is there no live path that
+skips the undo stack?"**
+
+- **No remount is ever needed.** `dataset.entries.update/add/remove` inside
+  `dataset.transaction(...)` repaint live. The row-plan cache (question 1) changes nothing here: it
+  is keyed on `datasetRevision`, and every commit bumps it.
+- The closure caveat is narrower than it sounds. It applies only when a `filter` or `sort` closure
+  reads state outside the Dataset, for example a search-box variable. Then the page assigns
+  `gantt.rowSource` again. That is one property write, not a remount.
+- **But every live write records an undo step today.** `ChangeOrigin` is
+  `'user' | 'undo' | 'redo'`. The `'load'` origin is reserved (D-S2-11) and not built, and no public
+  call clears or skips History. So Ctrl+Z after a server refresh undoes the refresh.
+- That is exactly **#419**, and a server refresh is its main case. **Recommendation: take #419 out
+  of the grill backlog and settle it before the first npm publish.** The owner's question is
+  recorded on #419.
+
 ## 6. The owner's rulings (2026-09-22)
 
 The full table is in `plans/fix-now-2026-09-22.md` §6, and each ruling is a comment on its issue.
@@ -149,11 +168,13 @@ The full table is in `plans/fix-now-2026-09-22.md` §6, and each ruling is a com
   target with tick tools (next tick, tick width) and a custom snap rule.
 - **#317:** Firefox and WebKit run locally first. CI stays on Chromium.
 - **#281:** run the type design pass now, before release.
+- **#442:** publish to the public npm registry. The `prepare` build (#400) is temporary.
+- **#93:** closed for now.
 
 ## 7. The status of every issue
 
-Six issues closed this session, each with an evidence comment: #102 and #128 (`wontfix`), #267,
-#438, #439 and #463. Forty issues are open.
+Seven issues closed this session, each with a comment: #102 and #128 (`wontfix`), #267, #438,
+#439, #463, and #93 (the owner closed it for now). Thirty-nine issues are open.
 
 | State | Issues |
 |---|---|
@@ -161,8 +182,8 @@ Six issues closed this session, each with an evidence comment: #102 and #128 (`w
 | Worked in a lane: partly done (`ready for agent`) | #242 (WIP), #414 (part one done, the cache waits on question 1), #95 (numbers done, the human trace read is open) |
 | Ruled, ready to build (`ready for agent`) | #342, #424, #434, #262, #317, #281 |
 | Ruled, one answer left | #489 (anchor, question 3) |
-| Waiting on a ruling (§4) | #473, #336, #393, #253, #92, #93 |
+| Waiting on a ruling (§4) | #473, #336, #393, #253, #92 |
 | Act now, not started | #100, #130, #460 (the PAT comes first) |
 | Waits on S7 | #136, #135, #284, #457 (fold into `plans/03` and close) |
-| Needs a design grill | #222, #419, #423, #425, #428, #465, #94, #449, #426 |
+| Needs a design grill | **#419 first (before the npm publish, see Q-D)**, #222, #423, #425, #428, #465, #94, #449, #426 |
 | Release | #442 (#400 and #460 feed it) |
