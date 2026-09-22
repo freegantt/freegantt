@@ -1718,12 +1718,15 @@ describe("GanttShell's committed stored rows (I5, #246 S2-3)", () => {
 
 // #476: the today line goes stale with no frame to repaint it. `nextTickBoundaryDelayMs` stands in
 // for `api/gantt.ts`'s real `time/`-backed wiring (I1) — these tests only need a controllable delay,
-// never a real clock read.
+// never a real clock read. The container is appended to `document.body` throughout, the way a real
+// consumer's is: the timer only arms for a connected container (NEW-1/#481), so a detached fixture
+// would silently test nothing.
 describe('GanttShell today line timer (#476)', () => {
   it('a frame painted with todayLine: true arms one timer', () => {
     vi.useFakeTimers();
     try {
       const container = document.createElement('div');
+      document.body.append(container);
       const shell = new GanttShell({
         wiring: { nextTickBoundaryDelayMs: () => 1000 },
         container,
@@ -1741,6 +1744,7 @@ describe('GanttShell today line timer (#476)', () => {
     vi.useFakeTimers();
     try {
       const container = document.createElement('div');
+      document.body.append(container);
       const computeFrameSpy = vi.spyOn(FrameLayout.prototype, 'computeFrame');
       const shell = new GanttShell({
         wiring: { nextTickBoundaryDelayMs: () => 10 },
@@ -1764,6 +1768,7 @@ describe('GanttShell today line timer (#476)', () => {
     vi.useFakeTimers();
     try {
       const container = document.createElement('div');
+      document.body.append(container);
       const shell = new GanttShell({
         wiring: { nextTickBoundaryDelayMs: () => 1000 },
         container,
@@ -1782,6 +1787,7 @@ describe('GanttShell today line timer (#476)', () => {
     vi.useFakeTimers();
     try {
       const container = document.createElement('div');
+      document.body.append(container);
       const shell = new GanttShell({
         wiring: { nextTickBoundaryDelayMs: () => 1000 },
         container,
@@ -1800,6 +1806,7 @@ describe('GanttShell today line timer (#476)', () => {
     vi.useFakeTimers();
     try {
       const container = document.createElement('div');
+      document.body.append(container);
       const shell = new GanttShell({
         wiring: { nextTickBoundaryDelayMs: () => 1000 },
         container,
@@ -1829,15 +1836,18 @@ describe('GanttShell today line timer (#476)', () => {
           return 1000;
         },
       };
+      const container1 = document.createElement('div');
+      const container2 = document.createElement('div');
+      document.body.append(container1, container2);
       const shell1 = new GanttShell({
         wiring,
-        container: document.createElement('div'),
+        container: container1,
         dataset: fakeDataset(entries), // zone 'UTC', binds the scale first
         scale,
       });
       const shell2 = new GanttShell({
         wiring,
-        container: document.createElement('div'),
+        container: container2,
         dataset: fakeDatasetWithZone(entries, 'Asia/Kathmandu'),
         scale,
       });
@@ -1855,6 +1865,7 @@ describe('GanttShell today line timer (#476)', () => {
     vi.useFakeTimers();
     try {
       const container = document.createElement('div');
+      document.body.append(container);
       const shell = new GanttShell({
         wiring: { nextTickBoundaryDelayMs: () => 1000 },
         container,
@@ -1865,6 +1876,49 @@ describe('GanttShell today line timer (#476)', () => {
       shell.render();
       expect(vi.getTimerCount()).toBe(1);
 
+      shell.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // NEW-1/#481 review: a consumer that drops a Gantt with no destroy() call must not leave a timer
+  // running forever against a detached container — the exact leak the fired timer's #frames.request()
+  // would otherwise cause by requesting, and getting, another paint.
+  it('does not arm at construction time for a container never attached to the document', () => {
+    vi.useFakeTimers();
+    try {
+      const container = document.createElement('div'); // never appended
+      const shell = new GanttShell({
+        wiring: { nextTickBoundaryDelayMs: () => 1000 },
+        container,
+        dataset: fakeDataset(entries),
+      });
+
+      expect(vi.getTimerCount()).toBe(0);
+      shell.destroy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops re-arming once the container leaves the document, with no destroy() call', async () => {
+    vi.useFakeTimers();
+    try {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const shell = new GanttShell({
+        wiring: { nextTickBoundaryDelayMs: () => 10 },
+        container,
+        dataset: fakeDataset(entries),
+      });
+      expect(vi.getTimerCount()).toBe(1);
+
+      container.remove(); // the consumer drops the Gantt without calling destroy()
+      vi.advanceTimersByTime(10);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
+      expect(vi.getTimerCount()).toBe(0); // one last paint into the detached tree, then no re-arm
       shell.destroy();
     } finally {
       vi.useRealTimers();

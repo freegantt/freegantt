@@ -2575,10 +2575,19 @@ export class GanttShell {
   /** #476: what this frame just painted decides whether the today line can go stale again. `true`
    *  re-arms one `setTimeout` for the finest header band's next tick boundary; `false` and a pinned
    *  `Instant` need no timer, since neither reads the clock. Always clears first — "one timer at a
-   *  time" holds whether this call re-arms or not. */
+   *  time" holds whether this call re-arms or not.
+   *
+   *  NEW-1/#481 review: a consumer that drops a Gantt with no `destroy()` call leaves `#container`
+   *  detached but this shell alive, and the fired timer's `#frames.request()` would otherwise render
+   *  into that detached tree and re-arm again here, forever — a permanent timer a library must never
+   *  leave running. `#container.isConnected` is this call's last gate, checked after every render
+   *  (construction's own first render included), so a detached container gets at most one more paint
+   *  from a timer armed before the drop, never a second. No new public API: `destroy()` remains the
+   *  correct way to stop a live Gantt; this only bounds the cost of forgetting it. */
   #syncTodayLineTimer(header: FrameHeader): void {
     this.#clearTodayLineTimer();
     if (this.#frameSettings.todayLine !== true) return;
+    if (!this.#container.isConnected) return;
     const nextTickBoundaryDelayMs = this.#options.wiring.nextTickBoundaryDelayMs;
     if (nextTickBoundaryDelayMs === undefined) return;
     const finestBand = header.bands[header.bands.length - 1];
