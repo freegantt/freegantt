@@ -13,9 +13,10 @@ issue plans land here as they're opened.
 
 - [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived
   cell: the Rollup owns it, or the consumer owns the Field. Shipped in #482: `writeToChildren`
-  is gone from the Field surface, a consumer may declare `rollUp: 'none'` on a core Field, and the
-  parent-move rule reads the write resolver instead of `hasChildren`. ADR 0013 records the
-  reversal and keeps its permission rule. See
+  is gone from the Field surface, a consumer may declare `rollUp: 'none'` on a core Field that
+  declares a rollup of its own (`start`, `end` — narrowed in #491), and the parent-move rule reads
+  the write resolver instead of `hasChildren`. ADR 0013 records the reversal and keeps its
+  permission rule. See
   [../closed/470-uniform-rollup.md](../closed/470-uniform-rollup.md).
 
 - [#466](https://github.com/freegantt/freegantt/issues/466) — a `StoredEntry` could not
