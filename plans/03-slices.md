@@ -53,7 +53,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Acceptance**
 
-- [x] `[S1-A1]` Scroll a 5,000-entry fixture: only windowed rows exist in the DOM. (Not "smoothly" — that's throughput, D2's measured spike at S6, and a timing assertion in CI is a flaky proxy for it; S1.11 D-S1.11-5.)
+- [x] `[S1-A1]` Scroll a 10,000-entry fixture: only windowed rows exist in the DOM. (Not "smoothly" — that's throughput, D2's measured spike at S6, and a timing assertion in CI is a flaky proxy for it; S1.11 D-S1.11-5.)
 - [x] `[S1-A2]` Grid and timeline row tops are pixel-identical under fractional zoom (I9).
 - [x] `[S1-A3]` Preset switch and zoom are live reconfigurations — no remount, anchor preserved.
 - [x] `[S1-A4]` Two harness Gantt instances given the same `ScrollModel` scroll together (a 5-line harness demo — the D9 seam proven now, cheaply).

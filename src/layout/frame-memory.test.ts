@@ -92,6 +92,51 @@ describe('FrameMemory (A2)', () => {
   });
 });
 
+describe('FrameMemory caches entryById by entries identity, not datasetRevision (#414)', () => {
+  const registry = createVariantRegistry({ fieldFor: () => undefined });
+
+  it('two frames over the same entries array share one Map', () => {
+    const memory = new FrameMemory();
+    const entries = [sampleEntries[0]!];
+    const plan = planOf(entries);
+    memory.sync({ plan, rowHeight: 32, entries, registry, datasetRevision: 0 });
+    const firstMap = memory.entryById;
+    memory.sync({ plan, rowHeight: 32, entries, registry, datasetRevision: 0 });
+    expect(memory.entryById).toBe(firstMap);
+  });
+
+  it('a frame after a commit — a new entries array — paints the moved Entry, not the cached one', () => {
+    const memory = new FrameMemory();
+    const one = sampleEntries[0]!;
+    const plan = planOf([one]);
+    memory.sync({ plan, rowHeight: 32, entries: [one], registry, datasetRevision: 0 });
+    expect(memory.entryById.get(one.id)).toBe(one);
+
+    const moved = entryDoubleLike(one, {
+      start: addMs(one.start!, 1000),
+      end: addMs(one.end!, 1000),
+    });
+    memory.sync({ plan, rowHeight: 32, entries: [moved], registry, datasetRevision: 1 });
+    expect(memory.entryById.get(one.id)).toBe(moved);
+  });
+
+  it(
+    'a new entries array refreshes entryById even when datasetRevision stays the same — the shape a ' +
+      'preview reaching placeFrame would need, guarded even though today no preview takes that path ' +
+      '(GanttShell paints a preview through #backend.applyState, never through placeFrame)',
+    () => {
+      const memory = new FrameMemory();
+      const one = sampleEntries[0]!;
+      const plan = planOf([one]);
+      memory.sync({ plan, rowHeight: 32, entries: [one], registry, datasetRevision: 0 });
+
+      const previewed = entryDoubleLike(one, { start: addMs(one.start!, 1000) });
+      memory.sync({ plan, rowHeight: 32, entries: [previewed], registry, datasetRevision: 0 });
+      expect(memory.entryById.get(one.id)).toBe(previewed);
+    },
+  );
+});
+
 // Retired (ADR 0026, #421): this describe block used to be 'FrameMemory remembers the Segment sets
 // beside the Bars (#230 R1)' — `RowMemory.segmentIds`/`segmentIdsByBar` and
 // `FrameMemory.segmentIdsOfEntries` named which Segment(s) each Bar stood for. A core Entry now

@@ -80,7 +80,7 @@ const GATES = {
   S1: {
     name: 'S1 → S2',
     checks: [
-      tagged('S1-A1', ['e2e'], '5,000-entry fixture: only windowed rows exist in the DOM'),
+      tagged('S1-A1', ['e2e'], '10,000-entry fixture: only windowed rows exist in the DOM'),
       tagged(
         'S1-A2',
         ['vitest'],
