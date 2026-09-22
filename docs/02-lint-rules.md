@@ -10,7 +10,7 @@ Twenty-three rules enforce the spec. The count has grown since the original nine
 eslint/
   plugin.js            // the 9 custom rules, exported as { rules: { … } }
   rules/<rule-id>.js
-  rules/<rule-id>.test.js   // RuleTester: ≥2 valid, ≥2 invalid per rule (mandatory, see 04 §4)
+  rules/<rule-id>.test.js   // RuleTester: ≥2 valid, ≥2 invalid per rule (mandatory, see 04-hooks-and-ci.md)
 eslint.config.js       // flat config: layered overrides per directory
 ```
 
@@ -49,7 +49,7 @@ Each row is a `files`-scoped override. The `allowlist` column names the only pat
 | B8 | `no-not-implemented` | `no-restricted-syntax` on `ThrowStatement > NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]` | Dishonest public surface | tests | I11 |
 | B9 | `no-derived-in-json` | `eslint/rules/no-derived-in-json.cjs` — bans `Row`/`Bar`/`GeometryFrame` type references and `layout/`/`view/` imports | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
 | B10 | `raf-single-owner` | `no-restricted-globals` (`requestAnimationFrame`, `cancelAnimationFrame`) | Multiple rAF pipelines | `src/view/frame-scheduler.ts` | Rendering |
-| B11 | `no-restricted-imports` layer mirror | `no-restricted-imports` with per-directory `patterns` | Layer violations (fast editor feedback) | — | I1 (backstop for `03` §1) |
+| B11 | `no-restricted-imports` layer mirror | `no-restricted-imports` with per-directory `patterns` | Layer violations (fast editor feedback) | — | I1 (backstop for the layer graph in `03-boundaries-and-config.md`) |
 
 ### dependency-cruiser removable leaves (not ESLint rules)
 
@@ -169,9 +169,9 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ---
 
-### 3.6 `freegantt/no-store-mutation-outside-transaction` — type-aware · `01` §6 · shipped S2.7
+### 3.6 `freegantt/no-store-mutation-outside-transaction` — type-aware
 
-**Flags:** calls to store mutator methods (`add`, `update`, `remove`, `set`, `clear`) on a receiver whose type implements the internal `MutableStore` interface, outside `src/data/entry-store.ts` and `src/data/transaction.test.ts` — corrected from the plan's original `transaction.ts`/`history.ts` guess: neither of those calls the gated methods by name in the shipped code, `entry-store.ts` is the actual internal caller (via its own `TxToken`-gated methods), and the test file legitimately drives the gate directly.
+**Flags:** calls to store mutator methods (`add`, `update`, `remove`, `set`, `clear`) on a receiver whose type implements the internal `MutableStore` interface, outside `src/data/entry-store.ts` and `src/data/transaction.test.ts`. `entry-store.ts` is the one internal caller (through its own `TxToken`-gated methods), and the test file legitimately drives the gate directly.
 
 **Belt and braces:** the mutators additionally take a `TxToken` parameter that only `transaction.ts` can construct (private constructor + non-exported type), so `typecheck` catches it too. The lint rule exists for the clearer message and because the token can be threaded around by a determined caller.
 
@@ -179,15 +179,15 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ---
 
-### 3.7 `freegantt/model-is-types-only` — syntactic · `01` §1
+### 3.7 `freegantt/model-is-types-only` — syntactic
 
-**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `barId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the BarId readers `entryIdOfBar` and `partIndexOfBar` (D-S4-25), plus the span predicate `spansTime` (ADR 0012, Q5), which must also state its whole answer in one return. Any `import` that is not `import type` is flagged.
+**Flags:** in `src/model/**` (tests exempt), any value-producing declaration — function/class/variable — except an allowlist of id/brand helpers (`brand`, `unbrand`, `entryId`, `dependencyId`, `rowId`, `barId`, `changeSetId`) which must additionally be one-line, dependency-free identity casts, plus the BarId readers `entryIdOfBar` and `partIndexOfBar`, plus the span predicate `spansTime`, which must also state its whole answer in one return. Any `import` that is not `import type` is flagged.
 
 **Message:** `model/ is types only: zero runtime beyond id/brand helpers, zero dependencies. (plans/01 §1)`
 
 ---
 
-### 3.8 `freegantt/require-invariant-header` — syntactic · `plans/04` §3.1
+### 3.8 `freegantt/require-invariant-header` — syntactic
 
 **Flags:** a file listed in the rule's `headers` option whose first block comment does not contain the required invariant sentence.
 
@@ -201,7 +201,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 | `src/data/reactivity.ts` | `the only file that sees the reactive dependency` |
 | `src/render/dom/apply-state.ts` | `@hot-path` |
 
-**Why a rule and not a convention:** these headers are the in-repo statement of the invariant that a reader meets *before* the code (`plans/04` §3.1 step 3). A file that loses its header loses the explanation, and the next author doesn't know the rule exists.
+**Why a rule and not a convention:** these headers are the in-repo statement of the invariant that a reader meets *before* the code. A file that loses its header loses the explanation, and the next author doesn't know the rule exists.
 
 ---
 
@@ -219,7 +219,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ### 3.10 `freegantt/no-flow-layout-rows` — syntactic · I9 · `AUTO-PARTIAL`
 
-**Flags:** in `src/view/**` and `src/render/dom/**` (S1.8, D-S1.8-8 — the issue's original scope, `src/view/grid/**`/`src/view/timeline/**`, never existed) — reads of `offsetHeight`/`clientHeight` and calls to `getBoundingClientRect()`.
+**Flags:** in `src/view/**` and `src/render/dom/**` — reads of `offsetHeight`/`clientHeight` and calls to `getBoundingClientRect()`.
 
 **Exempt:** `pane-layout.ts` and `pane-size-attachment.ts`, by filename. Both legitimately read `clientWidth`/`clientHeight` to measure the *pane's own box* (CONTEXT.md's "Pane size") — a different concept from *row* height. Banning that would break the synchronous first measurement `PaneLayout.measureTimelinePane()` needs.
 
@@ -229,7 +229,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ---
 
-### 3.11 `freegantt/no-inline-style-outside-geometry` — syntactic · S1.10 (`plans/s1.10-theming-and-a11y/README.md` D-S1.10-6)
+### 3.11 `freegantt/no-inline-style-outside-geometry` — syntactic
 
 **Flags:** in `src/render/**` and `src/view/**` — any `node.style.<prop> = …` assignment where `<prop>` is not `transform`, `width`, or `height`.
 
@@ -239,13 +239,13 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 **Message:** `Structure moves to the base stylesheet; inline styles are for live per-frame/per-instance geometry only (transform/width/height). (plans/s1.10-theming-and-a11y/README.md D-S1.10-6)`
 
-### 3.12 `freegantt/editable-has-one-reader` — syntactic · I14 · ADR 0015
+### 3.12 `freegantt/editable-has-one-reader` — syntactic · I14
 
 **Flags:** in `src/**/*.ts` outside `src/data/fields/field-registry.ts` and outside test files — any read of an `editable` member: `field.editable`, `field['editable']`, and `const { editable } = field`.
 
 **Allowed:** the declaration itself (`{ key: 'start', editable: 'anywhere' }` is a Property, not a read), and `field-registry.ts`, where `editableOf` resolves the boolean aliases and the absent-key default. Every other caller asks a named threshold from `src/data/write-rule.ts`: `isUserEditable(field)` for the grid — the cell editor, a bar handle, a bar move — and `isApiEditable(field)` for `entries.update()`.
 
-**Why:** this is the check that would have caught #256. `view/capability.ts` read `field.editable === true` while `entries.update()` read nothing at all, so one key had two answers: the grid hid a handle over a write that still landed. A second reader of the raw key is how that split comes back.
+**Why:** this is the check that catches a split reader. `view/capability.ts` read `field.editable === true` while `entries.update()` read nothing at all, so one key had two answers: the grid hid a handle over a write that still landed. A second reader of the raw key is how that split comes back.
 
 **Message:** `` `Field.editable` is read in `data/fields/field-registry.ts` only (I14, ADR 0015). Ask `isUserEditable(field)` for the grid, or `isApiEditable(field)` for `entries.update()` — one key, two thresholds. ``
 
@@ -253,25 +253,19 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 ## 4. Message discipline
 
-Every custom-rule message follows one shape: **what is wrong · what to do instead · the spec citation**. This matters more than usual here, because the primary consumer of these messages is often an agent editing the file, and a message ending in `(plans/01 §5)` sends it to the governing text instead of to a workaround.
+Every custom-rule message follows one shape: **what is wrong · what to do instead · the spec citation**. This matters more than usual here, because the primary consumer of these messages is often an agent editing the file, and a message that ends in a spec citation sends it to the governing text instead of to a workaround.
 
 ## 5. Phasing
 
-Rules land with the code they can govern. Rows below match the matrix statuses.
+A rule lands with the code it can govern. A rule with no code to govern has no fixture to prove it
+works, so it waits for that code.
 
-| Slice | Rules active |
-|---|---|
-| S0 | B1, B2, B5, B6, B11, 3.1 |
-| S1 | + B4, 3.2, 3.10, 3.11 |
-| S2.7 | + B7, B8, B9, B10, 3.3a, 3.4, 3.6, 3.7, 3.8 (S2.7 correction: the plan drafted these against S0/S2, before the code they govern existed to write fixtures against — `no-store-mutation-outside-transaction` needs `data/transaction.ts`, `require-invariant-header` needs its five listed files, and so on; all landed together at slice-close instead) |
-| S4 | dependency-cruiser: `rollup-is-removable`, `autogroup-is-removable`, `layout-boundary` (proved by `scripts/guard-red-test.mjs`) |
-| S3 | (no new ESLint rules — I6 is a test) |
-| ADR 0015 | + 3.12 `editable-has-one-reader` (I14's lint half; the thresholds themselves stay tests) |
+**Active:** B1, B2, B4, B5, B6, B7, B8, B9, B10, B11, 3.1, 3.2, 3.3a, 3.4, 3.6, 3.7, 3.8, 3.10,
+3.11, 3.12, and the dependency-cruiser rules `rollup-is-removable`, `autogroup-is-removable` and
+`layout-boundary` (proved by `scripts/guard-red-test.mjs`).
 
-**Not yet shipped (S2.7 correction — the table above previously claimed these landed at S0, before the
-code they govern existed):** B3 (no production id minter needs it — `01-invariant-guard-matrix.md`'s
-I4 row), 3.3 (its four seam files don't exist before S3–S6), 3.5 `no-recursion-in-scheduling` (I3,
-`scheduling/` is an empty stub until S7), 3.9 `no-allocation-in-hot-path` (I5, `interaction/` doesn't
-exist before S3).
+**Not yet active,** because the code each one governs does not exist yet: B3 (no production id
+minter needs it — see `01-invariant-guard-matrix.md`'s I4 row), 3.3 (its four seam files),
+3.5 `no-recursion-in-scheduling` (I3), and 3.9 `no-allocation-in-hot-path` (I5).
 
-A rule scheduled for a later slice still exists in `eslint.config.js` from S0, pointed at its (empty) target directory: it costs nothing and it fires the moment the first violating file appears.
+A rule that waits still exists in `eslint.config.js`, pointed at its (empty) target directory: it costs nothing and it fires the moment the first violating file appears.

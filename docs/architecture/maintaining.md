@@ -10,17 +10,16 @@ no copy to publish and no second page to hold in step.
 
 - **Are:** a map of what the code *currently does* — files, classes, call order, and data flow,
   each claim traceable to a line someone read.
-- **Are not:** the spec. `plans/00`–`04` state what the code *should* do, `CONTEXT.md` is the
+- **Are not:** the spec. The spec states what the code *should* do, `CONTEXT.md` is the
   glossary, and `docs/adr/` holds the decisions. Never restate a rule from those here as if this
-  folder were its home — cite it and move on. If a page and a plan disagree, the plan is right and
-  the page is stale.
-- **Are not** the consumer API. An app author reads `README.md`, `plans/02-public-api.md` and
-  `docs/05-consumer-api.md`. The [Overview](./index.md) page carries a short usage summary and
+  folder were its home — state what the code does and move on. If a page and the spec disagree,
+  the spec is right and the page is stale.
+- **Are not** the consumer API. An app author reads `README.md` and `docs/05-consumer-api.md`. The [Overview](./index.md) page carries a short usage summary and
   links out; nothing deeper than that belongs here.
 - **Are not** a place for aspirations. A section describing a class that does not exist yet is
   worse than no section.
 - **Are not** a tracker. A defect, a design doubt, or work someone means to do next goes in the
-  issue tracker or the plan it belongs to, where it gets triaged and closed. Findings written here
+  issue tracker, where it gets triaged and closed. Findings written here
   go stale silently, and a stale finding costs the next reader more than it ever saved.
 
 ## What to update when a file changes
@@ -86,9 +85,9 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
 6. **Match the existing structure.** Prefer extending a diagram to adding a new one. When a page
    grows past roughly a thousand lines, split it into another page rather than adding a section
    nobody scrolls to.
-7. **Cite the ADR, not the plan step.** A decision has one home: `docs/adr/`. A page here may link
-   an ADR by number and title; it should not cite an internal slice or decision id as if that were
-   the record — a reader of this site has no way to look one up, and doesn't need to.
+7. **State the rule; cite no internal id.** A page here names what the code does. It does not cite
+   a slice, a decision id, an issue number or a plan section as the record — a reader of this site
+   has no way to look one up, and doesn't need to.
 
 ## Mechanics of the pages
 

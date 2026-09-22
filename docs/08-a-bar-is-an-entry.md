@@ -426,7 +426,7 @@ aria-label="A left-to-right chain of six stages: Entry array, resolveRows, produ
 <text x="596" y="182" class="box-name" font-size="11" fill="var(--core)">ALREADY PER-ENTRY</text>
 <text x="596" y="202" class="box-sub" font-size="10.5" fill="var(--ink)">The loop resolves a variant per Entry, not per</text>
 <text x="596" y="218" class="box-sub" font-size="10.5" fill="var(--ink)">row — so each bar keeps its own name, props,</text>
-<text x="596" y="234" class="box-sub" font-size="10.5" fill="var(--ink)">variant and capabilities. That is #421's title.</text>
+<text x="596" y="234" class="box-sub" font-size="10.5" fill="var(--ink)">variant and capabilities. That is the whole change.</text>
 <rect x="24" y="272" width="1188" height="38" rx="7" fill="var(--bg)" stroke="var(--border)" stroke-width="1.2" stroke-dasharray="5 4" />
 <text x="618" y="296" text-anchor="middle" class="box-sub" font-size="11" fill="var(--muted)">Unchanged: geometry, paint, hit tests and the reconciler never learn how many Entries a Row owns. A custom row already owns several.</text>
 </svg>
@@ -570,7 +570,7 @@ answers the new tree.
 | `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a segmented parent draws no Bar of its own. `followSegments` is deleted; `ignoreSegments` becomes `wholeSpanUnlessSegments` |
 | `render/` | `FrameRow.segmentIds`, `FrameBar.segmentIds` and `Bar.segmentId` go. A bar keys on its `BarId` and names its `EntryId`, as it did before Segments |
 | `view/` + `interaction/` | `selectedSegmentIds`, `segmentIdsForBar`, `segmentIdsForRow` and the `segmentIds` half of `DomTarget` and `CommandTarget` go. The Selection holds Entry ids |
-| `scheduling/` (S7) | Unaffected by this page. A link to a split piece of work names the parent or one child, and the scheduling plugin rules that |
+| `scheduling/` | Unaffected by this page. A link to a split piece of work names the parent or one child, and the scheduling plugin rules that |
 
 ## What it costs
 

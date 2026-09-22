@@ -53,7 +53,7 @@ It writes two files under `measurements/` (git-ignored): a summary JSON, and a C
 
 **It refuses a port that already answers.** An earlier version did not, silently reused a server left over from the previous run, and produced a page of numbers measured against the wrong code. That is the same false green `scripts/e2e-worktree-port-guard.mjs` exists to refuse (§5), and the fix is the same: fail loudly rather than measure the wrong thing.
 
-**What it cannot do.** A scripted `scrollTop` write is not a real wheel or trackpad scroll. A headless run is not reference hardware. Which call stacks are ours, and whether a layout was forced, is Performance-panel work — which is what the trace file is for, and why #95 asks a person to read it.
+**What it cannot do.** A scripted `scrollTop` write is not a real wheel or trackpad scroll. A headless run is not reference hardware. Which call stacks are ours, and whether a layout was forced, is Performance-panel work — which is what the trace file is for, and why a person reads it.
 
 ---
 
@@ -247,7 +247,7 @@ A case with no failing fixture is presumed broken (the rule this whole section s
 
 One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify:full` on `ubuntu-latest`, with `pnpm` on a frozen lockfile and Node pinned by `.nvmrc`.
 
-**Why one job.** GitHub bills a job by the minute and rounds up. The shape before #255 was eleven jobs, and each one paid for a checkout and an install before it did about ten seconds of work — roughly twenty billed minutes for a gate that runs in about one. Steps inside a job are free. The fan-out bought a prettier failure page, and the verdict line already names the check that stopped the run (§3.2).
+**Why one job.** GitHub bills a job by the minute and rounds up. An earlier shape was eleven jobs, and each one paid for a checkout and an install before it did about ten seconds of work — roughly twenty billed minutes for a gate that runs in about one. Steps inside a job are free. The fan-out bought a prettier failure page, and the verdict line already names the check that stopped the run (§3.2).
 
 **Why one command.** The workflow holds no check list of its own. `pnpm verify:full` reads the list out of `package.json` at run time, so a check joins CI the moment it joins `verify`, and CI cannot run a spelling of the gate that nobody runs locally. `test/guards/gate-is-one-command.test.ts` fails the build when the workflow runs a single check beside the gate.
 
@@ -274,13 +274,13 @@ One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify
 **Rules for the pipeline itself:**
 
 - **No `continue-on-error`.** A check that can be yellow is a check that is off. The gate has one exit code and one verdict line.
-- **A measurement is not a guard.** `size-limit` before S5, and `perf` before S6, measure. They are labeled as measurements where they are declared, not as guards.
+- **A measurement is not a guard.** `size-limit` and `perf` measure until the budget behind each one is measured rather than guessed. They are labeled as measurements where they are declared, not as guards.
 - **`api-report` failure is not a bug**, it is a semver decision: the fix is either "revert the surface change" or "commit the updated report and say so in the pull request." The check's message says exactly that.
-- **Required check on `main`: `gate`.** One job, so one required check. Later slices add `axe` (S5) and `perf` (S6) as checks inside the gate, never as jobs beside it.
+- **Required check on `main`: `gate`.** One job, so one required check. Later work adds `axe` and `perf` as checks inside the gate, never as jobs beside it.
 
 ### 5.1 Slice gates
 
-`plans/00` §4 defines a gate between every pair of slices. `scripts/slice-gate.mjs` reads the current slice from a committed `.slice` file and runs that gate's mechanical conditions, printing the human-only items as an explicit checklist rather than silently ignoring them:
+A gate sits between every pair of slices. `scripts/slice-gate.mjs` reads the current slice from a committed `.slice` file and runs that gate's mechanical conditions, printing the human-only items as an explicit checklist rather than silently ignoring them:
 
 ```
 $ pnpm gate
@@ -294,7 +294,7 @@ Bumping `.slice` is a reviewed commit. That is the enforcement: you cannot start
 
 ---
 
-### 5.2 Pull requests open as drafts (#255)
+### 5.2 Pull requests open as drafts
 
 `pnpm open-pr` is how a pull request opens here. `.claude/hooks/require-draft-pr.sh` blocks the raw create command (§2.3).
 
@@ -312,9 +312,9 @@ The draft is not a formality. It is what the trigger set reads:
 
 So: open every pull request as a draft, and mark it ready only when it is the merge decision. A branch that waits stays a draft, and costs nothing while it waits.
 
-**`pnpm pr-wait` watches workflow runs, not check suites.** Every draft push, and the close event, still creates a workflow run whose `gate` job is skipped. Those rows share the required check name, so `gh pr checks` reports "nothing started" while `gh run list` already shows a live `pull_request` run — or prints `pass` from `--watch` and returns empty JSON on the re-read. Both happened on #420. `pr-wait` lists CI runs for the pull request's head commit (`gh run list --commit <sha> --event pull_request --workflow ci.yml`), ignores skipped and cancelled rows, and gives the waiting to `gh run watch`.
+**`pnpm pr-wait` watches workflow runs, not check suites.** Every draft push, and the close event, still creates a workflow run whose `gate` job is skipped. Those rows share the required check name, so `gh pr checks` reports "nothing started" while `gh run list` already shows a live `pull_request` run — or prints `pass` from `--watch` and returns empty JSON on the re-read. Both of those happen. `pr-wait` lists CI runs for the pull request's head commit (`gh run list --commit <sha> --event pull_request --workflow ci.yml`), ignores skipped and cancelled rows, and gives the waiting to `gh run watch`.
 
-**Do not dispatch a workflow to close a `pr-wait`.** `gh workflow run ci.yml --ref <branch>` is `workflow_dispatch`. That run is on the branch, not the pull request, so it cannot close this wait. Concurrency is keyed on the branch name, so the dispatch also cancels the live `pull_request` run. On #415 that is exactly what happened: `pr-wait` said SKIPPED while the gate was two minutes in, the fallback fired, and concurrency killed the real job. If no live `pull_request` run appears, push a commit so `synchronize` fires, then run `pr-wait` again.
+**Do not dispatch a workflow to close a `pr-wait`.** `gh workflow run ci.yml --ref <branch>` is `workflow_dispatch`. That run is on the branch, not the pull request, so it cannot close this wait. Concurrency is keyed on the branch name, so the dispatch also cancels the live `pull_request` run. That is exactly what happened once: `pr-wait` said SKIPPED while the gate was two minutes in, the fallback fired, and concurrency killed the real job. If no live `pull_request` run appears, push a commit so `synchronize` fires, then run `pr-wait` again.
 
 **A `workflow_dispatch` run proves the gate and cannot close a `pr-wait`.** Read its verdict from `gh run list --branch <branch> --workflow ci.yml`, and say plainly that the verdict came from a dispatch run rather than from `pr-wait` — a run with no `pr-wait` verdict line is proven differently, not proven green. To get a `pr-wait` verdict back, push a commit.
 
@@ -328,10 +328,10 @@ Worth stating, because a guardrail system that nobody wants to run is a guardrai
 |---|---|
 | Per agent file-edit (PostToolUse) | ~2s |
 | Per commit (pre-commit) | ~5s |
-| Per push (pre-push, `verify:full`) | ~75s at S5 scale, e2e included |
+| Per push (pre-push, `verify:full`) | ~75s at current scale, e2e included |
 | Per ready pull request (CI, one job) | ~3 min wall clock, ~4 billed minutes |
 | Per draft pull request (CI) | nothing — the job does not run |
-| Build-out cost | ~2 days of S0, of which the 9 custom rules are ~1 day |
+| Build-out cost | ~2 days, of which the 9 custom rules are ~1 day |
 
 The type-aware ESLint pass dominates local lint time and grows with the codebase. If `lint` crosses ~30s, the response is to split the type-aware rules into a separate `lint:types` script run at pre-push and CI only, keeping the per-edit hook syntactic and fast — not to drop rules.
 
@@ -346,11 +346,11 @@ The consumer-facing counterpart is `docs/09-integration-pitfalls.md`.
 
 ### 7.1 Probe the DOM-free layers in Node, not in a browser
 
-`model/`, `time/`, `data/` and `layout/` never touch the DOM (`plans/01` §1). They ship to the
+`model/`, `time/`, `data/` and `layout/` never touch the DOM. They ship to the
 browser like everything else, and they also run in plain Node. So a question about tick geometry,
 scale arithmetic or frame culling needs no dev server and no Playwright.
 
-On #436 a browser investigation spent several rounds on stale reads. The same bug then reproduced
+A browser investigation once spent several rounds on stale reads. The same bug then reproduced
 in a throwaway Vitest file in about one minute, and it matched the browser numbers to the pixel.
 
 Write the probe, read it once, then delete it. Pin the behaviour with a real test afterwards.
@@ -358,7 +358,7 @@ Write the probe, read it once, then delete it. Pin the behaviour with a real tes
 ### 7.2 A stale first read follows any preset or zoom change in the browser
 
 When an e2e test clicks a preset control, the first measurement it takes can still be the old
-frame. On #436 that produced a false "the gap collapsed to 0" and sent the investigation backwards.
+frame. That produced a false "the gap collapsed to 0" and sent one investigation backwards.
 
 Wait for the frame to settle, then read a second time. A negative result from a single read proves
 nothing.
@@ -372,7 +372,7 @@ type fails `verify:full` until that file is synced.
 pnpm api-extractor run --local
 ```
 
-This caught #448, where the new `bar-renderer-shadowed` code widened the public
+This caught the change where the new `bar-renderer-shadowed` code widened the public
 `BuiltInReportCode` union.
 
 ### 7.4 The sentence-length guard reads a declared list, not a glob
@@ -387,7 +387,7 @@ Write to the 25-word ceiling anyway. CLAUDE.md states it as a hard rule for all 
 
 ### 7.5 Playwright's `.check()` can scroll your drag target out of reach
 
-On #432 a splitter drag silently moved nothing. Every test that first checked a lock checkbox
+A splitter drag once silently moved nothing. Every test that first checked a lock checkbox
 failed, and the red proof failed twice before the cause was clear.
 
 `.check()` scrolled the page, the splitter moved to a negative `y`, and `mouse.down()` landed on no
@@ -398,7 +398,7 @@ the test driver. Never compensate for it in the library.
 
 ### 7.6 Verify a merge conflict resolution with `tsc` before you trust it
 
-A keep-both resolution can eat a brace when the two sides share one closing line. On #446 the
+A keep-both resolution can eat a brace when the two sides share one closing line. In one case the
 accessor block's `}` sat after the `>>>>>>>` marker, so a concatenating resolver dropped it. The
 result was one esbuild error and about 18 cascading `tsc` errors.
 

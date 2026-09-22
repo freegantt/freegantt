@@ -952,7 +952,7 @@ helpers — everywhere else the crossing is types only. <code>data/</code> also 
 full vocabulary to declare fields and react to changesets.
 <code>view/</code> never imports <code>api/</code> — <code>GanttShell</code> takes a
 structurally-compatible <code>DatasetLike</code> instead, so <code>view -&gt; api</code> stays a
-non-edge (#40).
+non-edge.
 </figcaption>
 </figure>
 </div>
@@ -1529,7 +1529,7 @@ same call chain re-runs on every TimeScaleModel onChange — resize, zoom, or a 
 <figcaption>
 Four export groups, one allow-list philosophy: <code>api/index.ts</code> re-exports exactly the types
 a consumer needs to call the classes above it and nothing else — <code>TimeScaleOptions</code> stays
-internal because it carries <em>resolved</em> geometry, not a caller's state (#5). At S5 the
+internal because it carries <em>resolved</em> geometry, not a caller's state. The
 <code>Gantt</code> class exposes plugins, commands, and the live-reconfigurable properties (preset,
 range, gridColumns, rowSource, collapsed, selection, …) and <code>Dataset</code> exposes entries CRUD,
 transactions, events, fields, Dataset plugins, and undo/redo. The call chain underneath never appears in the public

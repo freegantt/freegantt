@@ -68,7 +68,7 @@ So the reader searches the model, finds nothing, and concludes no notification e
 zoom control built from explicit `range` windows can detect that the user left its ladder, because
 `fit` stops being the preset's. It cannot learn which window now shows without reading that back
 itself. Test `fit` by shape, not by `typeof`: a zoom gesture writes a `number`, and a consumer
-stating a tile width writes a `TimeUnitWidth` object (#15).
+stating a tile width writes a `TimeUnitWidth` object.
 
 **Do not shadow `freegantt.zoomIn` to learn that zoom happened.** Re-registering a command id is
 legal and it works, but it is the wrong tool. Shadow a built-in to change what zoom *means*, never
@@ -101,7 +101,7 @@ same function. That false negative buys zero false positives.
 that window is still unclamped. **That part is the feature.** The buffer exists to pull in the tick
 and the bar just off the edge, so a scroll of one pixel has them already built.
 
-What #436 reported was the consequence, and that is now closed: the frame *painted* what the buffer
+The consequence is now closed: the frame *painted* what the buffer
 pulled in, past `[0, contentWidth)`, and a painted node past the content sizer widens the pane's own
 native `scrollWidth`. Two Gantts on a shared `ScrollAxis` then disagreed about how far right the
 timeline goes, because the axis binds `contentWidth` and the browser had measured something wider.
