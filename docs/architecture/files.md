@@ -63,7 +63,7 @@ where they do something beyond re-export.
 | `data/rollup.ts` | `rollUpFields()` | Gives every roll-up-kind parent every rolling-up field from its children, bottom-up, on every commit. Yields to the body-proposed field — a user value is never overwritten. |
 | `data/computed-cache.ts` | `ComputedFieldCache` | Revision-keyed memo for compute-sourced fields; cleared once per committed changeset. |
 | `data/edit-extension.ts` | `EditRequest, EditExtender, identityExtender` | The extension hook shape. `identityExtender` returns an empty map (the unoccupied default); a Dataset plugin or a scheduling plugin occupies this slot by wrapping. |
-| `data/plugin-store.ts` | `PluginStores, pluginStoreName()` | Per-plugin per-entry rows, staged through the same write-set a transaction already uses for entries. Not `Entry.meta` (ADR 0002). |
+| `data/plugin-store.ts` | `PluginStores, pluginStoreName()` | Per-plugin per-entry rows, staged through the same write-set a transaction already uses for entries. Not `Entry.props` (ADR 0002). |
 | `data/error-reporting.ts` | `raiseErrorOn(), createErrorRaiser(), buildRefusalReport()` | Stamps an Error report with `now()` and raises it on a bus. Builds the one shape a refused `before*` veto reports. `render/` and `extensions/` take a `RaiseError` by injection instead. |
 | `data/dev-mode.ts` | `isDevMode()` | One home for the Vite/dev-mode flag. The named leaf `render/` and `extensions/` may import without opening a `data/` edge. |
 | `data/event-bus.ts` | `EventBus, RefusalNote` | Generic typed pub/sub with sync veto. The `beforeChange`/`change` fan-out channel shared by dataset and view. `RefusalNote` holds the first `refuse(reason)` words from one emit. |

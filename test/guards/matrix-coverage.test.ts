@@ -1,6 +1,6 @@
 // docs/04-hooks-and-ci.md §4 promises this file: "closes the loop plans/04 §4 opens (an invariant
 // without a job is a TODO, tracked in the table itself). The table stops being prose and becomes a
-// checked artifact." Parses docs/01-invariant-guard-matrix.md's I1-I14 table and asserts every row
+// checked artifact." Parses docs/01-invariant-guard-matrix.md's numbered table and asserts every row
 // names a gate check that runs today (CI is one job running the whole gate — docs/04 §5), or one
 // docs/04 §5's pipeline diagram plans for a later slice, and that no row's status is blank (#43).
 
@@ -86,13 +86,23 @@ function checkNamesInCell(cell: string): string[] {
   return [...cell.matchAll(/`([\w:-]+)`/g)].map((m) => m[1]!);
 }
 
+/** The spec's own §11 table is the list, so the page above cannot quietly stop at the invariant it
+ * happened to know about. `I15` (ADR 0024) landed in `plans/01` and nothing noticed that
+ * `docs/01-invariant-guard-matrix.md` still ended at `I14`, because this guard held its own copy of
+ * the count. Read the ids instead of counting them. */
+function invariantIdsInSpec(): string[] {
+  const spec = read('plans/01-domain-architecture.md');
+  const section = spec.split(/^## 11\./m)[1] ?? '';
+  return [...section.matchAll(/^\|\s*(I\d+)\s*\|/gm)].map((m) => m[1]!);
+}
+
 describe('the invariant guard matrix maps every row to a real check (#43)', () => {
   const matrix = read('docs/01-invariant-guard-matrix.md');
   const rows = parseInvariantRows(matrix);
   const knownChecks = new Set([...checksRunByGate(), ...FUTURE_PLANNED_CHECKS]);
 
-  it('finds exactly 14 rows (I1-I14) — guards the parser itself against a doc rewrite', () => {
-    expect(rows.map((r) => r.id)).toEqual(Array.from({ length: 14 }, (_, i) => `I${i + 1}`));
+  it('carries one row per invariant `plans/01` §11 declares — the page cannot fall behind the spec', () => {
+    expect(rows.map((r) => r.id)).toEqual(invariantIdsInSpec());
   });
 
   it.each(rows.map((r) => [r.id, r] as const))('%s names a non-blank status', (_id, row) => {

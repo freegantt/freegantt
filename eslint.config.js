@@ -119,7 +119,7 @@ export default tseslint.config(
       'freegantt/no-time-to-pixel-math': 'error',
       'freegantt/no-flow-layout-rows': 'error',
       // S1.10, D-S1.10-6: pane-layout.ts's structural writes move to the base stylesheet; only
-      // transform/width/height stay inline. Scoped to src/render/** + src/view/** (§3.3) — expected
+      // transform/width/height stay inline. Scoped to src/render/** + src/view/** (§3.11) — expected
       // to widen to src/interaction/** once gesture previews need the same allowance.
       'freegantt/no-inline-style-outside-geometry': 'error',
     },
