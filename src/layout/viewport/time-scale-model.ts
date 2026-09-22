@@ -179,7 +179,11 @@ export class TimeScaleModel {
 
   /** Live — every config key is live-reconfigurable (plans/02 §1.1). Resolved through
    *  `resolvePreset` (throws `UnknownPresetError` for an unknown id); no-op, no invalidation, when
-   *  the resolved preset is unchanged (D-S1.9-3). */
+   *  the resolved preset is unchanged (D-S1.9-3).
+   *
+   *  Shipped-only — this model has no `zoomPresets` ladder of its own to search (it can be shared
+   *  by more than one `Gantt`, each with a different ladder, so it has none), so a custom id here
+   *  is always `UnknownPresetError`, unlike `gantt.preset` (#489 owner ruling). */
   set preset(ref: PresetRef) {
     const resolved = resolvePreset(ref, 'preset');
     if (resolved === this.#preset) return;

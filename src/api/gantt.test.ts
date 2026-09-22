@@ -7583,6 +7583,42 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     }
   });
 
+  // #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own
+  // `zoomPresets`, not only the shipped table — the red test the ruling closes: before it,
+  // this threw UnknownPresetError even though the id had just been spliced into zoomPresets.
+  it("preset = resolves a custom id spliced into this Gantt's own zoomPresets, with no error (#489)", () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'day',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const sixHour = {
+        id: 'sixHour',
+        tickUnit: 'hour' as const,
+        tickIncrement: 6,
+        headers: [{ unit: 'hour' as const, increment: 6, format: () => 'x' }],
+        preferredTickWidthPx: 48,
+        minTickWidthPx: 40,
+      };
+      gantt.zoomPresets = [...gantt.zoomPresets, sixHour];
+
+      gantt.preset = 'sixHour';
+
+      expect(gantt.preset).toBe(sixHour);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('zoomTo sets an exact density and fires navigationChange, the same notification zoomIn/zoomOut fire', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);

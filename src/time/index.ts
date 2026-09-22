@@ -62,4 +62,4 @@ export {
   ZOOM_PRESETS,
   resolvePreset,
 } from './presets.js';
-export type { ShippedPresetId, PresetRef } from './presets.js';
+export type { ShippedPresetId, PresetId, PresetRef } from './presets.js';

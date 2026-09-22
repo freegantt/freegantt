@@ -298,25 +298,48 @@ export const ZOOM_PRESETS: readonly ViewPreset[] = Object.freeze([
   yearPreset,
 ]);
 
-/** A caller states either a shipped id (autocompletes) or a full custom object — never a bare
- * string with no closed set behind it (fix-issue1-apis.md Design #11). */
-export type PresetRef = ShippedPresetId | ViewPreset;
+/** A string id naming a `ViewPreset`: a shipped id (autocompletes against `ShippedPresetId`) or a
+ * custom id from this Gantt's own `zoomPresets` (`gantt.preset` reversed fix-issue1-apis.md
+ * Design #11 for this one door — #489 owner ruling — because `gantt.preset` alone had no way to
+ * name a rung a consumer already put in their own ladder). `(string & {})` keeps autocomplete for
+ * the shipped ids while still accepting any other string — see the `PresetId` glossary entry. */
+export type PresetId = ShippedPresetId | (string & {});
 
-/** Throws `UnknownPresetError` for an id outside `presets`, or `InvalidPresetError` for a custom
- * `ViewPreset` object that breaks a rule between its own fields. A `ViewPreset` object otherwise
- * passes through unchanged — a custom preset is never a library edit.
+/** A caller states a `PresetId` or a full custom object — never a bare, unchecked value: a string
+ * id is always resolved against a table (the ladder, the shipped set, or both), and a `ViewPreset`
+ * object is always validated against its own field rules. */
+export type PresetRef = PresetId | ViewPreset;
+
+/** Throws `UnknownPresetError` for an id outside every table searched, or `InvalidPresetError` for
+ * a custom `ViewPreset` object that breaks a rule between its own fields. A `ViewPreset` object
+ * otherwise passes through unchanged — a custom preset is never a library edit.
  *
  * `operation` is the door the caller reached this through (`gantt.preset`, `gantt.zoomPresets`, a
  * shared `TimeScaleModel`'s own `preset`) — every caller must state its own, so `InvalidPresetError`
- * always names the surface the consumer actually wrote (C3/#482 review). */
-export function resolvePreset(ref: PresetRef, operation: string): ViewPreset {
+ * and `UnknownPresetError` always name the surface the consumer actually wrote (C3/#482 review).
+ *
+ * `ladder` is this Gantt's own `zoomPresets`, searched by `id` before the shipped table — a custom
+ * rung spliced into the ladder then resolves the same way a shipped id does (#489 owner ruling: the
+ * Gantt's own ladder wins on a shared id, because a consumer who put a preset there meant it).
+ * Omitted by `gantt.zoomPresets` itself (defining the ladder has no existing ladder to search) and
+ * by a shared `TimeScaleModel`'s own `preset` (it has no ladder at all) — both stay shipped-only. */
+export function resolvePreset(ref: PresetRef, operation: string, ladder?: readonly ViewPreset[]): ViewPreset {
   if (typeof ref !== 'string') {
     validatePresetTickWidths(ref, operation);
     validatePresetTickIncrement(ref, operation);
     validatePresetTickStep(ref, operation);
     return ref;
   }
-  const preset = presets[ref];
-  if (!preset) throw new UnknownPresetError(ref, Object.keys(presets));
+  const fromLadder = ladder?.find((preset) => preset.id === ref);
+  if (fromLadder) return fromLadder;
+  const preset = Object.hasOwn(presets, ref) ? presets[ref as ShippedPresetId] : undefined;
+  if (!preset) {
+    throw new UnknownPresetError(
+      ref,
+      ladder?.map((preset) => preset.id) ?? [],
+      Object.keys(presets),
+      operation,
+    );
+  }
   return preset;
 }

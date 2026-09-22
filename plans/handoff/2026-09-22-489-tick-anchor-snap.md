@@ -1,5 +1,76 @@
 # Handoff: #489 tick anchor / snap unification — 2026-09-22
 
+## Follow-up: gantt.preset resolves against this Gantt's own zoomPresets (owner ruling, 2026-09-22)
+
+Closes the gap the "Left alone" note below flagged: `harness/timeline-toolbar.ts:114`'s one line,
+`gantt.preset = presetSelect.value`, threw `UnknownPresetError` for the custom `sixHour` rung. The
+owner ruled `gantt.preset = '<id>'` should also find a preset in this Gantt's own `zoomPresets`, not
+only the shipped table, so a custom preset and a shipped preset work the same way through this door.
+
+Commits:
+- Public API change: `PresetRef`/`PresetId`, `resolvePreset`'s new `ladder` param,
+  `UnknownPresetError`'s new shape — see below for the exact signatures.
+
+What changed, by file:
+- `src/time/presets.ts` — `PresetId = ShippedPresetId | (string & {})` (new, exported);
+  `PresetRef = PresetId | ViewPreset` (was `ShippedPresetId | ViewPreset`). `resolvePreset(ref,
+  operation, ladder?)` takes an optional third param, a `readonly ViewPreset[]` searched by `id`
+  before the shipped `presets` table.
+- `src/layout/viewport/viewport.ts` — `set preset` now calls `resolvePreset(ref, 'gantt.preset',
+  this.#zoomPresets)`, so `gantt.preset` searches this Gantt's own ladder first. **Precedence: the
+  ladder wins on a shared id** (owner ruling — a consumer who put a preset on their own ladder meant
+  it). `set zoomPresets` is unchanged: it still resolves each ref shipped-only (defining the ladder
+  has no existing ladder to search against).
+- `src/layout/viewport/time-scale-model.ts` — `set preset` unchanged in behavior (still
+  shipped-only, no ladder passed) — this model can be shared across `Gantt` instances with
+  different ladders, so it has none of its own. Doc comment now says so explicitly.
+- `src/model/errors.ts` — `UnknownPresetError` reshaped: `constructor(presetId, ladderIds,
+  shippedIds, operation)`, replacing the old `constructor(presetId, available)`. It also used to
+  hardcode "gantt.preset:" in the message regardless of caller — now honest per-door, like
+  `InvalidPresetError` already was. Message names which table(s) it searched; `ladderIds` is `[]`
+  for a shipped-only door (`gantt.zoomPresets`, `TimeScaleModel.preset`), so the message then names
+  only the shipped table.
+- `harness/timeline-toolbar.ts`, `harness/gantt-toolbar.ts` — removed the `as PresetRef` cast on
+  `gantt.preset = presetSelect.value`; a plain `string` now satisfies `PresetRef` directly (no
+  narrowing needed since `PresetId` accepts any string, with autocomplete kept for the shipped ids).
+- `CONTEXT.md` ("Preset reference"), `plans/02-public-api.md` (`UnknownPresetError` paragraph),
+  `plans/s1.9-presets-and-zoom/README.md` (Q9 — records the Design #11 reversal, scoped to
+  `gantt.preset` only, citing #489 and the 2026-09-22 owner ruling).
+- Tests: `src/time/presets.test.ts` (ladder precedence, fallback, shared-id-wins, error's
+  `ladderIds`/`shippedIds`), `src/layout/viewport/viewport.test.ts` (the red test —
+  `viewport.preset = 'sixHour'` after a `zoomPresets` splice — plus precedence and the still-throws
+  case), `src/layout/viewport/time-scale-model.test.ts` (pins the *unchanged* shipped-only
+  behavior), `src/api/gantt.test.ts` (one Gantt-level integration test), `e2e/editing-and-data.spec.ts`
+  (picking "Every 6 hours" off the harness picker switches preset with no page error).
+- `harness/six-hour-preset.ts` **left where it is, at harness root** — checked against the
+  coordinator's harness-layout rule (test-only fixtures live under `harness/e2e/`, themed demo
+  pages own the root). It is not test-only: `harness/editing-and-data.ts` (the themed demo page) and
+  `harness/e2e/editing.ts` (the e2e fixture) both import it, the same shared-root pattern
+  `timeline-toolbar.ts`, `change-log.ts` and `plugins/lock-entries.ts` already use to hand code down
+  into `harness/e2e/`. Moving it under `harness/e2e/` would take it away from the demo page that owns
+  the feature, against the rule's own "a demo change goes on the themed page that owns the feature."
+  No file moved.
+
+Final public signatures:
+```ts
+export type PresetId = ShippedPresetId | (string & {});
+export type PresetRef = PresetId | ViewPreset;
+
+export class UnknownPresetError extends FreeGanttError {
+  readonly presetId: string;
+  readonly ladderIds: readonly string[];
+  readonly shippedIds: readonly string[];
+  readonly operation: string;
+}
+```
+`gantt.preset` setter is unchanged in shape (`set preset(ref: PresetRef)`); only its resolution
+order changed (ladder, then shipped table).
+
+`pnpm build && pnpm api-report`: clean (`etc/freegantt.api.md` regenerated and committed with this
+change).
+
+---
+
 Branch `Pawel-IT/489-tick-anchor-snap`, worktree
 `/home/pawel/orca/workspaces/freegantt/489-tick-anchor-snap`. Not pushed.
 

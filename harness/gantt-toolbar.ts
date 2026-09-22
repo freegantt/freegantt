@@ -14,7 +14,7 @@
 // `Gantt` and its `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
-import type { Gantt, PresetRef, SnapSetting } from 'freegantt';
+import type { Gantt, SnapSetting } from 'freegantt';
 import { formatDate, formatEndInclusive, isTimeUnit } from 'freegantt';
 
 export interface GanttToolbarOptions {
@@ -199,7 +199,7 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
   todayBtn.addEventListener('click', () => gantt.commands.run('freegantt.panToToday'));
 
   presetSelect.addEventListener('change', () => {
-    gantt.preset = presetSelect.value as PresetRef;
+    gantt.preset = presetSelect.value;
   });
   snapSelect?.addEventListener('change', () => {
     gantt.snap = readSnapChoice(snapSelect!.value);

@@ -12,12 +12,68 @@ describe('resolvePreset', () => {
   });
 
   it('throws UnknownPresetError with code "unknown-preset" for an id outside the shipped set', () => {
-    expect(() => resolvePreset('fortnight' as ShippedPresetId, 'test')).toThrow(UnknownPresetError);
+    expect(() => resolvePreset('fortnight', 'test')).toThrow(UnknownPresetError);
     try {
-      resolvePreset('fortnight' as ShippedPresetId, 'test');
+      resolvePreset('fortnight', 'test');
     } catch (error) {
       expect((error as UnknownPresetError).code).toBe('unknown-preset');
     }
+  });
+
+  it('lists only the shipped ids when no ladder was searched (#489)', () => {
+    try {
+      resolvePreset('fortnight', 'test');
+      expect.unreachable();
+    } catch (error) {
+      const unknown = error as UnknownPresetError;
+      expect(unknown.ladderIds).toEqual([]);
+      expect(unknown.shippedIds).toEqual(Object.keys(presets));
+      expect(unknown.operation).toBe('test');
+      expect(unknown.message).not.toMatch(/zoomPresets/);
+    }
+  });
+
+  // #489 owner ruling: `gantt.preset` also finds a preset in this Gantt's own `zoomPresets`, not
+  // only the shipped table — a custom rung then resolves the same way a shipped id does.
+  describe('a ladder is passed (the gantt.preset door)', () => {
+    const sixHour: ViewPreset = {
+      id: 'sixHour',
+      tickUnit: 'hour',
+      tickIncrement: 6,
+      headers: [{ unit: 'hour', increment: 6, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    const ladder = [presets.hour, sixHour, presets.day];
+
+    it('resolves a custom id found only in the ladder', () => {
+      expect(resolvePreset('sixHour', 'gantt.preset', ladder)).toBe(sixHour);
+    });
+
+    it('resolves a shipped id found in the ladder too', () => {
+      expect(resolvePreset('day', 'gantt.preset', ladder)).toBe(presets.day);
+    });
+
+    it('falls back to the shipped table for an id the ladder does not carry', () => {
+      expect(resolvePreset('week', 'gantt.preset', ladder)).toBe(presets.week);
+    });
+
+    it('the ladder wins over the shipped table for a shared id (#489 owner ruling)', () => {
+      const customHour: ViewPreset = { ...presets.hour, preferredTickWidthPx: 999 };
+      expect(resolvePreset('hour', 'gantt.preset', [customHour])).toBe(customHour);
+    });
+
+    it('names both tables it checked when the id is in neither', () => {
+      try {
+        resolvePreset('fortnight', 'gantt.preset', ladder);
+        expect.unreachable();
+      } catch (error) {
+        const unknown = error as UnknownPresetError;
+        expect(unknown.ladderIds).toEqual(['hour', 'sixHour', 'day']);
+        expect(unknown.shippedIds).toEqual(Object.keys(presets));
+        expect(unknown.operation).toBe('gantt.preset');
+        expect(unknown.message).toMatch(/zoomPresets/);
+      }
+    });
   });
 
   it('passes a ViewPreset object through unchanged — a custom preset is never a library edit', () => {

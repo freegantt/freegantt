@@ -212,6 +212,61 @@ describe('Viewport preset doors name themselves in InvalidPresetError (C3/#482)'
   });
 });
 
+// #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`,
+// not only the shipped table. Before this ruling, `viewport.preset = 'sixHour'` below threw
+// UnknownPresetError even after the id was spliced into `zoomPresets` — the red test this closes.
+describe("Viewport.preset resolves against this Gantt's own zoomPresets first (#489)", () => {
+  const sixHour = {
+    id: 'sixHour',
+    tickUnit: 'hour' as const,
+    tickIncrement: 6,
+    headers: [{ unit: 'hour' as const, increment: 6, format: () => 'x' }],
+    preferredTickWidthPx: 48,
+    minTickWidthPx: 40,
+  };
+
+  it('resolves a custom id spliced into zoomPresets, with no UnknownPresetError', () => {
+    const viewport = new Viewport();
+    viewport.zoomPresets = [...viewport.zoomPresets, sixHour];
+
+    viewport.preset = 'sixHour';
+
+    expect(viewport.preset).toBe(sixHour);
+  });
+
+  it('a shipped id spliced into the ladder still resolves to the shipped preset object', () => {
+    const viewport = new Viewport();
+    const shippedDay = viewport.zoomPresets.find((p) => p.id === 'day')!;
+
+    viewport.preset = 'day';
+
+    expect(viewport.preset).toBe(shippedDay);
+  });
+
+  it('the ladder wins over the shipped table for a shared id (#489 owner ruling)', () => {
+    const viewport = new Viewport();
+    const customDay = { ...viewport.zoomPresets.find((p) => p.id === 'day')!, preferredTickWidthPx: 999 };
+    viewport.zoomPresets = viewport.zoomPresets.map((p) => (p.id === 'day' ? customDay : p));
+
+    viewport.preset = 'day';
+
+    expect(viewport.preset).toBe(customDay);
+  });
+
+  it('still throws UnknownPresetError, naming both tables, for an id in neither', () => {
+    const viewport = new Viewport();
+    viewport.zoomPresets = [...viewport.zoomPresets, sixHour];
+    try {
+      viewport.preset = 'fortnight';
+      expect.unreachable('expected UnknownPresetError');
+    } catch (error) {
+      const unknown = error as { ladderIds?: readonly string[]; shippedIds?: readonly string[] };
+      expect(unknown.ladderIds).toContain('sixHour');
+      expect(unknown.shippedIds).toContain('day');
+    }
+  });
+});
+
 describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
   it('delivers exactly one notification', () => {
     const { viewport, calls } = boundViewport();

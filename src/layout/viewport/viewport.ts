@@ -187,7 +187,11 @@ export class Viewport {
     // — the surface this setter's own caller actually wrote — rather than `TimeScaleModel.preset`'s
     // generic `preset` (C3/#482 review). `this.scale.preset` re-resolves the same, already-valid
     // object below; that second pass cannot throw.
-    const resolved = resolvePreset(ref, 'gantt.preset');
+    //
+    // Searches this Gantt's own `zoomPresets` before the shipped table (#489 owner ruling) — a
+    // custom rung a consumer spliced into their own ladder then resolves the same way a shipped id
+    // does, so `gantt.preset = presetSelect.value` never needs to know which table an id came from.
+    const resolved = resolvePreset(ref, 'gantt.preset', this.#zoomPresets);
     this.batch(() => {
       this.scale.preset = resolved;
       this.#reclampToContentWidth();

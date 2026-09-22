@@ -4,7 +4,7 @@
 // this answers is "make the surface visible on every demo page", so this file exists to avoid three
 // copies of the same dozen lines). Zoom buttons stay in sync through `gantt.on('navigationChange')`.
 
-import type { Gantt, PresetRef } from 'freegantt';
+import type { Gantt } from 'freegantt';
 
 export interface TimelineToolbarOptions {
   gantt: Gantt;
@@ -111,7 +111,7 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
     gantt.zoomIn();
   });
   presetSelect.addEventListener('change', () => {
-    gantt.preset = presetSelect.value as PresetRef;
+    gantt.preset = presetSelect.value;
   });
   // S5.2, D-S5-6: the toolbar's own button is the command, not a second call to `panToToday()` —
   // the same call `gantt.commands.run(id)` a keybinding or a menu item (S5.5) makes.

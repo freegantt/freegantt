@@ -1826,7 +1826,10 @@ export interface PopupSurface {
 }
 
 // @public
-export type PresetRef = ShippedPresetId | ViewPreset;
+export type PresetId = ShippedPresetId | (string & {});
+
+// @public
+export type PresetRef = PresetId | ViewPreset;
 
 // @public (undocumented)
 export const presets: Readonly<Record<ShippedPresetId, ViewPreset>>;
@@ -2318,11 +2321,15 @@ export class UnknownGridColumnError extends FreeGanttError {
 
 // @public
 export class UnknownPresetError extends FreeGanttError {
-    constructor(presetId: string, available: readonly string[]);
+    constructor(presetId: string, ladderIds: readonly string[], shippedIds: readonly string[], operation: string);
     // (undocumented)
-    readonly available: readonly string[];
+    readonly ladderIds: readonly string[];
+    // (undocumented)
+    readonly operation: string;
     // (undocumented)
     readonly presetId: string;
+    // (undocumented)
+    readonly shippedIds: readonly string[];
 }
 
 // @public
