@@ -402,7 +402,7 @@ set range(r: 'fitDataset' | { start: InstantInput; end: InstantInput });
 
 | Foot-gun | Answer |
 |---|---|
-| `gantt.fit = 'pane'` no longer shows the whole dataset | Correct, and deliberate (Q1). The floor wins; the timeline scrolls. Documented on the `fit` doc comment and in `plans/02` §4. |
+| `gantt.fit = 'pane'` no longer shows the whole dataset | **Accepted (#477).** Correct, and deliberate (Q1). The floor wins; the timeline scrolls. Documented on the `TimeScaleFit` and `fit` doc comments (`src/layout/viewport/time-scale-model.ts`, `src/api/gantt.ts`) and in `docs/09-integration-pitfalls.md` §6. |
 | A custom preset omits `minTickWidthPx` and never compresses | The documented default (`= preferredTickWidthPx`). Stated on the field, and `presets.test.ts` asserts it. |
 | `zoomIn()` at the finest preset silently does nothing | `canZoomIn` is the check, and the harness toolbar disables off it. A no-op is not an error — `reveal` on an already-visible entry is the same shape. |
 | `zoomBy(1000)` blows past the browser's scroll limit | `MAX_CONTENT_PX` (D-S1.12-4), applied in the same resolve as the floor. |
