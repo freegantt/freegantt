@@ -64,6 +64,23 @@ function fakeDataset(
   };
 }
 
+// C2/#487: the today-line-timer test below needs two Datasets in two different zones sharing one
+// scale — `fakeDataset` above always answers the module's own `timeZone` ('UTC'), so this variant
+// takes the zone as an argument instead.
+function fakeDatasetWithZone(entries: readonly StoredEntry[], zone: string): GanttShellOptions['dataset'] {
+  const registry = new FieldRegistry({});
+  const context = { timeZone: zone, dateOnlyEnd: 'inclusive' as const };
+  return {
+    entries: new EntryStore(entries, context, registry),
+    timeZone: zone,
+    datasetRevision: 0,
+    fields: { all: registry.all },
+    field: (key) => registry.get(key),
+    on: () => {},
+    off: () => {},
+  };
+}
+
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
 // attachment.test.ts's own fake) — this is the same test seam, stubbed globally because GanttShell
 // constructs `attachPaneSize` itself and takes no `ResizeObserverCtor` option of its own (#8: the
@@ -1792,6 +1809,43 @@ describe('GanttShell today line timer (#476)', () => {
 
       shell.destroy();
       expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // C2/#487 follow-up: a shared `TimeScaleModel` takes the zone of the *first* Gantt bound to it
+  // (`time-scale-model.ts`), so the header bands every bound instance paints are all in that zone —
+  // the timer must arm off the same zone, not each instance's own Dataset zone, or a second-bound
+  // instance re-arms for a midnight its own header never draws.
+  it('a shared scale arms the timer off the scale zone, not the second instance’s own dataset zone', () => {
+    vi.useFakeTimers();
+    try {
+      const scale = new TimeScaleModel();
+      const seenZones: string[] = [];
+      const wiring = {
+        nextTickBoundaryDelayMs: (zone: string) => {
+          seenZones.push(zone);
+          return 1000;
+        },
+      };
+      const shell1 = new GanttShell({
+        wiring,
+        container: document.createElement('div'),
+        dataset: fakeDataset(entries), // zone 'UTC', binds the scale first
+        scale,
+      });
+      const shell2 = new GanttShell({
+        wiring,
+        container: document.createElement('div'),
+        dataset: fakeDatasetWithZone(entries, 'Asia/Kathmandu'),
+        scale,
+      });
+
+      expect(seenZones).toEqual(['UTC', 'UTC']);
+
+      shell1.destroy();
+      shell2.destroy();
     } finally {
       vi.useRealTimers();
     }

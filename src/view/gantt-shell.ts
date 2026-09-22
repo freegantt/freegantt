@@ -2584,7 +2584,10 @@ export class GanttShell {
     const finestBand = header.bands[header.bands.length - 1];
     const unit = finestBand?.unit ?? this.#viewport.preset.tickUnit;
     const increment = finestBand?.increment ?? this.#viewport.preset.tickIncrement;
-    const delayMs = nextTickBoundaryDelayMs(this.#options.dataset.timeZone, unit, increment);
+    // #476/C2: a shared scale (`time-scale-model.ts`) takes the zone of the *first* Gantt bound to
+    // it, not this instance's own Dataset. Arm the timer off the zone the header bands above were
+    // actually generated in — else a second-bound instance re-arms for the wrong midnight.
+    const delayMs = nextTickBoundaryDelayMs(this.#viewport.timeScale.timeZone, unit, increment);
     this.#todayLineTimer = setTimeout(
       () => {
         this.#todayLineTimer = undefined;
