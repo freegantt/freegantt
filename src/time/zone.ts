@@ -9,7 +9,7 @@
 // native Temporal ships. See CONTEXT.md.
 
 import type { Instant, PlainParts, TimeSpan, TimeUnit } from '../model/index.js';
-import { UnsupportedUnitError } from '../model/index.js';
+import { InvalidSnapIncrementError, UnsupportedUnitError } from '../model/index.js';
 import { instant, addMs, MS } from './instant.js';
 import * as InstantFns from 'temporal-polyfill/fns/Instant';
 import * as PlainDateFns from 'temporal-polyfill/fns/PlainDate';
@@ -176,12 +176,12 @@ export function isTimeUnit(value: string): value is TimeUnit {
 
 /** `UNITS`' own declaration order, coarsest last — pinned by a test (`zone.test.ts`) rather than
  *  trusted, since nothing about `Object.freeze` guarantees a reader keeps it sorted. `isCoarserThan`
- *  reads this instead of re-deriving an order of its own, so the two can never disagree. */
+ *  reads this (through `UNIT_RANK`) instead of re-deriving an order of its own, so the two can never
+ *  disagree. */
+const UNIT_ORDER: readonly TimeUnit[] = Object.freeze(Object.keys(UNITS) as TimeUnit[]);
+
 const UNIT_RANK: Record<TimeUnit, number> = Object.freeze(
-  Object.fromEntries((Object.keys(UNITS) as TimeUnit[]).map((unit, index) => [unit, index])) as Record<
-    TimeUnit,
-    number
-  >,
+  Object.fromEntries(UNIT_ORDER.map((unit, index) => [unit, index])) as Record<TimeUnit, number>,
 );
 
 /** Call: `isCoarserThan(tickUnit, 'day')` — true when `unit` groups a wider calendar span than
@@ -262,10 +262,73 @@ export function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: numb
   return ops.step(zone, i, increment);
 }
 
-/** Floors `i` to `unit`'s boundary in `zone` (S1.7 §3.3) — the boundary `TimeScale.ticks` aligns
- * its cells to. */
+/** Floors `i` to `unit`'s boundary in `zone` (S1.7 §3.3) — what `tickFloor` below anchors its own
+ * walk against, and the boundary `increment: 1` always answers. */
 export function startOf(zone: string, i: Instant, unit: TimeUnit): Instant {
   const ops = UNITS[unit];
   if (!ops) throw unsupportedUnit(unit);
   return ops.floor(zone, i);
+}
+
+/** The larger calendar unit anchoring `unit`'s own tick walk (d3 `every(n)`-style, #489): hours count
+ * from the day they fall in, months from their year — one gridline never moves off a boundary it
+ * already drew, whatever window is on screen. Not `UNIT_ORDER`'s own next entry: that would anchor
+ * `week` on `month`, but a week's own floor is not generally a whole number of weeks from a month's
+ * start (a month rarely starts on a week's own first day), so walking weeks from there would miss
+ * `week`'s true floor even at `increment: 1`. Every entry here nests evenly instead — every minute
+ * inside its hour, every hour inside its day, every day inside its week, every month inside its
+ * year — which is what lets `tickFloor` count forward from the anchor and still land on the exact
+ * boundary `startOf` would give directly. A unit with no entry (`week`, `year`) anchors to its own
+ * floor, same as `increment: 1` always did — there is no larger unit to count it from safely. */
+const ANCHOR_UNIT: Partial<Record<TimeUnit, TimeUnit>> = Object.freeze({
+  millisecond: 'minute',
+  minute: 'hour',
+  hour: 'day',
+  day: 'week',
+  month: 'year',
+});
+
+function anchorUnit(unit: TimeUnit): TimeUnit {
+  return ANCHOR_UNIT[unit] ?? unit;
+}
+
+/** The tick immediately after `boundary`, which must already be a valid tick (a `tickFloor` or
+ * `nextTick` answer, never an arbitrary instant) — exported so `TimeScale.ticks` can walk a whole
+ * window one tick at a time, and `snap.ts` can find both boundaries flanking an instant, without
+ * either re-deriving this rule (#489).
+ *
+ * A plain `stepBy` is right only when `increment` divides its anchor container evenly (15 into an
+ * hour's 60 minutes, 6 into a day's 24 hours) — every shipped preset's own increment does. A
+ * `7`-minute step does not divide the hour: strided blindly, 0, 7, … 56 would next give 63 (1:03),
+ * quietly crossing into the next hour's own count mid-stride. "Hours count from the day they fall
+ * in" (#489) means each hour instead resets the count at 0 — so once the raw stride crosses out of
+ * `boundary`'s own container, this resets to that new container's own start (offset 0) instead of
+ * continuing the stride across the seam. */
+export function nextTick(zone: string, boundary: Instant, unit: TimeUnit, increment: number): Instant {
+  const container = startOf(zone, boundary, anchorUnit(unit));
+  const raw = stepBy(zone, boundary, unit, increment);
+  const rawContainer = startOf(zone, raw, anchorUnit(unit));
+  return rawContainer === container ? raw : rawContainer;
+}
+
+/** The tick boundary at or before `at`: `increment`-many whole `unit`s counted from the start of
+ * `unit`'s own `anchorUnit`, never from `at`'s own floor (#489). This is the one tick walk
+ * `TimeScale.ticks`, `snapInstant` and `nextTickBoundary` all read, so a gridline and a drag snap
+ * never disagree. A 6-hour tick (`unit: 'hour', increment: 6`) always lands on
+ * 00:00/06:00/12:00/18:00 in `zone`, whichever span is on screen — the anchor comes from the
+ * calendar, not from wherever the caller's own window happens to start.
+ *
+ * `increment: 1` always answers the same boundary `startOf(zone, at, unit)` already gave: counting
+ * one whole `unit` at a time from any anchor lands back on the boundary `at` already sits inside. */
+export function tickFloor(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant {
+  if (!Number.isInteger(increment) || increment <= 0) {
+    throw new InvalidSnapIncrementError(unit, increment);
+  }
+  let boundary = startOf(zone, at, anchorUnit(unit));
+  let next = nextTick(zone, boundary, unit, increment);
+  while (next <= at) {
+    boundary = next;
+    next = nextTick(zone, boundary, unit, increment);
+  }
+  return boundary;
 }

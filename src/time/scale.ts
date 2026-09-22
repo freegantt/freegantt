@@ -3,7 +3,7 @@
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
 import type { Duration, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
-import { stepBy, startOf } from './zone.js';
+import { stepBy, tickFloor, nextTick } from './zone.js';
 import { instant } from './instant.js';
 
 /** What a caller states about a stepping cadence — the shared shape `ViewPresetHeader` and
@@ -120,10 +120,15 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
     const spanEnd = instantForX(span.x + span.width);
 
     const out: Tick[] = [];
-    let cursor = startOf(timeZone, instantForX(span.x), step.unit);
+    // Anchored, not floored against the visible window's own edge (#489) — tickFloor counts
+    // step.increment-many step.units from step.unit's own next-larger-calendar boundary, so this
+    // first cell stays on the same instant across a pan. nextTick (not a plain stepBy) carries that
+    // same anchor forward one cell at a time, resetting at each anchor-unit boundary rather than
+    // striding across it — the whole row of cells the window draws stays on that one lattice.
+    let cursor = tickFloor(timeZone, instantForX(span.x), step.unit, step.increment);
     let count = 0;
     while (cursor < spanEnd && count < MAX_TICKS) {
-      const next = stepBy(timeZone, cursor, step.unit, step.increment);
+      const next = nextTick(timeZone, cursor, step.unit, step.increment);
       out.push({ instant: cursor, x: xForInstant(cursor), width: xForInstant(next) - xForInstant(cursor) });
       cursor = next;
       count++;
