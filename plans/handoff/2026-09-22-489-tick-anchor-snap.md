@@ -43,11 +43,10 @@ re-splitting later.
    `snapInstant`/`nextTickBoundary` are now exported from `api/index.ts`
    (`src/api/index.ts` — search `#489: the tick tools`), alongside the `SnapRule`/`SnapUnit`
    types. `etc/freegantt.api.md` regenerated and matches (`pnpm api-report` is clean).
-4. **Harness.** `harness/editing.ts` adds a custom `sixHourPreset` (`tickUnit: 'hour',
-   tickIncrement: 6`) spliced into `gantt.zoomPresets` right after `'hour'`, plus a
-   matching "Every 6 hours" option in the snap picker (`harness/editing.html`'s
-   `#snap-unit` select). This is the visible proof: zoom to it, pan — gridlines stay on
-   00/06/12/18; pick that snap and drag — the bar lands on one of them.
+4. **Harness.** Originally landed on `harness/editing.ts`. #497's five-themed-page rebuild
+   delinked that file to `harness/e2e/editing.ts` (a Playwright fixture, not a nav page); the
+   2026-09-22 follow-up session (see "What is left" below) moved the visible demo to
+   `harness/editing-and-data.html` / `harness/gantt-toolbar.ts` to match.
 
 **Tests that prove it**, all green at the final commit:
 - `src/time/scale.test.ts` — new `describe('ticks() anchoring (#489)')` block: (a) ticks()
@@ -67,18 +66,47 @@ re-splitting later.
 
 ## What is left
 
-1. **Run `FG_E2E_PORT=5186 pnpm verify:full`** and report the verdict line verbatim — I did
-   not run this (browser/e2e gate) before the context-budget stop. Everything short of it
-   (verify's own non-e2e chain: typecheck, lint, unit+dom tests, guards, build, api-report)
-   is green as reported above, so I'd expect `verify:full` to pass, but say so as an
-   expectation, not a result, until it actually runs.
-2. **Optional**: `e2e/direct-manipulation.spec.ts` or similar may be worth a read for a
-   snap-behavior assertion that assumed the old default-on fallback — I did not find one
-   grepping for `snap` in `e2e/`, but I did not run the e2e suite itself.
-3. Nothing else is known-incomplete. If `verify:full` fails, the most likely culprits given
-   what changed: a doc-example checker (`check-doc-examples`) choking on the `gantt.snap`
-   code sample in `plans/02-public-api.md` (I edited one line there), or an e2e page that
-   drags a bar and expected it to snap with no `gantt.snap` stated (now free-dragging).
+Nothing. A follow-up session (2026-09-22, after `origin/main` moved two merges ahead on
+#497's five-themed-page harness rebuild) rebased this branch, closed every item below, and
+ran the full gate. Final commits:
+
+- `578ad284` — Anchor the tick walk on the calendar, one walk for grid and snap (#489)
+- `cb254492` — Make gantt.snap opt-in; drop the dead ViewPreset.snap field (#489)
+- `5b1befd9` — Custom snap rule and tick tools on the public API (#489)
+- `59bdc0a8` — this handoff, as first written
+- `cf1e9b0f` — Land the #489 demo on editing-and-data.html after the harness restructure (#489)
+
+What the follow-up session did:
+
+1. **Ran `FG_E2E_PORT=5186 pnpm verify:full`.** Verdict: `verify:full PASS — all 17 checks
+   green, test:e2e included (96s).`
+2. **Checked `e2e/` for a drag test relying on the old snap-on-by-default fallback.** None
+   found. `e2e/direct-manipulation.spec.ts` drives `/e2e/editing.html`, which calls
+   `applySnapChoice()` unconditionally on load — it always states `gantt.snap` itself, so
+   the opt-in-default change never reaches it. `e2e/write-refusal.spec.ts` has a comment
+   about snap-back risk on a small resize drag, but its assertion (`after.start >
+   before.start`) holds under free dragging too, and is more robust with snap off, not
+   less. No other `e2e/*.spec.ts` asserts an exact snapped date.
+3. **Rebased onto `origin/main`** (`cbde4e0c` #497's five-themed-page rebuild, `9e6c86a2`
+   #498). Conflicts were in `harness/gantt-toolbar.ts` (a duplicated/stale merge hunk —
+   dropped, keeping only the `snap-rule`-aware `snapValue`) and `harness/e2e/editing.ts`
+   (import-path/header only — `harness/editing.ts` had moved to `harness/e2e/editing.ts` as
+   a delinked test fixture; kept that file's #489 content, fixed its now-one-level-deeper
+   import paths).
+4. **Moved the visible demo.** #497 delinked `harness/editing.ts` (→ `harness/e2e/editing.ts`)
+   from the nav — it is a Playwright fixture now, not a page a reader opens. The demo needed
+   a new home: `editing-and-data.html` owns dragging on the shared `gantt-toolbar.ts`, so the
+   `sixHourPreset` (`tickUnit: 'hour', tickIncrement: 6`) splices into its
+   `gantt.zoomPresets`, and "Every 6 hours" joins the toolbar's shared snap picker
+   (`SNAP_CHOICES`/`readSnapChoice`/`snapValue` in `harness/gantt-toolbar.ts`) — public API
+   only (`ViewPreset`, `gantt.zoomPresets`, `gantt.snap`), no harness workaround. To see it:
+   open `editing-and-data.html`, zoom past "Hour" (or pick "Every 6 hours" straight off the
+   time-scale picker) and pan — gridlines hold at 00/06/12/18; pick "Every 6 hours" off the
+   Snap picker and drag a bar — it lands on one of those lines.
+5. **Fixed a stale doc example `pnpm verify` caught.** README.md's "Dragging bars and
+   snapping" section still named the retired `ViewPreset.snap` field (removed by
+   `cb254492`, before this handoff was first written) — `check-doc-examples` failed on it.
+   Rewrote the section against `gantt.snap`, including the new `SnapRule` escape hatch.
 
 ## Design decisions (with reasons)
 
@@ -118,9 +146,9 @@ re-splitting later.
 
 ## Open questions / stops
 
-- None on the harness stop rule — `harness/editing.ts`'s custom preset and snap-picker
-  option both use only public API (`ViewPreset`, `gantt.zoomPresets`, `gantt.snap`), no
-  workaround.
+- None on the harness stop rule — the demo (now on `editing-and-data.html` /
+  `gantt-toolbar.ts`) uses only public API (`ViewPreset`, `gantt.zoomPresets`, `gantt.snap`),
+  no workaround.
 - The `SnapRule`-and-multi-entry-drag interaction above (ms-delta fallback) is the one
   design call worth a second look from the owner if they read this closely.
 
@@ -133,26 +161,19 @@ re-splitting later.
 - `src/view/gantt-shell.ts:1495-1516` — `get/set snap`, the opt-in default.
 - `src/time/scale.test.ts` — the `describe('ticks() anchoring (#489)')` block, bottom of
   file, for the property tests and why the buffer/numRuns are sized as they are.
-- `harness/editing.ts` — the `sixHourPreset` and `applySnapChoice` additions, for the
-  visible proof.
+- `harness/editing-and-data.ts` (the `sixHourPreset` splice) and `harness/gantt-toolbar.ts`
+  (`SNAP_CHOICES`/`readSnapChoice`/`snapValue`'s `sixHour` case) — the visible proof, on the
+  themed page that replaced the old `harness/editing.ts`.
 - The issue itself, `gh issue view 489 --comments`, for the four ownership rulings this
   build follows.
 
 ## Last verify/test result (verbatim)
 
-`pnpm verify:full` was **not run** — stopped for the context-budget handoff before reaching
-it. The last commands actually run, each reported PASS/green above:
+Run after the rebase onto `origin/main` and the harness demo move, at commit `cf1e9b0f`:
 
 ```
-pnpm typecheck   -> clean (tsc --noEmit, no errors)
-pnpm lint        -> clean (eslint ., no errors)
-pnpm test:node   -> Test Files  63 passed (63) / Tests  944 passed (944)
-pnpm test:dom    -> Test Files  65 passed (65) / Tests  1288 passed (1288)
-pnpm guards      -> all guard suites + rule tests + red tests passed
-pnpm build       -> ✓ built in 2.25s (dist/api/index.js + .d.ts)
-pnpm api-report  -> API Extractor completed successfully (etc/freegantt.api.md matches)
+FG_E2E_PORT=5186 pnpm verify:full
+verify:full PASS — all 17 checks green, test:e2e included (96s).
 ```
 
-Next step for whoever picks this up: run
-`FG_E2E_PORT=5186 pnpm verify:full > /tmp/claude-1000/v489.log 2>&1; tail -3 /tmp/claude-1000/v489.log`
-and report that verdict line verbatim, as the original dispatch asked.
+Not pushed; no pull request opened, per the dispatch.
