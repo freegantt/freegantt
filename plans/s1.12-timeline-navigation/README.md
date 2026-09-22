@@ -280,7 +280,24 @@ todayLine?: boolean;
 - `computeFrame` emits a `TodayLine` when `todayLine` is on **and** `now()` falls inside `scale.range`; otherwise nothing. `now()` lives in `time/instant.ts` and is the only legal clock read (I10).
 - `render/dom` renders `.fg-today-line`, positioned like any other content-space geometry.
 - One token: `--fg-today-line-color`, the key S1.10 §270 cut *"until the render surface that needs it ships."* This is that surface.
-- **No timer.** The line is recomputed from `now()` on each frame and moves on the next render, not on a clock tick. A self-refreshing line needs a timer, and a timer needs a lifecycle the reconciler is explicitly not allowed to grow (CLAUDE.md: *"Needing lifecycle hooks means the design is wrong"*).
+- **No timer**, at the time this decision was written. The line was recomputed from `now()` on each
+  frame and moved on the next render, not on a clock tick. The objection: a self-refreshing line
+  needs a timer, and a timer needs a lifecycle the reconciler is explicitly not allowed to grow
+  (CLAUDE.md: *"Needing lifecycle hooks means the design is wrong"*).
+
+  **Superseded 2026-09 by PR #487.** The line now self-refreshes (#476, §5's foot-gun table).
+  `view/gantt-shell.ts` arms one `setTimeout` for the finest header band's next tick boundary. Every
+  frame painted with `todayLine: true` re-arms it. On fire, it requests a repaint.
+
+  This does not reopen the objection above. The timer lives in the shell, one level above the
+  reconciler, not inside it. The reconciler still grows no lifecycle hook. `GanttShell` already owns a
+  mount/unmount lifecycle; one more timer there adds no new kind of thing.
+
+  **Known limitation, accepted.** The timer arms off the finest header band. So its cadence is only as
+  fine as that band. On a coarse preset, the line can sit stale a while between fires. Measured:
+  `preset: 'monthAndYear'` at `2026-06-15T10:00Z` arms one 1,346,400,000 ms (15.6-day) timeout. Between
+  fires, `now()` moves on but the painted line does not, drifting by up to a whole month column. The
+  cadence is not fixed here — that is a separate decision, not yet made.
 
 Weekend and non-working-time shading stays S5's plugin-dogfood example (`plans/03` §S5), narrowed to shading alone — §7.
 
@@ -494,7 +511,6 @@ Guardrails and glossary first, then the engine, then the seam, then the public e
 |---|---|---|
 | ctrl/⌘+wheel zoom, shift+wheel pan, keyboard pan | S3 | `interaction/`'s controller base; recorded in `plans/03` §S3 (D-S1.12-17) |
 | Weekend / non-working-time shading | S5 | the plugin dogfood gate it is the example for (`plans/03` §S5) |
-| A self-refreshing today line | when a caller needs one | a timer and the lifecycle the reconciler may not grow (D-S1.12-14) |
 | `align: 'end'` on `panToDate` | when a caller asks | `'start'` and `'center'` cover the toolbar and the "show me this date" case; a third alignment is a policy nobody has requested |
 | A per-band `minTickWidthPx` (rather than per-preset) | when a band's labels need a floor its tick unit does not imply | today `tickUnit` is never coarser than the finest header, so the tick floor is already at least as strict |
 | Quarter as a `TimeUnit` | when a consumer asks for a fiscal-quarter band | `TimeUnit` is a closed union; adding one means `zone.ts`'s stepping table, not a preset |

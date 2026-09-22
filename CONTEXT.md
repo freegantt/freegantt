@@ -486,7 +486,7 @@ The text a Date line shows when it has a `label`. A sibling Part, `.fg-date-line
 _Avoid_: caption (used generically elsewhere), tooltip (this is always-visible, not hover-triggered)
 
 **Today line**:
-The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Updates on the next render, not on a clock tick. Paint marks it with `data-flag="today"` on `.fg-date-line`. `panToToday` pans to `now()`.
+The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Self-refreshing: `view/gantt-shell.ts` arms a `setTimeout` for the finest header band's next tick boundary and repaints on fire (#476, D-S1.12-14 superseded). Cadence follows that band, so a coarse preset drifts up to a whole column between fires — accepted, not yet tuned. Paint marks it with `data-flag="today"` on `.fg-date-line`. `panToToday` pans to `now()`.
 _Avoid_: Cursor (that is the pane's CSS cursor, or the Cursor line during a drag — never this Date line)
 
 **Cursor line**:
