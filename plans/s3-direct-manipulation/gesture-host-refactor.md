@@ -285,5 +285,5 @@ node scripts/guard-red-test.mjs
       D-GH-4; S3.5 shared context / keyboard / `setPending` added 25). Every method the plan's §2
       "cut" list named is gone (verified by grep). The residual is the shell's non-gesture surface
       (viewport/theme/scroll/splitter/pane wiring) — out of C1–C5; do not split it in this plan.
-- [ ] Leftover `#commit` fold, pending-ghost, two "pending" field names — tracked under S3.5 §4
+- [x] Leftover `#commit` fold, pending-ghost, two "pending" field names — tracked under S3.5 §4. **Done:** no `pendingGhost` or `pending-ghost` symbol survives in `src/`.
       follow-up, not a new D-GH step.

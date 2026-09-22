@@ -32,7 +32,7 @@ export const DERIVED: FieldWriteVerdict = Object.freeze({ ok: false, reason: 'de
  *  asked. A write refused here is refused standalone and refused inside `dataset.transaction()`
  *  alike: grouping decides when writes land together and what one undo step covers, never what is
  *  allowed. The signal it replaced was transaction depth, and `dataset.transaction()` is public, so
- *  a consumer set it in one call (Q7, `plans/field-redesign/BUILD-LOG.md`).
+ *  a consumer set it in one call (Q7, ADR 0013's appendix — still open).
  *
  *  Three readers ask, and they must agree (I14): `entries.update()` decides a write with it,
  *  `view/capability.ts` decides whether the cell offers an editor at all, and `EditRequest.writeTarget`

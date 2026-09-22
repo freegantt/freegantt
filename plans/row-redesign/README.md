@@ -4,7 +4,7 @@ One row has three names. It is a stored value in `model/`, a set of questions on
 
 Opened 2026-09-11, out of a design session on the plugin variant surface.
 
-> **The plan of record is [`build/`](build/README.md).** This folder is the reasoning behind it. An implementer reads `build/README.md` once, then one build file. Open questions and lone calls are in [`BUILD-LOG.md`](BUILD-LOG.md).
+> **This folder is historical working material.** All four ADRs (0017–0020) are `accepted`, and every build here landed. The build files and the build log are deleted; each ADR now carries the questions and the calls it depends on, in its own appendix. `plans/00`–`04` and `CONTEXT.md` state what is true now.
 
 ## The four, in landing order
 
@@ -141,7 +141,7 @@ ctx.variants.add({ name: 'buffer', when: (entry) => entry.read('slack') > 0, pai
 
 ## Open
 
-**Nothing. Every question closed on 2026-09-11.** Each ADR's frontmatter says so, and [`BUILD-LOG.md`](BUILD-LOG.md) carries each answer with its reasoning.
+**Nothing. Every question closed on 2026-09-11.** Each ADR's frontmatter says so, and [ADR 0017's questions appendix](../../docs/adr/0017-the-entry-answers-questions-about-itself.md#appendix--the-questions-this-redesign-closed-q1q9) carries each answer.
 
 **A plan review the same day closed ten more holes in the plugin-author surface**, and every one is a `J` entry — a call made alone, and reversible. `J5` is the largest: a `compute` Field keeps its by-key read and its duration, bound to the pass, and the contexts split by lifetime. Read `J5`–`J14` before you change one of them back.
 

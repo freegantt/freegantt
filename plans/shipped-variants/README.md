@@ -1,5 +1,9 @@
 # shipped variants — plan
 
+**This folder is historical working material.** All three issues (#287, #288, #289) are closed,
+ADRs 0021 and 0022 are `accepted`, and every build here landed. The per-build checklists and the
+build log are deleted. `plans/00`–`04` and `CONTEXT.md` state what is true now.
+
 One defect on `harness/planner.ts`'s checkpoint glyph opened three issues. This folder is the work.
 
 | Issue | ADR | The job |
@@ -53,10 +57,10 @@ Seven questions came up while planning. **All seven carry answers.** Nothing her
 
 Each one says where its answer came from: an existing record, a principle the author stated, or a
 call made under a rule already in `CLAUDE.md`. A call is reversible — the reasoning is written down
-so a reviewer can undo it. Every answer is also a row in [`BUILD-LOG.md`](BUILD-LOG.md).
+so a reviewer can undo it. Every answer is also a row in the table below.
 
 **Before you file a new question here, search the records first.** Q1 and Q4 were filed as open and
-were already decided — one in an ADR, one in a review finding. `plans/row-redesign/BUILD-LOG.md`,
+were already decided — one in an ADR, one in a review finding. the row redesign's own record,
 `docs/adr/**` and the `plans/s*/README.md` D-tables are where a settled decision hides.
 
 ### Q1 — an `ItemProducer` cannot name the variant it draws for
@@ -128,7 +132,7 @@ its own number into its own Items, and nothing outside it has an opinion.
 
 ### Q4 — `variantOf` and `variantFor` are one concept with two names
 
-**Answered by review finding F3 (`plans/row-redesign/BUILD-LOG.md:1415`). Not an open question.**
+**Answered by review finding F3 ([ADR 0018's appendix](../../docs/adr/0018-a-variant-is-a-rule-not-an-id-list.md)). Not an open question.**
 F3 ruled that a door answering with a *name* is the bug: *"`variantFor(entry)` answered with a
 string, and `itemsFor`/`paintFor`/`interactionsFor` looked that string up again."* The registry
 already answers `resolveFor(entry): ResolvedVariant` because of it, and `ResolvedVariant`'s own doc
@@ -304,8 +308,3 @@ Both ADRs hold the full reasoning. This is the short list, so nobody spends a tu
 
 | File | What it holds |
 |---|---|
-| [`build/README.md`](build/README.md) | The hard rules every build follows. |
-| [`build/build-1-287-seal-the-harness.md`](build/build-1-287-seal-the-harness.md) | #287. |
-| [`build/build-2-0021-the-layer.md`](build/build-2-0021-the-layer.md) | #288, ADR 0021. |
-| [`build/build-3-0022-shipped-variants.md`](build/build-3-0022-shipped-variants.md) | #289, ADR 0022. |
-| [`BUILD-LOG.md`](BUILD-LOG.md) | Every question and every judgement call. |

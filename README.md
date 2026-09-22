@@ -9,6 +9,32 @@ this file documents the public surface as it lands, slice by slice.
 The public API below reflects what ships on this branch; names and options may still change until S4
 closes. The full, defended spec is `plans/02-public-api.md`; `CONTEXT.md` is the glossary.
 
+<!-- doc-example-setup
+// What the examples below stand on: the classes a reader has already imported, a live Dataset and
+// Gantt, the values their options take, and the app's own elements and callbacks. Every example on
+// this page is typechecked against the built package types by `pnpm check-doc-examples`.
+declare const Dataset: typeof import('freegantt').Dataset;
+declare const Gantt: typeof import('freegantt').Gantt;
+declare const invertChangeSet: typeof import('freegantt').invertChangeSet;
+type Props = { cost: number; team: string };
+declare const dataset: import('freegantt').Dataset<Props>;
+declare const gantt: import('freegantt').Gantt<Props>;
+declare const entries: import('freegantt').DatasetOptions<Props>['entries'];
+declare const timeZone: string;
+declare const dateOnlyEnd: import('freegantt').DateOnlyEndRule;
+declare const aggregators: NonNullable<import('freegantt').DatasetOptions<Props>['aggregators']>;
+declare const plugins: NonNullable<import('freegantt').DatasetOptions<Props>['plugins']>;
+declare function asCurrency(value: unknown, ctx: import('freegantt').FormatContext, entry: import('freegantt').Entry): string;
+declare const recordedChangeSet: import('freegantt').ChangeSet;
+declare const container: HTMLElement;
+declare const element: HTMLElement;
+declare const selectionLabel: HTMLElement;
+declare const renameBtn: HTMLButtonElement;
+declare const input: HTMLInputElement;
+declare function save(value: unknown): void;
+declare const api: { save(changeSet: import('freegantt').ChangeSet): Promise<void> };
+-->
+
 ## Quick start
 
 Minimal example: put a small, fixed set of entries into a `Gantt`.
@@ -182,7 +208,7 @@ surface. The authoritative design doc is `plans/02-public-api.md`.
 ```ts
 import { Dataset } from 'freegantt';
 
-const dataset = new Dataset({
+const dataset = new Dataset<{ cost: number; team: string }>({
   entries, // readonly EntryInput[] — see "Dates and ids a consumer can write"
   timeZone, // IANA zone; omit it and the environment's own zone resolves once, at construction
   dateOnlyEnd, // optional, 'inclusive' (default) | 'exclusive'
@@ -203,7 +229,7 @@ dataset.entries.remove('t9'); // and every descendant, in the same changeset
 // There is no `rollUpKinds` and no `hierarchy: { autoGroup }`. An Entry carries no stored kind
 // (ADR 0013): a parent rolls up because it has children. One entry opts out with `rollUp: 'none'`,
 // which keeps the caller-assigned dates on that parent alone (#470).
-dataset.entries.fieldValue('t2', 'cost'); // reads through the Field registry
+dataset.entries.get('t2')?.read('cost'); // reads through the Field registry
 
 dataset.field('cost'); // resolved Field | undefined
 dataset.fields.all; // every declared Field, core included
@@ -223,8 +249,8 @@ dataset.redo(); // origin: 'redo'
 dataset.canUndo;
 dataset.canRedo;
 
-const doc = dataset.toJSON(); // schema: 2
-const copy = Dataset.fromJSON(doc, { aggregators }); // function keys travel with the app
+// There is no `toJSON` and no `fromJSON`: the library holds no save format (ADR 0016). A consumer
+// reads `entries.all` and `fields.all` above, and saves the shape its own backend wants.
 
 // The write path undo()/redo() are built on, published for a consumer's own History:
 dataset.replay(invertChangeSet(recordedChangeSet)); // origin must be 'undo' or 'redo'
@@ -327,15 +353,14 @@ On `Gantt` directly (when no shared `scale` is passed): `preset`, `range`, `fit`
 ### `Gantt`
 
 ```ts
-import { Gantt } from 'freegantt';
+import { Gantt, ScrollAxis } from 'freegantt';
 
 const gantt = new Gantt({
   container: element, // HTMLElement or CSS selector
   dataset,
-  scale, // optional TimeScaleModel — omit for a private default
-  scroll, // optional ScrollAxes — { x?: ScrollAxis, y?: ScrollAxis }
-  preset: 'weekAndMonth', // when scale is omitted
+  preset: 'weekAndMonth', // or a shared `scale: TimeScaleModel` — one arm or the other, never both
   range: 'fitDataset', // or { start, end } — InstantInput
+  scroll: { x: new ScrollAxis(), y: new ScrollAxis() }, // optional ScrollAxes — either key on its own is legal
   gridColumns: ['name', 'start', 'duration'],
   rowSource: { source: 'entries', tree: true },
   theme: 'auto', // 'light' | 'dark'
@@ -380,7 +405,7 @@ a toolbar, bulk rename, or any "act on the selected rows" control:
 ```ts
 gantt.on('selectionChange', () => {
   const names = gantt.selectedEntries.map((entry) => entry.name);
-  toolbar.textContent = names.join(', ');
+  selectionLabel.textContent = names.join(', ');
 });
 
 renameBtn.addEventListener('click', () => {

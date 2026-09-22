@@ -1,5 +1,5 @@
 ---
-status: accepted — built and green on 2026-09-12 (`verify:full PASS — all 16 checks green, test:e2e included`). Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`, and the build is `plans/row-redesign/build/build-4-0020-hierarchy.md`.
+status: accepted — built and green on 2026-09-12 (`verify:full PASS — all 16 checks green, test:e2e included`). Opened 2026-09-11, out of a design session on the plugin variant surface. The working material is in `plans/row-redesign/`, and the build was build 4 of that redesign.
 decided: one seam, not two — a plugin states the parent of an Entry, and the Rollup follows (2026-09-11, from the author's "from the data side it should be able to change how our rollup and parents/children work"). The source reads a `StoredEntry`, never the live `Entry`. Grouping stays a row source and does not come here.
 open: nothing. The seam is the **hierarchy source**, set through `ctx.hierarchy.setSource` (2026-09-11, author's ruling — `Q3` — with the namespace added on a review finding the same day), and it sits beside `ctx.edits.setExtender` on the `data` half. The cost question is answered in *What core keeps*, not open: the source is a pure function of one Entry, so an open transaction keeps its O(children + edits) shape.
 ---
@@ -39,7 +39,7 @@ type HierarchySource<TProps = Record<string, unknown>> = (
 ) => EntryId | string | undefined;
 ```
 
-One entry in, one parent id out. Core's own source is `(entry) => entry.parentId`, registered like any other, with no special claim on the seam (D-S5-23). A plain `string` is a legal answer, the way it is on every other way into the library, and core brands it once (`BUILD-LOG` `J51`).
+One entry in, one parent id out. Core's own source is `(entry) => entry.parentId`, registered like any other, with no special claim on the seam (D-S5-23). A plain `string` is a legal answer, the way it is on every other way into the library, and core brands it once ([`J51`](#appendix--the-calls-made-during-the-build-j51j55)).
 
 A plugin composes, the same way an `EditExtender` composes — it receives the current occupant and may call it:
 
@@ -54,7 +54,7 @@ definePlugin({
 });
 ```
 
-That call reads: _the phase id when there is one, otherwise whatever the next source says._ `setSource` takes the props shape, so `entry.props` carries the key with no cast (`BUILD-LOG` `J52`); a key a plugin reads is a key a plugin declares (ADR 0011), which is what `ctx.fields.register` above is for. An Entry named by a `phaseId` becomes a parent. It has children, so it derives, it rolls up, and step 3 of ADR 0018 paints it as a summary — because it **is** one, not because a stored word said so.
+That call reads: _the phase id when there is one, otherwise whatever the next source says._ `setSource` takes the props shape, so `entry.props` carries the key with no cast ([`J52`](#appendix--the-calls-made-during-the-build-j51j55)); a key a plugin reads is a key a plugin declares (ADR 0011), which is what `ctx.fields.register` above is for. An Entry named by a `phaseId` becomes a parent. It has children, so it derives, it rolls up, and step 3 of ADR 0018 paints it as a summary — because it **is** one, not because a stored word said so.
 
 ## One seam, not two
 
@@ -78,7 +78,7 @@ So the signature takes `StoredEntry`. The seam that builds the tree is the one s
 
 **Core inverts the answer.** A source states one parent per Entry. Core builds the child index from that, so nothing can produce two parents for one Entry, and sibling order stays the order the Entries are in.
 
-**Core refuses a cycle.** `ParentCycleError` (`entry-store.ts`) guards a `parentId` write, and keeps that job — `parentId` is still stored and still written. A second guard sits on the walk, because a cycle can now arrive from a source instead of from a write. A cyclic answer raises a Fault with `by: 'plugin'` (code `hierarchy-cycle`), and the Entry whose answer **closes** the loop is read as a root, so one link is dropped rather than the whole chain (`BUILD-LOG` `J54`). A refusal never throws: a Gantt whose plugin answers badly still draws.
+**Core refuses a cycle.** `ParentCycleError` (`entry-store.ts`) guards a `parentId` write, and keeps that job — `parentId` is still stored and still written. A second guard sits on the walk, because a cycle can now arrive from a source instead of from a write. A cyclic answer raises a Fault with `by: 'plugin'` (code `hierarchy-cycle`), and the Entry whose answer **closes** the loop is read as a root, so one link is dropped rather than the whole chain ([`J54`](#appendix--the-calls-made-during-the-build-j51j55)). A refusal never throws: a Gantt whose plugin answers badly still draws.
 
 **Core keeps the cost shape.** The source is a pure function of one Entry, so `#childrenOfWriteSet` swaps one property read for one call and stays O(children + edits). A source that needed the whole entry list would make it O(dataset) per query — the O(n²) shape finding S1 (#212) already killed once.
 
@@ -96,10 +96,23 @@ The line is the author's: layout is not coupled to data, and this seam does not 
 
 **Three read sites stop reading `.parentId`, and a fourth is this ADR's own.** `layout/rows/entries-source.ts:16`, `layout/frame-memory.ts:77` and `view/tree-collapse.ts:111,153` ask the live `Entry` instead — `entry.parent()`, `entry.children()`, `entry.hasChildren` — and that work is 0017's. This ADR is the reason it must land completely: a site left reading the field disagrees with the rest of the library the moment a plugin installs.
 
-**The fourth site cannot move with them, and it belongs here.** `data/rollup.ts`'s `collectTouchedIds` finds the **former** parent of a row that moved, out of the `entries` map it was handed. A live `parent()` answers the new one, so the old parent never rolls up again and a move leaves a stale aggregate behind. It asks the **source**, applied to the pre-edit row — which is a question only this ADR can answer, because before it there is no source to ask. It asks for **every** edit rather than only for one that named `parentId`: a source reading a `props` key moves a row with no `parentId` write to spot, and a write-shape check would miss it (`BUILD-LOG` `J53`). `WriteSet.stagedParents` reads the source for the same reason.
+**The fourth site cannot move with them, and it belongs here.** `data/rollup.ts`'s `collectTouchedIds` finds the **former** parent of a row that moved, out of the `entries` map it was handed. A live `parent()` answers the new one, so the old parent never rolls up again and a move leaves a stale aggregate behind. It asks the **source**, applied to the pre-edit row — which is a question only this ADR can answer, because before it there is no source to ask. It asks for **every** edit rather than only for one that named `parentId`: a source reading a `props` key moves a row with no `parentId` write to spot, and a write-shape check would miss it ([`J53`](#appendix--the-calls-made-during-the-build-j51j55)). `WriteSet.stagedParents` reads the source for the same reason.
 
-**`entry-tree.ts`'s walks take the source.** `childIdsByParent`, `depthOf` and `ancestorsOf` each read `parentId` directly today. The fourth, `childCountByParent`, had no caller anywhere and was deleted rather than threaded (`BUILD-LOG` `J55`).
+**`entry-tree.ts`'s walks take the source.** `childIdsByParent`, `depthOf` and `ancestorsOf` each read `parentId` directly today. The fourth, `childCountByParent`, had no caller anywhere and was deleted rather than threaded ([`J55`](#appendix--the-calls-made-during-the-build-j51j55)).
 
 **This is an expert door.** An app author never meets it. It sits on the Dataset half of `definePlugin` ([0019](0019-one-plugin-one-install-site.md)), beside `ctx.edits.setExtender`, and the two read the same way: a namespace, then the verb.
 
 **A childless Entry can be made to paint as a summary two ways** — a variant of its own under ADR 0018, or this. The first changes the paint and claims nothing. The second changes the data's own answer, so the Rollup follows. That difference is exactly what 0018 protects when it refuses to store a variant.
+
+## Appendix — the calls made during the build (J51–J55)
+
+These entries were `plans/row-redesign/BUILD-LOG.md`. That log is deleted; the calls this ADR
+cites live here, so the citation resolves inside the record that depends on it.
+
+| | The call |
+|---|---|
+| `J51` | the hierarchy source answers a loose id, and core brands it once |
+| `J52` | `setSource` takes the `props` shape, so a plugin reads a consumer key with no cast |
+| `J53` | `collectTouchedIds` reads the former parent for every edit, and the `'parentId' in edit` check is gone |
+| `J54` | a refused hierarchy answer is a Fault, never a throw, and `ParentCycleError` keeps its own job |
+| `J55` | `childCountByParent` is deleted, because nothing called it |

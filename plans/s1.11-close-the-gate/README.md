@@ -394,7 +394,7 @@ Everything below lands on top of a merged, green S1.11a.
 - [x] #33 deferred to S2 with the reason in `plans/03` §S2; #41 and #64 closed
 - [x] `plans/temp_todo_for_s1-close.md` deleted; `plans/need-fixing/` triaged (the one file in it moved to `plans/fixed/` — its findings are all resolved by the S1.7–S1.9 `Viewport`/`bind(binding, onChange)` refactor)
 - [x] `pnpm verify` green; `pnpm test:e2e` green (13/13); `pnpm gate` prints `S1 → S2` with six ✔
-- [ ] `.slice` → `S2` in a **separate** reviewed commit (D-S1.11-10)
+- [x] `.slice` → `S2` in a **separate** reviewed commit (D-S1.11-10) — **done** in `ce02a05f` *Advance `.slice` to S2*, which touches that file alone.
 
 ---
 

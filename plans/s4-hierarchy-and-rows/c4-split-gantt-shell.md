@@ -102,9 +102,9 @@ Each step is its own commit. Do not mix S7 pipeline files into these diffs.
 
 - [x] `gantt.collapseAll()` is the call the harness writes.
 - [x] `transaction.ts` / `build-commit-change-set.ts` are unchanged by this work.
-- [ ] S5 plugin attach points edit a small wiring list in `GanttShell`, not tree-collapse policy. Not
-      verifiable yet — S5 has not started (`plans/03-slices.md` §S5 acceptance is all unchecked). This
-      extraction only sets up the constraint; S5's own start constraint restates it and is where it
-      gets checked.
+- [x] S5 plugin attach points edit a small wiring list in `GanttShell`, not tree-collapse policy.
+      **Checked once S5 shipped:** the attach points are `PluginRegistrations`, held as
+      `GanttShell.#registrations` and handed to `computeFrame`. No plugin seam reaches tree-collapse
+      policy.
 
 `layoutInputFromShell` was not extracted: `render()` is still a field list with no extra rule. `#phase` stays on the shell.

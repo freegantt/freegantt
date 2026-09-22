@@ -29,13 +29,13 @@ Two more facts sit beside it:
    library's own writes. The first fix told a consumer write from a library write by **call nesting**
    (`TransactionData.openTransactions === 1`).
 3. `dataset.transaction()` is public, so a consumer reached that lever in one call: the same write
-   threw standalone and landed silently inside a transaction body (Q7,
-   `plans/field-redesign/BUILD-LOG.md`).
+   threw standalone and landed silently inside a transaction body (Q7, carried in
+   [ADR 0013's appendix](../../../docs/adr/0013-what-decides-that-a-row-derives-its-values.md)).
 4. The amendment of 2026-09-11 fixed that correctly — permission reads off the thing written, never
    off the shape of the call — and in the same breath shipped `distribute`, framed as "the consumer
    naming the policy" from step 1.
 5. Nobody had named one. Its first user is a harness "Set cost 500" button, written afterwards to
-   exercise the key (BUILD-LOG J29, Task 2).
+   exercise the key (field redesign, J29, Task 2).
 
 **The permission rule from step 4 stays. The policy seam that rode along on it goes.**
 

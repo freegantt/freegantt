@@ -86,3 +86,14 @@ End with no start is allowed. Inclusive-end formatting has no start: show the st
 | Issue | What this ADR needs from it |
 |---|---|
 | [#242](https://github.com/Pawel-IT/FreeGantt/issues/242) | Optional dates change what `InvalidInstantError` guards. **This ADR lands before #242's own fix** |
+
+## Appendix — the calls this ADR's span invariant rests on
+
+These entries were `plans/field-redesign/BUILD-LOG.md`. That log is deleted; what this ADR and
+`src/` cite lives here.
+
+| | The call |
+|---|---|
+| `Q5` | does `model/`'s types-only carve-out admit a small runtime helper? **Answered 2026-09-11: yes, one function.** `spansTime(entry)` states this ADR's span invariant in one place, and five of the six casts that restated it are gone |
+| `J2` | `wholeEntryBar`'s signature is untouched; the span guard sits once in `produceBarsForRow` |
+| `N10` | `wholeEntryBar`'s parameter should be a spanning Entry, and that is a public change |

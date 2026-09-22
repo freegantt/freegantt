@@ -298,7 +298,7 @@ export class GesturePipeline {
     // A gesture exists only for an Entry with a grip to grab, which means it already spans
     // (`spansTime`, ADR 0012). This was a cast until Q5 gave the rule one home; it now asks the
     // question. A non-spanning anchor sizes its step at zero, which moves nothing — the cast sized
-    // it at `NaN`, and nothing on any reachable path produces either (J32 in BUILD-LOG.md).
+    // it at `NaN`, and nothing on any reachable path produces either (J32 of the field redesign).
     if (!spansTime(anchor)) return 0;
     const anchorInstant = gesture.kind === 'resize' && gesture.edge === 'end' ? anchor.end : anchor.start;
     return this.#deps.timeScale().widthForDuration({ unit, value: increment }, anchorInstant);

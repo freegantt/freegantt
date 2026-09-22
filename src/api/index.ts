@@ -392,7 +392,7 @@ export type { Bar, BarProducer, BarAnchor, FixedBarBox } from '../layout/index.j
 // (#421 Q30).
 export type { EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
 // ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
-// looks up again (F3, `plans/row-redesign/BUILD-LOG.md`).
+// looks up again (F3).
 export type { ResolvedVariant } from '../layout/index.js';
 // Review P3: the common producer, so `(entry) => [wholeEntryBar(entry)]` replaces eight hand-written
 // lines — and the Bar id convention has one owner instead of one copy per plugin.

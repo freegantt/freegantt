@@ -3,6 +3,12 @@
 This page is the styling reference. It answers one question: how do you make a Gantt look
 different from its shipped default?
 
+<!-- doc-example-setup
+// What the examples below stand on: a mounted Gantt, and the app's own dark-mode signal.
+declare const gantt: import('freegantt').Gantt;
+declare const isDark: boolean;
+-->
+
 ## The two levels
 
 The library exposes styling on two levels:

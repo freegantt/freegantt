@@ -9,6 +9,16 @@ issue plans land here as they're opened.
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 
+- **A declared Field key written flat does not typecheck, though it works at runtime.** No issue
+  number yet; flagged for the author in `src/model/dataset.ts` and carried here when the field
+  redesign's build log was deleted. `new Dataset({ entries: [{ id: 'd1', hours: 8 }] })` raises
+  TS2353, because an excess-property check hits a fresh literal; hoisting the array to a `const`
+  first compiles. `dataset.entries.update('t2', { cost: 12_000 })` raises TS2353 unless the Dataset
+  names its props (`new Dataset<{ cost: number }>(...)`), because inference gives `TProps = unknown`.
+  Ingest reads the flat key at runtime either way (`propsFromInput` in `entry-reader.ts`), so a
+  caller loses the static check, not the behaviour. The docs hoist and name the type to stay honest.
+  The ergonomics are the author's call.
+
 **Closed:**
 
 - [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived

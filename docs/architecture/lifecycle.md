@@ -1,3 +1,8 @@
+---
+last_update:
+  date: 2026-09-22
+---
+
 # Construction, render, notification
 
 Three passes, in the order they run: what `new Gantt(…)` builds, what one `render()` does, and how
@@ -330,8 +335,8 @@ is the fan-in over the three, so `view/` holds one reaction instead of three.
 model calls it straight back. That first call is not an update. It *is* the newcomer's first
 render, so it never waits for an open batch:
 
-```ts
-// src/layout/viewport/bound-value.ts — the mechanism both models share
+```ts title="src/layout/viewport/bound-value.ts"
+// The mechanism both models share.
 bind(binding: Binding, onChange: () => void): BoundValueHandle {
   this.#bindings.set(binding, onChange);
   this.#resolved = undefined;
@@ -344,8 +349,8 @@ bind(binding: Binding, onChange: () => void): BoundValueHandle {
 **One `Viewport.bind()` binds three models, and nothing wraps the three.** Each call reaches
 `#notify`, and each `#notify` delivers straight through to the shell:
 
-```ts
-// src/layout/viewport/viewport.ts — inside bind()
+```ts title="src/layout/viewport/viewport.ts"
+// Inside bind().
 const scaleHandle = bindTimeScale(this.scale, scaleBinding, this.#notify); // → onChange() #1
 const scrollHandleX = bindScrollAxis(this.scroll.x, { content, pane }, this.#notify); // → onChange() #2
 const scrollHandleY = bindScrollAxis(this.scroll.y, { content, pane }, this.#notify); // → onChange() #3
@@ -354,8 +359,8 @@ const scrollHandleY = bindScrollAxis(this.scroll.y, { content, pane }, this.#not
 Compare that with every *later* write through the same handle. Each one wraps its calls in a
 batch, so one caller-visible change costs exactly one notification:
 
-```ts
-// src/layout/viewport/viewport.ts — the handle bind() returns
+```ts title="src/layout/viewport/viewport.ts"
+// The handle bind() returns.
 setPaneSize: (size) => {
   this.#paneSize = size;
   this.#notifications.batch(() => {   // ← one delivery at the end of the batch
@@ -452,8 +457,8 @@ Diagram 2 — the same three sub-models, reached two ways. Amber = the unbatched
 **Nobody outside the shell ever sees those three calls.** `bind()` runs in the constructor and
 nowhere else, and the callback the shell passes in returns early for the whole of construction:
 
-```ts
-// src/view/gantt-shell.ts — step 10 of the diagram above
+```ts title="src/view/gantt-shell.ts"
+// Step 10 of the diagram above.
 this.#viewportHandle = this.#viewport.bind(
   { entries: options.dataset.entries.all, timeZone: options.dataset.timeZone },
   () => {

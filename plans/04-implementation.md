@@ -56,7 +56,7 @@ Guardrails land **before** the code they guard — each step is a reviewable com
 
 ### 3.1 Foundation
 
-1. `pnpm init`; `package.json`: `"name": "freegantt"`, `"type": "module"`, `"sideEffects": false`, and the **sealed `exports` map from day one** — only `.` (api + model types) resolves; internals are unreachable so semver never accidentally covers them (`02` §7).
+1. `pnpm init`; `package.json`: `"name": "freegantt"`, `"type": "module"`, `"sideEffects": false` — **S5.13 narrowed that to `["src/view/styles.ts"]`** (issue #137 F16, `plans/s5-extensibility-and-editing/s5.13-gallery-and-gate.md`), because `view/styles.ts` injects the base stylesheet and a blanket `false` promised a bundler it did not — and the **sealed `exports` map from day one** — only `.` (api + model types) resolves; internals are unreachable so semver never accidentally covers them (`02` §7).
 2. `tsconfig.json`: `strict`, plus the flags that catch real Gantt bugs: `noUncheckedIndexedAccess` (index lookups on stores), `exactOptionalPropertyTypes` (changeset `from`/`to` vs. absent), `verbatimModuleSyntax`, `isolatedModules`, `noPropertyAccessFromIndexSignature`.
 3. Directory skeleton per `01` §1.1 — empty modules with header comments stating each module's invariant (the scheduling no-recursion header, the reconciler scope boundary), so the invariants exist in-repo before any implementation.
 

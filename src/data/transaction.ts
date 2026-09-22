@@ -81,7 +81,7 @@ export interface TransactionData {
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule).
    *  `EntryStore` read it for a while, to tell a standalone `update()` from one joining a caller's
    *  open transaction — and that made the derived-write refusal a consumer's to opt out of, because
-   *  `dataset.transaction()` is public (Q7, BUILD-LOG). Nothing outside this file reads it again:
+   *  `dataset.transaction()` is public (Q7, ADR 0013's appendix — still open). Nothing outside this file reads it again:
    *  how deeply a write is nested is not a permission. */
   openTransactions: number;
   /** Set while `beforeChange`/`change` handlers are fanning out; a transaction started while this is

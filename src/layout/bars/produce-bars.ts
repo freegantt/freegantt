@@ -47,7 +47,7 @@ export function produceBarsForRow(
     // An Entry draws nothing until it spans (`spansTime`, ADR 0012). This is the one gate: no
     // producer — shipped or a plugin's own — ever sees a non-spanning Entry, so `wholeEntryBar`
     // and the shipped producers may read `entry.start`/`entry.end` as always present (J2,
-    // BUILD-LOG.md).
+    // ADR 0012's appendix).
     if (!spansTime(entry)) continue;
     // Nothing skips a segmented row's subject (Q33): the fact travels to the producer instead, so
     // a consumer's own `bars` still runs for it and still wins (Q26).

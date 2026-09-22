@@ -1,3 +1,8 @@
+---
+last_update:
+  date: 2026-09-22
+---
+
 # Plugin lifecycle
 
 What `installPlugin` does, when a plugin's own half may call a `register*`, and what

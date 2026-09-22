@@ -1,6 +1,6 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 
-// N13 (plans/field-redesign/BUILD-LOG.md): the parent bar drag, in a real browser.
+// N13 (ADR 0013's appendix): the parent bar drag, in a real browser.
 //
 // ADR 0013 gives a row with children no authored dates — the Rollup derives its envelope from what
 // is under it. So dragging that row's bar does not write the row. The gesture proposes the dated

@@ -6,6 +6,11 @@
 
 This directory is the settled spec for S1.7, in the same form as [`plans/s1.5-scroll-model/README.md`](../s1.5-scroll-model/README.md).
 
+> **Closed out.** S1.7 shipped, and `.slice` has since moved to S6. The checklists below were a
+> builder's working list; they were never ticked off as each item landed, so an empty box here means
+> *not ticked*, never *not done*. Spot-checked when this folder was closed out: the files these
+> boxes name exist in the repo. Read the slice's own gate verdict, not these boxes.
+
 > **§0 is settled.** Three questions were scope calls, not engineering calls. All three are confirmed as recommended — everything in this document, including the seam change to `attachScroll` (D-S1.7-1) and every rename site inventoried in §3.8, is settled.
 
 ---

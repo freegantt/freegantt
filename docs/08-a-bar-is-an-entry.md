@@ -214,23 +214,41 @@ Band 1 is the same machinery with nothing to roll up.
 
 Every job below already ships, except one row.
 
+<!-- doc-example-setup
+// What every example below stands on: the imports a reader already has, the consumer Fields this
+// page declares, and the container and dates its call sites pass.
+declare const Dataset: typeof import('freegantt').Dataset;
+declare const Gantt: typeof import('freegantt').Gantt;
+declare const wholeEntryBar: typeof import('freegantt').wholeEntryBar;
+type BarProducer = import('freegantt').BarProducer;
+type EntriesRowSource = import('freegantt').EntriesRowSource;
+type EntryRule = import('freegantt').EntryRule;
+type Props = { showDaysOnRow: boolean; hours: number; locked: boolean; team: string };
+declare const container: HTMLElement;
+declare const start: string;
+declare const end: string;
+-->
+
 ```ts
-const dataset = new Dataset({
+const entries = [
+  { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
+  { id: 'd1', parentId: 'req-1', start, end, hours: 8 },               // a bar: a plain Entry
+  { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
+  { id: 'hold', name: 'Site hold', start, end },                       // a plain row, as today
+];
+
+const dataset = new Dataset<Props>({
   // Core ships `name`, `start`, `end` and `duration`. Every Field below is this consumer's own.
   fields: [
     { key: 'showDaysOnRow', type: 'boolean' },   // the marker the row rule reads
     { key: 'hours', type: 'number', rollUp: 'sum' },
     { key: 'locked', type: 'boolean' },
   ],
-  entries: [
-    { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
-    { id: 'd1', parentId: 'req-1', start, end, hours: 8 },               // a bar: a plain Entry
-    { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
-    { id: 'hold', name: 'Site hold', start, end },                       // a plain row, as today
-  ],
+  entries,
 });
 
 new Gantt({
+  container,
   dataset,
   rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
 });
@@ -275,10 +293,12 @@ Gantt — a read-only board resizes nothing, whatever a row looks like.
 parent Entry in the layout pass, so the scope of the setting is whatever the rule says:
 
 ```ts
-childrenAsSegments: true                                      // every parent
-childrenAsSegments: { team: 'framing' }                       // any value the data already holds
-childrenAsSegments: { showDaysOnRow: true }                   // the parents the consumer marks
-childrenAsSegments: (entry) => entry.children().length > 3    // whatever a predicate can ask
+const forms: readonly (EntryRule | true)[] = [
+  true,                                      // every parent
+  { team: 'framing' },                       // any value the data already holds
+  { showDaysOnRow: true },                   // the parents the consumer marks
+  (entry) => entry.children().length > 3,    // whatever a predicate can ask
+];
 ```
 
 The common case is the shorthand and the long form is the expert one, as every other config key on
@@ -324,15 +344,19 @@ parents that carry bars; their own parent matches no rule, keeps its row, wears 
 rolls up as it always has:
 
 ```ts
-entries: [
+const deeper = [
   { id: 'site-a', name: 'Site A' },                                      // a summary row
   { id: 'req-1', parentId: 'site-a', name: 'Framing crew', showDaysOnRow: true },
   { id: 'req-2', parentId: 'site-a', name: 'Roofing crew', showDaysOnRow: true },
   { id: 'd1', parentId: 'req-1', start, end, hours: 8 },                 // a bar on req-1's row
   { id: 'd2', parentId: 'req-1', start, end, hours: 4 },
-]
+];
 
-rowSource: { source: 'entries', tree: true, childrenAsSegments: { showDaysOnRow: true } }
+const rowSource: EntriesRowSource = {
+  source: 'entries',
+  tree: true,
+  childrenAsSegments: { showDaysOnRow: true },
+};
 ```
 
 Three rows: `site-a` with a summary rail over everything below it, then `req-1` and `req-2`, each
@@ -347,7 +371,7 @@ suppresses is the parent's own bar, so `summary()`'s rail does not paint over th
 stands for. **Core ships nothing to put one back**: no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and that producer ignores the third parameter rather than reading it:
 
 ```ts
-bars: (entry, variant) => [wholeEntryBar(entry, variant)],
+const bars: BarProducer = (entry, variant) => [wholeEntryBar(entry, variant)];
 ```
 
 This producer always draws, segmented row or not — it is what a rail actually wants. `wholeSpanUnlessSegments`, the parameter it ignores, is core's own answer of *when to suppress*; a consumer producer that wants its band to survive claiming skips that question and always paints, so it always sits behind the children's bars rather than disappearing the moment `childrenAsSegments` matches the row.

@@ -4,6 +4,7 @@ Every entry below is a question a real integrator asked. Each one cost hours, an
 answer already in the tree. The pattern is always the same: the integrator looked at the object
 they held, found nothing, and built a workaround.
 
+
 A pitfall earns a place here when a correct API existed and a competent reader still missed it.
 That makes it a documentation defect, not a user error. When the API was genuinely absent, the
 entry says so and links the issue.
@@ -157,6 +158,12 @@ An integrator loading a three-year dataset on the `day` preset sees a timeline t
 one that shrinks every day to fit. That is the floor at work, not a defect. The library never
 coarsens a preset behind the caller's back. A silent switch would turn `gantt.preset` into a value
 the library overwrites. A window resize would then relabel the axis without warning.
+
+<!-- doc-example-setup
+// What the example below stands on: a live Gantt, and a preset coarser than the one it shows.
+declare const gantt: import('freegantt').Gantt;
+declare const weekPreset: import('freegantt').ViewPreset;
+-->
 
 ```ts
 gantt.zoomOut(); // or:

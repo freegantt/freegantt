@@ -1,8 +1,8 @@
 # The field redesign — six ADRs
 
 **This folder is historical working material.** All six ADRs (0011–0016) are `accepted`, and every
-build here landed. Read an ADR's own `status:` line for its verdict. This README, `BUILD-LOG.md`,
-`BUILD-SPEC.md` and `CLOSE-OUT.md` stay as they were written — a record of how the decisions were
+build here landed. Read an ADR's own `status:` line for its verdict. This README, `BUILD-SPEC.md`
+and `CLOSE-OUT.md` stay as they were written — a record of how the decisions were
 reached, not a live spec. `plans/00`–`04` and `CONTEXT.md` state what is true now.
 
 One ADR grew to 25 decisions. On 2026-09-09 it split into five, **by question, not by file**. On 2026-09-10 a sixth opened, [ADR 0016](../../docs/adr/0016-the-library-holds-no-save-format.md), and it lands first. This folder is the working material for all of them.
@@ -50,7 +50,7 @@ Avoid **phase** and **grouped entry** in this folder. An Entry with children is 
 
 ## Build it
 
-**[`build/README.md`](build/README.md) is the plan of record.** It holds the hard rules and the landing order. One file per build holds the checklist, the traps and the gate. A builder reads the one file for the build in hand, and ticks each box as it finishes.
+**The per-build checklists are deleted.** They held the hard rules, the landing order and each build's gate. Every build landed, so the checklists have no reader; `BUILD-SPEC.md` keeps the verification record.
 
 ## Shared
 

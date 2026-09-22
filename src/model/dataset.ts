@@ -46,7 +46,8 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  signature `EntryInput` does not carry), which broke every fixture that pre-types its own array.
    *  Ingest itself still reads a flat declared key off any object at runtime — `propsFromInput`
    *  (`entry-reader.ts`) does not consult this type — so a caller loses only the static
-   *  autocomplete/check, not the behaviour. Flagged for the author (BUILD-LOG Q). */
+   *  autocomplete/check, not the behaviour. Flagged for the author; still unresolved, and tracked
+   *  in `plans/issues/open/README.md`. */
   add(input: EntryInput<TProps>): Entry<TProps>;
   update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
   remove(id: EntryId | string): void;

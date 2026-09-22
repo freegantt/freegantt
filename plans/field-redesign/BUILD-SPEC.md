@@ -1,8 +1,12 @@
 # BUILD-SPEC — the field redesign, ADRs 0016 → 0012 → 0011 → 0013 → 0014 → 0015
 
-> ## The plan of record is [`build/`](build/README.md)
+> ## The build files are deleted
 >
-> **Do not build from this file.** [`build/README.md`](build/README.md) holds the hard rules and the landing order. One file per build holds the checklist, the traps and the gate. A builder reads the one file for the build in hand.
+> **Do not build from this file.** The redesign shipped, and its per-build checklists are deleted. This file stays as the verification record.
+>
+> **The work lists below were never ticked off as each item landed** — an empty box means *not
+> ticked*, never *not done*. The redesign's verdicts are in `CLOSE-OUT.md` and in each ADR's
+> `status:` line.
 >
 > **This file is the verification record.** It holds the HEAD snapshot of `src/`, the twenty-one findings against the ADRs' own work lists, and the author's rulings on them. Read it when you need the evidence behind an instruction in `build/`. Every correction it makes is already folded into `build/`.
 

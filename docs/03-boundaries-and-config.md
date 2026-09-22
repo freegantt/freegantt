@@ -110,6 +110,7 @@ Only `.` resolves for imports:
 `sideEffects` is a one-file allowlist, not `false`: `view/styles.ts`
 injects the base stylesheet on import, so a bundler that drops it as dead code ships an unstyled
 Gantt. Everything else in the package is side-effect free, which is what keeps tree-shaking real.
+`test/guards/package-shape.test.ts` holds the array to that one file.
 
 ### 3.2 Tests that keep it sealed
 
