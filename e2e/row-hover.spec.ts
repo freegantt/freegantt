@@ -23,7 +23,7 @@ async function paintOf(page: import('@playwright/test').Page, rowId: string) {
 }
 
 test('hovering a grid row paints its timeline band too, in the same colour', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const row = page.locator('#gantt .fg-grid-pane .fg-row').first();
   await expect(row).toBeVisible();
   const rowId = (await row.getAttribute('data-row-id'))!;
@@ -45,7 +45,7 @@ test('hovering a grid row paints its timeline band too, in the same colour', asy
 test('hovering a bar paints the grid row that owns it, across the splitter the other way', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary):not(.fg-bar-diamond)').first();
   await expect(bar).toBeVisible();
 

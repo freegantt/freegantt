@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 // assertion below reads its scrollTop, matching e2e/harness.spec.ts's own scroll assertion,
 // just triggered from the grid pane instead.
 test('a plain wheel over the grid pane scrolls rows, matching the timeline pane (#126)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const timelinePane = page.locator('.fg-timeline-pane');
@@ -20,11 +20,11 @@ test('a plain wheel over the grid pane scrolls rows, matching the timeline pane 
 
 // #126: fixed-width grid columns can already be given a pixel width that never shrinks
 // (GridColumn.width -> flex: 0 0 auto). Several summing past gridWidth used to clip silently
-// (`.fg-grid-pane { overflow: hidden }`) — harness/grid-scroll.ts configures four 120px columns
+// (`.fg-grid-pane { overflow: hidden }`) — harness/e2e/grid-scroll.ts configures four 120px columns
 // inside a 220px pane so the overflow is real, and D-S1.8-13 gives the pane its own independent
 // horizontal scroller to reach it.
 test('the grid pane scrolls horizontally to reach columns that overflow it (#126)', async ({ page }) => {
-  await page.goto('/grid-scroll.html');
+  await page.goto('/e2e/grid-scroll.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const gridPane = page.locator('#gantt .fg-grid-pane');
@@ -46,7 +46,7 @@ test('the grid pane scrolls horizontally to reach columns that overflow it (#126
 // column is fixed-width by default now, so the same four columns written as bare field names
 // overflow the same 220px pane and reach the same horizontal scroller — the gap #139 reported.
 test('grid columns overflow and scroll with no width authored anywhere (#139)', async ({ page }) => {
-  await page.goto('/grid-scroll.html');
+  await page.goto('/e2e/grid-scroll.html');
   await expect(page.locator('#gantt-default .fg-bar').first()).toBeVisible();
 
   const gridPane = page.locator('#gantt-default .fg-grid-pane');
@@ -68,7 +68,7 @@ test('grid columns overflow and scroll with no width authored anywhere (#139)', 
 // #139: `flex` is the opt-out, and it still works — a flex column shrinks to whatever the fixed
 // columns beside it leave, so the pane never gains a scrollbar it did not need.
 test('a flex column shares the leftover room instead of forcing overflow (#139)', async ({ page }) => {
-  await page.goto('/grid-scroll.html');
+  await page.goto('/e2e/grid-scroll.html');
   await expect(page.locator('#gantt-flex .fg-bar').first()).toBeVisible();
 
   const gridPane = page.locator('#gantt-flex .fg-grid-pane');
@@ -92,7 +92,7 @@ test('a flex column shares the leftover room instead of forcing overflow (#139)'
 // instead of the layout tree, matching e2e/harness.spec.ts's own regression test for the same class
 // of bug: it asks what is actually painted at the label's own box, not just where the box sits.
 test('a bar label too wide for its bar paints outside the bar, not clipped away (#325)', async ({ page }) => {
-  await page.goto('/grid-scroll.html');
+  await page.goto('/e2e/grid-scroll.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const outsideLabels = page.locator('#gantt .fg-bar[data-label="outside"] .fg-bar-label');

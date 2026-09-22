@@ -139,10 +139,11 @@ holds `team` to label its own button.
 
 - [`harness/main.ts`](../harness/main.ts) — the three
   handlers. Two spread one key. The grouping button switches `source`, so it builds a new source.
-- [`harness/hierarchy.ts`](../harness/hierarchy.ts) —
+- [`harness/e2e/hierarchy.ts`](../harness/e2e/hierarchy.ts) —
   the same settings driven from `<select>` controls. It uses the same pattern: a filter or sort
   change reads `gantt.rowSource` back and spreads one key, and only a `source` switch (tree, flat or
-  grouped) builds a fresh one (#429). Both harness pages follow the pattern above; neither keeps a
+  grouped) builds a fresh one (#429). [`harness/hierarchy-and-timeline.ts`](../harness/hierarchy-and-timeline.ts),
+  the demo page, does the same. The harness pages follow the pattern above; neither keeps a
   second copy of the row-source state.
 
 ## Related

@@ -56,7 +56,7 @@ emitters is the honest model of where reports originate; one subscription is wha
   `new Dataset(...)` are missed, and it makes the Gantt claim authorship of what it did not observe.
 - **Ship a first-party toast/notification plugin.** Deferred, not rejected. A generic toast is not
   Gantt domain knowledge, and shipping one means owning its stacking, timing, theming and
-  announcement. `harness/editing.html` demonstrates the wiring; promote it only if every consumer
+  announcement. `harness/e2e/editing.html` demonstrates the wiring; promote it only if every consumer
   would copy that code verbatim.
 - **A build-time switch for the console fallback.** Rejected: one `dist/` serves every consumer and
   their production mode is invisible when we build it. `process.env.NODE_ENV` left unresolved for

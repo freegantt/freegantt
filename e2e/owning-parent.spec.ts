@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// #470: a Field may opt out of the Rollup with `rollUp: 'none'`. `harness/owning-parent.ts`
+// #470: a Field may opt out of the Rollup with `rollUp: 'none'`. `harness/e2e/owning-parent.ts`
 // declares both `start` and `end` that way, so `phase` is an ordinary bar — its own dates, not a
 // derived envelope. `src/view/capability.test.ts` and `src/view/gesture-pipeline.test.ts` pin the
 // resolver and the write set; this is the pointer end only a real browser proves: hit-testing the
@@ -23,7 +23,7 @@ async function datesOf(page: Page, ids: readonly string[]): Promise<Record<strin
 }
 
 async function gotoOwningParent(page: Page): Promise<void> {
-  await page.goto('/owning-parent.html');
+  await page.goto('/e2e/owning-parent.html');
   await expect(page.locator('#gantt .fg-bar-summary')).toBeVisible();
 }
 

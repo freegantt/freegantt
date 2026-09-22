@@ -25,7 +25,7 @@ declare global {
  *  Only the windowed rows reach the DOM (I3). So this reveals the row through the public
  *  `gantt.reveal`, rather than search whatever happens to be painted. */
 async function openPinnedRow(page: Page): Promise<{ bar: Locator; entryId: string }> {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
   const entryId = await page.evaluate(() => {
     window.__gantt.reveal(window.__dataset.entries.get(window.__fixedFinishEntryId)!.id);
@@ -131,7 +131,7 @@ test('a pinned cell refuses the inline editor, and its neighbour still opens one
 // Move buttons still shift the date, which is what `'api'` means and why that page can hold it
 // (ADR 0015).
 test('a Field closed to the grid closes the end handle on every row', async ({ page }) => {
-  await page.goto('/data.html');
+  await page.goto('/e2e/data.html');
   const bars = page.locator('#gantt .fg-bar');
   await expect(bars.first()).toBeVisible();
 
@@ -152,7 +152,7 @@ test('a Field closed to the grid closes the end handle on every row', async ({ p
 // A unit test proves the resolver agrees with itself. Only a browser proves the page a consumer
 // really writes gets the same two answers.
 test("entries.update() refuses a locked Field, and writes an 'api' one", async ({ page }) => {
-  await page.goto('/data.html');
+  await page.goto('/e2e/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const locked = await page.evaluate(() => {

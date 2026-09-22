@@ -4,11 +4,11 @@ import { test, expect } from '@playwright/test';
 // spends a bar too narrow for its label on no label at all, never on the outside fallback that
 // `'fitBar'` and `'outside'` both take — the one placement a grid of contiguous day-tiles cannot
 // afford, because it paints across the next tile. Real measured widths only: happy-dom does no
-// layout, so this is a Playwright check, not a DOM unit test (harness/bar-label-fit.ts).
+// layout, so this is a Playwright check, not a DOM unit test (harness/e2e/bar-label-fit.ts).
 test('bar labels stay inside a narrow contiguous tile grid, never spilling onto the next tile (#435)', async ({
   page,
 }) => {
-  await page.goto('/bar-label-fit.html');
+  await page.goto('/e2e/bar-label-fit.html');
 
   const bars = page.locator('#gantt .fg-bar');
   await expect(bars.first()).toBeVisible();

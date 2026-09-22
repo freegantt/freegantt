@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// [S1-A1] (plans/s1.11-close-the-gate/README.md §6, D-S1.11-5): harness/large-dataset.html mounts
+// [S1-A1] (plans/s1.11-close-the-gate/README.md §6, D-S1.11-5): harness/e2e/large-dataset.html mounts
 // 10,000 seeded entries at `zoom: 'preset'` (content wider than the pane). The DOM must hold a bounded
 // number of rows the whole time, not 10,000 — and the visible id set must actually move on scroll, so
 // a bound alone (nothing rendered) can't pass.
@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 test('[S1-A1] only windowed rows exist in the DOM, and the row-id set moves after a scroll', async ({
   page,
 }) => {
-  await page.goto('/large-dataset.html');
+  await page.goto('/e2e/large-dataset.html');
 
   const rows = page.locator('[data-testid="fg-row"]');
   await expect(rows.first()).toBeVisible();

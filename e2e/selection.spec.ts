@@ -88,7 +88,7 @@ async function emptyTimelinePoint(page: import('@playwright/test').Page): Promis
 }
 
 test('a selected bar keeps its paint when it remounts after a scroll (#185)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bar = await unobstructedBar(page);
@@ -114,7 +114,7 @@ test('a selected bar keeps its paint when it remounts after a scroll (#185)', as
 });
 
 test('clicking a bar does not highlight bar or page text', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bar = await unobstructedBar(page);
@@ -125,7 +125,7 @@ test('clicking a bar does not highlight bar or page text', async ({ page }) => {
 });
 
 test('double-clicking a bar does not highlight text from the page', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bar = await unobstructedBar(page);
@@ -136,7 +136,7 @@ test('double-clicking a bar does not highlight text from the page', async ({ pag
 });
 
 test('double-clicking a row label does not highlight text from the page', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const label = page.locator('#gantt .fg-row-label').first();
@@ -148,7 +148,7 @@ test('double-clicking a row label does not highlight text from the page', async 
 test('a right-click keeps a multi-bar Selection when it lands inside it, and clears it on an empty timeline miss (#199/#205)', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bars = await unobstructedBars(page, 2);

@@ -54,7 +54,7 @@ test('resizing the window re-fits the axis (#8)', async ({ page }) => {
   // against the running harness to confirm both clear it (below it, per commit f2ab918, the pane
   // stops re-fitting on resize by design and this test would no longer be testing what it says).
   await page.setViewportSize({ width: 8600, height: 800 });
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const before = await contentSizerRight(page);
@@ -74,7 +74,7 @@ test('resizing the window re-fits the axis (#8)', async ({ page }) => {
 // nothing capped the grid pane at its own content. The drag now stops at the last column's right
 // edge — the pane can still be dragged narrower, and the columns then overflow and scroll (#126).
 test('the splitter stops at the last column instead of opening dead space (#139)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const columnsWidth = await page
@@ -102,7 +102,7 @@ test('the splitter stops at the last column instead of opening dead space (#139)
 // toggles its Budget column at runtime, which is the honest test — a real column set changing under
 // a pane that was never told a number.
 test("'fitColumns' re-measures when the column set changes (#157)", async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const gridPane = page.locator('#gantt .fg-grid-pane');
@@ -130,7 +130,7 @@ test('dragging the splitter re-fits the axis with no other call (U4)', async ({ 
   // Wide enough that the pane stays above the S1.12 density floor (see the #8 test above) both
   // before and after the 120px drag — otherwise the content edge legitimately does not move.
   await page.setViewportSize({ width: 8800, height: 800 });
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const gridWidthBefore = await page.locator('.fg-grid-pane').evaluate((el) => el.clientWidth);
@@ -158,7 +158,7 @@ test('dragging the splitter re-fits the axis with no other call (U4)', async ({ 
 // it. The harness wires this to `#lock-grid-checkbox` (harness/main.ts).
 test.describe('gridResizable locks the grid pane (#432)', () => {
   test('a locked splitter does not drag, and shows no resize cursor', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/generic.html');
     await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
     await page.locator('#lock-grid-checkbox').check();
 
@@ -178,7 +178,7 @@ test.describe('gridResizable locks the grid pane (#432)', () => {
   test("an unlocked splitter keeps today's behaviour: it drags and shows a resize cursor", async ({
     page,
   }) => {
-    await page.goto('/');
+    await page.goto('/generic.html');
     await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
     expect(await page.locator('#lock-grid-checkbox').isChecked()).toBe(false);
 
@@ -192,7 +192,7 @@ test.describe('gridResizable locks the grid pane (#432)', () => {
   });
 
   test('a locked grid paints no column resizer grip', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/generic.html');
     await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
     const grip = page.locator('#gantt .fg-col-header').first().locator('.fg-column-resizer');
@@ -210,7 +210,7 @@ test.describe('gridResizable locks the grid pane (#432)', () => {
   // dragged to (#157) — the very failure mode #432 exists to close off. With the lock on, a drag
   // attempt must leave 'fitColumns' governing the pane, so a later column addition still grows it.
   test('a locked splitter cannot convert gridWidth: fitColumns into a fixed width', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/generic.html');
     await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
     await page.locator('#lock-grid-checkbox').check();
 
@@ -246,7 +246,7 @@ test.describe('gridResizable locks the grid pane (#432)', () => {
 // means the bar's top sits the row's top plus half the row/bar height difference, not equality.
 test('both panes stay pixel-aligned after a splitter drag (U1)', async ({ page }) => {
   await page.setViewportSize({ width: 1000, height: 800 });
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   await dragSplitterBy(page, -80);
@@ -306,7 +306,7 @@ test('a splitter drag moves the visible span (#461)', async ({ page }) => {
   // the browser's own ResizeObserver reports the new size, and `gantt.visibleSpan` follows. The
   // toolbar readout is that value painted, so asserting on it proves the getter and the harness
   // wiring in one move.
-  await page.goto('/');
+  await page.goto('/generic.html');
   const readout = page.locator('.toolbar-readout');
   await expect(readout).not.toHaveText('');
 

@@ -20,7 +20,7 @@ declare global {
 test('a variant’s own css beats the base sheet, and an unlayered consumer rule still beats the variant’s', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary):not(.fg-bar-diamond)').first();
   await expect(bar).toBeVisible();
 

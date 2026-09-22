@@ -19,7 +19,7 @@ import { test, expect } from '@playwright/test';
 // no longer means "the same top" — it means the bar's top sits the row's top plus half the
 // leftover between the row's height and the bar's own shorter height.
 test('every grid pane row lines up with its own bar in the timeline pane, centred (I9)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   // Matched by entry id, not by sorted position/count: the row layer windows purely on vertical
@@ -76,7 +76,7 @@ test('every grid pane row lines up with its own bar in the timeline pane, centre
 // (or level with) the header's own bottom edge instead of strictly below it — "covering the
 // timeline" from the report.
 test('bars render below the header band, never under it', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const headerBottom = await page.locator('.fg-header').evaluate((el) => el.getBoundingClientRect().bottom);

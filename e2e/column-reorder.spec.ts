@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 test('a reorder drag carries the grabbed header cell and drops the column in its new slot', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const headers = page.locator('#gantt .fg-col-header');

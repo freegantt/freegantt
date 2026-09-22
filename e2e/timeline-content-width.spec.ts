@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // unit wide (D-S1.7-4) and can be many times wider than a dataset shorter than that unit. `.fg-header`
 // had no width of its own and no clip, so that oversized tick leaked past `frame.contentWidth` and
 // inflated the timeline pane's native `scrollWidth` — the pane looked like it never shrank back down
-// on zoom-out. `harness/data.html`'s dataset (`demoEntryInputs.slice(0, 8)`, ~3 weeks) is shorter
+// on zoom-out. `harness/e2e/data.html`'s dataset (`demoEntryInputs.slice(0, 8)`, ~3 weeks) is shorter
 // than every preset from `weekMonthYear` up, so it is the fixture that already carries this case.
 
 test('[timeline-content-width] the pane never scrolls past contentWidth on a short dataset, at any preset', async ({
@@ -17,7 +17,7 @@ test('[timeline-content-width] the pane never scrolls past contentWidth on a sho
   // longer holds at that viewport. Widened so the pane's client width clears the floor with margin at
   // every preset this test walks through (measured directly against the running harness).
   await page.setViewportSize({ width: 2400, height: 1100 });
-  await page.goto('/data.html');
+  await page.goto('/e2e/data.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
@@ -50,13 +50,13 @@ test('[timeline-content-width] the pane never scrolls past contentWidth on a sho
 // contentWidth's own right edge, with nothing to shift it back, before this fix. At `fit: 'pane'`
 // (the default), contentWidth === paneWidth by construction, so the pane's ScrollAxis computes a
 // max of 0 and can never see the native scroll range that overhang opens — the two-Gantt desync
-// `harness/scroll-sync.ts` never had a fixture to catch (see its own `fit: 'pane'` pair, added for
+// `harness/e2e/scroll-sync.ts` never had a fixture to catch (see its own `fit: 'pane'` pair, added for
 // this same issue).
 test('[timeline-content-width] a zero-length entry at the range end never scrolls the pane past contentWidth (#436)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/entries-outside-the-range.html');
+  await page.goto('/e2e/entries-outside-the-range.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
@@ -70,14 +70,14 @@ test('[timeline-content-width] a zero-length entry at the range end never scroll
 // #436 (severe case): a Dataset wider than its own `range` — the normal shape for a caller
 // prefetching so pan/zoom never re-fetches — used to paint entries the overscan buffer alone pulls
 // past `contentWidth`'s own edge, with no bound of its own (`layout/frame.ts`'s `barSpan`, the
-// 'exact' span path). `harness/entries-outside-the-range.html` carries both shapes: `straddling`
+// 'exact' span path). `harness/e2e/entries-outside-the-range.html` carries both shapes: `straddling`
 // (starts inside `range`, ends past it — trimmed, not dropped) and `out-after` (entirely past
 // `range.end` — dropped outright, never a FrameBar).
 test('[timeline-content-width] entries outside the dataset range never widen the pane past contentWidth (#436)', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await page.goto('/entries-outside-the-range.html');
+  await page.goto('/e2e/entries-outside-the-range.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   // The wholly out-of-range entry never becomes a bar at all — nothing for a reader to click on

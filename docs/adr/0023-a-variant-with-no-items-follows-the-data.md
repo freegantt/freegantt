@@ -50,7 +50,7 @@ measurements, not assumptions:
   children gets exactly one Segment, spanning the envelope. So a summary row draws one rail under
   either default — switching the default does not multiply a summary's bars.
 - **The harness's `buffer`/`risk` rows carry no Segments.** `buffer` and `risk` claim
-  `entry-36`/`entry-37` (`harness/plugins.ts:24-25`); only `entry-16` carries Segments in
+  `entry-36`/`entry-37` (`harness/e2e/plugins.ts:24-25`); only `entry-16` carries Segments in
   `fixtures/demo-dataset.ts`. Neither claimed row fires the new branch.
 - **A parent may author several Segments.** `src/data/rollup.ts:151-155` records that rejecting a
   parent-authored Segment at ingest was considered and refused. So a summary row is not safe by

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — S1.5 scroll sync</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .fg-gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        --fg-bar-label-gap: 6px;
+        border: 1px solid #ccc;
+      }
+      #tall {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #short {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #xonly-a {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #xonly-b {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #yonly-a {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #yonly-b {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #gutter-a {
+        height: 240px;
+        margin-bottom: 1rem;
+      }
+      #gutter-b {
+        height: 240px;
+      }
+      #pane-fit-a {
+        height: 160px;
+        margin-bottom: 1rem;
+      }
+      #pane-fit-b {
+        height: 160px;
+      }
+      /* Colour/background/border/border-radius for .fg-header/.fg-tick/.fg-row/.fg-bar, and their
+         top/left origin, now ship in the library's own base stylesheet (S1.10/S1.11, view/styles.ts)
+         — this harness keeps only the typography that stays legitimately harness-owned (D-S1.11-8). */
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — S1.5 scroll sync</h1>
+      <p>
+        Two Gantts sharing one ScrollAxis per direction (both x and y). #tall has every fixture entry; #short
+        has the first 20.
+      </p>
+      <div id="tall" class="fg-gantt"></div>
+      <div id="short" class="fg-gantt"></div>
+      <h2>x-only sharing (D-S6-1)</h2>
+      <p>
+        Two more Gantts sharing only the x ScrollAxis. Each keeps a private y, so a vertical scroll on one
+        never moves the other, even with different row counts.
+      </p>
+      <div id="xonly-a" class="fg-gantt"></div>
+      <div id="xonly-b" class="fg-gantt"></div>
+      <h2>y-only sharing (D-S6-1)</h2>
+      <p>
+        Two more Gantts sharing only the y ScrollAxis. Each keeps a private x, so a horizontal scroll on one
+        never moves the other.
+      </p>
+      <div id="yonly-a" class="fg-gantt"></div>
+      <div id="yonly-b" class="fg-gantt"></div>
+      <h2>Unequal vertical overflow on one x axis (#440)</h2>
+      <p>
+        Two more Gantts sharing only the x ScrollAxis. The first holds every row and overflows its box; the
+        second holds three rows and does not. Both panes reserve a scrollbar gutter, so one pane's scrollbar
+        cannot make it narrower than the other and the two stop at the same place on the right.
+      </p>
+      <div id="gutter-a" class="fg-gantt"></div>
+      <div id="gutter-b" class="fg-gantt"></div>
+      <h2>x-only sharing at the default fit (#436)</h2>
+      <p>
+        Two more Gantts sharing only the x ScrollAxis, at <code>fit: 'pane'</code> — the default every other
+        pair above opts out of. Each carries the same 3-day dataset with a zero-length entry parked on the
+        range's own end.
+      </p>
+      <div id="pane-fit-a" class="fg-gantt"></div>
+      <div id="pane-fit-b" class="fg-gantt"></div>
+    </main>
+    <script type="module" src="./scroll-sync.ts"></script>
+  </body>
+</html>

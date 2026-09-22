@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — performance</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+    <style>
+      /* The overview strip sits in its own workbench, shorter than the main chart, so the two
+         read as "one chart, one summary" rather than two equal panes. Geometry only — every
+         colour comes from the shared chrome tokens above. */
+      .workbench > #overview-gantt {
+        height: 160px;
+        border: 0;
+        border-radius: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <h1>Performance</h1>
+          <p>
+            One Dataset of 50,000 seeded entries, wide enough that no browser paints it whole. The statusbar
+            below states what building and first-painting it actually cost, and how few
+            <code>.fg-row</code>/<code>.fg-bar</code> nodes the DOM holds at any one time. The shorter chart
+            underneath shares this chart's time axis and horizontal scroll position.
+          </p>
+        </div>
+
+        <div id="page-brief"></div>
+
+        <!-- The library's own surface: toolbar, chart and readout share one border and one rule
+           rhythm, so they read as a single instrument. -->
+        <section class="workbench" aria-label="Performance workbench">
+          <div id="toolbar"></div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="build-readout">Dataset build: —</span>
+            <span class="readout" id="paint-readout">First paint: —</span>
+            <span class="readout" id="count-readout">Entries: —</span>
+            <span class="readout" id="rendered-readout">Rendered: —</span>
+          </div>
+        </section>
+
+        <!-- The overview: same data, same time axis, no toolbar of its own. Scrolling either
+           chart horizontally pans both, because both hold the same ScrollAxis (plans/02 §5). -->
+        <section class="workbench" aria-label="Overview workbench">
+          <div id="overview-gantt"></div>
+        </section>
+
+        <!-- Everything below the torn rule is apparatus. It exercises the library; it ships to
+           nobody. -->
+        <section class="bench" aria-label="Harness controls">
+          <div class="bench-head">
+            <h2>Harness bench</h2>
+            <p>Demo-only controls. None of this is library UI.</p>
+          </div>
+
+          <div class="bench-grid">
+            <div class="panel">
+              <h3>Dataset size</h3>
+              <p>
+                Reloads the page with a different entry count (<code>?count=</code>). Build and first-paint
+                time grow with the count; the rendered row/bar count should barely move.
+              </p>
+              <div class="segmented" id="count-picker" role="group" aria-label="Dataset size">
+                <button type="button" data-count="5000">5k</button>
+                <button type="button" data-count="50000">50k</button>
+                <button type="button" data-count="100000">100k</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./performance.ts"></script>
+  </body>
+</html>

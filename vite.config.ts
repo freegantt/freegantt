@@ -2,8 +2,10 @@ import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
 
 // `root: 'harness'` with no explicit input list makes `pnpm build` emit only harness/index.html —
-// scroll-sync.html, zoom.html and large-dataset.html would silently never see a production build
-// (plans/s1.11-close-the-gate/README.md D-S1.11-5). Every harness page goes in the input map.
+// every other demo page would silently never see a production build (plans/s1.11-close-the-gate/
+// README.md D-S1.11-5). Every demo page goes in the input map. The e2e fixture pages under
+// `harness/e2e/` stay out on purpose: the dev server serves them to Playwright, and the demo build
+// never ships them.
 const page = (name: string): string => fileURLToPath(new URL(`harness/${name}`, import.meta.url));
 
 export default defineConfig({
@@ -26,21 +28,10 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: page('index.html'),
-        'scroll-sync': page('scroll-sync.html'),
-        'grid-scroll': page('grid-scroll.html'),
-        'bar-label-fit': page('bar-label-fit.html'),
-        zoom: page('zoom.html'),
-        'large-dataset': page('large-dataset.html'),
-        data: page('data.html'),
-        editing: page('editing.html'),
-        hierarchy: page('hierarchy.html'),
-        planner: page('planner.html'),
-        plugins: page('plugins.html'),
-        'mount-destroy': page('mount-destroy.html'),
-        'dense-tile-grid': page('dense-tile-grid.html'),
-        'entries-outside-the-range': page('entries-outside-the-range.html'),
-        'theme-push': page('theme-push.html'),
-        'owning-parent': page('owning-parent.html'),
+        generic: page('generic.html'),
+        'editing-and-data': page('editing-and-data.html'),
+        'hierarchy-and-timeline': page('hierarchy-and-timeline.html'),
+        performance: page('performance.html'),
       },
     },
   },

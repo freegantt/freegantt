@@ -22,35 +22,35 @@
 
 /* ---------------------------------------------------------------- tokens */
 
+/* The page has no palette of its own. Every chrome token below reads a library `--fg-*` token, so
+   the page and the Gantt always paint from one theme. `page-theme.ts` pins `data-fg-theme` on
+   `<html>`; the library's own token rules answer that pin, or `prefers-color-scheme` when there is
+   no pin. The page never restates a light or a dark hex value, so it can never clash with the chart
+   or miss a theme change. The library declares `--fg-*` on `:root` for exactly this read. */
 :root {
-  /* Paper: cool, not cream. A warm cream ground with a clay accent is the single commonest
-     generated-page palette; this is the drawing-sheet reading instead — blue-shifted paper, ink
-     that is near-black but never neutral. */
-  --paper: #f5f7f9;
-  --surface: #ffffff;
-  --surface-sunk: #eef1f5;
+  --paper: color-mix(in oklab, var(--fg-header-band-bg) 60%, var(--fg-pane-bg));
+  --surface: var(--fg-pane-bg);
+  --surface-sunk: var(--fg-header-band-bg);
 
-  --ink: #16191f;
-  --ink-2: #4a5260;
-  /* #79828f (the library's own --fg-header-subtext default) reads at 3.88:1 on --surface — axe's
-     color-contrast rule (D-S5-27) wants 4.5:1 for normal-size text. Darkened to clear that ratio;
-     the library token itself is a separate, reported finding, not fixed here. */
-  --ink-3: #5a6270;
+  --ink: var(--fg-row-label-color);
+  --ink-2: var(--fg-header-subtext);
+  --ink-3: var(--fg-row-unmatched-label-color);
 
-  --rule: #dde2e9;
-  --rule-strong: #c2cad5;
+  --rule: var(--fg-splitter-color);
+  --rule-strong: color-mix(in oklab, var(--fg-splitter-color), var(--fg-row-label-color) 14%);
 
-  /* Ink blue is the same hue family the library paints bars in, so chrome and data agree. */
-  --accent: oklch(0.52 0.14 248);
-  --accent-ink: #ffffff;
-  --accent-wash: oklch(0.52 0.14 248 / 0.09);
+  /* The bar's own fill and label pair: the chrome accent is the ink blue the chart paints bars in,
+     and the pair already clears 4.5:1 in every theme. */
+  --accent: var(--fg-bar-fill);
+  --accent-ink: var(--fg-bar-label-color);
+  --accent-wash: color-mix(in oklab, var(--fg-bar-fill) 12%, transparent);
 
   /* Reserved: vermilion marks time (today, boundaries), amber warns. Nothing else is coloured. */
-  --signal: #cf3b26;
-  --warn: #b4690e;
-  --warn-wash: #fdf5e6;
+  --signal: var(--fg-date-line-color);
+  --warn: var(--fg-warn);
+  --warn-wash: color-mix(in oklab, var(--fg-warn) 12%, var(--fg-pane-bg));
 
-  --focus: oklch(0.52 0.14 248);
+  --focus: var(--fg-focus-ring);
 
   /* One radius for controls, one for surfaces. Not one radius for everything. */
   --radius-control: 3px;
@@ -59,61 +59,53 @@
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-code: ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
 
+  /* Native form controls and scrollbars follow the same theme as the tokens. */
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    /* Blueprint: deep indigo-slate. A tinted near-black (#0B0B0B / #111) standing in for black is
-       template chrome; this ground is genuinely blue and the rules read against it. */
-    --paper: #11141a;
-    --surface: #171b22;
-    --surface-sunk: #0d1015;
-
-    --ink: #e8ecf3;
-    --ink-2: #a7b1c1;
-    --ink-3: #6d7889;
-
-    --rule: #262c36;
-    --rule-strong: #3a4250;
-
-    --accent: oklch(0.74 0.13 248);
-    --accent-ink: #10131a;
-    --accent-wash: oklch(0.74 0.13 248 / 0.15);
-
-    --signal: #ff6f57;
-    --warn: #e0a340;
-    --warn-wash: #2a2214;
-
-    --focus: oklch(0.78 0.13 248);
-
+  :root:not([data-fg-theme]) {
     color-scheme: dark;
   }
 }
 
-:root[data-theme='dark'] {
-  --paper: #11141a;
-  --surface: #171b22;
-  --surface-sunk: #0d1015;
-
-  --ink: #e8ecf3;
-  --ink-2: #a7b1c1;
-  --ink-3: #6d7889;
-
-  --rule: #262c36;
-  --rule-strong: #3a4250;
-
-  --accent: oklch(0.74 0.13 248);
-  --accent-ink: #10131a;
-  --accent-wash: oklch(0.74 0.13 248 / 0.15);
-
-  --signal: #ff6f57;
-  --warn: #e0a340;
-  --warn-wash: #2a2214;
-
-  --focus: oklch(0.78 0.13 248);
-
+:root[data-fg-theme='dark'] {
   color-scheme: dark;
+}
+
+/* Paper: the third theme, and a consumer one. The library ships Light and Dark; Paper is this class
+   over `--fg-*` alone, on top of a Light pin. It is unlayered, so it beats the library's own
+   `@layer freegantt` token rules with no `!important` (ADR 0021). Every Gantt on the page is on
+   `theme: 'auto'` and writes no attribute of its own, so these values reach inside by inheritance.
+   Its shadows are hard-offset rather than soft, which makes it read as stock rather than glass. */
+:root.theme-paper {
+  --fg-pane-bg: #faf7ee;
+  --fg-splitter-color: #d9d2bd;
+  --fg-header-bg: #faf7ee;
+  --fg-header-band-bg: #ece6d4;
+  --fg-header-text: #2a2620;
+  --fg-header-subtext: #625a4b;
+  --fg-header-divider-color: #d9d2bd;
+  --fg-row-odd-bg: #f3eee0;
+  --fg-row-hover-bg: #efe9d5;
+  --fg-row-selected-bg: #ece3cb;
+  --fg-row-label-color: #2a2620;
+  --fg-row-unmatched-label-color: #665f50;
+  --fg-bar-fill: oklch(0.44 0.1 252);
+  --fg-bar-label-color: #faf7ee;
+  --fg-bar-label-outside-color: #625a4b;
+  --fg-bar-radius: 2px;
+  --fg-selection-color: oklch(0.48 0.18 305);
+  --fg-focus-ring: oklch(0.48 0.18 305);
+  --fg-warn: #96590a;
+  --fg-date-line-color: #b0361f;
+  --fg-date-line-label-color: #faf7ee;
+  --fg-hover-ring: rgb(42 38 32 / 0.24);
+  --fg-drag-shadow: 0 2px 0 rgb(42 38 32 / 0.22);
+  --fg-popup-bg: #faf7ee;
+  --fg-popup-border: #c5bca1;
+  --fg-popup-shadow: 0 2px 0 rgb(42 38 32 / 0.1), 0 10px 24px rgb(42 38 32 / 0.1);
+  --fg-time-shading-fill: rgb(42 38 32 / 0.06);
 }
 
 /* ---------------------------------------------------------------- page */
@@ -222,7 +214,8 @@ nav.harness-site-nav a:hover {
 
 nav.harness-site-nav a[aria-current='page'] {
   background: var(--accent-wash);
-  color: var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  color: var(--ink);
   font-weight: 600;
   cursor: default;
   pointer-events: none;
@@ -257,16 +250,37 @@ nav.harness-site-nav a[aria-current='page'] {
 
 /* -------------------------------------------------------------- page brief */
 
-/* D-S5-29: the block above the Gantt that names what a page demonstrates, the config that does it,
+/* D-S5-29: the note above the Gantt that lists the features a page shows, the config that does it,
  * and the spec section that governs it. `harness/docs/page-brief.ts` fills it in. */
 .harness-page-brief {
-  margin: 14px 0 20px;
-  padding: 11px 14px;
+  margin: 0 0 20px;
+  padding: 12px 16px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-surface);
   background: var(--surface);
   font-size: 12.5px;
   line-height: 1.6;
+}
+
+.harness-page-brief h2 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.harness-page-brief ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--ink);
+  columns: 2 320px;
+  column-gap: 32px;
+}
+
+.harness-page-brief li {
+  break-inside: avoid;
 }
 
 .harness-page-brief p {
@@ -444,8 +458,16 @@ nav.harness-site-nav a[aria-current='page'] {
   padding: 0 8px;
   border: 0;
   border-radius: 2px;
+  background: transparent;
   color: var(--ink-2);
+  font: inherit;
   font-size: 12px;
+  cursor: pointer;
+}
+
+.segmented button:hover {
+  background: var(--surface-sunk);
+  color: var(--ink);
 }
 
 .segmented button[aria-pressed='true'] {
@@ -710,7 +732,8 @@ nav.harness-site-nav a[aria-current='page'] {
    here on purpose: the library ships its own palette, and a demo page that repainted it would hide
    what a consumer actually sees on install. If the shipped palette is wrong, it is wrong in
    `src/view/styles.ts`. */
-#gantt {
+/* Scoped to the workbench: the planner draws its own design and takes the library's density. */
+.workbench #gantt {
   --fg-row-height: 30px;
   --fg-bar-label-gap: 7px;
 }
@@ -781,7 +804,7 @@ nav.harness-site-nav a[aria-current='page'] {
    `plugins.html` carries the same rule for `plugins.ts`'s own Gantt (F19) — each page states its
    own colour, and only this sheet links to `index.html`, so the duplication follows the harness's
    per-page-stylesheet shape rather than restating one page's rule on another. */
-.fg-bar-diamond {
+.workbench .fg-bar-diamond {
   --fg-bar-fill: #7b2cbf;
 }
 

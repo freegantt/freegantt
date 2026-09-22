@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// ADR 0029: the app pushes the theme; the library never asks. `harness/theme-push.html` demos both
+// ADR 0029: the app pushes the theme; the library never asks. `harness/e2e/theme-push.html` demos both
 // recipes off one toggle — this drives the page the way a person would: click the button, watch
 // both Gantts follow.
 //
@@ -10,7 +10,7 @@ import { test, expect } from '@playwright/test';
 // instead of an attribute that was never going to be there.
 
 test('one toggle pushes the theme both ways: a direct write and a data-fg-theme pin', async ({ page }) => {
-  await page.goto('/theme-push.html');
+  await page.goto('/e2e/theme-push.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   const pushedContainer = page.getByTestId('gantt-pushed');
