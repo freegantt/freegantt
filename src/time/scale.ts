@@ -47,6 +47,9 @@ export interface ViewPresetHeader extends TickStep {
 /** Data, not a switch statement — shipped presets are config objects; custom ones are too (plans/01 §5.1). */
 export interface ViewPreset {
   id: string;
+  /** The grid's step, with `tickIncrement`. Must be no coarser than the finest (last) header's own
+   *  step — a coarser tick would draw a grid the header disagrees with. `resolvePreset` throws
+   *  `InvalidPresetError` for a preset that breaks this rule. */
   tickUnit: TimeUnit;
   tickIncrement: number;
   headers: readonly ViewPresetHeader[];

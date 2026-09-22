@@ -6,6 +6,7 @@
 
 import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
 import { formatHour, formatWeekNumber } from './format.js';
+import { isCoarserThan } from './zone.js';
 import type { ViewPreset } from './scale.js';
 
 /** `minTickWidthPx` is the density floor below which a preset's labels stop being legible;
@@ -18,7 +19,38 @@ import type { ViewPreset } from './scale.js';
  * 32 }` until this check caught it). */
 function validatePresetTickWidths(preset: ViewPreset): void {
   if (preset.minTickWidthPx !== undefined && preset.minTickWidthPx > preset.preferredTickWidthPx) {
-    throw new InvalidPresetError(preset.id, preset.minTickWidthPx, preset.preferredTickWidthPx);
+    throw new InvalidPresetError(
+      preset.id,
+      `sets minTickWidthPx to ${preset.minTickWidthPx}, above its own preferredTickWidthPx of ` +
+        `${preset.preferredTickWidthPx}. Lower minTickWidthPx to ${preset.preferredTickWidthPx} or ` +
+        'less, so the preset can reach its own preferred zoom.',
+    );
+  }
+}
+
+/** `tickUnit`/`tickIncrement` drive the grid lines and a future snap-to-tick gesture; the finest
+ * (last) header band is what a human reads. A tick step coarser than that band draws a grid the
+ * header disagrees with — a `week` grid under a `day` header, or a `day × 2` grid under a `day × 1`
+ * header. Checked at the same two sites as the width rule, for the same reason (header readability
+ * follow-up, finding 5): a shipped preset already broke a trust like this once. Empty `headers` has
+ * no band to compare against, so it passes (`frame.ts` already handles a bandless preset). */
+function validatePresetTickStep(preset: ViewPreset): void {
+  const finestHeader = preset.headers[preset.headers.length - 1];
+  if (!finestHeader) return;
+  if (isCoarserThan(preset.tickUnit, finestHeader.unit)) {
+    throw new InvalidPresetError(
+      preset.id,
+      `sets tickUnit to "${preset.tickUnit}", coarser than its finest header's unit "${finestHeader.unit}". ` +
+        `Set tickUnit to "${finestHeader.unit}" or finer, so the grid never draws coarser than the header it labels.`,
+    );
+  }
+  if (preset.tickUnit === finestHeader.unit && preset.tickIncrement > finestHeader.increment) {
+    throw new InvalidPresetError(
+      preset.id,
+      `sets tickIncrement to ${preset.tickIncrement} for unit "${preset.tickUnit}", coarser than its ` +
+        `finest header's increment of ${finestHeader.increment}. Lower tickIncrement to ${finestHeader.increment} ` +
+        'or less, so the grid never draws coarser than the header it labels.',
+    );
   }
 }
 
@@ -34,6 +66,7 @@ const YEAR_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({ year: 'numeric' 
  * mutable singleton — one consumer's zoom cannot retune every Gantt on the page (I2). */
 function freezePreset(preset: ViewPreset): ViewPreset {
   validatePresetTickWidths(preset);
+  validatePresetTickStep(preset);
   Object.freeze(preset.headers);
   for (const header of preset.headers) Object.freeze(header);
   return Object.freeze(preset);
@@ -230,6 +263,7 @@ export type PresetRef = ShippedPresetId | ViewPreset;
 export function resolvePreset(ref: PresetRef): ViewPreset {
   if (typeof ref !== 'string') {
     validatePresetTickWidths(ref);
+    validatePresetTickStep(ref);
     return ref;
   }
   const preset = presets[ref];

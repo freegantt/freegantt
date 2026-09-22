@@ -339,7 +339,7 @@ Call sites, read aloud: `gantt.zoomBy(1.5, pointerX)` — "zoom the Gantt by one
 | Two Gantts share a `scale`; one calls `zoomBy` and the other's screen jumps unexpectedly | Documented, not prevented (`plans/02` §5) — sharing a scale always meant this; U7 makes it visible for the first time. |
 | A caller passes `scale` **and** `preset` to `new Gantt(...)`, expecting both to apply | The shared `scale`'s own intent wins; the constructor keys are ignored with a dev-mode warning (D-S1.9-9) — never silently merged. |
 | `reveal(entryId)` called with an id that was just removed | `EntryNotFoundError`, not a silent no-op (D-S1.9-6). |
-| A custom `ViewPreset` sets `tickUnit` coarser than its finest header | Not enforced by a runtime check (data, not a validator) — documented in the doc comment (D-S1.9-3) as a rule an author must keep, the same trust `snap` and `tickWidthPx` already require. |
+| A custom `ViewPreset` sets `tickUnit` coarser than its finest header | Enforced by `resolvePreset` (`validatePresetTickStep`, `time/presets.ts`, #474) — throws `InvalidPresetError`. Covered by `presets.test.ts`. |
 | Someone reads `TimeScale.pxPerMs` expecting it to vary across the range | It's a Cartesian scale — constant by construction (`createTimeScale`'s single `pxPerMs` closure var). A non-linear scale is a different `TimeScale` implementation entirely (`plans/00` §5, deferred), not a per-point read here. |
 
 ---
