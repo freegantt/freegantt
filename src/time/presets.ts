@@ -41,10 +41,12 @@ function isPositiveIntegerIncrement(increment: number): boolean {
  * nothing ever advances. Left unchecked, a `tickIncrement: 0` preset resolves clean here and only
  * fails later, as an untyped `RangeError` thrown deep in `time/scale.ts`'s `msForOneStep` — far from
  * the preset that caused it, and with no `rule` a caller could branch on (NEW-2/#481 review). A
- * header's own bad increment does not throw the same way — `scale.ts`'s `ticks()` caps its walk at
- * `MAX_TICKS` rather than looping forever — but it still renders 100,000 zero-width ticks instead of
- * a readable band, so it gets the same refusal here rather than a silent garbage render. Checked
- * before `isCoarserStep` below, which assumes both steps already advance. */
+ * header's own bad increment does throw the same way once a render reaches it — `scale.ts`'s
+ * `ticks()` reads the same `tickFloor` this preset's own tick does, and `tickFloor` refuses a
+ * non-positive-integer increment with a typed `InvalidSnapIncrementError` (#489) — but that throw
+ * names the increment, not the preset, and fires mid-render instead of at registration. Checking
+ * here catches it earlier, with a message that names the preset and the header, before a caller
+ * ever mounts it. Checked before `isCoarserStep` below, which assumes both steps already advance. */
 function validatePresetTickIncrement(preset: ViewPreset, operation: string): void {
   if (!isPositiveIntegerIncrement(preset.tickIncrement)) {
     throw new InvalidPresetError(

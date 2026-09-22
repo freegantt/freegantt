@@ -75,7 +75,12 @@ export interface TimeScale {
   widthForDuration(d: Duration, at: Instant): number;
   /** Ticks whose cell `[x, x + width)` intersects `span`, aligned to `step`'s boundary in the dataset
    *  zone — the cell covering `span.x` is emitted even when its own `x` is left of `span`. Whole-range
-   *  callers pass `{ x: 0, width: contentWidth }` — and are greppable. */
+   *  callers pass `{ x: 0, width: contentWidth }` — and are greppable.
+   *
+   *  Throws `InvalidSnapIncrementError` when `step.increment` is not a positive whole number — a
+   *  step-driven caller normally never sees this: every shipped and custom preset already rejects a
+   *  bad `tickIncrement`/header `increment` at registration (`time/presets.ts`), so the throw only
+   *  reaches a caller building a `TickStep` by hand. */
   ticks(step: TickStep, span: PixelSpan): readonly Tick[];
   /** What time a pixel extent stands for. Clamps to `[0, contentWidth]` first (D-S1.8-1: there is no
    *  time outside the content), so a caller hands over whatever pixels it has and never repeats the
@@ -93,7 +98,10 @@ export interface TimeScaleOptions {
   pxPerMs: number;
 }
 
-/** Guards ticks() against a misconfigured step (e.g. zero increment) walking forever. */
+/** Guards ticks() against a step so fine (`{ unit: 'millisecond', increment: 1 }` over a year-long
+ * span) that walking every one of its ticks would stand in for "forever" in practice. A step that
+ * cannot advance at all (zero, negative, or fractional `increment`) never reaches this loop —
+ * `tickFloor` refuses it first, with `InvalidSnapIncrementError` (#489). */
 const MAX_TICKS = 100_000;
 
 export function createTimeScale(options: TimeScaleOptions): TimeScale {
