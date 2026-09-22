@@ -51,7 +51,7 @@ So R2 is the timing half of a fixture that already exists. It needs three measur
 | unthrottled | 16.6 ms | 17.6 ms | 22.9 ms | 0/240 | 4.24 ms |
 | 4x CPU slowdown | 26.2 ms | 32.9 ms | 61.3 ms | 17/240 | 18.85 ms |
 
-Trace: `measurements/2026-09-22T19-32-23-416Z-scroll-trace.json`. No budget follows from this — S6 Q1 is still open. Hover and the bulk-edit-in-one-transaction measurements are not covered by `measure:scale` and remain unmeasured.
+Run: `2026-09-22T19-32-23-416Z`. Trace: `measurements/2026-09-22T19-32-23-416Z-scroll-trace.json`. The `81e80c20` commit message quotes a different pair (4.43 ms / 20.66 ms script per frame). That pair is the before/after comparison for #414 from separate runs. This table is the recorded reading. No budget follows from this — S6 Q1 is still open. Hover and the bulk-edit-in-one-transaction measurements are not covered by `measure:scale` and remain unmeasured.
 
 ### R3 — the linked-Gantt demo
 
