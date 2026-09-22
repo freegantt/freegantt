@@ -1,6 +1,6 @@
 # FreeGantt — Lint Rule Specifications
 
-Twenty-three rules enforce the spec (S2.7 correction — the original count of nineteen predates §3.3a and drifted as rules landed). **Eleven are configuration of ESLint builtins** (`no-restricted-syntax`, `no-restricted-properties`, `no-restricted-globals`, `no-restricted-imports`) scoped by directory — zero maintenance, no plugin code. **Twelve need real AST logic** and live in a local flat-config plugin. Prefer the builtin vehicle whenever it expresses the rule honestly: every custom rule is code we own, test, and debug.
+Twenty-three rules enforce the spec. The count has grown since the original nineteen as rules landed. **Eleven are configuration of ESLint builtins** (`no-restricted-syntax`, `no-restricted-properties`, `no-restricted-globals`, `no-restricted-imports`) scoped by directory — zero maintenance, no plugin code. **Twelve need real AST logic** and live in a local flat-config plugin. Prefer the builtin vehicle whenever it expresses the rule honestly: every custom rule is code we own, test, and debug.
 
 ---
 
@@ -25,7 +25,7 @@ const PURE = ['src/model/**', 'src/time/**', 'src/data/**', 'src/scheduling/**',
 export default [
   { plugins: { freegantt } },
   { files: ['src/**/*.ts'], languageOptions: { parserOptions: { projectService: true } },
-    rules: { /* §2 + §3 baselines */ } },
+    rules: { /* builtin + custom baselines */ } },
   { files: PURE, rules: { 'no-restricted-globals': ['error', ...DOM_GLOBALS] } },
   // …per-directory relaxations, each with a spec citation in a comment
 ];
@@ -41,24 +41,24 @@ Each row is a `files`-scoped override. The `allowlist` column names the only pat
 |---|---|---|---|---|---|
 | B1 | `no-magic-time-constants` | `no-restricted-syntax` on `Literal[value=86400000]`, `3600000`, `604800000`, `60000`, `1000` *(in binary expressions only)* | Numeric time constants used as durations | `src/time/**` | I10 |
 | B2 | `no-date-outside-time` | `no-restricted-globals` (`Date`) + `no-restricted-properties` (`Date.now`, `Date.parse`, `Date.UTC`, `performance.now` for wall-clock use) | Any `Date` construction or read | `src/time/**` (the sanctioned `Intl`/`Date` boundary) | I10, determinism |
-| B3 | `no-random` | `no-restricted-properties` (`Math.random`, `crypto.randomUUID`) | Nondeterminism in pure layers | tests only — no production id minter uses randomness: `model/ids.ts`'s `changeSetId` takes a per-instance counter (S2.7 correction; the plan's original `src/data/id.ts` allowlist entry named a path that was never written) | I4 |
+| B3 | `no-random` | `no-restricted-properties` (`Math.random`, `crypto.randomUUID`) | Nondeterminism in pure layers | tests only — no production id minter uses randomness | I4 |
 | B4 | `no-scroll-outside-scroll-attachment` (shipped as a custom rule — `scrollLeft`/`scrollTop`/`scrollTo` need AST-level filename exemption, past what `no-restricted-properties` alone expresses) | `eslint/rules/no-scroll-outside-scroll-attachment.cjs` | Direct scroll manipulation | `src/view/scroll-attachment.ts` | I12 |
 | B5 | `no-inner-html` | `no-restricted-properties` (`innerHTML`, `outerHTML`, `insertAdjacentHTML`) + `no-restricted-syntax` on `document.write` | HTML injection paths | `src/render/dom/raw-html.ts` (the opt-in flag path) | I13 |
 | B6 | `no-dom-in-pure` | `no-restricted-globals` (`document`, `window`, `navigator`, `location`, `self`, `HTMLElement`, `Node`, `Element`, `requestAnimationFrame`, `getComputedStyle`) | DOM access below the line | — (pure dirs only, no exceptions) | I1, D4 |
-| B7 | `no-external-runtime-import` | `no-restricted-imports` (`alien-signals`, `temporal-polyfill`, `temporal-polyfill/*`) | Any runtime dep import | `src/data/reactivity.ts` (`alien-signals`), `src/time/zone.ts` (`temporal-polyfill`) — S2.7 correction: the plan's original text named only `alien-signals`/`reactivity.ts`; the shipped rule confines both façades | `plans/04` §1 |
+| B7 | `no-external-runtime-import` | `no-restricted-imports` (`alien-signals`, `temporal-polyfill`, `temporal-polyfill/*`) | Any runtime dep import | `src/data/reactivity.ts` (`alien-signals`), `src/time/zone.ts` (`temporal-polyfill`) | Runtime dependencies |
 | B8 | `no-not-implemented` | `no-restricted-syntax` on `ThrowStatement > NewExpression[callee.name='Error'] > Literal[value=/not.implemented|TODO|unsupported/i]` | Dishonest public surface | tests | I11 |
 | B9 | `no-derived-in-json` | `eslint/rules/no-derived-in-json.cjs` — bans `Row`/`Bar`/`GeometryFrame` type references and `layout/`/`view/` imports | Derived types in serialization | — (`src/data/serialization/**` only) | authored/derived |
-| B10 | `raf-single-owner` | `no-restricted-globals` (`requestAnimationFrame`, `cancelAnimationFrame`) | Multiple rAF pipelines | `src/view/frame-scheduler.ts` | `01` §3 |
+| B10 | `raf-single-owner` | `no-restricted-globals` (`requestAnimationFrame`, `cancelAnimationFrame`) | Multiple rAF pipelines | `src/view/frame-scheduler.ts` | Rendering |
 | B11 | `no-restricted-imports` layer mirror | `no-restricted-imports` with per-directory `patterns` | Layer violations (fast editor feedback) | — | I1 (backstop for `03` §1) |
 
 ### dependency-cruiser removable leaves (not ESLint rules)
 
-These live in `.dependency-cruiser.cjs` and are proved by `scripts/guard-red-test.mjs` (D-S2-23, S4):
+These live in `.dependency-cruiser.cjs` and are proved by `scripts/guard-red-test.mjs`:
 
 | Rule | Module | Allowed importers | Invariant |
 |---|---|---|---|
-| `rollup-is-removable` | `src/data/rollup.ts` | `build-commit-change-set.ts`, `transaction.ts` | D-S4-7 — delete the file and parents keep caller-assigned values |
-| ~~`autogroup-is-removable`~~ **RETIRED 2026-09-11** | ~~`src/data/hierarchy.ts`~~ | — | [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `data/hierarchy.ts` itself, so the rule's guarded file no longer exists. `autoGroup` is gone, not merely unreachable. |
+| `rollup-is-removable` | `src/data/rollup.ts` | `build-commit-change-set.ts`, `transaction.ts` | Delete the file and parents keep caller-assigned values |
+| ~~`autogroup-is-removable`~~ **RETIRED** | ~~`src/data/hierarchy.ts`~~ | — | The module that inspired this rule was deleted, so the rule's guarded file no longer exists. `autoGroup` is gone, not merely unreachable. |
 | `layout-boundary` | `src/layout/**` | may import `time/`, `model/` only | I1 — `layout/` never imports `data/` |
 
 *(B11 duplicates dependency-cruiser deliberately: `depcruise` is the authority and understands the whole graph; the ESLint mirror gives the red squiggle in-editor and inside the Claude Code PostToolUse hook, where a full graph crawl would be too slow.)*
@@ -67,7 +67,7 @@ These live in `.dependency-cruiser.cjs` and are proved by `scripts/guard-red-tes
 
 ## 3. Custom rules
 
-Every custom rule spec below is complete enough to implement without re-reading `plans/`. All report messages end with the governing spec citation, so a failure teaches the rule rather than just blocking.
+Every custom rule spec below is complete enough to implement. All report messages describe the rule and its rationale.
 
 ### 3.1 `freegantt/no-instant-arithmetic` — type-aware · I10
 
@@ -79,7 +79,7 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Why type-aware:** the whole point of the brand is that `entry.end - 1` and `someNumber - 1` look identical syntactically. Uses `parserServices.getTypeAtLocation` and checks for the `__brand: 'Instant'` property on the resolved type.
 
-**Message:** `Arithmetic on Instant/Duration outside time/. Use time/ helpers (add, diff, startOf); inclusive ends go through formatEndInclusive. (plans/01 §5)`
+**Message:** `Arithmetic on Instant/Duration outside time/. Use time/ helpers (add, diff, startOf); inclusive ends go through formatEndInclusive.`
 
 **Subsumes** the "no inline `end - 1`" review rule from `CLAUDE.md`.
 
@@ -95,11 +95,11 @@ Every custom rule spec below is complete enough to implement without re-reading 
 
 **Known residue** (documented in `01-invariant-guard-matrix.md` §3): a conversion laundered through an untyped intermediate. Accepted.
 
-**Message:** `Time→pixel conversion outside TimeScale. Gantt instances bind to a TimeScale; nothing else may know px-per-ms. (plans/01 §8.2, D9)`
+**Message:** `Time→pixel conversion outside TimeScale. Gantt instances bind to a TimeScale; nothing else may know px-per-ms.`
 
 ---
 
-### 3.3 `freegantt/no-kind-conditional` — syntactic · `01` §2.5
+### 3.3 `freegantt/no-kind-conditional` — syntactic
 
 **Flags:** comparisons (`===`, `!==`, `switch` discriminant, `case`) where one side is a member expression whose property is `kind` and the other is a string literal; and `switch` statements whose discriminant is `*.kind`.
 
@@ -113,19 +113,18 @@ these files were never created):**
 | `src/render/dom/renderer-registry.ts` | appearance per kind |
 | `src/interaction/capabilities.ts` | affordances per kind |
 
-**Message:** `kind is dispatched through a registry, never compared inline. Register behavior at the seam for this layer. (plans/01 §2.5)`
+**Message:** `kind is dispatched through a registry, never compared inline. Register behavior at the seam for this layer.`
 
 **Note:** the rule does *not* flag `entry.kind ?? 'span'` or passing `kind` to a registry lookup — only branching on its value.
 
-**Never shipped, and its premise is now superseded.** The four seams above landed by S6 with no stored `kind` to dispatch on, and only `src/layout/bars/produce-bars.ts` exists at the path this table names: [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` outright, so derivation and look follow structure and registered Variants ([ADR 0018](adr/0018-a-variant-is-a-rule-not-an-id-list.md), [ADR 0022](adr/0022-core-ships-variants-and-a-variant-answers-about-itself.md)) instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
+**Never shipped, and its premise is now superseded.** The stored `kind` field was deleted, so derivation and lookup now follow structure and registered Variants instead of a kind comparison at any seam. This section stays as a historical record of the rule that was planned but never built.
 
 ---
 
-### 3.3a `freegantt/no-kind-literal` — syntactic · `01` §2.5 · shipped S2.7
+### 3.3a `freegantt/no-kind-literal` — syntactic
 
-**Narrower cousin of §3.3, landed early.** D-S2-22's span rollup is the first kind-dependent
-behaviour in `data/`, before any of §3.3's four seam files exist (S3–S6). Rather than ship §3.3's
-seam-allowlist shape against seams that don't exist yet, S2.7 lands the part that is checkable today:
+**Narrower cousin of §3.3, landed early.** The span rollup is the first kind-dependent
+behaviour in `data/`. Rather than ship a seam-allowlist rule against seams that don't exist yet, this lands the part that is checkable today:
 no file may compare a kind string literal against `.kind` at all, in `src/data/**` or `src/layout/**`
 (tests exempt — fixture setup legitimately writes `{ kind: 'group' }`).
 
@@ -137,9 +136,9 @@ the same reasoning, a comparison against `'span'` specifically — treated as a 
 (e.g. "is this the default, so can be omitted from a serialized document"), not the "different
 behavior per kind" chain the rule targets. A comparison against any other kind value still trips it.
 
-**Message:** `kind is dispatched through a lookup, never compared inline. Register behavior at the seam for this layer. (plans/01 §2.5)`
+**Message:** `kind is dispatched through a lookup, never compared inline. Register behavior at the seam for this layer.`
 
-**Resolved, not by folding into §3.3.** [ADR 0013](adr/0013-what-decides-that-a-row-derives-its-values.md) deleted `Entry.kind` itself, so §3.3's seam-allowlist rule was never built — there is no stored `kind` left to compare at any seam. This rule stays registered as a general backstop against inline `.kind` dispatch in `data/` and `layout/`, but its original target (`entry.kind ?? 'span'`) no longer exists in the model.
+**Resolved, not by folding into §3.3.** The `Entry.kind` field was deleted, so the seam-allowlist rule was never built — there is no stored `kind` left to compare at any seam. This rule stays registered as a general backstop against inline `.kind` dispatch in `data/` and `layout/`.
 
 ---
 
