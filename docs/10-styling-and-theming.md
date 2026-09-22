@@ -143,7 +143,9 @@ or pin an ancestor once and never touch the Gantt again
 <div data-fg-theme="dark"><div id="gantt"></div></div>
 ```
 
-mirroring the same class in the app's own toggle. `harness/theme-push.html` demonstrates both.
+mirroring the same class in the app's own toggle. `harness/e2e/theme-push.html` demonstrates both.
+Every harness demo page uses the pin: `harness/page-theme.ts` writes `data-fg-theme` on `<html>`,
+every Gantt stays on `'auto'`, and the page chrome reads the same `--fg-*` tokens as the chart.
 `'auto'` keeps reading an ancestor's `data-fg-theme` pin and then `prefers-color-scheme` — both
 signals the library defines or the platform defines, never a guess at a convention some framework
 holds.
@@ -340,7 +342,7 @@ needs its own rule.
 
 ### The harness's worked example
 
-`harness/harness-chrome.css:763-768` shows the supported path. It overrides the **token**
+`harness/harness-chrome.css` (the `.demo-mobilization-line` rule) shows the supported path. It overrides the **token**
 `--fg-date-line-color`, not a Part rule, on its own `.demo-mobilization-line` class — a date line
 the demo names for something other than Today:
 
@@ -356,7 +358,7 @@ The file's own comment explains why one declaration restyles both the stroke and
 stroke and its label both read `--fg-date-line-color`, so overriding the token — not writing a
 level-2 Part rule — moves both at once.
 
-`harness/planner.html:157-158` sets the same pair of tokens directly on its container, to restyle
+`harness/harness-chrome.css`'s Paper theme (`:root.theme-paper`) sets the same pair of tokens, to restyle
 every date line the page shows:
 
 ```css

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // [S2-A4] (plans/s2-data-core/s2.7-close-the-gate.md §2, plans/00 §4 gate condition 3): the
-// changeset log in harness/data.html is built from each committed ChangeSet alone (D-S2-17), never
+// changeset log in harness/e2e/data.html is built from each committed ChangeSet alone (D-S2-17), never
 // by re-reading the dataset. `from` is what makes this falsifiable — a log built from a re-read can
 // produce `to` but never `from`, since the dataset has already moved on by the time it is read.
 //
@@ -63,7 +63,7 @@ async function costsOf(page: import('@playwright/test').Page, id: string): Promi
 }
 
 test('[S2-A4] rename logs from and to for the name field', async ({ page }) => {
-  await page.goto('/data.html');
+  await page.goto('/e2e/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const { entryId, name: before } = await selectFirstBar(page);
@@ -78,7 +78,7 @@ test('[S2-A4] rename logs from and to for the name field', async ({ page }) => {
 });
 
 test('[S2-A4] move +1 day logs from and to for start and end', async ({ page }) => {
-  await page.goto('/data.html');
+  await page.goto('/e2e/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const { entryId } = await selectFirstBarWithOwnDates(page);
@@ -100,7 +100,7 @@ test('[S2-A4] move +1 day logs from and to for start and end', async ({ page }) 
 });
 
 test('[S2-A4] undo logs an [undo]-tagged row whose to is the original value', async ({ page }) => {
-  await page.goto('/data.html');
+  await page.goto('/e2e/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const { entryId, name: original } = await selectFirstBar(page);
@@ -118,13 +118,13 @@ test('[S2-A4] undo logs an [undo]-tagged row whose to is the original value', as
 });
 
 // ADR 0013: a rolling-up parent's cell is read-only, from every direction — #470 retired the one
-// seam that let a Field reopen it. `harness/data.ts`'s "Set cost 500" button owns the split now, in
+// seam that let a Field reopen it. `harness/e2e/data.ts`'s "Set cost 500" button owns the split now, in
 // app code: it writes the phase row's leaves, weighted by leaf count, and the Rollup reads 500 back
 // off them at every level above. One undo restores every row the split touched.
 test('Set cost 500 on a rolling-up parent splits to its leaves and rolls back up (ADR 0013, #470)', async ({
   page,
 }) => {
-  await page.goto('/data.html');
+  await page.goto('/e2e/data.html');
   await expect(page.locator('#gantt .fg-bar-summary').first()).toBeVisible();
 
   const { entryId: parentId } = await selectBar(page, page.locator('#gantt .fg-bar-summary').first());

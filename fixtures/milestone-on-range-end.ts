@@ -9,8 +9,8 @@
 // (D-S1.8-1). Under the default `fit: 'pane'` that is the only way two Gantts sharing one axis can
 // desync, because the axis max is 0 there and nothing else can move.
 //
-// Two harness pages need exactly this shape and built it twice: `harness/scroll-sync.ts`'s
-// `#pane-fit-*` pair and `harness/entries-outside-the-range.ts`, which adds two entries of its own
+// Two harness pages need exactly this shape and built it twice: `harness/e2e/scroll-sync.ts`'s
+// `#pane-fit-*` pair and `harness/e2e/entries-outside-the-range.ts`, which adds two entries of its own
 // that reach past the range. One fixture, so the shape the two pages prove stays one shape.
 
 import { MS } from 'freegantt';

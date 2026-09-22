@@ -236,7 +236,7 @@ const SUMMARY_CSS = `
 
 const DIAMOND_VARIANT_NAME = 'diamond';
 
-/** The diamond's own fixed box, in content pixels. `harness/planner.html` measured and shipped
+/** The diamond's own fixed box, in content pixels. `harness/index.html` measured and shipped
  *  13px, so that is what core's own default carries (ADR 0022 Q3).
  *
  *  Declared here, beside `diamond()`'s only reader — never in `src/layout/frame.ts`, which holds

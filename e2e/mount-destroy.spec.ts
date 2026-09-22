@@ -21,7 +21,7 @@ interface BrowserCensus {
 test('[S6-R4] repeated mount/destroy of a linked pair holds no nodes or listeners (#403)', async ({
   page,
 }) => {
-  await page.goto('/mount-destroy.html');
+  await page.goto('/e2e/mount-destroy.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   const client = await page.context().newCDPSession(page);
@@ -69,7 +69,7 @@ test('[S6-R4] repeated mount/destroy of a linked pair holds no nodes or listener
 });
 
 test('destroying a pair empties the containers it was handed', async ({ page }) => {
-  await page.goto('/mount-destroy.html');
+  await page.goto('/e2e/mount-destroy.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   await page.getByTestId('destroy-pair').click();

@@ -1,12 +1,13 @@
-// D-S5-29: every gallery page opens with one short block, above the Gantt, that answers three
-// questions for a reader who has never seen this library — what this page shows, the config that
+// D-S5-29: every demo page opens with one short note, above the Gantt, for a reader who has never
+// seen this library. It answers three questions: which features this page shows, the config that
 // does it, and where the spec says so. One table holds every page's answer; every page calls one
-// mount function. A page's own explanatory text lives here once, not eight times in eight HTML files.
+// mount function.
 
 import type { HarnessPageId } from '../harness-nav.js';
 
 const PUBLIC_API = '../plans/02-public-api.md';
 const PLUGIN_GUIDE = '../docs/06-plugin-authoring.md';
+const STYLING_GUIDE = '../docs/10-styling-and-theming.md';
 const BAR_IS_AN_ENTRY = '../docs/08-a-bar-is-an-entry.md';
 
 /** One doorway into the spec. `label` is what a reader clicks; `href` is where it lands. */
@@ -15,77 +16,84 @@ interface SpecLink {
   readonly href: string;
 }
 
-/** What one gallery page demonstrates: the plain-English claim, the API call that backs it, and the
- *  spec section that governs it. */
+/** What one demo page shows: the features a reader can try, the API calls that back them, and the
+ *  spec sections that govern them. */
 interface PageBrief {
-  readonly demonstrates: string;
+  readonly features: readonly string[];
   readonly config: readonly string[];
   readonly specLinks: readonly SpecLink[];
 }
 
 // Anchors point at plans/02-public-api.md's own headings. A markdown file has no live table of
-// contents in a browser tab, so the fragment is a best-effort jump for an editor or a renderer that
-// honours it; the link text always names the section too, for a reader whose viewer does not.
-// Partial, not a full Record: D-S5-29 names eight gallery pages, not every `HarnessPageId`.
-// `grid-scroll` and `docs` sit outside the gallery table on purpose and carry no entry here.
-const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
-  'generic-demo': {
-    demonstrates:
-      'The nav above reaches every page in this gallery. The strip around the Gantt is the smallest ' +
-      'setup that works — everything under the torn rule is harness apparatus, not library API.',
-    config: ["new Dataset({ entries, timeZone: 'UTC' })", "new Gantt({ container: '#gantt', dataset })"],
-    specLinks: [{ label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` }],
-  },
-  mutation: {
-    demonstrates:
-      'Every edit runs inside one transaction and produces one changeset. Undo and redo replay the ' +
-      'same log.',
-    config: ["dataset.entries.update(id, { name: '…' })", 'dataset.undo() / dataset.redo()'],
-    specLinks: [
-      { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },
-      { label: 'Undo and redo', href: `${PUBLIC_API}#undo-and-redo` },
-      { label: '§6 — Persistence', href: `${PUBLIC_API}#6-persistence-adr-0016` },
-    ],
-  },
-  editing: {
-    demonstrates:
-      'Drag and resize move an entry by gesture. A beforeEntryMove veto refuses a drop before a hard ' +
-      'boundary, and a Dataset plugin refuses an edit on a locked entry the same way.',
-    config: [
-      "gantt.on('beforeEntryMove', (event) => event.start < mobilization ? event.refuse('…') : undefined)",
-      'dataset.plugins: [lockEntries()]',
-    ],
-    specLinks: [
-      { label: 'plans/02 §3 — Events', href: `${PUBLIC_API}#3-events-one-bus-one-vocabulary` },
-      { label: '§4.1 — Per-entry looks and actions', href: `${PUBLIC_API}#41-per-entry-looks-and-actions` },
-    ],
-  },
+// contents in a browser tab, so the fragment is a best-effort jump; the link text always names the
+// section too.
+const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
   planner: {
-    demonstrates:
-      'A shipped design, built on the public surface alone. Colour is tokens, cells the design draws ' +
-      'as pictures are cell renderers, and a third theme the library never heard of is a consumer class.',
+    features: [
+      'Four themes for the whole page: Auto, Light, Dark, and Paper — a consumer theme made of --fg-* tokens alone',
+      'Cell renderers: phase tags, owner avatars, compact dates, and the shipped meter() for Done',
+      'Bar renderers: phase colours, progress shading, a critical-path ring, and labels placed by the library',
+      'The shipped diamond() variant for checkpoints, and the summary rail for phases',
+      'Weekend shading, the today line, and Day / Week / Month zoom',
+      'Tooltips, a context menu, inline editing, and undo / redo',
+    ],
     config: [
       "gridColumns: [{ field: 'owner', columnRenderer }, …]",
-      "barRenderer: { '*': ({ entry }) => ({ style: { '--fg-bar-fill': … } }) }",
-      "body.theme-paper #gantt { --fg-pane-bg: …; --fg-bar-fill: … }",
+      "barRenderer: ({ entry }) => ({ style: { '--fg-bar-fill': … } })",
+      "document.documentElement.setAttribute('data-fg-theme', 'dark')",
+      ':root.theme-paper { --fg-pane-bg: …; --fg-bar-fill: … }',
     ],
     specLinks: [
       { label: 'plans/02 §4.1 — Per-entry looks and actions', href: `${PUBLIC_API}#41-per-entry-looks-and-actions` },
-      { label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` },
+      { label: 'docs/10 — Styling and theming', href: STYLING_GUIDE },
     ],
   },
-  hierarchy: {
-    demonstrates:
-      'A tree of entries groups, sorts, and filters its rows. Grid columns resize and reorder by ' +
-      'drag, and a beforeEntryEdit veto swaps in a different editor for one column. "Framing crew" ' +
-      'draws its three children as segments as day bars on its own row — each with its own text, look and ' +
-      'capabilities, and a row total rolled up from them — and one Field write opens it back into ' +
-      'sub-rows.',
+  'generic-demo': {
+    features: [
+      'The smallest setup that works: one Dataset, one Gantt',
+      'A tree grid with editable columns, and a row that draws its children as segments',
+      'The toolbar a consumer ships: undo / redo, expand / collapse, zoom, presets, snap, and Today',
+      'A bench below the torn rule that drives mutation, vetoes, plugins, renderers, and JSON round-trips',
+    ],
+    config: ["new Dataset({ entries, timeZone: 'UTC' })", "new Gantt({ container: '#gantt', dataset })"],
+    specLinks: [{ label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` }],
+  },
+  'editing-and-data': {
+    features: [
+      'Drag and resize bars, and edit cells in place',
+      'Programmatic mutation: every edit runs in one transaction and makes one changeset',
+      'Undo and redo replay the same changeset log',
+      'A beforeEntryMove veto refuses a drop before a hard date line',
+      'A Dataset plugin locks an entry and refuses every edit to it',
+      'Plugins over the public contract: a custom bar kind, an over-budget row, a chord command, and a popup',
+      'JSON export and import round-trip the whole Dataset',
+    ],
+    config: [
+      "dataset.entries.update(id, { name: '…' })",
+      'dataset.undo() / dataset.redo()',
+      "gantt.on('beforeEntryMove', (event) => event.refuse('…'))",
+      'new Dataset({ entries, plugins: [lockEntries()] })',
+      'gantt.installPlugin(bufferKind())',
+    ],
+    specLinks: [
+      { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },
+      { label: 'plans/02 §3 — Events', href: `${PUBLIC_API}#3-events-one-bus-one-vocabulary` },
+      { label: 'docs/06 — Plugin authoring guide', href: PLUGIN_GUIDE },
+    ],
+  },
+  'hierarchy-and-timeline': {
+    features: [
+      'A tree of entries with roll-ups, and a phase that keeps its own dates (an owning parent)',
+      'Group, sort, and filter the rows; resize and reorder grid columns by drag',
+      'A row that draws its children as segments, with bar labels that fit or move outside',
+      'Presets, zoom in / out, pan to today, and a locale switch for the header',
+      'Date lines, the today line, weekend shading, and entries that start or end outside the range',
+    ],
     config: [
       "gantt.rowSource = { source: 'entries', tree: true }",
-      "gantt.gridColumns = ['name', 'start', 'end']",
-      "gantt.on('beforeEntryEdit', (event) => …)",
-      "rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } }",
+      "fields: [{ key: 'start', rollUp: 'none' }, { key: 'end', rollUp: 'none' }]",
+      "gantt.preset = 'weekAndMonth'",
+      'gantt.zoomIn() / gantt.zoomOut() / gantt.panToToday()',
     ],
     specLinks: [
       { label: 'plans/02 §4.2 — Fields and grid columns', href: `${PUBLIC_API}#42-fields-and-grid-columns` },
@@ -93,121 +101,64 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       { label: 'docs/08 — A bar is an Entry', href: BAR_IS_AN_ENTRY },
     ],
   },
-  'timeline-navigation': {
-    demonstrates:
-      'A preset picker and zoom in/out step the timeline through named densities. panToToday() and a ' +
-      "today-line toggle cover navigation; swap the dataset to see the density floor's effect.",
-    config: ["gantt.preset = 'weekAndMonth'", 'gantt.zoomIn() / gantt.zoomOut()', 'gantt.panToToday()'],
-    specLinks: [
-      { label: 'plans/02 — Reconfiguration is just assignment', href: `${PUBLIC_API}#reconfiguration-is-just-assignment` },
+  performance: {
+    features: [
+      '50,000 entries in one Dataset, with the load and first-paint times on the page',
+      'Virtualized rows and columns: the DOM holds only what the viewport shows',
+      'Scroll, zoom, and preset changes over the whole dataset',
+      'A second Gantt that shares the time scale and the horizontal scroll axis',
     ],
-  },
-  'scroll-sync': {
-    demonstrates:
-      'Two Gantts share one ScrollAxis per direction (x and y) and one TimeScaleModel. Scrolling ' +
-      'either one moves both; the shorter chart pins at its own last row while the taller one keeps ' +
-      'going. A second pair below shares only x: each keeps a private y, so a vertical scroll on one ' +
-      'never moves the other (D-S6-1).',
     config: [
-      'const scroll = { x: new ScrollAxis(), y: new ScrollAxis() };',
-      'new Gantt({ container, dataset, scale, scroll })',
-      '// x-only sharing: new Gantt({ container, dataset, scale, scroll: { x } })',
+      'new Dataset({ entries: fiftyThousandEntries })',
+      'new Gantt({ container, dataset, scale, scroll: { x } })',
     ],
     specLinks: [
       { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
-    ],
-  },
-  'mount-destroy': {
-    demonstrates:
-      'A linked pair mounts and destroys over and over on one page, the way a single-page app ' +
-      'mounts it on every visit. The shared TimeScaleModel and ScrollModel outlive every pair.',
-    config: ['gantt.destroy()', 'new Gantt({ container, dataset, scale, scroll })'],
-    specLinks: [
-      { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
-    ],
-  },
-  'theme-push': {
-    demonstrates:
-      'The app pushes its own dark-mode answer to the Gantt; the library never asks. One toggle ' +
-      'writes gantt.theme directly, and mirrors data-fg-theme onto a wrapper for a second Gantt on ' +
-      "'auto'.",
-    config: [
-      "gantt.theme = isDark ? 'dark' : 'light'",
-      "wrapper.setAttribute('data-fg-theme', isDark ? 'dark' : 'light')",
-    ],
-    specLinks: [{ label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` }],
-  },
-  'large-dataset': {
-    demonstrates:
-      'Five thousand entries render at a fixed frame cost. The DOM holds only the rows the viewport ' +
-      "shows, however far the dataset scrolls in either direction.",
-    config: ["const scale = new TimeScaleModel({ fit: 'preset' });", 'new Gantt({ container, dataset, scale })'],
-    specLinks: [
-      { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
-    ],
-  },
-  'owning-parent': {
-    demonstrates:
-      "Phase's start and end opt out of the Rollup, so Phase keeps its own authored dates. Its bar " +
-      'moves and resizes like an ordinary one, and its children move with it, but a resize never ' +
-      'stretches them.',
-    config: ["fields: [{ key: 'start', rollUp: 'none' }, { key: 'end', rollUp: 'none' }]"],
-    specLinks: [{ label: 'plans/02 §4.2 — Fields and grid columns', href: `${PUBLIC_API}#42-fields-and-grid-columns` }],
-  },
-  plugins: {
-    demonstrates:
-      'Five plugins install over the public plugin contract alone: the shipped timeShading(), an ' +
-      "over-budget row stripe, a consumer-defined 'buffer' kind, a command bound to a chord, and a " +
-      'popup anchored to a bar.',
-    config: [
-      'gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7) }]))',
-      'gantt.installPlugin(overBudgetRows(threshold))',
-      'gantt.installPlugin(bufferKind())',
-      "ctx.commands.register({ id: 'demo.clearSelection', run: … })",
-    ],
-    specLinks: [
-      { label: 'plans/02 §4.4 — Plugin registrations', href: `${PUBLIC_API}#44-plugin-registrations-one-collision-policy-one-lifetime-155` },
-      { label: 'docs/06 — Plugin authoring guide', href: PLUGIN_GUIDE },
     ],
   },
 };
 
-/** Mounts one page's brief into `container`. A page id with no entry (`grid-scroll` —
- *  eight gallery pages have a brief, not every harness page) leaves the container empty rather than throwing,
- *  so a page outside the gallery table can still call this without a special case. */
+function labelledLine(label: string): HTMLParagraphElement {
+  const line = document.createElement('p');
+  const strong = document.createElement('strong');
+  strong.textContent = `${label}: `;
+  line.append(strong);
+  return line;
+}
+
+/** Mounts one page's feature note into `container`. */
 export function mountPageBrief(container: HTMLElement, pageId: HarnessPageId): void {
   const brief = PAGE_BRIEFS[pageId];
-  if (brief === undefined) return;
-
   container.classList.add('harness-page-brief');
 
-  const demonstrates = document.createElement('p');
-  const demonstratesLabel = document.createElement('strong');
-  demonstratesLabel.textContent = 'Demonstrates: ';
-  demonstrates.append(demonstratesLabel, brief.demonstrates);
+  // Which features can the reader try on this page?
+  const heading = document.createElement('h2');
+  heading.textContent = 'Features on this page';
+  const features = document.createElement('ul');
+  for (const feature of brief.features) {
+    const item = document.createElement('li');
+    item.textContent = feature;
+    features.append(item);
+  }
 
-  const config = document.createElement('p');
-  const configLabel = document.createElement('strong');
-  configLabel.textContent = 'Config: ';
-  config.append(configLabel);
+  // Which API calls back them?
+  const config = labelledLine('Config');
   brief.config.forEach((line, index) => {
-    if (index > 0) config.append(', ');
+    if (index > 0) config.append(' ');
     const code = document.createElement('code');
     code.textContent = line;
     config.append(code);
   });
 
-  const spec = document.createElement('p');
-  const specLabel = document.createElement('strong');
-  specLabel.textContent = 'Spec: ';
-  spec.append(specLabel);
+  // Where does the spec say so?
+  const spec = labelledLine('Spec');
   brief.specLinks.forEach((link, index) => {
-    if (index > 0) spec.append(', ');
+    if (index > 0) spec.append(' · ');
     const anchor = document.createElement('a');
     anchor.href = link.href;
     anchor.textContent = link.label;
     spec.append(anchor);
   });
 
-  container.append(demonstrates, config, spec);
+  container.append(heading, features, config, spec);
 }

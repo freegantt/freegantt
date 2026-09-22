@@ -421,7 +421,7 @@ export { meter, image } from '../layout/index.js';
 export { currency } from '../data/fields/field-types.js';
 
 // Time helpers a caller needs: `instant` for a pinned `TimeSpan`, `now` for "this Instant",
-// `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/data.ts`'s move-by-a-day
+// `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/e2e/data.ts`'s move-by-a-day
 // buttons had no public way to do this and were hand-rolling `entry.start + 86400000`; the Add-entry
 // button then used `instant(Date.now())` the same way). `diffMs` is `addMs`'s pair, added in S5.10
 // for the same reason: `harness/plugins/lock-entries.ts` reads how far a proposed edit moved an

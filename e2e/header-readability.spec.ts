@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // e2e coverage for the S1.12 header readability follow-up
 // (plans/s1.12-timeline-navigation/header-readability-followup.md, "Not done — pick up here"):
 // findings 2-5 were fixed but shipped with no e2e regression test. Follows e2e/zoom.spec.ts's
-// pattern — `window.__gantt` on harness/zoom.html, driven with `page.evaluate`.
+// pattern — `window.__gantt` on harness/e2e/zoom.html, driven with `page.evaluate`.
 
 declare global {
   interface Window {
@@ -23,7 +23,7 @@ async function waitForNextFrame(page: import('@playwright/test').Page): Promise<
 test('[finding 3] a coarse band tick stays inside the pane even when its own boundary is scrolled past', async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   const bar = page.locator('.fg-bar').first();
   await expect(bar).toBeVisible();
 
@@ -62,7 +62,7 @@ test('[finding 3] a coarse band tick stays inside the pane even when its own bou
 test('[finding 2] a finer band never repeats the year/month a coarser band already shows', async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   const bar = page.locator('.fg-bar').first();
   await expect(bar).toBeVisible();
 
@@ -89,7 +89,7 @@ test('[finding 2] a finer band never repeats the year/month a coarser band alrea
 });
 
 test('[finding 4] hourPreset never zero-pads a single-digit hour', async ({ page }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   const bar = page.locator('.fg-bar').first();
   await expect(bar).toBeVisible();
 
@@ -113,7 +113,7 @@ test('[finding 4] hourPreset never zero-pads a single-digit hour', async ({ page
 test("[finding 5] adjacent tick cells never overlap at a preset's own minTickWidthPx floor", async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   const bar = page.locator('.fg-bar').first();
   await expect(bar).toBeVisible();
 

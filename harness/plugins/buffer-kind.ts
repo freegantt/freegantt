@@ -47,7 +47,7 @@ export function bufferKind() {
           if (entry === undefined) return;
           // The Dataset's own TProps is unknown to this untyped plugin (ADR 0011: an untyped plugin
           // sees no declared keys through EntryEdit<unknown>'s flat mapped part) — `consumed` is
-          // declared on the harness's own Dataset (harness/plugins.ts), so this write is real at
+          // declared on the harness's own Dataset (harness/e2e/plugins.ts), so this write is real at
           // runtime; the cast bridges the static gap an untyped plugin cannot close.
           ctx.dataset.entries.update(entry.id, { consumed: true } as EntryEdit);
         },

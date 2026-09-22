@@ -1,5 +1,5 @@
 // D-S1.11-5: `root: 'harness'` with no explicit input list makes `pnpm build` emit only
-// `harness/index.html`. Every other harness page needs its own entry in `vite.config.ts`'s
+// `harness/index.html`. Every other demo page needs its own entry in `vite.config.ts`'s
 // `rollupOptions.input`, or it never sees a production build — it only ever worked because the dev
 // server serves every file under `root` regardless of the input map, so the gap is invisible until
 // someone runs `pnpm build` and looks.

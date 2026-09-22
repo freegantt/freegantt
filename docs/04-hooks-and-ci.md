@@ -49,7 +49,7 @@ pnpm measure:scale              # headless
 pnpm measure:scale --headed     # watch it scroll
 ```
 
-It starts its own dev server on port 5174 — set `FG_MEASURE_PORT` if that port is taken — opens `harness/large-dataset.html`, and scrolls the timeline pane for 240 frames on each axis. Then it scrolls once more at 4x CPU slowdown, which is what turns a median into a cost on a machine with headroom. It prints:
+It starts its own dev server on port 5174 — set `FG_MEASURE_PORT` if that port is taken — opens `harness/e2e/large-dataset.html`, and scrolls the timeline pane for 240 frames on each axis. Then it scrolls once more at 4x CPU slowdown, which is what turns a median into a cost on a machine with headroom. It prints:
 
 - **Frame time**, as p50 / p95 / max, with a count of frames over 32 ms. Read the tail, not the median: an unthrottled run on a fast machine reports the display's cadence, about 16.7 ms, whatever the work costs.
 - **Script milliseconds per frame**, unthrottled and throttled. This is the honest cost number, because it is a CPU accumulator rather than a wall-clock sample.

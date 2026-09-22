@@ -129,7 +129,7 @@ async function firstChildMoved(
 }
 
 async function gotoExpandedHierarchy(page: Page): Promise<void> {
-  await page.goto('/hierarchy.html');
+  await page.goto('/e2e/hierarchy.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
   // A collapsed parent still paints a bar, but its children paint no row to read back against.
   await page.click('#expand-all-btn');
@@ -200,7 +200,7 @@ test('undo puts a dragged parent bar back where it was (ADR 0013)', async ({ pag
 });
 
 test('a dragged parent bar moves, and its sibling parents stay put (ADR 0013)', async ({ page }) => {
-  await page.goto('/planner.html');
+  await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   /** Every phase bracket by entry id, so one read covers the bar that moves and the bars that must

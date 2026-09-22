@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — editing &amp; data</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+    <style>
+      /* S5.9, [S5-A3]: bufferKind()'s own hatched fill, over the chrome tokens so it holds in every
+         theme (D-S2-15's "the library never invents one" precedent, restated per page). */
+      #gantt .demo-buffer-bar {
+        background-image: repeating-linear-gradient(
+          45deg,
+          var(--accent),
+          var(--accent) 4px,
+          var(--accent-wash) 4px,
+          var(--accent-wash) 8px
+        );
+      }
+      /* riskKind()'s own fill, on the same `bar` point bufferKind() uses — both plugins install,
+         both paint, one hue each. */
+      #gantt .demo-risk-bar {
+        background-image: repeating-linear-gradient(
+          -45deg,
+          var(--warn),
+          var(--warn) 4px,
+          var(--warn-wash) 4px,
+          var(--warn-wash) 8px
+        );
+      }
+      /* overBudgetRows()'s own row stripe (S5.6, [S5-A2]) — the whole-row half of the same reading
+         the Cost cell renderer gives one cell of. */
+      .demo-over-budget-row {
+        background: var(--warn-wash);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <h1>Editing &amp; data</h1>
+          <p>
+            Drag a bar, resize an edge, or double-click a cell — every gesture and every button below runs the
+            same <code>dataset.entries</code> surface, one transaction and one changeset at a time. A dashed
+            Mobilization line refuses an early drop; a locked entry refuses every edit; three plugins add
+            their own kind, row and command over the public contract alone.
+          </p>
+        </div>
+
+        <div id="page-brief"></div>
+
+        <section class="workbench" aria-label="Editing and data workbench">
+          <div id="toolbar"></div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="selection-readout">No selection</span>
+          </div>
+        </section>
+
+        <section class="bench" aria-label="Harness controls">
+          <div class="bench-head">
+            <h2>Harness bench</h2>
+            <p>Demo-only controls. None of this is library UI.</p>
+          </div>
+
+          <div class="bench-grid">
+            <div class="panel">
+              <h3>Change the data</h3>
+              <p>Every button is one transaction and one changeset — watch the log below.</p>
+              <div class="control-row">
+                <button id="add-entry" type="button">Add entry</button>
+                <button id="remove-btn" type="button">Remove</button>
+              </div>
+              <div class="control-row">
+                <input id="rename-input" type="text" size="16" aria-label="New name" />
+                <button id="rename-btn" type="button">Rename</button>
+              </div>
+              <div class="control-row">
+                <button id="cost-btn" type="button">Set cost 500</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Vetoes</h3>
+              <p>
+                A drop before the dashed Mobilization line is refused. Lock an entry and every edit to it is
+                too — drag a neighbour and a locked bar ghosts alongside it, then the drop is refused.
+              </p>
+              <div class="control-row">
+                <label><input id="lock-checkbox" type="checkbox" /> Lock the selected entry</label>
+              </div>
+              <div class="control-row">
+                <label><input id="hold-drop" type="checkbox" /> Hold drop (async veto)</label>
+              </div>
+              <div class="notice" id="toast" hidden></div>
+            </div>
+
+            <div class="panel">
+              <h3>Plugins</h3>
+              <p>
+                Three plugins over the public contract: <code>bufferKind()</code>/<code>riskKind()</code>
+                paint their own bar kind and menu item, <code>overBudgetRows()</code> stripes a whole row, and
+                <code>Mod+K</code> clears the selection through a plugin-registered chord.
+              </p>
+              <div class="control-row">
+                <label><input id="kind-plugins-toggle" type="checkbox" checked /> Buffer + risk kinds</label>
+                <label><input id="over-budget-rows-toggle" type="checkbox" checked /> Over-budget rows</label>
+              </div>
+              <div class="control-row">
+                <button id="open-popup-btn" type="button">Open popup on selected bar</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Document</h3>
+              <p>
+                Round-trips the whole Dataset through the public <code>toInput()</code>/<code>add()</code>
+                pair.
+              </p>
+              <div class="control-row">
+                <button id="export-btn" type="button">Export</button>
+                <button id="import-btn" type="button">Import</button>
+              </div>
+              <textarea
+                id="document-json"
+                rows="6"
+                aria-label="Dataset document JSON"
+                placeholder="Export writes the document here."
+              ></textarea>
+            </div>
+          </div>
+
+          <details class="log-panel" open>
+            <summary>Changeset log</summary>
+            <div id="log" role="log" aria-label="Changeset log"></div>
+          </details>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./editing-and-data.ts"></script>
+  </body>
+</html>

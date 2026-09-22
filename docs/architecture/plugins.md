@@ -80,7 +80,7 @@ orient="auto-start-reverse"
 <g>
 <rect class="bx api" x="10" y="14" width="126" height="36" />
 <text class="t" x="73" y="30" text-anchor="middle">harness page</text>
-<text class="s" x="73" y="43" text-anchor="middle">harness/plugins.ts</text>
+<text class="s" x="73" y="43" text-anchor="middle">e2e/plugins.ts</text>
 <rect class="bx api" x="160" y="14" width="128" height="36" />
 <text class="t" x="224" y="30" text-anchor="middle">Gantt</text>
 <text class="s" x="224" y="43" text-anchor="middle">api/gantt.ts</text>

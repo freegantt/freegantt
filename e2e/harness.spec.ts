@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // correctly against time." Smoke-checks what the DOM unit test (src/api/gantt.test.ts)
 // already proves headlessly, but in a real browser.
 test('harness renders the fixture dataset as positioned bars', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
 
   const bars = page.locator('#gantt .fg-bar');
   await expect(bars.first()).toBeVisible();
@@ -24,7 +24,7 @@ test('harness renders the fixture dataset as positioned bars', async ({ page }) 
 //
 // The timeline pane is the native scroller (S1.8, D-D/D-S1.8-1) — `#gantt` itself no longer scrolls.
 test('scrolling to the bottom of the frame shows rows, not a blank pane', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
@@ -54,7 +54,7 @@ test('scrolling to the bottom of the frame shows rows, not a blank pane', async 
 test('grid pane rows are actually painted after scrolling, not just correctly positioned (#regression)', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
@@ -125,7 +125,7 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
 // `scrollWidth` assertion happy-dom cannot express (src/view/gantt-shell.test.ts's D1 test reads the
 // content sizer's own transform instead, for that reason) — only a real layout engine settles it.
 test('the timeline pane has no row-label gutter in its scrollable content (D1)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const pane = page.locator('.fg-timeline-pane');
@@ -156,7 +156,7 @@ test('the timeline pane has no row-label gutter in its scrollable content (D1)',
 });
 
 test('generic demo shows Budget column, deep tree indent, and grouped rows', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
   await expect(page.locator('#gantt .fg-row [data-field="cost"]').first()).toBeVisible();
   await expect(page.locator('#gantt .fg-row [data-field="end"]').first()).toBeVisible();
@@ -204,7 +204,7 @@ test('generic demo shows Budget column, deep tree indent, and grouped rows', asy
 test('a segmented row draws its children as bars, and opening the segments back into rows gives them rows', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const segmentedRow = page.locator('#gantt .fg-row[data-entry-id="entry-16"]');

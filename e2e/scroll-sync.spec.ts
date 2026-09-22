@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // S1.5 README §7: the two cases happy-dom cannot express, because there `scrollTop` is a plain
 // property that neither clamps nor fires an event — so both checks pass vacuously in
-// src/view/scroll-attachment.test.ts. harness/scroll-sync.html mounts two Gantts sharing a
+// src/view/scroll-attachment.test.ts. harness/e2e/scroll-sync.html mounts two Gantts sharing a
 // ScrollAxis per direction: #tall has every fixture entry, #short has the first 20 (fewer rows ->
 // a smaller max). A second pair, #xonly-a/#xonly-b, shares only the x ScrollAxis, and a third,
 // #yonly-a/#yonly-b, shares only the y ScrollAxis (S6 R3, D-S6-1).
@@ -31,7 +31,7 @@ async function scrollPositions(page: import('@playwright/test').Page) {
 }
 
 test('a model-driven write does not feed back into another panTo (echo case, D-S1.5-6)', async ({ page }) => {
-  await page.goto('/scroll-sync.html');
+  await page.goto('/e2e/scroll-sync.html');
   await expect(page.locator('#tall .fg-bar').first()).toBeVisible();
 
   await page.evaluate(() => {
@@ -62,7 +62,7 @@ test('a model-driven write does not feed back into another panTo (echo case, D-S
 test('a shorter chart pins at its own max while the taller one keeps going, and resumes (U3)', async ({
   page,
 }) => {
-  await page.goto('/scroll-sync.html');
+  await page.goto('/e2e/scroll-sync.html');
   await expect(page.locator('#tall .fg-bar').first()).toBeVisible();
 
   const shortMax = await page.evaluate(() => {
@@ -96,7 +96,7 @@ test('a shorter chart pins at its own max while the taller one keeps going, and 
 test('[S1-A4] a scroll on #tall moves #short in x and y (D9, plans/00 §4 gate condition 2)', async ({
   page,
 }) => {
-  await page.goto('/scroll-sync.html');
+  await page.goto('/e2e/scroll-sync.html');
   await expect(page.locator('#tall .fg-bar').first()).toBeVisible();
 
   const before = await scrollPositions(page);
@@ -121,7 +121,7 @@ test('[S1-A4] a scroll on #tall moves #short in x and y (D9, plans/00 §4 gate c
 test('[S6-A3] two Gantts sharing only x move together in x and stay private in y (D-S6-1)', async ({
   page,
 }) => {
-  await page.goto('/scroll-sync.html');
+  await page.goto('/e2e/scroll-sync.html');
   await expect(page.locator('#xonly-a .fg-bar').first()).toBeVisible();
 
   async function xOnlyPositions() {
@@ -165,7 +165,7 @@ test('[S6-A3] two Gantts sharing only x move together in x and stay private in y
 test('[S6-A4] two Gantts sharing only y move together in y and stay private in x (D-S6-1)', async ({
   page,
 }) => {
-  await page.goto('/scroll-sync.html');
+  await page.goto('/e2e/scroll-sync.html');
   await expect(page.locator('#yonly-a .fg-bar').first()).toBeVisible();
 
   async function yOnlyPositions() {
@@ -216,7 +216,7 @@ test('[S6-A4] two Gantts sharing only y move together in y and stay private in x
 // maxima stay equal, and neither runs out before the other. The pane-width arithmetic itself lives
 // in src/layout/viewport/scroll-axis.test.ts, where it needs no browser.
 test('two panes on one x axis keep one width and one maximum (#440)', async ({ page }) => {
-  await page.goto('/scroll-sync.html');
+  await page.goto('/e2e/scroll-sync.html');
   await expect(page.locator('#gutter-a .fg-bar').first()).toBeVisible();
   await expect(page.locator('#gutter-b .fg-bar').first()).toBeVisible();
 
@@ -262,7 +262,7 @@ test('two panes on one x axis keep one width and one maximum (#440)', async ({ p
 });
 
 test('a Gantt that shares no axis keeps its whole pane width (#440)', async ({ page }) => {
-  await page.goto('/index.html');
+  await page.goto('/generic.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   const gutter = await page.evaluate(
@@ -273,7 +273,7 @@ test('a Gantt that shares no axis keeps its whole pane width (#440)', async ({ p
 });
 
 // #436: #pane-fit-a/#pane-fit-b share only the x ScrollAxis, at `fit: 'pane'` (the default) — the
-// one combination every pair above opts out of ("#436" comment in harness/scroll-sync.ts). At this
+// one combination every pair above opts out of ("#436" comment in harness/e2e/scroll-sync.ts). At this
 // fit, contentWidth === paneWidth by construction, so the shared ScrollAxis's own max is always 0:
 // the only way #pane-fit-a and #pane-fit-b can never desync is if neither pane can natively scroll
 // at all. A zero-length entry parked on the range's own end used to float a bar (and its label)
@@ -282,7 +282,7 @@ test('a Gantt that shares no axis keeps its whole pane width (#440)', async ({ p
 test('[timeline-content-width] two Gantts sharing an x ScrollAxis at fit: pane never open a native scroll range (#436)', async ({
   page,
 }) => {
-  await page.goto('/scroll-sync.html');
+  await page.goto('/e2e/scroll-sync.html');
   await expect(page.locator('#pane-fit-a .fg-bar').first()).toBeVisible();
 
   const panes = await page.evaluate(() => {

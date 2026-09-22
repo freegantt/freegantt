@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // time so a fixture edit does not break the assertions.
 
 async function gotoEditing(page: import('@playwright/test').Page): Promise<void> {
-  await page.goto('/editing.html');
+  await page.goto('/e2e/editing.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 }
 

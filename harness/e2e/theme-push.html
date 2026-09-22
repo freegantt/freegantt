@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — theme push</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      /* The app's own dark-mode signal (ADR 0029). The toggle flips this class, and the page's own
+         chrome follows it here. The two Gantts below follow the same toggle, each by its own
+         recipe. A reader sees the app move first, and the library move with it. */
+      html.dark body {
+        background: #1a1a1a;
+        color: #eee;
+      }
+      .gantt-demo {
+        --fg-bar-label-gap: 6px;
+        border: 1px solid #ccc;
+        height: 40vh;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+      .controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+      output {
+        font-variant-numeric: tabular-nums;
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 1.5rem 0 0.5rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — theme push</h1>
+      <p>
+        The app owns the dark-mode question, not the library. One toggle flips a
+        <code>dark</code> class on <code>&lt;html&gt;</code> — this page's own signal — and, in the same
+        handler, pushes the answer to each Gantt below its own way.
+      </p>
+      <div class="controls">
+        <button type="button" data-testid="toggle-dark-mode">Toggle dark mode</button>
+        <output data-testid="theme-flips">0 theme flips</output>
+      </div>
+
+      <h2>Recipe 1 — write <code>gantt.theme</code> directly</h2>
+      <div id="gantt-pushed" class="gantt-demo" data-testid="gantt-pushed"></div>
+
+      <h2>Recipe 2 — pin <code>data-fg-theme</code> on a wrapper, Gantt on <code>'auto'</code></h2>
+      <div id="pinned-wrapper" data-testid="pinned-wrapper" data-fg-theme="light">
+        <div id="gantt-pinned" class="gantt-demo" data-testid="gantt-pinned"></div>
+      </div>
+    </main>
+    <script type="module" src="./theme-push.ts"></script>
+  </body>
+</html>

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // e2e fixture for S1.9's acceptance checks (plans/s1.9-presets-and-zoom/README.md §6, §9):
-// harness/zoom.html mounts one Gantt and exposes it on `window.__gantt` (no wheel/pointer gesture
+// harness/e2e/zoom.html mounts one Gantt and exposes it on `window.__gantt` (no wheel/pointer gesture
 // controller exists until S4 — this is the wheel-zoom-equivalent the spec asks for, driving
 // `zoomBy` imperatively the same way a future gesture handler would).
 
@@ -12,7 +12,7 @@ declare global {
 }
 
 test('[S1-A3] zoomBy keeps the anchored pointer position visually fixed (U2/U3)', async ({ page }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   const pane = page.locator('.fg-timeline-pane');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
@@ -67,7 +67,7 @@ test('[S1-A3] zoomBy keeps the anchored pointer position visually fixed (U2/U3)'
 });
 
 test('a preset switch redraws header bands with no bar remount (U1, I8)', async ({ page }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   const bar = page.locator('.fg-bar').first();
   await expect(bar).toBeVisible();
 
@@ -101,7 +101,7 @@ test('a preset switch redraws header bands with no bar remount (U1, I8)', async 
 test('[S1-A6] a multi-year fixture at the day preset scrolls at the density floor instead of compressing', async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   await page.getByLabel('multi-year').check();
@@ -127,7 +127,7 @@ test('[S1-A6] a multi-year fixture at the day preset scrolls at the density floo
 test('[S1-A8] a three-band preset renders three full-height bands aligned with the grid spacer', async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   await page.evaluate(() => {
@@ -153,7 +153,7 @@ test('[S1-A8] a three-band preset renders three full-height bands aligned with t
 test('[S1-A9] the header stays pinned to the top of the timeline pane while rows scroll under it', async ({
   page,
 }) => {
-  await page.goto('/large-dataset.html');
+  await page.goto('/e2e/large-dataset.html');
   await expect(page.locator('[data-testid="fg-row"]').first()).toBeVisible();
 
   const header = page.locator('.fg-header');
@@ -170,7 +170,7 @@ test('[S1-A9] the header stays pinned to the top of the timeline pane while rows
 });
 
 test('[S1-A10] Today pans so the today line sits in the pane', async ({ page }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   await page.evaluate(() => {

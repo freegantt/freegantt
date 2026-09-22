@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — S2 mutation, live binding, undo &amp; JSON</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        --fg-bar-label-gap: 6px;
+        border: 1px solid #ccc;
+        height: 50vh;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+      #controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      #controls label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+      }
+      #selection-readout {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #555;
+      }
+      #log {
+        margin-top: 1rem;
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        padding: 0.5rem;
+      }
+      #log div {
+        padding: 1px 0;
+      }
+      #document-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      #document-json {
+        flex: 1 1 100%;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+      }
+      #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+      }
+      #toolbar select,
+      #toolbar button {
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — S2 mutation, live binding, undo/redo, export/import</h1>
+      <p>
+        e2e fixture for S2.4 (plans/s2-data-core/s2.4-live-binding.md §5): every button below is a plain call
+        on the public <code>dataset.entries.add/update/remove</code> surface (D-S2-17). Click a bar to select
+        it. Rename, move, and remove act on <code>gantt.selection</code>. The log below is built from each
+        committed <code>ChangeSet</code>, never by re-reading the dataset, and subscribes to
+        <code>dataset.on('change')</code> the same way <code>GanttShell</code>'s own live binding does
+        (D-S2-24) — the honest proof that nothing here reaches past the public API. S4.1: a declared
+        <code>cost</code> Field writes <code>entry.meta.cost</code>. Select a bar and press
+        <strong>Set cost 500</strong>, or in the console
+        <code>window.__dataset.entries.update('task-a', { cost: 500 })</code> — the log shows the
+        <code>cost</code> row on the task and on <code>phase</code> in the same changeset; Undo reverts both
+        in one press (S4.2).
+      </p>
+      <div id="controls">
+        <button id="add-entry" type="button">Add entry</button>
+        <p id="selection-readout">Selection: (none)</p>
+        <label>Name <input id="rename-input" type="text" size="20" /></label>
+        <button id="rename-btn" type="button">Rename</button>
+        <button id="move-back-btn" type="button">Move −1 day</button>
+        <button id="move-fwd-btn" type="button">Move +1 day</button>
+        <button id="remove-btn" type="button">Remove</button>
+        <button id="cost-btn" type="button">Set cost 500</button>
+        <button id="undo-btn" type="button">Undo</button>
+        <button id="redo-btn" type="button">Redo</button>
+        <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry (D-S2-25)</label>
+      </div>
+      <div id="toolbar"></div>
+      <div id="gantt"></div>
+      <div id="document-controls">
+        <button id="export-btn" type="button">Export</button>
+        <button id="import-btn" type="button">Import</button>
+        <textarea id="document-json" rows="10" cols="80" aria-label="Dataset document JSON"></textarea>
+      </div>
+      <div id="log" role="log" aria-label="Changeset log"></div>
+    </main>
+    <script type="module" src="./data.ts"></script>
+  </body>
+</html>

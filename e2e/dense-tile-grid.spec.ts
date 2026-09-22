@@ -5,11 +5,11 @@ import { test, expect } from '@playwright/test';
 // `insideOrNone` bar paints (or hides) its label correctly — but neither proves the *bar* layer
 // stays windowed when one row carries many bars, the #435 shape this branch made each bar costlier
 // for (`render/dom/index.ts`'s `BarLabelToken`, which mounts a hidden `.fg-bar-label` child per
-// too-narrow tile). `harness/dense-tile-grid.ts` is 50 rows of 250 day-tiles apiece — both axes far
+// too-narrow tile). `harness/e2e/dense-tile-grid.ts` is 50 rows of 250 day-tiles apiece — both axes far
 // bigger than the pane — under `barLabels: 'insideOrNone'`.
 //
 // Bound derivation: this asks "does the culled bar count match the exact visible slice, with no
-// slack at all?" — the tightest question the API can express. `harness/dense-tile-grid.ts` sets
+// slack at all?" — the tightest question the API can express. `harness/e2e/dense-tile-grid.ts` sets
 // `overscan: { verticalRows: 0, horizontalPx: 0 }` on its Gantt, so the render window carries no
 // buffer past the visible edge; the assertion below reads that same setting back off
 // `window.__gantt.overscan` (the public accessor, `src/api/gantt.ts`) rather than restating `0`
@@ -18,7 +18,7 @@ import { test, expect } from '@playwright/test';
 test('bar count stays windowed on both axes under a dense tile grid, and the visible set moves on scroll (#435 follow-up)', async ({
   page,
 }) => {
-  await page.goto('/dense-tile-grid.html');
+  await page.goto('/e2e/dense-tile-grid.html');
 
   const bars = page.locator('[data-testid="fg-bar"]');
   await expect(bars.first()).toBeVisible();

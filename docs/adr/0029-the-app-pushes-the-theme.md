@@ -63,7 +63,7 @@ or pins an ancestor once and never touches the Gantt again:
 ```
 
 The pin is the recipe for an app that flips a class on `<html>`: mirror the class onto one wrapper
-with `data-fg-theme`, in the same toggle that sets the class. `harness/theme-push.html` demonstrates
+with `data-fg-theme`, in the same toggle that sets the class. `harness/e2e/theme-push.html` demonstrates
 both.
 
 `'auto'` keeps reading an ancestor's `data-fg-theme` pin and then `prefers-color-scheme`. Both are

@@ -702,8 +702,8 @@ Everything is delegated into `data/` — the public class is a thin façade over
 `harness/main.ts` is the library's first consumer and gets reviewed on every commit, changed or
 not: code there that re-derives what the library already computes is an API gap even when no
 lint fires. It demos tree rows, grid columns, field rollups, live `rowSource` switching,
-selection, timeline controls, shipped plugins, and Dataset plugins; `harness/plugins.html` is the
-plugin playground; `harness/data.html` demos transactions and undo. It still reads clean —
+selection, timeline controls, shipped plugins, and Dataset plugins; `harness/e2e/plugins.html` is the
+plugin playground; `harness/e2e/data.html` demos transactions and undo. It still reads clean —
 
 ```ts title="harness/main.ts"
 import { Gantt, Dataset, tooltips, contextMenu, inlineEditing } from 'freegantt';
@@ -724,7 +724,7 @@ gantt.rowSource = { source: 'entries', tree: true };
 ```
 
 — no restated `rowHeight`, no hand-built `TimeScaleModel` standing in for `range: 'fitDataset'`.
-`harness/scroll-sync.ts` is the shared-viewport e2e fixture: one pair of Gantts sharing a
+`harness/e2e/scroll-sync.ts` is the shared-viewport e2e fixture: one pair of Gantts sharing a
 `TimeScaleModel` and both `ScrollAxis` instances, beside a pair sharing only the `x` axis and a
 pair sharing only the `y` axis.
 

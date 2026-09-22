@@ -179,7 +179,7 @@ const GATES = {
       tagged('S3-A7', ['vitest'], 'viewport gestures write nothing'),
       tagged('S3-A8', ['e2e'], 'cursor line during drag; drag + Ctrl+Z; veto demo'),
     ],
-    human: ['HUMAN: harness/editing.html is pokeable — drag, resize, veto toast, Ctrl+Z'],
+    human: ['HUMAN: harness/editing-and-data.html is pokeable — drag, resize, veto toast, Ctrl+Z'],
   },
   S4: {
     name: 'S4 → S5',
@@ -208,7 +208,9 @@ const GATES = {
       tagged('S4-A10', ['vitest'], 'filterPolicy matchOnly returns matching entries — no ancestor rows'),
       tagged('S4-A11', ['vitest'], "{ source: 'custom', resolve } produces the resolver's rows"),
     ],
-    human: ['HUMAN: harness/hierarchy.html is pokeable — row sources, pack, filter, collapse, cost + undo'],
+    human: [
+      'HUMAN: harness/hierarchy-and-timeline.html is pokeable — row sources, pack, filter, collapse, cost + undo',
+    ],
   },
   S5: {
     name: 'S5 → S6',

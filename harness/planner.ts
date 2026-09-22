@@ -25,7 +25,6 @@ import type {
 import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixtures/planner-dataset.js';
 import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';
-import type { PlannerThemeChoice } from './planner-toolbar.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // D-S5-29: what this page shows, the config that does it, and the spec section behind it.
@@ -223,48 +222,6 @@ const gantt = new Gantt({
 // rung — most consumers take the library default (--fg-time-shading-fill) and write no CSS at all.
 gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'planner-weekend' }]));
 
-const THEME_STORAGE_KEY = 'freegantt-planner-theme';
-
-function isPlannerTheme(value: string | null): value is PlannerThemeChoice {
-  return value === 'light' || value === 'dark' || value === 'paper';
-}
-
-/** What the page opens on when nobody has picked yet: whatever the reader's own system asks for.
- *  A stored choice always wins — picking Light on a dark desktop is a choice, not a mistake.
- *  Reads `gantt.resolvedTheme` (#330) rather than `matchMedia` directly — the library already
- *  resolves `'auto'` against the OS (and an ancestor's own pin, #271), and this page's own Gantt is
- *  still on that default here, before the toolbar below ever calls `gantt.theme = …`. */
-function preferredTheme(): PlannerThemeChoice {
-  return gantt.resolvedTheme;
-}
-
-function readStoredTheme(): PlannerThemeChoice {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isPlannerTheme(stored) ? stored : preferredTheme();
-  } catch {
-    return preferredTheme();
-  }
-}
-
-// Paper is the design's third theme, and it is a consumer class over `--fg-*` alone (see this page's
-// own stylesheet). It rides beside the library's Light/Dark rather than inside them, which is the
-// claim it exists to prove: a theme is only tokens, so a consumer can ship one the library never
-// heard of. Choosing Paper leaves `gantt.theme` on Light (`planner-toolbar.ts`'s own job) — the
-// class wins on specificity.
-function applyPlannerTheme(choice: PlannerThemeChoice): void {
-  document.body.classList.toggle('theme-paper', choice === 'paper');
-  // The toolbar sits above the Gantt, outside `.fg-container`, and paints from `--fg-*` like
-  // everything else on this page. The same pin the library writes on its own container, written here
-  // on the page, gives the chrome the theme's token set — no hex value is restated for it.
-  document.body.dataset['fgTheme'] = choice === 'dark' ? 'dark' : 'light';
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, choice);
-  } catch {
-    // Persisting the choice is a convenience; failing to persist it is not worth an error.
-  }
-}
-
 // Not wired yet, on purpose: the design draws the button, and what a new row should inherit from the
 // selected phase is a product decision nobody has made. It says so rather than doing half of it.
 function handleNewTask(): void {
@@ -282,7 +239,6 @@ function resetToOpeningState(): void {
   gantt.commands.run('freegantt.expandAll');
   gantt.preset = 'weekAndMonth';
   gantt.commands.run('freegantt.panToToday');
-  toolbar.setTheme('light');
 }
 
 const toolbar = mountPlannerToolbar({
@@ -292,8 +248,6 @@ const toolbar = mountPlannerToolbar({
   projectSpan: plannerSpan,
   onNewTask: handleNewTask,
   onReset: resetToOpeningState,
-  onThemeChange: applyPlannerTheme,
-  initialTheme: readStoredTheme(),
 });
 
 const readout = toolbar.readout;

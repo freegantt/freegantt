@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // the proof: the button label round-trips a consumer reading gantt.rowSource itself would compute,
 // across two toggles.
 test('the grouping button reads its label off gantt.rowSource, not a local mirror', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const groupBtn = page.locator('#rows-source-btn');

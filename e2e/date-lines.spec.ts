@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// e2e fixture for S1.13's acceptance checks (plans/s1.13-date-lines/README.md §6). harness/zoom.html
+// e2e fixture for S1.13's acceptance checks (plans/s1.13-date-lines/README.md §6). harness/e2e/zoom.html
 // mounts one Gantt on window.__gantt (see e2e/zoom.spec.ts) over a dataset that always spans "now",
 // so a `dateLines` entry placed a few days out is always inside `scale.range`.
 
@@ -13,7 +13,7 @@ declare global {
 test('[S1-A14] a consumer stylesheet styling a Date line className actually paints — U3', async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   // The library ships no `style`/`dashed` option (D-S1.13-5) — a consumer's own stylesheet is the
@@ -39,7 +39,7 @@ test('[S1-A14] a consumer stylesheet styling a Date line className actually pain
 });
 
 test('a Date line label stays glued to its line while the timeline pane scrolls — U4', async ({ page }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   await page.evaluate(() => {
@@ -71,7 +71,7 @@ test('a Date line label stays glued to its line while the timeline pane scrolls 
 test('a Date line stroke keeps no gap below it after a preset switch grows the header — #118', async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   await page.evaluate(() => {

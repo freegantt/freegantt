@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — hierarchy &amp; timeline</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+    <style>
+      /* The owning-parent demo is its own small instrument, outside the main workbench, so it gets
+         a plain ruled box instead of the full toolbar/statusbar shell the main Gantt owns. */
+      #owning-parent-gantt {
+        height: 150px;
+        border: 1px solid var(--rule-strong);
+        border-radius: var(--radius-surface);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <h1>Hierarchy &amp; timeline</h1>
+          <p>
+            One tree, three levels deep. Parent rows roll up cost, hours and dates from their children —
+            except "Framing crew", which draws its three days as bars on its own row instead of rows of their
+            own, and Cy's day, which is locked against both edit and resize. Drag a column edge to resize it,
+            or a header cell to reorder it.
+          </p>
+        </div>
+
+        <div id="page-brief"></div>
+
+        <section class="workbench" aria-label="Hierarchy and timeline workbench">
+          <div id="toolbar"></div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="selection-readout">No selection</span>
+          </div>
+        </section>
+
+        <section class="bench" aria-label="Harness controls">
+          <div class="bench-head">
+            <h2>Harness bench</h2>
+            <p>Demo-only controls. None of this is library UI.</p>
+          </div>
+
+          <div class="bench-grid">
+            <div class="panel">
+              <h3>Rows</h3>
+              <p>Switch the row source, sort it, or filter it by team. Grouping drops both.</p>
+              <div class="control-row">
+                <label>
+                  Rows
+                  <select id="rows-mode" aria-label="Row source">
+                    <option value="tree" selected>Tree</option>
+                    <option value="grouped">Grouped by team</option>
+                    <option value="flat">Flat</option>
+                  </select>
+                </label>
+                <label>
+                  Sort
+                  <select id="sort-field" aria-label="Sort field">
+                    <option value="none" selected>Off</option>
+                    <option value="start">Start</option>
+                    <option value="cost">Cost</option>
+                    <option value="name">Name</option>
+                  </select>
+                </label>
+              </div>
+              <div class="control-row">
+                <button id="filter-team-btn" type="button">Filter team: off</button>
+                <button id="reparent-btn" type="button">Reparent Beta task under Plain parent</button>
+              </div>
+              <!-- ADR 0020: the same move, through the phase-hierarchy plugin's own key instead of
+                   parentId — "Empty phase" derives a span and a cost the moment it gains a child. -->
+              <div class="control-row">
+                <button id="phase-btn" type="button">Nest Gate review under Empty phase (plugin tree)</button>
+              </div>
+              <!-- #421: one Field write opens "Framing crew" into three rows, or closes them back into
+                   one segmented row, in a single undo step. Cy's day stays locked either way — a
+                   double-click on it never opens the editor (`beforeEntryEdit`). -->
+              <div class="control-row">
+                <button id="crew-days-btn" type="button">Draw Framing crew days as segments</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Timeline</h3>
+              <p>
+                Zoom, presets and Today live on the toolbar above. This panel covers the rest: locale, the
+                range, and the "Status check" date line.
+              </p>
+              <div class="control-row">
+                <label>
+                  Locale
+                  <select id="locale-select" aria-label="Header locale">
+                    <option value="en-US" selected>en-US</option>
+                    <option value="de-DE">de-DE</option>
+                    <option value="ja-JP">ja-JP</option>
+                  </select>
+                </label>
+                <label>
+                  Range
+                  <select id="range-mode" aria-label="Time range">
+                    <option value="fit" selected>Fit to data</option>
+                    <option value="fixed">Fixed — Mar 1 to 21</option>
+                  </select>
+                </label>
+              </div>
+              <div class="control-row">
+                <label><input id="date-lines-checkbox" type="checkbox" checked /> Date lines</label>
+              </div>
+              <p>
+                "Site survey" sits before the fixed range's start, and "Site hold" sits after its end — pick
+                <strong>Fixed</strong> to watch both leave the pane.
+              </p>
+            </div>
+
+            <div class="panel">
+              <h3>Owning parent</h3>
+              <p>
+                "Phase" below overrides <code>start</code>/<code>end</code>'s roll-up — its dates are its own,
+                authored once, kept until written again. Drag Task A or Task B and Phase never moves; drag
+                Phase's own edge and it does.
+              </p>
+              <div id="owning-parent-gantt"></div>
+              <div class="control-row">
+                <button id="owning-parent-undo-btn" type="button">Undo</button>
+              </div>
+            </div>
+          </div>
+
+          <details class="log-panel" open>
+            <summary>Changeset log</summary>
+            <div id="log" role="log" aria-label="Changeset log"></div>
+          </details>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./hierarchy-and-timeline.ts"></script>
+  </body>
+</html>

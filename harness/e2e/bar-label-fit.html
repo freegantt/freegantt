@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — #435 bar label fit</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .fg-gantt {
+        /* Shorter than every sibling harness page's 32px: this page's tile grid reads best at a
+           compact row height, and 90px below only holds two such rows. */
+        --fg-row-height: 28px;
+        height: 90px;
+        border: 1px solid #ccc;
+        margin-block-end: 1rem;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+      .controls {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — bar label fit (#435)</h1>
+      <p>
+        Forty contiguous day-long bars, butted edge to edge, with <code>barLabels: 'insideOrNone'</code>. Each
+        bar's label paints inside it when the day is wide enough for the text, and paints no label at all
+        otherwise — never outside, where it would overlap the next day's bar. "Widen days" reassigns
+        <code>gantt.fit</code> to a wider pixels-per-millisecond density live, the same knob a zoom gesture
+        writes.
+      </p>
+      <div class="controls">
+        <button type="button" id="narrow-days">Narrow days</button>
+        <button type="button" id="widen-days">Widen days</button>
+      </div>
+      <div id="gantt" class="fg-gantt"></div>
+    </main>
+    <script type="module" src="./bar-label-fit.ts"></script>
+  </body>
+</html>

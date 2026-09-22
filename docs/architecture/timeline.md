@@ -11,7 +11,7 @@ repeated granularity across bands, unpadded hour labels, and a today line that o
 the scale range.
 
 *Source: `time/scale.ts`, `time/presets.ts`, `render/dom/`. Open
-[`zoom.html`](https://github.com/Pawel-IT/FreeGantt/blob/main/harness/zoom.html) while you read
+[`zoom.html`](https://github.com/Pawel-IT/FreeGantt/blob/main/harness/e2e/zoom.html) while you read
 this.*
 
 ## Paint path
@@ -302,7 +302,7 @@ frames.
 </div>
 <figcaption>
 Try <code>weekAndMonth</code> or <code>weekMonthYear</code> on
-<a href="https://github.com/Pawel-IT/FreeGantt/blob/main/harness/zoom.html">zoom.html</a>. The
+<a href="https://github.com/Pawel-IT/FreeGantt/blob/main/harness/e2e/zoom.html">zoom.html</a>. The
 coarse band still carries the year. The fine band no longer repeats it.
 </figcaption>
 </figure>
@@ -351,7 +351,7 @@ painted x = max(tick.x, visible.x) · width shrinks · instant (the year) is unc
 </svg>
 </div>
 <figcaption>
-Switch <a href="https://github.com/Pawel-IT/FreeGantt/blob/main/harness/zoom.html">zoom.html</a>
+Switch <a href="https://github.com/Pawel-IT/FreeGantt/blob/main/harness/e2e/zoom.html">zoom.html</a>
 to the multi-year dataset and a three-band preset. Scroll horizontally. The year stays at the
 left of its cell until the cell leaves the pane.
 </figcaption>
@@ -384,7 +384,7 @@ immediately instead.
 The sample fixture starts on 2026-09-01 so unit tests stay deterministic. If "today" is before
 that start (or after the last entry under `range: 'fitDataset'`), the line is correctly missing.
 That is not a paint bug. Use the multi-year dataset on
-[`zoom.html`](https://github.com/Pawel-IT/FreeGantt/blob/main/harness/zoom.html) when you want the
+[`zoom.html`](https://github.com/Pawel-IT/FreeGantt/blob/main/harness/e2e/zoom.html) when you want the
 line inside the range.
 
 *Derived from `layout/date-line.ts`, `render/dom/date-line.ts`, `view/gantt-shell.ts`,

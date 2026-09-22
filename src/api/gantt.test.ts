@@ -4629,7 +4629,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     // carries no notion of "claimed" at all, so the refusal is proven the same way any rolling-up
     // parent's is (`entry-store.mutation.test.ts`); this pins it against the exact shape a segmented
     // row uses. The drag half needs a bar to grab: `req-1` draws none of its own (Q26), so a
-    // consumer variant supplies the rail the way `harness/hierarchy.ts`'s own `summary()` case does
+    // consumer variant supplies the rail the way `harness/e2e/hierarchy.ts`'s own `summary()` case does
     // — the same shape the "consumer producer... still draws a band" test above already installs.
     it("a write to a segmented row's start/end is refused, and dragging its rail bar moves every child (ADR 0013)", () => {
       expect(() => crewDataset().entries.update('req-1', { start: '2026-01-05' })).toThrow(

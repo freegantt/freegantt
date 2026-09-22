@@ -26,14 +26,14 @@ pnpm build          # production build of the same pages into dist-harness/
 | Page | What it shows | Read alongside |
 | --- | --- | --- |
 | `index.html` | The general demo: timeline, viewport, selection, snap, and theme. Driven by `harness/main.ts`. | [Lifecycle](./lifecycle.md) |
-| `hierarchy.html` | Tree and grouped row sources, filter and sort, collapse, declared-field rollup, and JSON round-trip. Driven by `harness/hierarchy.ts`. | [Class map](./classes.md) |
+| `hierarchy.html` | Tree and grouped row sources, filter and sort, collapse, declared-field rollup, and JSON round-trip. Driven by `harness/e2e/hierarchy.ts`. | [Class map](./classes.md) |
 | `scroll-sync.html` | One pair of Gantts sharing a `TimeScaleModel` and both `ScrollAxis` instances, beside a pair sharing only the `x` axis and a pair sharing only the `y` axis. | [Class map](./classes.md) |
 | `grid-scroll.html` | The grid pane as its own vertical scroll surface, kept in step with the timeline rows. | [Lifecycle](./lifecycle.md) |
 | `zoom.html` | Presets, zoom in/out, pan to a date, pan to today, and the header bands. | [Timeline render](./timeline.md) |
 | `large-dataset.html` | Row virtualization under a large entry count. | [Lifecycle](./lifecycle.md) |
 | `data.html` | Mutation, live binding, undo/redo, and JSON export/import. | [Class map](./classes.md) |
 | `editing.html` | Direct manipulation: drag to move, resize, keyboard editing, snapping, inline cell edit, and the lock Dataset plugin. | [Lifecycle](./lifecycle.md) |
-| `plugins.html` | The plugin runtime: the shipped `timeShading()` built-in, a milestone `diamond()` variant, the `bufferKind`/`riskKind` harness variants, a cell renderer, commands, and a popup demo. Driven by `harness/plugins.ts`. | [Plugin lifecycle](./plugins.md), [plugin authoring guide](../06-plugin-authoring.md) |
+| `plugins.html` | The plugin runtime: the shipped `timeShading()` built-in, a milestone `diamond()` variant, the `bufferKind`/`riskKind` harness variants, a cell renderer, commands, and a popup demo. Driven by `harness/e2e/plugins.ts`. | [Plugin lifecycle](./plugins.md), [plugin authoring guide](../06-plugin-authoring.md) |
 
 :::note The harness is reviewed like library code
 It sits outside the `src/**` lint scope on purpose, so a rule it breaks fires no lint. Code here

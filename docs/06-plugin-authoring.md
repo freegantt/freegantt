@@ -312,4 +312,4 @@ the batch started untouched.
 
 - `CONTEXT.md` — the glossary entries for `Plugin`, `PluginContext`, and
   `PluginStore`.
-- `harness/plugins.html` — every plugin in this guide, running.
+- `harness/e2e/plugins.html` — every plugin in this guide, running.

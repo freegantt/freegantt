@@ -2,13 +2,13 @@ import { test, expect } from '@playwright/test';
 
 // S5.4 visible acceptance (s5.4-renderers.md §4, D-S5-10/11/12): "the harness paints a custom
 // milestone diamond and a red over-budget cost cell via renderers, with a toggle that switches
-// both off live, no remount." harness/plugins.ts wires barRenderer/gridCellRenderer as plain
+// both off live, no remount." harness/e2e/plugins.ts wires barRenderer/gridCellRenderer as plain
 // GanttOptions (D-S5-11 level 3) over the sample dataset's "Launch" milestone and "Launch prep"'s
 // over-budget cost.
 test('barRenderer paints a milestone diamond and gridCellRenderer paints an over-budget cost cell, toggling off live with no bar remount (I8)', async ({
   page,
 }) => {
-  await page.goto('/plugins.html');
+  await page.goto('/e2e/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   // ADR 0022: `diamond()` is core's own shipped glyph. The page's variant (still named `diamond`,

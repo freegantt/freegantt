@@ -675,7 +675,7 @@ An Error report is the record a consumer subscribes to. A `FreeGanttError` is th
 consumer catches. They are two different things. Core raises reports and keeps none.
 
 *Derived from `model/error-report.ts`, `data/error-reporting.ts`, `view/live-region.ts`,
-`api/watch-all-errors.ts`, `harness/main.ts`, `harness/editing.ts`, `harness/data.ts`.*
+`api/watch-all-errors.ts`, `harness/main.ts`, `harness/e2e/editing.ts`, `harness/e2e/data.ts`.*
 
 | Field | On a beforeChange refusal |
 | --- | --- |

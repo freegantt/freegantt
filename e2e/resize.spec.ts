@@ -31,7 +31,7 @@ async function visibleResizableBar(page: import('@playwright/test').Page): Promi
 }
 
 test('the resize handle pair lines up with the bar it belongs to (I9-adjacent)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
 
@@ -63,7 +63,7 @@ async function dragBarEndEdgeBy(
 }
 
 test('dragging the end handle resizes the bar', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
 
@@ -85,7 +85,7 @@ test('dragging the end handle resizes the bar', async ({ page }) => {
 test('a second resize at the bar edge still works after the entry stays selected from the first', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = await visibleResizableBar(page);
   await bar.click(); // selects the entry; it stays selected and hovered through both resizes below
   const box = (await bar.boundingBox())!;
@@ -133,7 +133,7 @@ async function committedSpan(
 test('dragging the end handle past start commits a zero-length span, never an inverted one (#240)', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
   const entryId = (await bar.getAttribute('data-bar-id'))!.split(':')[0]!;
@@ -148,7 +148,7 @@ test('dragging the end handle past start commits a zero-length span, never an in
 test('dragging the start handle past end commits a zero-length span, never an inverted one (#240)', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = await visibleResizableBar(page);
   const box = (await bar.boundingBox())!;
   const entryId = (await bar.getAttribute('data-bar-id'))!.split(':')[0]!;
@@ -162,7 +162,7 @@ test('dragging the start handle past end commits a zero-length span, never an in
 test('a second end-handle drag after the first clamps to zero length still refuses to invert (#240)', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = await visibleResizableBar(page);
   const entryId = (await bar.getAttribute('data-bar-id'))!.split(':')[0]!;
   const box = (await bar.boundingBox())!;

@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // override never reached the bar's painted background — the custom property changed, but the mixed
 // colour did not. The fix moves the color-mix() onto .fg-bar itself.
 //
-// The override this test reads is `harness/plugins.ts`'s milestone recolour, an ordinary
+// The override this test reads is `harness/e2e/plugins.ts`'s milestone recolour, an ordinary
 // `.fg-bar-diamond { --fg-bar-fill: … }` rule in `plugins.html`'s own stylesheet (ADR 0022,
 // refuted item 8 — colour is a `--fg-*` token, never a JavaScript paint override). The assertion
 // below reads computed style, so it exercises this rule the same way it would any other source of
@@ -17,7 +17,7 @@ import { test, expect } from '@playwright/test';
 test('a bar with its own --fg-bar-fill override paints that colour, not the container default (T1-1)', async ({
   page,
 }) => {
-  await page.goto('/plugins.html');
+  await page.goto('/e2e/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const milestoneBar = page.locator('#gantt .fg-bar.fg-bar-diamond');

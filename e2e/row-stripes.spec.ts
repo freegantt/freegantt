@@ -27,7 +27,7 @@ async function stripeByRowId(page: import('@playwright/test').Page) {
 }
 
 test('both panes stripe the same rows, before and after a scroll', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-row').first()).toBeVisible();
 
   const atTop = await stripeByRowId(page);
@@ -52,10 +52,10 @@ test('both panes stripe the same rows, before and after a scroll', async ({ page
 });
 
 test('the timeline zebra paints in dark mode, in the same colour as the grid', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-row').first()).toBeVisible();
   await page.getByRole('button', { name: 'Dark' }).click();
-  await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-fg-theme', 'dark');
 
   const striped = await page.evaluate(() => {
     const band = document.querySelector<HTMLElement>('.fg-timeline-pane .fg-row-band[data-parity="odd"]');
@@ -75,7 +75,7 @@ test('the timeline zebra paints in dark mode, in the same colour as the grid', a
 test('the last row scrolls fully into view — the pane scrolls its header as well as its rows', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-row').first()).toBeVisible();
 
   const pane = page.locator('#gantt .fg-timeline-pane');

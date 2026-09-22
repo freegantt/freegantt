@@ -1,0 +1,115 @@
+import { test, expect } from '@playwright/test';
+
+declare global {
+  interface Window {
+    __dataset: import('freegantt').Dataset;
+    __gantt: import('freegantt').Gantt;
+  }
+}
+
+// `harness/editing-and-data.ts` merges data.ts, editing.ts and plugins.ts (harness/e2e/*) into one
+// demo. This file proves a handful of the page's headline features work end to end, not every
+// control the old pages had.
+
+function logLines(page: import('@playwright/test').Page) {
+  return page.locator('#log div').allTextContents();
+}
+
+test('adding an entry is one transaction, and the log shows it as one changeset', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const before = await page.evaluate(() => window.__dataset.entries.all.length);
+  await page.locator('#add-entry').click();
+  const after = await page.evaluate(() => window.__dataset.entries.all.length);
+  expect(after).toBe(before + 1);
+
+  const lines = await logLines(page);
+  expect(lines[0]).toMatch(/entries · new-1 · added/);
+});
+
+test('locking the selected entry refuses a rename, and the log names why', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
+  await expect(bar).toBeVisible();
+  await bar.click();
+  await expect(page.locator('#lock-checkbox')).toBeEnabled();
+
+  await page.locator('#lock-checkbox').check();
+  await expect(page.locator('#rename-input')).toBeEnabled();
+
+  const nameBefore = await page.locator('#rename-input').inputValue();
+  await page.locator('#rename-input').fill('Renamed while locked');
+  await page.locator('#rename-btn').click();
+
+  // The write is refused — the log names the refusal, and the Entry's own name is unchanged.
+  await expect(page.locator('#log div').first()).toContainText('is locked');
+  const nameAfter = await page.evaluate(() => {
+    const id = window.__gantt.selectedEntryIds[0]!;
+    return window.__dataset.entries.get(id)!.name;
+  });
+  expect(nameAfter).toBe(nameBefore);
+});
+
+test('a beforeEntryMove veto refuses a drop before the Mobilization line', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await page.getByLabel('Snap').selectOption('none');
+
+  // The page opens on today's own week (`gantt.panToToday()`), and the Mobilization line sits only
+  // a week out — every bar with its own dates already starts before it, so a small leftward drag on
+  // one is enough to cross the veto (`harness/editing-and-data.ts`). `gantt.reveal` scrolls it into
+  // view first — only the windowed rows reach the DOM (I3).
+  const entryId = await page.evaluate(() => {
+    const entry = window.__dataset.entries.all.find((e) => e.start !== undefined && e.end !== undefined)!;
+    window.__gantt.reveal(entry.id);
+    return entry.id;
+  });
+  const bar = page.locator(`#gantt .fg-bar[data-bar-id^="${entryId}:"]`).first();
+  await expect(bar).toBeVisible();
+  const before = await page.evaluate((id) => window.__dataset.entries.get(id)!.start?.toString(), entryId);
+
+  const box = await bar.boundingBox();
+  if (!box) throw new Error('missing bar bounding box');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 150, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.up();
+
+  await expect(page.locator('#toast')).toContainText('mobilization');
+  const after = await page.evaluate((id) => window.__dataset.entries.get(id)!.start?.toString(), entryId);
+  expect(after).toBe(before);
+});
+
+test('export writes the document, and import round-trips the entry count', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.locator('#export-btn').click();
+  const exported = await page.locator('#document-json').inputValue();
+  expect(exported.length).toBeGreaterThan(0);
+  const parsed = JSON.parse(exported) as { id: string }[];
+  expect(parsed.length).toBeGreaterThan(0);
+
+  const countBefore = await page.evaluate(() => window.__dataset.entries.all.length);
+  await page.locator('#import-btn').click();
+  const countAfter = await page.evaluate(() => window.__dataset.entries.all.length);
+  expect(countAfter).toBe(countBefore);
+
+  const lines = await logLines(page);
+  expect(lines[0]).toMatch(/imported \d+ entries/);
+});
+
+test('the buffer + risk kind plugins toggle off and on', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await expect.poll(() => page.evaluate(() => window.__gantt.hasPlugin('demo.bufferKind'))).toBe(true);
+
+  await page.locator('#kind-plugins-toggle').uncheck();
+  await expect.poll(() => page.evaluate(() => window.__gantt.hasPlugin('demo.bufferKind'))).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__gantt.hasPlugin('demo.riskKind'))).toBe(false);
+
+  await page.locator('#kind-plugins-toggle').check();
+  await expect.poll(() => page.evaluate(() => window.__gantt.hasPlugin('demo.bufferKind'))).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__gantt.hasPlugin('demo.riskKind'))).toBe(true);
+});
