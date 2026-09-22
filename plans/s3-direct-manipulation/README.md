@@ -201,7 +201,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | Ctrl+wheel zooms browser | `passive: false` + `preventDefault()` |
 | Arrows pan when user meant nudge | Selection mode switch; Escape clears |
 | A dense Gantt is unscrollable on touch | `touch-action: none` on bars only; long-press arms |
-| Ten nudges need ten undo | True — coalescing needs History merge policy (§9) |
+| Ten nudges need ten undo | **Accepted.** One press, one entry. The History merge-policy design is recorded in #479, for the day a consumer asks |
 | Two Gantts fight over selection | Selection is per-Gantt (D-S3-10) |
 | Handler expects extender cascade in move payload | User edit only; cascade is `beforeChange` on Dataset |
 | `gantt.selectedEntryIds = ['t1']` type error | Setter accepts `EntryId \| string`. S3 spelled this `selectedIds`, #212 made it `selectedSegmentIds`, and ADR 0025 and ADR 0026 brought it back to the Entry |
