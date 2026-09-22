@@ -166,17 +166,18 @@ Track #434. Do not treat the hand-rolled version as a supported pattern.
 
 **Issue #477. Not a bug — an accepted limitation, deliberate (Q1, D-S1.12-2).**
 
-`fit: 'pane'` fills the pane down to the preset's `minTickWidthPx` floor. A range wider than that
-floor scrolls. To see more, choose a coarser preset — the library never picks one for you.
+`fit: 'pane'` fills the pane down to the preset's `minTickWidthPx` floor. Every `fit` mode floors
+at the preset's `minTickWidthPx`, not just `'pane'`. A range wider than that floor scrolls. To see
+more, choose a coarser preset — the library never picks one for you.
 
 An integrator loading a three-year dataset on the `day` preset sees a timeline that scrolls, not
 one that shrinks every day to fit. That is the floor at work, not a defect. The library never
-coarsens a preset behind the caller's back: a silent switch would turn `gantt.preset` into a value
-the library overwrites, and a window resize could relabel the axis without warning.
+coarsens a preset behind the caller's back. A silent switch would turn `gantt.preset` into a value
+the library overwrites. A window resize would then relabel the axis without warning.
 
 ```ts
 gantt.zoomOut(); // or:
-gantt.preset = weekPreset; // a coarser preset, chosen by you
+gantt.preset = 'week'; // a coarser preset, chosen by you
 ```
 
 ---

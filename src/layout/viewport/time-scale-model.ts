@@ -205,7 +205,7 @@ export class TimeScaleModel {
 
   /** Live. `'pane'` (default) fits the measured pane width; `'preset'` ignores it; a
    *  `TimeUnitWidth` states one unit's width in pixels; an explicit `number` is `pxPerMs`
-   *  (D-S1.9-2). `'pane'` still floors at the preset's `minTickWidthPx` — a range wider than the
+   *  (D-S1.9-2). Every mode floors at the preset's `minTickWidthPx` — a range wider than the
    *  floor allows scrolls; pick a coarser preset to fit more (#477). */
   set fit(f: TimeScaleFit) {
     if (sameFit(this.#fit, f)) return;

@@ -759,9 +759,9 @@ export class Gantt<TProps = unknown> {
   }
 
   /** How dense the time axis is — see `TimeScaleFit`. Default `'pane'` fits the measured pane
-   *  width, floored at the showing preset's `minTickWidthPx`: a range wider than the floor allows
-   *  scrolls instead of compressing further. To see more, set a coarser `preset` — the library
-   *  never picks one for you (#477). */
+   *  width. Every mode floors at the showing preset's `minTickWidthPx`: a range wider than the
+   *  floor allows scrolls instead of compressing further. To see more, set a coarser `preset` — the
+   *  library never picks one for you (#477). */
   get fit(): TimeScaleFit {
     return this.#shell.fit;
   }

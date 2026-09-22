@@ -391,15 +391,18 @@ gap, not a rename.
 
 ### `data-flag`
 
-`data-flag` is a space-separated token list generated from `BarFlags`/`LinkFlags` (S1.10,
-D-S1.10-2). `BAR_FLAG_KEYS` and `LINK_FLAG_KEYS` (`src/layout/frame.ts`, public exports) name the
-closed key set; a Vitest guard (`src/render/dom/flag-selectors.test.ts`) fails if a key here has no
-row below, or a row here names a key the list does not.
+`data-flag` is a space-separated token list. It has two producers: `BarFlags`/`LinkFlags` (S1.10,
+D-S1.10-2) and the Today line wrapper (`render/dom/date-line.ts`), which writes `today`
+independently of the `BarFlags`/`LinkFlags` key set. `BAR_FLAG_KEYS` and `LINK_FLAG_KEYS`
+(`src/layout/frame.ts`, public exports) name the closed key set for the first producer; a Vitest
+guard (`src/render/dom/flag-selectors.test.ts`) fails if a key here has no row below, or a row here
+names a key the list does not.
 
 `.fg-bar` paints `data-flag` today; every key stays false until S7's scheduling plugin sets one
 true. `.fg-link` paints nothing yet — no code under `render/dom` reads `GeometryFrame.links` — so
 its two rows name the vocabulary that element will carry once S7 adds it, not a selector a
-stylesheet can match now.
+stylesheet can match now. `.fg-date-line` and `.fg-date-line-label` paint `data-flag="today"` now,
+on every frame where the Today line shows.
 
 | Selector | Set by |
 |---|---|
@@ -407,6 +410,8 @@ stylesheet can match now.
 | `.fg-bar[data-flag~="cycle"]` | S7 scheduling plugin |
 | `.fg-link[data-flag~="inactive"]` | S7 scheduling plugin |
 | `.fg-link[data-flag~="cycle"]` | S7 scheduling plugin |
+| `.fg-date-line[data-flag~="today"]` | the library (Today line) |
+| `.fg-date-line-label[data-flag~="today"]` | the library (Today line) |
 
 ### Internal Parts
 
