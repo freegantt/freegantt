@@ -201,6 +201,58 @@ describe('validatePresetTickStep (via resolvePreset)', () => {
   });
 });
 
+// NEW-2/#481 review: an increment that cannot advance a step (0, negative, or fractional) used to
+// resolve clean here and crash much later, as an untyped RangeError from time/scale.ts, far from the
+// preset that caused it.
+describe('validatePresetTickIncrement (via resolvePreset)', () => {
+  it.each([
+    ['zero', 0],
+    ['negative', -1],
+    ['fractional', 1.5],
+  ])('throws with rule "tick-increment" for a %s tickIncrement', (_label, tickIncrement) => {
+    const preset: ViewPreset = {
+      id: 'custom-bad-tick-increment',
+      tickUnit: 'day',
+      tickIncrement,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(() => resolvePreset(preset, 'test')).toThrow(InvalidPresetError);
+    try {
+      resolvePreset(preset, 'test');
+    } catch (error) {
+      expect((error as InvalidPresetError).rule).toBe('tick-increment');
+    }
+  });
+
+  it('throws with rule "tick-increment" for a header band whose own increment cannot advance', () => {
+    const preset: ViewPreset = {
+      id: 'custom-bad-header-increment',
+      tickUnit: 'day',
+      tickIncrement: 1,
+      headers: [{ unit: 'week', increment: 0, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(() => resolvePreset(preset, 'test')).toThrow(InvalidPresetError);
+    try {
+      resolvePreset(preset, 'test');
+    } catch (error) {
+      expect((error as InvalidPresetError).rule).toBe('tick-increment');
+    }
+  });
+
+  it('allows a tickIncrement and header increments that are all positive whole numbers', () => {
+    const preset: ViewPreset = {
+      id: 'custom-good-increments',
+      tickUnit: 'day',
+      tickIncrement: 1,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(resolvePreset(preset, 'test')).toBe(preset);
+  });
+});
+
 describe('shipped presets', () => {
   it('multi-band presets carry headers coarsest-first', () => {
     expect(presets.dayAndWeek.headers.map((h) => h.unit)).toEqual(['week', 'day']);

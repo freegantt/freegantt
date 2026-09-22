@@ -30,6 +30,44 @@ function validatePresetTickWidths(preset: ViewPreset, operation: string): void {
   }
 }
 
+/** Is `increment` a step a calendar can actually advance by? `0` or a negative number never moves a
+ * cursor forward; a fraction moves it by less than one whole unit, which `time/`'s calendar stepping
+ * (whole days, whole months…) cannot honour either. */
+function isPositiveIntegerIncrement(increment: number): boolean {
+  return Number.isInteger(increment) && increment > 0;
+}
+
+/** `tickIncrement` and every header band's own `increment` must each be a positive whole number, or
+ * nothing ever advances. Left unchecked, a `tickIncrement: 0` preset resolves clean here and only
+ * fails later, as an untyped `RangeError` thrown deep in `time/scale.ts`'s `msForOneStep` — far from
+ * the preset that caused it, and with no `rule` a caller could branch on (NEW-2/#481 review). A
+ * header's own bad increment does not throw the same way — `scale.ts`'s `ticks()` caps its walk at
+ * `MAX_TICKS` rather than looping forever — but it still renders 100,000 zero-width ticks instead of
+ * a readable band, so it gets the same refusal here rather than a silent garbage render. Checked
+ * before `isCoarserStep` below, which assumes both steps already advance. */
+function validatePresetTickIncrement(preset: ViewPreset, operation: string): void {
+  if (!isPositiveIntegerIncrement(preset.tickIncrement)) {
+    throw new InvalidPresetError(
+      preset.id,
+      'tick-increment',
+      `sets tickIncrement to ${preset.tickIncrement}, not a positive whole number. Set tickIncrement to ` +
+        '1 or more, so the grid can advance.',
+      operation,
+    );
+  }
+  for (const header of preset.headers) {
+    if (!isPositiveIntegerIncrement(header.increment)) {
+      throw new InvalidPresetError(
+        preset.id,
+        'tick-increment',
+        `declares a header band for unit "${header.unit}" with increment ${header.increment}, not a ` +
+          'positive whole number. Set every header increment to 1 or more, so its band can advance.',
+        operation,
+      );
+    }
+  }
+}
+
 /** `tickUnit`/`tickIncrement` drive the grid lines and a future snap-to-tick gesture; the finest
  * (last) header band is what a human reads. A tick step coarser than that band draws a grid the
  * header disagrees with — a `day × 10` grid under a `week × 1` header spans more time per line than
@@ -69,6 +107,7 @@ function freezePreset(preset: ViewPreset): ViewPreset {
   // consumer door, so this operation name is diagnostic only, for the report a shipped preset
   // failing its own rule would need.
   validatePresetTickWidths(preset, 'time/presets (shipped preset)');
+  validatePresetTickIncrement(preset, 'time/presets (shipped preset)');
   validatePresetTickStep(preset, 'time/presets (shipped preset)');
   Object.freeze(preset.headers);
   for (const header of preset.headers) Object.freeze(header);
@@ -271,6 +310,7 @@ export type PresetRef = ShippedPresetId | ViewPreset;
 export function resolvePreset(ref: PresetRef, operation: string): ViewPreset {
   if (typeof ref !== 'string') {
     validatePresetTickWidths(ref, operation);
+    validatePresetTickIncrement(ref, operation);
     validatePresetTickStep(ref, operation);
     return ref;
   }

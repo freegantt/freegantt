@@ -202,10 +202,13 @@ export class UnknownPresetError extends FreeGanttError {
 /** `code: 'invalid-preset'` — a `ViewPreset` object that breaks a rule between its own fields, from
  * `resolvePreset` (header readability follow-up). One code covers every such rule, because each one
  * names the same fault: this preset object is inconsistent. `time/presets.ts` holds the rules —
- * today, `'tick-widths'` (`preferredTickWidthPx` below its own `minTickWidthPx`) and `'tick-step'`
- * (`tickUnit`/`tickIncrement` coarser than the finest header). `rule` is that closed set, for a
- * caller that wants to branch without parsing prose; `message` is the broken validator's own
- * sentence, naming the fix, and stays the human-readable half.
+ * today, `'tick-widths'` (`preferredTickWidthPx` below its own `minTickWidthPx`), `'tick-step'`
+ * (`tickUnit`/`tickIncrement` coarser than the finest header), and `'tick-increment'` (a
+ * `tickIncrement` or header `increment` that is not a positive whole number — `0` or less never
+ * advances a step, `stepBy` throws an untyped `RangeError` for it deep in `time/scale.ts`, far from
+ * the preset that caused it (NEW-2/#481 review)). `rule` is that closed set, for a caller that wants
+ * to branch without parsing prose; `message` is the broken validator's own sentence, naming the fix,
+ * and stays the human-readable half.
  *
  * `rule` is not `reason`: that word already names the consumer's own words passed to
  * `refuse(reason)` (`MutationCancelledError.reason`, the `ErrorReport.reason` field) — a different
@@ -218,10 +221,15 @@ export class UnknownPresetError extends FreeGanttError {
  * that always said `gantt.preset` named the wrong door for the other two. */
 export class InvalidPresetError extends FreeGanttError {
   readonly presetId: string;
-  readonly rule: 'tick-widths' | 'tick-step';
+  readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment';
   readonly operation: string;
 
-  constructor(presetId: string, rule: 'tick-widths' | 'tick-step', message: string, operation: string) {
+  constructor(
+    presetId: string,
+    rule: 'tick-widths' | 'tick-step' | 'tick-increment',
+    message: string,
+    operation: string,
+  ) {
     super('invalid-preset' satisfies BuiltInThrownCode, `${operation}: the preset "${presetId}" ${message}`);
     this.name = 'InvalidPresetError';
     this.presetId = presetId;
