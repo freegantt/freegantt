@@ -58,9 +58,6 @@ export interface ViewPreset {
   /** The density floor: below this, this preset's labels stop being legible. Defaults to
    *  `preferredTickWidthPx` when omitted, which makes a custom preset never compress. */
   minTickWidthPx?: number;
-  /** What a drag snaps to under this preset. Unset reads as `'tick'`. `Gantt.snap` overrides it for
-   *  one Gantt (D-S3-24). */
-  snap?: SnapSetting;
 }
 
 export interface TimeScale {

@@ -329,16 +329,10 @@ export class Viewport {
   }
 
   /** Ladder position by `preset.id`, not object identity — a spread clone of a shipped preset
-   *  (e.g. `{ ...gantt.preset, snap }`) must still step and report `canZoom*` correctly. */
+   *  (e.g. `{ ...gantt.preset, preferredTickWidthPx: 40 }`) must still step and report `canZoom*`
+   *  correctly. */
   #zoomPresetIndex(): number {
     return this.#zoomPresets.findIndex((preset) => preset.id === this.scale.preset.id);
-  }
-
-  /** When stepping the ladder, carry `snap` from the active preset so a customization survives the
-   *  swap to the next canonical `zoomPresets` entry. */
-  #presetWithCarriedSnap(target: ViewPreset, current: ViewPreset): ViewPreset {
-    if (current.snap === undefined) return target;
-    return { ...target, snap: current.snap };
   }
 
   /** True unless the current preset is the finest entry of `zoomPresets`, or is not in it at all —
@@ -361,7 +355,7 @@ export class Viewport {
     if (index === -1 || next < 0 || next >= this.#zoomPresets.length) return;
     const anchorInstant = this.timeScale.instantForX(this.scroll.x.state.position + anchorX);
     this.batch(() => {
-      this.scale.preset = this.#presetWithCarriedSnap(this.#zoomPresets[next]!, this.scale.preset);
+      this.scale.preset = this.#zoomPresets[next]!;
       this.#pushContentWidth();
       this.scroll.x.panTo(this.timeScale.xForInstant(anchorInstant) - anchorX);
     });

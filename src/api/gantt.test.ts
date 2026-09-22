@@ -376,12 +376,12 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
 // `gantt.preset = { ...gantt.preset, snap }` — a one-off copy of a shipped preset, thrown away by
 // the next zoom. The harness wrote that, which is how this was found.
 describe('Gantt.snap (D-S3-24, #195)', () => {
-  it('reads the showing preset when this Gantt states nothing, and no shipped preset states one', () => {
+  it('reads none when this Gantt states nothing — snap is opt-in (#489 reverses D-S3-24s preset fallback)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
-    expect(gantt.snap).toBe('tick');
+    expect(gantt.snap).toBe('none');
 
     gantt.destroy();
   });
@@ -410,14 +410,14 @@ describe('Gantt.snap (D-S3-24, #195)', () => {
     gantt.destroy();
   });
 
-  it('undefined hands the answer back to the preset', () => {
+  it('undefined turns snapping back off (#489)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, snap: 'none' });
+    const gantt = new Gantt({ container, dataset, snap: { unit: 'day', increment: 1 } });
 
     gantt.snap = undefined;
 
-    expect(gantt.snap).toBe('tick');
+    expect(gantt.snap).toBe('none');
 
     gantt.destroy();
   });
@@ -469,10 +469,12 @@ describe('Gantt.snap (D-S3-24, #195)', () => {
     const ganttA = new Gantt({ container: document.createElement('div'), dataset, scale });
     const ganttB = new Gantt({ container: document.createElement('div'), dataset, scale });
 
-    ganttA.snap = 'none';
+    ganttA.snap = 'tick';
 
-    expect(ganttA.snap).toBe('none');
-    expect(ganttB.snap).toBe('tick');
+    expect(ganttA.snap).toBe('tick');
+    // Opt-in, and per Gantt (#489): ganttB never asked for snapping, so sharing an axis with a Gantt
+    // that did leaves it dragging free.
+    expect(ganttB.snap).toBe('none');
 
     ganttA.destroy();
     ganttB.destroy();
@@ -5895,7 +5897,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.preset = { ...gantt.preset, snap: { unit: 'day', increment: 1 } };
+    gantt.snap = { unit: 'day', increment: 1 };
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;

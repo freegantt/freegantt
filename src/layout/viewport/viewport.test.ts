@@ -368,13 +368,15 @@ describe('Viewport.zoomIn / zoomOut (S1.12, D-S1.12-6)', () => {
 
   it('canZoomIn / canZoomOut and zoom stepping work when the active preset is a spread clone of a ladder member (#116)', () => {
     const { viewport } = boundViewport();
-    viewport.scale.preset = { ...viewport.preset, snap: 'none' };
+    viewport.scale.preset = { ...viewport.preset, preferredTickWidthPx: 999 };
     expect(viewport.canZoomIn).toBe(true);
     expect(viewport.canZoomOut).toBe(true);
 
     viewport.zoomOut();
     expect(viewport.preset.id).toBe('dayAndWeek');
-    expect(viewport.preset.snap).toBe('none');
+    // Stepping the ladder lands on the ladder's own member, not a further clone of it (#489 removed
+    // the snap-carrying clone `#stepPreset` used to build here).
+    expect(viewport.preset.preferredTickWidthPx).not.toBe(999);
   });
 
   it('[S1-A7] zoomIn then zoomOut returns preset and scroll x to their starting values', () => {
