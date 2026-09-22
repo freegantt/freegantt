@@ -393,16 +393,22 @@ gap, not a rename.
 
 `data-flag` is a space-separated token list. It has two producers: `BarFlags`/`LinkFlags` (S1.10,
 D-S1.10-2) and the Today line wrapper (`render/dom/date-line.ts`), which writes `today`
-independently of the `BarFlags`/`LinkFlags` key set. `BAR_FLAG_KEYS` and `LINK_FLAG_KEYS`
-(`src/layout/frame.ts`, public exports) name the closed key set for the first producer; a Vitest
-guard (`src/render/dom/flag-selectors.test.ts`) fails if a key here has no row below, or a row here
-names a key the list does not.
+independently of the `BarFlags`/`LinkFlags` key set. `BAR_FLAG_KEYS` (`src/layout/frame.ts`, a
+public export) names the closed key set for the first producer's bar side; `LINK_FLAG_KEYS` is the
+same list for the link side but stays layout-internal (NEW-3/#481 review) — see the note below. A
+Vitest guard (`src/render/dom/flag-selectors.test.ts`) fails if a key here has no row below, or a
+row here names a key the list does not.
 
 `.fg-bar` paints `data-flag` today; every key stays false until S7's scheduling plugin sets one
 true. `.fg-link` paints nothing yet — no code under `render/dom` reads `GeometryFrame.links` — so
 its two rows name the vocabulary that element will carry once S7 adds it, not a selector a
-stylesheet can match now. `.fg-date-line` and `.fg-date-line-label` paint `data-flag="today"` now,
-on every frame where the Today line shows.
+stylesheet can match now (this is why `LINK_FLAG_KEYS` is not exported from `api/`: nothing yet
+paints a `.fg-link` for a consumer's rule to match). `.fg-date-line` and `.fg-date-line-label` paint
+`data-flag="today"` now, on every frame where the Today line shows — but the shipped stylesheet
+carries no rule against either selector (D-S1.13-8: Today gets no palette of its own). Styling
+Today apart from an ordinary Date line is a rule the consumer writes, against
+`.fg-date-line[data-flag~="today"]` or `.fg-date-line-label[data-flag~="today"]`; the library ships
+none out of the box.
 
 | Selector | Set by |
 |---|---|

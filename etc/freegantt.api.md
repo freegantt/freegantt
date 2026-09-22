@@ -1532,9 +1532,6 @@ export interface KeyEventLike {
     target: EventTarget | null;
 }
 
-// @public
-export const LINK_FLAG_KEYS: readonly ["inactive", "cycle"];
-
 // @public (undocumented)
 export type MenuEntry = MenuItem | {
     separator: true;

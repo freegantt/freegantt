@@ -364,9 +364,12 @@ export type {
   BarSpanKind,
   PlannedRowKind,
 } from '../layout/index.js';
-// The closed `data-flag` key set behind `BarFlags`/`LinkFlags` (#475) — a consumer writing a
-// stylesheet selector or a `barRenderer` reads the same list `flagTokens` iterates.
-export { BAR_FLAG_KEYS, LINK_FLAG_KEYS } from '../layout/index.js';
+// The closed `data-flag` key set behind `BarFlags` (#475) — a consumer writing a stylesheet
+// selector or a `barRenderer` reads the same list `flagTokens` iterates. `LINK_FLAG_KEYS` stays
+// layout-internal (NEW-3/#481 review): `GeometryFrame.links` always emits `[]` until links paint
+// (S7), no renderer reads it, and no stylesheet has a `.fg-link` rule, so a consumer styling
+// against it today would write CSS that matches nothing.
+export { BAR_FLAG_KEYS } from '../layout/index.js';
 // S5.6, D-S5-15: a decoration provider's own vocabulary — a plugin author writes `ctx.view
 // .registerDecoration('underBars', (ctx) => [...])` against these alone. `RangeBand`/`RowStripe`
 // are the same pixel-resolved shapes `GeometryFrame.underBars`/`.overBars` carry.
