@@ -355,7 +355,7 @@ left of its cell until the cell leaves the pane.
 
 ## Today line
 
-The today line is a Date line, not a type of its own (S1.13). `resolveDateLines`
+The today line is a Date line, not a type of its own. `resolveDateLines`
 (`layout/date-line.ts`) emits one `DateLineDecoration` carrying `today: true`, alongside any line a
 consumer authored in `dateLines`, and only when the instant falls inside `scale.range`. Paint keys
 the wrapper off that flag: `render/dom/date-line.ts` writes `data-flag="today"` on the
@@ -365,7 +365,7 @@ the today stroke are one element type with one token, `--fg-date-line-color`.
 `todayLine` defaults to `true`, which reads the clock. `false` omits the line, and an `Instant`
 pins it there with no clock read at all — which is how a test freezes it.
 
-**The line stays current on its own (#476).** A page left open past a tick boundary used to show a
+**The line stays current on its own.** A page left open past a tick boundary used to show a
 stale reading, because nothing asked for a frame at the boundary. `GanttShell` now arms one
 `setTimeout` for the finest header band's next tick boundary after every frame painted with
 `todayLine: true`, and asks `FrameScheduler` to repaint when it fires. It re-arms every frame, so a

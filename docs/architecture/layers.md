@@ -1,10 +1,9 @@
 # Layers & import rules
 
-Which directories may import which, and the lint rules that hold the line. The rule itself lives
-in [`plans/01`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/01-domain-architecture.md)
-§1 — where that document and this page disagree, it is right and this page is stale.
+Which directories may import which, and the lint rules that hold the line. The structure
+enforced here defines the architecture.
 
-*Derived from `src/**`, `.dependency-cruiser.cjs`, `plans/01-domain-architecture.md` §1.*
+*Derived from `src/**`, `.dependency-cruiser.cjs`.*
 
 ## The ten directories
 
@@ -83,7 +82,7 @@ transactions · fields · rollup
 </div>
 <div class="box stub">
 <div class="name">scheduling/</div>
-<div class="sub">stub — optional plugin (ADR 0002)</div>
+<div class="sub">stub — optional plugin</div>
 </div>
 </div>
 <div class="arrow-v">↓</div>
@@ -112,7 +111,7 @@ near-zero runtime
 ### Who may import whom
 
 `.dependency-cruiser.cjs` transcribes the diagram literally: one `forbid()` rule per layer,
-listing its *only* legal targets. Anything not listed fails the build (invariant I1).
+listing its *only* legal targets. Anything not listed fails the build.
 
 | Layer | May import | Note |
 | --- | --- | --- |
@@ -128,10 +127,10 @@ listing its *only* legal targets. Anything not listed fails the build (invariant
 | `api` | `view`, `data`, `model`, `time`, `layout`, `interaction`, `extensions` | `model`, `time` and `layout` are type/primitive re-export edges, not behavioural ones. `interaction` arrives by constructor injection — the shell takes the gesture attachments structurally-typed rather than importing `interaction/` itself. `extensions` is the plugin runtime and the shipped built-ins (`tooltips`, `contextMenu`, `inlineEditing`, `createPopup`). |
 
 :::note The thirteen custom lint rules
-`eslint/rules/` holds what dependency-cruiser cannot see, all scoped to `src/**`. Time (I10):
-`no-date-outside-time`, `no-magic-time-constants`, `no-instant-arithmetic`. Geometry (I12):
+`eslint/rules/` holds what dependency-cruiser cannot see, all scoped to `src/**`. Time-related:
+`no-date-outside-time`, `no-magic-time-constants`, `no-instant-arithmetic`. Geometry-related:
 `no-time-to-pixel-math`, `no-scroll-outside-scroll-attachment` (exempt:
-`view/scroll-attachment.ts`), `no-flow-layout-rows`, `no-inline-style-outside-geometry`. Shape:
+`view/scroll-attachment.ts`), `no-flow-layout-rows`, `no-inline-style-outside-geometry`. Structure-related:
 `no-module-level-state`, `model-is-types-only`, `no-store-mutation-outside-transaction`,
 `require-invariant-header`, `no-kind-literal`, `no-derived-in-json`. Each rule ships a
 violation fixture so the rule itself is proven to bite.

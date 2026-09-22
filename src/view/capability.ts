@@ -87,9 +87,12 @@ function hasSomewhereToWrite(field: Field | undefined): field is Field {
  *  left to special-case a gesture off of (ADR 0013). `canWrite` below decides whether that gesture
  *  can carry its write out.
  *
- *  A parent is *not* named here, and needs no name. Whether it owns the dates it moves and resizes
- *  is `canWrite`'s question, gated by `ownsField` (#470). This function stays one answer for every
- *  Entry, deriving or owning alike. */
+ *  A parent is *not* named here, and needs no name. Whether a *move* owns the dates it translates is
+ *  `canWrite`'s question, gated by `ownsField` (#470). A *resize* asks `canWrite` alone, with no
+ *  `ownsField` gate: it can paint a handle on a deriving parent's edge, and the commit then throws
+ *  `DerivedFieldNotWritableError`. That is the pre-existing #256 trade-off, not fixed here — changing
+ *  it is its own slice (T6/#481 review). This function stays one answer for every Entry, deriving or
+ *  owning alike. */
 function gestureIsOffered(): boolean {
   return true;
 }

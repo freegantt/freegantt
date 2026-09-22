@@ -183,8 +183,13 @@ export class Viewport {
    *  unreachable because every existing fixture only ever scrolled from position 0, where any
    *  content size is still in bounds). */
   set preset(ref: PresetRef) {
+    // Resolved here, under this door's own name, so an invalid custom preset reports `gantt.preset`
+    // — the surface this setter's own caller actually wrote — rather than `TimeScaleModel.preset`'s
+    // generic `preset` (C3/#482 review). `this.scale.preset` re-resolves the same, already-valid
+    // object below; that second pass cannot throw.
+    const resolved = resolvePreset(ref, 'gantt.preset');
     this.batch(() => {
-      this.scale.preset = ref;
+      this.scale.preset = resolved;
       this.#reclampToContentWidth();
     });
   }
@@ -320,7 +325,7 @@ export class Viewport {
   }
 
   set zoomPresets(refs: readonly PresetRef[]) {
-    this.#zoomPresets = Object.freeze(refs.map(resolvePreset));
+    this.#zoomPresets = Object.freeze(refs.map((ref) => resolvePreset(ref, 'gantt.zoomPresets')));
   }
 
   /** Ladder position by `preset.id`, not object identity — a spread clone of a shipped preset

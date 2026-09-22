@@ -167,7 +167,7 @@ export class TimeScaleModel {
   #scaleBuiltFrom: TimeScaleOptions | undefined;
 
   constructor(options: TimeScaleModelOptions = {}) {
-    this.#preset = options.preset ? resolvePreset(options.preset) : dayPreset;
+    this.#preset = options.preset ? resolvePreset(options.preset, 'preset') : dayPreset;
     this.#range = options.range ?? 'fitDataset';
     this.#fit = options.fit ?? 'pane';
     internals.set(this, { scaleOptions: this.#scaleOptions });
@@ -181,7 +181,7 @@ export class TimeScaleModel {
    *  `resolvePreset` (throws `UnknownPresetError` for an unknown id); no-op, no invalidation, when
    *  the resolved preset is unchanged (D-S1.9-3). */
   set preset(ref: PresetRef) {
-    const resolved = resolvePreset(ref);
+    const resolved = resolvePreset(ref, 'preset');
     if (resolved === this.#preset) return;
     this.#preset = resolved;
     this.#scaleOptions.invalidate();
@@ -205,7 +205,7 @@ export class TimeScaleModel {
 
   /** Live. `'pane'` (default) fits the measured pane width; `'preset'` ignores it; a
    *  `TimeUnitWidth` states one unit's width in pixels; an explicit `number` is `pxPerMs`
-   *  (D-S1.9-2). `'pane'` still floors at the preset's `minTickWidthPx` — a range wider than the
+   *  (D-S1.9-2). Every mode floors at the preset's `minTickWidthPx` — a range wider than the
    *  floor allows scrolls; pick a coarser preset to fit more (#477). */
   set fit(f: TimeScaleFit) {
     if (sameFit(this.#fit, f)) return;

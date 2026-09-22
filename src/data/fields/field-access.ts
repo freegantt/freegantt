@@ -285,9 +285,10 @@ function descendantsOf(
  * subtree*, and a subtree of one leaf has one leaf. This is why `leaves(row)` can include `row`
  * while `descendantsOf` never does — a row is not its own descendant, but it can be its own
  * subtree's only leaf.
+ *
+ * Exported for `data/live-entry.ts`'s `Entry.leaves()`, so the live row and both pass contexts
+ * (`ComputeContext`, `RollUpContext`) share this one walk instead of each rebuilding it.
  */
-/** Exported for `data/live-entry.ts`'s `Entry.leaves()`, so the live row and both pass contexts
- *  (`ComputeContext`, `RollUpContext`) share this one walk instead of each rebuilding it. */
 export function leavesOf(
   root: StoredEntry,
   childrenOf: (row: StoredEntry) => readonly StoredEntry[],

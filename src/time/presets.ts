@@ -6,7 +6,7 @@
 
 import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
 import { formatHour, formatWeekNumber } from './format.js';
-import { isCoarserThan } from './zone.js';
+import { isCoarserStep } from './zone.js';
 import type { ViewPreset } from './scale.js';
 
 /** `minTickWidthPx` is the density floor below which a preset's labels stop being legible;
@@ -17,39 +17,77 @@ import type { ViewPreset } from './scale.js';
  * future preset edit can't silently reintroduce the header-readability follow-up's finding 5 (a
  * min/preferred mismatch shipped as `dayAndWeekPreset: { preferredTickWidthPx: 24, minTickWidthPx:
  * 32 }` until this check caught it). */
-function validatePresetTickWidths(preset: ViewPreset): void {
+function validatePresetTickWidths(preset: ViewPreset, operation: string): void {
   if (preset.minTickWidthPx !== undefined && preset.minTickWidthPx > preset.preferredTickWidthPx) {
     throw new InvalidPresetError(
       preset.id,
+      'tick-widths',
       `sets minTickWidthPx to ${preset.minTickWidthPx}, above its own preferredTickWidthPx of ` +
         `${preset.preferredTickWidthPx}. Lower minTickWidthPx to ${preset.preferredTickWidthPx} or ` +
         'less, so the preset can reach its own preferred zoom.',
+      operation,
     );
+  }
+}
+
+/** Is `increment` a step a calendar can actually advance by? `0` or a negative number never moves a
+ * cursor forward; a fraction moves it by less than one whole unit, which `time/`'s calendar stepping
+ * (whole days, whole months…) cannot honour either. */
+function isPositiveIntegerIncrement(increment: number): boolean {
+  return Number.isInteger(increment) && increment > 0;
+}
+
+/** `tickIncrement` and every header band's own `increment` must each be a positive whole number, or
+ * nothing ever advances. Left unchecked, a `tickIncrement: 0` preset resolves clean here and only
+ * fails later, as an untyped `RangeError` thrown deep in `time/scale.ts`'s `msForOneStep` — far from
+ * the preset that caused it, and with no `rule` a caller could branch on (NEW-2/#481 review). A
+ * header's own bad increment does not throw the same way — `scale.ts`'s `ticks()` caps its walk at
+ * `MAX_TICKS` rather than looping forever — but it still renders 100,000 zero-width ticks instead of
+ * a readable band, so it gets the same refusal here rather than a silent garbage render. Checked
+ * before `isCoarserStep` below, which assumes both steps already advance. */
+function validatePresetTickIncrement(preset: ViewPreset, operation: string): void {
+  if (!isPositiveIntegerIncrement(preset.tickIncrement)) {
+    throw new InvalidPresetError(
+      preset.id,
+      'tick-increment',
+      `sets tickIncrement to ${preset.tickIncrement}, not a positive whole number. Set tickIncrement to ` +
+        '1 or more, so the grid can advance.',
+      operation,
+    );
+  }
+  for (const header of preset.headers) {
+    if (!isPositiveIntegerIncrement(header.increment)) {
+      throw new InvalidPresetError(
+        preset.id,
+        'tick-increment',
+        `declares a header band for unit "${header.unit}" with increment ${header.increment}, not a ` +
+          'positive whole number. Set every header increment to 1 or more, so its band can advance.',
+        operation,
+      );
+    }
   }
 }
 
 /** `tickUnit`/`tickIncrement` drive the grid lines and a future snap-to-tick gesture; the finest
  * (last) header band is what a human reads. A tick step coarser than that band draws a grid the
- * header disagrees with — a `week` grid under a `day` header, or a `day × 2` grid under a `day × 1`
- * header. Checked at the same two sites as the width rule, for the same reason (header readability
- * follow-up, finding 5): a shipped preset already broke a trust like this once. Empty `headers` has
- * no band to compare against, so it passes (`frame.ts` already handles a bandless preset). */
-function validatePresetTickStep(preset: ViewPreset): void {
+ * header disagrees with — a `day × 10` grid under a `week × 1` header spans more time per line than
+ * the header it labels, whatever the two units are. Checked at the same two sites as the width rule,
+ * for the same reason (header readability follow-up, finding 5): a shipped preset already broke a
+ * trust like this once. `isCoarserStep` (T1/#481) compares the two steps by real span, not by unit
+ * alone — comparing units alone let a `48-hour` tick pass under a `1-day` header, and refused a
+ * `week × 1` tick under a `day × 14` header, both wrong. Empty `headers` has no band to compare
+ * against, so it passes (`frame.ts` already handles a bandless preset). */
+function validatePresetTickStep(preset: ViewPreset, operation: string): void {
   const finestHeader = preset.headers[preset.headers.length - 1];
   if (!finestHeader) return;
-  if (isCoarserThan(preset.tickUnit, finestHeader.unit)) {
+  if (isCoarserStep({ unit: preset.tickUnit, increment: preset.tickIncrement }, finestHeader)) {
     throw new InvalidPresetError(
       preset.id,
-      `sets tickUnit to "${preset.tickUnit}", coarser than its finest header's unit "${finestHeader.unit}". ` +
-        `Set tickUnit to "${finestHeader.unit}" or finer, so the grid never draws coarser than the header it labels.`,
-    );
-  }
-  if (preset.tickUnit === finestHeader.unit && preset.tickIncrement > finestHeader.increment) {
-    throw new InvalidPresetError(
-      preset.id,
-      `sets tickIncrement to ${preset.tickIncrement} for unit "${preset.tickUnit}", coarser than its ` +
-        `finest header's increment of ${finestHeader.increment}. Lower tickIncrement to ${finestHeader.increment} ` +
-        'or less, so the grid never draws coarser than the header it labels.',
+      'tick-step',
+      `sets tickUnit/tickIncrement to ${preset.tickIncrement} × "${preset.tickUnit}", coarser than its ` +
+        `finest header's ${finestHeader.increment} × "${finestHeader.unit}". Lower tickUnit/tickIncrement so ` +
+        'the grid never draws coarser than the header it labels.',
+      operation,
     );
   }
 }
@@ -65,8 +103,12 @@ const YEAR_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({ year: 'numeric' 
 /** Deep-freezes a preset (and its `headers` array) so a shipped preset is a value, not a shared
  * mutable singleton — one consumer's zoom cannot retune every Gantt on the page (I2). */
 function freezePreset(preset: ViewPreset): ViewPreset {
-  validatePresetTickWidths(preset);
-  validatePresetTickStep(preset);
+  // A shipped preset's own id, checked at module load against the library's own data — never a
+  // consumer door, so this operation name is diagnostic only, for the report a shipped preset
+  // failing its own rule would need.
+  validatePresetTickWidths(preset, 'time/presets (shipped preset)');
+  validatePresetTickIncrement(preset, 'time/presets (shipped preset)');
+  validatePresetTickStep(preset, 'time/presets (shipped preset)');
   Object.freeze(preset.headers);
   for (const header of preset.headers) Object.freeze(header);
   return Object.freeze(preset);
@@ -258,12 +300,18 @@ export const ZOOM_PRESETS: readonly ViewPreset[] = Object.freeze([
  * string with no closed set behind it (fix-issue1-apis.md Design #11). */
 export type PresetRef = ShippedPresetId | ViewPreset;
 
-/** Throws `UnknownPresetError` for an id outside `presets`. A `ViewPreset` object passes through
- * unchanged — a custom preset is never a library edit. */
-export function resolvePreset(ref: PresetRef): ViewPreset {
+/** Throws `UnknownPresetError` for an id outside `presets`, or `InvalidPresetError` for a custom
+ * `ViewPreset` object that breaks a rule between its own fields. A `ViewPreset` object otherwise
+ * passes through unchanged — a custom preset is never a library edit.
+ *
+ * `operation` is the door the caller reached this through (`gantt.preset`, `gantt.zoomPresets`, a
+ * shared `TimeScaleModel`'s own `preset`) — every caller must state its own, so `InvalidPresetError`
+ * always names the surface the consumer actually wrote (C3/#482 review). */
+export function resolvePreset(ref: PresetRef, operation: string): ViewPreset {
   if (typeof ref !== 'string') {
-    validatePresetTickWidths(ref);
-    validatePresetTickStep(ref);
+    validatePresetTickWidths(ref, operation);
+    validatePresetTickIncrement(ref, operation);
+    validatePresetTickStep(ref, operation);
     return ref;
   }
   const preset = presets[ref];

@@ -312,8 +312,10 @@ export class GesturePipeline {
    *  moves the parent's own envelope at commit. It still has to follow the pointer while the drag is
    *  live, so it travels in the draft and drops out of the map that commits.
    *
-   *  A resize reaches none of this: a parent never passes `can('resize', …)`, because one edge of a
-   *  derived envelope names no descendant to resize. */
+   *  A resize reaches none of this: it drags one grabbed bar's own edge, never a subtree, so there is
+   *  no descendant to translate alongside it. `can('resize', …)` does not actually refuse a deriving
+   *  parent here — that is the pre-existing #256 trade-off (`capability.ts`'s
+   *  `mayWriteTheDatesItSets`), not fixed here (T6/#481 review). */
   #draftedEntries(
     bars: readonly Entry[],
     capability: GestureCapability,

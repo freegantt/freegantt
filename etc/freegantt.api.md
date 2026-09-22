@@ -1451,11 +1451,13 @@ export class InvalidPlainTimeError extends FreeGanttError {
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(presetId: string, reason: string);
+    constructor(presetId: string, rule: 'tick-widths' | 'tick-step' | 'tick-increment', message: string, operation: string);
+    // (undocumented)
+    readonly operation: string;
     // (undocumented)
     readonly presetId: string;
     // (undocumented)
-    readonly reason: string;
+    readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment';
 }
 
 // @public
@@ -1529,9 +1531,6 @@ export interface KeyEventLike {
     // (undocumented)
     target: EventTarget | null;
 }
-
-// @public
-export const LINK_FLAG_KEYS: readonly ["inactive", "cycle"];
 
 // @public (undocumented)
 export type MenuEntry = MenuItem | {

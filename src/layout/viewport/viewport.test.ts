@@ -176,6 +176,42 @@ describe('Viewport', () => {
   });
 });
 
+// C3/#482 review: `viewport.preset` and `viewport.zoomPresets` both reach `resolvePreset` — an
+// invalid custom preset must name the door the caller actually wrote, not a door shared with the
+// other setter.
+describe('Viewport preset doors name themselves in InvalidPresetError (C3/#482)', () => {
+  const tooNarrow = {
+    id: 'custom-too-narrow',
+    tickUnit: 'hour' as const,
+    tickIncrement: 6,
+    headers: [{ unit: 'hour' as const, increment: 6, format: () => 'x' }],
+    preferredTickWidthPx: 24,
+    minTickWidthPx: 32,
+  };
+
+  it('an invalid gantt.preset assignment names "gantt.preset"', () => {
+    const viewport = new Viewport();
+    try {
+      viewport.preset = tooNarrow;
+      expect.unreachable('expected InvalidPresetError');
+    } catch (error) {
+      expect((error as { operation?: string }).operation).toBe('gantt.preset');
+      expect((error as Error).message).toMatch(/^gantt\.preset:/);
+    }
+  });
+
+  it('an invalid gantt.zoomPresets assignment names "gantt.zoomPresets", not "gantt.preset"', () => {
+    const viewport = new Viewport();
+    try {
+      viewport.zoomPresets = [tooNarrow];
+      expect.unreachable('expected InvalidPresetError');
+    } catch (error) {
+      expect((error as { operation?: string }).operation).toBe('gantt.zoomPresets');
+      expect((error as Error).message).toMatch(/^gantt\.zoomPresets:/);
+    }
+  });
+});
+
 describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
   it('delivers exactly one notification', () => {
     const { viewport, calls } = boundViewport();

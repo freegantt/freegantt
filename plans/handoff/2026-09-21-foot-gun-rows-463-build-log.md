@@ -4,9 +4,9 @@ Decisions the coordinator and the implementers made on their own while they clos
 
 ## PR 1 — #478, #480, #479
 
-No decision left open. The three issues settled every row's wording.
+**Escalated: a stale-worktree sweep deleted a live worktree, branch included.** The three issues settled every row's wording, but this hazard needed a fix outside the rows.
 
-**Worktree location.** `scripts/create-worktree.sh` puts a worktree at `.worktrees/<issue>-<slug>/`. A stale-worktree sweep from another agent deleted that `.worktrees/` checkout, branch included. PRs 1 and 2 ran in the coordinator's own worktree as a stop-gap. PR #484 then moved the script to `orca worktree create`, so PR 3 onward each run in their own Orca-managed worktree, as the workflow always intended.
+**Worktree location.** `scripts/create-worktree.sh` put a worktree at `.worktrees/<issue>-<slug>/`. A stale-worktree sweep from another agent deleted that `.worktrees/` checkout, branch included. PRs 1 and 2 ran in the coordinator's own worktree as a stop-gap. Issue #482 and PR #484 then rewrote the script so every worktree is Orca-managed, under `/home/pawel/orca/workspaces/<repo>/<name>`, never a `.worktrees/` sibling folder a sweep can delete. PR 3 onward each ran in their own Orca-managed worktree, as the workflow always intended.
 
 ## PR 2 — #477
 

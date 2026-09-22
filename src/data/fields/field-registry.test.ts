@@ -155,6 +155,34 @@ describe("#142/#470 a consumer may override a core Field's editable and rollUp, 
     );
   });
 
+  it("{ key: end, rollUp: none } is legal and merges onto core's declaration (regression)", () => {
+    const registry = new FieldRegistry({ fields: [{ key: 'end', rollUp: 'none' }] });
+    expect(registry.get('end')?.rollUp).toBe('none');
+    expect(registry.get('end')?.type).toBe('date');
+  });
+
+  // C1/#482: `rollUp` is on `CORE_FIELD_OVERRIDABLE_KEYS`, but `start`/`end` are the only core
+  // Fields that declare one of their own (`core-fields.ts`, `plans/01` §6). A core Field with no
+  // `rollUp` — `name`, `parentId` — has nothing for a consumer's `rollUp` to override, so the door
+  // refuses it the same as any other illegal key on that core Field.
+  it('a core-key override naming rollUp on `name` (no core rollUp) throws IllegalCoreFieldOverrideError', () => {
+    try {
+      new FieldRegistry({ fields: [{ key: 'name', rollUp: 'max' }] });
+      expect.unreachable('expected IllegalCoreFieldOverrideError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(IllegalCoreFieldOverrideError);
+      expect((error as IllegalCoreFieldOverrideError).illegalKey).toBe('rollUp');
+      expect((error as IllegalCoreFieldOverrideError).key).toBe('name');
+      expect((error as IllegalCoreFieldOverrideError).overridableKeys).toEqual(['editable']);
+    }
+  });
+
+  it('a core-key override naming rollUp on `parentId` (no core rollUp) throws IllegalCoreFieldOverrideError', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'parentId', rollUp: 'count' }] })).toThrow(
+      IllegalCoreFieldOverrideError,
+    );
+  });
+
   it('overriding rollUp on the same core key twice throws DuplicateFieldKeyError', () => {
     expect(
       () =>
@@ -167,11 +195,13 @@ describe("#142/#470 a consumer may override a core Field's editable and rollUp, 
     ).toThrow(DuplicateFieldKeyError);
   });
 
-  // `duration` is core's own compute Field (`core-fields.ts`) — it has no stored home, so an
-  // override cannot give it a rollUp or an editable answer either, the same as a fresh declaration.
-  it('overriding rollUp on the core compute Field duration throws ComputedFieldCannotBeWrittenError', () => {
+  // `duration` is core's own compute Field (`core-fields.ts`) — it has no stored home, and no
+  // rollUp of its own either. C1: `rollUp` is overridable only on a core Field that declares one
+  // (`start`/`end`), so the illegal-override door refuses `duration`'s rollUp before the
+  // compute-conflict check ever runs — the same refusal `name`/`parentId` get.
+  it('overriding rollUp on the core compute Field duration throws IllegalCoreFieldOverrideError', () => {
     expect(() => new FieldRegistry({ fields: [{ key: 'duration', rollUp: 'sum' }] })).toThrow(
-      ComputedFieldCannotBeWrittenError,
+      IllegalCoreFieldOverrideError,
     );
   });
 

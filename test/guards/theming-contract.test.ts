@@ -1,10 +1,10 @@
 // #261 / #334: `plans/02` §4 was once the only published home of the Customization ladder, and by
 // the time S5 audited it, it had been wrong for three slices with every gate green the whole time —
 // twelve live tokens missing, a stale colour palette, a wrong published default, a selector that
-// matched nothing. #221 question 1 moved the level-1 token reference to `docs/05-consumer-api.md`
+// matched nothing. #221 question 1 moved the level-1 token reference to `docs/10-styling-and-theming.md`
 // and corrected it once (`46db903`). Half 1 (`#261`) parses `src/view/styles.ts` for every `--fg-*`
 // token the sheet actually carries, and fails when that set (or a documented default) disagrees with
-// `docs/05-consumer-api.md`'s tables. Half 2 (`#334`) does the same for every `.fg-*` class: the
+// `docs/10-styling-and-theming.md`'s tables. Half 2 (`#334`) does the same for every `.fg-*` class: the
 // base sheet plus the two glyph classes `summary()` and `diamond()` ship in their own CSS.
 //
 // #383 closed the gap CLAUDE.md's stop rule named `--fg-grid-pane-width` as exactly (#157): every
@@ -12,7 +12,7 @@
 // default back with a bare `var(--fg-x)`. `--fg-row-height`, `--fg-grid-pane-width` and five more
 // still read, in TypeScript, through `pixel-property.ts` — their `:root` declaration exists only so a
 // consumer can see the default; `pixel-property.ts`'s own JS-side constant stays the guard against an
-// *invalid* authored value, a different job (docs/05-consumer-api.md, "Structural pixel tokens").
+// *invalid* authored value, a different job (docs/10-styling-and-theming.md, "Structural pixel tokens").
 // Each one's `:root` line interpolates that same TypeScript constant (`${DEFAULT_ROW_HEIGHT}px`) rather
 // than restating the number as a literal, so this guard checks it against the TypeScript file that
 // actually owns it, named per token below, instead of trying to parse the interpolation as a value.
@@ -27,7 +27,7 @@ const read = (rel: string): string => fs.readFileSync(path.join(root, rel), 'utf
 
 const styles = read('src/view/styles.ts');
 const variants = read('src/layout/bars/variants.ts');
-const doc = read('docs/05-consumer-api.md');
+const doc = read('docs/10-styling-and-theming.md');
 
 // ---------------------------------------------------------------------------------------------
 // Parsing src/view/styles.ts
@@ -230,7 +230,7 @@ function resolvePixelTokenDefault(token: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Parsing docs/05-consumer-api.md
+// Parsing docs/10-styling-and-theming.md
 // ---------------------------------------------------------------------------------------------
 
 /** The text between one `### Heading` and the next heading matching `stop` (exclusive on both
@@ -238,7 +238,9 @@ function resolvePixelTokenDefault(token: string): string {
 function section(heading: string, stop: RegExp): string {
   const start = doc.indexOf(heading);
   if (start === -1)
-    throw new Error(`theming-contract guard: heading "${heading}" not found in docs/05-consumer-api.md`);
+    throw new Error(
+      `theming-contract guard: heading "${heading}" not found in docs/10-styling-and-theming.md`,
+    );
   const rest = doc.slice(start + heading.length);
   const end = stop.exec(rest);
   return end ? rest.slice(0, end.index) : rest;
@@ -289,7 +291,7 @@ describe('the sheet and the published token tables name the same tokens', () => 
     );
     expect(
       undocumented,
-      `styles.ts defines these --fg-* tokens but docs/05-consumer-api.md's tables never mention them:\n${undocumented.join('\n')}`,
+      `styles.ts defines these --fg-* tokens but docs/10-styling-and-theming.md's tables never mention them:\n${undocumented.join('\n')}`,
     ).toEqual([]);
   });
 
@@ -297,7 +299,7 @@ describe('the sheet and the published token tables name the same tokens', () => 
     const phantom = [...documentedConsumerTokens].filter((token) => !sheetDefinedTokens.has(token));
     expect(
       phantom,
-      `docs/05-consumer-api.md documents these --fg-* tokens but styles.ts never defines them:\n${phantom.join('\n')}`,
+      `docs/10-styling-and-theming.md documents these --fg-* tokens but styles.ts never defines them:\n${phantom.join('\n')}`,
     ).toEqual([]);
   });
 
@@ -467,7 +469,7 @@ describe('the sheet and the published Parts tables name the same classes', () =>
     );
     expect(
       undocumented,
-      `styles.ts / shipped variant CSS define these .fg-* classes but docs/05-consumer-api.md's Parts tables never mention them:\n${undocumented.join('\n')}`,
+      `styles.ts / shipped variant CSS define these .fg-* classes but docs/10-styling-and-theming.md's Parts tables never mention them:\n${undocumented.join('\n')}`,
     ).toEqual([]);
   });
 
@@ -477,7 +479,7 @@ describe('the sheet and the published Parts tables name the same classes', () =>
     );
     expect(
       phantom,
-      `docs/05-consumer-api.md documents these .fg-* classes but neither styles.ts nor the shipped variant CSS defines them:\n${phantom.join('\n')}`,
+      `docs/10-styling-and-theming.md documents these .fg-* classes but neither styles.ts nor the shipped variant CSS defines them:\n${phantom.join('\n')}`,
     ).toEqual([]);
   });
 

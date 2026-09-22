@@ -13,57 +13,120 @@ fi
 issue="$1"
 slug="$2"
 base="${3:-origin/main}"
-name="${issue}-${slug}"
-branch="Pawel-IT/${name}"
 
-# Resolve the orca CLI executable for this session (.claude/skills/orca-cli). A managed session
-# exports ORCA_CLI_COMMAND; a dev checkout exposes ORCA_DEV_REPO_ROOT and orca-dev; a plain Linux
-# shell outside Orca's terminals falls back to orca-ide, never bare `orca` — that name can resolve
-# to the GNOME Orca screen reader and start speech on the user's machine.
+if ! [[ "$issue" =~ ^[0-9]+$ ]]; then
+  echo "error: <issue-number> must be a number, got '$issue'." >&2
+  echo "Usage: scripts/create-worktree.sh <issue-number> <slug> [base-branch]" >&2
+  exit 1
+fi
+
+name="${issue}-${slug}"
+
+# Resolve the orca CLI executable for this session. See the user-level orca-cli skill
+# (~/.claude/skills/orca-cli/SKILL.md) for the environment variables an Orca-managed session sets.
+# This ladder never falls back to bare `orca`: on a plain Linux machine that name can resolve to
+# the GNOME Orca screen reader instead of Orca's CLI, and starting speech on the user's machine is
+# a worse failure than stopping here with a clear error.
 if [ -n "${ORCA_CLI_COMMAND:-}" ]; then
   orca_cmd="$ORCA_CLI_COMMAND"
 elif [ -n "${ORCA_DEV_REPO_ROOT:-}" ] && command -v orca-dev > /dev/null 2>&1; then
   orca_cmd="orca-dev"
 elif command -v orca-ide > /dev/null 2>&1; then
   orca_cmd="orca-ide"
-elif command -v orca > /dev/null 2>&1; then
-  orca_cmd="orca"
 else
-  echo "error: no orca CLI executable found (checked ORCA_CLI_COMMAND, orca-dev, orca-ide, orca)" >&2
+  echo "error: no orca CLI executable found (checked ORCA_CLI_COMMAND, orca-dev, orca-ide)" >&2
   exit 1
 fi
 
+# Run an orca CLI subcommand that returns a JSON envelope, and stop with the CLI's own error on
+# any failure. Orca prints its error envelope on stdout (not stderr) and exits 1, so a plain
+# `set -e` command substitution loses the message; this wraps both failure shapes — a nonzero
+# exit and an `"ok": false` envelope — and prints the real cause either way.
+run_orca() {
+  local json code message
+  if ! json="$("$orca_cmd" "$@")"; then
+    echo "error: $orca_cmd $* failed:" >&2
+    echo "$json" >&2
+    exit 1
+  fi
+  if node -e '
+    const data = JSON.parse(process.argv[1] || "{}");
+    process.exit(data.ok === false ? 0 : 1);
+  ' "$json"; then
+    code="$(node -e '
+      const data = JSON.parse(process.argv[1] || "{}");
+      process.stdout.write(data.error?.code ?? "unknown_error");
+    ' "$json")"
+    message="$(node -e '
+      const data = JSON.parse(process.argv[1] || "{}");
+      process.stdout.write(data.error?.message ?? "");
+    ' "$json")"
+    echo "error: $orca_cmd $* failed ($code): $message" >&2
+    exit 1
+  fi
+  printf '%s' "$json"
+}
+
+# Installs dependencies for a worktree at <path>, unless Orca's own setup hook for this repo
+# (`hookSettings.scripts.setup`) already ran `pnpm install` there.
+install_dependencies() {
+  local path="$1"
+  if [ -d "$path/node_modules" ]; then
+    echo "Dependencies already installed by Orca's setup hook."
+  else
+    echo "Installing dependencies in $path..."
+    (cd "$path" && pnpm install)
+  fi
+}
+
 # Read the repo id from the running checkout. This works from the main checkout and from a linked
 # worktree alike, so the script never hard-codes a repo id.
-current_json="$("$orca_cmd" worktree current --json 2> /dev/null || true)"
+current_json="$(run_orca worktree current --json)"
 repo_id="$(node -e '
   const data = JSON.parse(process.argv[1] || "{}");
   process.stdout.write(data.result?.worktree?.repoId ?? "");
 ' "$current_json")"
 
 if [ -z "$repo_id" ]; then
-  echo "error: could not resolve the Orca repo id. Run this from an Orca-managed checkout of this repo." >&2
+  echo "error: could not resolve the Orca repo id from 'orca worktree current --json'." >&2
   exit 1
 fi
 
 # A second call with the same issue and slug resumes the existing worktree instead of failing.
-list_json="$("$orca_cmd" worktree list --repo "id:$repo_id" --json)"
+# Match on the worktree's own name (displayName), not on the branch checked out inside it — a
+# caller can `git switch` inside a worktree, and the live HEAD branch is not the worktree's
+# identity (#487 review).
+list_json="$(run_orca worktree list --repo "id:$repo_id" --json)"
 existing_path="$(node -e '
   const data = JSON.parse(process.argv[1]);
-  const wantBranch = "refs/heads/" + process.argv[2];
-  const hit = (data.result?.worktrees ?? []).find((w) => w.branch === wantBranch);
+  const hit = (data.result?.worktrees ?? []).find((w) => w.displayName === process.argv[2]);
   process.stdout.write(hit?.git?.path ?? hit?.path ?? "");
-' "$list_json" "$branch")"
+' "$list_json" "$name")"
+existing_branch="$(node -e '
+  const data = JSON.parse(process.argv[1]);
+  const hit = (data.result?.worktrees ?? []).find((w) => w.displayName === process.argv[2]);
+  const ref = hit?.git?.branch ?? "";
+  process.stdout.write(ref.replace(/^refs\/heads\//, ""));
+' "$list_json" "$name")"
 
 if [ -n "$existing_path" ]; then
   echo "Worktree for $name already exists — resuming it."
   echo
-  echo "Worktree ready: $existing_path (branch $branch)"
+
+  if [ ! -d "$existing_path" ]; then
+    echo "error: Orca lists worktree $name at $existing_path, but that path does not exist on disk." >&2
+    exit 1
+  fi
+
+  install_dependencies "$existing_path"
+
+  echo
+  echo "Worktree ready: $existing_path (branch $existing_branch)"
   exit 0
 fi
 
 echo "Creating worktree $name..."
-create_json="$("$orca_cmd" worktree create \
+create_json="$(run_orca worktree create \
   --repo "id:$repo_id" \
   --name "$name" \
   --issue "$issue" \
@@ -87,14 +150,12 @@ if [ -z "$path" ]; then
   exit 1
 fi
 
-# The repo's Orca setup hook already runs `pnpm install` for a new worktree (`hookSettings.scripts.setup`).
-# Install here only when that did not happen, so a working checkout never waits on a second install.
-if [ -d "$path/node_modules" ]; then
-  echo "Dependencies already installed by Orca's setup hook."
-else
-  echo "Installing dependencies in $path..."
-  (cd "$path" && pnpm install)
+if [ ! -d "$path" ]; then
+  echo "error: orca worktree create returned path $path, but it does not exist on disk." >&2
+  exit 1
 fi
+
+install_dependencies "$path"
 
 echo
 echo "Worktree ready: $path (branch $created_branch)"

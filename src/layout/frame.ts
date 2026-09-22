@@ -210,7 +210,7 @@ function fixedBoxX(x: number, end: number, anchor: BarAnchor, width: number): nu
   }
 }
 
-/** Every `BarFlags` key, finest source of truth for `flagTokens` (S1.10, D-S1.10-2) — a key lives
+/** Every `BarFlags` key, the one runtime source of truth for `flagTokens` (S1.10, D-S1.10-2) — a key lives
  *  here once, and `BarFlags` and the `docs/05` selector table both derive from, or are checked
  *  against, this list (#475). */
 export const BAR_FLAG_KEYS = ['conflict', 'cycle'] as const;
