@@ -198,7 +198,7 @@ plugins claim the same key.
 | `fields.registerType(name, type)` | type name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
 | `fields.registerAggregator(name, fn)` | aggregator name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
-| `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it (ADR 0020) | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
+| `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 
 `store.read<T>(pluginId)` is not a registration. It gives one plugin

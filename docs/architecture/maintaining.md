@@ -34,6 +34,7 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
 | If you change… | Update |
 | --- | --- |
 | any new or deleted file in `src/` | [File inventory](./files.md), and [Layers](./layers.md)'s layer map if the layer changed shape |
+| enough of `src/` that a layer's size moved | [Module map diagrams](./diagram.md) — three diagrams state a per-directory `N lines · M files`, and nothing guards them. Re-measure with `find src/<dir> -name '*.ts' ! -name '*.test.ts'`, and set all three to the same number |
 | `.dependency-cruiser.cjs` or `eslint/rules/` | [Layers](./layers.md) — the import table and the lint-rule note |
 | `view/gantt-shell.ts` constructor | [Lifecycle](./lifecycle.md) (the construction diagram and the "why the order" table), and [Class map](./classes.md) |
 | `view/gantt-shell.ts` `render()` | [Lifecycle](./lifecycle.md) (the render diagram) — and *re-measure* the pass count (see the recipe below) |
@@ -62,9 +63,10 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
    write the number down. If you cannot prove it, write "appears to" and say why you could not.
 3. **Delete what the code no longer does.** A sentence that stopped being true is not history, it
    is a wrong answer with a confident tone. Remove it in the same commit that makes it wrong.
-4. **Vocabulary is `CONTEXT.md`'s.** Entry, not Task. Dataset, not its earlier name. Item, not bar
-   (a bar is what an Item renders). Row, not line. Field is what a value *is*; a grid column is
-   where a Gantt *shows* it. No scheduling framing in core descriptions — a shift roster and
+4. **Vocabulary is `CONTEXT.md`'s.** Entry, not Task. Dataset, not its earlier name. Bar, not Item
+   — Item is retired, so read every older "Item" as "Bar". A row that draws more than one
+   Bar draws Segments, and a Segment is a reading of a Bar, never a type. Row, not line. Field is
+   what a value *is*; a grid column is where a Gantt *shows* it. No scheduling framing in core descriptions — a shift roster and
    units-sold-per-week are as much the intended use as a construction plan.
 5. **Four guards scan this folder.** `scripts/check-vendor-names.mjs` fails on a vendor Gantt
    product name, and `test/guards/retired-words.test.ts` fails on a retired word — that file holds

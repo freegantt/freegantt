@@ -355,9 +355,26 @@ left of its cell until the cell leaves the pane.
 
 ## Today line
 
-`todayLine` defaults to `true`. `computeFrame` emits a `TodayLine` decoration only when `now()`
-falls inside `scale.range`. The DOM backend reuses one `.fg-today-line` element and hides it when
-the decoration is absent.
+The today line is a Date line, not a type of its own. `resolveDateLines`
+(`layout/date-line.ts`) emits one `DateLineDecoration` carrying `today: true`, alongside any line a
+consumer authored in `dateLines`, and only when the instant falls inside `scale.range`. Paint keys
+the wrapper off that flag: `render/dom/date-line.ts` writes `data-flag="today"` on the
+`.fg-date-line` stroke and on its `.fg-date-line-label` chip, so the stroke a consumer authored and
+the today stroke are one element type with one token, `--fg-date-line-color`.
+
+`todayLine` defaults to `true`, which reads the clock. `false` omits the line, and an `Instant`
+pins it there with no clock read at all — which is how a test freezes it.
+
+**The line stays current on its own.** A page left open past a tick boundary used to show a
+stale reading, because nothing asked for a frame at the boundary. `GanttShell` now arms one
+`setTimeout` for the finest header band's next tick boundary after every frame painted with
+`todayLine: true`, and asks `FrameScheduler` to repaint when it fires. It re-arms every frame, so a
+preset change moves the boundary with it, and it is cleared when `todayLine` leaves `true` and on
+`destroy()`. `view/` may not read the clock or do `Instant` arithmetic (I1, I10), so the delay
+arrives through the `GanttShellWiring.nextTickBoundaryDelayMs` port, composed in `api/gantt.ts` from
+`time/`'s `nextTickBoundary()` and `now()`. The delay is clamped to `setTimeout`'s 32-bit ceiling
+(~24.8 days), because a year preset's boundary sits past it and an unclamped delay fires almost
+immediately instead.
 
 The sample fixture starts on 2026-09-01 so unit tests stay deterministic. If "today" is before
 that start (or after the last entry under `range: 'fitDataset'`), the line is correctly missing.
@@ -365,7 +382,8 @@ That is not a paint bug. Use the multi-year dataset on
 [`zoom.html`](https://github.com/Pawel-IT/FreeGantt/blob/main/harness/zoom.html) when you want the
 line inside the range.
 
-*Derived from `layout/frame.ts` decorations, `render/dom/index.ts`, `fixtures/sample-dataset.ts`.*
+*Derived from `layout/date-line.ts`, `render/dom/date-line.ts`, `view/gantt-shell.ts`,
+`view/frame-settings.ts`, `fixtures/sample-dataset.ts`.*
 
 ## CSS the library owns
 
@@ -376,7 +394,7 @@ The base stylesheet in `view/styles.ts` now owns tick overflow. The harness page
 | --- | --- |
 | `.fg-header` | `position: sticky; top: 0`. Band count × `--fg-band-height` sets height. Rows scroll under the header. |
 | `.fg-tick` | `box-sizing: border-box`, `padding: 0 4px`, `overflow: hidden`, `text-overflow: ellipsis`, left hairline. A label that is still too wide clips instead of covering its neighbour. |
-| `.fg-today-line` | 1 px wide, `--fg-today-line-color`, `pointer-events: none`. |
+| `.fg-date-line` | 1 px wide, `--fg-date-line-color`, `pointer-events: none`. The today line is this element with `data-flag='today'`. |
 | `.fg-timeline-pane` | Native scroller. `min-width: 0` so a zoom-out that hits the density floor can shrink the pane and scroll content instead of stretching the shell. |
 
 The module and class map still covers construction and the notification machine. This page covers

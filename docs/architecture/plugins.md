@@ -20,7 +20,7 @@ Dataset then runs its `view` half once, each with its own context.
 | Installed through | `DatasetOptions.plugins`, or — chrome-only — `GanttOptions.plugins`, `gantt.installPlugin`, `gantt.plugins =` | `DatasetOptions.plugins` — read-only after construction |
 | When it runs | Once, after the Gantt mounts | Once, while the Dataset constructs |
 | Can it be added or removed later? | A chrome-only plugin, yes — `installPlugin`/`uninstallPlugin`, live, no remount | No — a Field a plugin declares must exist before the first Rollup, so a different plugin set means a new `Dataset` |
-| What it registers into | Renderers, decorations, item producers, kind defaults, grid columns, commands, keybindings (§3 table) | Fields, field types, aggregators, the mutation extension hook, its own store |
+| What it registers into | Renderers, decorations, variants, grid columns, commands, keybindings (§3 table) | Fields, field types, aggregators, the mutation extension hook, its own store |
 | Runtime that installs it | `PluginRuntime<TContext>` | `installDatasetPlugins()` |
 
 Setup order for either half resolves from `requires` alone — `[a, b]` and `[b, a]` install
@@ -327,18 +327,18 @@ in reverse, then rethrows — the previous installed set, dropped plugins includ
 </figure>
 </div>
 
-### The five seams a Gantt plugin registers into
+### The four seams a Gantt plugin registers into
 
-`ctx.view`/`ctx.layout` carry five distinct registration points, one module
+`ctx.view`/`ctx.variants` carry four registration points, one module
 (`view/plugin-registrations.ts`), each with the one thing that has to run again after a
-registration changes. A sixth capability — `ctx.view.registerGridColumn` — shares the shape but
-keeps its own refresh in `ColumnChrome`, not here.
+registration changes. Three of the four refresh inside that module; `ctx.view.registerGridColumn`
+shares the shape but keeps its own refresh in `ColumnChrome`.
 
 | Seam | Call | Who wins when two plugins claim it | What re-runs |
 | --- | --- | --- | --- |
-| renderer | `ctx.view.registerRenderer(point, fn)` | One slot per point (`cell`/`header`/`tooltip`); `bar` holds one slot *per kind*, so two plugins defining different kinds both install | Next frame repaints (`requestFrame`) |
+| renderer | `ctx.view.registerRenderer(point, fn)` | One slot per point — `bar`, `gridCell`, `header`, `tooltip` — and a second claim throws `RendererAlreadyRegisteredError`, naming the point and both plugin ids. `bar` used to hold one slot per variant name; that moved to `ctx.variants.add`, so `bar` is an ordinary point again | Next frame repaints (`requestFrame`) |
 | decoration | `ctx.view.registerDecoration(layer, fn)` | Every registration paints — the only seam where more than one wins at once | Held provider list drops; next frame repaints |
-| variant | `ctx.variants.add(variant)` | Newest registration for that `name` wins  | Per-row Item cache invalidates, capabilities re-resolve, next frame repaints |
+| variant | `ctx.variants.add(variant)` | Newest registration for that `name` wins | Per-row Bar cache invalidates, capabilities re-resolve, variant styles refresh, next frame repaints |
 | grid column | `ctx.view.registerGridColumn(column)` | A duplicate `field` the consumer's own `gridColumns` already names is dropped — config beats a plugin | Column chrome rebinds; a stale field's baked-in copy is stripped first |
 
 Every one of these returns a `Disposer` that removes exactly its own registration, and every one

@@ -27,7 +27,7 @@ slug: /
 
 ## 1. Principle: a rule that isn't executable is a wish
 
-The standard here is: *"Every invariant in `01` §11 must name the CI job that enforces it; an invariant without a job is a TODO, tracked in the table itself."* This folder extends that standard from the 14 numbered invariants to **every hard rule in `CLAUDE.md`**, and adds three commitments:
+The standard here is: *"Every invariant must name the CI job that enforces it; an invariant without a job is a TODO, tracked in the table itself."* This folder extends that standard from the 14 numbered invariants to **every hard rule in `CLAUDE.md`**, and adds three commitments:
 
 1. **Every guard is itself tested.** A lint rule with no failing fixture is indistinguishable from a lint rule that silently matches nothing. This is required for the layer boundary ("the red test — prove the gun is loaded"); we generalize it to all guards.
 2. **Guards fail at the earliest layer that can catch them.** A violation caught by the type system costs seconds; by an editor lint, a minute; by CI, ten minutes; by review, a day; by a user, a release. Push every rule down the stack as far as it will go.
@@ -61,7 +61,7 @@ L4 is a *convenience* layer: it runs a fast subset of L2/L3 early, for the agent
 | Scheduling | Scheduling rules | recursion lint rule + 5k fixture + fast-check purity property |
 | Rendering / view | Reconciler scope and rules | 3 custom lint rules + reconciler unit tests |
 | Entry kinds | No `if (kind === …)` outside seams | custom lint rule with seam allowlist |
-| Invariants | All rules | the matrix in `01-invariant-guard-matrix.md` |
+| Invariants | All rules | the matrix in `01-invariant-guard-matrix.md`, which `matrix-coverage.test.ts` holds to the invariant list |
 | API surface | Naming pairs, no "not implemented", JSON contract | event-pair test + api-report diff + custom lint rule |
 | Dependencies | Exactly one runtime dep | package-shape test + import allowlist |
 | `CLAUDE.md` | Vendor-name ban, workflow rules | repo-wide grep check |

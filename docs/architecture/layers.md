@@ -69,7 +69,7 @@ context menu, inline editing
 <div class="box pure">
 <div class="name">layout/</div>
 <div class="sub">
-<code>computeFrame</code> · <code>FrameLayout</code> · rows/items ·
+<code>computeFrame</code> · <code>FrameLayout</code> · rows/bars ·
 <code>TimeScaleModel</code> · <code>ScrollAxis</code>
 </div>
 </div>

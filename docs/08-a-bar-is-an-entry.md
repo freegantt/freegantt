@@ -495,7 +495,7 @@ aria-label="A five-stage pipeline for one write: entries.update, runTransaction 
 <text x="196" y="176" class="mono" font-size="11.5" fill="var(--ink)">{ store: 'entries', id: 'd2',    field: 'hours', from: 4,  to: 6  }</text>
 <text x="700" y="176" class="box-sub" font-size="10" fill="var(--muted)">← the bar's own write</text>
 <text x="196" y="200" class="mono" font-size="11.5" fill="var(--ink)">{ store: 'entries', id: 'req-1', field: 'hours', from: 12, to: 14 }</text>
-<text x="700" y="200" class="box-sub" font-size="10" fill="var(--muted)">← the Rollup's write onto the row (ADR 0013)</text>
+<text x="700" y="200" class="box-sub" font-size="10" fill="var(--muted)">← the Rollup's write onto the row</text>
 <text x="196" y="228" class="box-sub" font-size="10.5" fill="var(--muted)">One store. One address shape. One undo step covering both rows.</text>
 <rect x="24" y="266" width="1188" height="56" rx="7" fill="var(--new-bg)" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="5 4" />
 <text x="618" y="289" text-anchor="middle" class="box-sub" font-size="11" fill="var(--ink)">A date write is the same path: the bar's own start/end change, and the Rollup rewrites the row's envelope from its children.</text>

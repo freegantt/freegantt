@@ -8,17 +8,18 @@ Twenty-three rules enforce the spec. The count has grown since the original nine
 
 ```
 eslint/
-  plugin.js            // the 9 custom rules, exported as { rules: { … } }
-  rules/<rule-id>.js
-  rules/<rule-id>.test.js   // RuleTester: ≥2 valid, ≥2 invalid per rule (mandatory, see 04-hooks-and-ci.md)
-eslint.config.js       // flat config: layered overrides per directory
+  rules/index.cjs           // the 14 shipped custom rules, exported as { rules: { … } }
+  rules/<rule-id>.cjs
+  rules/<rule-id>.test.cjs  // RuleTester: ≥2 valid, ≥2 invalid per rule (mandatory, see 04-hooks-and-ci.md)
+  rules/fixtures/           // violation fixtures the red test reads
+eslint.config.js            // flat config: layered overrides per directory
 ```
 
 Flat config, plugin inlined by object (no publishing, no `eslint-plugin-` package):
 
 ```js
 // eslint.config.js
-import freegantt from './eslint/plugin.js';
+import freegantt from './eslint/rules/index.cjs';
 
 const PURE = ['src/model/**', 'src/time/**', 'src/data/**', 'src/scheduling/**', 'src/layout/**'];
 
@@ -223,7 +224,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 **Exempt:** `pane-layout.ts` and `pane-size-attachment.ts`, by filename. Both legitimately read `clientWidth`/`clientHeight` to measure the *pane's own box* (CONTEXT.md's "Pane size") — a different concept from *row* height. Banning that would break the synchronous first measurement `PaneLayout.measureTimelinePane()` needs.
 
-**Residue:** this rule does not catch an assignment to `style.height` that is not sourced from a `frame.rows[i].height` expression — too fragile to express syntactically, the same AUTO-PARTIAL shape as `no-time-to-pixel-math` (§3.9). Mitigated the same way: the layer graph makes a laundered value useless (only `layout/` legitimately owns row height), so the residue is small and review-visible.
+**Residue:** this rule does not catch an assignment to `style.height` that is not sourced from a `frame.rows[i].height` expression — too fragile to express syntactically, the same AUTO-PARTIAL shape as `no-time-to-pixel-math` (§3.2). Mitigated the same way: the layer graph makes a laundered value useless (only `layout/` legitimately owns row height), so the residue is small and review-visible.
 
 **Message:** `Both panes position rows absolutely from frame.rows. Neither measures nor computes a height. (plans/01 §4, I9)`
 
@@ -235,7 +236,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 **Allowed:** `transform`/`width`/`height` — the three properties that carry a live per-frame or per-instance number (row/bar position, grid width, header spacer height). Everything structural (`display`, `overflow`, `position`, `flexDirection`, `cursor`, colors, …) moves to the base stylesheet `ensureBaseStyles` injects (`src/view/styles.ts`).
 
-**Scope:** expected to widen to `src/interaction/**` once gesture previews need the same per-frame allowance (§3.3) — not a gap today, just not yet applicable.
+**Scope:** `src/render/**` + `src/view/**` today (`eslint.config.js`). Expected to widen to `src/interaction/**` once gesture previews need the same per-frame allowance — not a gap today, just not yet applicable.
 
 **Message:** `Structure moves to the base stylesheet; inline styles are for live per-frame/per-instance geometry only (transform/width/height). (plans/s1.10-theming-and-a11y/README.md D-S1.10-6)`
 
@@ -261,8 +262,9 @@ A rule lands with the code it can govern. A rule with no code to govern has no f
 works, so it waits for that code.
 
 **Active:** B1, B2, B4, B5, B6, B7, B8, B9, B10, B11, 3.1, 3.2, 3.3a, 3.4, 3.6, 3.7, 3.8, 3.10,
-3.11, 3.12, and the dependency-cruiser rules `rollup-is-removable`, `autogroup-is-removable` and
-`layout-boundary` (proved by `scripts/guard-red-test.mjs`).
+3.11, 3.12, and the dependency-cruiser rules `rollup-is-removable` and `layout-boundary` (proved by `scripts/guard-red-test.mjs`).
+
+`autogroup-is-removable` retired on 2026-09-11 — see §2's table.
 
 **Not yet active,** because the code each one governs does not exist yet: B3 (no production id
 minter needs it — see `01-invariant-guard-matrix.md`'s I4 row), 3.3 (its four seam files),
