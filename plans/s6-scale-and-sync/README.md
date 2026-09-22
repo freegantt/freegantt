@@ -20,7 +20,7 @@
 | **R2** | 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank | Harness seeds **5,000** and the row says 10,000. Ruled 2026-09-15: **the fixture goes to 10k.** See §5.2. | **#406** (fixture), #95 (measurement) |
 | **R3** | Linked-scroll demo works with both axes shared, and with x shared while y stays private | **Done — ticked in `plans/03` §S6.** Shipped as D-S6-1 (#405): `ScrollModel` retired, `ScrollAxis` is the shared unit. The paragraph below is the reasoning that got there. `[S1-A4]` proves both-axis sharing. The second shape is a build, and the shape is settled: one **scroll axis** becomes the shared unit, so a caller shares x, y, both or neither — **D-S6-1**, §5.3. Shared y alone is representable and unadvertised. | **#405** |
 | **R4** | 100 mount/destroy cycles leak no nodes, listeners or observables | **Done, 2026-09-15.** Counted in `test/dom/leak-cycles.test.ts` (100 cycles, three shapes, plus the shared-model binding check) and in `e2e/mount-destroy.spec.ts` (Chromium nodes, listeners and heap). `GanttShell.destroy()` is one `disposeAll()`. | **#403** |
-| **R5** | `npm pack` output audited: internals unreachable, types complete, bundle within budget | Not started, and now blocking. A `github:` install lands with no `dist/` at all. | **#400** |
+| **R5** | `npm pack` output audited: internals unreachable, types complete, bundle within budget | **Internals unreachable and types complete are done.** `prepack` builds the library, so a packed tarball and a `github:` install both carry `dist/`; `scripts/check-pack-install.mjs` proves the install from outside the repository. Bundle within budget stays open — #342. | **#400** |
 
 ### R1 — budgets from a measured spike
 
@@ -90,7 +90,7 @@ Written as hygiene. It is now the blocker: `version` is `0.0.0`, `dist/` is giti
 
 | Issue | Row | Note |
 |---|---|---|
-| **#400** | R5 | Blocking. The first consumer cannot install the library. |
+| **#400** | R5 | Unreachable internals and complete types are done — `prepack` builds the tarball, and `check-pack-install.mjs` proves the install. Bundle within budget stays open, on #342. |
 | **#403** | R4 | The shared-model case is the one that matters. |
 | **#405** | R3 | Per-axis sharing. **The design is settled — D-S6-1, §5.3**, which answers D-S1.5-3's two rejections rather than repeating them. `needs grill` is discharged; the issue is a build. |
 | **#406** | R2 | Raise the fixture to 10,000. Mechanical, and it gates every R2 measurement. |
