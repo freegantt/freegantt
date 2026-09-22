@@ -325,7 +325,7 @@ Every level-1 property the library reads as a length goes through one reader (`r
 
 **The complete level-2 Parts list — every `.fg-*` class, public or internal — moved to the same file (issue #334).** Level 2 stays documented here as a level of the ladder and as the per-slice notes below; the class-by-class list drifts the same way the token table did, so it lives next to it.
 
-**`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BarFlags`'/`LinkFlags`' own keys, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7).
+**`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BarFlags`'/`LinkFlags`' own keys, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7). The selector-by-selector list, and what sets each one, is in [`docs/05-consumer-api.md`](../docs/05-consumer-api.md) (#475), guarded so a new key cannot ship undocumented.
 
 S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-cursor-line-label`. S3 State attribute: `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and `data-movable` (grab cursor).
 

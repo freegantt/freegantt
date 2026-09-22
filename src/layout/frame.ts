@@ -210,15 +210,17 @@ function fixedBoxX(x: number, end: number, anchor: BarAnchor, width: number): nu
   }
 }
 
-export interface BarFlags {
-  conflict?: boolean;
-  cycle?: boolean;
-}
+/** Every `BarFlags` key, finest source of truth for `flagTokens` (S1.10, D-S1.10-2) — a key lives
+ *  here once, and `BarFlags` and the `docs/05` selector table both derive from, or are checked
+ *  against, this list (#475). */
+export const BAR_FLAG_KEYS = ['conflict', 'cycle'] as const;
 
-export interface LinkFlags {
-  inactive?: boolean;
-  cycle?: boolean;
-}
+export type BarFlags = Partial<Record<(typeof BAR_FLAG_KEYS)[number], boolean>>;
+
+/** Every `LinkFlags` key — the link-side twin of `BAR_FLAG_KEYS` (#475). */
+export const LINK_FLAG_KEYS = ['inactive', 'cycle'] as const;
+
+export type LinkFlags = Partial<Record<(typeof LINK_FLAG_KEYS)[number], boolean>>;
 
 export interface FrameBar {
   id: BarId;

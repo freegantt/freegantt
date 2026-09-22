@@ -30,6 +30,7 @@ import {
   entryIdOfBar,
   barIdFromDataset,
   rowIdFromDataset,
+  BAR_FLAG_KEYS,
 } from '../../layout/index.js';
 import { attachDateLines } from './date-line.js';
 import { attachTickLines } from './tick-lines.js';
@@ -291,10 +292,11 @@ type HandleGeom = Pick<FrameBar, 'x' | 'y' | 'width' | 'height'>;
 type BandGeom = Record<string, never>;
 const EMPTY_BAND_GEOM: BandGeom = Object.freeze({});
 
-/** `data-flag` is generated from `BarFlags`' own keys, not hand-mapped (S1.10, D-S1.10-2) — adding a
- * new `BarFlags` key needs no edit here (U7). */
+/** `data-flag` is generated from `BAR_FLAG_KEYS` (S1.10, D-S1.10-2) — adding a new key to that list
+ * needs no edit here (U7). Iterating the list, not `Object.keys(flags)`, also fixes the token
+ * order and drops a stray key the type does not carry. */
 function flagTokens(flags: BarFlags): string {
-  return (Object.keys(flags) as (keyof BarFlags)[]).filter((k) => flags[k]).join(' ');
+  return BAR_FLAG_KEYS.filter((k) => flags[k]).join(' ');
 }
 
 function cellItemsFor(

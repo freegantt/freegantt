@@ -243,7 +243,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  it('renders a third, hypothetical BarFlags key with no render/dom change (drives the generated path, U7)', () => {
+  it('ignores a flag key outside BAR_FLAG_KEYS, forced past the type onto flags (closed list, #475)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
     backend.mount({ grid, timeline });
@@ -258,11 +258,14 @@ describe('render/dom backend', () => {
       datasetRevision: 0,
       variants: variantRegistry,
     });
+    // `BAR_FLAG_KEYS` (layout/frame.ts) is the closed set: `flagTokens` iterates that list, not
+    // `Object.keys(flags)`, so a key past the type — a bad plugin write, say — never reaches the
+    // DOM even when forced onto the object like this.
     (frame.bars[0]!.flags as Record<string, boolean>)['late'] = true;
     backend.sync(frame);
 
     const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
-    expect(bar.dataset['flag']).toBe('late');
+    expect(bar.dataset['flag']).toBe('');
     backend.destroy();
   });
 
