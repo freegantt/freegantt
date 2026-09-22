@@ -104,33 +104,15 @@ const log = document.querySelector<HTMLDivElement>('#log')!;
 
 let filterTeam: 'alpha' | 'beta' | null = null;
 
-function buildRowSource(): RowSource {
-  const rowsMode = rowsModeSelect.value;
-  const sortField = sortFieldSelect.value;
-  const shared = {
-    ...(filterTeam !== null && rowsMode !== 'grouped'
-      ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
-      : {}),
-    ...(sortField !== 'none' && rowsMode !== 'grouped'
-      ? { sort: { field: sortField as 'start' | 'cost' | 'name' } }
-      : {}),
-  };
-
+// #429: the fresh source for a `source` switch (tree, flat or grouped). A fresh source carries no
+// filter and no sort. It is also the one literal the Gantt reads at first mount.
+function freshRowSource(rowsMode: string): RowSource {
   if (rowsMode === 'grouped') {
-    return {
-      source: 'group',
-      groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned'),
-      ...shared,
-    };
+    return { source: 'group', groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned') };
   }
   // #421 C7: "Framing crew" draws its day children as segments on every entries-sourced
   // arrangement, flat or tree alike — a segment rule is orthogonal to nesting.
-  return {
-    source: 'entries',
-    tree: rowsMode !== 'flat',
-    childrenAsSegments: { showDaysOnRow: true },
-    ...shared,
-  };
+  return { source: 'entries', tree: rowsMode !== 'flat', childrenAsSegments: { showDaysOnRow: true } };
 }
 
 const gantt = new Gantt<HierarchyProps>({
@@ -139,7 +121,7 @@ const gantt = new Gantt<HierarchyProps>({
   gridColumns: GRID_COLUMNS,
   // #157: the pane sits on its columns' own right edge, and keeps sitting there as they change.
   gridWidth: 'fitColumns',
-  rowSource: buildRowSource(),
+  rowSource: freshRowSource(rowsModeSelect.value),
   range: 'fitDataset',
   preset: 'weekAndMonth',
   plugins: [inlineEditing()],
@@ -164,21 +146,49 @@ function renderSelection(): void {
   selectionReadout.textContent = ids.length === 0 ? 'No selection' : `Selected: ${ids.join(', ')}`;
 }
 
-function syncFilterSortControls(): void {
-  const grouped = rowsModeSelect.value === 'grouped';
+// #429: the page holds no second copy of an answer `gantt.rowSource` already gives. A filter or
+// sort change reads it back and spreads its own key (`docs/07-row-source-updates.md`).
+// `filterTeam` stays local: the getter hands back the filter closure, not the team name inside it.
+function applyRowsMode(): void {
+  filterTeam = null;
+  gantt.rowSource = freshRowSource(rowsModeSelect.value);
+  syncRowSourceControls();
+}
+
+function applyFilter(): void {
+  const current = gantt.rowSource;
+  if (current.source !== 'entries') return;
+  gantt.rowSource = {
+    ...current,
+    filter: filterTeam === null ? undefined : (entry: Entry) => entry.read('team') === filterTeam,
+  };
+  syncRowSourceControls();
+}
+
+function applySort(): void {
+  const current = gantt.rowSource;
+  if (current.source !== 'entries') return;
+  const sortField = sortFieldSelect.value;
+  gantt.rowSource = {
+    ...current,
+    sort: sortField === 'none' ? undefined : { field: sortField as 'start' | 'cost' | 'name' },
+  };
+  syncRowSourceControls();
+}
+
+// UI state that mirrors the row source reads it back from `gantt.rowSource`, not from a local copy.
+function syncRowSourceControls(): void {
+  const current = gantt.rowSource;
+  const grouped = current.source === 'group';
   filterTeamBtn.disabled = grouped;
   sortFieldSelect.disabled = grouped;
   crewDaysBtn.disabled = grouped;
   filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
-}
-
-function applyRowSource(): void {
-  gantt.rowSource = buildRowSource();
-  syncFilterSortControls();
+  sortFieldSelect.value = current.source === 'entries' ? (current.sort?.field ?? 'none') : 'none';
 }
 
 // #421 C7: nothing here decides the row shape directly — `showDaysOnRow` does, and
-// `childrenAsSegments` reads it (`buildRowSource`, above). This button writes the one Field the row
+// `childrenAsSegments` reads it (`freshRowSource`, above). This button writes the one Field the row
 // source already matches on.
 function syncCrewDaysLabel(): void {
   const drawsSegments = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
@@ -201,17 +211,17 @@ gantt.on('beforeEntryEdit', ({ entry }) => {
   return undefined;
 });
 
-applyRowSource();
+syncRowSourceControls();
 renderSelection();
 syncCrewDaysLabel();
 
-rowsModeSelect.addEventListener('change', () => applyRowSource());
-sortFieldSelect.addEventListener('change', () => applyRowSource());
+rowsModeSelect.addEventListener('change', () => applyRowsMode());
+sortFieldSelect.addEventListener('change', () => applySort());
 
 filterTeamBtn.addEventListener('click', () => {
   if (rowsModeSelect.value === 'grouped') return;
   filterTeam = filterTeam === null ? 'alpha' : filterTeam === 'alpha' ? 'beta' : null;
-  applyRowSource();
+  applyFilter();
 });
 
 reparentBtn.addEventListener('click', () => {

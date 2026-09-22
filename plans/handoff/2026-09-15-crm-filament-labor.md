@@ -37,19 +37,27 @@ open (blue), partial (grey + meter), fully booked (green), over-allocated (red, 
 
 Most of this maps onto what you already ship, and maps well:
 
-| Ours | Yours | Note |
-|---|---|---|
-| `LaborRequest` | `Entry` | |
-| `LaborRequestBlock` | `Segment` | S4's segmented entry, exactly |
-| block multi-select → assign | `selectedSegmentIds` + `selectionChange` | ADR 0010 is our feature verbatim |
-| project / position nesting, collapse | tree `rowSource`, `collapsed` | |
-| two panes scrolling as one | shared `ScrollModel` + `TimeScaleModel` | D9 / `S1-A4` |
-| day / week / month zoom | `zoomPresets` | |
-| sticky label column + splitter | grid pane, `gridColumns` | |
-| search, "hide filled" | `RowSource.filter`, `filterPolicy` | |
-| read-mostly | `interactions: { move: false, resize: false }` | |
+**Checked 2026-09-22 against `etc/freegantt.api.md` and the code behind it, at commit
+`dda983c4` (#407). The table below is the current answer; the original table, sent 2026-09-15,
+is superseded — see the change notes under each row that moved.**
 
-We are not asking for any of that. It works.
+| Ours | Current API | Checked |
+|---|---|---|
+| `LaborRequest` | `Entry` | Works as assumed. Name unchanged. |
+| `LaborRequestBlock` | A child `Entry` drawn on its parent's row through `childrenAsSegments` (ADR 0026, #421) | **Superseded.** `Segment` retired before this brief could be checked. `etc/freegantt.api.md` has no `Segment` type now. A block is an ordinary `Entry` with a `parentId`. `rowSource: { childrenAsSegments: … }` says which parent draws its children as bars on its own row, instead of on rows of their own. |
+| block multi-select → assign | `selectedEntryIds` + `selectionChange` | **Superseded.** `selectedSegmentIds` retired with `Segment` — the Selection holds Entry ids only (`docs/08-a-bar-is-an-entry.md` §"nine call sites"). A segmented row can still select several of its children at once; each selected block is one Entry id in `selectedEntryIds`. |
+| project / position nesting, collapse | tree `rowSource`, `collapsed` | Works as assumed, with a caveat. A segmented parent (a request row, once blocks land) is never expandable — its children draw as bars on its own row, not as rows of their own, so there is nothing under it to collapse (`src/layout/rows/entries-source.ts`: "a segmented parent is never expandable"). Collapse still works normally on the project/position rows above it. |
+| two panes scrolling as one | shared `scroll: { x }` (one `ScrollAxis`) plus a shared `scale: TimeScaleModel` | **Corrected by #405, not merely renamed.** The 2026-09-15 row asked for a shared `ScrollModel`, which links both axes. The panes hold different row sets, so a shared y was never wanted; D-S6-1 (2026-09-15) ruled y stays private by default. `ScrollModel` retired. Pass the same `ScrollAxis` instance as `scroll.x` on both Gantts to share x, and a shared `TimeScaleModel` instance as `scale` to keep one zoom and one pixels-per-millisecond on both panes. |
+| day / week / month zoom | `zoomPresets` | Works as assumed. Name unchanged. |
+| sticky label column + splitter | grid pane, `gridColumns`, `gridResizable` | Works as assumed. `gridResizable` is the one addition since 2026-09-15 (#432): it locks the splitter and every column resizer together, live. |
+| search, "hide filled" | `RowSource.filter`, `filterPolicy` | Works as assumed, with a caveat. The default `filterPolicy: 'keepAncestors'` (`src/layout/rows/row-source.ts`) keeps a project or position row visible when any of its own requests still match the filter — "hide filled" hides a fully-covered request without also hiding the group it sits under. `filterPolicy: 'matchOnly'` is the other choice, for a search box that should hide the whole ancestor chain when nothing under it matches. |
+| read-mostly | `capabilities: { move: false, resize: false }` | **Superseded.** `interactions` retired; the current key is `capabilities`, same shape. |
+
+The 2026-09-15 close — "We are not asking for any of that. It works." — held for five of the nine
+rows unchanged. Two rows (`Segment`, `selectedSegmentIds`) named a type retired before anyone
+checked this table, one row (scroll sharing) was outright wrong and became #405, and one row
+(`interactions`) was renamed. #407 is the record that the table is checked now; #405 is the one
+row that needed its own issue.
 
 ---
 
