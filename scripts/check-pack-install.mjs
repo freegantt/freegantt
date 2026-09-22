@@ -89,6 +89,13 @@ try {
     !bad.ok && bad.output.includes('Cannot find module'),
     '`freegantt/src/api/index.js` resolved from the packed tarball — the exports map no longer seals src/.',
   );
+} catch (error) {
+  // `pnpm pack` or `pnpm add` failed. Their output is piped, so print it here: the `vite build`
+  // log inside `prepack` names the real cause, and the scratch folder goes away next.
+  console.error(`check-pack-install: ${error.message}`);
+  console.error((error.stdout ?? '').toString());
+  console.error((error.stderr ?? '').toString());
+  failed = true;
 } finally {
   rmSync(workDir, { recursive: true, force: true });
 }

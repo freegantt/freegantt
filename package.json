@@ -39,7 +39,7 @@
     "dist"
   ],
   "scripts": {
-    "prepare": "node scripts/setup-hooks.mjs",
+    "prepare": "node scripts/setup-hooks.mjs && node scripts/build-for-git-install.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
