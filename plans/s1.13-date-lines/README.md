@@ -132,9 +132,8 @@ export function resolveDateLines(input: ResolveDateLinesInput): DateLine[];
 ```
 
 Resolution order for `todayLine`: `undefined` and `true` both read `now()` (or the test-frozen
-`input.now`); `false` emits nothing; an `Instant` pins the line there with no clock read at all. A
-pinned line stays pinned even after D-S1.12-14's later self-refresh (#487) — the shell's timer only
-re-arms for a live `now()` line, never for one an app already pinned.
+`input.now`); `false` emits nothing; an `Instant` pins the line there with no clock read at all —
+consistent with D-S1.12-14's "no timer," now extended to "no clock read either, once pinned."
 
 `attachDateLines`'s `syncKeyed` call moves from `key: (line) => line.id` to `key: (_line, i) => i`, and
 `toGeom`/`patch` carry `className` onto the node (`node.className = 'fg-date-line ' + (geom.className
@@ -227,10 +226,8 @@ mechanism to exist and work *somewhere* (D-S1.13-6 supplies it) plus a documente
 "Today" marker: turn `todayLine` off and author it — `gantt.dateLines = [{ placeAt: 'now', label:
 'Today' }]` reads wrong (`'now'` is not a valid `InstantInput`) — the honest form is
 `gantt.dateLines = [{ placeAt: new Date(), label: 'Today' }]`, which the app must re-assign itself to
-track the clock. D-S1.12-14's later self-refresh (#487) only re-arms for the `todayLine` wrapper's own
-`now()` line, never for an authored `dateLines` entry, which stays a one-time pin like any other.
-Documented on `todayLine`'s doc comment and in CONTEXT.md's **Today line** entry, not built as a
-second option.
+track the clock, exactly as D-S1.12-14 already refuses to give the wrapper a timer. Documented on
+`todayLine`'s doc comment and in CONTEXT.md's **Today line** entry, not built as a second option.
 
 **Today-line caption (#99 gap 1), second half — "document how an app keeps today visible":** already
 answered by S1.12's own surface, not new here — `panToToday()` (D-S1.12-8) pans the scroll position;

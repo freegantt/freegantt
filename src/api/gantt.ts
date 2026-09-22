@@ -48,7 +48,7 @@ import type {
 } from '../model/index.js';
 import { PluginSetupError } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
-import { diffMs, nextTickBoundary, now, toInstant } from '../time/index.js';
+import { now, toInstant } from '../time/index.js';
 import { extraEditsFor, type Dataset } from './dataset.js';
 import type { ChromePluginOf, DataPluginOf, PluginOf } from './plugin.js';
 import type { PluginContextOf } from './plugin-context.js';
@@ -130,11 +130,12 @@ export interface GanttOptionsBase<TProps = unknown> {
   /** Live (S1.12, D-S1.12-12). `undefined` = the runtime default. Feeds header labels and
    *  screen-reader dates alike, with no bar remount. */
   locale?: Intl.LocalesArgument;
-  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). Default `true`: reads the clock and repaints at
-   *  the next tick boundary on its own (#476) — a page left open past that boundary still shows the
-   *  line in the right place, with no timer of the app's own. `false`: off, no clock read. An
-   *  `InstantInput` pins it with no clock read and no repaint timer. To keep today visible, pan with
-   *  `panToToday()` or grow `range`. */
+  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). Default `true`: reads the clock on each render, so
+   *  the line moves on the next render, not on a clock tick. It goes stale on a page left open past
+   *  midnight until something else repaints. An app that wants a live line reassigns this on its own
+   *  timer, e.g. `setInterval(() => { gantt.todayLine = new Date(); }, 60_000)`, held in a plugin's
+   *  `ctx.disposables`. `false`: off, no clock read. An `InstantInput` pins it with no clock read at
+   *  all. To keep today visible, pan with `panToToday()` or grow `range`. */
   todayLine?: boolean | InstantInput;
   /** Live (S1.13, D-S1.13-4). Default `[]`. Extra Date lines beside the today wrapper —
    *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
@@ -400,14 +401,6 @@ export class Gantt<TProps = unknown> {
         buildPluginContext: (parts): PluginContext<TProps> => withDatasetAndGantt(parts),
         buildCommandContext: (parts): CommandContext<TProps> => withDatasetAndGantt(parts),
         now,
-        // #476: how long the shell's own today-line timer waits before its next repaint. Composed
-        // from `now` and `nextTickBoundary` here, not in `view/`, for the same reason `now` above
-        // is supplied rather than read: `view/` may not call `time/` or do `Instant` arithmetic
-        // (I1, I10) — `diffMs` is exactly the arithmetic that ban covers.
-        nextTickBoundaryDelayMs: (zone, unit, increment) => {
-          const at = now();
-          return diffMs(nextTickBoundary(zone, at, unit, increment), at);
-        },
       },
     });
   }
