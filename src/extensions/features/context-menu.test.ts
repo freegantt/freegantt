@@ -291,12 +291,11 @@ describe('[S5-A1] contextMenu() (S5.5, D-S5-13/14)', () => {
     expect(container.querySelector('.fg-menu')).not.toBeNull();
     expect(menuItems(container)).toHaveLength(0);
 
-    // Arrow keys find no items to move between, and must not throw.
-    expect(() =>
-      document.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
-      ),
-    ).not.toThrow();
+    // Arrow keys find no items to move between, so the menu leaves the key unconsumed. The key goes
+    // to the menu itself: `onDomEvent` ignores a target the Gantt does not own, like `document`.
+    const arrowDown = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+    container.querySelector('.fg-menu')!.dispatchEvent(arrowDown);
+    expect(arrowDown.defaultPrevented).toBe(false);
 
     gantt.destroy();
     container.remove();
