@@ -314,7 +314,7 @@ toAdd; set up toAdd in order, rolling back on a throw; then dispose removed; the
 <tspan x="20" dy="14">call's own toAdd. kept and removed</tspan>
 <tspan x="20" dy="14">are never disposed on a throw — a</tspan>
 <tspan x="20" dy="14">half-applied plugin list never reaches</tspan>
-<tspan x="20" dy="14">a caller (issue #137 F4, C1).</tspan>
+<tspan x="20" dy="14">a caller .</tspan>
 </text>
 </svg>
 </div>
@@ -338,7 +338,7 @@ keeps its own refresh in `ColumnChrome`, not here.
 | --- | --- | --- | --- |
 | renderer | `ctx.view.registerRenderer(point, fn)` | One slot per point (`cell`/`header`/`tooltip`); `bar` holds one slot *per kind*, so two plugins defining different kinds both install | Next frame repaints (`requestFrame`) |
 | decoration | `ctx.view.registerDecoration(layer, fn)` | Every registration paints — the only seam where more than one wins at once | Held provider list drops; next frame repaints |
-| variant | `ctx.variants.add(variant)` | Newest registration for that `name` wins (ADR 0018) | Per-row Item cache invalidates, capabilities re-resolve, next frame repaints |
+| variant | `ctx.variants.add(variant)` | Newest registration for that `name` wins  | Per-row Item cache invalidates, capabilities re-resolve, next frame repaints |
 | grid column | `ctx.view.registerGridColumn(column)` | A duplicate `field` the consumer's own `gridColumns` already names is dropped — config beats a plugin | Column chrome rebinds; a stale field's baked-in copy is stripped first |
 
 Every one of these returns a `Disposer` that removes exactly its own registration, and every one

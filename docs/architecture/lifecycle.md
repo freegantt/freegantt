@@ -322,7 +322,7 @@ from the start. No knowledge of the code is assumed.
 **A Gantt does not own its time scale or its scroll position.** Three small models own them.
 `TimeScaleModel` answers "which instant sits at which pixel". A `ScrollAxis` answers "how far is
 the content scrolled, and how far can it go" — for *one* direction; a Gantt holds two, `scroll.x`
-and `scroll.y` (D-S6-1). All three are *shareable*: two Gantts may bind to the same instance, and
+and `scroll.y` . All three are *shareable*: two Gantts may bind to the same instance, and
 that is how `harness/scroll-sync.ts` makes two Gantts pan together, on one axis or both. `Viewport`
 is the fan-in over the three, so `view/` holds one reaction instead of three.
 
@@ -479,7 +479,7 @@ what a notification normally does — it asks for the next frame.
 | 10–12 | `bind()` always notifies the newcomer, once per sub-model, with no `Viewport` batch around the three — [the section below](#step-12-why-one-bind-delivers-three-notifications) walks through why that is three. Those three `onChange`s land before `#viewportHandle` is assigned. `#phase` drops them, so none asks for a frame and none emits `navigationChange`. The first real frame is step 20. |
 | 14–15 | One synchronous measurement, because a real `ResizeObserver`'s first callback is queued, not immediate. The viewport gets the *rows'* box, not the pane box: the header sticks to the pane's top and covers that band of rows for the whole scroll, so the measured header height comes off the height. Reporting the full box left the scroll model one header short, and the last row could then never scroll fully into view. All four `--fg-*` pixel properties are re-read here, not per render. |
 | 17–18 | **Capabilities and gestures after the viewport.** The gesture pipeline needs the viewport's scale for draft math, and the capability resolver needs the consumer's `interactions` options which the shell has by then. Keyboard and wheel navigation sit at the end so the elements they attach to exist. |
-| 19–20 | **Plugins before the first frame** (ADR 0019). A constructor-supplied plugin's variant, keybinding, command or selection has to reach frame 1, so the shell applies all of them through its own live setters, then flushes. `theme` is the one setting applied *after* the flush. |
+| 19–20 | **Plugins before the first frame** . A constructor-supplied plugin's variant, keybinding, command or selection has to reach frame 1, so the shell applies all of them through its own live setters, then flushes. `theme` is the one setting applied *after* the flush. |
 
 ## One render pass
 
@@ -852,7 +852,7 @@ orient="auto-start-reverse"
 <!-- side prose -->
 <text class="xs" x="16" y="356">Sharing a TimeScaleModel syncs x.</text>
 <text class="xs" x="16" y="370">Sharing scroll.x or scroll.y syncs</text>
-<text class="xs" x="16" y="384">that axis only (D-S6-1). Sharing a</text>
+<text class="xs" x="16" y="384">that axis only . Sharing a</text>
 <text class="xs" x="16" y="398">Viewport is an error — it holds ONE</text>
 <text class="xs" x="16" y="412">Gantt's own measured boxes.</text>
 <text class="xs" x="664" y="356">Copy-at-bind everywhere: each model</text>
