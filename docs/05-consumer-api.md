@@ -389,6 +389,21 @@ gap, not a rename.
 | `.fg-cell-editor-discard` | Discard button on an invalid editor. |
 | `.fg-cell-notice` | Refusal notice over a cell that cannot open an editor. |
 
+### `data-flag`
+
+`.fg-bar` and `.fg-link` each carry `data-flag`, a space-separated token list generated from
+`BarFlags`/`LinkFlags` (S1.10, D-S1.10-2). `BAR_FLAG_KEYS` and `LINK_FLAG_KEYS`
+(`src/layout/frame.ts`, public exports) name the closed key set; a Vitest guard
+(`src/render/dom/flag-selectors.test.ts`) fails if a key here has no row below, or a row here
+names a key the list does not.
+
+| Selector | Set by |
+|---|---|
+| `.fg-bar[data-flag~="conflict"]` | S7 scheduling plugin |
+| `.fg-bar[data-flag~="cycle"]` | S7 scheduling plugin |
+| `.fg-link[data-flag~="inactive"]` | S7 scheduling plugin |
+| `.fg-link[data-flag~="cycle"]` | S7 scheduling plugin |
+
 ### Internal Parts
 
 These names have no stability promise. A consumer rule against one is allowed (ADR 0021) and

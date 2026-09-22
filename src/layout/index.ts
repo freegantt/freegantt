@@ -82,6 +82,10 @@ export type {
   LinkFlags,
   LayoutInput,
 } from './frame.js';
+// The closed key set behind `BarFlags`/`LinkFlags` (#475) — a consumer writing a stylesheet
+// selector or a `barRenderer` reads the same list `flagTokens` iterates, the way `ZOOM_PRESETS`
+// publishes the zoom ladder.
+export { BAR_FLAG_KEYS, LINK_FLAG_KEYS } from './frame.js';
 export { DecorationRunner } from './decorations.js';
 export type { RegisteredDecorationProvider, DecorationsByLayer } from './decorations.js';
 export type {

@@ -58,15 +58,13 @@ export interface Bar {
 export function bar(overrides?: Partial<EntryVariant>): EntryVariant;
 
 // @public
+export const BAR_FLAG_KEYS: readonly ["conflict", "cycle"];
+
+// @public
 export type BarAnchor = 'start' | 'center' | 'end';
 
 // @public (undocumented)
-export interface BarFlags {
-    // (undocumented)
-    conflict?: boolean;
-    // (undocumented)
-    cycle?: boolean;
-}
+export type BarFlags = Partial<Record<(typeof BAR_FLAG_KEYS)[number], boolean>>;
 
 // @public (undocumented)
 export type BarId = string & {
@@ -1531,6 +1529,9 @@ export interface KeyEventLike {
     // (undocumented)
     target: EventTarget | null;
 }
+
+// @public
+export const LINK_FLAG_KEYS: readonly ["inactive", "cycle"];
 
 // @public (undocumented)
 export type MenuEntry = MenuItem | {
