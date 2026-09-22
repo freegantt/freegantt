@@ -16,6 +16,7 @@ slug: /
 | `03-boundaries-and-config.md` | dependency-cruiser, tsconfig, `exports` map, Vitest projects, package checks |
 | `04-hooks-and-ci.md` | Git hooks, Claude Code hooks, the CI pipeline, guard-test meta-suite |
 | `05-consumer-api.md` | Index for app authors — links README, `plans/02`, glossary, export report, S4 surface |
+| `10-styling-and-theming.md` | Styling reference — the `--fg-*` token levels, the Parts list, `data-flag`, date lines and the Today line |
 | `06-plugin-authoring.md` | Plugin authoring guide — the two-halves shape, every registration seam, disposal |
 | `07-row-source-updates.md` | How to change one `rowSource` setting and keep the rest |
 | `08-a-bar-is-an-entry.md` | ADR-adjacent record of #421: a Bar is one child Entry by default |

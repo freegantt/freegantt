@@ -321,11 +321,11 @@ Documented in this order; each level solves what the previous can't, and consume
 
 Every level-1 property the library reads as a length goes through one reader (`render/dom/pixel-property.ts`): computed value → px → validated → library default. What counts as authored is stated per property rather than re-implemented per call site — a property whose zero value would be nonsense (a zero-height row is not a row) rejects it; a property whose zero value is a real, intentional choice (a consumer turning the grid pane off) keeps it. Re-read cadence stays the caller's own choice, and is stated at each call site — some properties read once at construction, others read again on every pane measurement, none per render.
 
-**The complete level-1 `--fg-*` reference — every token, its light/dark defaults, what reads it, and the retired/renamed tokens' migration notes — moved to [`docs/05-consumer-api.md`](../docs/05-consumer-api.md) (issue #221).** Level 1 stays documented here as a level of the ladder; the token-by-token values are a reference that drifts out of date faster than this design statement does, so they live beside the rest of the consumer-facing surface instead.
+**The complete level-1 `--fg-*` reference — every token, its light/dark defaults, what reads it, and the retired/renamed tokens' migration notes — moved to [`docs/10-styling-and-theming.md`](../docs/10-styling-and-theming.md) (issue #221).** Level 1 stays documented here as a level of the ladder; the token-by-token values are a reference that drifts out of date faster than this design statement does, so they live beside the rest of the consumer-facing surface instead.
 
 **The complete level-2 Parts list — every `.fg-*` class, public or internal — moved to the same file (issue #334).** Level 2 stays documented here as a level of the ladder and as the per-slice notes below; the class-by-class list drifts the same way the token table did, so it lives next to it.
 
-**`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BAR_FLAG_KEYS`, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). Nothing generates link tokens yet — `layout/frame.ts` always emits `links: []`. A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7). The selector-by-selector list, and what sets each one, is in [`docs/05-consumer-api.md`](../docs/05-consumer-api.md) (#475), guarded so a new key cannot ship undocumented.
+**`data-flag` is real (S1.10, D-S1.10-2).** Generated from `BAR_FLAG_KEYS`, not hand-mapped — `.fg-bar[data-flag~="conflict"]`, `.fg-bar[data-flag~="cycle"]` are live selectors today (nothing sets them true until S7's scheduling plugin, but the mechanism and the vocabulary both ship now, U2). Nothing generates link tokens yet — `layout/frame.ts` always emits `links: []`. A new `BarFlags` key needs no `render/dom` edit to show up as a token (U7). The selector-by-selector list, and what sets each one, is in [`docs/10-styling-and-theming.md`](../docs/10-styling-and-theming.md) (#475), guarded so a new key cannot ship undocumented.
 
 S3 Parts: `.fg-bar-handle` (shared resize-handle pair), `.fg-cursor-line`, `.fg-cursor-line-label`. S3 State attribute: `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and `data-movable` (grab cursor).
 
@@ -384,7 +384,7 @@ string — `'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none'`, default 
 only placement, printing `name`; see `BarLabelPolicy`'s own doc comment (`src/layout/renderer.ts`)
 for what each of the five values does. The resolved side is `data-label` on `.fg-bar` (`'inside'` /
 `'outside'`) — a level-2 hook for a consumer stylesheet, styled by default through
-`--fg-bar-label-gap` and `--fg-bar-label-outside-color` (`docs/05-consumer-api.md`). `data-label` is
+`--fg-bar-label-gap` and `--fg-bar-label-outside-color` (`docs/10-styling-and-theming.md`). `data-label` is
 absent for `'none'` and for a `barRenderer` result — no label child exists either time.
 `'insideOrNone'` on a bar too narrow is `data-label='hidden'` instead: the label child exists,
 measured, so a resize drag that widens the bar back across the fit line has something to reveal —

@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { BAR_FLAG_KEYS, LINK_FLAG_KEYS } from '../../src/layout/index.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const doc = fs.readFileSync(path.join(root, 'docs/05-consumer-api.md'), 'utf8');
+const doc = fs.readFileSync(path.join(root, 'docs/10-styling-and-theming.md'), 'utf8');
 
 /** The text between one `### Heading` and the next heading matching `stop` (exclusive on both
  *  ends) — same helper as `test/guards/theming-contract.test.ts`'s own `section`, so a key named
@@ -56,7 +56,7 @@ describe('the data-flag doc contract', () => {
     const missing = BAR_FLAG_KEYS.filter((key) => !documentedBarKeys.has(key));
     expect(
       missing,
-      `add a ".fg-bar[data-flag~=\\"KEY\\"]" row to the data-flag table in docs/05-consumer-api.md for: ${missing.join(', ')}`,
+      `add a ".fg-bar[data-flag~=\\"KEY\\"]" row to the data-flag table in docs/10-styling-and-theming.md for: ${missing.join(', ')}`,
     ).toEqual([]);
   });
 
@@ -64,7 +64,7 @@ describe('the data-flag doc contract', () => {
     const missing = LINK_FLAG_KEYS.filter((key) => !documentedLinkKeys.has(key));
     expect(
       missing,
-      `add a ".fg-link[data-flag~=\\"KEY\\"]" row to the data-flag table in docs/05-consumer-api.md for: ${missing.join(', ')}`,
+      `add a ".fg-link[data-flag~=\\"KEY\\"]" row to the data-flag table in docs/10-styling-and-theming.md for: ${missing.join(', ')}`,
     ).toEqual([]);
   });
 
@@ -77,7 +77,7 @@ describe('the data-flag doc contract', () => {
     );
     expect(
       orphaned,
-      `docs/05-consumer-api.md documents these .fg-bar data-flag keys but BAR_FLAG_KEYS (src/layout/frame.ts) does not name them:\n${orphaned.join('\n')}`,
+      `docs/10-styling-and-theming.md documents these .fg-bar data-flag keys but BAR_FLAG_KEYS (src/layout/frame.ts) does not name them:\n${orphaned.join('\n')}`,
     ).toEqual([]);
   });
 
@@ -87,7 +87,7 @@ describe('the data-flag doc contract', () => {
     );
     expect(
       orphaned,
-      `docs/05-consumer-api.md documents these .fg-link data-flag keys but LINK_FLAG_KEYS (src/layout/frame.ts) does not name them:\n${orphaned.join('\n')}`,
+      `docs/10-styling-and-theming.md documents these .fg-link data-flag keys but LINK_FLAG_KEYS (src/layout/frame.ts) does not name them:\n${orphaned.join('\n')}`,
     ).toEqual([]);
   });
 });
@@ -98,7 +98,7 @@ describe('the data-flag doc contract', () => {
 
 describe('the guard mechanism itself, against a deliberately broken fixture doc', () => {
   it('defect (a): a key named only outside the data-flag table does not count as documented', () => {
-    // Mirrors the real failure: docs/05-consumer-api.md:207 names "conflict" in an unrelated
+    // Mirrors the real failure: docs/10-styling-and-theming.md names "conflict" in an unrelated
     // --fg-warn token row, and the `### data-flag` table's own "conflict" row is gone.
     const brokenDoc = [
       '### Colour and shadow tokens',
