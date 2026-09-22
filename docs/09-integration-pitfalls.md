@@ -53,7 +53,7 @@ through the viewport binding, which fires on any resolved-scale change. The caus
 A toolbar, a key binding, the wheel and a plugin all arrive the same way.
 
 ```js
-gantt.on('navigationChange', ({ presetId, fit, canZoomIn, canZoomOut }) => { … });
+gantt.on('navigationChange', ({ presetId, fit, canZoomIn, canZoomOut, visibleSpan }) => { … });
 ```
 
 **Why a reader misses it.** A consumer who shares one `TimeScaleModel` across two Gantts holds the
@@ -64,12 +64,12 @@ published type has nothing a consumer holding a `TimeScaleModel` could call.
 So the reader searches the model, finds nothing, and concludes no notification exists. Ask the
 `Gantt` instead. Either Gantt reports the shared scale, because both bind the same model.
 
-**One real limit.** The `NavigationChange` payload carries `presetId`, `fit`, `canZoomIn` and
-`canZoomOut`. It carries no time span. A zoom control built from presets has everything it needs. A
-zoom control built from explicit `range` windows can detect that the user left its ladder, because
-`fit` stops being the preset's. It cannot learn which window now shows without reading that back
-itself. Test `fit` by shape, not by `typeof`: a zoom gesture writes a `number`, and a consumer
-stating a tile width writes a `TimeUnitWidth` object.
+**The payload names the window.** The `NavigationChange` payload carries `presetId`, `fit`,
+`canZoomIn`, `canZoomOut` and `visibleSpan`. `visibleSpan` is the window that shows now, the same
+value `gantt.visibleSpan` reads (#461). A plain scroll changes it too, so the event also fires when
+the zoom stands still. A zoom control built from explicit `range` windows can detect that the user
+left its ladder, because `fit` stops being the preset's. Test `fit` by shape, not by `typeof`: a
+zoom gesture writes a `number`, and a consumer stating a tile width writes a `TimeUnitWidth` object.
 
 **Do not shadow `freegantt.zoomIn` to learn that zoom happened.** Re-registering a command id is
 legal and it works, but it is the wrong tool. Shadow a built-in to change what zoom *means*, never

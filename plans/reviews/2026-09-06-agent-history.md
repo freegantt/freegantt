@@ -1,8 +1,9 @@
 # Agent history — the 2026-09-06 issue wave
 
 Written for a later reviewer who did not watch this happen. One entry per dispatched agent, in
-order. Each says what it was told, what it decided, and what it refused. Read
-`plans/reviews/2026-09-06-issue-wave-status.md` for the outcome per issue; this file is the *why*.
+order. Each says what it was told, what it decided, and what it refused. The wave's status board
+is deleted: every issue it tracked is closed except #222 and #242, which
+`plans/issue-triage-2026-09-22.md` carries. This file is the *why*.
 
 **Coordination shape.** Two implementation lanes at a time, never more. Each lane works in its own
 git worktree (`wt-data`, `wt-frame`) beside the primary tree, so no two agents share an index or a
