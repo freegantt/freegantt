@@ -48,8 +48,8 @@ const SNAP_CHOICES: readonly { readonly value: string; readonly label: string }[
   { value: 'tick', label: 'Tick' },
   { value: 'none', label: 'Off' },
   { value: 'hour', label: 'Hour' },
-  // #489: a custom, non-dividing increment — the same anchoring the "Every 6 hours" preset above
-  // draws, read here through the public `{ unit, increment }` snap surface alone.
+  // #489: a custom, stepped increment — the same anchoring the "Every 6 hours" preset above draws,
+  // read here through the public `{ unit, increment }` snap surface alone.
   { value: 'sixHour', label: 'Every 6 hours' },
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
