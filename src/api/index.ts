@@ -237,6 +237,9 @@ export type {
 // `BuiltInThrownCode` names every code a consumer can catch, so a `switch` on `.code` is exhaustive;
 // `ThrownCode` is that plus a consumer's own, for a subclass they write themselves.
 export type { BuiltInThrownCode, ThrownCode } from '../model/index.js';
+// `InvalidInstantError.reason`'s closed set (#242) — exported so a consumer can branch on it by type,
+// not just read it off a caught error.
+export type { InvalidInstantReason } from '../model/index.js';
 export {
   FreeGanttError,
   UnsupportedUnitError,
