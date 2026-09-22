@@ -1,18 +1,7 @@
 # A bar is an Entry
 
-**Shipped.** Question **Q17** on [issue #421](https://github.com/Pawel-IT/FreeGantt/issues/421) was
-ruled on 2026-09-17, after spike **S4** measured the cost objection away, and builds C1–C8 of
-[`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md)
-landed it. The design is
-[`CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md),
-and every ruling is in
-[`BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md).
-**The `Segment` *type* no longer exists** — the word does. A Segment is a Bar on a row that draws more than one Bar, and nothing stores one (`CONTEXT.md`). A bar is an ordinary child `Entry`, described in
-[`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md), [ADR 0025](./adr/0025-the-selection-holds-entries-not-segments.md)
-(the Selection holds `EntryId`) and [ADR 0026](./adr/0026-the-segment-retires.md) (the `Segment`
-type retires; `Item` becomes `Bar`). [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md)
-is superseded — its own body is not rewritten, and stays as a record of why the Selection once held
-`SegmentId`.
+**Shipped.** The `Segment` *type* no longer exists — the word does. A Segment is a Bar on a row that draws more than one Bar, and nothing stores one. A bar is an ordinary child `Entry`, described in
+`CONTEXT.md`.
 
 <style>
   /* Tokens mirror `docs/architecture/diagram.md`. Kept local: that page's block also carries rules
@@ -124,14 +113,13 @@ is superseded — its own body is not rewritten, and stays as a record of why th
 summary rail are the same authored shape. Two questions decide which one a reader sees, and neither
 one is stored on the Entry:
 
-1. **Does it have children?** That decides derivation and the default look today
-   ([ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md)).
+1. **Does it have children?** That decides derivation and the default look today.
 2. **Does a rule on the row source match its parent?** That decides whether it gets a row of its own,
    or draws on its parent's row. This is the one new question. The rule reads **one parent Entry at a
    time**, so the same key answers "every parent", "the parents this Field marks" and "this one
    parent, right now".
 
-What #421 calls a Segment becomes a regular Entry with `parentId` set. Nothing on the child marks it.
+A Segment becomes a regular Entry with `parentId` set. Nothing on the child marks it.
 
 ## Three bars, one shape
 
@@ -216,7 +204,7 @@ matches <code>req-1</code> in band 2, so its children draw on its row and get no
 the rule off they are ordinary sub-rows and <code>req-1</code> wears core's <code>summary()</code> rail.
 The Rollup runs identically in both: it writes <code>req-1</code>'s <code>hours</code> cell (12) and its
 <code>start</code>/<code>end</code> envelope from the two children, because a parent derives its
-rolling-up Fields whatever its row source does (ADR 0013).
+rolling-up Fields whatever its row source does.
 Band 1 is the same machinery with nothing to roll up.
 </figcaption>
 </figure>
@@ -228,8 +216,7 @@ Every job below already ships, except one row.
 
 ```ts
 const dataset = new Dataset({
-  // Core ships `name`, `start`, `end` and `duration`. Every Field below is this consumer's own,
-  // declared on the same code path as core's (ADR 0005).
+  // Core ships `name`, `start`, `end` and `duration`. Every Field below is this consumer's own.
   fields: [
     { key: 'showDaysOnRow', type: 'boolean' },   // the marker the row rule reads
     { key: 'hours', type: 'number', rollUp: 'sum' },
@@ -275,8 +262,7 @@ question, and the next section answers it.
 | Show the same bars as sub-rows | change the rule, or the value it matches | no |
 
 **Two doors gate a gesture, and they do not compete.** A bar's capability resolves down one chain:
-the consumer's own `capabilities`, then the resolved Variant's `capabilities`, then the library rule
-([`plans/02`](../plans/02-public-api.md) §4.1, [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md)).
+the consumer's own `capabilities`, then the resolved Variant's `capabilities`, then the library rule.
 Both doors take the same `Capabilities` shape, and a predicate at either level answers `undefined`
 for "no opinion", which falls to the next level. Write `can` when the rule belongs to the look — a
 milestone never resizes, wherever it is drawn. Write `capabilities` when the rule belongs to this
@@ -302,20 +288,18 @@ level with a match or a predicate when the dataset is deeper.
 **A field match names a Field and a value, and nothing else.** `{ showDaysOnRow: true }` matches every
 parent whose `showDaysOnRow` Field **equals** `true`. `{ team: 'framing' }` matches every parent whose
 `team` Field equals `'framing'`. The key is a Field key the `Dataset` declares — a core one, or the
-consumer's own — and the comparison is that Field's own `equals`
-([ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md)). A key no Field declares matches
+consumer's own — and the comparison is that Field's own `equals`. A key no Field declares matches
 nothing, and the miss reports once per rule and key on the `error` event
 (`code: 'unknown-row-source-field'`, `severity: 'warning'`, with a `console.warn` fallback when
-nothing subscribes) — the frame keeps drawing, and the typo is loud rather than silent (`J59`,
-`view/gantt-shell.ts`). `unknown-variant-field` is a different code, for `variants`' own `when` (Q29
-ruled against reusing it for `childrenAsSegments`). A match is equality, never "has
+nothing subscribes) — the frame keeps drawing, and the typo is loud rather than silent.
+`unknown-variant-field` is a different code, for `variants`' own `when`. A match is equality, never "has
 a value": ask that with a predicate.
 
 **It does not name a variant, and it does not pick one.** `variants` writes the same shape in its
 `when`, so an author learns one match syntax — but the two answer different questions. `when` asks
 *how does this row look*; `childrenAsSegments` asks *does this parent give its children rows*. A
 segmented parent's children each still resolve their own variant afterwards, and that is the per-bar
-name, look and capability #421 asks for.
+name, look and capability this design enables.
 
 ### `tree` is a separate question
 
@@ -358,9 +342,9 @@ cell totals every day under both crews. No stage of the pass asks whether a row 
 own children.
 
 **A segmented row is a summary in the grid already.** The segmented parent's cells roll up from its
-children — `req-1` reads 12 h with `d1` and `d2` on its row (ADR 0013). The one thing the design
+children — `req-1` reads 12 h with `d1` and `d2` on its row. The one thing the design
 suppresses is the parent's own bar, so `summary()`'s rail does not paint over the children it
-stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and that producer ignores the third parameter rather than reading it (Q27):
+stands for. **Core ships nothing to put one back**: no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and that producer ignores the third parameter rather than reading it:
 
 ```ts
 bars: (entry, variant) => [wholeEntryBar(entry, variant)],
@@ -368,8 +352,9 @@ bars: (entry, variant) => [wholeEntryBar(entry, variant)],
 
 This producer always draws, segmented row or not — it is what a rail actually wants. `wholeSpanUnlessSegments`, the parameter it ignores, is core's own answer of *when to suppress*; a consumer producer that wants its band to survive claiming skips that question and always paints, so it always sits behind the children's bars rather than disappearing the moment `childrenAsSegments` matches the row.
 
-:::note One rename inside this page
-The library's word for a bar was `Item` — `Item`, `ItemId`, `ItemProducer`, `EntryVariant.items`. That word also names a menu row and a grid cell, and everything downstream of it already said *bar*. It is `Bar`, now that the Segment has retired (Q28, ruled 2026-09-17), so this page writes `Bar`, `bars` and `wholeSpanUnlessSegments`. `MenuItem` and `CellItem` keep the generic word, because an item is what they are.
+:::note Terminology in this page
+The library retired `Item` in favour of `Bar`, so this page writes `Bar`, `bars` and
+`wholeSpanUnlessSegments`. `MenuItem` and `CellItem` keep the word "item" for menu rows and cells.
 :::
 
 :::note Why the key says "segments"
@@ -378,10 +363,10 @@ true." The name says what the children *become*, and it discriminates — an par
 children draw a bar on a row of their own, and never a segment of another row's bar. The key carries
 no `Row`, because it already sits on `rowSource` and a name does not repeat its own context.
 
-**The word is free because the type is gone.** `Segment` stopped being a stored type in build C6, and
+**The word is free because the type is gone.** `Segment` stopped being a stored type and
 comes back in the glossary with one meaning and nothing behind it: *a child Entry drawn as one piece
 of its parent's row.* Rejected: `childrenAsRowSegments`, `childrenOnParentRow`, `childrenAsBars`
-(an parent no rule matches's children draw bars too), `mergeChildRows` (the mechanism, not the job) and
+(a parent no rule matches has children that draw bars too), `mergeChildRows` (the mechanism, not the job) and
 `splitRow` ("Split" is under *Avoid* in `CONTEXT.md`).
 :::
 
@@ -517,10 +502,8 @@ aria-label="A five-stage pipeline for one write: entries.update, runTransaction 
 <text x="618" y="309" text-anchor="middle" class="box-sub" font-size="11" fill="var(--muted)">One transaction per gesture, at commit. A drag preview allocates nothing and writes nothing until the pointer lifts.</text>
 </svg>
 <figcaption>
-The envelope is the Rollup, not a second mechanism — which is what ruling Q9 already decided for
-Option C, and what this design gets for free. A direct write to <code>req-1.start</code> is refused
-with <code>DerivedFieldNotWritableError</code>, the refusal every parent already gives
-(ADR 0013). Nothing here
+The envelope is the Rollup, not a second mechanism. A direct write to <code>req-1.start</code> is refused
+with <code>DerivedFieldNotWritableError</code>, the refusal every parent already gives. Nothing here
 branches on whether the Entry draws on its own row or its parent's: the write door never learns the
 row source.
 </figcaption>
@@ -573,7 +556,7 @@ aria-label="Before and after mini-timelines. Before: the Framing crew row carrie
 This is the main gesture of a shift roster, and the clearest gain over a Segment type: a Segment
 belongs to its Entry, so moving one between rows is a remove plus an add, and the id does not
 survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy source
-(ADR 0020) answers the new tree.
+answers the new tree.
 </figcaption>
 </figure>
 </div>
@@ -584,7 +567,7 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 | --- | --- |
 | `model/` | `Segment`, `StoredSegment`, `SegmentId`, `SegmentInput`, `SegmentEdit` and the four Segment errors are deleted. Nothing replaces them |
 | `data/` | `updateSegment`, `addSegment`, `removeSegments` and the `store: 'segments'` apply path go. The Rollup already gives a parent its children's values, and that is now also the envelope |
-| `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a segmented parent draws no Bar of its own. `followSegments` is deleted; `ignoreSegments` becomes `wholeSpanUnlessSegments` (ADR 0026, Q38) |
+| `layout/` | One new key on `EntriesRowSource`, one fold in `resolveEntriesSource`, and a segmented parent draws no Bar of its own. `followSegments` is deleted; `ignoreSegments` becomes `wholeSpanUnlessSegments` |
 | `render/` | `FrameRow.segmentIds`, `FrameBar.segmentIds` and `Bar.segmentId` go. A bar keys on its `BarId` and names its `EntryId`, as it did before Segments |
 | `view/` + `interaction/` | `selectedSegmentIds`, `segmentIdsForBar`, `segmentIdsForRow` and the `segmentIds` half of `DomTarget` and `CommandTarget` go. The Selection holds Entry ids |
 | `scheduling/` (S7) | Unaffected by this page. A link to a split piece of work names the parent or one child, and the scheduling plugin rules that |
@@ -593,24 +576,15 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 
 | Cost | Where it stands |
 | --- | --- |
-| **Performance** | **Measured, and the objection falls.** 10,000 bars build a frame **20% cheaper** as child Entries than as Segments. One write and one row resolution grew, and each **halves** once the Rollup stops re-deriving an index the store already memoizes (build C4). A browser measurement of the hover path is still owed |
-| **A parent's own bar** | **Ruled: core draws no bar for a segmented parent.** A consumer variant may still paint a rail. Build C2 |
-| **The Selection unit** | **Ruled: the Entry.** A new ADR revises [ADR 0010](./adr/0010-the-selection-holds-segments-not-entries.md). This is a build, not a delete: 16 non-test files name `segmentIds`. Build C6 |
-| **A shared row's nine call sites** | `entryIds[0]` is read nine times in seven files. Seven mean "the row's subject", and a segmented row holds N+1 ids. Two mean "the first selected Entry", and a segmented row can select several. Each one is read once and fixed in build C3 |
+| **Performance** | **Measured, and the objection falls.** 10,000 bars build a frame **20% cheaper** as child Entries than as Segments. One write and one row resolution grew, and each **halves** once the Rollup stops re-deriving an index the store already memoizes. A browser measurement of the hover path is still owed |
+| **A parent's own bar** | Core draws no bar for a segmented parent. A consumer variant may still paint a rail. |
+| **The Selection unit** | The Entry. 16 non-test files that named `segmentIds` now use EntryIds instead. |
+| **A shared row's nine call sites** | `entryIds[0]` is read nine times in seven files. Seven mean "the row's subject", and a segmented row holds N+1 ids. Two mean "the first selected Entry", and a segmented row can select several. Each one is read once and fixed. |
 | **Mixed children** | The rule matches the parent, so all of that parent's children draw as Segments. A parent with days on its row *and* sub-tasks below cannot be expressed. No consumer has asked for it |
-| **A segment child with children of its own** | **Ruled: a segment rule is a collapse, one level deeper.** The segmented parent draws its direct children as bars; the subtree below loses its rows, and a child that derives draws one rolled-up bar — what a collapsed parent's bar does today |
-| **Migration** | **Ruled: no legacy.** Segments shipped in S4 and this library has never shipped to a user, so the `segments` key is deleted outright. 59 non-test sites and 37 test files read it |
+| **A segment child with children of its own** | A segment rule is a collapse, one level deeper. The segmented parent draws its direct children as bars; the subtree below loses its rows, and a child that derives draws one rolled-up bar — what a collapsed parent's bar does today |
+| **Migration** | This library has never shipped to a user, so the `segments` key is deleted outright. 59 non-test sites and 37 test files that read it have been updated. |
 | **Copying a row with its bars** | `toInput()` copies one Entry. A subtree copy needs its own door — with or without this design |
 
-## Read next
+## Related
 
-| Document | What it holds |
-| --- | --- |
-| [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md) | The build order C1–C8, the call sites, and the nine calls the plan makes |
-| [`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md) | The ruled design, and what each former open point was ruled to be |
-| [`plans/segment-is-a-bar/SPIKE-FINDINGS.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/SPIKE-FINDINGS.md) | Spike S4 — the numbers, the two shapes written for the subject seam, and the limits on both |
-| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q44 — every ruling, and why Q17 voided Q1–Q16. Read the table at the top, not the older bodies below it |
-| [ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md) | Why structure, not a stored word, decides that a row derives |
-| [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md) | The `when` rule this key reuses |
-| [ADR 0023](./adr/0023-a-variant-with-no-items-follows-the-data.md) | `followSegments` — the default this design deletes |
-| [Row source updates](./07-row-source-updates.md) | Changing one row-source setting and keeping the rest |
+- [Row source updates](./07-row-source-updates.md) — change one row-source setting and keep the rest.

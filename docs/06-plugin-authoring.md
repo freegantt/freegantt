@@ -5,8 +5,7 @@ plugin type and its two halves, where each half installs, every registration
 seam a plugin can use, and the errors an author meets.
 
 The Docusaurus site serves this page itself, so one rendering exists and not
-two. All four ADRs are accepted, so it describes one shipped surface and not a
-draft of one. This guide describes HEAD, and its fenced examples typecheck
+two. This guide describes the current shipped surface, and its fenced examples typecheck
 against HEAD.
 
 Every claim below names the test that proves it. If a claim in an earlier
@@ -31,8 +30,7 @@ A `data` half never touches `document` or `window` — the same DOM-free rule
 `data/` itself follows.
 
 `definePlugin` reads which halves an object fills and narrows to that arm. So a
-plugin with a `data` half does not typecheck into `GanttOptions.plugins`
-(`src/api/define-plugin.test.ts`, "does not typecheck").
+plugin with a `data` half does not typecheck into `GanttOptions.plugins`.
 
 ## The smallest working chrome plugin
 
@@ -66,8 +64,7 @@ export { overBudgetRows };
 
 The plugin returns nothing from `view`. It does not need a `Disposer`,
 because `ctx.disposables` already retracts the `registerDecoration` call when
-the plugin is removed (review P4; `src/extensions/plugin-runtime.test.ts`,
-"installs disposes plugin setup returns nothing").
+the plugin is removed.
 
 Wrap `definePlugin` in a factory, as above. One factory call is one install's
 worth of state, so two Gantts on one page share none of it.
@@ -173,7 +170,7 @@ A plugin with a `data` half handed to a `Gantt` raises `PluginSetupError`, and
 the message names the Dataset as the site to use instead
 (`src/api/define-plugin.test.ts`, "the message says where to install it").
 
-## Why a factory, not a name-keyed table (D-S5-2)
+## Why a factory, not a name-keyed table
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin
 object. FreeGantt has no registry that looks a plugin up by a string name.
@@ -193,7 +190,7 @@ plugins claim the same key.
 | --- | --- | --- | --- |
 | `commands.register(command)` | `command.id` | Newest wins; falls back to the older one on dispose | `src/extensions/commands.test.ts` |
 | `interaction.registerKeybinding(binding)` | `binding.chord` | Newest-first resolution; falls back on dispose | `src/extensions/keymap.test.ts` |
-| `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose (ADR 0018) | `src/layout/bars/variants.test.ts`, "lets the newest of two plugin rules win, and disposing it restores the older one" |
+| `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose | `src/layout/bars/variants.test.ts` |
 | `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: a second plugin claiming the whole bar point throws, naming both plugin ids" |
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
@@ -202,20 +199,17 @@ plugins claim the same key.
 | `fields.registerAggregator(name, fn)` | aggregator name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
 | `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it (ADR 0020) | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
-| `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it (D-S5-23) | `src/data/edit-extension.test.ts` |
+| `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 
 `store.read<T>(pluginId)` is not a registration. It gives one plugin
 read-only access (`get`/`all`, no `set`/`remove`) to a store another plugin
 reserved, or `undefined` if that plugin never reserved one.
 
-## The registration gate (D-S5-4)
+## The registration gate
 
 Every `register*` and `fields.register*` call is legal only while that
 plugin's own half is running. The moment that half returns, the gate closes for
-that plugin (`src/view/plugin-ports.test.ts` names this
-"buildPluginPorts — D-S5-4 gate"; `src/extensions/install-dataset-plugins.ts`
-carries the matching "closes the gate the moment setup returns" test for the
-`data` half).
+that plugin.
 
 Calling a gated method after that half has returned throws
 `RegistrationClosedError`:
@@ -240,29 +234,22 @@ export { lateRegistration };
 
 Some parts of the context stay open after that half returns, because they
 are not registrations — `interaction.canWrite`, for example, is a plain
-read and keeps working (`src/view/plugin-ports.test.ts`, "leaves ungated
-parts open after setup returns").
+read and keeps working.
 
 ## Disposal
 
 `ctx.disposables` is a `DisposableStore`. Every gated registration a plugin
 makes is added to it automatically, so removing the plugin retracts every
-registration with no extra code from the plugin author
-(`src/view/plugin-ports.test.ts`, "`disposables.disposeAll()` frees every
-gated registration, uninstall needs no plugin help").
+registration with no extra code from the plugin author.
 
 A half's own return value — a `Disposer` — is for a resource
 the plugin owns itself: a timer, a socket, a subscription outside
 FreeGantt. Most plugins return nothing, as `overBudgetRows()` above does.
 When a plugin does return a `Disposer`, it runs after `ctx.disposables`
-has already retracted every registration
-(`src/extensions/plugin-runtime.test.ts`, "disposes plugin's own
-ctx.disposables ahead returned Disposer").
+has already retracted every registration.
 
 Two `Gantt` instances never share a registration: disposing a plugin on one
-leaves the other's registrations untouched
-(`src/view/plugin-ports.test.ts`, "two Gantts share nothing: one plugin's
-disposal leaves other's registrations (I2)").
+leaves the other's registrations untouched.
 
 ## `requires` and setup order
 
@@ -292,23 +279,18 @@ export { lockAwareReport };
 ```
 
 Setup order follows `requires`, not array position — a required plugin runs
-first no matter where the array places it
-(`src/extensions/install-dataset-plugins.test.ts`, "sets up required plugin
-first, whichever order array writes"). A chain of requirements resolves
-transitively (`"resolves chain requirements before dependents"`).
+first no matter where the array places it. A chain of requirements resolves
+transitively.
 
 Two errors come from a bad `requires` list:
 
 - A required plugin that is not in the array at all throws
-  `MissingPluginError`, naming both the plugin and the missing requirement
-  (`"throws MissingPluginError naming both ids prerequisite absent"`).
+  `MissingPluginError`, naming both the plugin and the missing requirement.
 - A requirement cycle throws `PluginRequirementCycleError`, naming every
-  plugin in the cycle (`"throws PluginRequirementCycleError naming plugin
-  in cycle"`).
+  plugin in the cycle.
 
 A `Gantt` sorts the Dataset's own plugins together with its own chrome, under
-that one `requires` graph (`src/api/define-plugin.test.ts`, "lets a chrome
-plugin require a plugin whose only half is data").
+that one `requires` graph.
 
 ## Errors an author will meet
 
@@ -320,17 +302,14 @@ plugin require a plugin whose only half is data").
 | `RegistrationClosedError` | `'registration-closed'` | A gated method is called after that plugin's half has returned | `src/view/plugin-ports.test.ts` |
 | `PluginSetupError` | `'plugin-setup-failed'` | A plugin's half throws, or a plugin with a `data` half reaches a `Gantt` | `src/api/define-plugin.test.ts`, "the message says where to install it" |
 | `RendererAlreadyRegisteredError` | `'renderer-already-registered'` | Two plugins claim the same `RendererPoint` slot | `src/view/renderer-registry.test.ts` |
-| `PluginNotInstalledError` | `'plugin-not-installed'` | `gantt.uninstallPlugin(id)` is called with an `id` that is not installed | `etc/freegantt.api.md` (constructor signature; see `gantt.uninstallPlugin`) |
+| `PluginNotInstalledError` | `'plugin-not-installed'` | `gantt.uninstallPlugin(id)` is called with an `id` that is not installed | |
 
 A throw during a batch install unwinds only that batch, in
 reverse order, and leaves the plugins that were already installed before
-the batch started untouched (`src/extensions/plugin-runtime.test.ts`, "a
-same-batch view() throw leaves dropped plugin installed undisposed, not
-primed for double dispose (C1)").
+the batch started untouched.
 
 ## Where to go next
 
 - `CONTEXT.md` — the glossary entries for `Plugin`, `PluginContext`, and
   `PluginStore`.
-- `plans/02` — the full public API surface these types come from.
 - `harness/plugins.html` — every plugin in this guide, running.

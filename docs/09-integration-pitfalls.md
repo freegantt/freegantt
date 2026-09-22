@@ -16,12 +16,11 @@ the answer from the same starting point.
 
 ## 1. `theme: 'auto'` does not follow an application's own `dark` class
 
-**Issue #433. Closed by a ruling, not a code change — [ADR 0029](adr/0029-the-app-pushes-the-theme.md).**
 The application resolves its own dark-mode signal and **pushes** the answer. The library never calls
 back to ask, and never watches an attribute or a class it does not own. So the behaviour below is the
 decided behaviour, and the workaround below is the supported answer.
 
-`resolveTheme` (`src/view/theme.ts:26-27`) reads two sources, and only two:
+`resolveTheme` reads two sources, and only two:
 
 1. The nearest `data-fg-theme` pin, found by a `closest()` walk up from the container.
 2. `prefers-color-scheme`, which is the operating system.
@@ -34,7 +33,7 @@ dark gets a light Gantt on a dark page. The grid pane renders near-black text on
 background, and the left rail becomes unreadable.
 
 **The answer.** Mirror the application's signal onto `data-fg-theme` on any ancestor. One write at
-the application root reaches every Gantt below it (#271).
+the application root reaches every Gantt below it.
 
 ```js
 document.documentElement.setAttribute('data-fg-theme', isDark ? 'dark' : 'light');
@@ -48,23 +47,18 @@ dispose it on `destroy()`.
 
 ## 2. Zoom does fire a change notification — on the `Gantt`, not on the `TimeScaleModel`
 
-**Issue #438. The reported premise was wrong. The discoverability defect is real.**
-
 `zoomIn`, `zoomOut`, `zoomBy` and `zoomTo` all fire `navigationChange`. The notification reaches you
-through the viewport binding (`src/view/gantt-shell.ts:838`), which fires on any resolved-scale
-change. The cause does not matter. A toolbar, a key binding, the wheel and a plugin all arrive the
-same way.
+through the viewport binding, which fires on any resolved-scale change. The cause does not matter. 
+A toolbar, a key binding, the wheel and a plugin all arrive the same way.
 
 ```js
 gantt.on('navigationChange', ({ presetId, fit, canZoomIn, canZoomOut }) => { … });
 ```
 
-Tests pin this at `src/api/gantt.test.ts:998` and `src/api/gantt.test.ts:7000`.
-
 **Why a reader misses it.** A consumer who shares one `TimeScaleModel` across two Gantts holds the
 object that conceptually owns the zoom state. That object publishes no observer, and it never will:
-`bindTimeScale` reaches the model's internals through a module-private `WeakMap` on purpose, "so the
-published type has nothing a consumer holding a `TimeScaleModel` could call" (ADR 0007, #84).
+`bindTimeScale` reaches the model's internals through a module-private `WeakMap` on purpose, so the
+published type has nothing a consumer holding a `TimeScaleModel` could call.
 
 So the reader searches the model, finds nothing, and concludes no notification exists. Ask the
 `Gantt` instead. Either Gantt reports the shared scale, because both bind the same model.
@@ -84,11 +78,8 @@ to observe it.
 
 ## 3. A `barRenderer` paints nothing when every entry's variant already paints
 
-**Issue #448. Fixed — the library now warns.**
-
-`#paintFor` (`src/view/gantt-shell.ts:1363-1367`) resolves a variant's own `paint` first, and falls
-back to the Gantt-wide `barRenderer` only when the variant supplies none. A variant outranks the
-Gantt-wide renderer. That precedence is deliberate and documented (`src/api/gantt.ts:164`).
+The library now warns about this. A variant's own `paint` takes priority over the Gantt-wide
+`barRenderer`. That precedence is deliberate and documented.
 
 The failure mode is silence. An author assigns `barRenderer`, every entry resolves to a variant that
 paints, and no bar changes. Nothing reports why.
@@ -104,10 +95,7 @@ same function. That false negative buys zero false positives.
 
 ## 4. `overscan` widens what the frame asks for, and nothing it widens paints past the content
 
-**Issue #436. Fixed and shipped — read this before you tune `overscan`.**
-
-`overscan` is public on the `Gantt`, as a constructor option and a live accessor pair. It landed in
-`2051b57c` and it is **not** in `0.1.0`.
+`overscan` is public on the `Gantt`, as a constructor option and a live accessor pair.
 
 `buildFrame` still derives its cull window from the visible pane plus `overscan.horizontalPx`, and
 that window is still unclamped. **That part is the feature.** The buffer exists to pull in the tick
@@ -118,16 +106,13 @@ pulled in, past `[0, contentWidth)`, and a painted node past the content sizer w
 native `scrollWidth`. Two Gantts on a shared `ScrollAxis` then disagreed about how far right the
 timeline goes, because the axis binds `contentWidth` and the browser had measured something wider.
 
-The fix clips output, not the window (`src/layout/frame.ts`):
+The fix clips output, not the window:
 
 - A header band cell takes its intersection with `[0, contentWidth)` and is dropped at zero width.
 - A tick line is a point, so it is kept only while `0 <= x < contentWidth`.
 - A real duration bar is trimmed to its intersection, and reports `span: 'clipped'` rather than
   `'exact'` — `'exact'` promises the entry's own untouched start and end. A bar with no intersection
   at all is dropped, not shifted inward to a visible edge.
-
-`e2e/timeline-content-width.spec.ts` states this in a real engine, which is the only place a native
-`scrollWidth` can be read honestly.
 
 **What this means for you.** Tune `overscan` for how far ahead you want the frame built, and nothing
 else. A larger buffer costs ticks and bars per frame. It no longer costs overflow, so you do not
@@ -137,8 +122,8 @@ need a consumer-side compensation, and `fit: 'pane'` no longer guarantees an ove
 
 ## 5. A row click has no public event
 
-**Issue #434. Open — a genuine gap, not a misunderstanding. Fix decided, not yet built:**
-**`entryActivate: { entry, cause: 'click' | 'dblclick' | 'key' }` on `GanttEventMap`.**
+This is a genuine gap. When built, the fix will be:
+`entryActivate: { entry, cause: 'click' | 'dblclick' | 'key' }` on `GanttEventMap`.
 
 "Click a row, open that thing" has no public path today. `GanttEventMap` declares no activation
 event. `selectionChange` is the nearest thing and it is the wrong shape: selection is state that
@@ -153,20 +138,18 @@ So a consumer hand-rolls `closest('.fg-row')` and `data-entry-id`, against class
 public export versions. A rename breaks that code with a green build. This is the exact retyping the
 plugin seam was built to abolish.
 
-The fix adds an activation event, fired from the view's own hit testing. It stays independent of
-`selection` and of `capabilities.select`, and it keeps the DOM contract internal. Promoting
+The fix will add an activation event, fired from the view's own hit testing. It stays independent of
+`selection` and of `capabilities.select`, and keeps the DOM contract internal. Promoting
 `onDomEvent` and `targetUnder` onto `Gantt` was rejected: an app author must never need a plugin
-port to get default behaviour (`plans/02`, two callers and two surfaces).
+port to get default behaviour.
 
-Track #434. Do not treat the hand-rolled version as a supported pattern.
+Do not treat the hand-rolled version as a supported pattern.
 
 ---
 
 ## 6. `fit: 'pane'` scrolls instead of showing the whole dataset
 
-**Issue #477. Not a bug — an accepted limitation, deliberate (Q1, D-S1.12-2).**
-
-`fit: 'pane'` fills the pane down to the preset's `minTickWidthPx` floor. Every `fit` mode floors
+This is an accepted limitation. `fit: 'pane'` fills the pane down to the preset's `minTickWidthPx` floor. Every `fit` mode floors
 at the preset's `minTickWidthPx`, not just `'pane'`. A range wider than that floor scrolls. To see
 more, choose a coarser preset — the library never picks one for you.
 
@@ -186,4 +169,3 @@ gantt.preset = 'week'; // a coarser preset, chosen by you
 
 - `docs/05-consumer-api.md` — the consumer API index.
 - `docs/06-plugin-authoring.md` — the plugin surface, including `onDomEvent` and `targetUnder`.
-- `docs/04-hooks-and-ci.md` §7 — the contributor-side counterpart to this file.
