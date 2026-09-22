@@ -1084,11 +1084,11 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
 });
 
 describe(
-  'computeFrame — 5,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
+  'computeFrame — 10,000 entries (supporting test for [S1-A1], not the acceptance proof itself:' +
     ' the box says "in the DOM", proven by e2e/large-dataset.spec.ts)',
   () => {
     const large: readonly Entry[] = entryDoubles(
-      seededEntryInputs({ count: 5000 }).map((input) => ({
+      seededEntryInputs({ count: 10_000 }).map((input) => ({
         id: input.id,
         ...(input.name !== undefined ? { name: input.name } : {}),
         start: instant(input.start as Date),
