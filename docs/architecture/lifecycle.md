@@ -328,7 +328,7 @@ from the start. No knowledge of the code is assumed.
 `TimeScaleModel` answers "which instant sits at which pixel". A `ScrollAxis` answers "how far is
 the content scrolled, and how far can it go" — for *one* direction; a Gantt holds two, `scroll.x`
 and `scroll.y` . All three are *shareable*: two Gantts may bind to the same instance, and
-that is how `harness/scroll-sync.ts` makes two Gantts pan together, on one axis or both. `Viewport`
+that is how `harness/e2e/scroll-sync.ts` makes two Gantts pan together, on one axis or both. `Viewport`
 is the fan-in over the three, so `view/` holds one reaction instead of three.
 
 **Every binding follows one rule: bind always notifies the newcomer.** When something binds, the
@@ -869,7 +869,7 @@ orient="auto-start-reverse"
 </div>
 <figcaption>
 Diagram 4 — two Gantts sharing one <code>TimeScaleModel</code> and both
-<code>ScrollAxis</code> instances (exactly what <code>harness/scroll-sync.ts</code>'s both-axis
+<code>ScrollAxis</code> instances (exactly what <code>harness/e2e/scroll-sync.ts</code>'s both-axis
 pair builds). Dashed = notification, solid = a call in.
 </figcaption>
 </figure>

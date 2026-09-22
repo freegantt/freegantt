@@ -7,14 +7,14 @@
 // all, collapse all, zoom and Today are all registered core commands with default keybindings, so a
 // button that called `gantt.undo()` directly would drift from the keystroke that does the same job
 // (D-S5-26: a pointer affordance and its command are one implementation, two entry points). Where
-// the control sets a value rather than performing an act — preset, snap, theme — it writes the
+// the control sets a value rather than performing an act — preset, snap — it writes the
 // published property, because those are configuration, not commands.
 //
 // The strip carries no state of its own. Enabled-ness and current values are read back off the
 // `Gantt` and its `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
-import type { Gantt, PresetRef, SnapSetting, Theme } from 'freegantt';
+import type { Gantt, PresetRef, SnapSetting } from 'freegantt';
 import { formatDate, formatEndInclusive, isTimeUnit } from 'freegantt';
 
 export interface GanttToolbarOptions {
@@ -22,17 +22,7 @@ export interface GanttToolbarOptions {
   container: HTMLElement;
   /** Include the snap picker. Default `true`. */
   showSnap?: boolean;
-  /** Include the light/dark/auto control. Default `true`. */
-  showTheme?: boolean;
 }
-
-const THEME_STORAGE_KEY = 'freegantt-harness-theme';
-
-const THEME_CHOICES: readonly { readonly value: Theme; readonly label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
 
 // Preset ids are API identifiers (`dayWeekMonth`); a picker shows people words. The map is
 // presentation, so it lives here and not beside the presets themselves.
@@ -57,28 +47,6 @@ const SNAP_CHOICES: readonly { readonly value: string; readonly label: string }[
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
 ];
-
-function isTheme(value: string | null | undefined): value is Theme {
-  return value === 'auto' || value === 'light' || value === 'dark';
-}
-
-function readStoredTheme(): Theme {
-  try {
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    return isTheme(stored) ? stored : 'auto';
-  } catch {
-    // A browser with site data blocked still gets a working toolbar, on the default theme.
-    return 'auto';
-  }
-}
-
-function storeTheme(choice: Theme): void {
-  try {
-    localStorage.setItem(THEME_STORAGE_KEY, choice);
-  } catch {
-    // Persisting the choice is a convenience; failing to persist it is not worth an error.
-  }
-}
 
 function group(...children: readonly HTMLElement[]): HTMLDivElement {
   const el = document.createElement('div');
@@ -125,7 +93,7 @@ function option(value: string, label: string): HTMLOptionElement {
 /** Builds the toolbar and binds it to the `Gantt`. Every button runs a registered command; the
  *  pickers write published properties. */
 export function mountGanttToolbar(options: GanttToolbarOptions): void {
-  const { gantt, container, showSnap = true, showTheme = true } = options;
+  const { gantt, container, showSnap = true } = options;
   // #226: the Dataset comes off the Gantt that already holds it, so the page cannot hand this
   // toolbar a Gantt and a Dataset that do not belong to each other.
   const dataset = gantt.dataset;
@@ -183,44 +151,7 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
     bar.append(group(field));
   }
 
-  const spacer = document.createElement('div');
-  spacer.className = 'toolbar-spacer';
-  bar.append(spacer);
-
-  // Which way round is it? Three exclusive states, so a segmented control shows all three at once
-  // instead of hiding two behind a click.
-  let themeButtons: readonly HTMLButtonElement[] = [];
-  if (showTheme) {
-    const segmented = document.createElement('div');
-    segmented.className = 'segmented';
-    segmented.setAttribute('role', 'group');
-    segmented.setAttribute('aria-label', 'Theme');
-    themeButtons = THEME_CHOICES.map(({ value, label }) => {
-      const el = document.createElement('button');
-      el.type = 'button';
-      el.textContent = label;
-      el.dataset['themeChoice'] = value;
-      el.addEventListener('click', () => applyTheme(value));
-      return el;
-    });
-    segmented.append(...themeButtons);
-    bar.append(segmented);
-  }
-
   container.append(bar);
-
-  // The theme reaches two places: the Gantt's own token layer, and the page around it. The library
-  // writes `data-fg-theme` on its container from `gantt.theme`; the page's own tokens key off
-  // `data-theme` on the document element, so the page writes that half.
-  function applyTheme(choice: Theme): void {
-    gantt.theme = choice;
-    if (choice === 'auto') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', choice);
-    storeTheme(choice);
-    for (const el of themeButtons) {
-      el.setAttribute('aria-pressed', String(el.dataset['themeChoice'] === choice));
-    }
-  }
 
   function snapValue(setting: SnapSetting): string {
     return typeof setting === 'string' ? setting : setting.unit;
@@ -263,6 +194,5 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
   gantt.on('navigationChange', refresh);
   dataset.on('change', refresh);
 
-  if (showTheme) applyTheme(readStoredTheme());
   refresh();
 }

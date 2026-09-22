@@ -25,12 +25,12 @@ async function paint(page: import('@playwright/test').Page) {
 }
 
 test('the design is tokens: one page, three themes, no re-derived colour', async ({ page }) => {
-  await page.goto('/planner.html');
+  await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const light = await paint(page);
   await page.getByRole('button', { name: 'Dark' }).click();
-  await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'dark');
+  await expect(page.locator('html')).toHaveAttribute('data-fg-theme', 'dark');
   const dark = await paint(page);
 
   // The bar and the avatar carry the same phase hue, and both follow the theme — the avatar is a
@@ -49,14 +49,14 @@ test('the design is tokens: one page, three themes, no re-derived colour', async
   await page.getByRole('button', { name: 'Light' }).click();
   await page.getByRole('button', { name: 'Paper' }).click();
   const paper = await paint(page);
-  await expect(page.locator('#gantt')).toHaveAttribute('data-fg-theme', 'light');
+  await expect(page.locator('html')).toHaveAttribute('data-fg-theme', 'light');
   expect(paper.pane).not.toBe(light.pane);
   expect(paper.bar).not.toBe(light.bar);
   expect(paper.toolbar).toBe(paper.pane);
 });
 
 test('the cells the design draws as pictures are real rendered nodes', async ({ page }) => {
-  await page.goto('/planner.html');
+  await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   // A phase is a group bracket: the library's own shape, reached by structure alone (ADR 0013 —
@@ -89,7 +89,7 @@ test('the checkpoint diamond paints transparent and holds its box width across a
   // properties that would have gone red — a computed style, and a measured box across a real zoom
   // step driven through the toolbar (`harness/planner-toolbar.ts`'s Zoom in button), not a
   // hand-built `TimeScaleModel`.
-  await page.goto('/planner.html');
+  await page.goto('/');
   const checkpoint = page.locator('#gantt .fg-bar.fg-bar-diamond').first();
   await expect(checkpoint).toBeVisible();
 
@@ -100,14 +100,15 @@ test('the checkpoint diamond paints transparent and holds its box width across a
   const widthAtDefaultZoom = await checkpoint.evaluate((el) => el.getBoundingClientRect().width);
 
   await page.locator('button[aria-label="Zoom in"]').click();
-  await expect(checkpoint).toBeVisible();
-  const widthAfterZoomIn = await checkpoint.evaluate((el) => el.getBoundingClientRect().width);
-
-  expect(widthAfterZoomIn).toBe(widthAtDefaultZoom);
+  // Poll: the zoom repaints on the next frame, and a read in the click's own frame can land between
+  // the old layout and the new one.
+  await expect
+    .poll(() => checkpoint.evaluate((el) => el.getBoundingClientRect().width))
+    .toBe(widthAtDefaultZoom);
 });
 
 test('the new-task button says it is not wired rather than doing half a job', async ({ page }) => {
-  await page.goto('/planner.html');
+  await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const before = await page.locator('#gantt .fg-row').count();
@@ -118,7 +119,7 @@ test('the new-task button says it is not wired rather than doing half a job', as
 
 // #436 follow-up: the bar clip is the library's own label's, so it must not reach a bar whose
 // content a `barRenderer` owns. This page is that case — `phaseBar` emits its own
-// `.demo-bar-label-outside` child at `left: 100%` (harness/planner.html), and a renderer-owned bar
+// `.demo-bar-label-outside` child at `left: 100%` (harness/index.html), and a renderer-owned bar
 // carries no `data-label` at all (`ownsContent` ⇒ no token, render/dom/index.ts), so the
 // `[data-label='outside']` escape hatch can never reach it. A clip on `.fg-bar` itself swallowed
 // these labels whole. Same paint-tree query as the #325 test in e2e/grid-scroll.spec.ts, and for
@@ -126,14 +127,14 @@ test('the new-task button says it is not wired rather than doing half a job', as
 // and `getBoundingClientRect` both report a healthy label either way.
 //
 // Two details this page adds over #325's. The demo label is `pointer-events: none`
-// (harness/planner.html), which drops it out of `elementFromPoint` whether it paints or not, so the
+// (harness/index.html), which drops it out of `elementFromPoint` whether it paints or not, so the
 // probe opts it back in for the one call and restores it. And the second half asserts the negative:
 // with the old clip put back by hand, the same probe must report the label gone. Without that, a
 // probe broken in any other way would report this test green forever.
 test('a barRenderer that places a child outside the bar is not clipped by the library (#436)', async ({
   page,
 }) => {
-  await page.goto('/planner.html');
+  await page.goto('/');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const outsideLabel = page.locator('#gantt .demo-bar-label-outside').first();

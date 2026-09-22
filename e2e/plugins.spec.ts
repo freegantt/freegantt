@@ -14,7 +14,7 @@ declare global {
 // e2e right-click scenario stable, so only the hover path (no such race) is covered here.
 
 test('hovering a bar opens a tooltip with the entry name and dates', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
   await expect(bar).toBeVisible();
 
@@ -41,7 +41,7 @@ test('hovering a bar opens a tooltip with the entry name and dates', async ({ pa
 test('[#437] a context menu opened near a pane top paints, and hit-tests, above the sticky header', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const timelinePane = page.locator('#gantt .fg-timeline-pane');
@@ -86,7 +86,7 @@ test('[#437] a context menu opened near a pane top paints, and hit-tests, above 
 // range (`fixtures/demo-dataset.ts`) — instead of relying on wherever the axis happened to leave
 // the old pixel position.
 test('[#404] timeShading() still paints at both hour zoom rungs', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   await page.evaluate(() => {
@@ -102,14 +102,14 @@ test('[#404] timeShading() still paints at both hour zoom rungs', async ({ page 
   await expect(page.locator('#gantt .fg-range-band.fg-time-shading').first()).toBeVisible();
 });
 
-// #404: harness/plugins.html installs timeShading() — the shipped built-in, imported from
+// #404: harness/e2e/plugins.html installs timeShading() — the shipped built-in, imported from
 // 'freegantt' alone, no harness plugin behind it. Bands appear, follow a pan, and the page's own
 // checkbox removes the plugin live (no core edit either way). `.fg-time-shading` is the Part every
 // timeShading() band carries regardless of which page installs it or what `class` a rule names.
 test('[#404] weekend bands appear, follow a pan, and a checkbox removes the plugin live', async ({
   page,
 }) => {
-  await page.goto('/plugins.html');
+  await page.goto('/e2e/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bands = page.locator('#gantt .fg-range-band.fg-time-shading');
@@ -156,12 +156,12 @@ test('[#404] weekend bands appear, follow a pan, and a checkbox removes the plug
   await expect(bands.first()).toBeVisible();
 });
 
-// S5.6, [S5-A2]: harness/plugins.html installs overBudgetRows() — harness/plugins/over-budget-rows.ts,
+// S5.6, [S5-A2]: harness/e2e/plugins.html installs overBudgetRows() — harness/plugins/over-budget-rows.ts,
 // written against the public 'freegantt' entry alone. Dogfoods the `rowStripe` half of
 // `DecorationInput` (rangeBand is the other, covered by timeShading() above) — a stripe appears
 // under every over-budget row, and the page's own checkbox removes the plugin live.
 test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin live', async ({ page }) => {
-  await page.goto('/plugins.html');
+  await page.goto('/e2e/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const stripes = page.locator('#gantt .fg-row-stripe.demo-over-budget-row');
@@ -177,7 +177,7 @@ test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin li
   await expect(stripes.first()).toBeVisible();
 });
 
-// S5.10 visible acceptance (s5.10-dataset-plugins.md §4, D-S5-23/24): harness/editing.html installs
+// S5.10 visible acceptance (s5.10-dataset-plugins.md §4, D-S5-23/24): harness/e2e/editing.html installs
 // lockEntries() — harness/plugins/lock-entries.ts, written against the public 'freegantt' entry
 // alone — and its checkbox locks entry-15 through the plugin's own store. Two seams, one demo: the
 // extension hook ghosts the locked bars while a neighbour drags, and `beforeChange` refuses the drop.
@@ -189,7 +189,7 @@ test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin li
 test('every bar of a locked row ghosts alongside a dragged neighbour, and the drop is refused', async ({
   page,
 }) => {
-  await page.goto('/editing.html');
+  await page.goto('/e2e/editing.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   await page.locator('#lock-entry').check();
@@ -240,8 +240,8 @@ test('every bar of a locked row ghosts alongside a dragged neighbour, and the dr
   await expect(page.locator('#log')).toContainText('entry-15-a is locked');
 });
 
-// #280: harness/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()
-// with no `items` filter (harness/plugins.ts) — right-clicking entry-37, a buffer bar, opens the
+// #280: harness/e2e/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()
+// with no `items` filter (harness/e2e/plugins.ts) — right-clicking entry-37, a buffer bar, opens the
 // ~22-item, ~740px-tall menu the issue reports. `.fg-container` clips at its own edge (styles.ts),
 // so a menu this tall used to run past the bottom with no way to reach the lowest items. popup.ts's
 // `--fg-popup-max-height` (set from the anchor's own pane on every reposition) and styles.ts's
@@ -251,7 +251,7 @@ test('#280: a menu taller than the pane scrolls, so every item stays reachable',
   // shorter pane, still wide enough for the harness page's own chrome, is what makes the pane the
   // binding constraint instead, the same way any consumer's own page layout could.
   await page.setViewportSize({ width: 1000, height: 500 });
-  await page.goto('/plugins.html');
+  await page.goto('/e2e/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-37:"]').first();
@@ -311,7 +311,7 @@ test('#280: scrolling inside the open menu does not dismiss it', async ({ page }
   // this scroll to land inside it at all, rather than trivially not-dismissing a menu with nothing
   // to scroll.
   await page.setViewportSize({ width: 1000, height: 500 });
-  await page.goto('/plugins.html');
+  await page.goto('/e2e/plugins.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-37:"]').first();

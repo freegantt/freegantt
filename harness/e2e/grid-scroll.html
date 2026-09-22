@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — #126 grid pane scroll</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .fg-gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        --fg-bar-label-gap: 6px;
+        height: 320px;
+        border: 1px solid #ccc;
+        margin-block-end: 1rem;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — grid pane scroll (#126, #139)</h1>
+      <p>
+        Four fixed-width columns (120px each) in a 220px grid pane: the pane's content is wider than itself,
+        so
+        <code>.fg-grid-pane</code> is a real horizontal scroller (D-S1.8-13). Hovering either pane and using a
+        plain mouse wheel also scrolls rows vertically.
+      </p>
+      <div id="gantt" class="fg-gantt"></div>
+      <h2>#139 — the same overflow, with no width authored anywhere</h2>
+      <p>
+        The same four columns, this time written as bare field names. Every Grid column is fixed-width by
+        default, so the set overflows the 220px pane and scrolls exactly as the one above does. The third
+        Gantt drops to two columns and asks its Name column to <code>flex</code>, which is the opt-out: Name
+        takes whatever room the fixed Start column beside it leaves, and nothing overflows.
+      </p>
+      <div id="gantt-default" class="fg-gantt"></div>
+      <div id="gantt-flex" class="fg-gantt"></div>
+    </main>
+    <script type="module" src="./grid-scroll.ts"></script>
+  </body>
+</html>

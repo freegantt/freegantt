@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — S3 direct manipulation</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      #gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 220px;
+        --fg-bar-label-gap: 6px;
+        border: 1px solid #ccc;
+        height: 50vh;
+      }
+      .fg-tick {
+        font-size: 10px;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+      .demo-mobilization-line {
+        border-left-style: dashed;
+        border-left-width: 2px;
+      }
+      #controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 1rem 0;
+      }
+      #controls label {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+      }
+      #selection-readout {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #555;
+      }
+      #toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin: 1rem 0;
+        font-size: 0.9rem;
+      }
+      #toolbar select,
+      #toolbar button,
+      #controls button,
+      #controls select,
+      #controls input {
+        font: inherit;
+      }
+      #log {
+        margin-top: 1rem;
+        max-height: 180px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        font-family: ui-monospace, monospace;
+        font-size: 0.8rem;
+        padding: 0.5rem;
+      }
+      #log div {
+        padding: 1px 0;
+      }
+      #toast {
+        position: fixed;
+        right: 1.5rem;
+        bottom: 1.5rem;
+        max-width: 24rem;
+        padding: 0.6rem 0.9rem;
+        background: #1a1815;
+        color: #fafaf7;
+        border-radius: 4px;
+        font-size: 0.9rem;
+      }
+      #toast[hidden] {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — S3 direct manipulation</h1>
+      <p>
+        Drag a bar to move it. Drag an edge handle to resize. Click to select; Shift-click extends the
+        selection. Arrow keys nudge a selection by one snap; Escape clears it and hands the arrows back to
+        panning. Ctrl/⌘+Z undoes the last gesture. A drop before the dashed mobilization line is refused.
+        Check “Hold drop” to keep the commit as a pending ghost until you uncheck it.
+      </p>
+      <p id="lock-readout">
+        Check “Lock entry-15” and a Dataset plugin locks its three bars (S5.10). Drag <code>entry-14</code>:
+        the locked bars ghost alongside it, because the plugin's extender wrote their dates too — and the drop
+        is refused. <code>entry-15</code>'s row draws three bars, and each one is a child Entry the row draws
+        as a segment (<code>childrenAsSegments</code>). That is the case the cascade has to get right: it
+        moves each bar rigidly through <code>moveEntryTo</code>, one dated Entry at a time.
+      </p>
+      <div id="controls">
+        <p id="selection-readout">Selection: (none)</p>
+        <button id="undo-btn" type="button">Undo</button>
+        <button id="redo-btn" type="button">Redo</button>
+        <label><input id="lock-resize" type="checkbox" /> Disable resize</label>
+        <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
+        <label><input id="lock-entry" type="checkbox" /> Lock entry-15's three bars (Dataset plugin)</label>
+        <label>
+          Snap
+          <select id="snap-unit">
+            <option value="tick">Auto (preset's tick)</option>
+            <option value="none">Off</option>
+            <option value="hour">Hour</option>
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+          </select>
+        </label>
+      </div>
+      <div id="toolbar"></div>
+      <div id="gantt"></div>
+      <div id="log" role="log" aria-label="Changeset log"></div>
+      <div id="toast" role="status" hidden></div>
+    </main>
+    <script type="module" src="./editing.ts"></script>
+  </body>
+</html>

@@ -106,7 +106,7 @@ Two survive, and neither mentions serialization:
 - `plans/01:555` — the serialization bullet, and `plans/01:62`'s `data/ --> TIME` note, which cites Instant⇄ISO serialization as one of its two reasons. **The other reason stands on its own**, so the arrow stays and the sentence loses a clause.
 - `plans/02:155` and `:183` — the late-install door, rewritten to construct rather than to re-read.
 - ADR 0005's *"we serialize"* rejection, and [ADR 0008](0008-progress-is-scheduling-not-core.md)'s *"`schema: 2` Documents omit `progress`"*.
-- `harness/main.ts:309`, `harness/data.ts:258`, `harness/hierarchy.ts:277` — three `toJSON()` textarea dumps — and `harness/docs/page-brief.ts:45`.
+- `harness/main.ts:309`, `harness/e2e/data.ts:258`, `harness/e2e/hierarchy.ts:277` — three `toJSON()` textarea dumps — and `harness/docs/page-brief.ts:45`.
 
 **What a consumer loses**
 

@@ -11,7 +11,7 @@ import { test, expect } from '@playwright/test';
 test("[today line] spans the full scrollable row content, not just the pane's initial viewport", async ({
   page,
 }) => {
-  await page.goto('/zoom.html');
+  await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
   const line = page.locator('.fg-date-line');

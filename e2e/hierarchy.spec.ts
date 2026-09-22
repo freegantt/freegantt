@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // collapse, live row-source re-resolution, and tree keyboard.
 
 async function gotoHierarchy(page: import('@playwright/test').Page): Promise<void> {
-  await page.goto('/hierarchy.html');
+  await page.goto('/e2e/hierarchy.html');
   await expect(page.locator('#gantt .fg-row').first()).toBeVisible();
 }
 
@@ -190,7 +190,7 @@ test('a plugin tree makes a childless Entry a parent in fact, not by a stored wo
 // #421 C7: "Framing crew" (`req-1`) draws three children as segments, each a real child Entry with its own
 // name, its own `hours`, and its own look — a real browser proof that a segmented row draws several
 // bars, that a bar prints its own text, that per-bar capabilities differ, and that a bar with no
-// name still draws (`fixtures/hierarchy-dataset.ts`, `harness/hierarchy.ts`'s `crewDayVariant`).
+// name still draws (`fixtures/hierarchy-dataset.ts`, `harness/e2e/hierarchy.ts`'s `crewDayVariant`).
 test('a segmented row draws its children as bars, each with its own text, look and capabilities', async ({
   page,
 }) => {

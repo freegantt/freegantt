@@ -15,7 +15,7 @@ import { test, expect } from '@playwright/test';
 // Selecting the row once first (settling the reflow) before the real double-click works around it here.
 
 test('[S5-A5] double-click a Name cell edits in place and commits on Enter', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const cell = page.locator('#gantt .fg-row [data-field="name"]').first();
   await expect(cell).toBeVisible();
   const original = (await cell.textContent())?.trim();
@@ -33,7 +33,7 @@ test('[S5-A5] double-click a Name cell edits in place and commits on Enter', asy
 });
 
 test('Escape reverts a Budget edit with no commit', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const cell = page.locator('#gantt .fg-row [data-field="cost"]').first();
   await expect(cell).toBeVisible();
   const original = await cell.textContent();
@@ -50,9 +50,9 @@ test('Escape reverts a Budget edit with no commit', async ({ page }) => {
 });
 
 // U8, [S5-A5]: hierarchy.html's own "Bring your own editor" checkbox opens `window.prompt` through
-// `beforeEntryEdit` instead of the built-in editor (harness/hierarchy.ts).
+// `beforeEntryEdit` instead of the built-in editor (harness/e2e/hierarchy.ts).
 test('[S5-A5] a consumer replaces the editor through beforeEntryEdit (U8)', async ({ page }) => {
-  await page.goto('/hierarchy.html');
+  await page.goto('/e2e/hierarchy.html');
   await page.locator('#custom-editor-checkbox').check();
 
   page.once('dialog', (dialog) => dialog.accept('Renamed via prompt'));
@@ -71,7 +71,7 @@ test('[S5-A5] a consumer replaces the editor through beforeEntryEdit (U8)', asyn
 // scroll in a real browser. A vetoed edit is what keeps an editor open long enough to scroll at all
 // (#137 F5) — the harness has no veto, so an untouched editor left open serves the same purpose.
 test('an open editor stays over its cell while the pane scrolls (#158)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const cell = page.locator('#gantt .fg-row [data-field="name"]').first();
   await expect(cell).toBeVisible();
   await cell.click(); // settle the #selection-readout reflow before the real double-click
@@ -111,7 +111,7 @@ test('an open editor stays over its cell while the pane scrolls (#158)', async (
 // makes having children the whole predicate, so every row with children refuses the same way, and a
 // childless row edits normally.
 test('a refused cell names the reason, and the notice lets the next click through (R4)', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/generic.html');
   const groupRow = page.locator('#gantt .fg-row[data-entry-id="program"]');
   const rolledUp = groupRow.locator('[data-field="cost"]');
   await expect(rolledUp).toBeVisible();

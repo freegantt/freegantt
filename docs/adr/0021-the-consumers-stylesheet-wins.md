@@ -20,7 +20,7 @@ That rule does not work. It never has.
 
 ### The defect that found it
 
-`harness/planner.ts` paints a checkpoint as a diamond. Its renderer returns `class: { 'demo-checkpoint': true }`, and `harness/planner.html` says:
+`harness/planner.ts` paints a checkpoint as a diamond. Its renderer returns `class: { 'demo-checkpoint': true }`, and `harness/index.html` says:
 
 ```css
 .demo-checkpoint { background: transparent; }

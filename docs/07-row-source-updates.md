@@ -139,7 +139,7 @@ holds `team` to label its own button.
 
 - [`harness/main.ts`](../harness/main.ts) — the three
   handlers. Two spread one key. The grouping button switches `source`, so it builds a new source.
-- [`harness/hierarchy.ts`](../harness/hierarchy.ts) —
+- [`harness/e2e/hierarchy.ts`](../harness/e2e/hierarchy.ts) —
   the same settings driven from `<select>` controls. **It does not use the pattern above**: its
   `buildRowSource()` rebuilds the whole source from the controls on every change, so the page keeps a
   second copy of the row-source state. That is the shape "Do not keep a second copy" warns against,

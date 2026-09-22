@@ -3,160 +3,399 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FreeGantt harness — generic demo</title>
+    <title>FreeGantt — planner</title>
     <link rel="stylesheet" href="./harness-chrome.css" />
+    <style>
+      /* ---- The Gantt itself ---------------------------------------------------------------- */
+      /* The design's density is the library default now — row height, band height, cell padding,
+         bar radius and the checkpoint diamond all arrive on install, so this page states none of
+         them. One token is left, because it is a choice this page makes and not one the library
+         should make for every consumer. Nothing below reaches into a library class to restyle it,
+         which is the claim this page exists to make: the design is a token set. */
+      #gantt {
+        /* The design does not indent by depth: a phase and its rows start their text at the same x,
+           and what tells them apart is the twisty against the row's phase colour tag. The `#` column
+           is the row label cell here, so a depth indent would also eat the width the ordinal needs —
+           at 14px a two-digit number ellipsised to `1.`. The library keeps its own 12px: a 0 default
+           would silently flatten the tree for a consumer who never asked for that. */
+        --fg-indent-width: 0px;
+        border: 1px solid var(--fg-splitter-color);
+        border-radius: 0 0 10px 10px;
+        overflow: hidden;
+        height: min(70vh, 760px);
+      }
+
+      /* Typography stays harness-owned (D-S1.11-8) — the library sets no font. */
+      #gantt .fg-tick,
+      #gantt .fg-row-cell,
+      #gantt .fg-row-label {
+        font-size: 12px;
+      }
+      #gantt .fg-col-header {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      #gantt .fg-bar {
+        font-size: 11px;
+      }
+
+      /* ---- Phase hues ---------------------------------------------------------------------- */
+      /* The design's five phase colours, named once per theme. A bar renderer points
+         `--fg-bar-fill` at one of these, so the swap happens in CSS and no script re-derives a
+         colour when the theme changes. Lightness is what moves between themes: dark fills carry
+         light labels, light fills carry dark ones. */
+      :root {
+        --demo-phase-60: oklch(0.44 0.11 60);
+        --demo-phase-30: oklch(0.44 0.11 30);
+        --demo-phase-285: oklch(0.44 0.11 285);
+        --demo-phase-15: oklch(0.44 0.11 15);
+        --demo-phase-215: oklch(0.44 0.11 215);
+        /* The weekend column shading `--fg-x-weekend` names in DESIGN-FACTS §7 — a themed colour
+           the design wants that the library's own default (--fg-time-shading-fill) does not carry,
+           so this page names it the way it already names phase hues: once per theme, read by
+           this page's own `.planner-weekend` class — named on the rule's `class` key, beside
+           `timeShading()`'s own `.fg-time-shading` (#404).
+           Each value is stated so that, once the band's own 0.55 has composited it over that theme's
+           pane, the step off the pane is about the same size in every theme. The dark value is not
+           the design's `#1F2126`: the design composites onto a `#15161A` page, our pane is the
+           lighter `#1B1D22`, and at 0.55 that leaves a band nobody can see. */
+        --planner-weekend-bg: #e8e6e0;
+      }
+      /* The dark set follows the page's own theme pin (`page-theme.ts`), the same pin the Gantt
+         reads — or the OS, when the reader picked Auto and there is no pin. Both selectors carry one
+         value set, so the hues can never follow a different theme than the chart does. */
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-fg-theme]) {
+          --demo-phase-60: oklch(0.78 0.12 60);
+          --demo-phase-30: oklch(0.78 0.12 30);
+          --demo-phase-285: oklch(0.78 0.12 285);
+          --demo-phase-15: oklch(0.78 0.12 15);
+          --demo-phase-215: oklch(0.78 0.12 215);
+          --planner-weekend-bg: #2d3037;
+        }
+      }
+      :root[data-fg-theme='dark'] {
+        --demo-phase-60: oklch(0.78 0.12 60);
+        --demo-phase-30: oklch(0.78 0.12 30);
+        --demo-phase-285: oklch(0.78 0.12 285);
+        --demo-phase-15: oklch(0.78 0.12 15);
+        --demo-phase-215: oklch(0.78 0.12 215);
+        --planner-weekend-bg: #2d3037;
+      }
+
+      /* ---- Paper ---------------------------------------------------------------------------- */
+      /* Paper's `--fg-*` set lives in `harness-chrome.css`, because every demo page offers it. This
+         page adds only its own phase hues and weekend band for Paper. */
+      :root.theme-paper {
+        --demo-phase-60: oklch(0.42 0.1 60);
+        --demo-phase-30: oklch(0.42 0.1 30);
+        --demo-phase-285: oklch(0.42 0.1 285);
+        --demo-phase-15: oklch(0.42 0.1 15);
+        --demo-phase-215: oklch(0.42 0.1 215);
+        --planner-weekend-bg: #e3ded0;
+      }
+
+      /* ---- Cells the page paints itself ------------------------------------------------------ */
+      /* These style the page's own renderer output (`demo-*`), never a library class. */
+      .demo-task-cell {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+      .demo-task-cell-group {
+        font-weight: 600;
+      }
+      .demo-task-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .demo-phase-tag {
+        flex: none;
+        width: 4px;
+        height: 18px;
+        border-radius: 2px;
+      }
+      .demo-avatar {
+        display: grid;
+        place-items: center;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        color: var(--fg-bar-label-color);
+        font-size: 10px;
+        font-weight: 600;
+      }
+      /* The design's compact Done cell: a short track, not the full column. Core's meter is the
+         renderer; this page only tightens the track. */
+      .fg-meter {
+        justify-content: flex-end;
+      }
+      .fg-meter-track {
+        max-width: 30px;
+        height: 4px;
+        border-radius: 2px;
+      }
+      .fg-meter-fill {
+        border-radius: 2px;
+      }
+      .fg-meter-text {
+        min-width: 30px;
+        text-align: right;
+      }
+
+      /* The progress shading inside a span bar (DESIGN-FACTS §2.2): a child rect pinned to the
+         bar's left edge, darkened 22% black over the fill, radius on the leading corners only —
+         the done part of the bar reads darker than the part still to go. */
+      .demo-bar-progress {
+        position: absolute;
+        inset: 0 auto 0 0;
+        background: rgb(0 0 0 / 0.22);
+        border-radius: var(--fg-bar-radius) 0 0 var(--fg-bar-radius);
+        pointer-events: none;
+      }
+
+      /* The bar's own label (DESIGN-FACTS §2.3). Which side it paints on is the library's answer,
+         not this page's: a `barRenderer` receives `label.placement`, already resolved against this
+         bar's width, so nothing here measures text. The two sides differ in more than position —
+         inside is ink-on-fill and ellipsised, outside is the muted pane ink and never clipped. Both
+         inks are the library's own label pair, so a theme swap moves them for free. */
+      .demo-bar-label {
+        position: relative;
+        min-width: 0;
+        padding-inline: var(--fg-bar-label-gap, 8px);
+        color: var(--fg-bar-label-color);
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        pointer-events: none;
+      }
+      .demo-bar-label-outside {
+        position: absolute;
+        left: 100%;
+        top: 50%;
+        transform: translateY(-50%);
+        padding-inline: var(--fg-bar-label-gap, 8px) 0;
+        color: var(--fg-bar-label-outside-color);
+        overflow: visible;
+      }
+      /* The critical path: a ring inside the bar's own box, so it never shifts a neighbour. It sits
+         on --fg-warn rather than a sixth hue — a critical row is a warning, and the sheet already
+         owns one colour for that.
+         It is a child element rather than a box-shadow on `.fg-bar`, because the bar's shadow slot
+         is the library's: `hovered` and `dragging` both paint there, and a second box-shadow rule
+         would replace theirs instead of joining it. A nested ring stacks with both. */
+      .demo-critical-ring {
+        position: absolute;
+        inset: 0;
+        border: 1.5px solid var(--fg-warn);
+        border-radius: inherit;
+        pointer-events: none;
+      }
+
+      /* A checkpoint's own stroke (DESIGN-FACTS §2.5, F8): `diamond()`'s own `::before` paints
+         `--fg-bar-fill-painted` and nothing else, so a hollow checkpoint's ring is this page's own
+         rule, read off a custom property `checkpointDiamond()` (planner.ts) sets only while not
+         done — `border: none` the rest of the time, when the property is unset. `box-sizing:
+         border-box` keeps the stroke inside the 13px box `diamond()` already sizes, rather than
+         growing it. */
+      .fg-bar-diamond::before {
+        box-sizing: border-box;
+        border: var(--demo-checkpoint-stroke, none);
+      }
+
+      /* A checkpoint's label reads on the pane in the row's own ink, 10px off the diamond's point
+         (DESIGN-FACTS §2.5) — the diamond has no fill to read a label against, so the muted outside
+         ink the design gives a span's label would sit next to nothing. */
+      .demo-checkpoint-label {
+        padding-inline-start: 10px;
+        color: var(--fg-row-label-color);
+      }
+
+      /* S5.6-style weekend band (DESIGN-FACTS §1.2, §7): #404's shipped `timeShading()`, its own
+         `--fg-time-shading-fill` overridden by this page's `class: 'planner-weekend'` rule — the
+         colour is this page's, named once per theme above, because the library ships no
+         `--fg-x-weekend` (D-S1.13-8's own posture on an `--fg-x-*` token: a gap the design flags,
+         not one the library fills). Most consumers take the library default and write no rule at
+         all; this page is the one that shows the override still works. */
+      .planner-weekend {
+        background: var(--planner-weekend-bg);
+        /* The design paints this overlay at 0.55 (DESIGN-FACTS §1.2). At full strength it swallows
+           the grid line on its trailing edge, which is exactly where every week boundary falls. */
+        opacity: 0.55;
+      }
+
+      /* ---- The toolbar (DESIGN-FACTS §5) ----------------------------------------------------- */
+      /* Two rows, both `--fg-*` tokens — nothing here is a library class. `planner-toolbar.ts`
+         builds the DOM; this stylesheet only paints it. */
+      #toolbar {
+        border: 1px solid var(--fg-splitter-color, #e6e2d9);
+        border-bottom: none;
+        border-radius: 10px 10px 0 0;
+        overflow: hidden;
+      }
+      .demo-toolbar-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        background: var(--fg-pane-bg, #fff);
+        border-bottom: 1px solid var(--fg-splitter-color, #e6e2d9);
+      }
+      .demo-toolbar-title-group {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        min-width: 0;
+      }
+      .demo-toolbar-title {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--fg-row-label-color, #1a1815);
+        white-space: nowrap;
+      }
+      .demo-toolbar-subtitle {
+        font-size: 12px;
+        color: var(--fg-header-subtext, #5e5a53);
+        white-space: nowrap;
+      }
+      .demo-toolbar-spacer {
+        flex: 1 1 auto;
+      }
+      .demo-toolbar-readout {
+        font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+        font-size: 11px;
+        color: var(--fg-header-subtext, #5e5a53);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .demo-segmented {
+        display: flex;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 8px;
+        background: var(--fg-header-band-bg, #f4f2ec);
+      }
+      .demo-segmented-btn {
+        height: 24px;
+        padding: 0 10px;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        background: transparent;
+        color: var(--fg-header-subtext, #5e5a53);
+      }
+      .demo-segmented-btn[aria-pressed='true'] {
+        background: var(--fg-pane-bg, #fff);
+        color: var(--fg-row-label-color, #1a1815);
+        box-shadow: 0 1px 2px rgb(0 0 0 / 0.05);
+      }
+      .demo-reset-btn {
+        height: 28px;
+        padding: 0 12px;
+        border-radius: 8px;
+        border: 1px solid var(--fg-splitter-color, #e6e2d9);
+        background: var(--fg-pane-bg, #fff);
+        color: var(--fg-header-subtext, #5e5a53);
+        font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      .demo-new-task-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 12px;
+        border: 1px solid var(--fg-row-label-color, #1a1815);
+        border-radius: 8px;
+        background: var(--fg-row-label-color, #1a1815);
+        color: var(--fg-pane-bg, #fff);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .demo-icon-btn {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--fg-splitter-color, #e6e2d9);
+        border-radius: 8px;
+        background: var(--fg-pane-bg, #fff);
+        color: var(--fg-row-label-color, #1a1815);
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+      }
+      .demo-icon-btn:disabled {
+        color: var(--fg-header-subtext, #5e5a53);
+        opacity: 0.5;
+        cursor: default;
+      }
+      .demo-today-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 12px;
+        border: 1px solid var(--fg-splitter-color, #e6e2d9);
+        border-radius: 8px;
+        background: var(--fg-pane-bg, #fff);
+        color: var(--fg-row-label-color, #1a1815);
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .demo-today-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--fg-date-line-color, #c93820);
+      }
+      .demo-toolbar-sep {
+        width: 1px;
+        height: 22px;
+        background: var(--fg-splitter-color, #e6e2d9);
+      }
+    </style>
   </head>
   <body>
     <div class="page">
       <header class="appbar">
         <span class="appbar-mark">FreeGantt</span>
-        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <nav class="harness-site-nav" aria-label="Demo pages"></nav>
         <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
       </header>
 
       <main>
         <div class="page-head">
-          <h1>Generic demo</h1>
+          <h1>Planner</h1>
           <p>
-            A four-level fixture tree with grid columns, and one row that draws several bars —
-            <code>entry-16</code> draws its three children as segments (ADR 0026: a bar is a child Entry). The
-            strip on the chart is the surface a consumer ships; everything under the torn rule drives the
-            demo. The S4.11 acceptance playground with its changeset log stays on
-            <a href="./hierarchy.html">hierarchy.html</a>.
+            A construction schedule drawn from one design, on the public surface alone. Every colour is a
+            <code>--fg-*</code> token, so the theme picker above repaints the chart and the page together.
           </p>
         </div>
 
         <div id="page-brief"></div>
 
-        <!-- The library's own surface: toolbar, chart and readout share one border and one rule
-           rhythm, so they read as a single instrument. -->
-        <section class="workbench" aria-label="Generic demo workbench">
-          <div id="toolbar"></div>
-          <div id="gantt"></div>
-          <div class="statusbar">
-            <span class="readout" id="selection-readout">No selection</span>
-          </div>
-        </section>
-
-        <!-- Everything below the torn rule is apparatus. It exercises the library; it ships to
-           nobody. The dashed rule and the plainer controls say so without a label having to. -->
-        <section class="bench" aria-label="Harness controls">
-          <div class="bench-head">
-            <h2>Harness bench</h2>
-            <p>Demo-only controls. None of this is library UI.</p>
-          </div>
-
-          <div class="bench-grid">
-            <div class="panel">
-              <h3>Rows and columns</h3>
-              <p>
-                Row source, filtering and column visibility. <code>entry-16</code> (“Auth”) draws three bars
-                on one row — its three child Entries, drawn as segments by <code>childrenAsSegments</code>.
-              </p>
-              <div class="control-row">
-                <button id="rows-source-btn" type="button">Group by team</button>
-                <button id="filter-team-btn" type="button">Filter team: off</button>
-                <button id="sort-name-btn" type="button">Sort by name: off</button>
-              </div>
-              <div class="control-row">
-                <button id="toggle-budget-btn" type="button">Hide Budget</button>
-                <button id="reparent-btn" type="button">Nest timeline rendering under Discovery</button>
-              </div>
-              <!-- #421: `entry-16` has three child Entries. Drawn as segments, they draw as three bars on the
-                   parent's own row; released, they are three ordinary rows. The button flips one
-                   config key, live. -->
-              <div class="control-row">
-                <button id="segment-row-btn" type="button">Draw entry-16's legs as segments</button>
-              </div>
-              <!-- #432: gridResizable locks the splitter and every column's own resizer grip, in
-                   one config key, live. -->
-              <div class="control-row">
-                <label
-                  ><input id="lock-grid-checkbox" type="checkbox" /> Lock grid (no splitter, no column
-                  resize)</label
-                >
-              </div>
-            </div>
-
-            <div class="panel">
-              <h3>Mutation</h3>
-              <p>
-                Every write goes through one transaction and one changeset. Double-click Name, Start or Budget
-                in the grid to edit in place.
-              </p>
-              <div class="control-row">
-                <input id="rename-input" type="text" size="16" aria-label="New name" />
-                <button id="rename-btn" type="button">Rename</button>
-                <button id="remove-btn" type="button">Remove</button>
-              </div>
-              <div class="control-row">
-                <button id="add-entry" type="button">Add entry</button>
-                <button id="cost-btn" type="button">Set cost 500</button>
-              </div>
-            </div>
-
-            <div class="panel">
-              <h3>Vetoes and capabilities</h3>
-              <p>
-                A Mobilization date line marks a hard boundary — <code>beforeEntryMove</code> refuses a drop
-                before it. Hold drop proves the async veto path.
-              </p>
-              <div class="control-row">
-                <label><input id="lock-checkbox" type="checkbox" /> Lock the first entry</label>
-              </div>
-              <div class="control-row">
-                <label><input id="hold-drop" type="checkbox" /> Hold drop</label>
-                <label><input id="lock-resize" type="checkbox" /> Lock resize</label>
-              </div>
-              <div class="notice" id="toast" hidden></div>
-            </div>
-
-            <div class="panel">
-              <h3>Plugins and renderers</h3>
-              <p>
-                Each control is a plugin over the public contract alone. <code>Mod+K</code> clears the
-                selection through a plugin-registered command.
-              </p>
-              <div class="control-row">
-                <button id="toggle-plugin-btn" type="button">Install logging plugin</button>
-                <button id="open-popup-btn" type="button">Open popup on selected bar</button>
-              </div>
-              <div class="control-row">
-                <label>
-                  <input id="renderers-toggle" type="checkbox" checked /> Custom milestone and cost renderers
-                </label>
-                <label
-                  ><input id="time-shading-toggle" type="checkbox" checked /> Time shading (weekends)</label
-                >
-              </div>
-            </div>
-
-            <div class="panel">
-              <h3>Document</h3>
-              <p>
-                Round-trips the dataset through the public <code>toJSON</code>/<code>fromJSON</code> pair.
-              </p>
-              <div class="control-row">
-                <button id="export-btn" type="button">Export</button>
-                <button id="import-btn" type="button">Import</button>
-              </div>
-              <textarea
-                id="document-json"
-                rows="5"
-                aria-label="Dataset document JSON"
-                placeholder="Export writes the document here."
-              ></textarea>
-            </div>
-          </div>
-
-          <details class="log-panel" open>
-            <summary>Event log</summary>
-            <div id="log" role="log" aria-label="Event log"></div>
-          </details>
-        </section>
+        <div id="toolbar"></div>
+        <div id="gantt"></div>
       </main>
     </div>
-
-    <script type="module" src="./main.ts"></script>
+    <script type="module" src="./planner.ts"></script>
   </body>
 </html>

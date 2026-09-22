@@ -3,8 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-// D-S5-27 (s5.11-a11y-completion.md §1): axe walks every page the harness gallery actually links,
-// not every .html file on disk. The nav's own HARNESS_PAGES array (harness/harness-nav.ts) is the
+// D-S5-27 (s5.11-a11y-completion.md §1): axe walks every demo page the harness nav actually links,
+// not every .html file on disk — the e2e fixtures under `harness/e2e/` are not demos. The nav's own HARNESS_PAGES array (harness/harness-nav.ts) is the
 // one list, so a page a future step adds to the gallery is covered here by construction instead of
 // by someone remembering to retype it.
 //
@@ -36,13 +36,20 @@ async function waitForPageToSettle(page: import('@playwright/test').Page): Promi
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 }
 
+// Every demo page paints the whole page from one theme (`harness/page-theme.ts`), so axe checks each
+// theme the picker offers. Contrast that holds in Light and breaks in Dark is still a failure.
+const PAGE_THEMES = ['light', 'dark', 'paper'] as const;
+
 for (const file of HARNESS_PAGE_FILES) {
-  test(`[S5-A4] ${file} has no axe violations`, async ({ page }) => {
-    await page.goto(`/${file}`);
-    await waitForPageToSettle(page);
+  for (const theme of PAGE_THEMES) {
+    test(`[S5-A4] ${file} has no axe violations in the ${theme} theme`, async ({ page }) => {
+      await page.addInitScript((choice) => localStorage.setItem('freegantt-harness-theme', choice), theme);
+      await page.goto(`/${file}`);
+      await waitForPageToSettle(page);
 
-    const results = await new AxeBuilder({ page }).analyze();
+      const results = await new AxeBuilder({ page }).analyze();
 
-    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
-  });
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    });
+  }
 }

@@ -161,7 +161,7 @@ export function segmentChildrenOf(
 }
 
 export const demoFieldOptions = {
-  // #142: `end` keeps its demo intent — `harness/index.html`'s own copy names only "Name, Start or
+  // #142: `end` keeps its demo intent — `harness/generic.html`'s own copy names only "Name, Start or
   // Budget" as editable. `CORE_FIELDS.end` now defaults to editable, so this page states the
   // override itself, the same way `hierarchy-dataset.ts` does.
   fields: [

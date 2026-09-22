@@ -442,7 +442,7 @@ gantt.preset = { ...gantt.preset, snap: { unit: 'hour', increment: 2 } }; // eve
 ```
 
 Holding **Alt** during a drag suspends snapping for that one gesture, regardless of the configured
-`snap` — useful for fine placement without changing the preset. The harness (`harness/index.html`)
+`snap` — useful for fine placement without changing the preset. The harness (`harness/generic.html`)
 has a "Snap" control (Auto / Off / Hour / Day / Week, plus an increment) wired to this same
 `gantt.preset` assignment — try it against a live drag at `pnpm dev`.
 
@@ -657,6 +657,14 @@ has been checked against the question "was this written expecting a _consumer's_
 it?" Parked here until it gets its own issue.
 
 The dev harness (`harness/`) is the library's first consumer. Open `http://localhost:5173` after
-`pnpm dev` — the main page demos tree rows, grid columns, field rollups, live `rowSource` switching,
-selection, and timeline controls. `harness/data.html` demos transactions and undo. Every slice adds
-to the harness; acceptance criteria live in `plans/03-slices.md`.
+`pnpm dev`. Five demo pages share one nav and one theme picker (Auto, Light, Dark, Paper):
+
+- **Planner** (`index.html`) — the featured demo: a full design on the public surface, in four themes.
+- **Generic demo** (`generic.html`) — the smallest setup, with a bench of harness controls.
+- **Editing & data** (`editing-and-data.html`) — gestures, mutation, undo, vetoes, plugins, JSON.
+- **Hierarchy & timeline** (`hierarchy-and-timeline.html`) — tree rows, roll-ups, zoom, date lines.
+- **Performance** (`performance.html`) — 50,000 entries.
+
+Each page lists the features it shows above the chart. The pages under `harness/e2e/` are Playwright
+fixtures, not demos; the nav does not link them. Every slice adds to the harness; acceptance criteria
+live in `plans/03-slices.md`.
