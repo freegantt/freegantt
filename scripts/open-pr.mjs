@@ -79,9 +79,22 @@ function markReady(number) {
   console.log(`open-pr: \`pnpm pr-wait ${number}\` waits for the gate and states the result in one line.`);
 }
 
-const existing = spawnSync('gh', ['pr', 'view', '--json', 'url,number,isDraft'], { encoding: 'utf8' });
-if (existing.status === 0) {
-  const pr = JSON.parse(existing.stdout);
+// `gh pr view` answers with the branch's newest pull request, open or not, so `state` decides
+// whether that pull request can still take a commit. A merged or closed one cannot, and a branch
+// that carries on after a merge needs a second pull request rather than a refusal (#470: #471
+// squash-merged the plan, and the implementation had nowhere to go).
+const existing = spawnSync('gh', ['pr', 'view', '--json', 'url,number,isDraft,state'], {
+  encoding: 'utf8',
+});
+const existingPr = existing.status === 0 ? JSON.parse(existing.stdout) : undefined;
+if (existingPr !== undefined && existingPr.state !== 'OPEN') {
+  console.log(
+    `open-pr: pull request #${existingPr.number} on this branch is ${existingPr.state.toLowerCase()} —` +
+      ` ${existingPr.url}. Opening a new one for the commits since.`,
+  );
+}
+if (existingPr !== undefined && existingPr.state === 'OPEN') {
+  const pr = existingPr;
   console.log(`open-pr: this branch already has pull request #${pr.number} — ${pr.url}`);
   if (pr.isDraft && wantsReady) {
     markReady(pr.number);
