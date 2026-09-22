@@ -18,11 +18,11 @@ A checkout is **dirty** when `git -C <path> status --porcelain` prints any line.
 From the main checkout:
 
 ```
-git worktree list
-herdr worktree list
+orca worktree list --repo id:<repo-id> --json
 ```
 
-The main checkout is the row whose path is the repo root (`git rev-parse --git-common-dir` then `..`). Every other row is a linked worktree.
+Read `<repo-id>` from `orca worktree current --json`. The main checkout is the row where
+`isMainWorktree` is `true`. Every other row is a linked worktree.
 
 ## 2. Keepers
 
@@ -44,20 +44,20 @@ Empty output means clean. It may go.
 
 ## 4. Remove each clean candidate
 
-Close the herdr workspace first, then remove the checkout. Name the absolute path in every command.
+Name the worktree id in every command:
 
 ```
-herdr workspace close <workspace-id>
-git worktree remove <absolute-path>
+orca worktree rm --worktree id:<repo-id>::<absolute-path> --json
 ```
 
-Read `open_workspace_id` from `herdr worktree list`. Skip the close when there is no workspace. Never pass `--force` to `git worktree remove`. If remove fails, print the error and leave that checkout.
+This removes the checkout from git and deregisters it from Orca in one call — no separate
+workspace to close. Never pass `--force`. If it fails, print the error and leave that checkout.
 
-Then delete leftover Cursor project folders that match **this** path only (`~/.cursor/projects/` names that contain the worktree slug). Leave `~/.claude/projects/` alone. Leave the empty `.worktrees/` directory.
+Then delete leftover Cursor project folders that match **this** path only (`~/.cursor/projects/` names that contain the worktree slug). Leave `~/.claude/projects/` alone.
 
 ## 5. Report
 
-Print three lists, then `git worktree list`:
+Print three lists, then `orca worktree list --repo id:<repo-id> --json`:
 
 - **Removed** — path and branch
 - **Kept** — path and branch
