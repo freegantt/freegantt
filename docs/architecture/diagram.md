@@ -220,7 +220,7 @@ stroke-width="1.75"
 />
 <text x="620" y="44" text-anchor="middle" class="box-name" font-size="17" fill="var(--ink)">api/</text>
 <text x="620" y="63" text-anchor="middle" class="box-sub" font-size="11.5" fill="var(--muted)">
-Gantt, Dataset, plugins · 1,833 lines · the only public export surface, alongside model/ types
+Gantt, Dataset, plugins · 2,397 lines · the only public export surface, alongside model/ types
 </text>
 <!-- boundary zones -->
 <rect
@@ -306,7 +306,7 @@ model/
 Entry, Field, ChangeSet, ids
 </text>
 <text x="195" y="227" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-1,771 lines · 14 files · types + brand helpers, 0 deps
+2,507 lines · 19 files · types + brand helpers, 0 deps
 </text>
 <text x="195" y="242" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 errors, geometry, document schema
@@ -329,7 +329,7 @@ time/
 instant, zone, scale, ZonedTime
 </text>
 <text x="455" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-1,084 lines · 9 files · only new Date() here
+1,388 lines · 10 files · only new Date() here
 </text>
 <!-- layout/ -->
 <rect
@@ -349,7 +349,7 @@ layout/
 frame.ts, bars/, rows/, viewport/
 </text>
 <text x="320" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-3,568 lines · 29 files · computeFrame(), row/item pipeline
+4,996 lines · 33 files · computeFrame(), row/bar pipeline
 </text>
 <text x="320" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 TimeScaleModel, ScrollAxis, gesture-draft, FrameLayout
@@ -372,7 +372,7 @@ data/
 DatasetState, EntryStore, transaction
 </text>
 <text x="205" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-4,207 lines · 28 files · extension hook → changeset
+5,026 lines · 28 files · extension hook → changeset
 </text>
 <text x="205" y="556" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 History, fields, rollup · imports time + model
@@ -413,7 +413,7 @@ render/
 backend, syncKeyed, decorations, ElementDescription
 </text>
 <text x="810" y="230" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-2,056 lines · 11 files · syncKeyed reconciler, date-line
+2,452 lines · 13 files · syncKeyed reconciler, date-line
 </text>
 <!-- view/ -->
 <rect
@@ -433,7 +433,7 @@ view/
 GanttShell, PluginRuntime ports, GesturePipeline
 </text>
 <text x="930" y="370" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-6,583 lines · 31 files · capability, commands, plugin seams
+9,520 lines · 38 files · capability, commands, plugin seams
 </text>
 <text x="930" y="386" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
 TreeCollapse, grid-columns, keyboard/wheel nav, splitter
@@ -456,7 +456,7 @@ interaction/
 entry-gestures, column-gestures
 </text>
 <text x="810" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-798 lines · 5 files · drives EntryGestureContext
+762 lines · 5 files · drives EntryGestureContext
 </text>
 <!-- extensions/ — BUILT in S5 -->
 <rect
@@ -476,7 +476,7 @@ extensions/
 PluginRuntime, popup, built-ins
 </text>
 <text x="1060" y="540" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-2,458 lines · 13 files · dogfoods api/
+2,905 lines · 16 files · dogfoods api/
 </text>
 <!-- harness note -->
 <rect
@@ -689,7 +689,7 @@ and <code>extensions/</code> for the plugin runtime and shipped built-ins.
 
 ### Model coupling
 
-`model/` is the one module every other layer is allowed to reach into — 1,771 lines, zero
+`model/` is the one module every other layer is allowed to reach into — 2,507 lines, zero
 dependencies, no runtime beyond id/brand helpers. At S5 it also exports `PluginId`,
 `ErrorReport`, `ElementDescription` and command primitives alongside
 `Field`/`ChangeSet`. Every arrow below is a real `import` in `src/` today;
@@ -749,7 +749,7 @@ geometry (Point, Size, PixelSpan, Rect)
 Instant, TimeSpan, Duration, FreeGanttError hierarchy
 </text>
 <text x="620" y="148" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-716 lines · 10 files · 0 deps — types + brand helpers only
+2,507 lines · 19 files · 0 deps — types + brand helpers only
 </text>
 <!-- time/ -->
 <rect
@@ -778,7 +778,7 @@ scale.ts / zone.ts / instant.ts
 format.ts / presets.ts / snap.ts
 </text>
 <text x="145" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-940 lines · 8 files
+1,388 lines · 10 files
 </text>
 <!-- layout/ -->
 <rect
@@ -807,7 +807,7 @@ Entry, EntryId/BarId/RowId
 geometry, Field types
 </text>
 <text x="425" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-2,342 lines · 20 files
+4,996 lines · 33 files
 </text>
 <!-- api/ -->
 <rect
@@ -836,7 +836,7 @@ Field, FieldKey, ChangeSet
 + entryId(), barId() functions
 </text>
 <text x="725" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-765 lines · the public surface allow-list
+2,397 lines · the public surface allow-list
 </text>
 <!-- view/ -->
 <rect
@@ -865,7 +865,7 @@ via GanttShell's structural DatasetLike —
 not an api/ import (view -&gt; api is not allowed)
 </text>
 <text x="1035" y="344" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-2,440 lines · 20 files
+9,520 lines · 38 files
 </text>
 <!-- render/ -->
 <rect
@@ -892,7 +892,7 @@ BarId, RowId arrive only as types,
 re-exported through layout/index.ts
 </text>
 <text x="425" y="540" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-1,028 lines · 7 files
+2,452 lines · 13 files
 </text>
 <!-- data/ — NEW consumer -->
 <rect
@@ -921,7 +921,7 @@ Entry, EntryId/BarId/RowId
 Field, FieldKey, ChangeSet
 </text>
 <text x="160" y="540" text-anchor="middle" class="box-sub" font-size="10" fill="var(--muted)">
-2,607 lines · 23 files
+5,026 lines · 28 files
 </text>
 <!-- arrows: model -> the six consumers -->
 <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow2)" color="var(--ink)">
@@ -1611,7 +1611,7 @@ gantt.destroy()
 one private GanttShell each (I2)
 </text>
 <text x="125" y="174" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-765 lines · 3 files
+2,397 lines · 12 files
 </text>
 <!-- view/ -->
 <rect
@@ -1661,7 +1661,7 @@ build Gestures + Capabilities
 TreeCollapse · keyboard/wheel nav
 </text>
 <text x="410" y="308" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-2,440 lines · 20 files
+9,520 lines · 38 files
 </text>
 <!-- data/ -->
 <rect
@@ -1693,7 +1693,7 @@ fields (field · fields.all)
 imports time/ + model/ only
 </text>
 <text x="720" y="190" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-2,607 lines · 23 files
+5,026 lines · 28 files
 </text>
 <!-- interaction/ -->
 <rect
@@ -1771,7 +1771,7 @@ createTimeScale(), hourPreset … yearPreset
 only new Date()/Date.now() in src/ (I10)
 </text>
 <text x="1060" y="318" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-940 lines · 8 files · temporal-polyfill façade
+1,388 lines · 10 files · temporal-polyfill façade
 </text>
 <!-- render/ -->
 <rect
@@ -1803,7 +1803,7 @@ sync() = syncKeyed() × {ticks, rows, bars}
 null/ twin: same contract, headless
 </text>
 <text x="1060" y="508" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-1,028 lines · 7 files
+2,452 lines · 13 files
 </text>
 <!-- computeFrame -->
 <rect

@@ -16,16 +16,22 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `lint` | `eslint .` (type-aware) | ~10s at S2 scale |
 | `lint:file` | `eslint --max-warnings 0` on `$1` | <2s |
 | `typecheck` | `tsc --noEmit` | ~5s |
-| `boundaries` | `depcruise --config .dependency-cruiser.cjs src harness` | ~3s |
+| `boundaries` | `depcruise --config .dependency-cruiser.cjs src harness e2e fixtures` | ~3s |
 | `test:node` | `vitest run --project pure` | seconds |
 | `test:dom` | `vitest run --project dom` | seconds |
-| `guards` | `vitest run test/guards` + `scripts/guard-red-test.mjs` + `eslint/rules/*.test.js` | ~10s |
+| `guards` | `vitest run test/guards` + `scripts/run-rule-tests.mjs` (the `eslint/rules/*.test.cjs` RuleTester suites) + `scripts/guard-red-test.mjs` | ~10s |
 | `vendor-names` | `scripts/check-vendor-names.mjs` | <1s |
+| `sentence-length` | `scripts/check-sentence-length.mjs` — reads a declared file list, not a glob (§7.4) | <1s |
 | `disables` | `scripts/audit-disables.mjs` | <1s |
 | `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating; shipped S2.7, name corrected from the plan's `api:report`) | ~10s |
+| `check-doc-examples` | `node scripts/check-doc-examples.mjs` — typechecks the docs' code fences against the built `.d.ts`, so `pnpm build` runs first | ~5s |
+| `bundle-probe` | `node scripts/bundle-probe.mjs` | ~5s |
+| `size-limit` | `size-limit` (`.size-limit.json`) — a measurement with a ceiling, not a guard (§5) | ~10s |
 | `verify` | the check chain in `package.json` — every check except the browser one | ~60s |
 | `verify:full` | `node scripts/verify-full.mjs` — the `verify` chain, then `test:e2e`. **The gate** | ~75s |
 | `open-pr` | `node scripts/open-pr.mjs` — pushes the branch, opens a draft pull request (§5.2) | ~5s |
+| `pr-wait` | `node scripts/pr-wait.mjs <n>` — watches the pull request's CI run and prints one verdict line (`docs/agents/ci.md`). **Not a check** | up to CI |
+| `gate` | `node scripts/slice-gate.mjs` — the slice gate, run deliberately at a slice boundary, outside `verify` and outside CI (§5.1) | ~60s |
 | `measure:scale` | `node scripts/measure-scale.mjs` — the scale measurement. **Not a check** (§1.1) | ~40s |
 
 `pnpm verify` is the **browser-free chain**: every check except `test:e2e`. It is a stage of the gate, not the gate.
@@ -262,6 +268,7 @@ One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify
 | `opened`, `reopened` | Only when the pull request is not a draft | The draft rule (§5.2). Work in progress spends no minutes |
 | `ready_for_review` | Yes | Not a default type, so the workflow lists it. This is the first run for most pull requests here |
 | `synchronize` (a push to a ready pull request) | Yes | The reviewed commit is the one that must be green |
+| `closed` (merged or not) | No — the job's `if:` skips it | The pull request it was gating is gone, so a run in flight has nothing left to prove. The event is listed only so the concurrency group below sees a new run and cancels the stale one; it reports `skipped`, at no cost |
 | A push to `main` | No | It lands a merge this workflow just proved |
 
 `main` moving under a branch is the one case where a green run goes stale. Branch protection's "require branches to be up to date before merging" re-runs the gate exactly then, and never otherwise.

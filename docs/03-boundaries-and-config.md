@@ -76,16 +76,20 @@ Per `plans/04` §3.1, plus what each flag buys us here specifically:
 | `exactOptionalPropertyTypes` | a changeset's `from: undefined` (field was absent) and an absent `from` key are different facts (`01` §6). Without this flag they collapse |
 | `verbatimModuleSyntax` | type imports never emit runtime imports — load-bearing for `model/` being types-only and for tree-shaking (S5) |
 | `isolatedModules` | keeps every file independently transpilable (Vite/esbuild parity) |
-| `noPropertyAccessFromIndexSignature` | `meta.team` on an unknown-shaped `TMeta` must be deliberate |
-| `noImplicitOverride`, `noFallthroughCasesInSwitch` | cheap, catch real edits |
-| `erasableSyntaxOnly` | no enums/namespaces/parameter properties — keeps the emitted shape predictable and the future Node-native-TS path open |
+| `noPropertyAccessFromIndexSignature` | `props.team` on an unknown-shaped `TProps` must be deliberate |
+| `skipLibCheck`, `forceConsistentCasingInFileNames`, `resolveJsonModule` | ordinary hygiene; no invariant rides on them |
+
+**Not set, although this page once claimed them:** `noImplicitOverride`,
+`noFallthroughCasesInSwitch` and `erasableSyntaxOnly` are absent from `tsconfig.json`, and
+`plans/04` §3.1 never listed them either. Nothing in `src/` depends on them today. Turning them on
+is a reasonable small change; claiming them while they are off is not.
 
 **Two type-level guards worth calling out as design, not config:**
 
 - **The `Instant` brand** is what makes `no-instant-arithmetic` (`02` §3.1) possible at all. It is a type-only construct with zero runtime cost, and it is the reason `time/` can be the sole owner of zone-aware date math.
 - **The `TxToken`** (`02` §3.6) makes "mutation outside a transaction" a *type* error, not just a lint error. Same trick: a non-exported branded type minted by exactly one function.
 
-`typecheck` runs `tsc --noEmit` over `src/`, `harness/`, `fixtures/`, and the test files — tests are not excused from strictness, because a test that compiles under looser rules proves less than it claims.
+`typecheck` runs `tsc --noEmit` over `src/`, `harness/`, `test/`, `fixtures/`, `e2e/` and `playwright.config.ts` — the whole `include` list. Tests are not excused from strictness, because a test that compiles under looser rules proves less than it claims.
 
 ---
 
@@ -97,11 +101,15 @@ From day one (`plans/04` §3.1), only `.` resolves:
 
 ```jsonc
 {
-  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
-  "sideEffects": false,
+  "exports": { ".": { "types": "./dist/api/index.d.ts", "import": "./dist/api/index.js" } },
+  "sideEffects": ["src/view/styles.ts"],
   "type": "module"
 }
 ```
+
+`sideEffects` is a one-file allowlist, not `false` as `plans/04` §3.1 drafted it: `view/styles.ts`
+injects the base stylesheet on import, so a bundler that drops it as dead code ships an unstyled
+Gantt. Everything else in the package is side-effect free, which is what keeps tree-shaking real.
 
 ### 3.2 Tests that keep it sealed
 
@@ -110,7 +118,7 @@ From day one (`plans/04` §3.1), only `.` resolves:
 | Internals unreachable | `test:node` resolution test: `import('freegantt/data')`, `freegantt/dist/data/index.js`, `freegantt/src/*` — each must reject. Run against a `pnpm pack`ed tarball installed into a temp dir, not against the source tree (only the packed artifact tells the truth) |
 | Public surface unchanged without notice | `api-extractor` report (`etc/freegantt.api.md`) committed; CI regenerates and fails on diff. The diff **is** the semver conversation (I11) |
 | Nothing unimplemented in the surface | `no-not-implemented` lint (B8) + a smoke test constructing `Dataset`/`Gantt` and invoking every zero-arg public method |
-| Runtime deps stay at one | Package-shape test: `dependencies` deep-equals `{ 'alien-signals': <range> }`; `peerDependencies`/`optionalDependencies` absent; `bundledDependencies` absent |
+| Runtime deps stay at two | Package-shape test: `dependencies` deep-equals `{ 'alien-signals': <range>, 'temporal-polyfill': <range> }` (`plans/04` §1); `peerDependencies`/`optionalDependencies` absent; `bundledDependencies` absent. The test does not exist yet — `01-invariant-guard-matrix.md`'s own row says so; `no-external-runtime-import` (B8's neighbour, `02` §2 B7) is what holds the line today |
 | Tree-shakeability | `size-limit` entry importing only `Dataset` must not pull in `interaction/` or `extensions/` (S5) |
 
 ---

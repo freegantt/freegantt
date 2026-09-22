@@ -109,7 +109,7 @@ same function. That false negative buys zero false positives.
 `overscan` is public on the `Gantt`, as a constructor option and a live accessor pair. It landed in
 `2051b57c` and it is **not** in `0.1.0`.
 
-`buildFrame` still derives its cull window from the visible pane plus `overscan.horizontalPx`, and
+`computeFrame` still derives its cull window from the visible pane plus `overscan.horizontalPx`, and
 that window is still unclamped. **That part is the feature.** The buffer exists to pull in the tick
 and the bar just off the edge, so a scroll of one pixel has them already built.
 
