@@ -1,7 +1,7 @@
 ---
 status: accepted — ruled 2026-09-18 by the coordinator, out of
 [#421](https://github.com/Pawel-IT/FreeGantt/issues/421). Built in C7b of
-`plans/segment-is-a-bar/README.md`. Working material: `plans/segment-is-a-bar/BUILD-LOG.md`.
+`plans/segment-is-a-bar/README.md`. Working material: [ADR 0026's rulings appendix](0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46).
 decided: an Entry spans iff both `start` and `end` are present (`spansTime`,
 `src/model/stored-entry.ts:56`), and a spanning Entry draws one Bar, on the row its `parentId`
 names. A claimed parent draws no Bar of its own; the Bars on its row are its children's.

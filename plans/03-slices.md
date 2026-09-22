@@ -310,7 +310,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **Goal:** the public-surface asks the first real consumer raised (`plans/handoff/2026-09-15-crm-filament-labor.md`), which S6 held out because S6 ships no new public feature. The consumer is deleting its fallback, so these are what it cannot ship without.
 
-**Tracker:** none yet. The first tracker described a design the author withdrew, so it was deleted rather than edited (2026-09-16). R1's plan is `plans/segment-is-a-bar/` — `README.md` (the build order), `CHILD-ENTRY-DESIGN.md` (the ruled design), `SPIKE-FINDINGS.md` (the evidence) and `BUILD-LOG.md` (every ruling) — written from #421.
+**Tracker:** none yet. The first tracker described a design the author withdrew, so it was deleted rather than edited (2026-09-16). R1's plan is `plans/segment-is-a-bar/` — `README.md` (the build order), `CHILD-ENTRY-DESIGN.md` (the ruled design), and `SPIKE-FINDINGS.md` (the evidence) — written from #421. Every ruling is ADR 0026's rulings appendix.
 
 **Scope**
 

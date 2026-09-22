@@ -1,3 +1,8 @@
+---
+last_update:
+  date: 2026-09-22
+---
+
 # Class map, layer by layer
 
 What each class owns, what it exposes, and who calls it — grouped by layer, DOM-free layers
@@ -700,7 +705,7 @@ lint fires. It demos tree rows, grid columns, field rollups, live `rowSource` sw
 selection, timeline controls, shipped plugins, and Dataset plugins; `harness/plugins.html` is the
 plugin playground; `harness/data.html` demos transactions and undo. It still reads clean —
 
-```ts
+```ts title="harness/main.ts"
 import { Gantt, Dataset, tooltips, contextMenu, inlineEditing } from 'freegantt';
 import { demoTreeEntryInputs, demoFieldOptions } from '../fixtures/demo-dataset.js';
 

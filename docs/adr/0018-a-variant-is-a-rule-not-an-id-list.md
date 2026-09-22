@@ -1,5 +1,5 @@
 ---
-status: accepted — built and green on `row-redesign`, 2026-09-12: `verify:full PASS — all 16 checks green, test:e2e included (70s)`. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The build is `plans/row-redesign/build/build-2-0018-variants.md`, and the calls made during it are `J32`–`J41` in `plans/row-redesign/BUILD-LOG.md`.
+status: accepted — built and green on `row-redesign`, 2026-09-12: `verify:full PASS — all 16 checks green, test:e2e included (70s)`. Opened 2026-09-11, out of a design session on the plugin variant surface. Reworked the same day, after the author ruled that nothing stores a variant. The calls made during the build are `J32`–`J41`, in the appendix at the end of this ADR.
 decided: a variant is a rule, and nothing stores one (2026-09-11, author's ruling) — see *Why nothing stores a variant*. `EntryLook` goes away, and a variant name is a `string` (2026-09-11, author's ruling) — see *`EntryLook` goes away*. `when` ships both forms, the field-match shorthand and the predicate (2026-09-11, refuted item 7 in `plans/row-redesign/README.md`). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) stands whole: this ADR changes how a variant is registered, and changes nothing about derivation.
 amended 2026-09-17 (naming only, no decision changed): the key this ADR calls `can` is now `capabilities`, and the type it calls `Interactions` is now `Capabilities`, matching `GanttOptions.capabilities`, `setCapabilityRule` and `CapabilityRule`. One concept, one word, at every level — and the word `interactions` goes back to naming the `interaction/` layer alone. The ADR text below keeps the names it was written with.
 open: nothing. **The newest rule wins** (2026-09-11, author's ruling — `Q5`), so all three registration seams agree and core registers its own two variants first. **What sets the order was never open** — `requires` does, ruled 2026-09-01 as D-S5-31, and [0019](0019-one-plugin-one-install-site.md) carries it to a plugin's `view` half. See *Double-claim arbitration*.
@@ -216,3 +216,21 @@ ctx.commands.register({
 **A variant change is not a `ChangeSet` entry.** The Field write that drives the rule is. That is the same undo, one level down, and it is the consumer's own key.
 
 The docs stop teaching an owned-id `Set`. `harness/plugins/milestone-kind.ts` becomes four lines of page config and no plugin.
+
+## Appendix — the calls made during the build (J32–J41)
+
+These entries were `plans/row-redesign/BUILD-LOG.md`. That log is deleted; the calls this ADR
+cites live here, so the citation resolves inside the record that depends on it.
+
+| | The call |
+|---|---|
+| `J32` | the interaction vocabulary moved to `model/`, so a variant can name it |
+| `J33` | a consumer's variant beats every plugin's, whatever order the plugins installed in |
+| `J34` | a paint that names no content decorates the library's bar |
+| `J35` | `resolveLook` and `claimedLookFor` collapse into one door, and `layout/items/` splits in three |
+| `J36` | a double claim is two rules from one source, never an override |
+| `J37` | core's `leaf` registers before core's `parent`, and the order inside that list is load-bearing |
+| `J38` | a consumer's variants install before the first frame, and a live list is not a `DisposableStore` |
+| `J39` | `renderer-registry.test.ts` loses the per-variant bar slot, and keeps everything else |
+| `J40` | a variant's `paint` beats `barRenderer`, because it names the rows it covers |
+| `J41` | the generic demo page reads the fixture's own props type, and states none of its own |

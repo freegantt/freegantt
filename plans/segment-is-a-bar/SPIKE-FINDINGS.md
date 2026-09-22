@@ -1,7 +1,7 @@
 # A Segment is a bar — spike findings (#421)
 
 **This file holds spike S4, run 2026-09-17.** S1–S3 ran on 2026-09-16 and their findings were removed
-on the author's word. Their rulings stand as J1, J2 and J3 in [`BUILD-LOG.md`](BUILD-LOG.md), and the
+on the author's word. Their rulings stand as J1, J2 and J3 in [ADR 0026's rulings appendix](../../docs/adr/0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46), and the
 README's spike table keeps their one-line answers.
 
 **A spike reports. The author rules.** Nothing below closes a question.

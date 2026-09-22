@@ -38,8 +38,8 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
 }
 
 /**
- * The span invariant, and the one place it is written (ADR 0012, Q5 in the field-redesign
- * BUILD-LOG). An Entry spans time when it holds **both** `start` and `end`. An Entry with one date,
+ * The span invariant, and the one place it is written (ADR 0012, Q5 in its appendix). An Entry
+ * spans time when it holds **both** `start` and `end`. An Entry with one date,
  * or with no date, appears in the grid and draws no bar.
  *
  * Call it as a question about the record: `if (!spansTime(entry)) return;`. It narrows, so the

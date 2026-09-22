@@ -499,8 +499,8 @@ describe('a lock holds at every caller-facing door (ADR 0015)', () => {
   /** A bar is an ordinary child Entry now (ADR 0026): removing it is `entries.remove(childId)`,
    *  which removes that Entry outright rather than un-dating some owner it used to draw a Segment
    *  for. A locked `end` on the child itself still refuses the un-date that removing it would cause
-   *  — `EntryStore#remove` names its own door, the same way `entries.update` names its (J37,
-   *  BUILD-LOG's ADR 0015 rule: a lock holds at every caller-facing door, not just `update`). */
+   *  — `EntryStore#remove` names its own door, the same way `entries.update` names its (J37, and
+   *  ADR 0015's rule: a lock holds at every caller-facing door, not just `update`). */
   it("refuses removing an Entry's own last date-bearing self when a locked 'end' would go un-dated", () => {
     const state = new DatasetState({
       timeZone: 'UTC',

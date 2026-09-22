@@ -1,6 +1,6 @@
 # Close-out — ADRs 0011 to 0016
 
-> **The plan of record is [`build/`](build/README.md).** This file tracks what the redesign still owes. It is not the build plan.
+> **The redesign shipped and its per-build checklists are deleted.** This file stays as the record of what the redesign owed and how each item closed.
 
 **The redesign is closed. Five of six shipped; the sixth was withdrawn.** ADR 0016, ADR 0012, ADR 0011, ADR 0013 and ADR 0015 are `accepted` and built. **ADR 0014 is `not planned`** — the author withdrew it on 2026-09-11, before Build 4 started. So `entries.fieldValue` is the by-key door for good, not an interim state, and nothing enforces a plugin key prefix. The [2026-09-10 grill](README.md#grill-2026-09-10) overruled 0012 #4, 0011 #1 for `add()`, and 0015 #18's default, and closed Q12b, Q15, and Q16.
 
@@ -15,10 +15,10 @@
 - [x] ~~**Build 0014**~~ — **withdrawn 2026-09-11, and the ADR file was deleted the same day** ([the gap at 0014](../../docs/adr/README.md#the-gap-at-0014) records why, and where its three surviving pieces went). Working material under this folder still names ADR 0014 — it is history, and its links now reach that note. No rename, no prefix rule, no `text`/`value` renderer pair. `entries.fieldValue` stays. Do not run its gate; `fieldValue` in `src/`, `harness/` and `e2e/` is correct, not debt.
 - [x] **Build 0015** — landed 2026-09-11 in `9321c95`, closed in `b8f121f`, `verify:full PASS — all 16 checks green, test:e2e included (71s).` `editable` enum default `'anywhere'`, `update()` wired to the editable arm, `dataset.setFieldEditable` (Q16), and `freegantt/editable-has-one-reader` so `Field.editable` keeps one reader. ADR 0015 is `accepted`, and I14 is claimed.
 - [x] **Every `status:` now matches reality** — 0011, 0012, 0013, 0015 and 0016 `accepted` with their verdicts linked; 0014 `not planned`. ADR 0005's *if accepted* is retired.
-- [ ] **Run the spike gate at each acceptance** ([`shared/prose-sweep.md`](shared/prose-sweep.md)): delete that ADR's `origin/spike/<ADR>-*` branches (there is no per-ADR `spikes/` folder — **V10**), and prove no spike path reaches `src/`, `harness/` or `e2e/`.
+- [x] **Run the spike gate at each acceptance** — **done.** `git ls-remote --heads origin 'refs/heads/spike/*'` returns none, and no spike path reaches `src/`, `harness/` or `e2e/` (the word *spike* survives there only as "a measured spike", never as a code path). ([`shared/prose-sweep.md`](shared/prose-sweep.md)): delete that ADR's `origin/spike/<ADR>-*` branches (there is no per-ADR `spikes/` folder — **V10**), and prove no spike path reaches `src/`, `harness/` or `e2e/`.
 - [x] **ADR 0016's six locked-spec edits landed** in `4e0dc3d`, authorized 2026-09-10. Eleven more sentences went with them. **`plans/00` D7 landed** — it reads *the library holds no save format*. See [`BUILD-SPEC.md`](BUILD-SPEC.md) §5.7.
 - [x] **The ahead-of-`src/` banners are gone.** `plans/01:5` and `plans/02:7` are deleted — both specs now match `src/`. `plans/03:9` keeps a banner with a different job: the S0–S6 records below it say what each slice shipped **at the time**, and some still use retired words. ADR 0005's banner is **blocked** — an accepted ADR is superseded, never edited.
-- [ ] **Restore the spec gate in `.claude/hooks/protect-spec.sh`.** The author relaxed the `plans/**` arm on 2026-09-10 for the duration of the build-out, because all six builds retire spec text the author has already approved, and the checkpoint question fired on every one. A clearly marked `TEMPORARY` block near the top of the script short-circuits that arm. **Delete the block when the redesign merges**, and the arm below it returns to warning as before. The `package.json` and guard-loosening arms were never relaxed — both still exit 2.
+- [x] **Restore the spec gate in `.claude/hooks/protect-spec.sh`** — **done.** The `TEMPORARY` block is gone from the script; the `plans/**` arm warns as before. The author relaxed the `plans/**` arm on 2026-09-10 for the duration of the build-out, because all six builds retire spec text the author has already approved, and the checkpoint question fired on every one. A clearly marked `TEMPORARY` block near the top of the script short-circuits that arm. **Delete the block when the redesign merges**, and the arm below it returns to warning as before. The `package.json` and guard-loosening arms were never relaxed — both still exit 2.
 
 ## Locked-spec edits — the author has to be in the room
 
@@ -30,8 +30,8 @@
 
 - [x] **The 2026-09-10 prose sweep** — author confirmed; landed in `8f6ced0`.
 - [x] **The sweep's two misses** — `plans/00:51` (principle 9 still declared authored `Entry.kind`) and `plans/03` (S4's `rollUpKinds`, `autoGroup`, `entry`/`meta` source). The gate grep named only 0011's words, so `plans/00` scored 0 and read as clean. The grep is widened in [`shared/prose-sweep.md`](shared/prose-sweep.md).
-- [ ] **`src/model/field.ts:125-127`** — the `editable` comment still says *default `false`* and claims I14. Not the sweep's: 0015's build edits it with the code.
-- [ ] **`plans/01` I14 and `plans/02` §4.2** — reread both when 0015 lands. I14 now reads *one key, two thresholds*, which is weaker than *every write asks one `canWrite`*. If the build cannot honour the new wording, the wording is wrong, not the build.
+- [x] **`src/model/field.ts`** — **done.** The comment reads *Absent means `'anywhere'`*; no *default `false`* claim survives. — the `editable` comment still says *default `false`* and claims I14. Not the sweep's: 0015's build edits it with the code.
+- [x] **`plans/01` I14 and `plans/02` §4.2** — **done.** ADR 0015 landed and I14 holds as written: *one key answers may this value change*, with the grid at `'anywhere'` and `entries.update()` at anything but `'never'`. — reread both when 0015 lands. I14 now reads *one key, two thresholds*, which is weaker than *every write asks one `canWrite`*. If the build cannot honour the new wording, the wording is wrong, not the build.
 - [x] **Grill 2026-09-10, locked specs — the first five.** Author authorized them on 2026-09-10, and they landed: `plans/02` default `gridColumns` is `['name', 'start', 'end']` and names the grid as the date path; `plans/01:330` and `plans/02:478` say default `editable` is `'anywhere'`; `plans/01:330`'s `parentId`/`segments` sentence is deleted, because it restated the default; `plans/03`'s three S4 acceptance rows carry an inline *retired by* marker. See [`BUILD-SPEC.md`](BUILD-SPEC.md) §1 V8, V9, V18.
 - [x] **ADR 0016's spec consequences landed 2026-09-10.** `plans/00` D7, `plans/s5.10:73`'s passenger bullet, `plans/01:831`, `CONTEXT.md`'s **Declarer** entry, and supersession banners on ADR 0005 and ADR 0008. **The accepted ADRs keep their bodies** — an ADR records the reasoning of its day, so each carries a banner instead of a rewrite.
 - [x] **Grill 2026-09-10, locked specs — what is left.** Both landed 2026-09-11, with Build 5. `plans/02` §2 now scopes the `fields` hole to adding or removing a **key**, and says `setFieldEditable` solves the *lock a declared column* case outright; the verb list carries `dataset.setFieldEditable`, next to `hideGridColumn`, with a note on why a `Dataset` verb sits in a `Gantt` list. **Landed earlier:** constructor `entries` in `plans/02` name declared keys at the top; `CONTEXT.md` has **Spans** and `_Avoid_`: phase, grouped entry.
@@ -40,8 +40,7 @@
 
 | Question | File |
 |---|---|
-| **How to build it** — the hard rules, the landing order, one file per build | [`build/README.md`](build/README.md) |
-| A question a build raised, or a call it made alone | [`BUILD-LOG.md`](BUILD-LOG.md) |
+| A question a build raised, or a call it made alone | each ADR's own appendix (0012, 0013) |
 | The verification record behind those files, and the author's rulings | [`BUILD-SPEC.md`](BUILD-SPEC.md) |
 | What was decided, and why | `docs/adr/0011`–`0016` |
 | The working material behind one decision | `plans/field-redesign/00xx-*/README.md` |

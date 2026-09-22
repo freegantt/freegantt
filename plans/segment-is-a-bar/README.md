@@ -1,10 +1,15 @@
 # A bar is a child Entry — the build plan for #421
 
-[#421](https://github.com/Pawel-IT/FreeGantt/issues/421) is the spec. **This plan does not restate it.** Read the issue once, then this file, then work one build. Open questions and lone calls go in [`BUILD-LOG.md`](BUILD-LOG.md).
+**This folder is historical working material.** ADRs 0025, 0026, 0027 and 0028 are `accepted`,
+#421 is closed, and every build here landed. The build log is deleted; every ruling Q1–Q46 is
+[ADR 0026's rulings appendix](../../docs/adr/0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46).
+`plans/00`–`04` and `CONTEXT.md` state what is true now.
+
+[#421](https://github.com/Pawel-IT/FreeGantt/issues/421) is the spec. **This plan does not restate it.** Read the issue once, then this file, then work one build. Open questions and lone calls go in [ADR 0026's rulings appendix](../../docs/adr/0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46).
 
 **Ruled 2026-09-17: Q17 passes. A bar is a regular child Entry, and a row source rule draws a claimed parent's children on its row.** The design is [`CHILD-ENTRY-DESIGN.md`](CHILD-ENTRY-DESIGN.md), the evidence is [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md), and the consumer page is [`docs/08-a-bar-is-an-entry.md`](../../docs/08-a-bar-is-an-entry.md). **The Segment retires.**
 
-**Option C is void.** Its build order B1–B8, its `Segment` stored/live pair, its write doors and its rulings Q1–Q16 describe a type this library will not ship. `BUILD-LOG.md` keeps that text as the record of what was refused and why. **Read the table at the top of the log, never an old body.**
+**Option C is void.** Its build order B1–B8, its `Segment` stored/live pair, its write doors and its rulings Q1–Q16 describe a type this library will not ship. ADR 0026's rulings appendix keeps that text as the record of what was refused and why. **Read the table at the top of the log, never an old body.**
 
 Line numbers below were measured at `496ed77`. **A line number is a hint. Open the file.**
 

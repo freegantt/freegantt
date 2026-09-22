@@ -102,7 +102,7 @@ export type ProposedEdit<TProps> = {
 type Field<TValue = unknown> =
   | { key: FieldKey; type?: FieldTypeName; rollUp?: AggregatorName; editable?: boolean;
       /* compute is genuinely absent here, not compute?: never — TypeScript's 'compute' in field
-         narrowing only excludes an arm that never declares the key at all (J12, BUILD-LOG). */
+         narrowing only excludes an arm that never declares the key at all (J12, field redesign). */
       /* equals, compare, formatValue, parseValue, inputType, column */ }
   | { key: FieldKey; compute(entry: Entry, ctx: FieldContext): TValue | undefined;
       rollUp?: never; editable?: never; /* compare, formatValue, column */ };

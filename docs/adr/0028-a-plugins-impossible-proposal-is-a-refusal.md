@@ -1,7 +1,7 @@
 ---
 status: accepted — ruled 2026-09-18, out of branch review F9 on
 [#421](https://github.com/Pawel-IT/FreeGantt/issues/421). Working material:
-`plans/segment-is-a-bar/BUILD-LOG.md` (Q39, corrected here).
+[ADR 0026's rulings appendix](0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46) (Q39, corrected here).
 decided: an `EditExtender` that proposes a value core defines as impossible gets a **refusal** — the
 gesture drops at `severity: 'warning'`, `by: <the plugin>`. An extender that throws anything else
 gets a **fault** — `gesture-commit-failed` at `severity: 'error'`. `severity` answers what it cost;
@@ -90,7 +90,7 @@ wants a zero-length marker or a direction should get a representation for that, 
   path always came from an extender. That is why `by` names the plugin without asking.
 - A direct `dataset.entries.update()` with an inverted span still **throws** `InvertedSpanError` to
   its caller. That caller is on its own stack and can catch it, so it needs no report.
-- Q39's ruling in `plans/segment-is-a-bar/BUILD-LOG.md` keeps its prose and takes a correction
+- Q39's ruling in [ADR 0026's rulings appendix](0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46) keeps its prose and takes a correction
   notice: it is a record of what was thought at the time.
 - Both sides are pinned in `src/view/gesture-pipeline.test.ts`. Neither side had a test before, which
   is how the reclassification shipped unnoticed.

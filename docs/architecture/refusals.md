@@ -1,3 +1,8 @@
+---
+last_update:
+  date: 2026-09-15
+---
+
 # How a refusal reaches the caller
 
 <style>
