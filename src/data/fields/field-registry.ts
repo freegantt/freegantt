@@ -93,10 +93,6 @@ function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField 
   return toStoredEditable({ ...merged, ...(column !== undefined ? { column } : {}) });
 }
 
-/** #142/#470: the only keys a consumer declaration may carry when it names a core Field's key. A
- *  core Field is the library's own — it cannot be redeclared — but these keys are facts about the
- *  Dataset, not about the Field's identity, so a consumer may still state them. `#mergeCoreFieldOverride`
- *  iterates this list; a key added here needs no other line changed, and no key names itself twice. */
 /** Does this Field take part in the Rollup? `'none'` is a declared opt-out, not an absent key
  *  (`register({ key: 'locked', rollUp: 'none' })`), so an absent key and an opted-out one both
  *  answer `false`. One predicate, because two readers ask: the Rollup pass itself, and #256's
@@ -150,15 +146,36 @@ export function requireResolvedIndex(
   return index;
 }
 
+/** #142/#470: the only keys a consumer declaration may carry when it names a core Field's key. A
+ *  core Field is the library's own — it cannot be redeclared — but these keys are facts about the
+ *  Dataset, not about the Field's identity, so a consumer may still state them. `#mergeCoreFieldOverride`
+ *  iterates this list; a key added here needs no other line changed, and no key names itself twice.
+ *  `rollUp` is on the list, but `overridableKeysFor` narrows it further: `plans/01` §6 puts only
+ *  `start`/`end` on the rollUp override path, because those are the only core Fields that declare a
+ *  `rollUp` of their own (D-S4-3) — a core Field with no `rollUp` (`name`, `parentId`) has nothing
+ *  for a consumer's `rollUp` to override, and letting one through would let a consumer's Field rows
+ *  roll a value that core never computes at all. */
 const CORE_FIELD_OVERRIDABLE_KEYS = ['editable', 'rollUp'] as const;
 type CoreFieldOverridableKey = (typeof CORE_FIELD_OVERRIDABLE_KEYS)[number];
 
-/** The first key on `field`, other than `key` itself, that `CORE_FIELD_OVERRIDABLE_KEYS` does not
- *  name — `undefined` when every key `field` carries is legal to override. Reads the object's own
- *  keys, not `Field`'s full shape, so an override that states nothing beyond `key` (a no-op) passes. */
-function illegalCoreOverrideKey(field: Field): string | undefined {
+/** The keys `field`'s core Field may take an override on. Every core Field accepts `editable`;
+ *  `rollUp` joins the list only when the core Field itself declares one (`start`, `end`) — see
+ *  `CORE_FIELD_OVERRIDABLE_KEYS` above for why. */
+function overridableKeysFor(core: Field): readonly CoreFieldOverridableKey[] {
+  return core.rollUp !== undefined
+    ? CORE_FIELD_OVERRIDABLE_KEYS
+    : CORE_FIELD_OVERRIDABLE_KEYS.filter((key): key is CoreFieldOverridableKey => key !== 'rollUp');
+}
+
+/** The first key on `field`, other than `key` itself, that `overridableKeys` does not name —
+ *  `undefined` when every key `field` carries is legal to override. Reads the object's own keys, not
+ *  `Field`'s full shape, so an override that states nothing beyond `key` (a no-op) passes. */
+function illegalCoreOverrideKey(
+  field: Field,
+  overridableKeys: readonly CoreFieldOverridableKey[],
+): string | undefined {
   return Object.keys(field).find(
-    (key) => key !== 'key' && !(CORE_FIELD_OVERRIDABLE_KEYS as readonly string[]).includes(key),
+    (key) => key !== 'key' && !(overridableKeys as readonly string[]).includes(key),
   );
 }
 
@@ -257,18 +274,20 @@ export class FieldRegistry {
     }
   }
 
-  /** #142: `field` names a core Field's key. A core Field cannot be redeclared, but one key of it
-   *  may be overridden — `CORE_FIELD_OVERRIDABLE_KEYS` names which. Call: `fields: [{ key: 'start',
-   *  editable: false }]` — "declare that `start` is not editable." Replaces the core entry in place,
+  /** #142: `field` names a core Field's key. A core Field cannot be redeclared, but `editable` may
+   *  always be overridden, and `rollUp` may be overridden on the core Fields that declare one
+   *  (`start`/`end`) — `overridableKeysFor` names which, per core Field. Call: `fields: [{ key:
+   *  'start', editable: false }]` — "declare that `start` is not editable." Replaces the core entry in place,
    *  at its own position in declaration order, so `all`/`get` answer the merged Field from here on. */
   #mergeCoreFieldOverride(field: Field, key: string): void {
     if (this.#consumerOverriddenCoreKeys.has(key)) throw new DuplicateFieldKeyError(key);
-    const illegalKey = illegalCoreOverrideKey(field);
-    if (illegalKey !== undefined) {
-      throw new IllegalCoreFieldOverrideError(key, illegalKey, CORE_FIELD_OVERRIDABLE_KEYS);
-    }
     const core = this.#byKey.get(key);
     if (core === undefined) throw new DuplicateFieldKeyError(key); // unreachable: core Fields add first.
+    const overridableKeys = overridableKeysFor(core);
+    const illegalKey = illegalCoreOverrideKey(field, overridableKeys);
+    if (illegalKey !== undefined) {
+      throw new IllegalCoreFieldOverrideError(key, illegalKey, overridableKeys);
+    }
     // `field` cross-declares `editable`/`rollUp` on both `Field` arms (one real, one `never`), so
     // both keys read off it without a cast.
     const declared: Pick<Field, CoreFieldOverridableKey> = field;

@@ -164,15 +164,15 @@
   }
 </style>
 
-*Architecture snapshot — slice S5, updated 2026-09-06.*
+*Architecture snapshot — updated 2026-09-06.*
 
 The dependency graph as it actually stands in `src/` right now: solid boxes are built and
 wired together by real imports; the one hatched box is the remaining stub
-(`scheduling/index.ts`, reserved for S7). The vertical split is the one boundary the linter
+(`scheduling/index.ts`). The vertical split is the one boundary the linter
 enforces — `model/`, `time/`, `data/`, and `layout/` stay DOM-free; only the right-hand column
 may touch `document` or `window`. `scheduling/` is DOM-free too, but sits outside the core
 zone on purpose: it is the first-party default scheduling plugin's engine, not a mandatory
-core layer (ADR 0002) — a Gantt with no scheduling plugin installed never loads it. At S5,
+core layer — a Gantt with no scheduling plugin installed never loads it.
 `extensions/` is built: plugin runtime, commands, keymap, popup, and the three shipped
 built-ins. `scheduling/` is the only stub left.
 
@@ -237,7 +237,7 @@ stroke-dasharray="3 4"
 <text x="60" y="142" class="box-name" font-size="11.5" fill="var(--core)" letter-spacing="0.06em">
 DOM-FREE CORE — mandatory, also runs headless in Node
 </text>
-<!-- first-party plugin zone: scheduling is deliberately NOT inside the core zone (ADR 0002) -->
+<!-- first-party plugin zone: scheduling is deliberately NOT inside the core zone -->
 <rect
 x="40"
 y="726"
@@ -250,7 +250,7 @@ stroke-width="1.25"
 stroke-dasharray="3 4"
 />
 <text x="60" y="750" class="box-name" font-size="11.5" fill="var(--muted)" letter-spacing="0.06em">
-FIRST-PARTY DEFAULT PLUGIN — DOM-free, not mandatory core (D4 · ADR 0002)
+FIRST-PARTY DEFAULT PLUGIN — DOM-free, not mandatory core
 </text>
 <rect
 x="660"
@@ -393,7 +393,7 @@ stroke-dasharray="5 4"
 scheduling/
 </text>
 <text x="455" y="806" text-anchor="middle" class="box-sub" font-size="10.5" fill="var(--muted)">
-5 lines · stub — S7, ADR 0002
+5 lines · stub
 </text>
 <!-- render/ -->
 <rect
@@ -660,14 +660,14 @@ never — meet only through data/
 </text>
 </svg>
 <figcaption>
-Boxes trace what <code>src/</code> contains at S5; arrows trace real <code>import</code> statements —
-except the muted <code>data/ ⇄ scheduling/</code> bridge, which is the designed extension-hook seam (ADR 0002):
+Boxes trace what <code>src/</code> contains; arrows trace real <code>import</code> statements —
+except the muted <code>data/ ⇄ scheduling/</code> bridge, which is the designed extension-hook seam:
 no static import in either direction. <code>model/</code> has zero dependencies and feeds nearly
 everything; <code>time/</code> and <code>layout/</code> stay DOM-free so they run the same in Node as in
 a browser; <code>render/</code> and <code>view/</code> are the DOM-touching modules.
 <code>data/</code>, <code>interaction/</code> and <code>extensions/</code> are fully built —
 <code>extensions/</code> may import only <code>api/</code> and <code>model/</code>.
-<code>scheduling/</code> remains a stub for S7.
+<code>scheduling/</code> remains a stub.
 <code>api/</code> imports <code>interaction/</code> for constructor injection of gesture attachments
 and <code>extensions/</code> for the plugin runtime and shipped built-ins.
 </figcaption>
@@ -952,7 +952,7 @@ helpers — everywhere else the crossing is types only. <code>data/</code> also 
 full vocabulary to declare fields and react to changesets.
 <code>view/</code> never imports <code>api/</code> — <code>GanttShell</code> takes a
 structurally-compatible <code>DatasetLike</code> instead, so <code>view -&gt; api</code> stays a
-non-edge (#40).
+non-edge.
 </figcaption>
 </figure>
 </div>
@@ -1229,11 +1229,11 @@ color="var(--ink)"
 />
 </svg>
 <figcaption>
-The transaction pipeline at S5. The consumer calls <code>dataset.transaction()</code>, which delegates
+The transaction pipeline. The consumer calls <code>dataset.transaction()</code>, which delegates
 to <code>runTransaction()</code> in <code>data/transaction.ts</code>. The body runs against a staged
 <code>EntryStore</code> overlay so mid-flight reads see consistent state. The
 <code>EditExtender</code> hook is called once (identity function by default; a Dataset plugin can wrap
-it, and a scheduling plugin occupies this slot in S7). Hierarchy promotion and rollup run next, then
+it). Hierarchy promotion and rollup run next, then
 <code>foldChangeSet()</code> diffs the staged edits against committed state to produce one
 <code>ChangeSet</code>. The events fire in order: <code>beforeChange</code> (cancelable — the
 consumer can veto), then <code>change</code> (carries the changeset). The <code>History</code>
@@ -1402,10 +1402,10 @@ presets · instant() · now() · addMs · ZonedTime
 instant(), ViewPreset
 </text>
 <text x="1030" y="132" text-anchor="middle" class="box-sub" font-size="10" fill="var(--ink)">
-TimeScaleModel, ScrollAxis — D9 shared-axis objects
+TimeScaleModel, ScrollAxis — shareable axis objects
 </text>
 <text x="1030" y="176" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-layout/ re-exports widened by issue #91 §9-I
+layout/ re-exports for viewport coordination
 </text>
 <!-- boundary -->
 <line
@@ -1514,7 +1514,7 @@ backend.sync(frame)
 render/dom/index.ts
 </text>
 <text x="910" y="462" text-anchor="middle" class="box-sub" font-size="9.5" fill="var(--muted)">
-syncKeyed() per layer (#48)
+syncKeyed() per layer
 </text>
 <g stroke="var(--ink)" stroke-width="1.5" fill="none" marker-end="url(#arrow3)" color="var(--ink)">
 <path d="M260,315 H310" />
@@ -1529,7 +1529,7 @@ same call chain re-runs on every TimeScaleModel onChange — resize, zoom, or a 
 <figcaption>
 Four export groups, one allow-list philosophy: <code>api/index.ts</code> re-exports exactly the types
 a consumer needs to call the classes above it and nothing else — <code>TimeScaleOptions</code> stays
-internal because it carries <em>resolved</em> geometry, not a caller's state (#5). At S5 the
+internal because it carries <em>resolved</em> geometry, not a caller's state. The
 <code>Gantt</code> class exposes plugins, commands, and the live-reconfigurable properties (preset,
 range, gridColumns, rowSource, collapsed, selection, …) and <code>Dataset</code> exposes entries CRUD,
 transactions, events, fields, Dataset plugins, and undo/redo. The call chain underneath never appears in the public
@@ -1608,7 +1608,7 @@ new Gantt({container, dataset, scale?})
 gantt.destroy()
 </text>
 <text x="125" y="158" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-one private GanttShell each (I2)
+one private GanttShell each
 </text>
 <text x="125" y="174" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
 2,397 lines · 12 files
@@ -1634,7 +1634,7 @@ constructor: backend.mount(container)
 → scale.bind(...) — its onChange fires
 </text>
 <text x="410" y="132" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
-the first render (#22)
+the first render
 </text>
 <text x="410" y="156" text-anchor="middle" class="box-sub lbl" font-size="10" fill="var(--ink)">
 render(): frame = computeFrame(...)
@@ -1649,7 +1649,7 @@ destroy(): handle.unbind();
 backend.destroy(); container cleared
 </text>
 <text x="410" y="234" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-caches one RowHeightIndex (#47)
+caches one RowHeightIndex
 </text>
 <text x="410" y="250" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
 FrameScheduler coalesces rAF
@@ -1748,7 +1748,7 @@ get scale — memoized createTimeScale()
 get preset
 </text>
 <text x="1060" y="194" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-one shared instance = x-synced Gantts (D9)
+one shared instance = x-synced Gantts
 </text>
 <!-- time/ -->
 <rect
@@ -1768,7 +1768,7 @@ time/
 createTimeScale(), hourPreset … yearPreset
 </text>
 <text x="1060" y="302" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-only new Date()/Date.now() in src/ (I10)
+only new Date()/Date.now() in src/
 </text>
 <text x="1060" y="318" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
 1,388 lines · 10 files · temporal-polyfill façade
@@ -1829,7 +1829,7 @@ resolveRows → produceItems → cull
 header ticks, date-lines, columns
 </text>
 <text x="1060" y="662" text-anchor="middle" class="box-sub lbl" font-size="9.5" fill="var(--muted)">
-heights: shell-cached RowHeightIndex (#47)
+heights: shell-cached RowHeightIndex
 </text>
 <!-- model/ strip -->
 <rect

@@ -202,18 +202,39 @@ export class UnknownPresetError extends FreeGanttError {
 /** `code: 'invalid-preset'` — a `ViewPreset` object that breaks a rule between its own fields, from
  * `resolvePreset` (header readability follow-up). One code covers every such rule, because each one
  * names the same fault: this preset object is inconsistent. `time/presets.ts` holds the rules —
- * today, `preferredTickWidthPx` below its own `minTickWidthPx`, and `tickUnit`/`tickIncrement`
- * coarser than the finest header. `reason` is the broken validator's own sentence: it names the rule
- * and the fix, so two rules never share one message. */
+ * today, `'tick-widths'` (`preferredTickWidthPx` below its own `minTickWidthPx`), `'tick-step'`
+ * (`tickUnit`/`tickIncrement` coarser than the finest header), and `'tick-increment'` (a
+ * `tickIncrement` or header `increment` that is not a positive whole number — `0` or less never
+ * advances a step, `stepBy` throws an untyped `RangeError` for it deep in `time/scale.ts`, far from
+ * the preset that caused it (NEW-2/#481 review)). `rule` is that closed set, for a caller that wants
+ * to branch without parsing prose; `message` is the broken validator's own sentence, naming the fix,
+ * and stays the human-readable half.
+ *
+ * `rule` is not `reason`: that word already names the consumer's own words passed to
+ * `refuse(reason)` (`MutationCancelledError.reason`, the `ErrorReport.reason` field) — a different
+ * thing, core's own words about a rule it enforces, not the consumer's about one it chose (T2/#481
+ * review, one word keeps one meaning).
+ *
+ * `operation` names the actual door the consumer wrote through — `resolvePreset` is one function
+ * reached from three doors (`gantt.preset`, `gantt.zoomPresets`, a shared `TimeScaleModel`'s own
+ * `preset`), the same reason `InvertedSpanError` below takes `operation` (#482 review). A message
+ * that always said `gantt.preset` named the wrong door for the other two. */
 export class InvalidPresetError extends FreeGanttError {
   readonly presetId: string;
-  readonly reason: string;
+  readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment';
+  readonly operation: string;
 
-  constructor(presetId: string, reason: string) {
-    super('invalid-preset' satisfies BuiltInThrownCode, `gantt.preset: the preset "${presetId}" ${reason}`);
+  constructor(
+    presetId: string,
+    rule: 'tick-widths' | 'tick-step' | 'tick-increment',
+    message: string,
+    operation: string,
+  ) {
+    super('invalid-preset' satisfies BuiltInThrownCode, `${operation}: the preset "${presetId}" ${message}`);
     this.name = 'InvalidPresetError';
     this.presetId = presetId;
-    this.reason = reason;
+    this.rule = rule;
+    this.operation = operation;
   }
 }
 
