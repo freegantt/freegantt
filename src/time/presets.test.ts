@@ -128,6 +128,62 @@ describe('validatePresetTickStep (via resolvePreset)', () => {
     expect(resolvePreset(equalStep, 'test')).toBe(equalStep);
   });
 
+  it('allows a tick step finer than the finest header (hour tick under a day band)', () => {
+    const hourTickUnderDayBand: ViewPreset = {
+      id: 'custom-hour-tick',
+      tickUnit: 'hour',
+      tickIncrement: 1,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(resolvePreset(hourTickUnderDayBand, 'test')).toBe(hourTickUnderDayBand);
+  });
+
+  // T1/#481: `isCoarserThan` answered calendar nesting, not duration, so a coarser tick in a
+  // different unit than its header slipped through. `isCoarserStep` compares real span instead.
+  it.each([
+    [
+      'a 2-day grid under a day header',
+      { tickUnit: 'hour', tickIncrement: 48 } as const,
+      { unit: 'day', increment: 1 } as const,
+    ],
+    [
+      '10-day steps under a weekly header',
+      { tickUnit: 'day', tickIncrement: 10 } as const,
+      { unit: 'week', increment: 1 } as const,
+    ],
+    [
+      'a 1440-minute tick under an hour header',
+      { tickUnit: 'minute', tickIncrement: 1440 } as const,
+      { unit: 'hour', increment: 1 } as const,
+    ],
+  ])('throws for %s, coarser than its header by real span, not just by unit', (_label, tick, header) => {
+    const preset: ViewPreset = {
+      id: 'custom-cross-unit-coarser',
+      tickUnit: tick.tickUnit,
+      tickIncrement: tick.tickIncrement,
+      headers: [{ ...header, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(() => resolvePreset(preset, 'test')).toThrow(InvalidPresetError);
+  });
+
+  // T1/#481: the same guard over-refused a finer-or-equal tick whenever the header band carried a
+  // large increment, because it only compared increments when the units matched.
+  it.each([
+    ['a fortnight-column header', { unit: 'day', increment: 14 } as const],
+    ['a span-equal week-column header', { unit: 'day', increment: 7 } as const],
+  ])('allows a week tick under %s, no coarser once the header increment is counted', (_label, header) => {
+    const preset: ViewPreset = {
+      id: 'custom-cross-unit-finer',
+      tickUnit: 'week',
+      tickIncrement: 1,
+      headers: [{ ...header, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(resolvePreset(preset, 'test')).toBe(preset);
+  });
+
   it('allows empty headers — there is no band to compare the tick step against', () => {
     const noHeaders: ViewPreset = {
       id: 'custom-no-headers',
