@@ -15,6 +15,16 @@ issue plans land here as they're opened.
   the spec up to date. The plan stays open until the branch merges. Plan:
   [470-uniform-rollup.md](./470-uniform-rollup.md).
 
+- **A declared Field key written flat does not typecheck, though it works at runtime.** No issue
+  number yet; flagged for the author in `src/model/dataset.ts` and carried here when the field
+  redesign's build log was deleted. `new Dataset({ entries: [{ id: 'd1', hours: 8 }] })` raises
+  TS2353, because an excess-property check hits a fresh literal; hoisting the array to a `const`
+  first compiles. `dataset.entries.update('t2', { cost: 12_000 })` raises TS2353 unless the Dataset
+  names its props (`new Dataset<{ cost: number }>(...)`), because inference gives `TProps = unknown`.
+  Ingest reads the flat key at runtime either way (`propsFromInput` in `entry-reader.ts`), so a
+  caller loses the static check, not the behaviour. The docs hoist and name the type to stay honest.
+  The ergonomics are the author's call.
+
 **Closed:**
 
 - [#466](https://github.com/freegantt/freegantt/issues/466) — a `StoredEntry` could not

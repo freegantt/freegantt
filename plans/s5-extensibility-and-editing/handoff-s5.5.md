@@ -1,5 +1,9 @@
 # Handoff — S5.4 done, start S5.5
 
+> **Closed out.** The work this note hands off shipped, and `.slice` has since moved to S6. The
+> "what's left" boxes below were never ticked as each item landed, so an empty box means *not
+> ticked*, never *not done*. Spot-checked at close-out: the files these boxes name exist.
+
 ## S5.4 status: done
 
 All TODO boxes in [`s5.4-renderers.md`](./s5.4-renderers.md) §4 are ticked, including the

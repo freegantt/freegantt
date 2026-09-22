@@ -1,3 +1,8 @@
+---
+last_update:
+  date: 2026-09-22
+---
+
 # Harness docs
 
 Maps of the library as the harness demos run it today. These pages sit next to the demos so a
@@ -47,6 +52,18 @@ consumer API.
 *Derived from `README.md`, `docs/05-consumer-api.md`, `src/api/index.ts`, `harness/main.ts`.*
 
 ### The smallest Gantt
+
+<!-- doc-example-setup
+// What the examples below stand on: the two classes a reader has already imported, a live Dataset
+// and Gantt, the entries they were built from, and the app's own callbacks.
+declare const Dataset: typeof import('freegantt').Dataset;
+declare const dataset: import('freegantt').Dataset;
+declare const gantt: import('freegantt').Gantt;
+declare const entries: readonly import('freegantt').EntryInput[];
+declare function asCurrency(value: unknown, ctx: import('freegantt').FormatContext, entry: import('freegantt').Entry): string;
+declare function save(changeSet: import('freegantt').ChangeSet): void;
+declare function render(entries: readonly import('freegantt').Entry[]): void;
+-->
 
 ```ts
 import { Gantt, Dataset } from 'freegantt';

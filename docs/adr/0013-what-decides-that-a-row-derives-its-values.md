@@ -1,7 +1,7 @@
 ---
 status: accepted, narrowed 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) (proposed) — *"core does not ship a diamond"* was written when the only diamond on offer was one core painted by reading `kind === 'milestone'`. Core now ships `diamond()` as a variant factory, and no row wears it until a rule claims it. **The decision below is unchanged: an Entry carries no stored classification, and core reads no stored word to decide a look.** Original verdict: `verify:full PASS — all 16 checks green, test:e2e included (70s).` (Build 3, 2026-09-11). Spike report: [reviews/2026-09-10-0013-derivation-spikes](../../plans/field-redesign/reviews/2026-09-10-0013-derivation-spikes/README.md). Split out of ADR 0011 on 2026-09-09. **The `distribute` half of the 2026-09-11 amendment is reversed 2026-09-21 by [#470](https://github.com/freegantt/freegantt/issues/470)** — see the second amendment, below the first.
 decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them; a rolling-up parent's cell is read-only from every direction, and grouping is not permission (amendment, 2026-09-11); a consumer who wants to own a parent's value declares `rollUp: 'none'` on the Field instead of a distribution policy (amendment, 2026-09-21, #470). *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
-open: nothing. The parent bar drag ships (Build 3g). Q9 is answered: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. The `ProposedDates` api report is approved and committed. `e2e/parent-bar-drag.spec.ts` drags a real `.fg-bar-summary` on two pages and reads the children's dates back (N13). See `plans/field-redesign/BUILD-LOG.md` J34, J35, N12 and N13. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
+open: **Q7** — a lone write to a derived cell wrapped in `dataset.transaction()` is not refused, so line 91's *"parent cells stay refused"* is opt-out for any consumer who wraps. Raised 2026-09-11, never ruled; carried in full in the appendix below. The parent bar drag ships (Build 3g). Q9 is answered: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. The `ProposedDates` api report is approved and committed. `e2e/parent-bar-drag.spec.ts` drags a real `.fg-bar-summary` on two pages and reads the children's dates back (N13). J34, J35, N12 and N13 are in the appendix below. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
 # What decides that a row derives its values
@@ -108,7 +108,7 @@ Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.en
 then also caught two of the library's own writes. The fix separated a consumer's write from the
 library's by asking **how deeply nested the call was** (`TransactionData.openTransactions === 1`).
 `dataset.transaction()` is public, so a consumer reaches that lever in one call: the identical write
-that throws on its own lands silently inside a transaction body (Q7, `plans/field-redesign/BUILD-LOG.md`).
+that throws on its own lands silently inside a transaction body (Q7, in the appendix below — still open).
 Permission was being read off the **shape of the call**. It must be read off the **thing being written**.
 
 ### The rule
@@ -331,3 +331,51 @@ consumer writes no gesture code in either mode.
 | Issue | What this ADR needs from it |
 |---|---|
 | [#270](https://github.com/Pawel-IT/FreeGantt/issues/270) | A declining Aggregator leaves a stale rolled-up value. `rollup.ts:208` skips an Aggregator **that saw children**; a childless parent never reaches one. Land the fix inside this build — BUILD-SPEC V15 |
+
+## Appendix — the build's calls, and one question still open
+
+These entries were `plans/field-redesign/BUILD-LOG.md`. That log is deleted; what this ADR cites
+lives here.
+
+| | The call |
+|---|---|
+| `J34` | the parent drag as built: one draft, split into what it writes and what it paints |
+| `J35` | the parent-drag e2e corrected two things the log said, and one of them was the agent's |
+| `N12` | the six `.fg-bar-summary` e2e exclusions: all six stay, and none of them is a drag test |
+| `N13` | no e2e covered the parent bar drag — closed 2026-09-11, `e2e/parent-bar-drag.spec.ts` |
+
+### Q7 — the moved guard is bypassable by any consumer who wraps the write in `dataset.transaction()`
+
+**Raised:** 2026-09-11, coordinator, verifying the Q6 fix. **Status:** open, needs the author.
+
+The Q6 fix works and both acceptance tests pass unmodified. But the signal it separates on —
+transaction depth (`TransactionData.openTransactions === 1`) — is **reachable by a consumer**, because
+`dataset.transaction()` is public API. Measured with a throwaway probe (since deleted), on `p1` with
+one child `c1`:
+
+| Call | Result |
+|---|---|
+| `entries.update('p1', {start, end})` standalone | throws `DerivedFieldNotWritableError` — correct |
+| the **same lone write** inside `state.transaction(() => { … })` | **no throw, and the consumer's value sticks on the derived cell** |
+
+So ADR 0013 line 91 — *"Parent **cells** stay refused"* — no longer holds for any consumer who wraps.
+The refusal is now opt-out, and the opt-out is one public call.
+
+**This is not a failed task.** The two internal callers Q6 named are genuinely fixed, the quadratic
+regression is genuinely fixed, and the fix agent recorded the `dataset.transaction()` case in its own
+comment as deliberate. The question is whether that consequence is acceptable.
+
+**Why transaction depth cannot be the whole rule.** Decision 5's protected case does go through the
+**public** `entries.update()` inside a transaction, so "internal method for internal callers" cannot
+separate them — the fix agent tested that and was right to reject it. But decision 5's case is a
+proposal that *accompanies a cause* (the child's own change in the same transaction). A lone write to
+a derived cell has no cause; it is an ordinary refused write that happens to be wrapped.
+
+**Candidate rule, for the author:** refuse unless the same transaction also carries a **cause** — a
+change to a descendant, or a structural change that makes the Rollup run for this Entry. That matches
+decision 5's wording ("the same-transaction proposal wins **over the cascade**" — there must be a
+cascade) and restores line 91 for the bare-write case. It is more work than the current check and it
+is a design decision, so it is not an agent's to make.
+
+**Alternative:** accept the current behaviour and amend ADR 0013 line 91 to say the refusal is a
+consumer-door convenience, not an invariant. Honest, but it weakens a stated guarantee.

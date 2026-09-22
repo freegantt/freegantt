@@ -107,9 +107,10 @@ From day one (`plans/04` §3.1), only `.` resolves:
 }
 ```
 
-`sideEffects` is a one-file allowlist, not `false` as `plans/04` §3.1 drafted it: `view/styles.ts`
-injects the base stylesheet on import, so a bundler that drops it as dead code ships an unstyled
-Gantt. Everything else in the package is side-effect free, which is what keeps tree-shaking real.
+`sideEffects` is a one-file allowlist. S0 shipped a blanket `false`, and S5.13 narrowed it (issue
+#137 F16): `view/styles.ts` injects the base stylesheet on import, so a bundler that drops it as
+dead code ships an unstyled Gantt. Everything else in the package is side-effect free, which is what
+keeps tree-shaking real. `test/guards/package-shape.test.ts` holds the array to that one file.
 
 ### 3.2 Tests that keep it sealed
 

@@ -5,8 +5,8 @@ ruled on 2026-09-17, after spike **S4** measured the cost objection away, and bu
 [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md)
 landed it. The design is
 [`CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md),
-and every ruling is in
-[`BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md).
+and every ruling is the
+[rulings appendix of ADR 0026](./adr/0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46).
 **The `Segment` *type* no longer exists** — the word does. A Segment is a Bar on a row that draws more than one Bar, and nothing stores one (`CONTEXT.md`). A bar is an ordinary child `Entry`, described in
 [`CONTEXT.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/CONTEXT.md), [ADR 0025](./adr/0025-the-selection-holds-entries-not-segments.md)
 (the Selection holds `EntryId`) and [ADR 0026](./adr/0026-the-segment-retires.md) (the `Segment`
@@ -222,12 +222,34 @@ Band 1 is the same machinery with nothing to roll up.
 </figure>
 </div>
 
+<!-- doc-example-setup
+// What every example below stands on: the imports a reader already has, the consumer Fields this
+// page declares, and the container and dates its call sites pass.
+declare const Dataset: typeof import('freegantt').Dataset;
+declare const Gantt: typeof import('freegantt').Gantt;
+declare const wholeEntryBar: typeof import('freegantt').wholeEntryBar;
+type BarProducer = import('freegantt').BarProducer;
+type EntriesRowSource = import('freegantt').EntriesRowSource;
+type EntryRule = import('freegantt').EntryRule;
+type Props = { showDaysOnRow: boolean; hours: number; locked: boolean; team: string };
+declare const container: HTMLElement;
+declare const start: string;
+declare const end: string;
+-->
+
 ## The API, in call sites
 
 Every job below already ships, except one row.
 
 ```ts
-const dataset = new Dataset({
+const entries = [
+  { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
+  { id: 'd1', parentId: 'req-1', start, end, hours: 8 },               // a bar: a plain Entry
+  { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
+  { id: 'hold', name: 'Site hold', start, end },                       // a plain row, as today
+];
+
+const dataset = new Dataset<Props>({
   // Core ships `name`, `start`, `end` and `duration`. Every Field below is this consumer's own,
   // declared on the same code path as core's (ADR 0005).
   fields: [
@@ -235,15 +257,11 @@ const dataset = new Dataset({
     { key: 'hours', type: 'number', rollUp: 'sum' },
     { key: 'locked', type: 'boolean' },
   ],
-  entries: [
-    { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
-    { id: 'd1', parentId: 'req-1', start, end, hours: 8 },               // a bar: a plain Entry
-    { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
-    { id: 'hold', name: 'Site hold', start, end },                       // a plain row, as today
-  ],
+  entries,
 });
 
 new Gantt({
+  container,
   dataset,
   rowSource: { source: 'entries', childrenAsSegments: { showDaysOnRow: true } },
 });
@@ -289,10 +307,12 @@ Gantt — a read-only board resizes nothing, whatever a row looks like.
 parent Entry in the layout pass, so the scope of the setting is whatever the rule says:
 
 ```ts
-childrenAsSegments: true                                      // every parent
-childrenAsSegments: { team: 'framing' }                       // any value the data already holds
-childrenAsSegments: { showDaysOnRow: true }                   // the parents the consumer marks
-childrenAsSegments: (entry) => entry.children().length > 3    // whatever a predicate can ask
+const forms: readonly (EntryRule | true)[] = [
+  true,                                      // every parent
+  { team: 'framing' },                       // any value the data already holds
+  { showDaysOnRow: true },                   // the parents the consumer marks
+  (entry) => entry.children().length > 3,    // whatever a predicate can ask
+];
 ```
 
 The common case is the shorthand and the long form is the expert one, as every other config key on
@@ -340,15 +360,19 @@ parents that carry bars; their own parent matches no rule, keeps its row, wears 
 rolls up as it always has:
 
 ```ts
-entries: [
+const deeper = [
   { id: 'site-a', name: 'Site A' },                                      // a summary row
   { id: 'req-1', parentId: 'site-a', name: 'Framing crew', showDaysOnRow: true },
   { id: 'req-2', parentId: 'site-a', name: 'Roofing crew', showDaysOnRow: true },
   { id: 'd1', parentId: 'req-1', start, end, hours: 8 },                 // a bar on req-1's row
   { id: 'd2', parentId: 'req-1', start, end, hours: 4 },
-]
+];
 
-rowSource: { source: 'entries', tree: true, childrenAsSegments: { showDaysOnRow: true } }
+const rowSource: EntriesRowSource = {
+  source: 'entries',
+  tree: true,
+  childrenAsSegments: { showDaysOnRow: true },
+};
 ```
 
 Three rows: `site-a` with a summary rail over everything below it, then `req-1` and `req-2`, each
@@ -363,7 +387,7 @@ suppresses is the parent's own bar, so `summary()`'s rail does not paint over th
 stands for. **Core ships nothing to put one back** (Q26, ruled 2026-09-17): no rail key, no rail concept, no helper. A consumer who wants a band behind the bars writes one variant with a producer of their own, and that producer ignores the third parameter rather than reading it (Q27):
 
 ```ts
-bars: (entry, variant) => [wholeEntryBar(entry, variant)],
+const bars: BarProducer = (entry, variant) => [wholeEntryBar(entry, variant)];
 ```
 
 This producer always draws, segmented row or not — it is what a rail actually wants. `wholeSpanUnlessSegments`, the parameter it ignores, is core's own answer of *when to suppress*; a consumer producer that wants its band to survive claiming skips that question and always paints, so it always sits behind the children's bars rather than disappearing the moment `childrenAsSegments` matches the row.
@@ -609,7 +633,7 @@ survive. Here it is an ordinary <code>parentId</code> write, and the Hierarchy s
 | [`plans/segment-is-a-bar/README.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/README.md) | The build order C1–C8, the call sites, and the nine calls the plan makes |
 | [`plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/CHILD-ENTRY-DESIGN.md) | The ruled design, and what each former open point was ruled to be |
 | [`plans/segment-is-a-bar/SPIKE-FINDINGS.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/SPIKE-FINDINGS.md) | Spike S4 — the numbers, the two shapes written for the subject seam, and the limits on both |
-| [`plans/segment-is-a-bar/BUILD-LOG.md`](https://github.com/Pawel-IT/FreeGantt/blob/main/plans/segment-is-a-bar/BUILD-LOG.md) | Q1–Q44 — every ruling, and why Q17 voided Q1–Q16. Read the table at the top, not the older bodies below it |
+| [ADR 0026 — rulings appendix](./adr/0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46) | Q1–Q46 — every ruling, and why Q17 voided Q1–Q16 |
 | [ADR 0013](./adr/0013-what-decides-that-a-row-derives-its-values.md) | Why structure, not a stored word, decides that a row derives |
 | [ADR 0018](./adr/0018-a-variant-is-a-rule-not-an-id-list.md) | The `when` rule this key reuses |
 | [ADR 0023](./adr/0023-a-variant-with-no-items-follows-the-data.md) | `followSegments` — the default this design deletes |

@@ -2,7 +2,7 @@
 
 **Status, 2026-09-17: RULED. This is the design #421 builds.** Spike S4 ran and reported a partial pass: the cost objection falls, and shape (a) wins the subject seam ([`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md)).
 
-**Option C is void.** Its builds B1–B8, its `Segment` stored/live pair and its write doors do not ship. The build order is now C1–C7 in [`README.md`](README.md). `BUILD-LOG.md` keeps Option C's text as the record of what was refused and why — read the table at the top of that file, never an old body. This file's closing section says what Option C was, in one paragraph.
+**Option C is void.** Its builds B1–B8, its `Segment` stored/live pair and its write doors do not ship. The build order is now C1–C7 in [`README.md`](README.md). ADR 0026's rulings appendix keeps Option C's text as the record of what was refused and why — read the table at the top of that file, never an old body. This file's closing section says what Option C was, in one paragraph.
 
 Every code claim below was measured at `d3ec677` and re-checked at `496ed77`. **A line number is a hint. Open the file.**
 
@@ -218,7 +218,7 @@ These jobs do not depend on the Segment type. They stay in scope under either de
 
 ## What is ruled, and what still waits
 
-Spike S4 ran on 2026-09-17 and reported a partial pass. The evidence is in [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md); the rulings are `J-plan-A` to `J-plan-I` in [`README.md`](README.md) and the table at the top of [`BUILD-LOG.md`](BUILD-LOG.md). Every point below was an open point in the proposal. Nothing here is re-opened casually.
+Spike S4 ran on 2026-09-17 and reported a partial pass. The evidence is in [`SPIKE-FINDINGS.md`](SPIKE-FINDINGS.md); the rulings are `J-plan-A` to `J-plan-I` in [`README.md`](README.md) and the table at the top of [ADR 0026's rulings appendix](../../docs/adr/0026-the-segment-retires.md#appendix--the-rulings-behind-the-retirement-q1q46). Every point below was an open point in the proposal. Nothing here is re-opened casually.
 
 | # | The point | Ruling |
 |---|---|---|
@@ -253,7 +253,7 @@ All three were put to the author on 2026-09-17. Two are ruled and land in C1.
 
 **Nothing is open on 2026-09-18. Every question this design raised is ruled.**
 
-Five more were raised on 2026-09-17 by the coordinator, verifying this plan line by line against the code, and the author ruled four of them on 2026-09-18. They are in `BUILD-LOG.md`:
+Five more were raised on 2026-09-17 by the coordinator, verifying this plan line by line against the code, and the author ruled four of them on 2026-09-18. They are in ADR 0026's rulings appendix:
 
 - **Q29** — `reportUnknownFieldMatch` cannot carry a rule that is not a variant. C1 adds an `unknown-row-source-field` code, and Q21's stated reason is corrected: `fieldContext` never carried `equals`.
 - **Q30** — `VariantRule` becomes `EntryRule`, and `VariantPredicate` becomes `EntryPredicate`. A row-source key may not take a type named for variants (#7).
@@ -269,7 +269,7 @@ Two left the plan rather than closing inside it, and both are issues of their ow
 | **Q32** | **#428** — `duration` is a Field and aggregates through a named Aggregator; `measureDuration` retires | C6 renames `'segments'` to `'children'` and falls back to the Entry's own span when it has no children. Limited and inconsistent, by the author's own word |
 | — | **#425** — a vertical drag moves a bar to another row | The write ships in C1–C6. The gesture does not |
 
-Two more were raised on the same day and the author ruled both the same day. They are in `BUILD-LOG.md`:
+Two more were raised on the same day and the author ruled both the same day. They are in ADR 0026's rulings appendix:
 
 - **Q25, corrected by Q32** — `measureDuration: 'segments'` becomes `measureDuration: 'children'`. Overlap has no rule of its own: core adds the children, and never reads them for overlap. **It is not a rename.** Ingest mints one Segment over every spanning Entry, so a childless leaf measures its own span today and would measure `0` under `'children'`. C6 sums the direct children's spans and falls back to the Entry's own `end - start` when it has no children. The author called that stopgap limited and inconsistent, and **#428 removes it**: `duration` is a Field and should aggregate through a named Aggregator, which `data/fields/field-registry.ts:230` refuses on a `compute` Field today.
 - **Q26** — a claimed parent draws no bar of its own, and **core ships nothing else**: no rail key, no rail concept, no helper. A consumer may put a band back on a variant of their own.
@@ -284,4 +284,4 @@ Two more were raised on the same day and the author ruled both the same day. The
 
 Option C ruled that every bar is a `Segment`, a stored/live pair beside the Entry, with its own write doors. It is void. The table under *Why this idea leads* above is the reason: Q10–Q13 brought back seven of the eight doubled doors the Q6 grill chose Option C to remove.
 
-`BUILD-LOG.md` keeps Q1–Q16 and the earlier README text as the record. The six cold-read fixes to Option C that closed this file in its proposal form are void with it, and were removed on 2026-09-17: they bound only if the spike failed, and it did not.
+ADR 0026's rulings appendix keeps Q1–Q16 and the earlier README text as the record. The six cold-read fixes to Option C that closed this file in its proposal form are void with it, and were removed on 2026-09-17: they bound only if the spike failed, and it did not.

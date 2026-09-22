@@ -122,7 +122,7 @@ export function entryBar(
  *  hand-written lines that must get the Bar id convention right from documentation alone. Pure and
  *  DOM-free, like every other `layout/` function.
  *
- *  Load-bearing cast (ADR 0012, Build 1, J2 in BUILD-LOG.md): a non-spanning Entry has no
+ *  Load-bearing cast (ADR 0012, Build 1, J2): a non-spanning Entry has no
  *  `start`/`end` to draw, so `produceBarsForRow` never calls any producer — shipped or a
  *  plugin's own — for one. `spansTime` is where that rule is written, and `produceBarsForRow`
  *  is where it runs. The contract, not the type, is why `entry.start`/`entry.end` are read here
@@ -130,7 +130,7 @@ export function entryBar(
  *
  *  This is the one cast Q5 left standing. The type fix is a narrower parameter — the Entry this
  *  takes always spans — and that is a public signature change, so it is owed rather than taken
- *  (N10 in plans/field-redesign/BUILD-LOG.md). */
+ *  (N10, ADR 0012's appendix). */
 export function wholeEntryBar(entry: Entry, variant: string): Bar {
   return entryBar(entry, 0, entry.start as Instant, entry.end as Instant, variant);
 }

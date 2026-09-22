@@ -1,3 +1,8 @@
+---
+last_update:
+  date: 2026-09-22
+---
+
 # File inventory
 
 An index of the tree: find the file here, then follow it into [Class map](./classes.md) for what

@@ -96,7 +96,7 @@ A diagnostic behind this flag is not a warning that appears in development. It i
 - Our tests run with `DEV === true`, so the gated branch is the only branch they exercise. The suite is green and proves nothing about what a consumer gets.
 - Nobody reports the absence. A consumer cannot miss a line they have never seen.
 
-This has bitten three times. `'scale-options-ignored'` and the corrected-rollup report were both gated, and no consumer ever received one (D-S5-41). `'variant-matched-twice'` was written the same way and caught in review before it shipped (J33, `plans/field-redesign/BUILD-LOG.md`). All three were specified as "warn in dev mode", which is why that phrase is the signal: it names an intent this flag cannot carry.
+This has bitten three times. `'scale-options-ignored'` and the corrected-rollup report were both gated, and no consumer ever received one (D-S5-41). `'variant-matched-twice'` was written the same way and caught in review before it shipped (J33 of the field redesign — the double-claim warning was raised unconditionally, not behind `isDevMode()`). All three were specified as "warn in dev mode", which is why that phrase is the signal: it names an intent this flag cannot carry.
 
 **What it is legitimately for:** making *our own* development stricter, at a cost we do not want to charge a consumer. `transaction.ts` deep-freezes a ChangeSet so our tests catch a mutation. `build-commit-change-set.ts` asserts an extension hook did not overwrite the body. Both would still be correct if they never ran anywhere else. The test is: *would a consumer want this?* If yes, it must not be gated.
 

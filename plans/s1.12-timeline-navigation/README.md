@@ -480,7 +480,7 @@ Guardrails and glossary first, then the engine, then the seam, then the public e
 - [x] `fixtures/multi-year-dataset.ts`
 - [x] `harness/zoom.html` + `zoom.ts` toolbar; `window.__gantt` kept; nav label updated in every page
 - [x] Toolbar also mounted on `index.html`/`main.ts` and `data.html`/`data.ts` (shared `harness/timeline-toolbar.ts`), beyond §3.7's `zoom.html`-only ask
-- [ ] Review `harness/main.ts` and every harness page against CLAUDE.md's harness rule; record any gap against S1.12 and fix it in `src/`
+- [x] Review `harness/main.ts` and every harness page against CLAUDE.md's harness rule; record any gap against S1.12 and fix it in `src/` — **no longer a one-time box.** `CLAUDE.md` now makes this a standing rule: review `harness/main.ts` on every commit, changed or not, and close each gap in `src/`.
 
 ### Review and gate
 - [x] The §7 spec edits, landed with this step

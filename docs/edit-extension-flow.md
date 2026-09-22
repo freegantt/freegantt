@@ -64,6 +64,20 @@ The `ChangeSet` publishes the cascaded value on the added entity, and no separat
 committed store to be found by scanning it, and a removal leaves no trace once it lands. `addedEntryIds`
 and `removedEntryIds` on `EditRequest` close that gap (#235):
 
+<!-- doc-example-setup
+// What the examples below stand on: the request the hook receives, the Dataset the caller writes
+// to, and the two scheduling helpers this walkthrough leaves to the consumer.
+declare const request: import('freegantt').EditRequest;
+declare const dataset: import('freegantt').Dataset;
+type EditExtender = import('freegantt').EditExtender;
+type EntryId = import('freegantt').EntryId;
+type EntryEdit = import('freegantt').EntryEdit;
+type StoredEntry = import('freegantt').StoredEntry;
+declare function unlinkEverythingTouching(id: EntryId): void;
+declare function scheduleFrom(entry: StoredEntry): void;
+declare function findDependent(entries: import('freegantt').EditRequest['entries'], id: EntryId): StoredEntry | undefined;
+-->
+
 ```ts
 for (const id of request.removedEntryIds) unlinkEverythingTouching(id);
 for (const id of request.addedEntryIds) scheduleFrom(request.entryAfterEdits(id)!);

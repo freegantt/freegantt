@@ -174,6 +174,12 @@ one that shrinks every day to fit. That is the floor at work, not a defect. The 
 coarsens a preset behind the caller's back: a silent switch would turn `gantt.preset` into a value
 the library overwrites, and a window resize could relabel the axis without warning.
 
+<!-- doc-example-setup
+// What the example below stands on: a live Gantt, and a preset coarser than the one it shows.
+declare const gantt: import('freegantt').Gantt;
+declare const weekPreset: import('freegantt').ViewPreset;
+-->
+
 ```ts
 gantt.zoomOut(); // or:
 gantt.preset = weekPreset; // a coarser preset, chosen by you

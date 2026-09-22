@@ -63,6 +63,15 @@ dataset.redo(); // origin 'redo', cost 500 -> 200
 moves on the `change` the undo commit emits, never on the `undo()` call (D-S2-25) — so one
 handler can drive a toolbar:
 
+<!-- doc-example-setup
+// What the examples below stand on: a Dataset, a Gantt, and the app's own toolbar.
+declare const dataset: import('freegantt').Dataset;
+declare const gantt: import('freegantt').Gantt;
+declare const undoButton: HTMLButtonElement;
+declare const redoButton: HTMLButtonElement;
+declare const isDark: boolean;
+-->
+
 ```ts
 dataset.on('change', () => {
   undoButton.disabled = !dataset.canUndo;
@@ -102,7 +111,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `rowSource.filter` and `groupBy` take the `Entry` alone, and read a value off it: `(entry) => entry.read('team') === 'Blue'`. `sort.compare(a, b, fields)` compares two *values* of `sort.field`, not two Entries, and its third argument is a `FieldContext` — the dataset `timeZone`, for a comparer that needs the zone to read a date.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
-- `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
+- `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after the app rebuilds the Dataset from its own store). Do not copy `scrollTop` off the pane.
 - `variants` — the rules this Gantt paints rows with (ADR 0018); `bar()`, `summary()`, `diamond()` are core's own shipped looks (ADR 0022).
 - `gantt.variantFor(entry): ResolvedVariant` (ADR 0022) — the whole variant this Gantt resolved for one row, never `entry.variant`: an Entry belongs to a `Dataset`, a variant resolves per Gantt, and two Gantts on one Dataset may answer differently for the same row.
 

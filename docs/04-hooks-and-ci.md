@@ -415,3 +415,22 @@ result was one esbuild error and about 18 cascading `tsc` errors.
 
 Run `pnpm typecheck` immediately after any manual conflict resolution. Do this before you run the
 full gate, because the full gate takes far longer to tell you the same thing.
+
+### 7.7 Every `ts` fence in the docs is compiled, unless it cites a file
+
+`check-doc-examples` reads `README.md` and every page under `docs/`, `docs/adr/` excepted. A plain
+`ts` fence is an **example**: it compiles as its own module, against the built package types. So a
+fence that names an API which moved fails the gate.
+
+Two escapes exist, and both are visible in the page.
+
+1. A fence opened with `ts title="src/view/gantt-shell.ts"` is an **excerpt** of that file. The
+   checker does not compile it. It does check that the file exists, so a title cannot silence a
+   failing example. Docusaurus prints the title above the block.
+2. A `doc-example-setup` HTML comment declares the names the page's examples stand on. Its lines
+   land in an ambient `.d.ts` beside the examples, so an example may also build its own `dataset`.
+   Write `import('freegantt')` inline there — a top-level `import` makes the file a module, and the
+   names stop being ambient.
+
+An ADR is out of scope on purpose. It records the API of the day it was written, superseded ones
+included.

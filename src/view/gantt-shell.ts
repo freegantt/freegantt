@@ -1391,8 +1391,8 @@ export class GanttShell {
   }
 
   /** The whole variant this Gantt resolved for one row (ADR 0018, ADR 0022 §3). One door answers
-   *  `bars`/`paint`/`can`/`css` together. No caller looks a name up again (F3,
-   *  `plans/row-redesign/BUILD-LOG.md`). `render/` and `interaction/` read the same answer.
+   *  `bars`/`paint`/`can`/`css` together. No caller looks a name up again (F3, ADR 0022 §3).
+   *  `render/` and `interaction/` read the same answer.
    *  `CommandContext.variant` and the two callers that want the name alone read `.name`.
    *
    *  Not `entry.variant`. An Entry belongs to a Dataset. A variant resolves per Gantt. I2 lets two

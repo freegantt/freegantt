@@ -1,5 +1,9 @@
 # S1.9 implementation — handoff
 
+> **Closed out.** The work this note hands off shipped, and `.slice` has since moved to S6. The
+> "what's left" boxes below were never ticked as each item landed, so an empty box means *not
+> ticked*, never *not done*. Spot-checked at close-out: the files these boxes name exist.
+
 Picking up mid-implementation of `plans/s1.9-presets-and-zoom/README.md`. That file is the settled
 spec — read it in full before touching anything; this note is only "what's done, what's left, how
 to keep going."
