@@ -167,7 +167,7 @@ export class TimeScaleModel {
   #scaleBuiltFrom: TimeScaleOptions | undefined;
 
   constructor(options: TimeScaleModelOptions = {}) {
-    this.#preset = options.preset ? resolvePreset(options.preset) : dayPreset;
+    this.#preset = options.preset ? resolvePreset(options.preset, 'preset') : dayPreset;
     this.#range = options.range ?? 'fitDataset';
     this.#fit = options.fit ?? 'pane';
     internals.set(this, { scaleOptions: this.#scaleOptions });
@@ -181,7 +181,7 @@ export class TimeScaleModel {
    *  `resolvePreset` (throws `UnknownPresetError` for an unknown id); no-op, no invalidation, when
    *  the resolved preset is unchanged (D-S1.9-3). */
   set preset(ref: PresetRef) {
-    const resolved = resolvePreset(ref);
+    const resolved = resolvePreset(ref, 'preset');
     if (resolved === this.#preset) return;
     this.#preset = resolved;
     this.#scaleOptions.invalidate();

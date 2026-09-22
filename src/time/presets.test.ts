@@ -7,14 +7,14 @@ import type { ViewPreset } from './scale.js';
 describe('resolvePreset', () => {
   it('resolves every shipped id to its preset', () => {
     for (const id of Object.keys(presets) as ShippedPresetId[]) {
-      expect(resolvePreset(id)).toBe(presets[id]);
+      expect(resolvePreset(id, 'test')).toBe(presets[id]);
     }
   });
 
   it('throws UnknownPresetError with code "unknown-preset" for an id outside the shipped set', () => {
-    expect(() => resolvePreset('fortnight' as ShippedPresetId)).toThrow(UnknownPresetError);
+    expect(() => resolvePreset('fortnight' as ShippedPresetId, 'test')).toThrow(UnknownPresetError);
     try {
-      resolvePreset('fortnight' as ShippedPresetId);
+      resolvePreset('fortnight' as ShippedPresetId, 'test');
     } catch (error) {
       expect((error as UnknownPresetError).code).toBe('unknown-preset');
     }
@@ -28,7 +28,7 @@ describe('resolvePreset', () => {
       headers: [{ unit: 'hour', increment: 6, format: () => 'x' }],
       preferredTickWidthPx: 40,
     };
-    expect(resolvePreset(custom)).toBe(custom);
+    expect(resolvePreset(custom, 'test')).toBe(custom);
   });
 
   it('throws InvalidPresetError with code "invalid-preset" when a custom preset\'s minTickWidthPx exceeds its preferredTickWidthPx', () => {
@@ -40,11 +40,34 @@ describe('resolvePreset', () => {
       preferredTickWidthPx: 24,
       minTickWidthPx: 32,
     };
-    expect(() => resolvePreset(tooNarrow)).toThrow(InvalidPresetError);
+    expect(() => resolvePreset(tooNarrow, 'test')).toThrow(InvalidPresetError);
     try {
-      resolvePreset(tooNarrow);
+      resolvePreset(tooNarrow, 'test');
     } catch (error) {
       expect((error as InvalidPresetError).code).toBe('invalid-preset');
+    }
+  });
+
+  // C3/#482 review: `resolvePreset` is one function reached from three doors — its own `operation`
+  // must be the message, not a hardcoded `gantt.preset` that names the wrong door for a caller that
+  // reached it some other way (`InvertedSpanError` already takes `operation` for the same reason).
+  it("names the caller's own operation in the thrown message and in .operation, not a hardcoded door", () => {
+    const tooNarrow: ViewPreset = {
+      id: 'custom-too-narrow',
+      tickUnit: 'hour',
+      tickIncrement: 6,
+      headers: [{ unit: 'hour', increment: 6, format: () => 'x' }],
+      preferredTickWidthPx: 24,
+      minTickWidthPx: 32,
+    };
+    try {
+      resolvePreset(tooNarrow, 'gantt.zoomPresets');
+      expect.unreachable('expected InvalidPresetError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(InvalidPresetError);
+      expect((error as InvalidPresetError).operation).toBe('gantt.zoomPresets');
+      expect((error as InvalidPresetError).message).toMatch(/^gantt\.zoomPresets: the preset/);
+      expect((error as InvalidPresetError).message).not.toMatch(/^gantt\.preset:/);
     }
   });
 
@@ -57,7 +80,7 @@ describe('resolvePreset', () => {
       preferredTickWidthPx: 32,
       minTickWidthPx: 32,
     };
-    expect(resolvePreset(exact)).toBe(exact);
+    expect(resolvePreset(exact, 'test')).toBe(exact);
   });
 });
 
@@ -80,7 +103,7 @@ describe('validatePresetTickStep (via resolvePreset)', () => {
       headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
       preferredTickWidthPx: 40,
     };
-    expect(() => resolvePreset(weekTickUnderDayBand)).toThrow(InvalidPresetError);
+    expect(() => resolvePreset(weekTickUnderDayBand, 'test')).toThrow(InvalidPresetError);
   });
 
   it('throws when tickIncrement is coarser than the finest header at the same unit (day x2 under day x1)', () => {
@@ -91,7 +114,7 @@ describe('validatePresetTickStep (via resolvePreset)', () => {
       headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
       preferredTickWidthPx: 40,
     };
-    expect(() => resolvePreset(dayTimesTwoUnderDayBand)).toThrow(InvalidPresetError);
+    expect(() => resolvePreset(dayTimesTwoUnderDayBand, 'test')).toThrow(InvalidPresetError);
   });
 
   it('allows a tick step equal to the finest header', () => {
@@ -102,7 +125,7 @@ describe('validatePresetTickStep (via resolvePreset)', () => {
       headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
       preferredTickWidthPx: 40,
     };
-    expect(resolvePreset(equalStep)).toBe(equalStep);
+    expect(resolvePreset(equalStep, 'test')).toBe(equalStep);
   });
 
   it('allows empty headers — there is no band to compare the tick step against', () => {
@@ -113,7 +136,7 @@ describe('validatePresetTickStep (via resolvePreset)', () => {
       headers: [],
       preferredTickWidthPx: 40,
     };
-    expect(resolvePreset(noHeaders)).toBe(noHeaders);
+    expect(resolvePreset(noHeaders, 'test')).toBe(noHeaders);
   });
 });
 

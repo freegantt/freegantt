@@ -1451,7 +1451,9 @@ export class InvalidPlainTimeError extends FreeGanttError {
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(presetId: string, reason: string);
+    constructor(presetId: string, reason: string, operation: string);
+    // (undocumented)
+    readonly operation: string;
     // (undocumented)
     readonly presetId: string;
     // (undocumented)

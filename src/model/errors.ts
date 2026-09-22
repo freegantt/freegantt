@@ -204,16 +204,23 @@ export class UnknownPresetError extends FreeGanttError {
  * names the same fault: this preset object is inconsistent. `time/presets.ts` holds the rules —
  * today, `preferredTickWidthPx` below its own `minTickWidthPx`, and `tickUnit`/`tickIncrement`
  * coarser than the finest header. `reason` is the broken validator's own sentence: it names the rule
- * and the fix, so two rules never share one message. */
+ * and the fix, so two rules never share one message.
+ *
+ * `operation` names the actual door the consumer wrote through — `resolvePreset` is one function
+ * reached from three doors (`gantt.preset`, `gantt.zoomPresets`, a shared `TimeScaleModel`'s own
+ * `preset`), the same reason `InvertedSpanError` below takes `operation` (#482 review). A message
+ * that always said `gantt.preset` named the wrong door for the other two. */
 export class InvalidPresetError extends FreeGanttError {
   readonly presetId: string;
   readonly reason: string;
+  readonly operation: string;
 
-  constructor(presetId: string, reason: string) {
-    super('invalid-preset' satisfies BuiltInThrownCode, `gantt.preset: the preset "${presetId}" ${reason}`);
+  constructor(presetId: string, reason: string, operation: string) {
+    super('invalid-preset' satisfies BuiltInThrownCode, `${operation}: the preset "${presetId}" ${reason}`);
     this.name = 'InvalidPresetError';
     this.presetId = presetId;
     this.reason = reason;
+    this.operation = operation;
   }
 }
 
