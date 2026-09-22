@@ -33,7 +33,7 @@ export {
 } from './format.js';
 export { createTimeScale, pxPerMsForPreset, minPxPerMsForPreset, pxPerMsForUnitWidth } from './scale.js';
 export { snapInstant, stepsBetween, nextTickBoundary } from './snap.js';
-export type { SnapUnit } from './snap.js';
+export type { SnapUnit, SnapRule } from './snap.js';
 export type {
   TimeScale,
   TimeScaleOptions,
@@ -62,4 +62,4 @@ export {
   ZOOM_PRESETS,
   resolvePreset,
 } from './presets.js';
-export type { ShippedPresetId, PresetRef } from './presets.js';
+export type { ShippedPresetId, PresetId, PresetRef } from './presets.js';

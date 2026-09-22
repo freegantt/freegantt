@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { InvalidSnapIncrementError } from '../model/index.js';
 import { instant } from './instant.js';
 import { nextTickBoundary, snapInstant, stepsBetween } from './snap.js';
+import type { SnapRule } from './snap.js';
 
 const ZONE = 'America/New_York';
 
@@ -25,12 +26,18 @@ describe('snapInstant', () => {
     expect(snapInstant(ZONE, at, 'none')).toBe(at);
   });
 
-  it('a larger increment pushes the upper boundary farther away, changing which side wins', () => {
-    // 14:40 is 40min past the 14:00 hour floor either way, but the upper boundary moves with the
-    // increment: a 1-hour snap's upper (15:00) is nearer, a 3-hour snap's upper (17:00) is not.
+  it('a larger increment pushes the flanking boundaries apart, changing which side wins', () => {
+    // 14:40 EDT is 40min past the 1-hour floor (14:00), so its nearer boundary is the 15:00 upper.
+    // A 3-hour step (#489) anchors on the day (00, 03, 06, …, 21 local), not on 14:40's own floor:
+    // its flanking boundaries are 12:00 and 15:00, and 14:40 is still nearer the 15:00 upper.
     const at = instant('2026-06-15T18:40:00Z'); // 14:40 EDT
     expect(snapInstant(ZONE, at, { unit: 'hour', increment: 1 })).toBe(instant('2026-06-15T19:00:00Z'));
-    expect(snapInstant(ZONE, at, { unit: 'hour', increment: 3 })).toBe(instant('2026-06-15T18:00:00Z'));
+    expect(snapInstant(ZONE, at, { unit: 'hour', increment: 3 })).toBe(instant('2026-06-15T19:00:00Z'));
+  });
+
+  it('#489: a 6-hour snap lands on 00/06/12/18 local, never on the caller-supplied instant’s own floor', () => {
+    const at = instant('2026-06-15T11:10:00Z'); // 07:10 EDT — closer to 06:00 than to 12:00
+    expect(snapInstant(ZONE, at, { unit: 'hour', increment: 6 })).toBe(instant('2026-06-15T10:00:00Z')); // 06:00 EDT
   });
 
   it('rejects a zero increment instead of looping forever (#201)', () => {
@@ -55,9 +62,11 @@ describe('nextTickBoundary', () => {
     expect(nextTickBoundary(ZONE, at, 'hour', 1)).toBe(instant('2026-06-15T15:00:00Z'));
   });
 
-  it('honours a multi-step increment, landing on the next multiple rather than the next unit', () => {
+  it('honours a multi-step increment, landing on the next multiple of the day-anchored grid (#489)', () => {
+    // 14:40 EDT sits between the day-anchored 12:00 and 15:00 boundaries (00, 03, 06, …, 21 local) —
+    // the next one strictly after it is 15:00, not 17:00 (14:40's own floor plus 3h).
     const at = instant('2026-06-15T18:40:00Z'); // 14:40 EDT
-    expect(nextTickBoundary(ZONE, at, 'hour', 3)).toBe(instant('2026-06-15T21:00:00Z'));
+    expect(nextTickBoundary(ZONE, at, 'hour', 3)).toBe(instant('2026-06-15T19:00:00Z'));
   });
 
   it('rejects a zero increment instead of looping forever (#201)', () => {
@@ -111,5 +120,44 @@ describe('stepsBetween', () => {
     const from = instant('2026-06-15T14:00:00Z');
     const to = instant('2026-06-18T14:00:00Z');
     expect(() => stepsBetween(ZONE, 'day', -1, from, to)).toThrow(InvalidSnapIncrementError);
+  });
+});
+
+// #489: a consumer's own SnapRule, the escape hatch a { unit, increment } step cannot state.
+describe('snapInstant with a custom SnapRule', () => {
+  it("returns the rule's own answer verbatim, not tickFloor's", () => {
+    const at = instant('2026-06-15T14:10:00Z');
+    const fixedAnswer = instant('2026-01-01T00:00:00Z');
+    const rule: SnapRule = () => fixedAnswer;
+    expect(snapInstant(ZONE, at, rule)).toBe(fixedAnswer);
+  });
+
+  it('passes the caller zone and at through to the rule unchanged', () => {
+    const at = instant('2026-06-15T14:10:00Z');
+    let seenZone: string | undefined;
+    let seenAt: typeof at | undefined;
+    const rule: SnapRule = (zone, ruleAt) => {
+      seenZone = zone;
+      seenAt = ruleAt;
+      return ruleAt;
+    };
+    snapInstant(ZONE, at, rule);
+    expect(seenZone).toBe(ZONE);
+    expect(seenAt).toBe(at);
+  });
+
+  it('a rule that hands back `at` itself is not re-rounded against any tick lattice', () => {
+    // 14:10 is not a whole hour boundary — a rule returning it unchanged must stay unrounded, not
+    // get quietly snapped to 14:00 or 15:00 by some second pass over the answer.
+    const at = instant('2026-06-15T14:10:00Z');
+    const identityRule: SnapRule = (_zone, ruleAt) => ruleAt;
+    expect(snapInstant(ZONE, at, identityRule)).toBe(at);
+  });
+
+  it('composes with the library’s own tools — a rule built from nextTickBoundary', () => {
+    // The documented shape of a real SnapRule: reach for the same tools ticks()/snapInstant use.
+    const at = instant('2026-06-15T11:10:00Z'); // 07:10 EDT
+    const everySixHours: SnapRule = (zone, ruleAt) => nextTickBoundary(zone, ruleAt, 'hour', 6);
+    expect(snapInstant(ZONE, at, everySixHours)).toBe(instant('2026-06-15T16:00:00Z')); // 12:00 EDT
   });
 });

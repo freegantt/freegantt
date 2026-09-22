@@ -32,6 +32,7 @@ import type {
   GridColumnInput,
   PluginContext,
   TimeUnit,
+  SnapRule,
 } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { diffMs, instant } from '../time/index.js';
@@ -376,12 +377,12 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
 // `gantt.preset = { ...gantt.preset, snap }` — a one-off copy of a shipped preset, thrown away by
 // the next zoom. The harness wrote that, which is how this was found.
 describe('Gantt.snap (D-S3-24, #195)', () => {
-  it('reads the showing preset when this Gantt states nothing, and no shipped preset states one', () => {
+  it('reads none when this Gantt states nothing — snap is opt-in (#489 reverses D-S3-24s preset fallback)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
 
-    expect(gantt.snap).toBe('tick');
+    expect(gantt.snap).toBe('none');
 
     gantt.destroy();
   });
@@ -410,14 +411,14 @@ describe('Gantt.snap (D-S3-24, #195)', () => {
     gantt.destroy();
   });
 
-  it('undefined hands the answer back to the preset', () => {
+  it('undefined turns snapping back off (#489)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, snap: 'none' });
+    const gantt = new Gantt({ container, dataset, snap: { unit: 'day', increment: 1 } });
 
     gantt.snap = undefined;
 
-    expect(gantt.snap).toBe('tick');
+    expect(gantt.snap).toBe('none');
 
     gantt.destroy();
   });
@@ -469,10 +470,12 @@ describe('Gantt.snap (D-S3-24, #195)', () => {
     const ganttA = new Gantt({ container: document.createElement('div'), dataset, scale });
     const ganttB = new Gantt({ container: document.createElement('div'), dataset, scale });
 
-    ganttA.snap = 'none';
+    ganttA.snap = 'tick';
 
-    expect(ganttA.snap).toBe('none');
-    expect(ganttB.snap).toBe('tick');
+    expect(ganttA.snap).toBe('tick');
+    // Opt-in, and per Gantt (#489): ganttB never asked for snapping, so sharing an axis with a Gantt
+    // that did leaves it dragging free.
+    expect(ganttB.snap).toBe('none');
 
     ganttA.destroy();
     ganttB.destroy();
@@ -498,6 +501,34 @@ describe('Gantt.snap (D-S3-24, #195)', () => {
     // The dataset's zone is UTC, so a whole-day boundary is a whole number of days from the epoch.
     const moved = dataset.entries.get(id)!;
     expect(Number(moved.start) % MS.DAY).toBe(0);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  // #489: a custom SnapRule is a gantt.snap member too — a real drag must reach it, not just a
+  // named { unit, increment }.
+  it('a real drag commits on the boundary a custom SnapRule chooses', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const fixedBoundary = instant('2026-01-01T00:00:00Z');
+    const alwaysSnapToFixedBoundary: SnapRule = () => fixedBoundary;
+    const gantt = new Gantt({ container, dataset, snap: alwaysSnapToFixedBoundary });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.setPointerCapture = vi.fn();
+    timeline.releasePointerCapture = vi.fn();
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    const moved = dataset.entries.get(id)!;
+    expect(moved.start).toBe(fixedBoundary);
 
     document.elementFromPoint = original;
     gantt.destroy();
@@ -5895,7 +5926,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
-    gantt.preset = { ...gantt.preset, snap: { unit: 'day', increment: 1 } };
+    gantt.snap = { unit: 'day', increment: 1 };
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -7545,6 +7576,42 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
       // "day" is now the finest step in this Gantt's own list: nothing finer to zoom into.
       expect(gantt.canZoomIn).toBe(false);
       expect(gantt.canZoomOut).toBe(true);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own
+  // `zoomPresets`, not only the shipped table — the red test the ruling closes: before it,
+  // this threw UnknownPresetError even though the id had just been spliced into zoomPresets.
+  it("preset = resolves a custom id spliced into this Gantt's own zoomPresets, with no error (#489)", () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    try {
+      const container = document.createElement('div');
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        preset: 'day',
+        fit: 'preset',
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 100 });
+
+      const sixHour = {
+        id: 'sixHour',
+        tickUnit: 'hour' as const,
+        tickIncrement: 6,
+        headers: [{ unit: 'hour' as const, increment: 6, format: () => 'x' }],
+        preferredTickWidthPx: 48,
+        minTickWidthPx: 40,
+      };
+      gantt.zoomPresets = [...gantt.zoomPresets, sixHour];
+
+      gantt.preset = 'sixHour';
+
+      expect(gantt.preset).toBe(sixHour);
 
       gantt.destroy();
     } finally {

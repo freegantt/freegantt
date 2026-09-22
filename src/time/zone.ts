@@ -9,8 +9,8 @@
 // native Temporal ships. See CONTEXT.md.
 
 import type { Instant, PlainParts, TimeSpan, TimeUnit } from '../model/index.js';
-import { UnsupportedUnitError } from '../model/index.js';
-import { instant, addMs, MS } from './instant.js';
+import { InvalidSnapIncrementError, UnsupportedUnitError } from '../model/index.js';
+import { instant, addMs, diffMs, MS } from './instant.js';
 import * as InstantFns from 'temporal-polyfill/fns/Instant';
 import * as PlainDateFns from 'temporal-polyfill/fns/PlainDate';
 import * as ZonedDateTimeFns from 'temporal-polyfill/fns/ZonedDateTime';
@@ -176,12 +176,12 @@ export function isTimeUnit(value: string): value is TimeUnit {
 
 /** `UNITS`' own declaration order, coarsest last — pinned by a test (`zone.test.ts`) rather than
  *  trusted, since nothing about `Object.freeze` guarantees a reader keeps it sorted. `isCoarserThan`
- *  reads this instead of re-deriving an order of its own, so the two can never disagree. */
+ *  reads this (through `UNIT_RANK`) instead of re-deriving an order of its own, so the two can never
+ *  disagree. */
+const UNIT_ORDER: readonly TimeUnit[] = Object.freeze(Object.keys(UNITS) as TimeUnit[]);
+
 const UNIT_RANK: Record<TimeUnit, number> = Object.freeze(
-  Object.fromEntries((Object.keys(UNITS) as TimeUnit[]).map((unit, index) => [unit, index])) as Record<
-    TimeUnit,
-    number
-  >,
+  Object.fromEntries(UNIT_ORDER.map((unit, index) => [unit, index])) as Record<TimeUnit, number>,
 );
 
 /** Call: `isCoarserThan(tickUnit, 'day')` — true when `unit` groups a wider calendar span than
@@ -262,10 +262,149 @@ export function stepBy(zone: string, i: Instant, unit: TimeUnit, increment: numb
   return ops.step(zone, i, increment);
 }
 
-/** Floors `i` to `unit`'s boundary in `zone` (S1.7 §3.3) — the boundary `TimeScale.ticks` aligns
- * its cells to. */
+/** Floors `i` to `unit`'s boundary in `zone` (S1.7 §3.3) — what `tickFloor` below anchors its own
+ * walk against, and the boundary `increment: 1` always answers. */
 export function startOf(zone: string, i: Instant, unit: TimeUnit): Instant {
   const ops = UNITS[unit];
   if (!ops) throw unsupportedUnit(unit);
   return ops.floor(zone, i);
+}
+
+/** The larger calendar unit anchoring `unit`'s own tick walk (d3 `every(n)`-style, #489): hours count
+ * from the day they fall in, months from their year — one gridline never moves off a boundary it
+ * already drew, whatever window is on screen. Not `UNIT_ORDER`'s own next entry: that would anchor
+ * `week` on `month`, but a week's own floor is not generally a whole number of weeks from a month's
+ * start (a month rarely starts on a week's own first day), so walking weeks from there would miss
+ * `week`'s true floor even at `increment: 1`. Every entry here nests evenly instead — every minute
+ * inside its hour, every hour inside its day, every day inside its week, every month inside its
+ * year — which is what lets `tickFloor` count forward from the anchor and still land on the exact
+ * boundary `startOf` would give directly. A unit with no entry (`week`, `year`) anchors to its own
+ * floor, same as `increment: 1` always did — there is no larger unit to count it from safely. */
+const ANCHOR_UNIT: Partial<Record<TimeUnit, TimeUnit>> = Object.freeze({
+  millisecond: 'minute',
+  minute: 'hour',
+  hour: 'day',
+  day: 'week',
+  month: 'year',
+});
+
+function anchorUnit(unit: TimeUnit): TimeUnit {
+  return ANCHOR_UNIT[unit] ?? unit;
+}
+
+/** How many whole `unit`s of nominal calendar span fit inside one occurrence of `unit`'s own
+ *  `ANCHOR_UNIT` (60 minutes in an hour, 24 hours in a day, 7 days in a week, 12 months in a
+ *  year). A unit with no `ANCHOR_UNIT` entry (`week`, `year`) has no size here either — it anchors
+ *  to its own floor, so the "does the stride fit" question below never applies to it. */
+const ANCHOR_CONTAINER_SIZE: Partial<Record<TimeUnit, number>> = Object.freeze({
+  millisecond: MS.MINUTE,
+  minute: 60,
+  hour: 24,
+  day: 7,
+  month: 12,
+});
+
+/** True when `increment`-many `unit`s fit inside one anchor container, so counting them from the
+ *  container's own start (#489's "hours count from the day they fall in") never has to spill a
+ *  stride into the next container. A unit with no container size (`week`, `year`) always fits —
+ *  it anchors to its own floor, one container per tick, so there is nothing to spill into. */
+function stepFitsAnchorContainer(unit: TimeUnit, increment: number): boolean {
+  const containerSize = ANCHOR_CONTAINER_SIZE[unit];
+  return containerSize === undefined || increment < containerSize;
+}
+
+/** `unit`s elapsed from `from` to `to`, exact and fractional, for `tickFloor`'s arithmetic below.
+ *  Each case matches the frame `stepBy`/`startOf` already count that unit in (fixed-length
+ *  milliseconds for `millisecond`/`minute`/`hour`, the zone's own calendar for `day`/`week`, whole
+ *  months for `month`/`year`) — this must never invent a length of its own (I10: `time/` is the one
+ *  place that does calendar arithmetic). */
+function unitsBetween(zone: string, unit: TimeUnit, from: Instant, to: Instant): number {
+  switch (unit) {
+    case 'millisecond':
+      return diffMs(to, from);
+    case 'minute':
+      return diffMs(to, from) / MS.MINUTE;
+    case 'hour':
+      return diffMs(to, from) / MS.HOUR;
+    case 'day':
+      return diffDays(zone, from, to);
+    case 'week':
+      return diffDays(zone, from, to) / 7;
+    case 'month':
+      return monthIndex(zone, to) - monthIndex(zone, from);
+    case 'year':
+      return (monthIndex(zone, to) - monthIndex(zone, from)) / 12;
+  }
+}
+
+/** `at`'s month, counted continuously from year 0 (`year * 12 + (month - 1)`), so two months'
+ *  distance is one subtraction instead of a calendar walk. */
+function monthIndex(zone: string, at: Instant): number {
+  const plain = toPlain(zone, at);
+  return plain.year * 12 + (plain.month - 1);
+}
+
+/** One fixed calendar point every zone can count `unit` from, so a stride that does not fit its
+ *  anchor container (#489) still lands on the same ticks on every call, never derived from the
+ *  caller's own `at` — that is what keeps the lines still on a pan. 1970-01-01T00:00 wall-clock in
+ *  `zone`, floored to `unit`: any fixed point works, this one is simplest to state and to test. */
+function fixedOrigin(zone: string, unit: TimeUnit): Instant {
+  const epochLocal = fromPlain(zone, { year: 1970, month: 1, day: 1, hour: 0, minute: 0, second: 0 });
+  return startOf(zone, epochLocal, unit);
+}
+
+/** The tick immediately after `boundary`, which must already be a valid tick (a `tickFloor` or
+ * `nextTick` answer, never an arbitrary instant) — exported so `TimeScale.ticks` can walk a whole
+ * window one tick at a time, and `snap.ts` can find both boundaries flanking an instant, without
+ * either re-deriving this rule (#489).
+ *
+ * A plain `stepBy` is right only when `increment` divides its anchor container evenly (15 into an
+ * hour's 60 minutes, 6 into a day's 24 hours) — every shipped preset's own increment does, and this
+ * is the case `stepFitsAnchorContainer` calls "fits". A `7`-minute step does not divide the hour:
+ * strided blindly, 0, 7, … 56 would next give 63 (1:03), quietly crossing into the next hour's own
+ * count mid-stride. "Hours count from the day they fall in" (#489) means each hour instead resets
+ * the count at 0 — so once the raw stride crosses out of `boundary`'s own container, this resets to
+ * that new container's own start (offset 0) instead of continuing the stride across the seam.
+ *
+ * A stride that does *not* fit its container (`{ day, 10 }`, `{ hour, 30 }`, `{ minute, 90 }`) gets
+ * no such reset: resetting would shorten the stated increment down to the container's own span (10
+ * days would collapse to the week it started in). This strides on regardless of the container it
+ * crosses, so the caller always gets the `increment` it asked for. */
+export function nextTick(zone: string, boundary: Instant, unit: TimeUnit, increment: number): Instant {
+  if (!stepFitsAnchorContainer(unit, increment)) {
+    return stepBy(zone, boundary, unit, increment);
+  }
+  const container = startOf(zone, boundary, anchorUnit(unit));
+  const raw = stepBy(zone, boundary, unit, increment);
+  const rawContainer = startOf(zone, raw, anchorUnit(unit));
+  return rawContainer === container ? raw : rawContainer;
+}
+
+/** The tick boundary at or before `at`: `increment`-many whole `unit`s counted from a fixed start,
+ * never from `at`'s own floor (#489). This is the one tick walk `TimeScale.ticks`, `snapInstant`
+ * and `nextTickBoundary` all read, so a gridline and a drag snap never disagree.
+ *
+ * The count starts from the container `at` falls in (`stepFitsAnchorContainer`'s "fits" case) when
+ * the stride is small enough to stay inside it — a 6-hour tick (`unit: 'hour', increment: 6`) always
+ * lands on 00:00/06:00/12:00/18:00 in `zone`, whichever span is on screen. A stride that does not fit
+ * (`{ day, 10 }`) counts instead from one fixed calendar origin (`fixedOrigin`), so the stated
+ * increment is never shortened to its container's own span — see `nextTick`'s own doc.
+ *
+ * Both branches are arithmetic, not a walk: `unitsBetween` gives the exact (possibly fractional)
+ * number of `unit`s from the start to `at`, `Math.floor` rounds that down to the last whole
+ * `increment`-multiple, and one `stepBy` lands on it. A one-tick-at-a-time walk from the container
+ * or origin start would cost up to 60,000 iterations for a millisecond-level tick (#489) — this
+ * costs one `startOf`/`stepBy` pair regardless of `unit` or how far `at` sits from the origin.
+ *
+ * `increment: 1` always answers the same boundary `startOf(zone, at, unit)` already gave: one whole
+ * `unit` from the container's own start is the boundary `at` already sits inside. */
+export function tickFloor(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant {
+  if (!Number.isInteger(increment) || increment <= 0) {
+    throw new InvalidSnapIncrementError(unit, increment);
+  }
+  const start = stepFitsAnchorContainer(unit, increment)
+    ? startOf(zone, at, anchorUnit(unit))
+    : fixedOrigin(zone, unit);
+  const steps = Math.floor(unitsBetween(zone, unit, start, at) / increment) * increment;
+  return stepBy(zone, start, unit, steps);
 }

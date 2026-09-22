@@ -24,7 +24,7 @@ export interface DraftInput {
   zone: string;
   scale: TimeScale;
   /** Resolved snap setting (D-S3-12) — the caller has already turned an unset/`'tick'`
-   *  `ViewPreset.snap` into a concrete `{ unit, increment }`, and Alt into `'none'`. */
+   *  `Gantt.snap` into a concrete `{ unit, increment }`, and Alt into `'none'`. */
   snap: SnapUnit;
   /** The entries this gesture moves, grabbed entry first (D-S3-22) — `entries[0]`'s own `start` is
    *  the anchor every other entry's delta is measured against, so a multi-selection drag moves as one
@@ -82,7 +82,10 @@ function translationOf(input: DraftInput, anchorInstant: Instant): Translation {
   const { zone, scale, snap, dxPx } = input;
   const anchorX = scale.xForInstant(anchorInstant);
   const candidate = snapInstant(zone, scale.instantForX(anchorX + dxPx), snap);
-  if (snap === 'none') return { ms: diffMs(candidate, anchorInstant) };
+  // A calendar step counts in whole `unit`s (DST-correct across a multi-day drag, D-S3-19). `'none'`
+  // and a custom `SnapRule` have no unit to count in — both take the plain millisecond delta instead,
+  // the same translation raw pixel placement always took (#489).
+  if (snap === 'none' || typeof snap === 'function') return { ms: diffMs(candidate, anchorInstant) };
   const steps = stepsBetween(zone, snap.unit, snap.increment, anchorInstant, candidate);
   return { unit: snap.unit, steps: steps * snap.increment };
 }

@@ -4,6 +4,7 @@ import { demoEntryInputs, segmentChildrenOf } from '../../fixtures/demo-dataset.
 import { mountTimelineToolbar } from '../timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from '../change-log.js';
 import { lockEntries } from '../plugins/lock-entries.js';
+import { zoomPresetsWithSixHour } from '../six-hour-preset.js';
 
 // S5.10 visible acceptance (s5.10-dataset-plugins.md §4): a Dataset plugin the page installs through
 // the public API alone. Check the box to lock one entry; drag its neighbour and the locked bar ghosts
@@ -42,6 +43,10 @@ const gantt = new Gantt({
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
 });
 gantt.panToToday();
+
+// #489: a custom `tickIncrement > 1` preset — proof the anchor fix holds. Its gridlines sit at
+// 00:00/06:00/12:00/18:00 in the dataset's zone and never drift off that grid during a pan.
+gantt.zoomPresets = zoomPresetsWithSixHour(gantt);
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 
@@ -152,10 +157,18 @@ lockResize.addEventListener('change', () => {
 
 // `gantt.snap =`, never `gantt.preset = { ...gantt.preset, snap }`: the old spelling built a one-off
 // copy of a shipped preset, and the next `zoomIn()` threw the snap away with it (`api/gantt.ts`).
+//
+// "Every 6 hours" is a `tickIncrement > 1` custom step (#489): anchored on the day it falls in, so
+// it always lands on 00:00/06:00/12:00/18:00 and never drifts off the hour preset's own gridlines
+// while panning.
 function applySnapChoice(): void {
   const unit = snapUnitSelect.value;
   if (unit === 'tick' || unit === 'none') {
     gantt.snap = unit;
+    return;
+  }
+  if (unit === 'sixHour') {
+    gantt.snap = { unit: 'hour', increment: 6 };
     return;
   }
   if (!isTimeUnit(unit)) return;

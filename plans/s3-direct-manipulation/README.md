@@ -137,6 +137,12 @@ Unset `ViewPreset.snap` reads as `'tick'`. `snapInstant(zone, at, snap)` in `tim
 
 ### D-S3-24 — `gantt.snap` is the Gantt's own snap, above the preset's (#195, added in S5)
 
+> **Reversed in part by #489.** The preset-fallback half of this decision — an unstated `gantt.snap`
+> reading the showing preset's own `snap`, defaulting further to `'tick'` — is gone: `ViewPreset.snap`
+> is retired, and a consumer who states nothing now gets free dragging (`gantt.snap` reads `'none'`).
+> `gantt.snap` staying the one Gantt-level place to state it, surviving a zoom, is unchanged. See
+> issue #489 for the owner's ruling and the tick-anchor fix it shipped alongside.
+
 D-S3-12 put snap on the ViewPreset, and left no other place to state it. So a consumer changing the snap alone wrote `gantt.preset = { ...gantt.preset, snap }` — the getter returns a resolved `ViewPreset`, the setter takes a `PresetRef`, and the round trip built a one-off copy of a shipped preset. `harness/main.ts` wrote exactly that. Two things were wrong with it. The next `zoomIn()` replaced that copy with the next rung of `zoomPresets` and threw the snap away. And a Gantt sharing a `TimeScaleModel` (D9) shares its preset, so one page's snap choice reached the other Gantt.
 
 **`gantt.snap` is a Gantt-level setting, over whatever preset is showing.**
@@ -144,13 +150,13 @@ D-S3-12 put snap on the ViewPreset, and left no other place to state it. So a co
 ```ts
 gantt.snap = { unit: 'day', increment: 2 };  // survives a zoom, and is this Gantt's alone
 gantt.snap = 'tick';                          // one tick of whatever preset is showing
-gantt.snap = undefined;                       // the preset decides again
-gantt.snap;                                   // 'tick' — what is in effect right now
+gantt.snap = undefined;                       // free dragging again (#489 — opt-in, no preset fallback)
+gantt.snap;                                   // 'none' unless this Gantt has stated otherwise
 ```
 
-`SnapSetting` (`TickStep | 'tick' | 'none'`) is what a caller states; `SnapUnit` stays what a gesture resolved it to. `ViewPreset.snap` keeps its meaning as the preset's own default, and both now name the same type.
+`SnapSetting` (`TickStep | 'tick' | 'none' | SnapRule`) is what a caller states; `SnapUnit` stays what a gesture resolved it to (#489 widens both with `SnapRule`, a consumer's own snap function). `ViewPreset` no longer carries a `snap` field (#489) — a preset never switches snapping on by itself.
 
-The getter answers with what is in effect — this Gantt's setting, else the showing preset's, else `'tick'` — the same asymmetry `gridWidth` already ships: loose on the way in, resolved on the way out. It never resolves `'tick'` into a unit, because only a gesture knows which preset is measuring it. `GesturePipeline` reads one dep, `snap()`, and no longer reads `preset.snap` at all: one resolution, in `GanttShell`.
+The getter answers with what is in effect — this Gantt's own setting, else `'none'` (#489) — the same asymmetry `gridWidth` already ships: loose on the way in, resolved on the way out. It never resolves `'tick'` into a unit, because only a gesture knows which preset is measuring it. `GesturePipeline` reads one dep, `snap()`, and never reads a preset's own snap default: one resolution, in `GanttShell`.
 
 Snap changes no paint, so it is a plain field, not a frame setting, and it raises no event. It is reconfiguration, like `minGridWidth` (`plans/02` §3).
 
@@ -185,7 +191,7 @@ Full prose for each decision lives in the step file that implements it. Use this
 | D-S3-21 | Touch long-press | S3.3 |
 | D-S3-22 | Event payloads | S3.1, S3.3, S3.4 |
 | D-S3-23 | Keyboard nudge reuses the pointer commit pipeline via `EntryGestureSession.nudge()`; async veto via `EventBus<TEvents, TAsyncKeys>` | S3.5 |
-| D-S3-24 | `gantt.snap` states the snap for one Gantt, over the showing preset | README above; impl S5 (#195) |
+| D-S3-24 | `gantt.snap` states the snap for one Gantt. Opt-in, `'none'` when unstated — the preset-fallback half reversed by #489 | README above; impl S5 (#195), reversed #489 |
 
 ---
 
