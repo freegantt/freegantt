@@ -1453,13 +1453,11 @@ export class InvalidPlainTimeError extends FreeGanttError {
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(presetId: string, minTickWidthPx: number, preferredTickWidthPx: number);
-    // (undocumented)
-    readonly minTickWidthPx: number;
-    // (undocumented)
-    readonly preferredTickWidthPx: number;
+    constructor(presetId: string, reason: string);
     // (undocumented)
     readonly presetId: string;
+    // (undocumented)
+    readonly reason: string;
 }
 
 // @public
@@ -2353,7 +2351,6 @@ export interface ViewPreset {
     snap?: SnapSetting;
     // (undocumented)
     tickIncrement: number;
-    // (undocumented)
     tickUnit: TimeUnit;
 }
 

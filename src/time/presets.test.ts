@@ -71,23 +71,53 @@ describe('validatePresetTickWidths (via freezePreset)', () => {
   });
 });
 
-describe('shipped presets', () => {
-  it("every preset's tickUnit is no coarser than its finest (last) header", () => {
-    const rank: Record<string, number> = {
-      millisecond: 0,
-      minute: 1,
-      hour: 2,
-      day: 3,
-      week: 4,
-      month: 5,
-      year: 6,
+describe('validatePresetTickStep (via resolvePreset)', () => {
+  it('throws when tickUnit is coarser than the finest header (week tick under a day band)', () => {
+    const weekTickUnderDayBand: ViewPreset = {
+      id: 'custom-week-tick',
+      tickUnit: 'week',
+      tickIncrement: 1,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
+      preferredTickWidthPx: 40,
     };
-    for (const preset of Object.values(presets)) {
-      const finestHeader = preset.headers[preset.headers.length - 1]!;
-      expect(rank[preset.tickUnit]!).toBeLessThanOrEqual(rank[finestHeader.unit]!);
-    }
+    expect(() => resolvePreset(weekTickUnderDayBand)).toThrow(InvalidPresetError);
   });
 
+  it('throws when tickIncrement is coarser than the finest header at the same unit (day x2 under day x1)', () => {
+    const dayTimesTwoUnderDayBand: ViewPreset = {
+      id: 'custom-day-x2-tick',
+      tickUnit: 'day',
+      tickIncrement: 2,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(() => resolvePreset(dayTimesTwoUnderDayBand)).toThrow(InvalidPresetError);
+  });
+
+  it('allows a tick step equal to the finest header', () => {
+    const equalStep: ViewPreset = {
+      id: 'custom-equal-step',
+      tickUnit: 'day',
+      tickIncrement: 1,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(resolvePreset(equalStep)).toBe(equalStep);
+  });
+
+  it('allows empty headers — there is no band to compare the tick step against', () => {
+    const noHeaders: ViewPreset = {
+      id: 'custom-no-headers',
+      tickUnit: 'week',
+      tickIncrement: 1,
+      headers: [],
+      preferredTickWidthPx: 40,
+    };
+    expect(resolvePreset(noHeaders)).toBe(noHeaders);
+  });
+});
+
+describe('shipped presets', () => {
   it('multi-band presets carry headers coarsest-first', () => {
     expect(presets.dayAndWeek.headers.map((h) => h.unit)).toEqual(['week', 'day']);
     expect(presets.weekAndMonth.headers.map((h) => h.unit)).toEqual(['month', 'week']);

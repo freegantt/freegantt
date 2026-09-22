@@ -199,24 +199,21 @@ export class UnknownPresetError extends FreeGanttError {
   }
 }
 
-/** `code: 'invalid-preset'` — a `ViewPreset` whose `preferredTickWidthPx` is below its own
- * `minTickWidthPx`, from `resolvePreset` (header readability follow-up). The floor would then be
- * unreachable at the preset's own intended zoom, which is never a preset author's intent. */
+/** `code: 'invalid-preset'` — a `ViewPreset` object that breaks a rule between its own fields, from
+ * `resolvePreset` (header readability follow-up). One code covers every such rule, because each one
+ * names the same fault: this preset object is inconsistent. `time/presets.ts` holds the rules —
+ * today, `preferredTickWidthPx` below its own `minTickWidthPx`, and `tickUnit`/`tickIncrement`
+ * coarser than the finest header. `reason` is the broken validator's own sentence: it names the rule
+ * and the fix, so two rules never share one message. */
 export class InvalidPresetError extends FreeGanttError {
   readonly presetId: string;
-  readonly minTickWidthPx: number;
-  readonly preferredTickWidthPx: number;
+  readonly reason: string;
 
-  constructor(presetId: string, minTickWidthPx: number, preferredTickWidthPx: number) {
-    super(
-      'invalid-preset' satisfies BuiltInThrownCode,
-      `gantt.preset: the preset "${presetId}" sets minTickWidthPx to ${minTickWidthPx} and preferredTickWidthPx to ${preferredTickWidthPx}. ` +
-        `Lower minTickWidthPx to ${preferredTickWidthPx} or less, so the preset can reach its own preferred zoom.`,
-    );
+  constructor(presetId: string, reason: string) {
+    super('invalid-preset' satisfies BuiltInThrownCode, `gantt.preset: the preset "${presetId}" ${reason}`);
     this.name = 'InvalidPresetError';
     this.presetId = presetId;
-    this.minTickWidthPx = minTickWidthPx;
-    this.preferredTickWidthPx = preferredTickWidthPx;
+    this.reason = reason;
   }
 }
 
