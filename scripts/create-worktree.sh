@@ -24,9 +24,9 @@ name="${issue}-${slug}"
 
 # Resolve the orca CLI executable for this session. See the user-level orca-cli skill
 # (~/.claude/skills/orca-cli/SKILL.md) for the environment variables an Orca-managed session sets.
-# This ladder never falls back to bare `orca`: on a plain Linux host that name can resolve to the
-# GNOME Orca screen reader instead of Orca's CLI, and starting speech on the user's machine is a
-# worse failure than stopping here with a clear error.
+# This ladder never falls back to bare `orca`: on a plain Linux machine that name can resolve to
+# the GNOME Orca screen reader instead of Orca's CLI, and starting speech on the user's machine is
+# a worse failure than stopping here with a clear error.
 if [ -n "${ORCA_CLI_COMMAND:-}" ]; then
   orca_cmd="$ORCA_CLI_COMMAND"
 elif [ -n "${ORCA_DEV_REPO_ROOT:-}" ] && command -v orca-dev > /dev/null 2>&1; then
