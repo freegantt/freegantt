@@ -41,6 +41,21 @@ export function snapInstant(zone: string, at: Instant, snap: SnapUnit): Instant 
   return diffMs(upper, at) < diffMs(at, lower) ? upper : lower;
 }
 
+/** The first whole `unit`/`increment` boundary strictly after `at`, in `zone` — what arms the today
+ *  line's own repaint timer (#476, `view/gantt-shell.ts`'s `nextTickBoundaryDelayMs` wiring): the
+ *  finest header band's step names the boundary the line goes stale at, and this walks forward from
+ *  `at`'s own unit floor in `increment`-sized steps until it passes `at`, the same walk `snapInstant`
+ *  above already takes. Unlike `snapInstant`, this never returns `at`'s own floor — a repaint armed
+ *  for the boundary `at` already sits on would fire immediately and never advance. */
+export function nextTickBoundary(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant {
+  assertAdvances(unit, increment);
+  let boundary = startOf(zone, at, unit);
+  while (diffMs(boundary, at) <= 0) {
+    boundary = stepBy(zone, boundary, unit, increment);
+  }
+  return boundary;
+}
+
 /** How many whole `increment`-sized `unit` steps separate `from` and `to` — the calendar delta a
  *  multi-entry drag re-applies to every grabbed entry's own `start`/`end` (D-S3-3, D-S3-19), instead
  *  of a raw millisecond difference that would drift a wall-clock time across a DST transition.

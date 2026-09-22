@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { InvalidSnapIncrementError } from '../model/index.js';
 import { instant } from './instant.js';
-import { snapInstant, stepsBetween } from './snap.js';
+import { nextTickBoundary, snapInstant, stepsBetween } from './snap.js';
 
 const ZONE = 'America/New_York';
 
@@ -41,6 +41,28 @@ describe('snapInstant', () => {
   it('rejects a negative increment instead of walking away from the target forever (#201)', () => {
     const at = instant('2026-06-15T14:10:00Z');
     expect(() => snapInstant(ZONE, at, { unit: 'day', increment: -1 })).toThrow(InvalidSnapIncrementError);
+  });
+});
+
+describe('nextTickBoundary', () => {
+  it('walks forward to the next whole-unit boundary strictly after at', () => {
+    const at = instant('2026-06-15T14:10:00Z'); // 10:10 EDT
+    expect(nextTickBoundary(ZONE, at, 'hour', 1)).toBe(instant('2026-06-15T15:00:00Z'));
+  });
+
+  it('steps past at even when at already sits on a boundary — never returns at itself (#476)', () => {
+    const at = instant('2026-06-15T14:00:00Z'); // 10:00 EDT, already a whole hour
+    expect(nextTickBoundary(ZONE, at, 'hour', 1)).toBe(instant('2026-06-15T15:00:00Z'));
+  });
+
+  it('honours a multi-step increment, landing on the next multiple rather than the next unit', () => {
+    const at = instant('2026-06-15T18:40:00Z'); // 14:40 EDT
+    expect(nextTickBoundary(ZONE, at, 'hour', 3)).toBe(instant('2026-06-15T21:00:00Z'));
+  });
+
+  it('rejects a zero increment instead of looping forever (#201)', () => {
+    const at = instant('2026-06-15T14:10:00Z');
+    expect(() => nextTickBoundary(ZONE, at, 'day', 0)).toThrow(InvalidSnapIncrementError);
   });
 });
 

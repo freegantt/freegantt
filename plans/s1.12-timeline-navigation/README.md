@@ -408,7 +408,7 @@ set range(r: 'fitDataset' | { start: InstantInput; end: InstantInput });
 | `zoomBy(1000)` blows past the browser's scroll limit | `MAX_CONTENT_PX` (D-S1.12-4), applied in the same resolve as the floor. |
 | Formatting allocates an `Intl.DateTimeFormat` per tick per frame | `resolveDateFormat` memoizes per `(locale, zone, options)`. A property test asserts identity across frames. |
 | A consumer sets `--fg-header-height` and nothing happens | Retired (D-S1.12-10). Migration line in `plans/02` §4; the token table lists `--fg-band-height` only. |
-| The today line looks stale after the page is open past midnight | It updates on the next render, not on a clock tick (D-S1.12-14). Stated in the `todayLine` doc comment. |
+| The today line looks stale after the page is open past midnight | **Guarded (#476).** The shell arms one `setTimeout` for the finest header band's next tick boundary after every frame painted with `todayLine: true`, and requests a repaint through `FrameScheduler` when it fires. `view/gantt-shell.test.ts`'s `today line timer (#476)` block. |
 | Month cells at the density floor are ~10% narrower in February | Accepted imprecision, documented on `minPxPerMsForPreset` (D-S1.12-2). |
 | Two Gantts share a `TimeScaleModel` but set different `locale`s | Works, and is the point of D-S1.12-12 — the axis geometry is shared, the labels are not. |
 
