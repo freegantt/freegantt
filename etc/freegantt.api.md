@@ -1451,13 +1451,13 @@ export class InvalidPlainTimeError extends FreeGanttError {
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(presetId: string, reason: string, operation: string);
+    constructor(presetId: string, rule: 'tick-widths' | 'tick-step', message: string, operation: string);
     // (undocumented)
     readonly operation: string;
     // (undocumented)
     readonly presetId: string;
     // (undocumented)
-    readonly reason: string;
+    readonly rule: 'tick-widths' | 'tick-step';
 }
 
 // @public

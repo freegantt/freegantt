@@ -21,6 +21,7 @@ function validatePresetTickWidths(preset: ViewPreset, operation: string): void {
   if (preset.minTickWidthPx !== undefined && preset.minTickWidthPx > preset.preferredTickWidthPx) {
     throw new InvalidPresetError(
       preset.id,
+      'tick-widths',
       `sets minTickWidthPx to ${preset.minTickWidthPx}, above its own preferredTickWidthPx of ` +
         `${preset.preferredTickWidthPx}. Lower minTickWidthPx to ${preset.preferredTickWidthPx} or ` +
         'less, so the preset can reach its own preferred zoom.',
@@ -44,6 +45,7 @@ function validatePresetTickStep(preset: ViewPreset, operation: string): void {
   if (isCoarserStep({ unit: preset.tickUnit, increment: preset.tickIncrement }, finestHeader)) {
     throw new InvalidPresetError(
       preset.id,
+      'tick-step',
       `sets tickUnit/tickIncrement to ${preset.tickIncrement} × "${preset.tickUnit}", coarser than its ` +
         `finest header's ${finestHeader.increment} × "${finestHeader.unit}". Lower tickUnit/tickIncrement so ` +
         'the grid never draws coarser than the header it labels.',

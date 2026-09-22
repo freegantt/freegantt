@@ -166,6 +166,11 @@ describe('validatePresetTickStep (via resolvePreset)', () => {
       preferredTickWidthPx: 40,
     };
     expect(() => resolvePreset(preset, 'test')).toThrow(InvalidPresetError);
+    try {
+      resolvePreset(preset, 'test');
+    } catch (error) {
+      expect((error as InvalidPresetError).rule).toBe('tick-step');
+    }
   });
 
   // T1/#481: the same guard over-refused a finer-or-equal tick whenever the header band carried a
