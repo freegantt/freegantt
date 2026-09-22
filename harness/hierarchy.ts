@@ -124,7 +124,7 @@ function mountGantt(next: Dataset<HierarchyProps>): Gantt {
     container: '#gantt',
     dataset: next,
     gridColumns: costColumnVisible ? GRID_WITH_COST : GRID_WITHOUT_COST,
-    rowSource: buildRowSource(),
+    rowSource: freshRowSource(rowsModeSelect.value),
     range: 'fitDataset',
     scroll: paneScroll,
     plugins: [inlineEditing()],
@@ -135,47 +135,61 @@ function mountGantt(next: Dataset<HierarchyProps>): Gantt {
   });
 }
 
-function buildRowSource(): RowSource {
-  const rowsMode = rowsModeSelect.value;
-  const sortField = sortFieldSelect.value;
-  const shared = {
-    ...(filterTeam !== null && rowsMode !== 'grouped'
-      ? { filter: (entry: Entry) => entry.read('team') === filterTeam }
-      : {}),
-    ...(sortField !== 'none' && rowsMode !== 'grouped'
-      ? { sort: { field: sortField as 'start' | 'cost' | 'name' } }
-      : {}),
-  };
-
+// #429: the fresh source for a `source` switch (tree, flat or grouped) — a fresh source carries no
+// filter and no sort, the same rule `main.ts`'s own `applyGrouping` follows. It is also the one
+// literal `mountGantt` reads at first mount, when nothing has set a filter or a sort yet.
+function freshRowSource(rowsMode: string): RowSource {
   if (rowsMode === 'grouped') {
-    return {
-      source: 'group',
-      groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned'),
-      ...shared,
-    };
+    return { source: 'group', groupBy: (entry: Entry) => String(entry.read('team') ?? 'unassigned') };
   }
   // #421 C7: `req-1` draws its day children as segments on every entries-sourced arrangement — flat or tree —
   // the same rule either way, because a segment rule is orthogonal to nesting (README hard rule 5).
-  if (rowsMode === 'flat') {
-    return { source: 'entries', tree: false, childrenAsSegments: { showDaysOnRow: true }, ...shared };
-  }
-  return { source: 'entries', tree: true, childrenAsSegments: { showDaysOnRow: true }, ...shared };
+  return { source: 'entries', tree: rowsMode === 'tree', childrenAsSegments: { showDaysOnRow: true } };
 }
 
-function syncFilterSortControls(): void {
-  const grouped = rowsModeSelect.value === 'grouped';
+// #248 S4-3, #429: the page holds no second copy of an answer `gantt.rowSource` already gives — a
+// filter or sort change reads it back and spreads its own key, the way `main.ts`'s own buttons do
+// (`docs/07-row-source-updates.md`). `filterTeam` stays local for the reason `main.ts` documents:
+// the getter hands back the filter closure, not the team name captured inside it.
+function applyRowsMode(): void {
+  filterTeam = null;
+  gantt.rowSource = freshRowSource(rowsModeSelect.value);
+  syncRowSourceControls();
+}
+
+function applyFilter(): void {
+  const current = gantt.rowSource;
+  if (current.source !== 'entries') return;
+  gantt.rowSource = {
+    ...current,
+    filter: filterTeam === null ? undefined : (entry: Entry) => entry.read('team') === filterTeam,
+  };
+  syncRowSourceControls();
+}
+
+function applySort(): void {
+  const current = gantt.rowSource;
+  if (current.source !== 'entries') return;
+  const sortField = sortFieldSelect.value;
+  gantt.rowSource = {
+    ...current,
+    sort: sortField === 'none' ? undefined : { field: sortField as 'start' | 'cost' | 'name' },
+  };
+  syncRowSourceControls();
+}
+
+// UI state that mirrors the row source reads it back from `gantt.rowSource`, not from a local copy.
+function syncRowSourceControls(): void {
+  const current = gantt.rowSource;
+  const grouped = current.source === 'group';
   filterTeamBtn.disabled = grouped;
   sortFieldSelect.disabled = grouped;
   filterTeamBtn.textContent = filterTeam === null ? 'Filter team: off' : `Filter team: ${filterTeam}`;
+  sortFieldSelect.value = current.source === 'entries' ? (current.sort?.field ?? 'none') : 'none';
 }
 
 function syncCostColumnLabel(): void {
   toggleCostBtn.textContent = costColumnVisible ? 'Hide cost column' : 'Show cost column';
-}
-
-function applyRowSource(): void {
-  gantt.rowSource = buildRowSource();
-  syncFilterSortControls();
 }
 
 function logLine(text: string): void {
@@ -239,12 +253,12 @@ function bindGantt(): void {
 bindDataset();
 bindGantt();
 mountTimelineToolbar({ gantt, container: toolbar });
-applyRowSource();
+syncRowSourceControls();
 syncCostColumnLabel();
 refreshHistoryButtons();
 renderSelection();
 
-rowsModeSelect.addEventListener('change', () => applyRowSource());
+rowsModeSelect.addEventListener('change', () => applyRowsMode());
 
 toggleCostBtn.addEventListener('click', () => {
   costColumnVisible = !costColumnVisible;
@@ -255,10 +269,10 @@ toggleCostBtn.addEventListener('click', () => {
 filterTeamBtn.addEventListener('click', () => {
   if (rowsModeSelect.value === 'grouped') return;
   filterTeam = filterTeam === null ? 'alpha' : filterTeam === 'alpha' ? 'beta' : null;
-  applyRowSource();
+  applyFilter();
 });
 
-sortFieldSelect.addEventListener('change', () => applyRowSource());
+sortFieldSelect.addEventListener('change', () => applySort());
 
 expandAllBtn.addEventListener('click', () => {
   gantt.expandAll();
@@ -307,7 +321,7 @@ redoBtn.addEventListener('click', () => {
 
 // #421 C7: one Field write opens the segmented row into its own three rows, in one undo step, and the
 // same write closes it back. Nothing here decides the row shape directly — `showDaysOnRow` does, and
-// `childrenAsSegments` reads it (`buildRowSource`, above).
+// `childrenAsSegments` reads it (`freshRowSource`, above).
 function syncCrewDaysLabel(): void {
   const drawsSegments = dataset.entries.get('req-1')?.read('showDaysOnRow') === true;
   crewDaysBtn.textContent = drawsSegments
