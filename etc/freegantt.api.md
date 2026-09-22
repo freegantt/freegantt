@@ -1625,6 +1625,9 @@ export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 export function now(): Instant;
 
 // @public
+export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined;
+
+// @public
 export interface Overscan {
     // (undocumented)
     horizontalPx?: number;

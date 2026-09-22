@@ -1,6 +1,6 @@
 // time/ owns all zone-aware date arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
 
-import type { Instant } from '../model/index.js';
+import type { Instant, TimeSpan } from '../model/index.js';
 import { NOT_FINITE, NULL_VALUE, UNREADABLE, ZONELESS, invalidInstant } from './instant-fault.js';
 
 const MS_PER_SECOND = 1000;
@@ -80,3 +80,20 @@ export const MS = {
   HOUR: MS_PER_HOUR,
   DAY: MS_PER_DAY,
 } as const;
+
+/**
+ * The part `a` and `b` share, or `undefined` when they do not touch. Half-open, like every stored
+ * `TimeSpan` (plans/01 §5): two spans that only touch at a boundary — `a.end === b.start` — share no
+ * instant, so that case answers `undefined` too, not a zero-length span.
+ *
+ * The library clips a `TimeSpan` to a window this way in three places already (`layout/frame.ts`'s
+ * box clip, `time-shading-covers.ts`'s day clip, `time/scale.ts`'s tick clip); this is that one rule,
+ * public. Without it a consumer totalling a Field over `gantt.visibleSpan` has to write
+ * `Math.max`/`Math.min` on two `Instant`s and cast the bare `number` back — the hand arithmetic I10
+ * exists to stop (#472).
+ */
+export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined {
+  const start = Math.max(a.start, b.start) as Instant;
+  const end = Math.min(a.end, b.end) as Instant;
+  return start < end ? { start, end } : undefined;
+}
