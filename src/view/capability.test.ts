@@ -415,3 +415,75 @@ describe("entriesMovedBy — what a parent bar's drag writes (ADR 0013, Q9)", ()
     expect(caps.entriesMovedBy(parent)).toEqual([child]);
   });
 });
+
+describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar too', () => {
+  const OWNS_START: Partial<Field> = { key: 'start', rollUp: 'none' };
+  const OWNS_END: Partial<Field> = { key: 'end', rollUp: 'none' };
+
+  it("a deriving parent's move writes descendants only, and capabilities.edit: true does not change that", () => {
+    const caps = capabilities({ capabilities: { edit: true } });
+    const parent = rollUpParent();
+    expect(caps.entriesMovedBy(parent)).toEqual(parent.descendants());
+    expect(caps.canWrite(parent, 'start').ok).toBe(true); // the cell looks open (#256's known trade-off) …
+    expect(caps.can('move', parent)).toBe(true); // … but the move still writes the subtree, never the parent.
+  });
+
+  it('an owning parent moves both itself and the dated descendants below it, an intermediate one included', () => {
+    const [parent, child, middle, grandchild] = entryDoubles([
+      { id: 'e1', start: 0, end: 1 },
+      { id: 'c1', name: 'c1', parentId: 'e1', start: 0, end: 1 },
+      { id: 'm1', name: 'm1', parentId: 'e1', start: 2, end: 3 },
+      { id: 'g1', name: 'g1', parentId: 'm1', start: 0, end: 1 },
+    ]) as readonly [Entry, Entry, Entry, Entry];
+    const caps = capabilities({}, OWNS_START, OWNS_END);
+    expect(caps.entriesMovedBy(parent)).toEqual([parent, child, middle, grandchild]);
+    expect(caps.can('move', parent)).toBe(true);
+  });
+
+  it('a leaf is unaffected — the leaf rule reads the same with or without rollUp: none', () => {
+    const caps = capabilities({}, OWNS_START, OWNS_END);
+    const leaf = entry();
+    expect(caps.entriesMovedBy(leaf)).toEqual([leaf]);
+  });
+
+  it("an owning parent's handle opens on each owned edge and writes the parent alone; a deriving parent's stays closed", () => {
+    const owning = capabilities({}, OWNS_START, OWNS_END);
+    const deriving = capabilities();
+    const parent = rollUpParent();
+    expect(owning.can('resize', parent, 'start')).toBe(true);
+    expect(owning.can('resize', parent, 'end')).toBe(true);
+    expect(deriving.can('resize', parent, 'start')).toBe(false);
+    expect(deriving.can('resize', parent, 'end')).toBe(false);
+  });
+
+  it("mixed mode (start: none, end: max): the move refuses outright — start would go stale, since nothing rolls an owned date back up — but start's handle still opens on its own", () => {
+    const caps = capabilities({}, OWNS_START);
+    const [parent] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
+    expect(caps.can('move', parent)).toBe(false);
+    expect(caps.can('resize', parent, 'start')).toBe(true);
+    expect(caps.can('resize', parent, 'end')).toBe(false);
+  });
+
+  it('a locked descendant under an owning parent refuses the whole gesture', () => {
+    const caps = capabilities({}, OWNS_START, OWNS_END, lockedEnd);
+    const [parent] = family({ name: 'c1', ...DATED }) as readonly [Entry, Entry];
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
+    expect(caps.can('move', parent)).toBe(false);
+  });
+
+  it('an owning parent refuses the whole gesture when a per-entry capabilities.edit lock closes one date it owns (#470 review D3)', () => {
+    const locked = entryId('e1');
+    const caps = capabilities(
+      { capabilities: { edit: (e, field) => (e.id === locked && field === 'end' ? false : undefined) } },
+      OWNS_START,
+      OWNS_END,
+    );
+    const [parent] = entryDoubles([
+      { id: 'e1', start: 0, end: 1 },
+      { id: 'c1', name: 'c1', parentId: 'e1', start: 0, end: 1 },
+    ]) as readonly [Entry, Entry];
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
+    expect(caps.can('move', parent)).toBe(false);
+  });
+});

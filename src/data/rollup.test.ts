@@ -179,6 +179,74 @@ describe('rollUpFields (S4.2)', () => {
     expect(parent.read('notes')).toBe(5);
     expect(parent.start).toBe(toInstant('UTC', '2026-06-01'));
   });
+  describe('#470: a core Field may opt out of the Rollup with rollUp: none', () => {
+    it('a parent whose start/end opt out keeps its authored dates, and the Rollup writes neither', () => {
+      const state = new DatasetState({
+        entries: [
+          { id: 'p1', name: 'p1', start: '2026-01-01', end: '2026-01-05' },
+          { id: 'c1', name: 'c1', parentId: 'p1', start: '2026-03-01', end: '2026-03-10' },
+        ],
+        timeZone: 'UTC',
+        fields: [
+          { key: 'start', rollUp: 'none' },
+          { key: 'end', rollUp: 'none' },
+        ],
+      });
+
+      let changeSet: ChangeSet | undefined;
+      state.on('change', ({ changeSet: cs }) => {
+        changeSet = cs;
+      });
+      state.entries.update('c1', { start: '2026-06-01', end: '2026-06-10' });
+
+      const parent = state.entries.get('p1')!;
+      expect(parent.start).toBe(toInstant('UTC', '2026-01-01'));
+      expect(parent.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+      expect(changeSet).toBeDefined();
+      const parentWrite = changeSet!.updated.find(
+        (row) => row.store === 'entries' && row.id === entryId('p1'),
+      );
+      expect(parentWrite).toBeUndefined();
+    });
+
+    it('a dated leaf that gains a child keeps its authored dates (promotion writes nothing)', () => {
+      const state = new DatasetState({
+        entries: [{ id: 'leaf', name: 'leaf', start: '2026-01-01', end: '2026-01-05' }],
+        timeZone: 'UTC',
+        fields: [
+          { key: 'start', rollUp: 'none' },
+          { key: 'end', rollUp: 'none' },
+        ],
+      });
+
+      state.entries.add({ id: 'child', name: 'child', parentId: 'leaf' });
+
+      const promoted = state.entries.get('leaf')!;
+      expect(promoted.start).toBe(toInstant('UTC', '2026-01-01'));
+      expect(promoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+    });
+
+    it('a parent that loses its last child keeps its authored dates (demotion clears nothing)', () => {
+      const state = new DatasetState({
+        entries: [
+          { id: 'p1', name: 'p1', start: '2026-01-01', end: '2026-01-05' },
+          { id: 'c1', name: 'c1', parentId: 'p1', start: '2026-03-01', end: '2026-03-10' },
+        ],
+        timeZone: 'UTC',
+        fields: [
+          { key: 'start', rollUp: 'none' },
+          { key: 'end', rollUp: 'none' },
+        ],
+      });
+
+      state.entries.remove('c1');
+
+      const demoted = state.entries.get('p1')!;
+      expect(demoted.start).toBe(toInstant('UTC', '2026-01-01'));
+      expect(demoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+    });
+  });
+
   it('reparenting recomputes both the old and new parent', () => {
     // `a` keeps a second child (`d`) so the reparent below does not also demote it (ADR 0013) —
     // this test's claim is the recompute on both sides, not the demotion clear hierarchy.test.ts

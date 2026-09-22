@@ -713,6 +713,7 @@ export interface Entry<TProps = Record<string, unknown>> {
     readonly hasChildren: boolean;
     // (undocumented)
     readonly id: EntryId;
+    leaves(): readonly Entry<TProps>[];
     readonly name: string;
     // (undocumented)
     parent(): Entry<TProps> | undefined;
@@ -879,7 +880,6 @@ export type Field<TValue = unknown> = {
     type?: FieldTypeName | FieldType<TValue>;
     rollUp?: AggregatorName;
     editable?: FieldEditable | boolean;
-    writeToChildren?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
     equals?(a: TValue | undefined, b: TValue | undefined): boolean;
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
@@ -898,7 +898,6 @@ export type Field<TValue = unknown> = {
     equals?: never;
     parseValue?: never;
     inputType?: never;
-    writeToChildren?: never;
 };
 
 // @public
@@ -955,7 +954,6 @@ export interface FieldType<TValue = unknown> {
     // (undocumented)
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
     rollUp?: AggregatorName;
-    writeToChildren?(value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext): EntryEdits | undefined;
 }
 
 // @public (undocumented)
@@ -977,9 +975,6 @@ export interface FieldUpdated {
 
 // @public
 export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldValues ? CoreFieldValues[K] : K extends keyof TProps ? TProps[K] : unknown;
-
-// @public
-export type FieldWriteToChildren<TValue = unknown> = (value: TValue | undefined, parent: StoredEntry, ctx: RollUpContext) => EntryEdits | undefined;
 
 // @public (undocumented)
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
@@ -2388,7 +2383,7 @@ export type WriteRefusalReason = FieldWriteRefusalReason;
 export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
 
 // @public
-export type WriteTarget = 'entry' | 'children' | 'refused';
+export type WriteTarget = 'entry' | 'refused';
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteVerdict" needs to be exported by the entry point index.d.ts
 //

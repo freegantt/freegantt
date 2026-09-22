@@ -51,6 +51,17 @@ async function selectBar(
   };
 }
 
+/** `cost` on `id` and every one of its descendants, read straight off the Dataset. */
+async function costsOf(page: import('@playwright/test').Page, id: string): Promise<Record<string, number>> {
+  return page.evaluate((entryId) => {
+    const dataset = window.__dataset;
+    const parent = dataset.entries.get(entryId)!;
+    return Object.fromEntries(
+      [parent, ...parent.descendants()].map((entry) => [entry.id, Number(entry.read('cost'))]),
+    );
+  }, id);
+}
+
 test('[S2-A4] rename logs from and to for the name field', async ({ page }) => {
   await page.goto('/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
@@ -106,10 +117,11 @@ test('[S2-A4] undo logs an [undo]-tagged row whose to is the original value', as
   expect(undoRow).toContain(`Renamed before undo → ${original}`);
 });
 
-// ADR 0013 amendment: a rolling-up parent's cell is read-only until the Field says what a write to
-// it means. `harness/data.ts` gives `money` a `writeToChildren` that splits evenly, so "Set cost 500" on
-// the phase row writes the children and the Rollup reads 500 back off them.
-test('Set cost 500 on a rolling-up parent splits to its children and rolls back up (ADR 0013)', async ({
+// ADR 0013: a rolling-up parent's cell is read-only, from every direction — #470 retired the one
+// seam that let a Field reopen it. `harness/data.ts`'s "Set cost 500" button owns the split now, in
+// app code: it writes the phase row's leaves, weighted by leaf count, and the Rollup reads 500 back
+// off them at every level above. One undo restores every row the split touched.
+test('Set cost 500 on a rolling-up parent splits to its leaves and rolls back up (ADR 0013, #470)', async ({
   page,
 }) => {
   await page.goto('/data.html');
@@ -117,21 +129,30 @@ test('Set cost 500 on a rolling-up parent splits to its children and rolls back 
 
   const { entryId: parentId } = await selectBar(page, page.locator('#gantt .fg-bar-summary').first());
 
+  const before = await costsOf(page, parentId);
+
   await expect(page.locator('#cost-btn')).toBeEnabled();
   await page.click('#cost-btn');
 
-  const costs = await page.evaluate((id) => {
+  const after = await page.evaluate((id) => {
     const dataset = window.__dataset;
-    const parent = dataset.entries.get(id);
+    const parent = dataset.entries.get(id)!;
+    const leaves = parent.leaves();
     return {
-      parent: Number(parent?.read('cost')),
-      children: (parent?.children() ?? []).map((child) => Number(child.read('cost'))),
+      parent: Number(parent.read('cost')),
+      leaves: leaves.map((leaf) => Number(leaf.read('cost'))),
     };
   }, parentId);
 
-  expect(costs.children.length).toBeGreaterThan(1);
-  // Every child carries a share, and the shares sum back to what the button asked for.
-  for (const share of costs.children) expect(share).toBeGreaterThan(0);
-  expect(costs.children.reduce((sum, share) => sum + share, 0)).toBe(500);
-  expect(costs.parent).toBe(500);
+  expect(after.leaves.length).toBeGreaterThan(1);
+  // Every leaf carries a share, and the shares sum back to what the button asked for.
+  for (const share of after.leaves) expect(share).toBeGreaterThan(0);
+  expect(after.leaves.reduce((sum, share) => sum + share, 0)).toBe(500);
+  expect(after.parent).toBe(500);
+
+  await page.click('#undo-btn');
+
+  const afterUndo = await costsOf(page, parentId);
+
+  expect(afterUndo).toEqual(before);
 });

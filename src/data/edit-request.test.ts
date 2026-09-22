@@ -54,13 +54,6 @@ function requestOver(
 }
 
 const cost: Field = { key: 'cost', rollUp: 'sum' };
-const spreadCost: Field = {
-  key: 'spreadCost',
-  rollUp: 'sum',
-  // What it writes is `entry-store.mutation.test.ts`'s concern; here only that it is declared at all,
-  // because that is the one fact `resolveWriteTarget` reads to answer `'children'`.
-  writeToChildren: () => new Map(),
-};
 const note: Field = { key: 'note' };
 
 function proposedEdit(patch: Record<string, unknown>): ProposedEdit {
@@ -149,12 +142,6 @@ describe('createEditRequest writeTarget', () => {
 
     expect(request.writeTarget('depot', 'cost')).toBe('refused');
     expect(request.writeTarget('van-1', 'cost')).toBe('entry');
-  });
-
-  it('sends a writeToChildren Field on a row with children down to the children', () => {
-    const request = requestOver(depotTree(), lookupOf(spreadCost));
-
-    expect(request.writeTarget('depot', 'spreadCost')).toBe('children');
   });
 
   it('lands a Field that does not roll up on the entry, children or not', () => {
