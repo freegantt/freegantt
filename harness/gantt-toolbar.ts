@@ -38,12 +38,19 @@ const PRESET_LABELS: Readonly<Record<string, string>> = {
   hourDayWeek: 'Hour / Day / Week',
   dayWeekMonth: 'Day / Week / Month',
   weekMonthYear: 'Week / Month / Year',
+  // #489: a `tickIncrement > 1` custom preset a page splices into `gantt.zoomPresets` — the visible
+  // proof that a stepped Tick is anchored on the calendar (`time/zone.ts`'s `tickFloor`/`nextTick`),
+  // not on wherever the visible window's own left edge happens to sit.
+  sixHour: 'Every 6 hours',
 };
 
 const SNAP_CHOICES: readonly { readonly value: string; readonly label: string }[] = [
   { value: 'tick', label: 'Tick' },
   { value: 'none', label: 'Off' },
   { value: 'hour', label: 'Hour' },
+  // #489: a custom, non-dividing increment — the same anchoring the "Every 6 hours" preset above
+  // draws, read here through the public `{ unit, increment }` snap surface alone.
+  { value: 'sixHour', label: 'Every 6 hours' },
   { value: 'day', label: 'Day' },
   { value: 'week', label: 'Week' },
 ];
@@ -157,11 +164,14 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
   // shows rather than guessing (`refresh()` below only writes when this answers a value).
   function snapValue(setting: SnapSetting): string | undefined {
     if (typeof setting === 'function') return undefined;
-    return typeof setting === 'string' ? setting : setting.unit;
+    if (typeof setting === 'string') return setting;
+    if (setting.unit === 'hour' && setting.increment === 6) return 'sixHour';
+    return setting.unit;
   }
 
   function readSnapChoice(value: string): SnapSetting {
     if (value === 'tick' || value === 'none') return value;
+    if (value === 'sixHour') return { unit: 'hour', increment: 6 };
     return isTimeUnit(value) ? { unit: value, increment: 1 } : 'tick';
   }
 

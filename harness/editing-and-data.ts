@@ -10,6 +10,7 @@ import {
   contextMenu,
   inlineEditing,
   watchAllErrors,
+  formatHour,
 } from 'freegantt';
 import type {
   ChromePlugin,
@@ -18,6 +19,7 @@ import type {
   EntryInput,
   GridCellRenderer,
   GridColumnInput,
+  ViewPreset,
 } from 'freegantt';
 import { demoTreeEntryInputs, demoFieldOptions, SEGMENTED_PARENT_ID } from '../fixtures/demo-dataset.js';
 import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
@@ -95,6 +97,23 @@ const overBudgetCell: GridCellRenderer = ({ column, value, fieldValue }) =>
 
 const GRID_COLUMNS: readonly GridColumnInput[] = ['name', 'start', 'end', { field: 'cost', header: 'Cost' }];
 
+// #489: a custom `tickIncrement > 1` preset — proof the anchor fix holds. Its gridlines sit at
+// 00:00/06:00/12:00/18:00 in the dataset's zone and never drift off that grid during a pan, because
+// `TimeScale.ticks` counts every tick from the day it falls in, not from wherever the visible
+// window's own left edge happens to sit. Zoom past "Hour" to reach it, or pick it straight off the
+// time-scale picker below.
+const sixHourPreset: ViewPreset = {
+  id: 'sixHour',
+  tickUnit: 'hour',
+  tickIncrement: 6,
+  headers: [
+    { unit: 'day', increment: 1, format: { year: 'numeric', month: 'short', day: 'numeric' } },
+    { unit: 'hour', increment: 6, format: formatHour },
+  ],
+  preferredTickWidthPx: 48,
+  minTickWidthPx: 40,
+};
+
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
@@ -106,6 +125,14 @@ const gantt = new Gantt({
   gridCellRenderer: overBudgetCell,
 });
 gantt.panToToday();
+
+// Splice the custom preset one rung coarser than "Hour" — reachable with one more zoom-out, without
+// reordering the shipped ladder around it. `mountGanttToolbar` below reads `gantt.zoomPresets` once,
+// at mount time, so this runs first.
+const hourRung = gantt.zoomPresets.findIndex((preset) => preset.id === 'hour');
+const zoomPresetsWithSixHour = [...gantt.zoomPresets];
+zoomPresetsWithSixHour.splice(hourRung + 1, 0, sixHourPreset);
+gantt.zoomPresets = zoomPresetsWithSixHour;
 
 // A test seam, the same one every other harness page exposes.
 window.__dataset = dataset;
