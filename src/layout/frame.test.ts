@@ -7,6 +7,7 @@ import { createVariantRegistry } from './bars/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 import {
+  addMs,
   createTimeScale,
   dayAndWeekPreset,
   dayPreset,
@@ -1477,5 +1478,57 @@ describe('Viewport.visibleSpan vs DecorationContext.span (issue #461)', () => {
     expect(seenSpan).toBeDefined();
     expect(viewport.visibleSpan.start).toBeGreaterThan(seenSpan!.start);
     expect(viewport.visibleSpan.end).toBeLessThan(seenSpan!.end);
+  });
+});
+
+describe('placeFrame reuses one entryById Map across frames that share entries (#414)', () => {
+  it('two scroll frames over the same entries array share one Map (FrameMemory.entryById identity)', () => {
+    const entries = sampleEntries.slice(0, 3);
+    const memory = new FrameMemory();
+    const input = {
+      entries,
+      scale: wideScale,
+      preset,
+      visible: { x: 0, y: 0, width: 800, height: 32 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    };
+
+    computeFrame(input, memory);
+    const firstMap = memory.entryById;
+    // A scroll changes only `visible` and `revision` — the same entries array reaches this frame,
+    // so the cached Map is the one thing that must not be rebuilt (I5).
+    computeFrame({ ...input, visible: { x: 0, y: 32, width: 800, height: 32 }, revision: 1 }, memory);
+
+    expect(memory.entryById).toBe(firstMap);
+  });
+
+  it('a frame after a commit — a new entries array — paints the moved Entry, not the cached one', () => {
+    const one = sampleEntries[0]!;
+    const memory = new FrameMemory();
+    const baseInput = {
+      scale: wideScale,
+      preset,
+      visible: { x: 0, y: 0, width: 800, height: 32 },
+      rowHeight: 32,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    };
+
+    const first = computeFrame({ ...baseInput, entries: [one], revision: 0 }, memory);
+    const firstX = first.bars.find((bar) => bar.entryId === one.id)?.x;
+    expect(firstX).toBeDefined();
+
+    const moved = entryDoubleLike(one, {
+      start: addMs(one.start!, 1000),
+      end: addMs(one.end!, 1000),
+    });
+    const second = computeFrame({ ...baseInput, entries: [moved], revision: 1, datasetRevision: 1 }, memory);
+    const secondX = second.bars.find((bar) => bar.entryId === one.id)?.x;
+    // wideScale's pxPerMs (1/1000) makes the 1000ms move exactly 1px — small enough not to touch
+    // any other assertion in this file, large enough that a stale cached Entry would fail this one.
+    expect(secondX).toBe(firstX! + 1);
   });
 });
