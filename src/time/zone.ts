@@ -199,6 +199,59 @@ export function isCoarserThan(unit: TimeUnit, than: TimeUnit): boolean {
   return UNIT_RANK[unit] > UNIT_RANK[than];
 }
 
+/** A step's real length, for `isCoarserStep` to compare. `time/` steps in two frames that never
+ *  share a common tick: `millisecond`/`minute`/`hour`/`day`/`week` have a fixed millisecond length,
+ *  `month`/`year` do not (a month is 28-31 days) and are compared in months instead. A unit outside
+ *  both frames (there is none today, but `UNIT_RANK` covers every `TimeUnit`) reports no length, and
+ *  `isCoarserStep` falls back to rank for it. */
+const MS_PER_UNIT: Partial<Record<TimeUnit, number>> = Object.freeze({
+  millisecond: 1,
+  minute: MS.MINUTE,
+  hour: MS.HOUR,
+  day: MS.DAY,
+  week: 7 * MS.DAY,
+});
+const MONTHS_PER_UNIT: Partial<Record<TimeUnit, number>> = Object.freeze({
+  month: 1,
+  year: 12,
+});
+
+interface StepLength {
+  readonly frame: 'ms' | 'month';
+  readonly value: number;
+}
+
+function stepLength(unit: TimeUnit, increment: number): StepLength | undefined {
+  const ms = MS_PER_UNIT[unit];
+  if (ms !== undefined) return { frame: 'ms', value: ms * increment };
+  const months = MONTHS_PER_UNIT[unit];
+  if (months !== undefined) return { frame: 'month', value: months * increment };
+  return undefined;
+}
+
+/** Call: `isCoarserStep({ unit: 'day', increment: 10 }, { unit: 'week', increment: 1 })` — true when
+ *  `a` spans more real time than `b`. For `presets.ts`'s `validatePresetTickStep`, which needs a
+ *  duration answer and not `isCoarserThan`'s calendar-nesting one (#481): a `day × 10` tick is
+ *  coarser than a `week × 1` header band even though `day` outranks nothing there, and a `week × 1`
+ *  tick is not coarser than a `day × 7` band, because the two span the same week.
+ *
+ *  `a` and `b` compare as milliseconds when both units are `millisecond`…`week`, and as months when
+ *  both are `month`/`year` — the one pair of frames a step can be measured in without a calendar to
+ *  read from (a month has no fixed millisecond length). A pair split across the two frames has no
+ *  shared length to compare, so `isCoarserThan`'s unit rank decides instead; no shipped preset needs
+ *  that fallback today. Pure — no clock, no zone, so DST never enters into it. */
+export function isCoarserStep(
+  a: { readonly unit: TimeUnit; readonly increment: number },
+  b: { readonly unit: TimeUnit; readonly increment: number },
+): boolean {
+  const lengthA = stepLength(a.unit, a.increment);
+  const lengthB = stepLength(b.unit, b.increment);
+  if (lengthA !== undefined && lengthB !== undefined && lengthA.frame === lengthB.frame) {
+    return lengthA.value > lengthB.value;
+  }
+  return isCoarserThan(a.unit, b.unit);
+}
+
 function unsupportedUnit(unit: TimeUnit): UnsupportedUnitError {
   return new UnsupportedUnitError(unit, 'time');
 }

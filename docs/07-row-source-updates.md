@@ -144,7 +144,7 @@ holds `team` to label its own button.
   `buildRowSource()` rebuilds the whole source from the controls on every change, so the page keeps a
   second copy of the row-source state. That is the shape "Do not keep a second copy" warns against,
   and it works there only because the `<select>` elements are the page's own single source of truth.
-  Read it as a demo of the keys, not of how to update them ([#429](https://github.com/Pawel-IT/FreeGantt/issues/429)).
+  Read it as a demo of the keys, not of how to update them.
 
 ## Related
 

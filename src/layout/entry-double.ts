@@ -155,8 +155,8 @@ class EntryDouble implements Entry {
 
 /**
  * A wired set of rows: `entryDoubles([{ id: 'p' }, { id: 'c', parentId: 'p' }])`. Each row answers
- * `parent()`, `children()`, `hasChildren`, `depth` and `descendants()` about the others, in the
- * order they were written.
+ * `parent()`, `children()`, `hasChildren`, `depth`, `descendants()` and `leaves()` about the
+ * others, in the order they were written.
  */
 export function entryDoubles(rows: readonly EntryDoubleValues[]): readonly Entry[] {
   const byId = new Map<EntryId, Entry>();

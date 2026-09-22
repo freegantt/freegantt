@@ -17,6 +17,7 @@ export {
   SUPPORTED_TIME_UNITS,
   isTimeUnit,
   isCoarserThan,
+  isCoarserStep,
 } from './zone.js';
 export type { PlainParts } from './zone.js';
 export { createZonedTime } from './zoned-time.js';

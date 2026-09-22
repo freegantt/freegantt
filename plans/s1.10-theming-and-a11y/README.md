@@ -44,8 +44,8 @@ Acceptance for each story is the checkbox under it — the only copy of this che
   - [x] Roles, labels, one honest tab stop (`render/dom/index.test.ts`).
 - **U6.** (developer) I write `e2e` selectors against `[data-testid="fg-bar"][data-item-id="t42"]` instead of a CSS class that could change with a design tweak.
   - [x] `data-testid` hooks present (`render/dom/index.test.ts`); the `[S1-A1]`/`[S1-A4]` selectors S1.11's boxes will select on exist now, not invented at S1.11.
-- **U7.** (developer) I add a new `BarFlags` key next month (say, `late`). I don't touch `render/dom` — the flag shows up as `data-flag~="late"` because the generator reads the object's keys, not a hand-written map.
-  - [x] A new `BarFlags` key needs no `render/dom` edit (`render/dom/index.test.ts`, table-driven).
+- **U7.** (developer) I add a new `BarFlags` key next month (say, `late`) to `BAR_FLAG_KEYS`. I don't touch `render/dom` — the flag shows up as `data-flag~="late"` because the generator reads `BAR_FLAG_KEYS`, a closed list, not the object's own keys.
+  - [x] A new `BarFlags` key needs no `render/dom` edit (`render/dom/index.test.ts:221`); a key forced onto `flags` outside `BAR_FLAG_KEYS` is ignored, proving the generator reads the closed list, not `Object.keys` (`render/dom/index.test.ts:246`).
 
 ---
 
@@ -63,12 +63,12 @@ Bars already carry `data-kind` (`render/dom/index.ts:139`, shipped with S0/S1's 
 
 ```ts
 function flagTokens(flags: BarFlags): string {
-  return (Object.keys(flags) as (keyof BarFlags)[]).filter((k) => flags[k]).join(' ');
+  return BAR_FLAG_KEYS.filter((k) => flags[k]).join(' ');
 }
 // patch: node.dataset['flag'] = flagTokens(geom.flags);
 ```
 
-Generated, not hand-mapped, per `plans/02` §4's documented selector (`.fg-bar[data-flag~="conflict"]`) — adding a `BarFlags` key needs no `render/dom` edit (U7). `FrameLink` gets the same treatment for `LinkFlags` when link rendering lands (S3); nothing here blocks on that, `LinkFlags`'s shape is already `{ inactive?; cycle? }`.
+Generated off the closed `BAR_FLAG_KEYS` list, not hand-mapped, per `plans/02` §4's documented selector (`.fg-bar[data-flag~="conflict"]`) — adding a `BarFlags` key to `BAR_FLAG_KEYS` needs no `render/dom` edit (U7). `FrameLink` gets the same treatment for `LinkFlags` when link rendering lands (S7); nothing here blocks on that, `LinkFlags`'s shape is already `Partial<Record<(typeof LINK_FLAG_KEYS)[number], boolean>>`.
 
 ### D-S1.10-3 — `BarFlags`/`LinkFlags` keys become the CSS vocabulary directly
 
