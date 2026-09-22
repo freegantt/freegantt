@@ -542,8 +542,11 @@ export function placeFrame(
   decorations?: DecorationRunner,
 ): GeometryFrame {
   const { scale, preset, visible, rowHeight, revision, locale } = input;
-  const entryById = new Map(input.entries.map((entry) => [entry.id, entry]));
   const mem = memory ?? memoryFor(input, plan);
+  // #414: `mem.sync` (already run, by this call or by `memoryFor` above) keeps one Map of every
+  // Entry, rebuilt only when the `entries` array changes identity — a scroll frame reuses it instead
+  // of paying an O(entries) allocation every frame.
+  const entryById = mem.entryById;
   const index = mem.heights;
   const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
   const minBarWidthPx = input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX;

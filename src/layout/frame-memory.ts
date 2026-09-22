@@ -35,6 +35,11 @@ export class FrameMemory {
   #plan: readonly PlannedRow[] = [];
   #rowById = new Map<string, PlannedRow>();
   #entryById = new Map<EntryId, Entry>();
+  /** The `entries` array `#entryById` was built from (#414). Identity, not `datasetRevision`: a
+   *  drag preview can leave the revision untouched while still wanting the committed entries — it
+   *  never reaches `placeFrame` at all (`GanttShell` paints a preview through `#backend.applyState`),
+   *  so an identity check is exact and never serves a stale entry. */
+  #entriesForEntryById: readonly Entry[] | undefined;
   #registry: VariantBars = NO_VARIANTS;
   #rowHeight = 0;
   #cachedRowCount = -1;
@@ -48,12 +53,21 @@ export class FrameMemory {
     return this.#heights ?? new PrefixSumHeightIndex(0, () => 0);
   }
 
+  /** Call: `memory.entryById` — every synced Entry, keyed by id, rebuilt only when `sync` sees a new
+   *  `entries` array (#414). `placeFrame` reads this instead of allocating its own Map every frame. */
+  get entryById(): ReadonlyMap<EntryId, Entry> {
+    return this.#entryById;
+  }
+
   /** Call: `memory.sync({ plan, rowHeight, entries, registry, datasetRevision })`. */
   sync(bind: FrameMemoryBind): void {
     this.#plan = bind.plan;
     this.#rowById = new Map(bind.plan.map((row) => [row.id, row]));
     this.#rowHeight = bind.rowHeight;
-    this.#entryById = new Map(bind.entries.map((entry) => [entry.id, entry]));
+    if (bind.entries !== this.#entriesForEntryById) {
+      this.#entryById = new Map(bind.entries.map((entry) => [entry.id, entry]));
+      this.#entriesForEntryById = bind.entries;
+    }
     this.#registry = bind.registry;
     if (bind.heightAt !== undefined) this.#heightAt = bind.heightAt;
     else this.#heightAt = undefined;
