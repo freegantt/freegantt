@@ -1,6 +1,6 @@
 # #470 — one rule for a derived cell: the Rollup owns it, or the consumer owns the Field
 
-**Reported:** 2026-09-21. **Status:** all five steps built and green, on `Pawel-IT/470-uniform-rollup`. Not merged. Labels: `enhancement`, `api change`.
+**Reported:** 2026-09-21. **Status:** shipped in #482, merged 2026-09-22. Labels: `enhancement`, `api change`.
 
 ## What the issue is
 
