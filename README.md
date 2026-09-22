@@ -184,20 +184,25 @@ import { Dataset } from 'freegantt';
 
 const dataset = new Dataset({
   entries, // readonly EntryInput[] — see "Dates and ids a consumer can write"
-  timeZone, // IANA zone, required (D6)
+  timeZone, // IANA zone; omit it and the environment's own zone resolves once, at construction
   dateOnlyEnd, // optional, 'inclusive' (default) | 'exclusive'
-  rollUpKinds: ['group'], // default; 'none' keeps caller-assigned parent values
-  hierarchy: { autoGroup: true }, // default; first child promotes parent to kind 'group'
   fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
   fields: [{ key: 'cost', type: 'money' }, { key: 'team' }],
+  aggregators, // optional — named rollUp functions beside the shipped ones
+  history: { capacity: 100 }, // optional undo depth
+  plugins, // a plugin with a `data` half installs here, at construction only (ADR 0019)
 });
 
 dataset.entries.all; // readonly Entry[] — ids branded, dates resolved to Instant
-dataset.entries.childrenOf('p1'); // direct children in store order
+dataset.entries.get('p1')?.children(); // direct children, in store order
 
 dataset.entries.add({ id: 't9', name: 'Roofing', start: '2026-10-01', end: '2026-10-15' });
 dataset.entries.update('t2', { name: 'Framing — north wing', cost: 12_000 });
 dataset.entries.remove('t9'); // and every descendant, in the same changeset
+
+// There is no `rollUpKinds` and no `hierarchy: { autoGroup }`. An Entry carries no stored kind
+// (ADR 0013): a parent rolls up because it has children. One entry opts out with `rollUp: 'none'`,
+// which keeps the caller-assigned dates on that parent alone (#470).
 dataset.entries.fieldValue('t2', 'cost'); // reads through the Field registry
 
 dataset.field('cost'); // resolved Field | undefined
@@ -265,7 +270,7 @@ in `gridColumns`.
 gantt.rowSource = { source: 'entries', tree: true };
 
 // One header row per groupBy value
-gantt.rowSource = { source: 'group', groupBy: (entry) => entry.meta.team };
+gantt.rowSource = { source: 'group', groupBy: (entry) => String(entry.read('team') ?? '') };
 
 // Consumer-supplied rows
 gantt.rowSource = {
@@ -277,7 +282,7 @@ gantt.rowSource = {
 gantt.rowSource = {
   source: 'entries',
   tree: true,
-  filter: (entry) => entry.meta.team === 'A',
+  filter: (entry) => entry.read('team') === 'A',
   filterPolicy: 'keepAncestors', // or 'matchOnly'
   sort: { field: 'start', direction: 'asc' },
 };
@@ -299,19 +304,21 @@ gantt.on('collapseChange', ({ to }) => save(to));
 For `{ source: 'entries' }`, a `RowId` equals the `EntryId`. Group headers use derived ids from the
 `groupBy` value.
 
-### `TimeScaleModel` and `ScrollModel`
+### `TimeScaleModel` and `ScrollAxis`
 
 ```ts
-import { TimeScaleModel, ScrollModel } from 'freegantt';
+import { TimeScaleModel, ScrollAxis } from 'freegantt';
 
 const scale = new TimeScaleModel({ preset: 'weekAndMonth', range: 'fitDataset' });
-const scroll = new ScrollModel();
+const scroll = { x: new ScrollAxis(), y: new ScrollAxis() }; // a `ScrollAxes` — either key is optional
 
 const gantt = new Gantt({ container, dataset, scale, scroll });
 ```
 
-Pass the **same** `TimeScaleModel` and/or `ScrollModel` to two `Gantt` instances to x-sync them (D9).
-Omit both and the Gantt builds private defaults — single-chart usage never has to meet the concept.
+Pass the **same** `TimeScaleModel` to two `Gantt` instances to share the time axis, and the same
+`ScrollAxis` under `x` and/or `y` to share that scroll direction (D9). One axis alone is legal:
+`{ x }` syncs the timelines and leaves each Gantt its own vertical scroll. Omit both and the Gantt
+builds private defaults — a single Gantt never has to meet the concept.
 
 On `Gantt` directly (when no shared `scale` is passed): `preset`, `range`, `fit`, `zoomIn`/`zoomOut`,
 `zoomPresets`, `panToDate`, `panToToday`, and `navigationChange`. Supplying `scale` alongside
@@ -326,7 +333,7 @@ const gantt = new Gantt({
   container: element, // HTMLElement or CSS selector
   dataset,
   scale, // optional TimeScaleModel — omit for a private default
-  scroll, // optional ScrollModel
+  scroll, // optional ScrollAxes — { x?: ScrollAxis, y?: ScrollAxis }
   preset: 'weekAndMonth', // when scale is omitted
   range: 'fitDataset', // or { start, end } — InstantInput
   gridColumns: ['name', 'start', 'duration'],
@@ -334,7 +341,7 @@ const gantt = new Gantt({
   theme: 'auto', // 'light' | 'dark'
   todayLine: true,
   locale: 'de-DE',
-  interactions: { move: true, resize: (e) => e.kind !== 'group' },
+  capabilities: { move: true, resize: (entry) => !entry.hasChildren }, // a Capabilities rule
   viewportGestures: { wheelZoom: true },
 });
 

@@ -380,7 +380,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // absolutely-positioned child of `.fg-header` itself) can sit at `top: 100%` of `.fg-header`'s own
   // height, right below the bands, with no clip cutting it off. `headerBandsHost` is the exact-band-
   // height box that carries the width-to-contentWidth clip `.fg-header` used to carry itself
-  // (#<S1.12 content-width fix>).
+  // (S1.12, `e2e/timeline-content-width.spec.ts`).
   let headerBandsHost: HTMLElement | undefined;
   let barLayer: HTMLElement | undefined;
   let rowBandLayer: HTMLElement | undefined;
@@ -1309,8 +1309,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // today wrapper and any authored Date line — those stay the topmost stroke either way.
       decorations = attachDecorations(timelineHost, barLayer);
       // Inserted between the decorations and the bars, so the lines paint over the zebra, the
-      // selected-row band, and weekend shading, and under every bar — the design's own paint
-      // order (`bands` -> `shades` -> `gridLines` -> bars, #<J2 fix>).
+      // selected-row band, and time shading, and under every bar — the design's own paint order
+      // (`rowBands` -> `decorations` -> `tickLines` -> `bars`).
       tickLines = attachTickLines(timelineHost, barLayer);
       dateLines = attachDateLines(timelineHost, headerLayer, contentSizer);
       timelineHost.append(cursorLine);
@@ -1322,7 +1322,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // coarse preset over a short dataset. `.fg-header-bands` clips (`overflow: hidden`) at its own
         // box edge, so the box must be exactly `contentWidth` wide — or the clip lands at the pane's
         // width instead and either hides in-range ticks or lets an oversized tick inflate native
-        // scrollWidth (#<S1.12 content-width fix>). Carrying this on `headerBandsHost`, not
+        // scrollWidth (S1.12, `e2e/timeline-content-width.spec.ts`). Carrying this on `headerBandsHost`, not
         // `.fg-header` itself, is what leaves `.fg-header` free to stay `overflow: visible` for the
         // Date line label (#225).
         headerBandsHost.style.width = `${frame.contentWidth}px`;

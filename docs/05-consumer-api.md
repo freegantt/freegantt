@@ -20,7 +20,7 @@ A Gantt is two panes on one set of rows. The **Grid pane** is on the left. The *
 
 A **Grid column** is one vertical slice of the Grid pane. It names a Field and carries presentation only — header, width, order. Declaring a Field does not put it on the Grid pane. A Grid column on the Gantt does that.
 
-The Timeline pane paints **Items** as bars on a time scale. A bar is paint, not identity (`CONTEXT.md`). The time axis is not a column. The whole view is a **Gantt**. Chart is a retired word (#7).
+The Timeline pane paints **Bars** on a time scale. A bar is paint, not identity (`CONTEXT.md`). Item is a retired word for Bar (#421 C6, ADR 0026). The time axis is not a column. The whole view is a **Gantt**. Chart is a retired word (#7).
 
 ## Undo, redo, and the `change` event
 
@@ -31,7 +31,11 @@ they did arrives on `dataset.on('change')` — the same channel a user edit uses
 ```ts
 import { Dataset, fieldRowsOf } from 'freegantt';
 
-const dataset = new Dataset({ timeZone: 'Europe/Warsaw', entries: [ /* … */ ] });
+const dataset = new Dataset<{ cost: number }>({
+  timeZone: 'Europe/Warsaw',
+  entries: [ /* … */ ],
+  fields: [{ key: 'cost', type: 'number' }], // `cost` is written below, so it is declared here
+});
 
 dataset.on('beforeChange', ({ changeSet }) => {
   if (changeSet.origin === 'undo' && !confirm('Undo this step?')) return false;
@@ -95,7 +99,7 @@ These landed in slice S4. Details and examples live in `plans/02-public-api.md` 
 - `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve). Reads back
   resolved, and one setting changes by spreading that value — see
   [Row source updates](07-row-source-updates.md).
-- `rowSource.filter` / `groupBy` / `sort.compare` — receive the bound Field reader as a second argument (`(entry, fields) => fields.read(entry, 'team')`). One-argument callbacks still work.
+- `rowSource.filter` and `groupBy` take the `Entry` alone, and read a value off it: `(entry) => entry.read('team') === 'Blue'`. `sort.compare(a, b, fields)` compares two *values* of `sort.field`, not two Entries, and its third argument is a `FieldContext` — the dataset `timeZone`, for a comparer that needs the zone to read a date.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
 - Events: `beforeCollapseChange` / `collapseChange`
 - `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after `Dataset.fromJSON`). Do not copy `scrollTop` off the pane.
@@ -110,11 +114,12 @@ of resolved rows.
 
 ### Published types (S4)
 
-`Field`, `FieldSource`, `FieldType`, `FieldKey`, `FieldContext`, `Aggregator`, `GridColumn`, `GridColumnInput`,
+`Field`, `FieldType`, `FieldTypeName`, `FieldKey`, `FieldContext`, `Aggregator`, `GridColumn`, `GridColumnInput`,
 `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`,
 `RowSourceCommon`, `CustomRowInput`,
-`CollapseChange`, `DatasetHierarchy`, `SerializedField`, and the S4 error classes re-exported from
-`freegantt`.
+`CollapseChange`, `DatasetHierarchy`, and the S4 error classes re-exported from `freegantt`.
+`FieldSource` retired with ADR 0011 (a Field key is the whole address) and `SerializedField` with
+ADR 0016 (the library holds no save format) — neither is in `etc/freegantt.api.md`.
 
 ## S5 (plugins)
 

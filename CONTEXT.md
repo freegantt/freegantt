@@ -524,7 +524,7 @@ The set of Entry ids a `Gantt` currently highlights (ADR 0025, #421, supersedes 
 _Avoid_: highlight (paint detail, not the authored concept), `Gantt.selection` / `Gantt.selectionEntries` (retired in #113 — a public name with no axis word left the reader to learn from the types which side was ids), `selectedItemIds` (retired in #185 — paint keyed by Bar let the shell guess which bar an Entry drew), `gantt.selectedIds` (retired in #212, ADR 0010 — the name could not say which unit it held once two units, Segment and Entry, existed), `selectedSegmentIds` (retired in #421, ADR 0025 — `Segment` no longer exists, so there is one set again, not two)
 
 **EntryGesture**:
-The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `interaction/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
+The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resize', edge }` — the shape `view/entry-gesture-context.ts`'s `EntryGestureContext` carries through `draftFor`/`commit`. Distinct from the pointer machine itself (`createPointerGesture`, `pointer-gesture.ts`), which knows nothing about entries, drafts, or kinds — only threshold, capture, Escape, and long-press over plain `start`/`move`/`commit`/`cancel` callbacks.
 _Avoid_: Gesture unqualified (collides with the pointer machine's own word — say "the pointer gesture" or "the EntryGesture" explicitly)
 
 **Parent bar drag**:

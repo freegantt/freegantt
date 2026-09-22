@@ -571,7 +571,7 @@ style="color: var(--sub)"
 />
 <rect class="bx pure" x="234" y="158" width="212" height="70" />
 <text class="t" x="246" y="176">FrameMemory</text>
-<text class="s" x="246" y="190">RowHeightIndex + per-row item memo</text>
+<text class="s" x="246" y="190">RowHeightIndex + per-row Bar memo</text>
 <text class="s" x="246" y="206">reused across renders when inputs</text>
 <text class="xs" x="246" y="220">did not change</text>
 <line
@@ -586,10 +586,10 @@ style="color: var(--sub)"
 <rect class="bx pure" x="234" y="256" width="212" height="128" />
 <text class="t" x="246" y="274">computeFrame(input, heights)</text>
 <text class="s" x="246" y="290">1) resolveRows — per rowSource</text>
-<text class="s" x="246" y="305">2) produceItems — per variant</text>
+<text class="s" x="246" y="305">2) produceBars — per variant</text>
 <text class="s" x="246" y="320">3) cull v + h to the window</text>
 <text class="s" x="246" y="335">4) header ticks; date-lines</text>
-<text class="xs" x="246" y="372">rows → items, in order</text>
+<text class="xs" x="246" y="372">rows → bars, in order</text>
 <!-- col C -->
 <line
 class="edge"
@@ -725,7 +725,7 @@ a row source, then asks one registry what each Entry draws:
 
 #### The coordinate rules `computeFrame` keeps
 
-- **Windowed vs. full.** `rows` and `items` hold only what survived culling;
+- **Windowed vs. full.** `rows` and `bars` hold only what survived culling;
   `contentWidth`/`contentHeight` are *always* the full extent. That split is what lets the scroll
   model compute a real maximum from a frame that drew twelve rows out of two thousand.
 - **Zero disables culling.** A zero `visible.height` means "no culling at all", not "an empty
@@ -734,7 +734,7 @@ a row source, then asks one registry what each Entry draws:
 - **Overscan is in index space vertically, pixels horizontally.** Vertical overscan counts *rows*
   and goes through the height index, so it stays correct as row heights vary. Horizontal has no
   rows to count, so it is a pixel buffer.
-- **Rows are culled vertically only.** A row whose item is off-screen horizontally is still
+- **Rows are culled vertically only.** A row whose bar is off-screen horizontally is still
   emitted — the grid pane needs its label.
 
 ## The notification machine

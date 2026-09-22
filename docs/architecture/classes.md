@@ -70,7 +70,7 @@ into a general reactivity primitive.
 
 *`layout/frame-layout.ts`*
 
-The stateful wrapper that keeps the row-height index and per-row item memo alive across renders.
+The stateful wrapper that keeps the row-height index and per-row Bar memo alive across renders.
 The shell states what to draw; the memory never crosses into `view/`.
 
 - **#memory: FrameMemory** — Holds one layout pass's cross-render memory — the

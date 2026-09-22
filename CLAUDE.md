@@ -57,7 +57,7 @@ Comment a seam with the question it answers, not the mechanism it uses. A reader
 
 - TS strict (with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), pnpm, Vite, Vitest (pure tests run in Node with no DOM env), fast-check for property tests. Dont do lie generics
 - Slice gates (`plans/00` §4) must pass before the next slice starts.
-- The invariants table (`plans/01` §11, I1–I14) is the review checklist; every invariant maps to a CI job.
+- The invariants table (`plans/01` §11, I1–I15) is the review checklist; every invariant maps to a CI job.
 - Rename a class, a type or a function with `pk-rename-symbol`. It renames through the language service, so it follows re-exports and aliases, and it skips prose. Then run `pnpm typecheck`. A same-named string in a comment or a doc stays as it is — decide those separately.
 - **CI and the verification gate**: open `docs/agents/ci.md` to run the gate before hand-off, and to troubleshoot a failing or truncated check.
 - **Pull requests**: open `docs/agents/pull-requests.md` when you create a pull request or mark one ready.

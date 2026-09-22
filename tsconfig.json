@@ -14,12 +14,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    // S5.6, [S5-A2]: harness/plugins/weekend-shading.ts imports 'freegantt' as a third-party
-    // plugin author would, against the published `exports` map's own target (api/index.ts) —
-    // never a path inside src/. This alias resolves that bare specifier to source so typecheck
-    // and the harness dev server both work with no prebuilt dist/ (the real package's own
-    // `exports` map points `"freegantt"` at the built `dist/api/index.js`; this is the same
-    // public entry, just unbuilt).
+    // S5.6, [S5-A2]: every harness page and fixture imports 'freegantt' as a third-party plugin
+    // author would, against the published `exports` map's own target (api/index.ts) — never a path
+    // inside src/. This alias resolves that bare specifier to source so typecheck and the harness
+    // dev server both work with no prebuilt dist/ (the real package's own `exports` map points
+    // `"freegantt"` at the built `dist/api/index.js`; this is the same public entry, just unbuilt).
     "paths": {
       "freegantt": ["./src/api/index.ts"]
     }
