@@ -4,7 +4,7 @@
 // this answers is "make the surface visible on every demo page", so this file exists to avoid three
 // copies of the same dozen lines). Zoom buttons stay in sync through `gantt.on('navigationChange')`.
 
-import type { Gantt } from 'freegantt';
+import type { Gantt, ShippedPresetId } from 'freegantt';
 
 export interface TimelineToolbarOptions {
   gantt: Gantt;
@@ -16,6 +16,10 @@ export interface TimelineToolbarOptions {
   showLocale?: boolean;
   /** Include the `todayLine` toggle checkbox. Default `false`. */
   showTodayLineToggle?: boolean;
+  /** #101: shipped presets outside `gantt.zoomPresets`' own nine-rung ladder — `minute`,
+   *  `fifteenMinute`, `sixHour`, `dayLetterAndWeek`. Appended to the same picker, after the ladder's
+   *  own entries, so `zoomIn`/`zoomOut` still step through only the shipped default. Default `[]`. */
+  extraPresetIds?: readonly ShippedPresetId[];
 }
 
 const LOCALE_OPTIONS = ['en-US', 'de-DE', 'ja-JP'] as const;
@@ -23,7 +27,14 @@ const LOCALE_OPTIONS = ['en-US', 'de-DE', 'ja-JP'] as const;
 /** Builds the toolbar DOM and wires it to the `Gantt` surface. `navigationChange` keeps the
  *  zoom buttons and preset picker in sync when something else writes Preset or Fit. */
 export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
-  const { gantt, container, showFit = false, showLocale = false, showTodayLineToggle = false } = options;
+  const {
+    gantt,
+    container,
+    showFit = false,
+    showLocale = false,
+    showTodayLineToggle = false,
+    extraPresetIds = [],
+  } = options;
 
   const bar = document.createElement('div');
   bar.className = 'demo-toolbar';
@@ -45,6 +56,12 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
     const option = document.createElement('option');
     option.value = preset.id;
     option.textContent = preset.id;
+    presetSelect.append(option);
+  }
+  for (const id of extraPresetIds) {
+    const option = document.createElement('option');
+    option.value = id;
+    option.textContent = `${id} (not in zoomIn/zoomOut)`;
     presetSelect.append(option);
   }
   presetLabel.append(presetSelect);

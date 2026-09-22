@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { presets, resolvePreset } from './presets.js';
+import { presets, resolvePreset, ZOOM_PRESETS } from './presets.js';
 import type { ShippedPresetId } from './presets.js';
 import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
+import { createTimeScale } from './scale.js';
 import type { ViewPreset } from './scale.js';
+import { resolveDateFormat } from './format.js';
+import { instant } from './instant.js';
 
 describe('resolvePreset', () => {
   it('resolves every shipped id to its preset', () => {
@@ -314,5 +317,79 @@ describe('shipped presets', () => {
     expect(presets.dayAndWeek.headers.map((h) => h.unit)).toEqual(['week', 'day']);
     expect(presets.weekAndMonth.headers.map((h) => h.unit)).toEqual(['month', 'week']);
     expect(presets.monthAndYear.headers.map((h) => h.unit)).toEqual(['year', 'month']);
+  });
+});
+
+// #101 items 1-2: sub-hour rungs and the day-letter band, shipped as named presets a consumer can
+// reach by id, outside the default `ZOOM_PRESETS` ladder — none of these change default zoom
+// behaviour.
+describe('#101 new shipped presets', () => {
+  const timeZone = 'UTC';
+
+  it('minute/fifteenMinute/sixHour stay off the default zoom ladder', () => {
+    const ladderIds = ZOOM_PRESETS.map((preset) => preset.id);
+    expect(ladderIds).not.toContain('minute');
+    expect(ladderIds).not.toContain('fifteenMinute');
+    expect(ladderIds).not.toContain('sixHour');
+    expect(ladderIds).not.toContain('dayLetterAndWeek');
+  });
+
+  it('minutePreset ticks once per minute', () => {
+    const range = { start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-01T00:10:00Z') };
+    const scale = createTimeScale({ timeZone, range, pxPerMs: 1 });
+    const ticks = scale.ticks(
+      { unit: presets.minute.tickUnit, increment: presets.minute.tickIncrement },
+      { x: 0, width: scale.contentWidth },
+    );
+    expect(ticks).toHaveLength(10);
+    expect(ticks[1]?.instant).toBe(instant('2026-09-01T00:01:00Z'));
+  });
+
+  it('fifteenMinutePreset ticks align to the hour, every 15 minutes', () => {
+    const range = { start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-01T01:00:00Z') };
+    const scale = createTimeScale({ timeZone, range, pxPerMs: 1 });
+    const ticks = scale.ticks(
+      { unit: presets.fifteenMinute.tickUnit, increment: presets.fifteenMinute.tickIncrement },
+      { x: 0, width: scale.contentWidth },
+    );
+    expect(ticks.map((t) => t.instant)).toEqual([
+      instant('2026-09-01T00:00:00Z'),
+      instant('2026-09-01T00:15:00Z'),
+      instant('2026-09-01T00:30:00Z'),
+      instant('2026-09-01T00:45:00Z'),
+    ]);
+  });
+
+  it('sixHourPreset ticks four times a day', () => {
+    const range = { start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-02T00:00:00Z') };
+    const scale = createTimeScale({ timeZone, range, pxPerMs: 1 });
+    const ticks = scale.ticks(
+      { unit: presets.sixHour.tickUnit, increment: presets.sixHour.tickIncrement },
+      { x: 0, width: scale.contentWidth },
+    );
+    expect(ticks.map((t) => t.instant)).toEqual([
+      instant('2026-09-01T00:00:00Z'),
+      instant('2026-09-01T06:00:00Z'),
+      instant('2026-09-01T12:00:00Z'),
+      instant('2026-09-01T18:00:00Z'),
+    ]);
+  });
+
+  it('dayLetterAndWeekPreset carries its week band coarsest-first, day-letter finest', () => {
+    expect(presets.dayLetterAndWeek.headers.map((h) => h.unit)).toEqual(['week', 'day']);
+  });
+
+  it('dayLetterAndWeekPreset ticks once per day, one letter per label (format-only, no new TimeUnit)', () => {
+    const range = { start: instant('2026-09-06T00:00:00Z'), end: instant('2026-09-13T00:00:00Z') }; // a Sunday through the next
+    const scale = createTimeScale({ timeZone, range, pxPerMs: 1 });
+    const dayBand = presets.dayLetterAndWeek.headers[1]!;
+    const ticks = scale.ticks(
+      { unit: dayBand.unit, increment: dayBand.increment },
+      { x: 0, width: scale.contentWidth },
+    );
+    expect(ticks).toHaveLength(7);
+    const label = resolveDateFormat(dayBand.format, timeZone, 'en-US');
+    // 2026-09-06 is a Sunday: S M T W T F S.
+    expect(ticks.map((t) => label(t.instant))).toEqual(['S', 'M', 'T', 'W', 'T', 'F', 'S']);
   });
 });
