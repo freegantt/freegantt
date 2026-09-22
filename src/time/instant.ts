@@ -1,7 +1,7 @@
 // time/ owns all zone-aware date arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
 
 import type { Instant, TimeSpan } from '../model/index.js';
-import { NOT_FINITE, NULL_VALUE, UNREADABLE, ZONELESS, invalidInstant } from './instant-fault.js';
+import { invalidInstant } from './instant-fault.js';
 
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = MS_PER_SECOND * 60;
@@ -35,22 +35,22 @@ const OPENS_LIKE_A_DATE = /^\d{4}-\d{2}-\d{2}/;
 export function instant(value: Date | number | string): Instant {
   if (value instanceof Date) {
     const ms = value.getTime();
-    if (Number.isNaN(ms)) throw invalidInstant(value, UNREADABLE);
+    if (Number.isNaN(ms)) throw invalidInstant(value, 'unreadable', 'instant');
     return ms as Instant;
   }
   if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw invalidInstant(value, NOT_FINITE);
+    if (!Number.isFinite(value)) throw invalidInstant(value, 'not-finite', 'instant');
     return value as Instant;
   }
   // The declared type rules the rest out, but a consumer feeding this from JSON or an untyped record
   // has no compiler left by the time it gets here (#431).
-  if (value === null || value === undefined) throw invalidInstant(value, NULL_VALUE);
-  if (typeof value !== 'string') throw invalidInstant(value, UNREADABLE);
+  if (value === null || value === undefined) throw invalidInstant(value, 'null-value', 'instant');
+  if (typeof value !== 'string') throw invalidInstant(value, 'unreadable', 'instant');
   if (!OFFSET_ISO.test(value)) {
-    throw invalidInstant(value, OPENS_LIKE_A_DATE.test(value) ? ZONELESS : UNREADABLE);
+    throw invalidInstant(value, OPENS_LIKE_A_DATE.test(value) ? 'zoneless' : 'unreadable', 'instant');
   }
   const ms = new Date(value).getTime();
-  if (Number.isNaN(ms)) throw invalidInstant(value, UNREADABLE);
+  if (Number.isNaN(ms)) throw invalidInstant(value, 'unreadable', 'instant');
   return ms as Instant;
 }
 

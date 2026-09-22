@@ -66,7 +66,7 @@ export function createZonedTime(zone: string): ZonedTime {
     fromPlain: (plain) => fromPlain(zone, plain),
     step: (at, unit, increment = 1) => stepBy(zone, at, unit, increment),
     each: (span, unit) => eachUnit(zone, span, unit),
-    toInstant: (input) => toInstant(zone, input),
-    toEndInstant: (input, rule = 'inclusive') => toEndInstant(zone, input, rule),
+    toInstant: (input) => toInstant(zone, input, 'dataset.time.toInstant'),
+    toEndInstant: (input, rule = 'inclusive') => toEndInstant(zone, input, rule, 'dataset.time.toEndInstant'),
   };
 }

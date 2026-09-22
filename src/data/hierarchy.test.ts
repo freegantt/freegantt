@@ -40,8 +40,8 @@ describe('structure decides derivation (ADR 0013)', () => {
 
     expect(changeCount).toBe(1);
     expect(rows.some((row) => row.field === 'kind')).toBe(false);
-    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-06-01'));
-    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-06-05', 'inclusive'));
+    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-06-01', 'test'));
+    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-06-05', 'inclusive', 'test'));
     expect(rows.some((row) => row.field === 'start')).toBe(true);
     expect(rows.some((row) => row.field === 'end')).toBe(true);
   });
@@ -56,8 +56,8 @@ describe('structure decides derivation (ADR 0013)', () => {
     state.entries.update('c1', { parentId: 'p1' });
 
     expect(state.entries.get('p1')?.children() ?? []).toHaveLength(1);
-    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
-    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
+    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
+    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive', 'test'));
   });
 
   it('promotion drops the parent’s authored rolling-up value in the same ChangeSet as the parentId write', () => {
@@ -85,7 +85,7 @@ describe('structure decides derivation (ADR 0013)', () => {
       { id: 'p1', start: '2026-01-01', end: '2026-01-02' },
       { id: 'c1', parentId: 'p1', start: '2026-03-01', end: '2026-03-05' },
     ]);
-    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
+    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
 
     state.entries.remove('c1');
 
@@ -102,7 +102,7 @@ describe('structure decides derivation (ADR 0013)', () => {
       { id: 'c1', parentId: 'p1', start: '2026-03-01', end: '2026-03-05' },
     ]);
 
-    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01'));
+    expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
     expect(state.canUndo).toBe(false);
   });
 

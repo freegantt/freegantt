@@ -174,7 +174,7 @@ describe('moveEntryTo writes a rigid start/end translate (D-S5-50, #239, ADR 002
     // The zone stays the caller's to apply, because `moveEntryTo` builds an edit and is not a way in
     // (D-S5-50). 'America/New_York' puts the start of 2026-01-05 five hours after the UTC one, and
     // the whole Entry moves by that much more.
-    const edit = moveEntryTo(entry, toInstant('America/New_York', '2026-01-05'));
+    const edit = moveEntryTo(entry, toInstant('America/New_York', '2026-01-05', 'test'));
     expect(edit.start).toBe(utc('2026-01-05T05:00:00Z'));
   });
 
