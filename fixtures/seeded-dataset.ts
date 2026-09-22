@@ -1,8 +1,8 @@
-// Deterministic entry inputs for the 5,000-entry acceptance page (plans/s1.11-close-the-gate/README.md
+// Deterministic entry inputs for the 10,000-entry acceptance page (plans/s1.11-close-the-gate/README.md
 // §3.1, D-S1.11-2) and the S7 perf spike. "seeded" names the generator; `harness/large-dataset.html`
 // is the demo page it feeds — the two are deliberately different names for two different things.
 //
-// A seeded LCG, never `Math.random`: the same seed is the same 5,000 entries forever, so a snapshot
+// A seeded LCG, never `Math.random`: the same seed is the same 10,000 entries forever, so a snapshot
 // or a perf spike taken today still reproduces tomorrow. A fixed default start instant, never `now()`
 // — a fixture that drifts with the clock is not a fixture.
 //
@@ -38,7 +38,7 @@ const MIN_DURATION_DAYS = 1;
 const MAX_DURATION_DAYS = 10;
 const MAX_START_OFFSET_DAYS = 3;
 
-/** Deterministic entry inputs for the 5,000-entry acceptance page and the S7 perf spike. Dates are
+/** Deterministic entry inputs for the 10,000-entry acceptance page and the S7 perf spike. Dates are
  *  UTC-midnight aligned; the caller supplies the zone to `new Dataset(...)`. */
 export function seededEntryInputs(options: SeededEntryOptions): EntryInput[] {
   const { count, startDate = '2026-01-01', seed = 1 } = options;
