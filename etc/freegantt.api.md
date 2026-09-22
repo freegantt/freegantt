@@ -1118,7 +1118,6 @@ export class Gantt<TProps = unknown> {
     expand(id: RowId | string): void;
     // (undocumented)
     expandAll(): void;
-    // (undocumented)
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
     get gridCellRenderer(): GridCellRenderer | undefined;

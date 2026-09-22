@@ -31,7 +31,11 @@ import { BoundValue } from './bound-value.js';
  *
  *  The `number` form is the expert one, and `TimeUnitWidth` is the shorthand an app author reaches
  *  for. Both land on the same `pxPerMs`, but only one of them can be written by hand without
- *  asserting that a day is always 24 hours (#15) — see `TimeUnitWidth`. */
+ *  asserting that a day is always 24 hours (#15) — see `TimeUnitWidth`.
+ *
+ *  `'pane'` fills the pane down to the preset's `minTickWidthPx` floor. A range wider than that
+ *  scrolls, on purpose (D-S1.12-2, issue #477): to see more, choose a coarser preset — the library
+ *  never picks one for you. */
 export type TimeScaleFit = 'pane' | 'preset' | number | TimeUnitWidth;
 
 /** What a caller states about how time should be displayed, to construct a TimeScaleModel
@@ -201,7 +205,8 @@ export class TimeScaleModel {
 
   /** Live. `'pane'` (default) fits the measured pane width; `'preset'` ignores it; a
    *  `TimeUnitWidth` states one unit's width in pixels; an explicit `number` is `pxPerMs`
-   *  (D-S1.9-2). */
+   *  (D-S1.9-2). `'pane'` still floors at the preset's `minTickWidthPx` — a range wider than the
+   *  floor allows scrolls; pick a coarser preset to fit more (#477). */
   set fit(f: TimeScaleFit) {
     if (sameFit(this.#fit, f)) return;
     this.#fit = f;
