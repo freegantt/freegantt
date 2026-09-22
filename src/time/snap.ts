@@ -19,18 +19,26 @@ function assertAdvances(unit: TimeUnit, increment: number): void {
   }
 }
 
-/** What a gesture snaps to: a named unit/increment, or `'none'` for raw pixel-to-millisecond
- *  conversion with no rounding. `ViewPreset.snap`'s `'tick'` member is resolved to a concrete
- *  `{ unit, increment }` by the caller (the preset's own `tickUnit`/`tickIncrement`) before this
- *  function ever sees it — `time/` names units and increments, never a preset. */
-export type SnapUnit = { unit: TimeUnit; increment: number } | 'none';
+/** A consumer's own snap rule (D-S3-24, #489): decides exactly where `at` settles, in `zone`. The
+ *  escape hatch for anything a plain `{ unit, increment }` step cannot state — business hours only,
+ *  a fixed list of milestones. Built from the same tools `time/` uses for its own tick walk:
+ *  `nextTickBoundary` for "the next drawn line", `snapInstant` for "the nearest one". */
+export type SnapRule = (zone: string, at: Instant) => Instant;
+
+/** What a gesture snaps to: a named unit/increment, a custom `SnapRule`, or `'none'` for raw
+ *  pixel-to-millisecond conversion with no rounding. `ViewPreset.snap`'s `'tick'` member is resolved
+ *  to a concrete `{ unit, increment }` by the caller (the preset's own `tickUnit`/`tickIncrement`)
+ *  before this function ever sees it — `time/` names units and increments, never a preset. */
+export type SnapUnit = { unit: TimeUnit; increment: number } | 'none' | SnapRule;
 
 /** The nearest whole `snap` boundary to `at`, in `zone`. `'none'` returns `at` unchanged — a snap of
- *  milliseconds is not rounding at all. Reads the boundary at or before `at` off `tickFloor` — the
- *  one tick walk the grid also reads (#489) — and the one strictly after it, and returns whichever
- *  of the two `at` is closer to. */
+ *  milliseconds is not rounding at all. A function `snap` runs directly: the consumer's own rule
+ *  decides. Otherwise this reads the boundary at or before `at` off `tickFloor` — the one tick walk
+ *  the grid also reads (#489) — and the one strictly after it, and returns whichever of the two `at`
+ *  is closer to. */
 export function snapInstant(zone: string, at: Instant, snap: SnapUnit): Instant {
   if (snap === 'none') return at;
+  if (typeof snap === 'function') return snap(zone, at);
   const { unit, increment } = snap;
   const lower = tickFloor(zone, at, unit, increment);
   const upper = nextTick(zone, lower, unit, increment);

@@ -153,7 +153,10 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
 
   container.append(bar);
 
-  function snapValue(setting: SnapSetting): string {
+  // A custom `SnapRule` function names no picker option — leave the select at whatever it already
+  // shows rather than guessing (`refresh()` below only writes when this answers a value).
+  function snapValue(setting: SnapSetting): string | undefined {
+    if (typeof setting === 'function') return undefined;
     return typeof setting === 'string' ? setting : setting.unit;
   }
 
@@ -170,7 +173,8 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
     zoomOutBtn.disabled = !gantt.canZoomOut;
     zoomInBtn.disabled = !gantt.canZoomIn;
     presetSelect.value = gantt.preset.id;
-    if (snapSelect) snapSelect.value = snapValue(gantt.snap);
+    const snapReadout = snapValue(gantt.snap);
+    if (snapSelect && snapReadout !== undefined) snapSelect.value = snapReadout;
     const span = gantt.visibleSpan;
     const zone = dataset.timeZone;
     spanReadout.textContent = `Showing ${formatDate(zone, span.start)} – ${formatEndInclusive(zone, span)}`;

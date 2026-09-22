@@ -33,7 +33,7 @@ export {
 } from './format.js';
 export { createTimeScale, pxPerMsForPreset, minPxPerMsForPreset, pxPerMsForUnitWidth } from './scale.js';
 export { snapInstant, stepsBetween, nextTickBoundary } from './snap.js';
-export type { SnapUnit } from './snap.js';
+export type { SnapUnit, SnapRule } from './snap.js';
 export type {
   TimeScale,
   TimeScaleOptions,

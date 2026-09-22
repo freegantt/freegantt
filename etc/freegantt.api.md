@@ -1616,6 +1616,9 @@ export interface NavigationChange {
 }
 
 // @public
+export function nextTickBoundary(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant;
+
+// @public
 export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 
 // @public (undocumented)
@@ -2086,7 +2089,19 @@ export interface Size {
 }
 
 // @public
-export type SnapSetting = TickStep | 'tick' | 'none';
+export function snapInstant(zone: string, at: Instant, snap: SnapUnit): Instant;
+
+// @public
+export type SnapRule = (zone: string, at: Instant) => Instant;
+
+// @public
+export type SnapSetting = TickStep | 'tick' | 'none' | SnapRule;
+
+// @public
+export type SnapUnit = {
+    unit: TimeUnit;
+    increment: number;
+} | 'none' | SnapRule;
 
 // @public
 export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover;
@@ -2348,7 +2363,6 @@ export interface ViewPreset {
     id: string;
     minTickWidthPx?: number;
     preferredTickWidthPx: number;
-    snap?: SnapSetting;
     // (undocumented)
     tickIncrement: number;
     tickUnit: TimeUnit;

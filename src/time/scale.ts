@@ -5,6 +5,7 @@
 import type { Duration, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
 import { stepBy, tickFloor, nextTick } from './zone.js';
 import { instant } from './instant.js';
+import type { SnapRule } from './snap.js';
 
 /** What a caller states about a stepping cadence — the shared shape `ViewPresetHeader` and
  * `TimeScale.ticks` both key off (S1.7 §3.3). */
@@ -13,11 +14,12 @@ export interface TickStep {
   readonly increment: number;
 }
 
-/** What a caller states that a drag snaps to (D-S3-12, D-S3-24): a named unit and increment, one
- *  tick of whatever preset is showing, or `'none'` for raw pixel placement. `ViewPreset.snap` states
- *  it for one preset; `Gantt.snap` states it for one Gantt, over whatever preset is showing. The
- *  gesture resolves it to a `SnapUnit` at commit time, when the preset's own tick is known. */
-export type SnapSetting = TickStep | 'tick' | 'none';
+/** What a caller states that a drag snaps to (D-S3-12, D-S3-24, #489): a named unit and increment,
+ *  one tick of whatever preset is showing, a custom `SnapRule`, or `'none'` for raw pixel placement
+ *  — the free-dragging default a consumer who states nothing gets. `Gantt.snap` is the one place
+ *  this is stated; the gesture resolves it to a `SnapUnit` at commit time, when the preset's own
+ *  tick is known. */
+export type SnapSetting = TickStep | 'tick' | 'none' | SnapRule;
 
 export interface Tick {
   instant: Instant;

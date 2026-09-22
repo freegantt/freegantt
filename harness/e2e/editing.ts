@@ -1,5 +1,5 @@
-import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from 'freegantt';
-import type { DatasetEventMap } from 'freegantt';
+import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit, formatHour } from 'freegantt';
+import type { DatasetEventMap, ViewPreset } from 'freegantt';
 import { demoEntryInputs, segmentChildrenOf } from '../../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from '../timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from '../change-log.js';
@@ -32,6 +32,22 @@ const lockDemoEntryInputs = demoEntryInputs.flatMap((entry) =>
 const dataset = new Dataset({ entries: lockDemoEntryInputs, timeZone: 'UTC', plugins: [locks] });
 const mobilization = now();
 
+// #489: a custom `tickIncrement > 1` preset — proof the anchor fix holds. Its gridlines sit at
+// 00:00/06:00/12:00/18:00 in the dataset's zone and never drift off that grid during a pan, because
+// `TimeScale.ticks` now counts every tick from the day it falls in, not from wherever the visible
+// window's own left edge happens to sit. Zoom past "Hour" to reach it.
+const sixHourPreset: ViewPreset = {
+  id: 'sixHour',
+  tickUnit: 'hour',
+  tickIncrement: 6,
+  headers: [
+    { unit: 'day', increment: 1, format: { year: 'numeric', month: 'short', day: 'numeric' } },
+    { unit: 'hour', increment: 6, format: formatHour },
+  ],
+  preferredTickWidthPx: 48,
+  minTickWidthPx: 40,
+};
+
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
@@ -42,6 +58,13 @@ const gantt = new Gantt({
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
 });
 gantt.panToToday();
+
+// Splice the custom preset one rung coarser than "Hour" — reachable with one more `zoomOut()`,
+// without reordering the shipped ladder around it.
+const hourRung = gantt.zoomPresets.findIndex((preset) => preset.id === 'hour');
+const zoomPresetsWithSixHour = [...gantt.zoomPresets];
+zoomPresetsWithSixHour.splice(hourRung + 1, 0, sixHourPreset);
+gantt.zoomPresets = zoomPresetsWithSixHour;
 
 mountTimelineToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#toolbar')! });
 
@@ -152,10 +175,18 @@ lockResize.addEventListener('change', () => {
 
 // `gantt.snap =`, never `gantt.preset = { ...gantt.preset, snap }`: the old spelling built a one-off
 // copy of a shipped preset, and the next `zoomIn()` threw the snap away with it (`api/gantt.ts`).
+//
+// "Every 6 hours" is a `tickIncrement > 1` custom step (#489): anchored on the day it falls in, so
+// it always lands on 00:00/06:00/12:00/18:00 and never drifts off the hour preset's own gridlines
+// while panning.
 function applySnapChoice(): void {
   const unit = snapUnitSelect.value;
   if (unit === 'tick' || unit === 'none') {
     gantt.snap = unit;
+    return;
+  }
+  if (unit === 'sixHour') {
+    gantt.snap = { unit: 'hour', increment: 6 };
     return;
   }
   if (!isTimeUnit(unit)) return;
