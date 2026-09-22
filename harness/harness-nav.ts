@@ -15,7 +15,8 @@ export type HarnessPageId =
   | 'plugins'
   | 'mount-destroy'
   | 'entries-outside-the-range'
-  | 'theme-push';
+  | 'theme-push'
+  | 'owning-parent';
 
 type HarnessPage = {
   readonly id: HarnessPageId;
@@ -43,6 +44,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
     file: 'entries-outside-the-range.html',
   },
   { id: 'theme-push', label: 'Theme push', file: 'theme-push.html' },
+  { id: 'owning-parent', label: 'Owning parent (#470)', file: 'owning-parent.html' },
 ];
 
 function detectCurrentPage(pathname: string): HarnessPageId {
@@ -79,6 +81,8 @@ function detectCurrentPage(pathname: string): HarnessPageId {
       return 'entries-outside-the-range';
     case 'theme-push.html':
       return 'theme-push';
+    case 'owning-parent.html':
+      return 'owning-parent';
     default:
       return 'generic-demo';
   }

@@ -8,7 +8,7 @@ open: nothing this redesign answers. **`Q2`** — whether the renderer contexts 
 
 > **Vocabulary note, added 2026-09-17 ([#421](https://github.com/Pawel-IT/FreeGantt/issues/421)).** This record predates the `Item`→`Bar` rename ([ADR 0026](0026-the-segment-retires.md)). Read every `Item` below as `Bar`. **Do not rewrite the body.**
 
-> **Vocabulary note, added 2026-09-21.** This record predates the `distribute` → `writeToChildren` rename. Read every `distribute` below as `writeToChildren`, and `FieldDistributor` as `FieldWriteToChildren`. **Do not rewrite the body.**
+> **Vocabulary note, added 2026-09-21.** This record predates the `distribute` → `writeToChildren` rename. Read every `distribute` below as `writeToChildren`, and `FieldDistributor` as `FieldWriteToChildren`. **Do not rewrite the body.** The key itself left the library in [#470](https://github.com/freegantt/freegantt/issues/470): a rolling-up parent's cell is refused, never written by a declared policy.
 
 # The Entry answers questions about itself
 

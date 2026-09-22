@@ -61,6 +61,6 @@ Comment a seam with the question it answers, not the mechanism it uses. A reader
 - Rename a class, a type or a function with `pk-rename-symbol`. It renames through the language service, so it follows re-exports and aliases, and it skips prose. Then run `pnpm typecheck`. A same-named string in a comment or a doc stays as it is — decide those separately.
 - **CI and the verification gate**: open `docs/agents/ci.md` to run the gate before hand-off, and to troubleshoot a failing or truncated check.
 - **Pull requests**: open `docs/agents/pull-requests.md` when you create a pull request or mark one ready.
-- **Acting on a finding**: open `docs/agents/review.md` before you apply a fix a plan or review proposes.
+- **Reviews**: open `docs/agents/review.md` before you review a branch, and before you apply a fix a plan or review proposes. It names `ocr` as the branch reviewer and gives the one command. "ocr review" and "code review" both mean that doc — read it first, and never read `ocr` as a typo.
 - **Context budget**: open `docs/agents/context-budget.md` before you re-read a hot file or a scratchpad artifact in a long session.
 

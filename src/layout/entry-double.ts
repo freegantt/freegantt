@@ -122,6 +122,19 @@ class EntryDouble implements Entry {
     return found;
   }
 
+  /** Same self-inclusion rule as the live row: a childless row is its own subtree's only leaf. */
+  leaves(): readonly Entry[] {
+    const found: Entry[] = [];
+    const pending: Entry[] = [this];
+    while (pending.length > 0) {
+      const row = pending.pop()!;
+      const children = this.#tree.childrenOf(row.id);
+      if (children.length === 0) found.push(row);
+      else pending.push(...children);
+    }
+    return found;
+  }
+
   /** The same platform hook the live row answers: a serialized row is its stored values. */
   toJSON(): EntryInput {
     return this.toInput();

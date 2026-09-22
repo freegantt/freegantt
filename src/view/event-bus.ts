@@ -118,11 +118,10 @@ export interface ProposedSpan extends ProposedDates {
  *  by `EntryMove` and `EntryResize` — resize is not a subtype of move, both extend this instead
  *  (D-S3-22).
  *
- *  `entries` is what the gesture **writes**, grabbed first. A parent bar is the one gesture where the
- *  grabbed entry is not in that list (ADR 0013): a parent's dates roll up from its children, so
- *  dragging it translates the dated descendants below it, and `entries` holds those descendants. The
- *  parent's own envelope follows from the Rollup, and this payload's own `start`/`end` say where it
- *  lands. */
+ *  `entries` is what the gesture **writes**, grabbed first. A parent that derives its dates from a
+ *  Rollup is the one gesture where the grabbed entry is not in that list (ADR 0013): dragging it
+ *  translates the dated descendants below it, and `entries` holds those descendants. A parent that
+ *  owns its dates (`rollUp: 'none'`) is in that list, grabbed first, the same as any other bar. */
 export interface EntryGestureEvent extends ProposedSpan {
   readonly entries: readonly ProposedDates[];
 }

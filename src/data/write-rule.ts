@@ -44,7 +44,7 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field | undefine
   // three readers ask this question and a caller that answered `'entry'` on its own would be a
   // fourth rule nobody could see (I14, #466).
   if (!hasChildren || field === undefined || !rollsUp(field)) return 'entry';
-  return field.writeToChildren ? 'children' : 'refused';
+  return 'refused';
 }
 
 /** May a person change this value by hand — the cell editor, a bar handle, a bar move? The **grid
@@ -70,11 +70,9 @@ export function isApiEditable(field: Field): boolean {
  *  Entry with at least one child (ADR 0013: derivation is structure, not a stored classification). A
  *  user write there would commit, and the next Rollup would overwrite it. That refusal is worth
  *  words, and they are the words the cell editor has always shown. `rollsUp` is the Rollup pass's own
- *  test, so this refuses exactly the set that pass would overwrite.
- *
- *  A Field that declares `writeToChildren` says what a write to that cell means, so the cell opens again
- *  — the write lands on the children (ADR 0013 amendment). `editable` still has the last word:
- *  a policy for the write does not make the value editable.
+ *  test, so this refuses exactly the set that pass would overwrite. No Field can reopen that cell by
+ *  declaring a distribution policy (#470 retired that seam) — a rolling-up cell on a row with
+ *  children refuses from every direction, with no exception left to name.
  *
  *  Everything else is the Field's own `editable`, read at the grid threshold. A Field that declares
  *  nothing is editable: `'anywhere'` is the default (ADR 0015). */

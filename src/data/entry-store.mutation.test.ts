@@ -16,7 +16,7 @@ import {
   UnknownFieldError,
   entryId,
 } from '../model/index.js';
-import type { ChangeSet, EntryInput, Field } from '../model/index.js';
+import type { ChangeSet, EntryInput } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
 interface Seed extends Partial<Omit<EntryInput, 'id'>> {
@@ -325,10 +325,11 @@ describe('rollup (§1.5)', () => {
   });
 });
 
-describe('a derived cell is read-only until the Field says what a write means (ADR 0013 amendment)', () => {
-  /** A Dataset with one rolling-up consumer Field. `writeToChildren`, when given, is what a write to a
-   *  rolling-up parent's `cost` cell means. */
-  function costDataset(writeToChildren?: Field<number>['writeToChildren']): DatasetState {
+describe("a rolling-up parent's cell is refused, from every door (ADR 0013, #470)", () => {
+  /** A Dataset with one rolling-up consumer Field, `cost`. No Field on this Dataset names a
+   *  distribution policy — #470 retired that seam, so a rolling-up parent's cell has exactly one
+   *  answer: refused. */
+  function costDataset(): DatasetState {
     return new DatasetState({
       timeZone: 'UTC',
       entries: [
@@ -336,18 +337,11 @@ describe('a derived cell is read-only until the Field says what a write means (A
         { id: 'c1', name: 'c1', parentId: 'p1', start: 0, end: 1, props: { cost: 10 } },
         { id: 'c2', name: 'c2', parentId: 'p1', start: 0, end: 1, props: { cost: 20 } },
       ],
-      fields: [
-        {
-          key: 'cost',
-          rollUp: 'sum',
-          editable: true,
-          ...(writeToChildren ? { writeToChildren } : {}),
-        },
-      ],
+      fields: [{ key: 'cost', rollUp: 'sum', editable: true }],
     });
   }
 
-  it('a parent cell with no writeToChildren is refused standalone, and refused inside a transaction', () => {
+  it('is refused from update(), inside a transaction, and from a second update() in the same transaction', () => {
     // The point of the exercise (Q7): permission follows the thing written, never the call that
     // wrapped it. `dataset.transaction()` is public, so a bypass here is a bypass for everyone.
     const standalone = costDataset();
@@ -373,103 +367,6 @@ describe('a derived cell is read-only until the Field says what a write means (A
     expect(batchedWithCompany.entries.get('p1')?.read('cost')).toBe(30);
   });
 
-  it('a Field that declares writeToChildren writes the children, and the Rollup reads the cell back', () => {
-    const state = costDataset((total, parent, ctx) => {
-      const children = ctx.children(parent);
-      const share = (total as number) / children.length;
-      return new Map(children.map((child) => [child.id, { cost: share }]));
-    });
-
-    state.entries.update('p1', { cost: 900 });
-
-    expect(state.entries.get('c1')?.read('cost')).toBe(450);
-    expect(state.entries.get('c2')?.read('cost')).toBe(450);
-    expect(state.entries.get('p1')?.read('cost')).toBe(900);
-  });
-
-  it('a writeToChildren splits by leaf count over a depth-2 tree, and the Rollup reads the total back (#466)', () => {
-    // Case 2 of #466. The split weighs each child by how many leaves it carries, which is what
-    // `ctx.leaves` is for: `Van 1` carries two, and `Van 2` is a leaf and so carries itself — one, not
-    // zero (the self-inclusion rule). Without it `Van 2` would be paid nothing and the total would not
-    // read back.
-    //
-    // It also pins the walk `#updateFrom` runs: the 600 aimed at `Van 1` is itself a write to a
-    // rolling-up parent's cell, so that Field splits again over its own two children. Nothing here
-    // recurses by hand — each edit re-enters the one door, and the walk ends at the leaves.
-    const state = new DatasetState({
-      timeZone: 'UTC',
-      entries: [
-        { id: 'depot', name: 'Depot', start: 0, end: 1 },
-        { id: 'van-1', name: 'Van 1', parentId: 'depot', start: 0, end: 1 },
-        { id: 'crate-a', name: 'Crate A', parentId: 'van-1', start: 0, end: 1, props: { cost: 1 } },
-        { id: 'crate-b', name: 'Crate B', parentId: 'van-1', start: 0, end: 1, props: { cost: 2 } },
-        { id: 'van-2', name: 'Van 2', parentId: 'depot', start: 0, end: 1, props: { cost: 3 } },
-      ],
-      fields: [
-        {
-          key: 'cost',
-          rollUp: 'sum',
-          editable: true,
-          writeToChildren: (total, parent, ctx) => {
-            const children = ctx.children(parent);
-            const leafCount = (row: (typeof children)[number]): number => ctx.leaves(row).length;
-            const leaves = children.reduce((sum, child) => sum + leafCount(child), 0);
-            const perLeaf = (total as number) / leaves;
-            return new Map(children.map((child) => [child.id, { cost: perLeaf * leafCount(child) }]));
-          },
-        },
-      ],
-    });
-
-    state.entries.update('depot', { cost: 900 });
-
-    // Three leaves, 300 each — and `Van 2` was paid its own share as one leaf.
-    expect(state.entries.get('crate-a')?.read('cost')).toBe(300);
-    expect(state.entries.get('crate-b')?.read('cost')).toBe(300);
-    expect(state.entries.get('van-2')?.read('cost')).toBe(300);
-    // The Rollup read back exactly the number the write asked for, at both levels.
-    expect(state.entries.get('van-1')?.read('cost')).toBe(600);
-    expect(state.entries.get('depot')?.read('cost')).toBe(900);
-  });
-
-  it('the writes to children and their rolled-up parent land in one changeset, and one undo step', () => {
-    const state = costDataset(
-      (total, parent, ctx) =>
-        new Map(
-          ctx
-            .children(parent)
-            .map((child) => [child.id, { cost: (total as number) / ctx.children(parent).length }]),
-        ),
-    );
-    const seen = changeSets(state);
-
-    state.entries.update('p1', { cost: 900 });
-
-    expect(seen).toHaveLength(1);
-    const rows = fieldRowsOf(seen[0]!).map(
-      (row) => `${row.id}.${row.field}: ${String(row.from)} → ${String(row.to)}`,
-    );
-    expect(rows).toEqual(
-      expect.arrayContaining(['c1.cost: 10 → 450', 'c2.cost: 20 → 450', 'p1.cost: 30 → 900']),
-    );
-  });
-
-  it('a writeToChildren that declines refuses the write, with the same error an absent one gives', () => {
-    const state = costDataset(() => undefined);
-    expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
-    expect(state.entries.get('p1')?.read('cost')).toBe(30);
-
-    const empty = costDataset(() => new Map());
-    expect(() => empty.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
-    expect(empty.entries.get('p1')?.read('cost')).toBe(30);
-  });
-
-  it('a writeToChildren that writes back to the parent is refused — that cell is the Rollup’s', () => {
-    const state = costDataset(() => new Map([[entryId('p1'), { cost: 900 }]]));
-    expect(() => state.entries.update('p1', { cost: 900 })).toThrow(DerivedFieldNotWritableError);
-    expect(state.entries.get('p1')?.read('cost')).toBe(30);
-  });
-
   it('a mixed patch is refused whole, before any write', () => {
     const state = costDataset();
     expect(() => state.entries.update('p1', { name: 'renamed', cost: 500 })).toThrow(
@@ -478,7 +375,7 @@ describe('a derived cell is read-only until the Field says what a write means (A
     expect(state.entries.get('p1')?.name).toBe('p1');
   });
 
-  it('a leaf writes its own rolling-up cell, with or without a writeToChildren', () => {
+  it('a leaf writes its own rolling-up cell', () => {
     const state = costDataset();
     state.entries.update('c1', { cost: 99 });
     expect(state.entries.get('c1')?.read('cost')).toBe(99);

@@ -24,6 +24,7 @@ function fakeEntry(id: string, props: Record<string, unknown> = {}): Entry {
     children: () => [],
     parent: () => undefined,
     descendants: () => [],
+    leaves: () => [],
     depth: 0,
     toInput: () => {
       throw new Error('fakeEntry.toInput() is not exercised by these tests');

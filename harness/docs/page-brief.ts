@@ -146,6 +146,14 @@ const PAGE_BRIEFS: Partial<Record<HarnessPageId, PageBrief>> = {
       { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
     ],
   },
+  'owning-parent': {
+    demonstrates:
+      "Phase's start and end opt out of the Rollup, so Phase keeps its own authored dates. Its bar " +
+      'moves and resizes like an ordinary one, and its children move with it, but a resize never ' +
+      'stretches them.',
+    config: ["fields: [{ key: 'start', rollUp: 'none' }, { key: 'end', rollUp: 'none' }]"],
+    specLinks: [{ label: 'plans/02 §4.2 — Fields and grid columns', href: `${PUBLIC_API}#42-fields-and-grid-columns` }],
+  },
   plugins: {
     demonstrates:
       'Five plugins install over the public plugin contract alone: the shipped timeShading(), an ' +

@@ -528,8 +528,19 @@ The kind of data edit a drag is making — `{ kind: 'move' }` or `{ kind: 'resiz
 _Avoid_: Gesture unqualified (collides with the pointer machine's own word — say "the pointer gesture" or "the EntryGesture" explicitly)
 
 **Parent bar drag**:
-Dragging a parent's bar translates every dated descendant below it, in one transaction and one undo (ADR 0013). A parent's `start`/`end` roll up, so the drag never writes them: the Rollup moves the parent's own envelope from the rows that moved. A child with one date moves that date. A child with neither is skipped. A descendant that derives its own dates is passed over, and the rows below it move instead. One locked descendant refuses the whole gesture, because a half-translated subtree rolls up to an envelope the drag never painted. The event pair is `beforeEntryMove`/`entryMove`, unchanged: `event.entry` is the parent you grabbed, and `event.entries` is each descendant that moves. `ProposedSpan` is the grabbed bar's own reading and keeps both dates; `ProposedDates` is each descendant's, where a date the gesture does not propose stays absent (Q9's ruling). A parent bar offers no resize: one edge of a derived envelope names no descendant to resize.
+Dragging a parent's bar translates every dated descendant below it, in one transaction and one undo (ADR 0013). A child with one date moves that date. A child with neither is skipped. A descendant that derives its own dates is passed over, and the rows below it move instead. One locked descendant refuses the whole gesture, because a half-translated subtree rolls up to an envelope the drag never painted. The event pair is `beforeEntryMove`/`entryMove`, unchanged: `event.entry` is the parent you grabbed, and `event.entries` is each descendant that moves, plus the parent itself, grabbed first, when it owns its own dates (`rollUp: 'none'`). `ProposedSpan` is the grabbed bar's own reading and keeps both dates; `ProposedDates` is each descendant's, where a date the gesture does not propose stays absent (Q9's ruling).
+
+**While the parent's `start`/`end` roll up**, the drag never writes them. The Rollup moves the parent's own envelope from the rows that moved. The bar offers no resize, because one edge of a derived envelope names no descendant to resize. **When the parent owns its own dates instead** (`rollUp: 'none'`, #470), the drag also writes the parent's own cell. Its resize handle opens and writes the parent alone. The subtree still translates underneath it either way.
 _Avoid_: group drag (there is no stored group), cascade (that is the extension hook's word)
+
+**Owning parent**:
+A row with children whose `start`/`end` Fields both declare `rollUp: 'none'` (#470). It keeps its own
+dates instead of deriving them from its subtree. Its bar moves and resizes like an ordinary bar's, and
+a direct write to its `start`/`end` cell succeeds instead of throwing `DerivedFieldNotWritableError`.
+Its subtree still translates under a drag of its own bar, per **Parent bar drag** above. The opposite
+is a **rolling-up parent**, the default for any row with children.
+_Avoid_: group (there is no stored group — see **Parent bar drag**), locked parent (locking is
+`editable`, a separate question from ownership)
 
 **Draft**:
 Prose for a gesture's in-flight edit while a drag previews — not a type of its own (D-S3-2). A Draft **is** `EntryEdits`, the same shape `dataset.entries.update()` takes; nothing new is declared for it. Distinct from Write set (a Transaction's own in-progress record, once a Draft actually commits).

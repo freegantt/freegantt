@@ -56,6 +56,11 @@ export interface Entry<TProps = Record<string, unknown>> {
   parent(): Entry<TProps> | undefined;
   /** Every Entry below this one, deepest included. It walks, so it carries parentheses. */
   descendants(): readonly Entry<TProps>[];
+  /** The bottom rows of this Entry's own subtree — every descendant with no children of its own.
+   *  Includes this Entry itself when it has no children (Child / Descendant / Leaf, CONTEXT.md):
+   *  a subtree of one leaf has one leaf, so `leaves()` on a childless row answers `[this]`, never
+   *  `[]`. It walks, so it carries parentheses. */
+  leaves(): readonly Entry<TProps>[];
   /** How many ancestors this row has. Read off a cached index, so it does no work here. */
   readonly depth: number;
 

@@ -220,6 +220,12 @@ Today `'children'` and `'refused'` both mean "dropped" for a cascade, so a boole
 — and lossy the moment the asymmetry below is closed, on a published surface. The wider return costs
 nothing now and cannot break later.
 
+**Update, #470 (2026-09-21): the third value left.** `writeToChildren` had one caller, a harness
+button, and no consumer ever named a second policy — #470 retired the seam and moved that button's
+split into app code. `WriteTarget` narrowed to `'entry' | 'refused'`, the outcome this note called
+"lossy" only for a cascade that could still address `'children'` on its own; with the policy gone,
+no cascade can.
+
 `WriteTarget` already exists at `write-rule.ts:31` and is internal. It moves to
 `src/model/write-verdict.ts`, which already holds `WriteVerdict` and `WriteRefusalReason` for this
 exact reason, with `write-rule.ts` keeping its local `Field`-prefixed alias the way it already does

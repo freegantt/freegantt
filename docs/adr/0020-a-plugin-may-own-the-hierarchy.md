@@ -6,7 +6,7 @@ open: nothing. The seam is the **hierarchy source**, set through `ctx.hierarchy.
 
 # A plugin may own the hierarchy
 
-> **Vocabulary note, added 2026-09-21.** This record predates the `distribute` → `writeToChildren` rename. Read every `distribute` below as `writeToChildren`, and `FieldDistributor` as `FieldWriteToChildren`. **Do not rewrite the body.**
+> **Vocabulary note, added 2026-09-21.** This record predates the `distribute` → `writeToChildren` rename. Read every `distribute` below as `writeToChildren`, and `FieldDistributor` as `FieldWriteToChildren`. **Do not rewrite the body.** The key itself left the library in [#470](https://github.com/freegantt/freegantt/issues/470): a rolling-up parent's cell is refused, never written by a declared policy.
 
 **Lands after [0017](0017-the-entry-answers-questions-about-itself.md), [0018](0018-a-variant-is-a-rule-not-an-id-list.md) and [0019](0019-one-plugin-one-install-site.md).** 0017 gives every reader one door onto the tree. This ADR is what makes that door worth having.
 

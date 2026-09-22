@@ -1,6 +1,6 @@
 ---
-status: accepted, narrowed 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) (proposed) — *"core does not ship a diamond"* was written when the only diamond on offer was one core painted by reading `kind === 'milestone'`. Core now ships `diamond()` as a variant factory, and no row wears it until a rule claims it. **The decision below is unchanged: an Entry carries no stored classification, and core reads no stored word to decide a look.** Original verdict: `verify:full PASS — all 16 checks green, test:e2e included (70s).` (Build 3, 2026-09-11). Spike report: [reviews/2026-09-10-0013-derivation-spikes](../../plans/field-redesign/reviews/2026-09-10-0013-derivation-spikes/README.md). Split out of ADR 0011 on 2026-09-09.
-decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them; a rolling-up parent's cell is read-only until the Field declares `distribute` (amendment, 2026-09-11). *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
+status: accepted, narrowed 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) (proposed) — *"core does not ship a diamond"* was written when the only diamond on offer was one core painted by reading `kind === 'milestone'`. Core now ships `diamond()` as a variant factory, and no row wears it until a rule claims it. **The decision below is unchanged: an Entry carries no stored classification, and core reads no stored word to decide a look.** Original verdict: `verify:full PASS — all 16 checks green, test:e2e included (70s).` (Build 3, 2026-09-11). Spike report: [reviews/2026-09-10-0013-derivation-spikes](../../plans/field-redesign/reviews/2026-09-10-0013-derivation-spikes/README.md). Split out of ADR 0011 on 2026-09-09. **The `distribute` half of the 2026-09-11 amendment is reversed 2026-09-21 by [#470](https://github.com/freegantt/freegantt/issues/470)** — see the second amendment, below the first.
+decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them; a rolling-up parent's cell is read-only from every direction, and grouping is not permission (amendment, 2026-09-11); a consumer who wants to own a parent's value declares `rollUp: 'none'` on the Field instead of a distribution policy (amendment, 2026-09-21, #470). *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
 open: nothing. The parent bar drag ships (Build 3g). Q9 is answered: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. The `ProposedDates` api report is approved and committed. `e2e/parent-bar-drag.spec.ts` drags a real `.fg-bar-summary` on two pages and reads the children's dates back (N13). See `plans/field-redesign/BUILD-LOG.md` J34, J35, N12 and N13. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
@@ -92,11 +92,13 @@ The six call sites are `entries.update()`, the cell editor, a bar drag, `entries
 
 ### Parent bar drag translates descendants, and does not write the parent
 
-**Grill 2026-09-10.** Parent **cells** stay refused (`DerivedFieldNotWritableError`). Do not distribute a typed parent value down to children. *— amended 2026-09-11: the refusal is now the **default**, not the only answer. A parent cell stays refused from every direction, batched or not, until the Field declares `distribute`. A Field that declares one distributes to the children, and the parent's own cell stays refused even then. See [the amendment](#amendment-2026-09-11--a-derived-cell-is-read-only-until-the-field-says-what-a-write-there-means).*
+**Grill 2026-09-10.** Parent **cells** stay refused (`DerivedFieldNotWritableError`) while the Field rolls up. Do not distribute a typed parent value down to children. *— amended 2026-09-11, reversed 2026-09-21: see [the second amendment](#amendment-2026-09-21--distribute-reverses-the-parent-move-rule-reads-the-resolver) for the standing rule. A parent cell stays refused from every direction, batched or not, while its Field rolls up. A Field with `rollUp: 'none'` is an ordinary cell instead, owned by the consumer.*
 
-Dragging a parent bar is a different job. It translates every descendant date that exists, in one transaction, one undo. A child with only start: that start moves. A child with only end: that end moves. Spanning children move as a span. Children with neither date are skipped. Writes land on the descendants. The parent envelope rolls up. The parent’s `start` / `end` are not written.
+Dragging a parent bar is a different job. It translates every descendant date that exists, in one transaction, one undo. A child with only start: that start moves. A child with only end: that end moves. Spanning children move as a span. Children with neither date are skipped. Writes land on the descendants. The parent envelope rolls up.
 
-Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.entry` is the parent you grabbed. `event.entries` is each descendant that will move, with its proposed `start` / `end`. A handler that needs the tree calls `dataset.childrenOf(event.entry)`. One veto refuses the whole gesture.
+**The next two sentences hold only while the parent's dates roll up.** The parent's `start` / `end` are not written. `event.entries` names each descendant. When the parent owns its own dates instead (`rollUp: 'none'`), the drag also writes the parent's own cell — see the second amendment's three rulings.
+
+Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.entry` is the parent you grabbed. `event.entries` is each descendant that will move, with its proposed `start` / `end` — plus the parent itself, grabbed first, when it owns its own dates instead of rolling them up (see the second amendment's three rulings). A handler that needs the tree calls `dataset.childrenOf(event.entry)`. One veto refuses the whole gesture.
 
 **No schema number.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. `reportCorrectedRollUps` deletes with that ADR, not here. Decision 5's warning is still this ADR's.
 
@@ -220,6 +222,9 @@ type WriteTarget = 'entry' | 'children' | 'refused';
 function resolveWriteTarget(hasChildren: boolean, field: Field): WriteTarget;
 ```
 
+**Narrowed 2026-09-21 (#470): `'children'` leaves the union.** `WriteTarget` is `'entry' | 'refused'`
+now — see the second amendment, below.
+
 `entries.update()` reads it, and so does the capability resolver behind a cell's affordance — the cell
 editor opens on a parent cell exactly when a write there would land. One resolution, gestures and
 affordances together (I14). The **editable** arm stays [ADR 0015](0015-what-the-write-door-refuses.md)'s,
@@ -240,12 +245,59 @@ untouched here: `update()` reads the derived arm only.
 - **The extension hook is a door this amendment never ruled on.** `toEditsReading`
   (`src/data/entry-reader.ts`) checks that the Field is declared, and nothing else. So a cascade
   neither splits a `distribute` cell (the key is `writeToChildren` since #467) nor meets `editable`'s
-  thresholds, where `entries.update()` does both. Both disagreements are tracked in
-  [#469](https://github.com/freegantt/freegantt/issues/469).
-- **[#470](https://github.com/freegantt/freegantt/issues/470) proposes reversing the `distribute`
-  half of this amendment**, and keeping the permission rule above. A consumer who wants to own a
-  parent's value declares `rollUp: 'none'` and owns the Field, so a derived cell has one rule again:
-  the Rollup owns it.
+  thresholds, where `entries.update()` does both.
+  [#469](https://github.com/freegantt/freegantt/issues/469) tracked both disagreements, and closed
+  on 2026-09-21: #470 deleted `writeToChildren`, so the split half has no key left to disagree
+  about. The `editable` half is [#473](https://github.com/freegantt/freegantt/issues/473).
+- **[#470](https://github.com/freegantt/freegantt/issues/470) reverses the `distribute`
+  half of this amendment**, and keeps the permission rule above. See the second amendment, below.
+
+## Amendment, 2026-09-21 — `distribute` reverses; the parent-move rule reads the resolver
+
+**The permission rule from 2026-09-11 stands, unchanged.** A Field that rolls up is read-only on a
+parent, from every direction. Grouping changes when writes land together, never what is allowed.
+
+**The policy seam that rode along on it goes.** `Field.distribute` (and its `FieldWriteToChildren`
+type) is deleted. `WriteTarget` narrows from three values to two: `'entry' | 'refused'`. A write to a
+rolling-up parent's cell throws `DerivedFieldNotWritableError` again, from every direct-write door,
+with no declared policy that reopens it. The extension hook is a separate door, and stays unruled:
+see [the amendment above](#amendment-2026-09-11--a-derived-cell-is-read-only-until-the-field-says-what-a-write-there-means)
+and [#473](https://github.com/freegantt/freegantt/issues/473).
+
+**Why.** Nobody named a policy in ten months of use. Its first and only caller was a harness button
+written afterward to exercise the key, not a consumer need. The *Considered options* table already
+gave the standing answer, and it is the answer again: *"A distribution rule is a per-Field policy
+with no defensible default… Refusal is honest until a consumer names the policy."* [The plan's "The
+decision"](https://github.com/freegantt/freegantt/issues/470) states this as a rule, not a case
+count: **core writes downward only where the arithmetic has exactly one answer.** A move under
+translation has one inverse. A resize (stretch an envelope) and a split (a total over children) do
+not, so core refuses both and leaves the Field to the consumer who wants one.
+
+**A consumer who wants to own a parent's value declares `rollUp: 'none'`, or no `rollUp` at all.**
+`CORE_FIELD_OVERRIDABLE_KEYS` grows by that one key ([ADR 0015](0015-what-the-write-door-refuses.md)),
+so `{ key: 'start', rollUp: 'none' }` is legal even on a core Field. The parent's cell is then an
+ordinary cell, written like any other — including from an `EditExtender` that keeps it current on
+every child change, one undo step per user action.
+
+**The parent-move rule reads the resolver, not `hasChildren`.** A grabbed parent's own dates write
+when, and only when, that row owns the Field (`resolveWriteTarget(entry.hasChildren, field) ===
+'entry'`) and may write it (`canWrite`) — the same two questions a leaf answers. The descendant walk
+skips a row on the first question, not on `hasChildren`, so an owning intermediate parent moves with
+the rest and a deriving one does not. Three rulings follow, all dated 2026-09-21:
+
+- **Resize.** An owning parent is an ordinary bar: the handle opens on an edge it owns and may write,
+  and the resize writes the parent alone. The subtree does not stretch — an envelope has no unique
+  inverse, so that half of the decision table stays true even for an owning parent.
+- **Mixed mode** (`start: 'none'`, `end: 'max'`). A move shifts a span, and half a span cannot shift.
+  The parent writes its own dates only when both Fields answer `'entry'` and both may be written.
+  Otherwise the move writes descendants only, and the derived half re-rolls at commit. Resize follows
+  per edge.
+- **A locked descendant under an owning parent** refuses the whole gesture. The preview paints the
+  whole subtree translated, and a parent that moved without its child would land where the drag never
+  showed.
+
+So the gesture keeps one meaning at every setting: move the bar you grabbed, and what it covers. A
+consumer writes no gesture code in either mode.
 
 ## Considered options
 

@@ -1241,3 +1241,61 @@ describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
     ]);
   });
 });
+
+// #470: a parent that owns its dates (`rollUp: 'none'`) answers `entriesMovedBy` with itself
+// included — `view/capability.ts`'s job. This pipeline reads that list, never a parent's structure,
+// so an owning parent needs no branch here: it is written the same way an ordinary bar is (D-GH-1).
+describe('an owning parent bar drag (#470) — the preview and the commit agree', () => {
+  function withOwningParent(children: readonly Entry[]) {
+    const parent = entry('phase', 100, 400);
+    return withRoster([parent, ...children], {
+      // The parent owns its dates: `entriesMovedBy` names it alongside the descendants, the shape
+      // `view/capability.ts` answers when every rolling-up Field on this Dataset opted out.
+      entriesMovedBy: (grabbed) => (grabbed.id === parent.id ? [parent, ...children] : [grabbed]),
+    });
+  }
+
+  it('writes the parent and the descendant, and both carry the same move in the event', async () => {
+    const child = entry('child', 100, 200);
+    const { deps, emitted } = withOwningParent([child]);
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(entryId('phase'), { kind: 'move' })!.commit(50);
+
+    expect(committed).toBe(true);
+    expect(written).toHaveLength(1);
+    expect([...written[0]!.keys()].sort()).toEqual([entryId('child'), entryId('phase')].sort());
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.entry).toBe(entryId('phase'));
+    expect(move.start).toBe(150);
+    expect(move.end).toBe(450);
+    expect(move.entries).toEqual(
+      expect.arrayContaining([
+        { entry: entryId('phase'), start: 150, end: 450 },
+        { entry: entryId('child'), start: 150, end: 250 },
+      ]),
+    );
+  });
+
+  it('the preview paints the parent and the child by the same delta the commit writes', async () => {
+    const child = entry('child', 100, 200);
+    const { deps, applied } = withOwningParent([child]);
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('phase'), { kind: 'move' })!.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied[0] as readonly { barId: string; dx: number; extra: boolean }[];
+    expect(preview.map((bar) => [bar.barId, bar.dx, bar.extra])).toEqual([
+      [barId(entryId('phase')), 50, false],
+      [barId(entryId('child')), 50, false],
+    ]);
+  });
+});
