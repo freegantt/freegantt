@@ -3,6 +3,12 @@
 // two paths package.json's sealed `exports` map points at exist, and that `pnpm pack --dry-run` would
 // publish the library entry — proving the exports map is exercised rather than pointed at nothing.
 // pnpm, not npm (#50): this repo's script surface is pnpm-only everywhere else.
+//
+// `--config.ignore-scripts=true` on the dry run (#400): `prepack` now runs the library build, and
+// `pnpm pack` (dry run included) runs `prepack`. `pnpm pack` has no `--ignore-scripts` flag of its
+// own, so the dry run needs the generic `--config.*` override to skip that second, redundant build.
+// This script must also never run from `prepack` itself — that would be `prepack` calling
+// `pnpm pack`, which calls `prepack` again, forever.
 
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -24,7 +30,9 @@ const dtsPath = exportsEntry.types.replace(/^\.\//, '');
 check(existsSync(jsPath), `${jsPath} (package.json exports["."].import) was not produced by the build`);
 check(existsSync(dtsPath), `${dtsPath} (package.json exports["."].types) was not produced by the build`);
 
-const packOutput = execFileSync('pnpm', ['pack', '--dry-run', '--json'], { encoding: 'utf8' });
+const packOutput = execFileSync('pnpm', ['pack', '--dry-run', '--json', '--config.ignore-scripts=true'], {
+  encoding: 'utf8',
+});
 const { files } = JSON.parse(packOutput);
 const paths = files.map((f) => f.path);
 check(paths.includes(jsPath), `pnpm pack would not publish ${jsPath}`);
