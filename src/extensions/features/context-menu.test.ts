@@ -273,6 +273,35 @@ describe('[S5-A1] contextMenu() (S5.5, D-S5-13/14)', () => {
     container.remove();
   });
 
+  it('a command with when: false does not appear, even with no target restriction', () => {
+    const { container, gantt } = makeGantt();
+    gantt.commands.register({ id: 'demo.hidden', label: 'Hidden', when: () => false, run: () => {} });
+
+    rightClick(bars(container)[0]!);
+    expect(commandIds(container)).not.toContain('demo.hidden');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('items() returning an empty list opens a menu with no items (empty menu)', () => {
+    const { container, gantt } = makeGantt({ items: () => [] });
+
+    rightClick(bars(container)[0]!);
+    expect(container.querySelector('.fg-menu')).not.toBeNull();
+    expect(menuItems(container)).toHaveLength(0);
+
+    // Arrow keys find no items to move between, and must not throw.
+    expect(() =>
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }),
+      ),
+    ).not.toThrow();
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('items() can append, reorder and replace the defaults', () => {
     const { container, gantt } = makeGantt({
       items: ({ defaults }) => [
