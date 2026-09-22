@@ -29,4 +29,4 @@ fi
 echo "pre-push: pnpm verify:full (the gate — the same command CI runs)"
 pnpm verify:full
 
-echo "pre-push: OK — every I1-I14 guard passed, and e2e is green."
+echo "pre-push: OK — every invariant guard passed, and e2e is green."
