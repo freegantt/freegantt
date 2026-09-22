@@ -24,7 +24,7 @@ export interface DraftInput {
   zone: string;
   scale: TimeScale;
   /** Resolved snap setting (D-S3-12) — the caller has already turned an unset/`'tick'`
-   *  `ViewPreset.snap` into a concrete `{ unit, increment }`, and Alt into `'none'`. */
+   *  `Gantt.snap` into a concrete `{ unit, increment }`, and Alt into `'none'`. */
   snap: SnapUnit;
   /** The entries this gesture moves, grabbed entry first (D-S3-22) — `entries[0]`'s own `start` is
    *  the anchor every other entry's delta is measured against, so a multi-selection drag moves as one

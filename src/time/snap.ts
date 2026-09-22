@@ -26,8 +26,8 @@ function assertAdvances(unit: TimeUnit, increment: number): void {
 export type SnapRule = (zone: string, at: Instant) => Instant;
 
 /** What a gesture snaps to: a named unit/increment, a custom `SnapRule`, or `'none'` for raw
- *  pixel-to-millisecond conversion with no rounding. `ViewPreset.snap`'s `'tick'` member is resolved
- *  to a concrete `{ unit, increment }` by the caller (the preset's own `tickUnit`/`tickIncrement`)
+ *  pixel-to-millisecond conversion with no rounding. `Gantt.snap`'s `'tick'` member is resolved to a
+ *  concrete `{ unit, increment }` by the caller (the current preset's own `tickUnit`/`tickIncrement`)
  *  before this function ever sees it — `time/` names units and increments, never a preset. */
 export type SnapUnit = { unit: TimeUnit; increment: number } | 'none' | SnapRule;
 
