@@ -36,6 +36,7 @@ import type {
   HeaderRenderer,
   TooltipRenderer,
   FrameBar,
+  FrameHeader,
   Bar,
   TimeScale,
   ResolvedColumn,
@@ -108,6 +109,7 @@ import type {
   Size,
   ProposedEdits,
   TimeSpan,
+  TimeUnit,
 } from '../model/index.js';
 import { resolveCapabilities } from './capability.js';
 import type { Capabilities, GestureCapability, ResolvedCapabilities } from './capability.js';
@@ -177,6 +179,11 @@ export type Theme = 'auto' | 'light' | 'dark';
 
 const DEFAULT_THEME: Theme = 'auto';
 const DEFAULT_A11Y_LABEL = 'Gantt';
+/** #476: `setTimeout`'s own platform ceiling — a 32-bit signed int of ms, ~24.8 days — not a time/
+ *  concept (I10 governs calendar constants, not this). A year preset's boundary sits past it, so
+ *  `#syncTodayLineTimer` clamps to this and repaints early rather than overflow into an immediate,
+ *  repeating fire. The next arm computes a fresh, shorter delay, and converges on the real boundary. */
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
 
 /** The five `--fg-*` pixel properties, their policies and the today-line margin default all live in
  *  `frame-settings.ts` now (#167). They are that module's own knowledge, not this shell's. The read
@@ -258,6 +265,12 @@ export interface GanttShellWiring {
    *  (I10). `api/gantt.ts` supplies `now` from `time/index.js`, the same function
    *  `Gantt.panToToday` already reads for the identical reason. */
   now?: () => Instant;
+  /** #476: the delay, in ms, `#syncTodayLineTimer` hands `setTimeout` to repaint the today line at
+   *  the next `unit`/`increment` tick boundary in `zone`. `view/` may not read the clock or do
+   *  `Instant` arithmetic (I1, I10). `api/gantt.ts` supplies this from `time/`'s `now()` and
+   *  `nextTickBoundary`, the same reason `now` above exists. It returns a delay, not the boundary
+   *  `Instant` itself: a `setTimeout` handler here has no `time/` door to turn one into the other. */
+  nextTickBoundaryDelayMs?: (zone: string, unit: TimeUnit, increment: number) => number;
 }
 
 export interface GanttShellOptions {
@@ -535,6 +548,9 @@ export class GanttShell {
   /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
+  /** #476: the one live `setTimeout` that repaints a `todayLine: true` frame once it goes stale.
+   *  `#syncTodayLineTimer` is `render()`'s last step, so this is never more than one call old. */
+  #todayLineTimer: ReturnType<typeof setTimeout> | undefined;
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
   /** S5.12, D-S5-40: this Gantt's own raise seam, over the bus above. Every collaborator that
    *  observes a refusal or a recovered fault takes it. That is the gesture pipeline, the render
@@ -654,6 +670,8 @@ export class GanttShell {
     this.#teardown.add(() => this.#paneLayout.destroy());
     // Registered first, released last: every resource below draws into these panes.
     this.#teardown.add(() => this.#frames.cancel());
+    // #476: the today line timer requests through `#frames`, so it clears beside it.
+    this.#teardown.add(() => this.#clearTodayLineTimer());
     this.#panes = this.#paneLayout.panes;
     this.#gridPaneWidth = new GridPaneWidth(this.#gridPaneWidthPorts(), options.gridWidth === 'fitColumns');
     // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
@@ -2549,6 +2567,37 @@ export class GanttShell {
     // S5.11, D-S5-25: this runs after the backend syncs the DOM to this frame, not before. A row
     // or bar the sweep wants to focus must already exist as a node.
     this.#rovingFocus.syncAfterRender();
+    // #476: last, so a preset change this same frame moves the boundary with it. Always re-arms off
+    // what this frame actually painted, never off a stale header.
+    this.#syncTodayLineTimer(frame.header);
+  }
+
+  /** #476: what this frame just painted decides whether the today line can go stale again. `true`
+   *  re-arms one `setTimeout` for the finest header band's next tick boundary; `false` and a pinned
+   *  `Instant` need no timer, since neither reads the clock. Always clears first — "one timer at a
+   *  time" holds whether this call re-arms or not. */
+  #syncTodayLineTimer(header: FrameHeader): void {
+    this.#clearTodayLineTimer();
+    if (this.#frameSettings.todayLine !== true) return;
+    const nextTickBoundaryDelayMs = this.#options.wiring.nextTickBoundaryDelayMs;
+    if (nextTickBoundaryDelayMs === undefined) return;
+    const finestBand = header.bands[header.bands.length - 1];
+    const unit = finestBand?.unit ?? this.#viewport.preset.tickUnit;
+    const increment = finestBand?.increment ?? this.#viewport.preset.tickIncrement;
+    const delayMs = nextTickBoundaryDelayMs(this.#options.dataset.timeZone, unit, increment);
+    this.#todayLineTimer = setTimeout(
+      () => {
+        this.#todayLineTimer = undefined;
+        this.#frames.request();
+      },
+      Math.min(delayMs, MAX_TIMER_DELAY_MS),
+    );
+  }
+
+  #clearTodayLineTimer(): void {
+    if (this.#todayLineTimer === undefined) return;
+    clearTimeout(this.#todayLineTimer);
+    this.#todayLineTimer = undefined;
   }
 
   destroy(): void {
