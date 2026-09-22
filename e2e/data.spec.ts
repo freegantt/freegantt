@@ -51,6 +51,17 @@ async function selectBar(
   };
 }
 
+/** `cost` on `id` and every one of its descendants, read straight off the Dataset. */
+async function costsOf(page: import('@playwright/test').Page, id: string): Promise<Record<string, number>> {
+  return page.evaluate((entryId) => {
+    const dataset = window.__dataset;
+    const parent = dataset.entries.get(entryId)!;
+    return Object.fromEntries(
+      [parent, ...parent.descendants()].map((entry) => [entry.id, Number(entry.read('cost'))]),
+    );
+  }, id);
+}
+
 test('[S2-A4] rename logs from and to for the name field', async ({ page }) => {
   await page.goto('/data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
@@ -118,13 +129,7 @@ test('Set cost 500 on a rolling-up parent splits to its leaves and rolls back up
 
   const { entryId: parentId } = await selectBar(page, page.locator('#gantt .fg-bar-summary').first());
 
-  const before = await page.evaluate((id) => {
-    const dataset = window.__dataset;
-    const parent = dataset.entries.get(id)!;
-    return Object.fromEntries(
-      [parent, ...parent.descendants()].map((entry) => [entry.id, Number(entry.read('cost'))]),
-    );
-  }, parentId);
+  const before = await costsOf(page, parentId);
 
   await expect(page.locator('#cost-btn')).toBeEnabled();
   await page.click('#cost-btn');
@@ -132,13 +137,10 @@ test('Set cost 500 on a rolling-up parent splits to its leaves and rolls back up
   const after = await page.evaluate((id) => {
     const dataset = window.__dataset;
     const parent = dataset.entries.get(id)!;
-    const leaves = parent.descendants().filter((row) => !row.hasChildren);
+    const leaves = parent.leaves();
     return {
       parent: Number(parent.read('cost')),
       leaves: leaves.map((leaf) => Number(leaf.read('cost'))),
-      all: Object.fromEntries(
-        [parent, ...parent.descendants()].map((entry) => [entry.id, Number(entry.read('cost'))]),
-      ),
     };
   }, parentId);
 
@@ -150,13 +152,7 @@ test('Set cost 500 on a rolling-up parent splits to its leaves and rolls back up
 
   await page.click('#undo-btn');
 
-  const afterUndo = await page.evaluate((id) => {
-    const dataset = window.__dataset;
-    const parent = dataset.entries.get(id)!;
-    return Object.fromEntries(
-      [parent, ...parent.descendants()].map((entry) => [entry.id, Number(entry.read('cost'))]),
-    );
-  }, parentId);
+  const afterUndo = await costsOf(page, parentId);
 
   expect(afterUndo).toEqual(before);
 });

@@ -111,11 +111,11 @@ const ROLLUP_TREE = [
 const locks = lockEntries();
 
 /** This page's own Field values (ADR 0011) — `cost` is what `splitCostOverLeaves` below writes,
- *  `leafCount` is computed for the Leaves column, and `contractId` is read-only here. */
+ *  and `contractId` is read-only here. `leafCount` is not here: it is a `compute` Field with no
+ *  stored home, so it never appears in a props type. */
 interface DataPageProps {
   cost: number;
   contractId?: string;
-  leafCount: number;
 }
 
 const dataset = new Dataset<DataPageProps>({
@@ -273,9 +273,9 @@ moveFwdBtn.addEventListener('click', () => move(MS.DAY));
 // Every leaf takes an equal share, and the rounding remainder lands on the last one, so the sum
 // reads back exactly what the button asked for once the Rollup re-aggregates it. A deeper subtree
 // therefore takes more of the total than a shallow sibling, because it holds more leaves.
-// `entry.descendants()` is the one walk this needs, and a leaf keeps the whole total.
+// `entry.leaves()` names them, self included when `entry` has no children of its own.
 function splitCostOverLeaves(entry: Entry<DataPageProps>, total: number): void {
-  const leaves = entry.hasChildren ? entry.descendants().filter((row) => !row.hasChildren) : [entry];
+  const leaves = entry.leaves();
   const share = Math.floor(total / leaves.length);
   let distributed = 0;
   leaves.forEach((leaf, index) => {

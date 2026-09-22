@@ -167,6 +167,20 @@ describe("#142/#470 a consumer may override a core Field's editable and rollUp, 
     ).toThrow(DuplicateFieldKeyError);
   });
 
+  // `duration` is core's own compute Field (`core-fields.ts`) — it has no stored home, so an
+  // override cannot give it a rollUp or an editable answer either, the same as a fresh declaration.
+  it('overriding rollUp on the core compute Field duration throws ComputedFieldCannotBeWrittenError', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'duration', rollUp: 'sum' }] })).toThrow(
+      ComputedFieldCannotBeWrittenError,
+    );
+  });
+
+  it('overriding editable on the core compute Field duration throws ComputedFieldCannotBeWrittenError', () => {
+    expect(() => new FieldRegistry({ fields: [{ key: 'duration', editable: 'never' }] })).toThrow(
+      ComputedFieldCannotBeWrittenError,
+    );
+  });
+
   it("{ key: start, type: text } throws IllegalCoreFieldOverrideError — a consumer cannot redeclare a core Field's type", () => {
     try {
       new FieldRegistry({ fields: [{ key: 'start', type: 'text' }] });

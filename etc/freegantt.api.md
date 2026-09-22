@@ -713,6 +713,7 @@ export interface Entry<TProps = Record<string, unknown>> {
     readonly hasChildren: boolean;
     // (undocumented)
     readonly id: EntryId;
+    leaves(): readonly Entry<TProps>[];
     readonly name: string;
     // (undocumented)
     parent(): Entry<TProps> | undefined;

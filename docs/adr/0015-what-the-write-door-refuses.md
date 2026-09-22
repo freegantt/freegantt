@@ -22,7 +22,7 @@ Beside it sits `#mergeCoreFieldOverride` (`field-registry.ts:211-225`), which le
 
 **Grill 2026-09-10.** No new Field keys after construction. Hide/show columns stay live. After setup, only `editable` may change on a Field. Keep `CORE_FIELD_OVERRIDABLE_KEYS`. Fields are the schema, not a product hole.
 
-**`CORE_FIELD_OVERRIDABLE_KEYS` grows by one key, `rollUp` ([#470](https://github.com/freegantt/freegantt/issues/470)).** A consumer may write `{ key: 'start', rollUp: 'none' }`, and the override runs the same `UnknownAggregatorError` check `#register` runs on a first declaration. The reason is uniformity: a core Field and a consumer Field take one merge path, one validation, one list. Dates are not a special case that skips it.
+**`CORE_FIELD_OVERRIDABLE_KEYS` grows by one key, `rollUp` ([#470](https://github.com/freegantt/freegantt/issues/470)).** A consumer may write `{ key: 'start', rollUp: 'none' }`, and the override runs the same `UnknownAggregatorError` check `#add` runs on a first declaration. The reason is uniformity: a core Field and a consumer Field take one merge path, one validation, one list. Dates are not a special case that skips it.
 
 **Q16, closed 2026-09-10 (grill).** A verb writes one key (`plans/02` §2, #184 / #195), the same family as `gantt.hideGridColumn`. AG Grid's full `columnDefs` re-assign is survey, not the call ([`evidence.md`](../../plans/field-redesign/shared/evidence.md)).
 

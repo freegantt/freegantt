@@ -21,7 +21,7 @@ export type WriteVerdict =
  *
  *  A third value, `'children'`, lived here between #466 and #470: a Field could declare
  *  `writeToChildren` and split a parent's write across its children. #470 retired that policy seam —
- *  a distribution rule has no defensible library default, and its one caller (a harness button) wrote
- *  it in app code instead, over public API. With the policy gone, every rolling-up cell on a row with
- *  children refuses, so the third value had nothing left to name. */
+ *  a distribution rule has no defensible library default. Its one caller, a harness button, now
+ *  writes it in app code instead, over public API. With the policy gone, every rolling-up cell on a
+ *  row with children refuses, so the third value had nothing left to name. */
 export type WriteTarget = 'entry' | 'refused';

@@ -27,12 +27,9 @@ async function gotoOwningParent(page: Page): Promise<void> {
   await expect(page.locator('#gantt .fg-bar-summary')).toBeVisible();
 }
 
-test('dragging the owning parent bar moves the parent and its children by one shared delta (#470)', async ({
-  page,
-}) => {
-  await gotoOwningParent(page);
-
-  const before = await datesOf(page, ['phase', 'task-a', 'task-b']);
+/** Grabs the parent's own summary bar, at a point clear of its resize handles, and drags it `dx`
+ *  pixels right. */
+async function grabAndDragParentBarBy(page: Page, dx: number): Promise<void> {
   const bar = page.locator('#gantt .fg-bar-summary');
   const box = (await bar.boundingBox())!;
   const grabX = box.x + 8;
@@ -40,8 +37,17 @@ test('dragging the owning parent bar moves the parent and its children by one sh
 
   await page.mouse.move(grabX, grabY);
   await page.mouse.down();
-  await page.mouse.move(grabX + DRAG_DX, grabY, { steps: 8 });
+  await page.mouse.move(grabX + dx, grabY, { steps: 8 });
   await page.mouse.up();
+}
+
+test('dragging the owning parent bar moves the parent and its children by one shared delta (#470)', async ({
+  page,
+}) => {
+  await gotoOwningParent(page);
+
+  const before = await datesOf(page, ['phase', 'task-a', 'task-b']);
+  await grabAndDragParentBarBy(page, DRAG_DX);
 
   await expect
     .poll(async () => (await datesOf(page, ['task-a']))['task-a']![0])
@@ -90,15 +96,7 @@ test('one undo restores every row after an owning-parent drag (#470)', async ({ 
   await gotoOwningParent(page);
 
   const before = await datesOf(page, ['phase', 'task-a', 'task-b']);
-  const bar = page.locator('#gantt .fg-bar-summary');
-  const box = (await bar.boundingBox())!;
-  const grabX = box.x + 8;
-  const grabY = box.y + box.height / 2;
-
-  await page.mouse.move(grabX, grabY);
-  await page.mouse.down();
-  await page.mouse.move(grabX + DRAG_DX, grabY, { steps: 8 });
-  await page.mouse.up();
+  await grabAndDragParentBarBy(page, DRAG_DX);
 
   await expect(page.locator('#undo-btn')).toBeEnabled();
   await expect

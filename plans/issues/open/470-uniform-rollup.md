@@ -73,8 +73,6 @@ Each step ends green (`pnpm verify:full`), and each is one commit.
 - Remove `#splitDerivedWrites` and its call from `#updateFrom`. A write to a rolling-up parent's cell
   throws `DerivedFieldNotWritableError` from every door again.
 - Remove the capability path that re-opens a parent cell for a Field that declares a policy.
-- Tests that name the key and are not in the table below: `src/api/dataset.test.ts`,
-  `src/data/edit-extension.test.ts`, `src/data/live-entry.test.ts`.
 - `pnpm api-report`.
 
 **2 — the harness writes the split itself, in app code.**
@@ -142,7 +140,7 @@ step. A `leafCount` compute Field already ships (#466), so the weights need no n
 
 | Step | Test | What it pins |
 |---|---|---|
-| 1 | `src/data/entry-store.mutation.test.ts` | A rolling-up parent's cell is refused from `update()`, inside a transaction, and from a cascade — one error, every door |
+| 1 | `src/data/entry-store.mutation.test.ts` | A rolling-up parent's cell is refused from `update()`, inside a transaction, and from a second `update()` in the same transaction |
 | 1 | `src/data/edit-request.test.ts` | `writeTarget` answers `'refused'` on a rolling-up parent and `'entry'` on a leaf, and has no third value |
 | 2 | `e2e/data.spec.ts` | The Set cost button splits by leaf count, the parent's cell reads back the number asked for, and one undo restores every row |
 | 3 | `src/data/fields/field-registry.test.ts` | `{ key: 'start', rollUp: 'none' }` is legal and merges onto core's declaration; an unknown aggregator name is refused; a second override of the same key still throws `DuplicateFieldKeyError` |
@@ -168,8 +166,10 @@ step. A `leafCount` compute Field already ships (#466), so the weights need no n
 - **`plans/02`** — `writeToChildren` leaves the Field surface; `WriteTarget` narrows. The errors
   paragraph (`:865`) lists `WriteTarget`'s three values by name.
 - **`CONTEXT.md`** — retire the write-to-children term; keep **Rollup**, **Aggregator**, **Field**.
-- **#469** — shrinks to one ruling: `editable` does not reach a cascade. Its write-target half
-  disappears, because no door can split any more.
+- **#469** — closed on 2026-09-21, and not retitled: the title's premise needs `writeToChildren`,
+  and step 1 deleted the key. No door can split any more. The one live ruling — `editable` does not
+  reach a cascade — moved to [#473](https://github.com/freegantt/freegantt/issues/473) with its own
+  evidence, because `editable` says nothing about rollup.
 - **`etc/freegantt.api.md`** — regenerated.
 
 ## Limits, recorded on purpose

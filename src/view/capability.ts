@@ -189,29 +189,42 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     ownsField(entry, 'end') &&
     canWrite(entry, 'end').ok;
 
+  /** Does `entry` hold no date that fails `test`? A date it never had cannot fail anything, so an
+   *  absent `start`/`end` passes on its own. Shared by the two questions below, one per test. */
+  const everyDateItHolds = (entry: Entry, test: (entry: Entry, field: FieldKey) => boolean): boolean =>
+    (entry.start === undefined || test(entry, 'start')) && (entry.end === undefined || test(entry, 'end'));
+
   /** ADR 0013: a descendant travels with the parent bar when every date it holds may change. It is
    *  not the leaf rule above. A child with a `start` and no `end` moves that `start`. A closed `end`
    *  it never had must not stop it. */
   const mayTranslateTheDatesItHolds = (entry: Entry): boolean =>
-    (entry.start === undefined || canWrite(entry, 'start').ok) &&
-    (entry.end === undefined || canWrite(entry, 'end').ok);
+    everyDateItHolds(entry, (e, field) => canWrite(e, field).ok);
 
   /** #470: does this row own every date it holds? The descendant walk below passes over an
    *  intermediate row that derives, the way `descendant.hasChildren` used to. The test is ownership
    *  now, not structure. So a Dataset that opts a Field out of the Rollup moves an intermediate
    *  owning row with the rest, instead of always skipping it. */
-  const ownsTheDatesItHolds = (entry: Entry): boolean =>
-    (entry.start === undefined || ownsField(entry, 'start')) &&
-    (entry.end === undefined || ownsField(entry, 'end'));
+  const ownsTheDatesItHolds = (entry: Entry): boolean => everyDateItHolds(entry, ownsField);
+
+  /** #470: does `entry` own any date it holds? A mixed Field, one date `rollUp: 'none'`
+   *  and the other rolled up, counts too. An owned date needs this move to write it. No Rollup
+   *  restores it afterward, the way a derived date does. */
+  const ownsADateItHolds = (entry: Entry): boolean =>
+    (entry.start !== undefined && ownsField(entry, 'start')) ||
+    (entry.end !== undefined && ownsField(entry, 'end'));
 
   const entriesMovedBy = (entry: Entry): readonly Entry[] => {
     if (!entry.hasChildren) return movesItsOwnDates(entry) ? [entry] : NOTHING_MOVES;
+    // One locked date on an owning bar refuses the whole gesture, the same as one locked descendant
+    // does below. Painting the bar anyway would drag it for the whole gesture. The date it owns
+    // would then go stale, since nothing rolls an owned date back up.
+    if (ownsADateItHolds(entry) && !movesItsOwnDates(entry)) return NOTHING_MOVES;
     const moved: Entry[] = [];
     // #470: the leaf rule above reads an owning parent as an ordinary bar. Its own dates move with
     // its subtree, on top of the translate ADR 0013 already gives that subtree.
     if (movesItsOwnDates(entry)) moved.push(entry);
     for (const descendant of entry.descendants()) {
-      // A descendant that derives the dates it holds is passed over, and the walk reaches the rows
+      // The walk passes over a descendant that derives the dates it holds, and reaches the rows
       // below it. One that owns them moves with the rest (#470) — a leaf always does.
       if (!ownsTheDatesItHolds(descendant)) continue;
       // "Children with neither date are skipped" (ADR 0013) — there is nothing to translate.

@@ -56,6 +56,7 @@ import { LiveEntries, unknownFieldError } from './live-entry.js';
 import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
 import type { CheckedHierarchy, ParentIndex } from './hierarchy-source.js';
 import { FieldRegistry } from './fields/field-registry.js';
+import type { ResolvedField } from './fields/field-registry.js';
 import { isApiEditable, resolveWriteTarget } from './write-rule.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
@@ -74,6 +75,13 @@ function applyFieldRow(
   if (value === undefined) delete next[field];
   else next[field] = value;
   return next as unknown as StoredEntry;
+}
+
+/** One field an edit names, and the Field `#assertFieldTakesThisWrite` resolved it to — carried
+ *  forward so `#assertNoDerivedWrite` reads the same declaration instead of resolving it again. */
+interface DeclaredFieldWrite {
+  readonly field: string;
+  readonly declared: ResolvedField;
 }
 
 interface WriteSet {
@@ -468,8 +476,10 @@ export class EntryStore implements EntryStoreContract {
     return this.#mutate((token) => {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, operation);
-      for (const field of Object.keys(edit)) this.#assertFieldTakesThisWrite(field, operation);
-      this.#assertNoDerivedWrite(key, edit, operation);
+      const declaredWrites = Object.keys(edit).map((field) =>
+        this.#assertFieldTakesThisWrite(field, operation),
+      );
+      this.#assertNoDerivedWrite(key, declaredWrites, operation);
       if (edit.parentId !== undefined) {
         this.#assertParentValid(key, entryId(edit.parentId), operation);
       }
@@ -489,12 +499,14 @@ export class EntryStore implements EntryStoreContract {
    *  the API threshold, which refuses the lock and nothing else.
    *
    *  It asks about the Field, never about the Entry. Whether *this* Entry's cell is the Rollup's own
-   *  is `#assertNoDerivedWrite`, below. */
-  #assertFieldTakesThisWrite(field: string, operation: string): void {
+   *  is `#assertNoDerivedWrite`, below. It returns the Field it resolved, so that check reads the
+   *  same declaration instead of looking the key up again. */
+  #assertFieldTakesThisWrite(field: string, operation: string): DeclaredFieldWrite {
     const declared = this.#registry.get(field);
     if (declared === undefined) throw new UnknownFieldError(field, operation);
     if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
     if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
+    return { field, declared };
   }
 
   /** Refuses a write aimed at a rolling-up parent's cell (ADR 0013). Every Field in the patch
@@ -505,10 +517,9 @@ export class EntryStore implements EntryStoreContract {
    *  The answer reads the Field declaration and one structural fact, through the one resolver
    *  `view/capability.ts` also reads. It asks nothing about the call — whether it opened this
    *  transaction or joined one a consumer already had open makes no difference to what is allowed. */
-  #assertNoDerivedWrite(id: EntryId, edit: EntryEdit, operation: string): void {
+  #assertNoDerivedWrite(id: EntryId, declaredWrites: readonly DeclaredFieldWrite[], operation: string): void {
     if (!this.#hasChildren(id)) return;
-    for (const field of Object.keys(edit)) {
-      const declared = this.#registry.get(field);
+    for (const { field, declared } of declaredWrites) {
       if (resolveWriteTarget(true, declared) === 'refused') {
         throw new DerivedFieldNotWritableError(field, id, operation);
       }

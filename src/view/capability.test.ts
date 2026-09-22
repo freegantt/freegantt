@@ -456,11 +456,11 @@ describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar t
     expect(deriving.can('resize', parent, 'end')).toBe(false);
   });
 
-  it("mixed mode (start: none, end: max): the move writes descendants only, start's handle opens, end's stays closed", () => {
+  it("mixed mode (start: none, end: max): the move refuses outright — start would go stale, since nothing rolls an owned date back up — but start's handle still opens on its own", () => {
     const caps = capabilities({}, OWNS_START);
-    const [parent, child] = family(DATED) as readonly [Entry, Entry];
-    expect(caps.entriesMovedBy(parent)).toEqual([child]);
-    expect(caps.can('move', parent)).toBe(true);
+    const [parent] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
+    expect(caps.can('move', parent)).toBe(false);
     expect(caps.can('resize', parent, 'start')).toBe(true);
     expect(caps.can('resize', parent, 'end')).toBe(false);
   });
@@ -468,6 +468,21 @@ describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar t
   it('a locked descendant under an owning parent refuses the whole gesture', () => {
     const caps = capabilities({}, OWNS_START, OWNS_END, lockedEnd);
     const [parent] = family({ name: 'c1', ...DATED }) as readonly [Entry, Entry];
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
+    expect(caps.can('move', parent)).toBe(false);
+  });
+
+  it('an owning parent refuses the whole gesture when a per-entry capabilities.edit lock closes one date it owns (#470 review D3)', () => {
+    const locked = entryId('e1');
+    const caps = capabilities(
+      { capabilities: { edit: (e, field) => (e.id === locked && field === 'end' ? false : undefined) } },
+      OWNS_START,
+      OWNS_END,
+    );
+    const [parent] = entryDoubles([
+      { id: 'e1', start: 0, end: 1 },
+      { id: 'c1', name: 'c1', parentId: 'e1', start: 0, end: 1 },
+    ]) as readonly [Entry, Entry];
     expect(caps.entriesMovedBy(parent)).toEqual([]);
     expect(caps.can('move', parent)).toBe(false);
   });

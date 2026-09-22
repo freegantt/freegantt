@@ -1,11 +1,12 @@
 // #470 harness: a Field may opt out of the Rollup with `rollUp: 'none'`. This page overrides both
-// core date Fields that way, so `phase`'s `start`/`end` are ordinary cells — a consumer's own,
-// authored once and kept until a gesture or a call writes them again, never recomputed underneath.
+// core date Fields that way. `phase`'s `start`/`end` become ordinary cells, a consumer's own.
+// A gesture or a call authors them once, and keeps them until it writes them again. Nothing
+// recomputes them underneath.
 //
-// `view/capability.ts` gives that row the ordinary bar rule as a result: the move writes the parent
-// **and** the dated rows below it (ADR 0013's translate still runs on the subtree), and the resize
-// handle opens on an edge the parent owns and writes the parent alone. `e2e/owning-parent.spec.ts`
-// drives both gestures in a real browser, plus the one-undo case.
+// `view/capability.ts` gives that row the ordinary bar rule as a result. The move writes the
+// parent **and** the dated rows below it — ADR 0013's translate still runs on the subtree. The
+// resize handle opens on an edge the parent owns, and writes the parent alone.
+// `e2e/owning-parent.spec.ts` drives both gestures in a real browser, plus the one-undo case.
 
 import './harness-nav.ts';
 import { Dataset, Gantt, attemptMutation } from 'freegantt';
@@ -17,14 +18,13 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'owning-p
 
 declare global {
   interface Window {
-    __dataset: Dataset;
     __gantt: Gantt;
   }
 }
 
 // #142/#470: `CORE_FIELD_OVERRIDABLE_KEYS` grew `rollUp`, so a consumer states this Dataset-wide,
-// the same door `editable` already used. `phase`'s dates are now its own — the Rollup skips them,
-// in both directions: they are not cleared on a demotion and not overwritten on a commit.
+// the same door `editable` already used. `phase`'s dates are now its own. The Rollup skips them in
+// both directions: it does not clear them on a demotion, and does not overwrite them on a commit.
 const dataset = new Dataset({
   entries: [
     // Task B runs past the end Phase authors, which a rolling-up parent could never show: the
@@ -42,9 +42,13 @@ const dataset = new Dataset({
   ],
 });
 
-const gantt = new Gantt({ container: '#gantt', dataset, range: 'fitDataset' });
+const gantt = new Gantt({
+  container: '#gantt',
+  dataset,
+  range: 'fitDataset',
+  gridWidth: 'fitColumns',
+});
 
-window.__dataset = dataset;
 window.__gantt = gantt;
 
 const undoBtn = document.querySelector<HTMLButtonElement>('#undo-btn')!;

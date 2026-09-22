@@ -11,7 +11,14 @@
 // in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
 // the caller already holds, not data the library owes a reader (ADR 0016).
 
-import type { Aggregator, Field, FieldEditable, FieldKey, FieldType } from '../../model/index.js';
+import type {
+  Aggregator,
+  AggregatorName,
+  Field,
+  FieldEditable,
+  FieldKey,
+  FieldType,
+} from '../../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
   FreeGanttError,
@@ -144,6 +151,7 @@ export function requireResolvedIndex(
 }
 
 const CORE_FIELD_OVERRIDABLE_KEYS = ['editable', 'rollUp'] as const;
+type CoreFieldOverridableKey = (typeof CORE_FIELD_OVERRIDABLE_KEYS)[number];
 
 /** The first key on `field`, other than `key` itself, that `CORE_FIELD_OVERRIDABLE_KEYS` does not
  *  name — `undefined` when every key `field` carries is legal to override. Reads the object's own
@@ -224,17 +232,29 @@ export class FieldRegistry {
     }
     if (this.#byKey.has(key)) throw new DuplicateFieldKeyError(key);
     const merged = mergeField(field, typeBundleOf(field, this.#fieldTypes));
-    // ADR 0011: a `compute` Field has no stored home, so `rollUp`/`editable` beside it is refused here,
-    // at registration — before `editable`, or the surviving message tells a consumer to declare an
-    // `editable` this door already rejects.
+    this.#refuseComputeConflict(key, merged);
+    this.#refuseUnknownAggregator(merged.rollUp);
+    this.#byKey.set(key, merged);
+    this.#resolved.push(merged);
+  }
+
+  /** ADR 0011: a `compute` Field has no stored home, so `rollUp`/`editable` beside it is refused
+   *  here — before `editable`, or the surviving message tells a consumer to declare an `editable`
+   *  this door already rejects. A fresh Field and a core Field override both reach this: an
+   *  override can name `rollUp`/`editable` on a core `compute` Field (`duration`) just as easily
+   *  as a fresh declaration can. */
+  #refuseComputeConflict(key: string, merged: ResolvedField): void {
     if ('compute' in merged && (merged.rollUp !== undefined || merged.editable !== undefined)) {
       throw new ComputedFieldCannotBeWrittenError(key, 'fields');
     }
-    if (merged.rollUp !== undefined && this.#aggregators[merged.rollUp] === undefined) {
-      throw new UnknownAggregatorError(merged.rollUp);
+  }
+
+  /** Does `rollUp` name an Aggregator this registry knows? A fresh Field and a core Field override
+   *  both reach this: neither may name an Aggregator nobody registered. */
+  #refuseUnknownAggregator(rollUp: AggregatorName | undefined): void {
+    if (rollUp !== undefined && this.#aggregators[rollUp] === undefined) {
+      throw new UnknownAggregatorError(rollUp);
     }
-    this.#byKey.set(key, merged);
-    this.#resolved.push(merged);
   }
 
   /** #142: `field` names a core Field's key. A core Field cannot be redeclared, but one key of it
@@ -249,19 +269,15 @@ export class FieldRegistry {
     }
     const core = this.#byKey.get(key);
     if (core === undefined) throw new DuplicateFieldKeyError(key); // unreachable: core Fields add first.
-    const overridden = field as unknown as Record<string, unknown>;
-    const overrides: Record<string, unknown> = {};
-    for (const overridableKey of CORE_FIELD_OVERRIDABLE_KEYS) {
-      const value = overridden[overridableKey];
-      if (value !== undefined) overrides[overridableKey] = value;
-    }
+    // `field` cross-declares `editable`/`rollUp` on both `Field` arms (one real, one `never`), so
+    // both keys read off it without a cast.
+    const declared: Pick<Field, CoreFieldOverridableKey> = field;
+    const overrides: Partial<Pick<Field, CoreFieldOverridableKey>> = {};
+    if (declared.editable !== undefined) overrides.editable = declared.editable;
+    if (declared.rollUp !== undefined) overrides.rollUp = declared.rollUp;
     const merged = toStoredEditable({ ...core, ...overrides });
-    // Same check `#add` runs for an ordinary declaration (:233) — an override reaches the
-    // Aggregator table by the same door a fresh Field does, so `rollUp: 'notAnAggregator'` is
-    // refused here too, not only when it happens to be a brand-new key.
-    if (merged.rollUp !== undefined && this.#aggregators[merged.rollUp] === undefined) {
-      throw new UnknownAggregatorError(merged.rollUp);
-    }
+    this.#refuseComputeConflict(key, merged);
+    this.#refuseUnknownAggregator(merged.rollUp);
     const coreIndex = requireResolvedIndex(this.#resolved, core, key);
     this.#byKey.set(key, merged);
     this.#resolved[coreIndex] = merged;

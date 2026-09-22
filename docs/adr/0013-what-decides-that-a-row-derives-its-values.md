@@ -98,7 +98,7 @@ Dragging a parent bar is a different job. It translates every descendant date th
 
 **The next two sentences hold only while the parent's dates roll up.** The parent's `start` / `end` are not written. `event.entries` names each descendant. When the parent owns its own dates instead (`rollUp: 'none'`), the drag also writes the parent's own cell — see the second amendment's three rulings.
 
-Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.entry` is the parent you grabbed. `event.entries` is each descendant that will move, with its proposed `start` / `end`. A handler that needs the tree calls `dataset.childrenOf(event.entry)`. One veto refuses the whole gesture.
+Reuse `beforeEntryMove` / `entryMove`. No new pair. No `isGroup` flag. `event.entry` is the parent you grabbed. `event.entries` is each descendant that will move, with its proposed `start` / `end` — plus the parent itself, grabbed first, when it owns its own dates instead of rolling them up (see the second amendment's three rulings). A handler that needs the tree calls `dataset.childrenOf(event.entry)`. One veto refuses the whole gesture.
 
 **No schema number.** [ADR 0016](0016-the-library-holds-no-save-format.md) deleted the Document. `reportCorrectedRollUps` deletes with that ADR, not here. Decision 5's warning is still this ADR's.
 
@@ -245,8 +245,10 @@ untouched here: `update()` reads the derived arm only.
 - **The extension hook is a door this amendment never ruled on.** `toEditsReading`
   (`src/data/entry-reader.ts`) checks that the Field is declared, and nothing else. So a cascade
   neither splits a `distribute` cell (the key is `writeToChildren` since #467) nor meets `editable`'s
-  thresholds, where `entries.update()` does both. Both disagreements are tracked in
-  [#469](https://github.com/freegantt/freegantt/issues/469).
+  thresholds, where `entries.update()` does both.
+  [#469](https://github.com/freegantt/freegantt/issues/469) tracked both disagreements, and closed
+  on 2026-09-21: #470 deleted `writeToChildren`, so the split half has no key left to disagree
+  about. The `editable` half is [#473](https://github.com/freegantt/freegantt/issues/473).
 - **[#470](https://github.com/freegantt/freegantt/issues/470) reverses the `distribute`
   half of this amendment**, and keeps the permission rule above. See the second amendment, below.
 
@@ -257,8 +259,10 @@ parent, from every direction. Grouping changes when writes land together, never 
 
 **The policy seam that rode along on it goes.** `Field.distribute` (and its `FieldWriteToChildren`
 type) is deleted. `WriteTarget` narrows from three values to two: `'entry' | 'refused'`. A write to a
-rolling-up parent's cell throws `DerivedFieldNotWritableError` again, from every door, with no
-declared policy that reopens it.
+rolling-up parent's cell throws `DerivedFieldNotWritableError` again, from every direct-write door,
+with no declared policy that reopens it. The extension hook is a separate door, and stays unruled:
+see [the amendment above](#amendment-2026-09-11--a-derived-cell-is-read-only-until-the-field-says-what-a-write-there-means)
+and [#473](https://github.com/freegantt/freegantt/issues/473).
 
 **Why.** Nobody named a policy in ten months of use. Its first and only caller was a harness button
 written afterward to exercise the key, not a consumer need. The *Considered options* table already

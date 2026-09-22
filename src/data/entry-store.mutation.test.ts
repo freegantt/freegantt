@@ -341,7 +341,7 @@ describe("a rolling-up parent's cell is refused, from every door (ADR 0013, #470
     });
   }
 
-  it('is refused from update(), inside a transaction, and from a cascade of writes in one transaction', () => {
+  it('is refused from update(), inside a transaction, and from a second update() in the same transaction', () => {
     // The point of the exercise (Q7): permission follows the thing written, never the call that
     // wrapped it. `dataset.transaction()` is public, so a bypass here is a bypass for everyone.
     const standalone = costDataset();

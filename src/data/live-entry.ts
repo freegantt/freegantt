@@ -17,6 +17,7 @@ import type {
   StoredEntry,
 } from '../model/index.js';
 import { UnknownFieldError } from '../model/index.js';
+import { leavesOf } from './fields/field-access.js';
 
 /**
  * What a live row asks its store. The store implements it; a `LiveEntry` holds an id and this, so
@@ -133,6 +134,17 @@ class LiveEntry implements Entry {
       }
     }
     return found;
+  }
+
+  /** Shares `leavesOf` with `ComputeContext`/`RollUpContext` (`fields/field-access.ts`) — one walk,
+   *  not a second one re-derived here. A removed row has no subtree left to walk, so it answers
+   *  no leaves. */
+  leaves(): readonly Entry[] {
+    const stored = this.#stored();
+    if (stored === undefined) return [];
+    return leavesOf(stored, (row) => this.#source.storedChildrenOf(row.id)).map((row) =>
+      this.#source.entryFor(row.id),
+    );
   }
 
   /**
