@@ -66,7 +66,78 @@ re-splitting later.
 
 ## What is left
 
-Nothing. A follow-up session (2026-09-22, after `origin/main` moved two merges ahead on
+Nothing. A third session (2026-09-22) ran `ocr review --from origin/main --to HEAD` against
+the state this handoff describes and fixed every finding it raised. Final commits:
+
+- `c46de8bd` — Never shorten a tick stride that leaves its anchor container (#489)
+- `6603c52c` — Document TimeScale.ticks' InvalidSnapIncrementError, drop the stale MAX_TICKS
+  cap claim (#489)
+- `57c54d9e` — Add SnapRule coverage: snapInstant's own tests, and a gesture-level drag (#489)
+- `e775c9bd` — Fix two doc comments still naming the retired ViewPreset.snap (#489)
+- `9667c06c` — Fix the sixHour ladder order and share the preset between harness pages (#489)
+
+What that OCR pass found and fixed:
+
+1. **Core bug (confirmed by the owner): `nextTick` shortened a stride that left its anchor
+   container.** `{day, 10}` (anchor: week) gave 7-day ticks, `{hour, 30}` (anchor: day) gave
+   daily ticks, `{minute, 90}` (anchor: hour) gave hourly ticks — the reset that "hours count
+   from the day they fall in" needs for a *fitting* stride (one that stays inside its
+   container) was firing for a stride that does not fit too, silently capping it at the
+   container's own span. Fixed by branching on `stepFitsAnchorContainer` (`increment` less
+   than the container's own size in `unit`s): a fitting stride still resets at each container
+   start; a non-fitting one counts on continuously from a fixed calendar origin
+   (`1970-01-01T00:00` local, floored to `unit`) instead, so the stated increment always
+   survives and the lines still never move on a pan. `tickFloor` and `nextTick`
+   (`src/time/zone.ts`) both read this now — one rule, both directions.
+   - Rule chosen for `month`/`week`/`year` too, since the ruling flagged `{month, 18}` as a
+     case to sanity-check: the same fits/doesn't-fit split applies (`month`'s container is
+     `year`, 12 months; `week`/`year` anchor to themselves, so they always "fit" — one
+     container per tick, nothing to spill into). No shipped preset or harness demo exercises
+     an `{month, 18}`-shaped non-fitting month stride, so this is a read of the rule's own
+     logic, not a test of that exact case — the property tests do cover `day`/`hour`/`minute`
+     non-fitting strides directly, across a DST zone.
+2. **Performance: `tickFloor` walked one tick at a time from its anchor start** — up to
+   60,000 iterations for a millisecond tick anchored on its minute, on every render and every
+   pointer move. Rewritten as arithmetic: one `startOf`/`stepBy` pair plus an exact
+   (possibly fractional) unit-count division, O(1) regardless of `unit` or how far the
+   instant sits from its anchor/origin. A test proves 10,000 calls to a millisecond-level
+   `tickFloor` stay well under a frame budget.
+3. **`TimeScale.ticks` contract change undocumented.** `ticks()` throws
+   `InvalidSnapIncrementError` for a bad increment (via the same `tickFloor`), where
+   `time/presets.ts` still described the old MAX_TICKS-capping behavior. Documented the throw
+   on `TimeScale.ticks` itself and corrected both stale comments — no behavior change, since
+   every shipped/custom preset already rejects a bad increment at registration.
+4. **`SnapRule` had no test.** Added: the rule's answer returns verbatim, `zone`/`at` pass
+   through unchanged, a rule returning `at` is not re-rounded, and a rule built from
+   `nextTickBoundary` (the documented real-author shape) — plus one gesture-level test in
+   `gantt.test.ts` proving a real pointer drag with a custom `SnapRule` commits on the
+   boundary the rule chose.
+5. **Stale docs still named the retired `ViewPreset.snap`** in `src/time/snap.ts` and
+   `src/layout/gesture-draft.ts`'s `DraftInput.snap` doc — both now name `gantt.snap`.
+6. **Harness: the sixHour zoom ladder wasn't monotonic.** Splicing `sixHourPreset` right
+   after "hour" put it before "hourDayWeek" (still a 1-hour, 56px/h tick — denser than
+   sixHour's own 8px/h), so `zoomOut()` from sixHour landed back on a denser rung. Now
+   splices after "hourDayWeek" instead.
+7. **Harness: the `sixHourPreset` literal was duplicated** across
+   `harness/editing-and-data.ts` and `harness/e2e/editing.ts`. Both now import
+   `sixHourPreset`/`zoomPresetsWithSixHour` from a new `harness/six-hour-preset.ts`, which
+   also guards the ladder lookup against `-1`. `harness/gantt-toolbar.ts`'s snap-picker
+   comment called 6 hours "non-dividing" — 6 divides a day's 24 hours evenly, so reworded to
+   "stepped".
+
+Left alone, per the dispatch: `harness/timeline-toolbar.ts:114`'s preset picker still throws
+`UnknownPresetError` when a reader picks "sixHour" off the dropdown on
+`e2e/editing.html` (`resolvePreset` only resolves a string against the shipped presets
+table, not a Gantt's own `zoomPresets`). This may be an API gap; the owner decides it.
+
+`FG_E2E_PORT=5186 pnpm verify:full` after this pass: `verify:full PASS — all 17 checks green,
+test:e2e included (102s).`
+
+---
+
+### Prior session (2026-09-22, before the OCR pass above)
+
+A follow-up session (2026-09-22, after `origin/main` moved two merges ahead on
 #497's five-themed-page harness rebuild) rebased this branch, closed every item below, and
 ran the full gate. Final commits:
 
