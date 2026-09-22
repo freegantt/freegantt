@@ -17,7 +17,7 @@
 | # | Acceptance row | State | Carried by |
 |---|---|---|---|
 | **R1** | All §12-style budgets defined numerically from the spike and enforced in CI | Not started. The spike has not run, and no budget is defined. `pnpm measure:scale` now captures the browser half of it on demand (#403's branch) — a measurement, never a gate, per #95. See §5.1. | #95 (profile the harness), #342 (bundle number) |
-| **R2** | 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank | Harness seeds **5,000** and the row says 10,000. Ruled 2026-09-15: **the fixture goes to 10k.** See §5.2. | **#406** (fixture), #95 (measurement) |
+| **R2** | 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank | The fixture now seeds 10,000 (#406, 2026-09-22). The scroll half is measured — see below. Hover and bulk-edit are not yet measured, so the row stays open. | **#406** (fixture, done), #95 (measurement, partial) |
 | **R3** | Linked-scroll demo works with both axes shared, and with x shared while y stays private | **Done — ticked in `plans/03` §S6.** Shipped as D-S6-1 (#405): `ScrollModel` retired, `ScrollAxis` is the shared unit. The paragraph below is the reasoning that got there. `[S1-A4]` proves both-axis sharing. The second shape is a build, and the shape is settled: one **scroll axis** becomes the shared unit, so a caller shares x, y, both or neither — **D-S6-1**, §5.3. Shared y alone is representable and unadvertised. | **#405** |
 | **R4** | 100 mount/destroy cycles leak no nodes, listeners or observables | **Done, 2026-09-15.** Counted in `test/dom/leak-cycles.test.ts` (100 cycles, three shapes, plus the shared-model binding check) and in `e2e/mount-destroy.spec.ts` (Chromium nodes, listeners and heap). `GanttShell.destroy()` is one `disposeAll()`. | **#403** |
 | **R5** | `npm pack` output audited: internals unreachable, types complete, bundle within budget | **Internals unreachable and types complete are done.** `prepack` builds the library, so a packed tarball and a `github:` install both carry `dist/`; `scripts/check-pack-install.mjs` proves the install from outside the repository. Bundle within budget stays open — #342. | **#400** |
@@ -40,9 +40,18 @@ Then act on it: swap the height index if the crossover says so, and fix what the
 
 ### R2 — the 10k fixture
 
-`harness/large-dataset.ts` seeds `seededEntryInputs({ count: 5000 })`. `e2e/large-dataset.spec.ts` drives it. `[S1-A1]` already proves only windowed rows exist in the DOM at 5,000 — and that box was ticked with a deliberate note: *not* "smoothly", because throughput is D2's measured spike and belongs here.
+`harness/large-dataset.ts` seeds `seededEntryInputs({ count: 10_000 })` (#406, 2026-09-22 — was 5,000). `e2e/large-dataset.spec.ts` drives it. `[S1-A1]` already proves only windowed rows exist in the DOM — and that box was ticked with a deliberate note: *not* "smoothly", because throughput is D2's measured spike and belongs here.
 
-So R2 is the timing half of a fixture that already exists. It needs the count raised (§5.2) and three measurements: scroll, hover, and a bulk edit in one transaction.
+So R2 is the timing half of a fixture that already exists. It needs three measurements: scroll, hover, and a bulk edit in one transaction.
+
+**Scroll reading, 2026-09-22, commit 81e80c20, this developer machine, headless, 10,000 entries.** `FG_MEASURE_PORT=5192 pnpm measure:scale`, unthrottled and at 4x CPU slowdown:
+
+| | p50 | p95 | max | dropped frames (>32ms) | script per frame |
+|---|---|---|---|---|---|
+| unthrottled | 16.6 ms | 17.6 ms | 22.9 ms | 0/240 | 4.24 ms |
+| 4x CPU slowdown | 26.2 ms | 32.9 ms | 61.3 ms | 17/240 | 18.85 ms |
+
+Trace: `measurements/2026-09-22T19-32-23-416Z-scroll-trace.json`. No budget follows from this — S6 Q1 is still open. Hover and the bulk-edit-in-one-transaction measurements are not covered by `measure:scale` and remain unmeasured.
 
 ### R3 — the linked-Gantt demo
 
