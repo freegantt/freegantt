@@ -5,9 +5,12 @@ information lives, and what the owner still has to decide.
 
 ## 0. Start here
 
-1. Ask the owner the open questions in §4. Each has a recommendation.
-2. Ask the owner: "May I push the five branches and open a pull request for each?" (§4, item 9).
-3. Then work the list in §3, in order.
+1. **Do not merge any lane branch until its review findings are fixed** (§2.1). The review is
+   `plans/reviews/2026-09-22-ocr-delegate-ready-issues.md`.
+2. Ask the owner the open questions in §4. Each has a recommendation.
+3. Ask the owner: "May I push the five branches and open a pull request for each?" (§4, item 9).
+   A pull request may open before the fixes land. It must not merge before them.
+4. Then work the list in §3, in order.
 
 ## 1. Where the information lives
 
@@ -39,42 +42,69 @@ reset. Each gate verdict is copied into the issue comments.
 edit `plans/03-slices.md` and the S6 README. Merge one branch, rebase the next onto `main`, and
 regenerate the API report (`pnpm build`, then `pnpm api-report`). Do not hand-merge the report.
 
+### 2.1 Merge block: the OCR review findings
+
+`plans/reviews/2026-09-22-ocr-delegate-ready-issues.md` reviewed each lane commit. **No branch
+merges until every finding on its commits is fixed and `verify:full` passes again.** The review
+edited no file. Fix each finding in the lane's own worktree, as a new commit on that branch.
+
+| Branch | Issue | Severity | Finding | Fix |
+|---|---|---|---|---|
+| `Pawel-IT/400-pack-install` | #400 | **High** | `prepare` does not build, so an npm git install still has no `dist/`. The commit message claims it works. | Add the library build to `prepare` (a temporary stopgap, see #442). Re-run the npm `git+file://` experiment. Correct the commit message claim in the pull request body. |
+| `Pawel-IT/400-pack-install` | #400 | Medium | `check-pack-install.mjs` hides the vite log when `pnpm pack` or `pnpm add` fails. | Print `error.stderr` in the catch, before the temp folder is removed. |
+| `Pawel-IT/472-time-helpers` | #472, #242 | **High** | WIP `2c145dde` does not type-check. `operation` is missing at `src/time/zoned-time.ts:69,70` and `src/api/gantt.ts:414,421,428,928,934`. `src/time/input.test.ts` still expects the old messages. | §3 item 4. Then split the commit into one per issue. |
+| `Pawel-IT/335-coverage-presets` | #335 | Medium | The empty-menu `ArrowDown` test dispatches on `document`. `onDomEvent` ignores a target the Gantt does not own, so the test passes without reaching the handler. | Dispatch the key on the open menu or an item in it. Prove it red by breaking the handler. |
+| `Pawel-IT/335-coverage-presets` | #101 | Medium | `fifteenMinute` (`tickIncrement: 15`) and `sixHour` (`tickIncrement: 6`) hit #489's gridline shift on pan. | **Owner decision:** hold the two presets until #489's anchor fix, or ship them with the limit written down. Recommendation: hold them. Ship `minute` and `dayLetterAndWeek` now. |
+| `Pawel-IT/406-scale-10k` | #95 | Medium | The S6 README table (4.24 ms / 18.85 ms) and the `81e80c20` message (4.43 ms / 20.66 ms) record different numbers for the same run. | Pick one pair, name the run, and make the commit message and README agree. |
+| `Pawel-IT/406-scale-10k` | #406 | Low | `harness/large-dataset.html` still says `zoom: 'preset'`. The option is `fit: 'preset'`. | Change the word. |
+| `Pawel-IT/429-docs-truth` | #429, #407 | — | No defect. | This branch may merge once pushed. |
+
+#414 part one (`81e80c20`) has no defect, but it shares a branch with #95 and #406. The branch merges
+as one after those two fixes.
+
+The issues above carry `fixed needs review`. Leave that label on until the fix lands and a person
+reads it.
+
 ## 3. Work left, in order
 
-1. **Push and open pull requests** for lanes A, B, C and E, after the owner approves. Follow
+1. **Fix the review findings in §2.1**, one commit per finding group, in each lane worktree. Run
+   `verify:full` again on each branch (keep the lane's `FG_E2E_PORT`: A 5181, B 5182, C 5183,
+   D 5184, E 5185).
+2. **Push and open pull requests** for lanes A, B, C and E, after the owner approves. Merge only
+   after step 1 is done for that branch. Follow
    `docs/agents/pull-requests.md`, and use `pnpm pr-wait <n>` for CI. Then comment on each issue
    with the pull request, as `.claude/skills/label-issues/SKILL.md` §4 asks.
-2. **#400 follow-up (lane A worktree).** npm runs only `prepare` for a git dependency, never
+3. **#400 follow-up (lane A worktree).** npm runs only `prepare` for a git dependency, never
    `prepack` (`pacote/lib/dir.js`). The ruling says `prepare` also runs the library build (about
    3 s) beside the hooks setup, until the first registry publish (#442). Then run the npm
    `git+file://` experiment again, then `FG_E2E_PORT=5181 pnpm verify:full`.
-3. **#242 (lane D worktree).** The steps are on the #242 comment:
+4. **#242 (lane D worktree).** The steps are on the #242 comment:
    1. Pass `operation` at `src/api/gantt.ts` (~414, 421, 428, 928, 934) and
       `src/time/zoned-time.ts` (~69). The names are settled.
    2. Fix the message assertions in `src/time/instant.test.ts` and `src/time/input.test.ts`.
    3. Regenerate the API report.
    4. Split WIP `2c145dde` into one commit for #472 and one for #242.
    5. Run `FG_E2E_PORT=5184 pnpm verify:full`.
-4. **#95.** A human opens the trace (§1) in the DevTools Performance panel and names the three
+5. **#95.** A human opens the trace (§1) in the DevTools Performance panel and names the three
    largest costs. An agent then measures the two R2 items that are still open: hover, and a bulk
    edit in one transaction.
-5. **Write the S6 Q1 ruling into the plans.** Rewrite R1 in `plans/03-slices.md` §S6 and
+6. **Write the S6 Q1 ruling into the plans.** Rewrite R1 in `plans/03-slices.md` §S6 and
    `plans/s6-scale-and-sync/README.md` (§4 Q1 answered, §5.1). Change ADR 0018's "§12" reference to
    `plans/01` §10.
-6. **Build the ruled issues.** Each has a "Decision" comment and the `ready for agent` label:
+7. **Build the ruled issues.** Each has a "Decision" comment and the `ready for agent` label:
    #342 (growth guard, 1 kB), #424 (`collapseStateOf`), #434 (`entryActivate`), #262 (chord
    config key), #317 (local Firefox/WebKit run), #281 (type design pass). #489 waits for the anchor
    answer (§4, item 3). #424, #434 and #262 all touch `src/api/gantt.ts`, so build them in one lane,
    one after another.
-7. **Mint `[S6-A1]`–`[S6-A5]`** and add the S6 → S7 entry to `scripts/slice-gate.mjs` (S6 README
+8. **Mint `[S6-A1]`–`[S6-A5]`** and add the S6 → S7 entry to `scripts/slice-gate.mjs` (S6 README
    §6, step 2). Also do the S9 gate if the owner says yes (§4, item 2).
-8. **The next batch that needs no ruling:** #100 (viewport navigation, about 1 day) and #130 (WBS,
+9. **The next batch that needs no ruling:** #100 (viewport navigation, about 1 day) and #130 (WBS,
    1–1.5 days). #460 needs the owner to create a PAT secret first.
-9. **Issues to file** (the text is in the lane E report and in the triage):
+10. **Issues to file** (the text is in the lane E report and in the triage):
    - #275 item 6: property tests beyond `data/` (wishlist).
    - #101 item 3: quarter, fiscal year and numbered weeks (needs a `time/` design).
    - #94: the week band prints a week-start date above the day cells (`src/time/presets.ts:182,221`).
-10. **Small doc fixes that the triage found:**
+11. **Small doc fixes that the triage found:**
     - ADR 0011:97 and :200 still call #267 open. #267 is closed.
     - `plans/03-slices.md:277,288` still call #136's design "open". It is settled (issue comment of
       2026-09-02, `plans/01` §4).
@@ -83,7 +113,7 @@ regenerate the API report (`pnpm build`, then `pnpm api-report`). Do not hand-me
       `src/model/dataset.ts:43-50`.
     - `scripts/slice-gate.mjs` `[S1-A4]` label still says `ScrollModel`, which #405 retired.
     - Fold #457 into `plans/03` §S7 and close it. Add #135, #136 and #284 to the S7 scope list.
-11. **After each merge:** remove the worktree with `orca worktree rm`
+12. **After each merge:** remove the worktree with `orca worktree rm`
     (`.claude/skills/create-worktree/SKILL.md`, "Clean up when the work merges").
 
 ## 4. Open questions for the owner, with recommendations
@@ -98,6 +128,7 @@ regenerate the API report (`pnpm build`, then `pnpm api-report`). Do not hand-me
 | 6 | **#393.** Publish JS constants for the `--fg-*` pixel defaults? | **No. Close as wontfix.** A stylesheet can override a token (ADR 0021), and then the constant is wrong. Add a live getter if a consumer needs a value. |
 | 7 | **#253.** `Resolved*` or `*Input`? | **Keep both, and write down which applies when** (`plans/02` §2.1 and `CONTEXT.md`). List the misfits, such as `ResolvedTheme`, for the 1.0 API review. |
 | 8 | **#92.** Separate entry points for tree shaking? | **No for now. Close with the evidence:** the plugins already tree-shake (`scripts/bundle-probe.mjs`), and `preserveModules` measured +1.89 kB. |
+| 9a | **#101 presets.** `fifteenMinute` and `sixHour` step by more than 1, so they show #489's gridline shift on pan (§2.1). Ship them now with the limit written down, or hold them? | **Hold them until #489's anchor fix.** Ship `minute` and `dayLetterAndWeek` now. |
 | 9 | **Push and pull requests.** May the agent push the five branches and open pull requests? | Yes. Until then the close comments cite commits nobody else can see. |
 
 ## 5. The owner's questions this session, with the answers
