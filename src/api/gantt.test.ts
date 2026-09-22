@@ -32,6 +32,7 @@ import type {
   GridColumnInput,
   PluginContext,
   TimeUnit,
+  SnapRule,
 } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { diffMs, instant } from '../time/index.js';
@@ -500,6 +501,34 @@ describe('Gantt.snap (D-S3-24, #195)', () => {
     // The dataset's zone is UTC, so a whole-day boundary is a whole number of days from the epoch.
     const moved = dataset.entries.get(id)!;
     expect(Number(moved.start) % MS.DAY).toBe(0);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  // #489: a custom SnapRule is a gantt.snap member too — a real drag must reach it, not just a
+  // named { unit, increment }.
+  it('a real drag commits on the boundary a custom SnapRule chooses', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const fixedBoundary = instant('2026-01-01T00:00:00Z');
+    const alwaysSnapToFixedBoundary: SnapRule = () => fixedBoundary;
+    const gantt = new Gantt({ container, dataset, snap: alwaysSnapToFixedBoundary });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timeline.setPointerCapture = vi.fn();
+    timeline.releasePointerCapture = vi.fn();
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    const moved = dataset.entries.get(id)!;
+    expect(moved.start).toBe(fixedBoundary);
 
     document.elementFromPoint = original;
     gantt.destroy();
