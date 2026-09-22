@@ -229,7 +229,7 @@ dataset.entries.remove('t9'); // and every descendant, in the same changeset
 // There is no `rollUpKinds` and no `hierarchy: { autoGroup }`. An Entry carries no stored kind
 // (ADR 0013): a parent rolls up because it has children. One entry opts out with `rollUp: 'none'`,
 // which keeps the caller-assigned dates on that parent alone (#470).
-dataset.entries.get('t2')?.read('cost'); // reads through the Field registry (ADR 0017)
+dataset.entries.get('t2')?.read('cost'); // reads through the Field registry
 
 dataset.field('cost'); // resolved Field | undefined
 dataset.fields.all; // every declared Field, core included

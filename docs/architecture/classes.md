@@ -30,7 +30,7 @@ buffer. The single object `view/` holds.
 - **get timeScale / preset** — Resolved and ready for `LayoutInput`; the shell never reaches
   through to `scale.scale`.
 - **get/set overscan** — Live-reconfigurable, notifies iff actually changed. Not on public
-  `GanttOptions` (issue #84).
+  `GanttOptions`.
 - **batch(run)** — Nests all three notifiers.
 
 #### TimeScaleModel — class
@@ -50,14 +50,14 @@ Two Gantts, one instance ⇒ x-synced with no event plumbing.
 
 *`layout/viewport/scroll-axis.ts`*
 
-Shareable one-direction scroll position (D-S6-1). Owns *one* shared position for *one* axis; each
+Shareable one-direction scroll position. Owns *one* shared position for *one* axis; each
 bound Gantt clamps it locally to its own content. A Gantt holds two, `{ x, y }` — sharing an
 instance as one Gantt's `x` and another's `x` syncs that direction only.
 
 - **panTo(position)** — Clamps to `[0, max]` at write time and nowhere else.
 - **get state: ScrollAxisState** — `{ position, max, bindingCount }` together, frozen.
 - **`bindScrollAxis(axis, binding, onChange)` → ScrollAxisBindingHandle** — free function, not a
-  class method (ADR 0007): `unbind()`, `setContentSize()`, `setPaneSize()`.
+  class method: `unbind()`, `setContentSize()`, `setPaneSize()`.
 
 #### BoundValue\<B, V\> — class
 
@@ -122,15 +122,15 @@ emits header ticks and date-line decorations.
 
 Per-row bar production. An Entry carries no stored classification, so nothing dispatches on a type
 tag: the variant registry resolves one variant per Entry, and that variant's own producer builds the
-Bars (ADR 0018). Header rows produce none.
+Bars. Header rows produce none.
 
 - **resolveBars(entry, registry)** — One resolution, one producer call, so no losing candidate's
   Bars are ever built and thrown away. A variant with no producer of its own draws one Bar over
   the Entry's whole span, so this never answers "nothing" for a variant the registry knows.
 - **VariantRegistry.resolveFor(entry)** — Walks newest-first: the consumer's rules, then a
   plugin's, then core's two. It stops at the first `when` that answers yes. Core's `leaf` carries
-  no `when`, so every row resolves. Structure comes off the Entry itself (`entry.hasChildren`,
-  ADR 0017) — never an `if (kind === …)` chain.
+  no `when`, so every row resolves. Structure comes off the Entry itself (`entry.hasChildren`)
+  — never an `if (kind === …)` chain.
 
 #### resolveRows() — function
 
@@ -166,7 +166,7 @@ by the render backend.
 
 Pure data types for the grid-column paint shape (`FrameColumn`, `ResolvedColumn`,
 `FieldCompare`) and its locale-bound formatter. Carries presentation only — grid columns show
-fields; they do not declare them (ADR 0005).
+fields; they do not declare them.
 
 ### `view/` — DOM
 
@@ -206,7 +206,7 @@ The one file exempted from `no-scroll-outside-scroll-attachment`. Owns no bindin
 *`view/pane-size-attachment.ts`*
 
 The only file that observes element size. Reports a box and stops — no pixel math, no scale
-awareness, which is what keeps I12 whole.
+awareness, preserving the separation between viewport and geometry concerns.
 
 - **entries[entries.length - 1]** — A resize burst can deliver several entries for one target;
   only the last reflects the settled box.
@@ -246,7 +246,7 @@ Editing after mount renders on the next frame with no extra call.
 
 Merges the consumer's `Interactions` overrides with the per-kind default table and returns a
 `Capabilities` object with `can(capability, entry)`. One resolution gates both gestures and
-affordances (invariant I14).
+affordances.
 
 #### projectAffordances() — function
 
@@ -303,7 +303,7 @@ The type-seam between `view/` (the shell realises it) and `interaction/` (which 
 
 ## `time/` & `model/`
 
-*Derived from `src/time/**`, `src/model/**`, `docs/adr/0001`.*
+*Derived from `src/time/**`, `src/model/**`.*
 
 ### The time pipeline
 
@@ -379,8 +379,7 @@ orient="auto-start-reverse"
 <text class="s" x="800" y="88">plus 5 single-band ids</text>
 <text class="xs" x="800" y="108">Deep-FROZEN: a shipped</text>
 <text class="xs" x="800" y="120">preset is a value, not a</text>
-<text class="xs" x="800" y="132">shared mutable singleton</text>
-<text class="xs" x="800" y="144">(I2).</text>
+<text class="xs" x="800" y="132">shared mutable singleton.</text>
 <path
 class="edge soft"
 d="M580,220 V234 H160 V252"
@@ -441,8 +440,8 @@ without depending on each other.
 | `Instant` | `number & {__brand}` | Epoch ms. Branded so a naked number cannot be passed as a date by accident. |
 | `TimeSpan` | `{ start, end }` | Half-open `[start, end)` in storage. Display is inclusive, via one formatting helper — never an inline `end - 1`. |
 | `EntryId` / `RowId` / `BarId` / `ChangeSetId` | `string & {__brand}` | Four distinct brands over `string`, so a row id cannot be used where a bar id belongs. |
-| `Entry` | `{ id, name?, start?, end?, read(), duration(), hasChildren, children(), parent(), descendants(), depth, toInput() }` | The authored record, and it answers questions about itself (ADR 0017). No stored classification: an Entry derives when it has children. `start`/`end` are absent together when it does not span (ADR 0012); a spanning Entry draws one Bar, on the row its `parentId` names (ADR 0027). `read(key)` is the one by-key value door — a core key, a `props` key, or a `compute` Field. |
-| `Field` | `{ key, type?, rollUp?, editable?, column?, … }` **or** `{ key, compute, … }` | What a value *is* (ADR 0005). A core field and a consumer field share one declaration shape, so one code path serves both. The union is exclusive (ADR 0011): a stored Field may roll up and may be edited; a `compute` Field may do neither and has no home, so its aggregate is computed on read. `'compute' in field` is the one test that separates them. `Field.column` is optional defaults for the bare-key shorthand. |
+| `Entry` | `{ id, name?, start?, end?, read(), duration(), hasChildren, children(), parent(), descendants(), depth, toInput() }` | The authored record, and it answers questions about itself. No stored classification: an Entry derives when it has children. `start`/`end` are absent together when it does not span; a spanning Entry draws one Bar, on the row its `parentId` names. `read(key)` is the one by-key value door — a core key, a `props` key, or a `compute` Field. |
+| `Field` | `{ key, type?, rollUp?, editable?, column?, … }` **or** `{ key, compute, … }` | What a value *is*. A core field and a consumer field share one declaration shape, so one code path serves both. The union is exclusive: a stored Field may roll up and may be edited; a `compute` Field may do neither and has no home, so its aggregate is computed on read. `'compute' in field` is the one test that separates them. `Field.column` is optional defaults for the bare-key shorthand. |
 | `ChangeSet` | `{ added, removed, updated }` | The *one write shape* emitted on `change`, with `updated` carrying `{ entryId, field, from, to }` per field. What undo and redo replay. |
 | `Dataset` | `{ entries, timeZone }` | The structural contract. `api/dataset.ts`'s class `implements` it, which is what lets `layout/` bind against a dataset without an illegal import. |
 | `Rect` / `Size` / `Point` / `PixelSpan` | readonly numbers | One geometry vocabulary for four layers. |
@@ -567,7 +566,7 @@ mechanical conversion.
 `data/entry-reader.ts` may see both `model/` (for the brand helpers) and `time/` (for the
 reading). It does no date math itself: resolving a Plain time needs the zone and the DST fold/gap
 policy, and advancing a date-only `end` by "one day" is zone-aware arithmetic that is not always
-86 400 000 ms. Both belong to `time/` under I10. The rule to carry forward: *data/ maps fields,
+86 400 000 ms. Both operations belong in `time/`. The rule to carry forward: *data/ maps fields,
 time/ decides dates.*
 :::
 
@@ -612,7 +611,7 @@ Implements `RenderBackend<HTMLElement>`.
 - **sync(frame)** — Keyed header/rows/cells/items, date-line, grid `translateY`, sizer
   transform. No layout reads.
 - **applyState(state)** — Hot-path class toggles and transforms only — hover/selection/drag
-  preview, zero allocation, never a frame rebuild (I13).
+  preview, zero allocation, never a frame rebuild.
 - **hitTest(x, y)** — `document.elementFromPoint` → `closest('.fg-bar')` →
   `dataset.barId`. No materialized hit-region array; the bars array *is* the hit index.
 
@@ -627,7 +626,7 @@ if `toGeom` differs from the cached geometry → prune keys no longer present.
   instance.
 - **create(item, key)** — Called once per key. Attributes fixed for the node's lifetime belong
   here.
-- **shallowEqual(a, b)** — Compares both directions (issue #91).
+- **shallowEqual(a, b)** — Compares both directions.
 
 #### readPixelProperty() — function
 
@@ -681,7 +680,7 @@ live-reconfigurable property to it.
   `panToInstant`/`panToToday`, `gridColumns`, `rowSource`, `collapsed`, `collapse`/`expand`,
   `selection`, `selectedEntries`, `interactions`, `plugins`, `commands`, `viewportGestures`,
   `theme`, `locale`, `todayLine`, `gridWidth`, …
-- **destroy()** — Idempotent, delegates. No module-level singletons anywhere in `src/` (I2).
+- **destroy()** — Idempotent, delegates. No module-level singletons anywhere in `src/`.
 
 #### Dataset — public class
 
@@ -727,7 +726,7 @@ gantt.rowSource = { source: 'entries', tree: true };
 — no restated `rowHeight`, no hand-built `TimeScaleModel` standing in for `range: 'fitDataset'`.
 `harness/scroll-sync.ts` is the shared-viewport e2e fixture: one pair of Gantts sharing a
 `TimeScaleModel` and both `ScrollAxis` instances, beside a pair sharing only the `x` axis and a
-pair sharing only the `y` axis (D-S6-1).
+pair sharing only the `y` axis.
 
 ## `extensions/`
 

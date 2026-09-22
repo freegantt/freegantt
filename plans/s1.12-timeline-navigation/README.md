@@ -280,7 +280,26 @@ todayLine?: boolean;
 - `computeFrame` emits a `TodayLine` when `todayLine` is on **and** `now()` falls inside `scale.range`; otherwise nothing. `now()` lives in `time/instant.ts` and is the only legal clock read (I10).
 - `render/dom` renders `.fg-today-line`, positioned like any other content-space geometry.
 - One token: `--fg-today-line-color`, the key S1.10 §270 cut *"until the render surface that needs it ships."* This is that surface.
-- **No timer.** The line is recomputed from `now()` on each frame and moves on the next render, not on a clock tick. A self-refreshing line needs a timer, and a timer needs a lifecycle the reconciler is explicitly not allowed to grow (CLAUDE.md: *"Needing lifecycle hooks means the design is wrong"*).
+- **No timer.** The line is recomputed from `now()` on each frame and moves on the next render, not
+  on a clock tick. A self-refreshing line needs a timer, and a timer needs a lifecycle the reconciler
+  is explicitly not allowed to grow (CLAUDE.md: *"Needing lifecycle hooks means the design is
+  wrong"*).
+
+  **Built, then removed.** PR #487 (#476) gave the line a `setTimeout` in `view/gantt-shell.ts` that
+  re-armed on every frame and repainted at the next tick boundary. This change removes it. Refreshing
+  the today line is the consumer's concern, not the library's — the same rule this decision started
+  with, now confirmed against a real timer rather than only argued.
+
+  **The consumer path.** A plugin keeps the line live on its own cadence, and holds its timer in
+  `ctx.disposables` for cleanup:
+
+  ```ts
+  const id = setInterval(() => { gantt.todayLine = <current instant>; }, 60_000);
+  ctx.disposables.add(() => clearInterval(id));
+  ```
+
+  `gantt.todayLine`'s setter always repaints (`view/frame-settings.ts`'s `set()`), so this needs no
+  other library support.
 
 Weekend and non-working-time shading stays S5's plugin-dogfood example (`plans/03` §S5), narrowed to shading alone — §7.
 
@@ -494,7 +513,7 @@ Guardrails and glossary first, then the engine, then the seam, then the public e
 |---|---|---|
 | ctrl/⌘+wheel zoom, shift+wheel pan, keyboard pan | S3 | `interaction/`'s controller base; recorded in `plans/03` §S3 (D-S1.12-17) |
 | Weekend / non-working-time shading | S5 | the plugin dogfood gate it is the example for (`plans/03` §S5) |
-| A self-refreshing today line | when a caller needs one | a timer and the lifecycle the reconciler may not grow (D-S1.12-14) |
+| A self-refreshing today line | not planned | built in #476/PR #487, then removed (D-S1.12-14) — refreshing is a consumer concern, and a plugin timer already covers it |
 | `align: 'end'` on `panToDate` | when a caller asks | `'start'` and `'center'` cover the toolbar and the "show me this date" case; a third alignment is a policy nobody has requested |
 | A per-band `minTickWidthPx` (rather than per-preset) | when a band's labels need a floor its tick unit does not imply | today `tickUnit` is never coarser than the finest header, so the tick floor is already at least as strict |
 | Quarter as a `TimeUnit` | when a consumer asks for a fiscal-quarter band | `TimeUnit` is a closed union; adding one means `zone.ts`'s stepping table, not a preset |

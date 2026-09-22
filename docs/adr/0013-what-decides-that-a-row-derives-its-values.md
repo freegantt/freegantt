@@ -290,8 +290,10 @@ the rest and a deriving one does not. Three rulings follow, all dated 2026-09-21
   inverse, so that half of the decision table stays true even for an owning parent.
 - **Mixed mode** (`start: 'none'`, `end: 'max'`). A move shifts a span, and half a span cannot shift.
   The parent writes its own dates only when both Fields answer `'entry'` and both may be written.
-  Otherwise the move writes descendants only, and the derived half re-rolls at commit. Resize follows
-  per edge.
+  Otherwise the move refuses the whole gesture: the owned date would go stale, since nothing rolls
+  an owned date back up (`src/view/capability.ts:221`, `NOTHING_MOVES`; pinned at
+  `capability.test.ts:459`). Resize still follows per edge — the handle for an owned date opens on
+  its own.
 - **A locked descendant under an owning parent** refuses the whole gesture. The preview paints the
   whole subtree translated, and a parent that moved without its child would land where the drag never
   showed.

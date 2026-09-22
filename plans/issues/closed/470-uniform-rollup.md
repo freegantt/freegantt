@@ -1,6 +1,6 @@
 # #470 — one rule for a derived cell: the Rollup owns it, or the consumer owns the Field
 
-**Reported:** 2026-09-21. **Status:** all five steps built and green, on `Pawel-IT/470-uniform-rollup`. Not merged. Labels: `enhancement`, `api change`.
+**Reported:** 2026-09-21. **Status:** shipped in #482, merged 2026-09-22. Labels: `enhancement`, `api change`.
 
 ## What the issue is
 
@@ -125,8 +125,9 @@ step. A `leafCount` compute Field already ships (#466), so the weights need no n
     stretch: the decision table's "stretch an envelope — not unique" stays true for it.
   - *Mixed mode* (`start: 'none'`, `end: 'max'`). A move shifts a span, and half a span cannot
     shift. The parent writes its own dates only when both Fields answer `'entry'` and both may be
-    written — the leaf rule at `:173`, unchanged. Otherwise the move writes descendants only, and
-    the derived half re-rolls at commit. Resize follows per edge.
+    written — the leaf rule at `:173`, unchanged. Otherwise the move refuses the whole gesture: the
+    owned date would go stale, since nothing rolls an owned date back up. Resize still follows per
+    edge — the handle for an owned date opens on its own.
   - *A locked descendant under an owning parent* refuses the whole gesture, as at `:195` today. The
     preview paints the whole subtree translated; a parent that moved without its child would land
     where the drag never showed.
@@ -146,7 +147,7 @@ step. A `leafCount` compute Field already ships (#466), so the weights need no n
 | 3 | `src/data/fields/field-registry.test.ts` | `{ key: 'start', rollUp: 'none' }` is legal and merges onto core's declaration; an unknown aggregator name is refused; a second override of the same key still throws `DuplicateFieldKeyError` |
 | 3 | `src/data/rollup.test.ts` | With `start`/`end` opted out, a parent keeps its authored dates and the Rollup writes neither. A dated leaf that gains a child keeps its dates; a parent that loses its last child keeps its dates |
 | 4 | `src/view/capability.test.ts` | A parent whose dates derive: the move writes descendants only, and `capabilities: { edit: true }` does not change that. A parent that owns its dates: the move writes the parent **and** its descendants, and an intermediate owning parent moves too. A leaf: unchanged |
-| 4 | `src/view/capability.test.ts` | Resize: an owning parent's handle opens and writes the parent alone; a deriving parent's handle stays closed. Mixed mode (`start: 'none'`, `end: 'max'`): the move writes descendants only; the `start` handle opens and the `end` handle stays closed. A locked descendant under an owning parent refuses the move |
+| 4 | `src/view/capability.test.ts` | Resize: an owning parent's handle opens and writes the parent alone; a deriving parent's handle stays closed. Mixed mode (`start: 'none'`, `end: 'max'`): the move refuses outright; the `start` handle still opens and the `end` handle stays closed (`:459`). A locked descendant under an owning parent refuses the move |
 | 4 | `src/view/gesture-pipeline.test.ts` | The drag preview and the commit agree in both modes |
 | 3, 4 | `e2e/` | The owning-parent harness page: drag the parent bar, the parent and its children shift; drag the end handle, only the parent's `end` changes; one undo restores every row |
 

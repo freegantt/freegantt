@@ -8,12 +8,6 @@ issue plans land here as they're opened.
 **Open:**
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
-- [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived
-  cell: the Rollup owns it, or the consumer owns the Field. Steps 1–4 shipped: `writeToChildren`
-  is gone from the Field surface, a consumer may declare `rollUp: 'none'` on a core Field, and the
-  parent-move rule reads the write resolver instead of `hasChildren`. Step 5 brought the ADRs and
-  the spec up to date. The plan stays open until the branch merges. Plan:
-  [470-uniform-rollup.md](./470-uniform-rollup.md).
 
 - **A declared Field key written flat does not typecheck, though it works at runtime.** No issue
   number yet; flagged for the author in `src/model/dataset.ts` and carried here when the field
@@ -26,6 +20,14 @@ issue plans land here as they're opened.
   The ergonomics are the author's call.
 
 **Closed:**
+
+- [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived
+  cell: the Rollup owns it, or the consumer owns the Field. Shipped in #482: `writeToChildren`
+  is gone from the Field surface, a consumer may declare `rollUp: 'none'` on a core Field that
+  declares a rollup of its own (`start`, `end` — narrowed in #491), and the parent-move rule reads
+  the write resolver instead of `hasChildren`. ADR 0013 records the reversal and keeps its
+  permission rule. See
+  [../closed/470-uniform-rollup.md](../closed/470-uniform-rollup.md).
 
 - [#466](https://github.com/freegantt/freegantt/issues/466) — a `StoredEntry` could not
   answer whether it has children. Shipped in #468: a pass answers `children`, `descendants`,

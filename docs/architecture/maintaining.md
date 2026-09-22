@@ -15,17 +15,16 @@ no copy to publish and no second page to hold in step.
 
 - **Are:** a map of what the code *currently does* — files, classes, call order, and data flow,
   each claim traceable to a line someone read.
-- **Are not:** the spec. `plans/00`–`04` state what the code *should* do, `CONTEXT.md` is the
+- **Are not:** the spec. The spec states what the code *should* do, `CONTEXT.md` is the
   glossary, and `docs/adr/` holds the decisions. Never restate a rule from those here as if this
-  folder were its home — cite it and move on. If a page and a plan disagree, the plan is right and
-  the page is stale.
-- **Are not** the consumer API. An app author reads `README.md`, `plans/02-public-api.md` and
-  `docs/05-consumer-api.md`. The [Overview](./index.md) page carries a short usage summary and
+  folder were its home — state what the code does and move on. If a page and the spec disagree,
+  the spec is right and the page is stale.
+- **Are not** the consumer API. An app author reads `README.md` and `docs/05-consumer-api.md`. The [Overview](./index.md) page carries a short usage summary and
   links out; nothing deeper than that belongs here.
 - **Are not** a place for aspirations. A section describing a class that does not exist yet is
   worse than no section.
 - **Are not** a tracker. A defect, a design doubt, or work someone means to do next goes in the
-  issue tracker or the plan it belongs to, where it gets triaged and closed. Findings written here
+  issue tracker, where it gets triaged and closed. Findings written here
   go stale silently, and a stale finding costs the next reader more than it ever saved.
 
 ## What to update when a file changes
@@ -70,12 +69,11 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
 3. **Delete what the code no longer does.** A sentence that stopped being true is not history, it
    is a wrong answer with a confident tone. Remove it in the same commit that makes it wrong.
 4. **Vocabulary is `CONTEXT.md`'s.** Entry, not Task. Dataset, not its earlier name. Bar, not Item
-   — Item retired with ADR 0026, so read every older "Item" as "Bar". A row that draws more than one
+   — Item is retired, so read every older "Item" as "Bar". A row that draws more than one
    Bar draws Segments, and a Segment is a reading of a Bar, never a type. Row, not line. Field is
    what a value *is*; a grid column is where a Gantt *shows* it. No scheduling framing in core descriptions — a shift roster and
    units-sold-per-week are as much the intended use as a construction plan.
-5. **Guards scan this folder, and they break CI exactly like code does.** Two read the prose.
-   `scripts/check-vendor-names.mjs` fails on a vendor Gantt
+5. **Four guards scan this folder.** `scripts/check-vendor-names.mjs` fails on a vendor Gantt
    product name, and `test/guards/retired-words.test.ts` fails on a retired word — that file holds
    the current list and the ADR behind each one, and it is the only place the list lives. Both read
    `docs/**`, with the ADRs out of scope. Both run in
@@ -84,29 +82,19 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
    concept the library dropped, and four pages here taught one for months because no guard read
    them.
 
-   Two more read what the pages measure rather than what they say.
+   The other two read what the pages measure rather than what they say.
    `test/guards/file-inventory.test.ts` fails when [File inventory](./files.md) misses a live
    `src/` file, keeps a row for a deleted one, or credits a file with an export it does not
    contain — that page claims to list every non-test file, and the claim was false for 24 of them.
    `test/guards/diagram-text-fits.test.ts` fails when a diagram label draws past its own box. Text
-   overflows silently: nothing marks it, and the page still builds.
-
-   The last one reads the front matter. `test/guards/architecture-last-update.test.ts` fails when a
-   page here states no `last_update.date`, states one the site cannot parse, or states one in the
-   future. All are pure Node, so they cost nothing to run.
-
-   A sixth guard reads the `ts` fences on every page, this folder included:
-   `scripts/check-doc-examples.mjs` compiles each one against the built package types. Quote a file
-   in `src/` instead of writing an example, and open the fence with
-   `ts title="src/view/gantt-shell.ts"` — the checker then verifies the citation rather than
-   compiling the block, and Docusaurus prints the file name above it
-   ([CI and hooks](../04-hooks-and-ci.md) §7.7).
+   overflows silently: nothing marks it, and the page still builds. Both are pure Node, so they
+   cost nothing to run.
 6. **Match the existing structure.** Prefer extending a diagram to adding a new one. When a page
    grows past roughly a thousand lines, split it into another page rather than adding a section
    nobody scrolls to.
-7. **Cite the ADR, not the plan step.** A decision has one home: `docs/adr/`. A page here may link
-   an ADR by number and title; it should not cite an internal slice or decision id as if that were
-   the record — a reader of this site has no way to look one up, and doesn't need to.
+7. **State the rule; cite no internal id.** A page here names what the code does. It does not cite
+   a slice, a decision id, an issue number or a plan section as the record — a reader of this site
+   has no way to look one up, and doesn't need to.
 
 ## Mechanics of the pages
 
@@ -116,21 +104,22 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
 - A Docusaurus site under `website/`, its own pnpm project with its own `package.json` and
   lockfile. Run it with `pnpm --dir website start` (dev server) or `pnpm --dir website build`
   (static build, includes the TypeDoc-generated API reference).
-- **A page says when it was last made true.** Every page here opens with this front matter, and
-  `test/guards/architecture-last-update.test.ts` fails when one does not:
+- **A page says when it was last made true.** Set `last_update.date` in the front matter to the day
+  you change it, in `YYYY-MM-DD`:
 
   ```yaml
   ---
+  id: lifecycle
+  title: "Construction, render, notification"
   last_update:
-    date: 2026-09-22
+    date: 2026-09-14
   ---
   ```
 
   `showLastUpdateTime` is on (`website/docusaurus.config.ts`), so the date prints at the foot of the
   page. A page with no such date falls back to its last commit date, which moves for a typo fix as
   readily as for a re-derivation. State the date by hand, and state it only when you checked the
-  page against the code. The guard holds the key present, parseable and not in the future; no guard
-  can tell whether you really re-read the code that day, so that part stays on you.
+  page against the code.
 - **Navigation is generated, not typed.** The sidebar for this section is
   `{ type: 'autogenerated', dirName: 'architecture' }` in `website/sidebars.ts` — a page added to
   or removed from this folder needs no other list edited, and Docusaurus renders previous/next

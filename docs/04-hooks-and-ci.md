@@ -13,7 +13,7 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | Script | Command | Typical time |
 |---|---|---|
 | `format` / `format:check` | `prettier --write .` / `--check .` | <2s |
-| `lint` | `eslint .` (type-aware) | ~10s at S2 scale |
+| `lint` | `eslint .` (type-aware) | ~10s |
 | `lint:file` | `eslint --max-warnings 0` on `$1` | <2s |
 | `typecheck` | `tsc --noEmit` | ~5s |
 | `boundaries` | `depcruise --config .dependency-cruiser.cjs src harness e2e fixtures` | ~3s |
@@ -23,7 +23,7 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `vendor-names` | `scripts/check-vendor-names.mjs` | <1s |
 | `sentence-length` | `scripts/check-sentence-length.mjs` — reads a declared file list, not a glob (§7.4) | <1s |
 | `disables` | `scripts/audit-disables.mjs` | <1s |
-| `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating; shipped S2.7, name corrected from the plan's `api:report`) | ~10s |
+| `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating) | ~10s |
 | `check-doc-examples` | `node scripts/check-doc-examples.mjs` — typechecks the docs' code fences against the built `.d.ts`, so `pnpm build` runs first | ~5s |
 | `bundle-probe` | `node scripts/bundle-probe.mjs` | ~5s |
 | `size-limit` | `size-limit` (`.size-limit.json`) — a measurement with a ceiling, not a guard (§5) | ~10s |
@@ -42,7 +42,7 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 
 Every other script on that table answers pass or fail. `pnpm measure:scale` answers "how much", and that is why no hook and no CI job calls it.
 
-The reason is issue #95's, and it is not squeamishness about slow tests. A frame-time assertion is a claim about the machine that ran it. A CI runner is shared, noisy and not the reference hardware S6's budgets will name, so such a test fails on a busy runner and passes on a quiet one, with the same code. That test teaches a team to re-run the build until it goes green, which costs more than the regression it was meant to catch. S1.11 already rejected CI timing assertions once, for `[S1-A1]`. Budgets arrive when S6 names them and names the hardware (`plans/s6-scale-and-sync/README.md` §5.1).
+The reason is that a frame-time assertion is a claim about the machine that ran it. A CI runner is shared, noisy and not necessarily the reference hardware, so such a test fails on a busy runner and passes on a quiet one, with the same code. That test teaches a team to re-run the build until it goes green, which costs more than the regression it was meant to catch. Budgets arrive when measured and named hardware is established.
 
 ```bash
 pnpm measure:scale              # headless
@@ -59,7 +59,7 @@ It writes two files under `measurements/` (git-ignored): a summary JSON, and a C
 
 **It refuses a port that already answers.** An earlier version did not, silently reused a server left over from the previous run, and produced a page of numbers measured against the wrong code. That is the same false green `scripts/e2e-worktree-port-guard.mjs` exists to refuse (§5), and the fix is the same: fail loudly rather than measure the wrong thing.
 
-**What it cannot do.** A scripted `scrollTop` write is not a real wheel or trackpad scroll. A headless run is not reference hardware. Which call stacks are ours, and whether a layout was forced, is Performance-panel work — which is what the trace file is for, and why #95 asks a person to read it.
+**What it cannot do.** A scripted `scrollTop` write is not a real wheel or trackpad scroll. A headless run is not reference hardware. Which call stacks are ours, and whether a layout was forced, is Performance-panel work — which is what the trace file is for, and why a person reads it.
 
 ---
 
@@ -106,13 +106,13 @@ Blocks (exit `2`) with an explanatory message when the edit targets:
 
 | Target | Message |
 |---|---|
-| `plans/**` | `plans/ is the spec. Locked decisions D1–D12 change by explicit human decision, not as a side effect of implementation. Ask first.` |
-| `package.json` → `dependencies` | `Exactly one runtime dependency is allowed (plans/04 §1). Rejected candidates and their reasons are documented there.` |
+| `plans/**` | `plans/ is the spec. Changes require explicit human decision, not as a side effect of implementation. Ask first.` |
+| `package.json` → `dependencies` | `Exactly one runtime dependency is allowed. Rejected candidates and their reasons are documented in CLAUDE.md.` |
 | `eslint.config.js`, `.dependency-cruiser.cjs` when the diff only *removes* rules | `Loosening a guard is a spec change. Say which invariant is being relaxed and why.` |
 
 The third check is the important one: the failure mode this whole system has to survive is an agent (or a tired human) resolving a guard failure by deleting the guard. It cannot fully prevent that — a determined caller edits the file in a way the heuristic misses — but it converts the easy path into a conversation, and the CI `disables` job plus review catch the rest.
 
-### 2.3 `require-draft-pr.sh` — PreToolUse on `Bash` (#255)
+### 2.3 `require-draft-pr.sh` — PreToolUse on `Bash`
 
 Blocks `gh pr create`, and the `gh api … /pulls` call behind it. Exit `2` returns a message naming `pnpm open-pr`, which opens the same pull request as a draft (§5.2). `gh pr ready`, `gh pr merge`, `gh pr view` and every other subcommand pass through.
 
@@ -154,7 +154,7 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 | `pre-commit` | `format` (auto-fix) on staged files, **except partially staged ones** + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
 | `pre-push` | `pnpm verify:full` (`verify`, then `test:e2e`) | The full gate before it becomes anyone else's problem. CI runs the same command on a ready pull request (§5); this half is faster, and it also covers a push that never becomes one |
 
-### 3.0 A partially staged file is never formatted (#203)
+### 3.0 A partially staged file is never formatted
 
 `prettier --write` edits the working tree, so the hook must re-stage what it formatted. `git add -- <file>` stages that file **whole**. On a file the author staged in part — `git add -p`, `git apply --cached`, an editor's stage-this-hunk — that commits the hunks they left out, under their message.
 
@@ -162,15 +162,13 @@ So the hook skips any file that is both staged and unstaged-modified, and says w
 
 The warning names the **intersection** only, never every dirty file. A warning that fires on most commits is a warning people stop reading.
 
-`--no-verify` exists and is not fought. Since #255 the old rationale holds again ("CI is the authority; hooks buy latency"): the server runs the whole gate on every pull request that asks for review (§5), so a skipped hook costs a red run rather than a silent landing. Two gaps stay local, by design. A draft runs nothing, and a push that never becomes a pull request is never proved on the server.
+`--no-verify` exists and is not fought. The server runs the whole gate on every pull request that asks for review, so a skipped hook costs a red run rather than a silent landing. Two gaps stay local, by design. A draft runs nothing, and a push that never becomes a pull request is never proved on the server.
 
-### 3.1 e2e runs in the gate, and the gate runs on the server too (#255)
+### 3.1 e2e runs in the gate, and the gate runs on the server too
 
-`pnpm test:e2e` sits outside `pnpm verify` and inside `pnpm verify:full`. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. Two of the five S1 acceptance boxes are e2e tests (`[S1-A1]`, `[S1-A4]`), and `scripts/slice-gate.mjs` shells out to `pnpm test:e2e` for both, so an unrun e2e suite makes the S1 gate unprovable.
+`pnpm test:e2e` sits outside `pnpm verify` and inside `pnpm verify:full`. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. The gate includes e2e tests so an unrun e2e suite makes the gate unprovable.
 
-For a long time nothing ran it on the server. Every trigger in `.github/workflows/ci.yml` was off by decision (D-S1.11-12), so `pre-push` was the only thing between a broken invariant and `main`. That is the half of #255 the `verify:full` wrapper could not close: the wrapper fixed what an agent proves, and left the pull-request page with no signal at all.
-
-The owner took the trigger decision on 2026-09-13, and CI now runs the whole gate — `test:e2e` included — on every pull request that asks for review (§5). `plans/s1.11-close-the-gate/README.md` still records D-S1.11-12 as it stood. A plan records what was decided then; this section records what holds now.
+CI now runs the whole gate — `test:e2e` included — on every pull request that asks for review.
 
 `pre-push` stays, and it stays as the same command. It is the faster half, because a failure surfaces before the push rather than after a wait on a runner. It is also the only half that covers a push nobody opens a pull request for.
 
@@ -178,9 +176,7 @@ The owner took the trigger decision on 2026-09-13, and CI now runs the whole gat
 
 The cost is small: the whole suite runs in seconds, and `playwright.config.ts` starts its own dev server. The failure mode that is *not* a real failure — a missing browser binary — gets its own message pointing at `pnpm exec playwright install chromium`.
 
-Before #255 the hook ran the two halves as two lines, and everyone else ran only `verify`. So the hook and the agent proved different things, and the agent's half was the one that reported completion.
-
-### 3.2 The last line is the verdict (#255)
+### 3.2 The last line is the verdict
 
 An exit code only reaches a reader who transcribes it, and the pattern this repo used transcribed the wrong one:
 
@@ -189,7 +185,7 @@ pnpm verify 2>&1 | tail -4; echo "EXIT: $?"      # `$?` is tail's status. Prints
 pnpm verify:full > /tmp/v.log 2>&1; tail -3 /tmp/v.log   # correct — redirect, and read the verdict
 ```
 
-Two agents hit this on #142. Both reported green, both told the truth, and `e2e/resize.spec.ts` was fully red. The failure surfaced at the push, after the review and after the merge.
+Both reported green, both told the truth, yet a test was failing. The failure surfaced at the push, after the review and after the merge.
 
 Documenting the capture rule is not enough on its own: it is exactly the instruction a tired reader skips. So `verify:full` states its own result **inside the output stream**, where no plumbing strips it. Every run prints exactly one verdict line:
 
@@ -220,18 +216,18 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | Builtin-restriction configs (B1–B11) | `test/guards/lint-fixtures.test.ts` — runs ESLint programmatically over `test/fixtures/violations/*.ts` and asserts the expected rule id fires on the expected line | a `files:` glob is edited so a rule silently stops covering a directory |
 | dependency-cruiser graph | `scripts/guard-red-test.mjs` (`03-boundaries-and-config.md` §1.3) | the graph config is loosened or the tool is misconfigured |
 | Purity of the pure layers | `test/setup/assert-no-dom.ts` throwing | a pure module reaches for the DOM |
-| The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts the table carries one row per invariant `plans/01` §11 declares, that every row names a gate check that runs, and that no row's status is blank; **and** (S1.11, D-S1.11-11) that every `freegantt/*` rule named in the Mechanism column of both §1 and §2 is registered in `eslint/rules/index.cjs`, unless it is honestly marked `PLANNED (Sn)` | an invariant loses its job, a job is renamed, or a row claims a rule is enforced when no rule file exists |
+| The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts the table carries one row per declared invariant, that every row names a gate check that runs, and that no row's status is blank; **and** that every `freegantt/*` rule named in the Mechanism column of both §1 and §2 is registered in `eslint/rules/index.cjs`, unless it is honestly marked `PLANNED (Sn)` | an invariant loses its job, a job is renamed, or a row claims a rule is enforced when no rule file exists |
 | One gate, every caller | `test/guards/gate-is-one-command.test.ts` — asserts CI runs `pnpm verify:full` and no single check beside it, that `pre-push` runs that same command, that the check list derives from `verify`, and that the workflow asks for `ready_for_review` and skips a draft | a caller starts proving a subset of the gate, or the draft rule stops holding |
 | The pr-wait hook | `test/guards/require-pr-wait.test.ts` — six hand-rolled waits are blocked, ten neighbouring commands pass, and the refusal names `pnpm pr-wait` | the hook stops blocking the poll, or starts blocking a log read or `gh run watch` |
 | The draft-PR hook | `test/guards/require-draft-pr.test.ts` — five ways to create a pull request are blocked, six neighbouring commands pass, and the hook is registered and executable | the hook stops blocking, or starts blocking `gh pr ready` and its neighbours |
-| The S1 → S2 gate itself | `test/guards/slice-gate.test.ts` (S1.11, plans/s1.11-close-the-gate/README.md §3.4) — drives `tagged()` against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted — U2's own scenario |
+| The gate itself | `test/guards/slice-gate.test.ts` — drives tagged gate checks against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted |
 
-That last one deserves emphasis: it closes the loop `plans/04` §4 opens ("an invariant without a job is a TODO, tracked in the table itself"). The table stops being prose and becomes a checked artifact.
+That last one deserves emphasis: it ensures that every invariant has a corresponding job. The table stops being prose and becomes a checked artifact.
 
 ### 4.1 `scripts/guard-red-test.mjs` — the red-test cases
 
 Each call writes one deliberate violation, asserts the guard it targets — `depcruise` for a boundary
-or leaf rule, `eslint` for the two ESLint-only #287 cases below — fails on it, then deletes the file.
+or leaf rule, `eslint` for boundary cases — fails on it, then deletes the file.
 A case with no failing fixture is presumed broken (the rule this whole section states):
 
 | Case | Rule it proves |
@@ -239,13 +235,13 @@ A case with no failing fixture is presumed broken (the rule this whole section s
 | `scheduling/ -> render/` | `scheduling-boundary` — D4, `scheduling/` never reaches a DOM layer |
 | `interaction/ -> layout/` | `interaction-boundary` — P3's one-arrow widening (`model/` only) stays to one arrow |
 | `rollup-is-removable: second importer` | `rollup-is-removable` — the Rollup leaf keeps exactly one legal importer |
-| `dataset-change-subscription-is-removable: second importer` | `dataset-change-subscription-is-removable` — same shape, S2/S4 leaf |
+| `dataset-change-subscription-is-removable: second importer` | `dataset-change-subscription-is-removable` — same shape |
 | `history-is-removable: second importer` | `history-is-removable` — same shape, undo/redo leaf |
-| `extensions/ -> view/` | `extensions-public-only` — D-S5-5's dogfood gate: a built-in feature may see only `api/` and `model/` |
+| `extensions/ -> view/` | `extensions-public-only` — a built-in feature may see only `api/` and `model/` |
 | `render/ -> data/transaction.js` | the `data/dev-mode.ts` leaf widening stays scoped to that one file, not `data/` generally |
 | `extensions/ -> data/transaction.js` | same, from the `extensions/` side |
-| `harness/ -> src/` (an internal, `import '../src/layout/bars/variants.js'`) | `harness-public-api-only` (#287) — dependency-cruiser blocks a relative reach *past* the published `freegantt` specifier's target |
-| `harness/ -> src/api/index.ts` by a relative path, and the same by a type-position inline `import(...)` | `eslint.config.js`'s `harness/`/`e2e/`/`fixtures/` block (#287, review finding F7) — dependency-cruiser matches *resolved* paths, so its one exception (`pathNot: '^src/api/index\.ts$'`, for the `freegantt` alias) can't tell that alias from a relative path naming the same file; this ESLint rule reads the specifier text instead, which is the only place that distinction is visible. `e2e/variant-styles.spec.ts` shipped the type-position case uncaught — belt and braces with the cruiser rule, not a replacement |
+| `harness/ -> src/` (an internal, `import '../src/layout/bars/variants.js'`) | `harness-public-api-only` — dependency-cruiser blocks a relative reach *past* the published `freegantt` specifier's target |
+| `harness/ -> src/api/index.ts` by a relative path, and the same by a type-position inline `import(...)` | `eslint.config.js`'s `harness/`/`e2e/`/`fixtures/` block — dependency-cruiser matches *resolved* paths, so its one exception (`pathNot: '^src/api/index\.ts$'`, for the `freegantt` alias) can't tell that alias from a relative path naming the same file; this ESLint rule reads the specifier text instead, which is the only place that distinction is visible |
 
 ### 4.2 Violation fixtures
 
@@ -257,7 +253,7 @@ A case with no failing fixture is presumed broken (the rule this whole section s
 
 One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify:full` on `ubuntu-latest`, with `pnpm` on a frozen lockfile and Node pinned by `.nvmrc`.
 
-**Why one job.** GitHub bills a job by the minute and rounds up. The shape before #255 was eleven jobs, and each one paid for a checkout and an install before it did about ten seconds of work — roughly twenty billed minutes for a gate that runs in about one. Steps inside a job are free. The fan-out bought a prettier failure page, and the verdict line already names the check that stopped the run (§3.2).
+**Why one job.** GitHub bills a job by the minute and rounds up. An earlier shape was eleven jobs, and each one paid for a checkout and an install before it did about ten seconds of work — roughly twenty billed minutes for a gate that runs in about one. Steps inside a job are free. The fan-out bought a prettier failure page, and the verdict line already names the check that stopped the run (§3.2).
 
 **Why one command.** The workflow holds no check list of its own. `pnpm verify:full` reads the list out of `package.json` at run time, so a check joins CI the moment it joins `verify`, and CI cannot run a spelling of the gate that nobody runs locally. `test/guards/gate-is-one-command.test.ts` fails the build when the workflow runs a single check beside the gate.
 
@@ -285,13 +281,13 @@ One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify
 **Rules for the pipeline itself:**
 
 - **No `continue-on-error`.** A check that can be yellow is a check that is off. The gate has one exit code and one verdict line.
-- **A measurement is not a guard.** `size-limit` before S5, and `perf` before S6, measure. They are labeled as measurements where they are declared, not as guards.
+- **A measurement is not a guard.** `size-limit` and `perf` measure until the budget behind each one is measured rather than guessed. They are labeled as measurements where they are declared, not as guards.
 - **`api-report` failure is not a bug**, it is a semver decision: the fix is either "revert the surface change" or "commit the updated report and say so in the pull request." The check's message says exactly that.
-- **Required check on `main`: `gate`.** One job, so one required check. Later slices add `axe` (S5) and `perf` (S6) as checks inside the gate, never as jobs beside it.
+- **Required check on `main`: `gate`.** One job, so one required check. Later work adds `axe` and `perf` as checks inside the gate, never as jobs beside it.
 
 ### 5.1 Slice gates
 
-`plans/00` §4 defines a gate between every pair of slices. `scripts/slice-gate.mjs` reads the current slice from a committed `.slice` file and runs that gate's mechanical conditions, printing the human-only items as an explicit checklist rather than silently ignoring them:
+A gate sits between every pair of slices. `scripts/slice-gate.mjs` reads the current slice from a committed `.slice` file and runs that gate's mechanical conditions, printing the human-only items as an explicit checklist rather than silently ignoring them:
 
 ```
 $ pnpm gate
@@ -305,7 +301,7 @@ Bumping `.slice` is a reviewed commit. That is the enforcement: you cannot start
 
 ---
 
-### 5.2 Pull requests open as drafts (#255)
+### 5.2 Pull requests open as drafts
 
 `pnpm open-pr` is how a pull request opens here. `.claude/hooks/require-draft-pr.sh` blocks the raw create command (§2.3).
 
@@ -323,9 +319,9 @@ The draft is not a formality. It is what the trigger set reads:
 
 So: open every pull request as a draft, and mark it ready only when it is the merge decision. A branch that waits stays a draft, and costs nothing while it waits.
 
-**`pnpm pr-wait` watches workflow runs, not check suites.** Every draft push, and the close event, still creates a workflow run whose `gate` job is skipped. Those rows share the required check name, so `gh pr checks` reports "nothing started" while `gh run list` already shows a live `pull_request` run — or prints `pass` from `--watch` and returns empty JSON on the re-read. Both happened on #420. `pr-wait` lists CI runs for the pull request's head commit (`gh run list --commit <sha> --event pull_request --workflow ci.yml`), ignores skipped and cancelled rows, and gives the waiting to `gh run watch`.
+**`pnpm pr-wait` watches workflow runs, not check suites.** Every draft push, and the close event, still creates a workflow run whose `gate` job is skipped. Those rows share the required check name, so `gh pr checks` reports "nothing started" while `gh run list` already shows a live `pull_request` run — or prints `pass` from `--watch` and returns empty JSON on the re-read. Both of those happen. `pr-wait` lists CI runs for the pull request's head commit (`gh run list --commit <sha> --event pull_request --workflow ci.yml`), ignores skipped and cancelled rows, and gives the waiting to `gh run watch`.
 
-**Do not dispatch a workflow to close a `pr-wait`.** `gh workflow run ci.yml --ref <branch>` is `workflow_dispatch`. That run is on the branch, not the pull request, so it cannot close this wait. Concurrency is keyed on the branch name, so the dispatch also cancels the live `pull_request` run. On #415 that is exactly what happened: `pr-wait` said SKIPPED while the gate was two minutes in, the fallback fired, and concurrency killed the real job. If no live `pull_request` run appears, push a commit so `synchronize` fires, then run `pr-wait` again.
+**Do not dispatch a workflow to close a `pr-wait`.** `gh workflow run ci.yml --ref <branch>` is `workflow_dispatch`. That run is on the branch, not the pull request, so it cannot close this wait. Concurrency is keyed on the branch name, so the dispatch also cancels the live `pull_request` run. That is exactly what happened once: `pr-wait` said SKIPPED while the gate was two minutes in, the fallback fired, and concurrency killed the real job. If no live `pull_request` run appears, push a commit so `synchronize` fires, then run `pr-wait` again.
 
 **A `workflow_dispatch` run proves the gate and cannot close a `pr-wait`.** Read its verdict from `gh run list --branch <branch> --workflow ci.yml`, and say plainly that the verdict came from a dispatch run rather than from `pr-wait` — a run with no `pr-wait` verdict line is proven differently, not proven green. To get a `pr-wait` verdict back, push a commit.
 
@@ -339,10 +335,10 @@ Worth stating, because a guardrail system that nobody wants to run is a guardrai
 |---|---|
 | Per agent file-edit (PostToolUse) | ~2s |
 | Per commit (pre-commit) | ~5s |
-| Per push (pre-push, `verify:full`) | ~75s at S5 scale, e2e included |
+| Per push (pre-push, `verify:full`) | ~75s at current scale, e2e included |
 | Per ready pull request (CI, one job) | ~3 min wall clock, ~4 billed minutes |
 | Per draft pull request (CI) | nothing — the job does not run |
-| Build-out cost | ~2 days of S0, of which the 9 custom rules are ~1 day |
+| Build-out cost | ~2 days, of which the 9 custom rules are ~1 day |
 
 The type-aware ESLint pass dominates local lint time and grows with the codebase. If `lint` crosses ~30s, the response is to split the type-aware rules into a separate `lint:types` script run at pre-push and CI only, keeping the per-edit hook syntactic and fast — not to drop rules.
 
@@ -357,11 +353,11 @@ The consumer-facing counterpart is `docs/09-integration-pitfalls.md`.
 
 ### 7.1 Probe the DOM-free layers in Node, not in a browser
 
-`model/`, `time/`, `data/` and `layout/` never touch the DOM (`plans/01` §1). They ship to the
+`model/`, `time/`, `data/` and `layout/` never touch the DOM. They ship to the
 browser like everything else, and they also run in plain Node. So a question about tick geometry,
 scale arithmetic or frame culling needs no dev server and no Playwright.
 
-On #436 a browser investigation spent several rounds on stale reads. The same bug then reproduced
+A browser investigation once spent several rounds on stale reads. The same bug then reproduced
 in a throwaway Vitest file in about one minute, and it matched the browser numbers to the pixel.
 
 Write the probe, read it once, then delete it. Pin the behaviour with a real test afterwards.
@@ -369,7 +365,7 @@ Write the probe, read it once, then delete it. Pin the behaviour with a real tes
 ### 7.2 A stale first read follows any preset or zoom change in the browser
 
 When an e2e test clicks a preset control, the first measurement it takes can still be the old
-frame. On #436 that produced a false "the gap collapsed to 0" and sent the investigation backwards.
+frame. That produced a false "the gap collapsed to 0" and sent one investigation backwards.
 
 Wait for the frame to settle, then read a second time. A negative result from a single read proves
 nothing.
@@ -383,7 +379,7 @@ type fails `verify:full` until that file is synced.
 pnpm api-extractor run --local
 ```
 
-This caught #448, where the new `bar-renderer-shadowed` code widened the public
+This caught the change where the new `bar-renderer-shadowed` code widened the public
 `BuiltInReportCode` union.
 
 ### 7.4 The sentence-length guard reads a declared list, not a glob
@@ -398,7 +394,7 @@ Write to the 25-word ceiling anyway. CLAUDE.md states it as a hard rule for all 
 
 ### 7.5 Playwright's `.check()` can scroll your drag target out of reach
 
-On #432 a splitter drag silently moved nothing. Every test that first checked a lock checkbox
+A splitter drag once silently moved nothing. Every test that first checked a lock checkbox
 failed, and the red proof failed twice before the cause was clear.
 
 `.check()` scrolled the page, the splitter moved to a negative `y`, and `mouse.down()` landed on no
@@ -409,28 +405,9 @@ the test driver. Never compensate for it in the library.
 
 ### 7.6 Verify a merge conflict resolution with `tsc` before you trust it
 
-A keep-both resolution can eat a brace when the two sides share one closing line. On #446 the
+A keep-both resolution can eat a brace when the two sides share one closing line. In one case the
 accessor block's `}` sat after the `>>>>>>>` marker, so a concatenating resolver dropped it. The
 result was one esbuild error and about 18 cascading `tsc` errors.
 
 Run `pnpm typecheck` immediately after any manual conflict resolution. Do this before you run the
 full gate, because the full gate takes far longer to tell you the same thing.
-
-### 7.7 Every `ts` fence in the docs is compiled, unless it cites a file
-
-`check-doc-examples` reads `README.md` and every page under `docs/`, `docs/adr/` excepted. A plain
-`ts` fence is an **example**: it compiles as its own module, against the built package types. So a
-fence that names an API which moved fails the gate.
-
-Two escapes exist, and both are visible in the page.
-
-1. A fence opened with `ts title="src/view/gantt-shell.ts"` is an **excerpt** of that file. The
-   checker does not compile it. It does check that the file exists, so a title cannot silence a
-   failing example. Docusaurus prints the title above the block.
-2. A `doc-example-setup` HTML comment declares the names the page's examples stand on. Its lines
-   land in an ambient `.d.ts` beside the examples, so an example may also build its own `dataset`.
-   Write `import('freegantt')` inline there — a top-level `import` makes the file a module, and the
-   names stop being ambient.
-
-An ADR is out of scope on purpose. It records the API of the day it was written, superseded ones
-included.
