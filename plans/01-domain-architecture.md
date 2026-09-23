@@ -567,7 +567,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 ```ts
 type StoreName = 'entries'; // S3 adds `plugin:${string}/${string}`
-type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with their producers (D-S2-11)
+type ChangeOrigin = 'user' | 'undo' | 'redo' | 'load'; // 'engine' arrives with its own producer (D-S2-11); 'load' is `entries.load()` (#496) — a full fresh start that clears History, not the skipped-write door D-S2-11 first reserved the word for
 
 // FieldKey stays open (D-S2-26): the core Entry keys are named for autocomplete and the
 // per-field comparator table's exhaustiveness check, but a consumer- or plugin-declared field

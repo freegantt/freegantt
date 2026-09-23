@@ -134,8 +134,8 @@ export interface Capabilities {
 // @public
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
 
-// @public (undocumented)
-export type ChangeOrigin = 'user' | 'undo' | 'redo';
+// @public
+export type ChangeOrigin = 'user' | 'undo' | 'redo' | 'load';
 
 // @public (undocumented)
 export interface ChangeSet {
