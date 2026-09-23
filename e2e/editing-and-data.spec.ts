@@ -134,6 +134,55 @@ test('export writes the document, and import round-trips the entry count', async
   expect(lines[0]).toMatch(/imported \d+ entries/);
 });
 
+// #496: `entries.load()` is order-tolerant — a pasted document may list a child before its parent,
+// and the import still lands in one commit. `load` is a full fresh start (L1), so it clears undo,
+// and a `locked` row the document names stays locked once the load lands (the lock plugin's own
+// `beforeChange` steps aside for `origin: 'load'`, `harness/plugins/lock-entries.ts`).
+test('import tolerates a child before its parent, clears undo, and a lock holds', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  // Rename something first, so Undo starts enabled — proof the import is what clears it, not an
+  // empty history the page already had.
+  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
+  await bar.click();
+  await page.locator('#rename-input').fill('Renamed before import');
+  await page.locator('#rename-btn').click();
+  await expect(page.getByLabel('Undo')).toBeEnabled();
+
+  const childBeforeParent = [
+    {
+      id: 'imported-child',
+      name: 'Imported child',
+      parentId: 'imported-parent',
+      start: '2026-02-02',
+      end: '2026-02-03',
+    },
+    { id: 'imported-parent', name: 'Imported parent', start: '2026-02-01', end: '2026-02-05', locked: true },
+  ];
+  await page.locator('#document-json').fill(JSON.stringify(childBeforeParent));
+  await page.locator('#import-btn').click();
+
+  const landed = await page.evaluate(() => ({
+    count: window.__dataset.entries.all.length,
+    parentOfChild: window.__dataset.entries.get('imported-child')?.parent()?.id,
+  }));
+  expect(landed.count).toBe(2);
+  expect(landed.parentOfChild).toBe('imported-parent');
+
+  await expect(page.getByLabel('Undo')).toBeDisabled();
+
+  const lockRefused = await page.evaluate(() => {
+    try {
+      window.__dataset.entries.update('imported-parent', { name: 'Should stay locked' });
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  expect(lockRefused).toBe(true);
+});
+
 // #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`,
 // not only the shipped table — the picker's one line (`harness/gantt-toolbar.ts`,
 // `gantt.preset = presetSelect.value`) needs no special case for the custom "sixHour" rung
