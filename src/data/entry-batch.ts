@@ -6,6 +6,7 @@ import type { EntryId, StoredEntry } from '../model/index.js';
 import {
   DuplicateEntryIdError,
   EntryNotFoundError,
+  MutationDuringExtensionHookError,
   ParentCycleError,
   TransactionAlreadyOpenError,
 } from '../model/index.js';
@@ -65,4 +66,16 @@ export function listOrderOf(entries: readonly StoredEntry[]): readonly EntryId[]
  */
 export function assertNoOpenTransaction(openTransactions: number, operation: string): void {
   if (openTransactions > 0) throw new TransactionAlreadyOpenError(operation);
+}
+
+/**
+ * Refuses a whole-list write called while the extension hook's current occupant is running (#323,
+ * #496). `openTransactions` is already back to 0 by the time the hook runs (`data/transaction.ts`),
+ * so `assertNoOpenTransaction` above never sees a hook-time call — an `EditExtender` that calls
+ * `entries.load()` would pass it and corrupt the write set the hook's own caller still has open.
+ * This closes that gap the same way `runTransaction` and `PluginStores#write` already do for
+ * `add`/`update`/`remove`.
+ */
+export function assertNoRunningExtensionHook(runningExtensionHook: boolean, operation: string): void {
+  if (runningExtensionHook) throw new MutationDuringExtensionHookError(operation);
 }

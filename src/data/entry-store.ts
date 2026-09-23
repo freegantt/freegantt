@@ -41,7 +41,12 @@ import { toEditReading, toEntries, toEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
-import { assertEntryBatchIsSound, assertNoOpenTransaction, listOrderOf } from './entry-batch.js';
+import {
+  assertEntryBatchIsSound,
+  assertNoOpenTransaction,
+  assertNoRunningExtensionHook,
+  listOrderOf,
+} from './entry-batch.js';
 import { buildDerivedValuesDroppedReport, raiseErrorOn } from './error-reporting.js';
 import {
   createFieldAccess,
@@ -609,6 +614,10 @@ export class EntryStore implements EntryStoreContract {
    * order. `commitChangeSet` applies exactly what it is given — unlike `runTransaction`, it never
    * folds an empty net effect away, which is how an empty `load` into an empty Dataset still commits
    * and still clears History (Q9).
+   *
+   * Refuses a call from inside the extension hook the same way `runTransaction` and `PluginStores`
+   * do (#323): `openTransactions` alone would not catch it, since it is already back to 0 by the
+   * time the hook runs.
    */
   load(inputs: readonly FlatEntryInput[]): void {
     const runner = this.#runner;
@@ -618,6 +627,7 @@ export class EntryStore implements EntryStoreContract {
       );
     }
     assertNoOpenTransaction(runner.openTransactions, 'entries.load');
+    assertNoRunningExtensionHook(runner.runningExtensionHook, 'entries.load');
 
     const read = toEntries(inputs, this.#context, this.#registry, 'entries.load');
     assertEntryBatchIsSound(read, 'entries.load');
