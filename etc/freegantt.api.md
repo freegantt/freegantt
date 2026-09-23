@@ -995,10 +995,16 @@ export interface FixedBarBox {
 // @public
 export function fixedWidthBar(px: number, anchor?: BarAnchor): BarProducer;
 
-// Warning: (ae-forgotten-export) The symbol "FlatEntryInputDeclared" needs to be exported by the entry point index.d.ts
-//
 // @public
-export type FlatEntryInput<TProps = Record<string, unknown>> = string extends keyof TProps ? EntryInput<TProps> : FlatEntryInputDeclared<TProps>;
+export type FlatEntryInput<TProps = Record<string, unknown>> = string extends keyof TProps ? EntryInput<TProps> : {
+    id: string;
+} & {
+    [K in keyof EntryEnvelope<TProps>]?: EntryEnvelope<TProps>[K];
+} & {
+    props?: Partial<TProps>;
+} & {
+    [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
+};
 
 // @public
 export interface FormatContext extends FieldContext {

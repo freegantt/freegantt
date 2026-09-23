@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { entryId } from './ids.js';
 import { spansTime } from './stored-entry.js';
-import type { StoredEntry } from './stored-entry.js';
+import type { FlatEntryInput, StoredEntry } from './stored-entry.js';
 import type { Instant } from './time.js';
 
 const instant = (value: number): Instant => value as Instant;
@@ -61,5 +61,20 @@ describe('spansTime', () => {
     };
     if (!spansTime(subject)) throw new Error('unreachable');
     expect(subject.props).toEqual({ team: 'A' });
+  });
+});
+
+// Type tests only — these exist to compile, not to run (same convention as `entry-edit-types.test.ts`).
+// A `TProps` with a key literally named `props` once made the nested-bag arm uninhabitable: the
+// declared-key mapped arm did not exclude `'props'`, so `Partial<TProps>['props']` (the nested-bag
+// arm) and `TProps['props']` (the declared-key arm) intersected into `never`. Excluding `'props'`
+// from the declared-key arm is the fix; this test pins it against a regression.
+describe('FlatEntryInput — a TProps key named "props" does not break the nested-bag form', () => {
+  it('compiles: nested props still works when TProps itself declares a "props" key', () => {
+    const input: FlatEntryInput<{ props: number; owner: string }> = {
+      id: 't1',
+      props: { props: 1, owner: 'Ali' },
+    };
+    expect(input).toBeDefined();
   });
 });
