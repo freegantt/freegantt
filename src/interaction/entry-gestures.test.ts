@@ -424,6 +424,41 @@ describe('attachEntryGestures — activation candidate lifetime (#434)', () => {
 
     expect(activations).toEqual([]);
   });
+
+  // #434 F7: a hit that exists (not a miss) but names no new candidate — a modifier held, or the
+  // hit itself refuses `activate` — used to leave an older, still-unconfirmed candidate in place.
+  // A later, unrelated click then wrongly confirmed it.
+  it('a hit that exists but is not activate-capable still drops an older, unconfirmed candidate', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A — its own click has not fired yet
+    pane.dispatchEvent(up(0, { shiftKey: true })); // same hit, shift held: names nothing new
+    container.dispatchEvent(click()); // must not confirm the stale A
+
+    expect(activations).toEqual([]);
+  });
+
+  // #434 F7: the grid pane's row layer arms no drag of its own, so it never had a
+  // `pointerdown`/`pointercancel` listener of its own to clear from — only `pane`'s did. A cancelled
+  // sequence that named its candidate through the row layer's own `pointerup` (`onRowLayerPointerUp`)
+  // must not outlive it either.
+  it('a pointercancel on the grid pane row layer drops a named candidate too', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(up(0)); // names A through the row layer's own pointerup
+    rowLayer.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1 }));
+    container.dispatchEvent(click());
+
+    expect(activations).toEqual([]);
+  });
 });
 
 // Bug hunt (S5 fixes, "grid row highlight and row click"): a row click selects the same way a bar

@@ -227,6 +227,10 @@ export function attachEntryGestures(
     // modify the Selection instead of opening anything, so neither modifier activates. This only
     // *names* the candidate — `onClick` below confirms it once the native `click` that always
     // follows this `pointerup` carries the real click count (see `pendingActivation`'s own comment).
+    // Cleared unconditionally first: a hit that is not a miss but also not activate-capable (a
+    // modifier held, or the row/bar itself refuses) must drop an older, still-unconfirmed candidate
+    // too, not just leave it for this hit's own `click` to wrongly confirm.
+    pendingActivation = undefined;
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const subject = ctx.activation.subjectEntryOf(hit);
       if (subject !== undefined && ctx.can('activate', subject)) {
@@ -354,14 +358,29 @@ export function attachEntryGestures(
     drag.pointercancel(e);
   }
 
+  /** #434: the grid pane's row layer arms no drag of its own (`onPointerDown` above only ever starts
+   *  one on a bar), so it never had a `pointerdown`/`pointercancel` listener at all — and so never
+   *  reached the clears those two give `pane` above. A candidate `onRowLayerPointerUp` named there
+   *  could then outlive a cancelled row-layer sequence and wrongly confirm on a later, unrelated
+   *  click. Same clear, same reason, just for the layer that had neither listener. */
+  function onRowLayerPointerDown(): void {
+    pendingActivation = undefined;
+  }
+
+  function onRowLayerPointerCancel(): void {
+    pendingActivation = undefined;
+  }
+
   pane.addEventListener('pointerdown', onPointerDown);
   pane.addEventListener('pointerup', onPointerUp);
   pane.addEventListener('pointermove', onPointerMove);
   pane.addEventListener('pointerleave', onPointerLeave);
   pane.addEventListener('pointercancel', onPointerCancel);
+  rowLayer.addEventListener('pointerdown', onRowLayerPointerDown);
   rowLayer.addEventListener('pointerup', onRowLayerPointerUp);
   rowLayer.addEventListener('pointermove', onRowLayerPointerMove);
   rowLayer.addEventListener('pointerleave', onRowLayerPointerLeave);
+  rowLayer.addEventListener('pointercancel', onRowLayerPointerCancel);
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('mousedown', onMouseDown);
   container.addEventListener('selectstart', onSelectStart);
@@ -375,9 +394,11 @@ export function attachEntryGestures(
       pane.removeEventListener('pointermove', onPointerMove);
       pane.removeEventListener('pointerleave', onPointerLeave);
       pane.removeEventListener('pointercancel', onPointerCancel);
+      rowLayer.removeEventListener('pointerdown', onRowLayerPointerDown);
       rowLayer.removeEventListener('pointerup', onRowLayerPointerUp);
       rowLayer.removeEventListener('pointermove', onRowLayerPointerMove);
       rowLayer.removeEventListener('pointerleave', onRowLayerPointerLeave);
+      rowLayer.removeEventListener('pointercancel', onRowLayerPointerCancel);
       container.removeEventListener('keydown', onKeyDown);
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('selectstart', onSelectStart);
