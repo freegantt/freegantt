@@ -114,8 +114,11 @@ export function lockEntries(): LockEntriesPlugin {
       dataset?.entries.update(id, { [LOCKED_FIELD_KEY]: true } as EntryEdit);
     },
 
+    /** Clears the key rather than writing `false`: an unlocked entry never carried `locked` before
+     *  this plugin composed in, and `toInput()` must read the same after an unlock as it did then —
+     *  not `locked: false` (every declared consumer key is removable without exception, ADR 0011). */
     unlock(id) {
-      dataset?.entries.update(id, { [LOCKED_FIELD_KEY]: false } as EntryEdit);
+      dataset?.entries.update(id, { [LOCKED_FIELD_KEY]: undefined } as EntryEdit);
     },
   };
 }
