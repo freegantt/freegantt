@@ -1,7 +1,7 @@
 name: Nightly engines
 # #514: Firefox and WebKit e2e run every night at 3am America/Denver. The push gate and CI run
 # Chromium only (#317). A failure opens or updates one `nightly-e2e-failure` issue
-# (scripts/report-nightly-failures.mjs).
+# (scripts/report-nightly-failures.mjs). A night with no new commit on main skips the run.
 on:
   schedule:
     # GitHub cron runs in UTC. 3am in Denver is 09:00 UTC in summer (MDT) and 10:00 UTC in winter
@@ -24,11 +24,18 @@ jobs:
       - id: denver
         env:
           SCHEDULE: ${{ github.event.schedule }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ "$GITHUB_EVENT_NAME" != schedule ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           offset="$(node -p "new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', timeZoneName: 'shortOffset' }).format(new Date()).split(' ').pop()")"
           if [ "$offset" = GMT-6 ]; then wanted='0 9 * * *'; else wanted='0 10 * * *'; fi
-          if [ "$SCHEDULE" = "$wanted" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+          if [ "$SCHEDULE" != "$wanted" ]; then echo "run=false" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # Did anything land on main since the last night? A merged PR and a direct push both
+          # land as a commit. The window is 25 hours, not 24, so the night after a DST change
+          # (a 25-hour day) misses nothing; an extra run costs only runner time.
+          since="$(date -u -d '25 hours ago' +%FT%TZ)"
+          landed="$(gh api "repos/$GITHUB_REPOSITORY/commits?sha=main&since=$since&per_page=1" --jq length)"
+          if [ "$landed" = 0 ]; then echo "No commit on main since $since. Skipping."; echo "run=false" >> "$GITHUB_OUTPUT"; else echo "run=true" >> "$GITHUB_OUTPUT"; fi
   engines:
     needs: when
     if: needs.when.outputs.run == 'true'
