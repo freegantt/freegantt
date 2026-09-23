@@ -1,0 +1,71 @@
+name: Nightly engines
+# #514: Firefox and WebKit e2e run every night at 3am America/Denver. The push gate and CI run
+# Chromium only (#317). A failure opens or updates one `nightly-e2e-failure` issue
+# (scripts/report-nightly-failures.mjs).
+on:
+  schedule:
+    # GitHub cron runs in UTC. 3am in Denver is 09:00 UTC in summer (MDT) and 10:00 UTC in winter
+    # (MST), so both fire, and the `when` job keeps the one that matches Denver's offset today.
+    - cron: '0 9 * * *'
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: nightly-engines
+  cancel-in-progress: false
+jobs:
+  when:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.denver.outputs.run }}
+    steps:
+      - id: denver
+        env:
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != schedule ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          offset="$(node -p "new Intl.DateTimeFormat('en-US', { timeZone: 'America/Denver', timeZoneName: 'shortOffset' }).format(new Date()).split(' ').pop()")"
+          if [ "$offset" = GMT-6 ]; then wanted='0 9 * * *'; else wanted='0 10 * * *'; fi
+          if [ "$SCHEDULE" = "$wanted" ]; then echo "run=true" >> "$GITHUB_OUTPUT"; else echo "run=false" >> "$GITHUB_OUTPUT"; fi
+  engines:
+    needs: when
+    if: needs.when.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - id: node-modules
+        uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml') }}
+      - if: steps.node-modules.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+      # No browser cache: WebKit needs its system libraries on every fresh runner anyway.
+      - run: pnpm exec playwright install --with-deps firefox webkit
+      - id: e2e
+        continue-on-error: true
+        run: pnpm test:e2e:engines --project=firefox --project=webkit
+        env:
+          FG_E2E_JSON_REPORT: e2e-engines-report.json
+      - if: steps.e2e.outcome == 'failure'
+        run: node scripts/report-nightly-failures.mjs e2e-engines-report.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FG_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      - if: steps.e2e.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-engines-test-results
+          path: test-results/
+          retention-days: 14
+      - if: steps.e2e.outcome == 'failure'
+        run: |
+          echo "The nightly engine run failed. See the nightly-e2e-failure issue."
+          exit 1
