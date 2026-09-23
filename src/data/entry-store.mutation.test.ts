@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
+import type { EditExtender } from './edit-extension.js';
 import * as writeRule from './write-rule.js';
 import {
   ComputedFieldCannotBeWrittenError,
@@ -17,7 +18,7 @@ import {
   UnknownFieldError,
   entryId,
 } from '../model/index.js';
-import type { ChangeSet, EntryInput } from '../model/index.js';
+import type { ChangeSet, EntryEdit, EntryId, EntryInput } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 
 interface Seed extends Partial<Omit<EntryInput, 'id'>> {
@@ -612,5 +613,60 @@ describe("a plugin's per-entry lock rule opens a locked Field (#473)", () => {
     expect(queryFor).toHaveBeenCalledTimes(1);
 
     queryFor.mockRestore();
+  });
+});
+
+// #496 step 1 — characterization tests pinning two facts `load` (#496) and sync (#517) design on.
+// Neither test asserts anything about `load` itself: `load` does not exist yet. Each pins how
+// construction and an ordinary transaction already behave, so the build step cannot assume a fact
+// that is not true.
+describe('#496 step 1 — characterization: what construction and a same-id remove+add already do', () => {
+  it('construction runs no EditExtender cascade over its input (Q3) — an extender that touches every entry it sees leaves none touched', () => {
+    const extender: EditExtender = (request) => {
+      const edits = new Map<EntryId, EntryEdit>();
+      for (const id of request.entries.keys()) edits.set(id, { touched: true });
+      return edits;
+    };
+    const state = new DatasetState({
+      entries: [
+        { id: 't1', name: 'Roofing', start: 0, end: 1 },
+        { id: 't2', name: 'Framing', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      fields: [{ key: 'touched', type: 'boolean' }],
+      editExtender: extender,
+    });
+
+    expect(state.entries.get('t1')!.read('touched')).toBeUndefined();
+    expect(state.entries.get('t2')!.read('touched')).toBeUndefined();
+
+    // The same extender does run for an ordinary write, proving it was wired and simply never
+    // called at construction — not that this extender is inert.
+    state.entries.update('t1', { name: 'Roofing (updated)' });
+    expect(state.entries.get('t1')!.read('touched')).toBe(true);
+  });
+
+  it('a remove then a re-add of the same id, in one transaction, folds to a plain in-place replace — the changeset carries no removed row for that id, and the id keeps its old position in entries.all', () => {
+    const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    const seen = changeSets(state);
+
+    state.transaction(() => {
+      state.entries.remove('b');
+      state.entries.add({ id: 'b', name: 'New B', start: 0, end: 1 });
+    });
+
+    expect(seen).toHaveLength(1);
+    const changeSet = seen[0]!;
+    // L1's worry, pinned: a fold like this must not be how `load` removes-and-re-adds a kept id,
+    // because the id never appears in `removed` here — it is not a clean remove-then-add pair.
+    expect(changeSet.removed.map((row) => row.entity.id)).not.toContain(entryId('b'));
+    expect(changeSet.added.map((row) => row.entity.id)).toEqual([entryId('b')]);
+    expect(changeSet.added[0]!.entity.name).toBe('New B');
+
+    // The id keeps its original slot — the fold is an in-place value replace, not a move to the
+    // end of insertion order. `load` must build its own ChangeSet rather than lean on this fold,
+    // or a kept id would keep its old list position instead of the input list's position (Q1).
+    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('b'), entryId('c')]);
+    expect(state.entries.get('b')!.name).toBe('New B');
   });
 });
