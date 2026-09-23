@@ -300,6 +300,19 @@ S0 → S1 gate
 
 Bumping `.slice` is a reviewed commit. That is the enforcement: you cannot start S2 work without a commit that says the S1 gate was met, and that commit is where a reviewer asks about the `☐` items.
 
+### 5.1.1 Firefox and WebKit run every night
+
+The gate and CI run Chromium only (#317). `.github/workflows/nightly-engines.yml` runs Firefox and WebKit every night at 3am America/Denver (#514). You can also start it by hand with `workflow_dispatch`.
+
+GitHub cron runs in UTC. The workflow fires at 09:00 and 10:00 UTC, and keeps the one that is 3am in Denver on that day.
+
+A failed run calls `scripts/report-nightly-failures.mjs`:
+
+- No open issue has the `nightly-e2e-failure` label: the script opens one that lists each failure.
+- One is open: the script comments with only the failures that issue does not list yet.
+
+A failure is new when its engine, spec file, test title, failing line or first error line is new. A flaky test passed on a retry, so the script does not report it. Close the issue when the nightly run is green again.
+
 ---
 
 ### 5.2 Pull requests open as drafts
