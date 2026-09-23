@@ -2,7 +2,7 @@
 
 **Reported:** 2026-09-23. **Status:** grill closed 2026-09-23, no code. Labels: `needs grill`, `api change`.
 Split out of [#496](https://github.com/freegantt/freegantt/issues/496) (`load`). Plan for `load`:
-[496-order-tolerant-bulk-write.md](./496-order-tolerant-bulk-write.md).
+[496-order-tolerant-bulk-write.md](../closed/496-order-tolerant-bulk-write.md).
 
 ## Why this is planned now
 

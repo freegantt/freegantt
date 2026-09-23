@@ -8,10 +8,6 @@ issue plans land here as they're opened.
 **Open:**
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
-- [#496](https://github.com/freegantt/freegantt/issues/496) — no order-tolerant bulk write, so a
-  restore button sorts entries parent-first itself. Direction: `entries.load()`, which clears undo
-  history; the undoable diffing door is #517. Grill closed; no code written yet. Plan:
-  [496-order-tolerant-bulk-write.md](./496-order-tolerant-bulk-write.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
   Field (#528). Blocked by #496 and #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
@@ -25,6 +21,13 @@ issue plans land here as they're opened.
   holds the work.
 
 **Closed:**
+
+- [#496](https://github.com/freegantt/freegantt/issues/496) — no order-tolerant bulk write, so a
+  restore button sorted entries parent-first itself. Shipped `dataset.entries.load(inputs)`: it
+  reads the whole list, refuses a dangling parent, a cycle or a duplicate id before anything
+  stages, and commits one `ChangeSet` (`origin: 'load'`) that clears undo history. The undoable
+  diffing door is #517. See
+  [../closed/496-order-tolerant-bulk-write.md](../closed/496-order-tolerant-bulk-write.md).
 
 - [#281](https://github.com/Pawel-IT/FreeGantt/issues/281) — a declared Field key written flat did
   not typecheck at `entries.add()` or the constructor, though it worked at runtime. Closed by the
