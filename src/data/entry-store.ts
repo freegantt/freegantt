@@ -37,10 +37,12 @@ import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
-import { toEditReading, toEntry } from './entry-reader.js';
+import { toEditReading, toEntries, toEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import { runTransaction } from './transaction.js';
+import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
+import { assertEntryBatchIsSound, assertNoOpenTransaction, listOrderOf } from './entry-batch.js';
+import { buildDerivedValuesDroppedReport, raiseErrorOn } from './error-reporting.js';
 import {
   createFieldAccess,
   measureEntryDuration,
@@ -589,6 +591,69 @@ export class EntryStore implements EntryStoreContract {
       for (const descendantId of this.#subtreeOf(key)) this.stageRemove(token, descendantId);
       this.stageRemove(token, key);
     });
+  }
+
+  /**
+   * A full fresh start (#496): removes every entry this store holds and adds every input, in the
+   * list's own order — no diff, no merge (L1). A child may list before its parent; the whole batch
+   * is checked first (`assertEntryBatchIsSound`), so order never throws — only a duplicate id, an
+   * unknown parent, or a loop does, and nothing stages when one does.
+   *
+   * This does not go through `#mutate`/`runTransaction`'s own diff-and-fold pipeline. Step 1 pinned
+   * why: staging a remove and a re-add of the same id through the ordinary `stageAdd`/`stageRemove`
+   * pair folds to an in-place value replace, keeping the id's old position in `entries.all` — exactly
+   * the per-entry state L1 says a kept id must not keep. `load` instead reads and checks the whole
+   * batch, runs the Rollup once the same way construction does (`applyConstructionRollUp`, no
+   * `EditExtender` cascade — step 1 pinned construction runs none either), and hands `commitChangeSet`
+   * an already-complete `ChangeSet`: every old entry in `removed`, every input in `added`, in list
+   * order. `commitChangeSet` applies exactly what it is given — unlike `runTransaction`, it never
+   * folds an empty net effect away, which is how an empty `load` into an empty Dataset still commits
+   * and still clears History (Q9).
+   */
+  load(inputs: readonly FlatEntryInput[]): void {
+    const runner = this.#runner;
+    if (!runner) {
+      throw new Error(
+        'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
+      );
+    }
+    assertNoOpenTransaction(runner.openTransactions, 'entries.load');
+
+    const read = toEntries(inputs, this.#context, this.#registry, 'entries.load');
+    assertEntryBatchIsSound(read, 'entries.load');
+
+    const byId = new Map(read.map((entry) => [entry.id, entry]));
+    const source = this.#hierarchySource.get();
+    const { parents } = checkHierarchyAnswers(byId, source);
+    // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
+    // itself stays a leaf only that file and the commit path may import, `rollup-is-removable`):
+    // no `pending`, so the pass walks `byId` as the whole tree. Refusals over this batch's hierarchy
+    // answers are not raised here: `endTransaction` below re-derives and raises them once the swap
+    // lands, the same door every other commit already raises through.
+    const rollupUpdated = rollUpFreshBatch(runner, byId, parents, source);
+    // A batch that authors a rolling-up Field on a row that also has children in the same batch gets
+    // it dropped here — one aggregate `derived-values-dropped` report for the whole load, the same
+    // rule and the same report construction raises (ADR 0013, decision 5; #496 Q3).
+    const dropped = rollupUpdated.filter((row) => row.to === undefined);
+    if (dropped.length > 0) {
+      raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(dropped));
+    }
+
+    const order = listOrderOf(read);
+    const added = order.map((id) => ({ store: 'entries' as const, entity: byId.get(id)! }));
+    const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
+    // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
+    // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.
+    const pluginRows = runner.pluginStores.pendingRows(removed.map((row) => row.entity.id));
+
+    const changeSet: ChangeSet = {
+      id: runner.nextChangeSetId(),
+      origin: 'load',
+      added,
+      removed,
+      updated: [...rollupUpdated, ...pluginRows],
+    };
+    commitChangeSet(runner, changeSet);
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {
