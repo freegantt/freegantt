@@ -55,18 +55,46 @@ function resolveBaseRef() {
   }
 }
 
+/** The stable identity of a `.size-limit.json` entry: what it measures, not what it is called. A
+ * rename changes `name` but never `path` + `import` together, so keying on the pair lets a branch
+ * entry find its base counterpart across a rename instead of reading as "new" and slipping past
+ * the growth check unchecked (#342 follow-up). */
+export function entryKey(entry) {
+  return `${entry.path}::${entry.import}`;
+}
+
 /** `size-limit --json` in one directory, for the entries `.size-limit.json` there names.
- * Returns a `Map<name, bytes>` so callers match branch entries to base entries by name, not by
- * position — the two configs are allowed to differ. */
-function measureSizes(dir) {
+ * Returns a `Map<key, { name, size }>`, keyed by `entryKey` so callers match branch entries to
+ * base entries by what they measure, surviving a rename. Each `size-limit` result is matched back
+ * to its config entry by `name` — the one field `size-limit` echoes verbatim from the config it
+ * read, so the match needs no assumption about output order. Throws, naming the entry, when a
+ * result cites a name absent from the config or carries a size that is not a finite number — both
+ * mean `size-limit --json`'s shape moved and a silent pass would hide that. */
+export function measureSizes(dir) {
   const sizeLimitBin = path.join(dir, 'node_modules', '.bin', 'size-limit');
   if (!existsSync(sizeLimitBin)) {
     throw new Error(`check-bundle-growth: ${sizeLimitBin} is missing — install did not complete.`);
   }
   const output = execFileSync(sizeLimitBin, ['--json'], { cwd: dir, encoding: 'utf8' });
   const results = JSON.parse(output);
+  const config = JSON.parse(readFileSync(path.join(dir, '.size-limit.json'), 'utf8'));
+  const configByName = new Map(config.map((entry) => [entry.name, entry]));
+
   const sizes = new Map();
-  for (const entry of results) sizes.set(entry.name, entry.size);
+  for (const result of results) {
+    const entry = configByName.get(result.name);
+    if (!entry) {
+      throw new Error(
+        `check-bundle-growth: ${dir} — size-limit reported "${result.name}", which is not in .size-limit.json.`,
+      );
+    }
+    if (typeof result.size !== 'number' || !Number.isFinite(result.size)) {
+      throw new Error(
+        `check-bundle-growth: ${dir} — "${result.name}" reported a size of ${JSON.stringify(result.size)}, not a finite number.`,
+      );
+    }
+    sizes.set(entryKey(entry), { name: entry.name, size: result.size });
+  }
   return sizes;
 }
 
@@ -84,7 +112,7 @@ function measureAtRef(ref) {
     const lockAtRef = git(['show', `${ref}:pnpm-lock.yaml`]);
     const lockHere = readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8').trim();
     if (lockAtRef === lockHere) {
-      symlinkSync(path.join(root, 'node_modules'), path.join(workDir, 'node_modules'));
+      symlinkSync(path.join(root, 'node_modules'), path.join(workDir, 'node_modules'), 'dir');
     } else {
       const install = spawnSync('pnpm', ['install', '--frozen-lockfile'], { cwd: workDir, stdio: 'inherit' });
       if (install.status !== 0) throw new Error(`check-bundle-growth: \`pnpm install\` failed for ${ref}.`);
@@ -107,35 +135,94 @@ function measureAtRef(ref) {
  * from `github.event.pull_request.number` — a number is known there. Locally, before a pull
  * request exists, the branch name is the only stable handle, so a row can be written against it
  * and updated to the real number once `pnpm open-pr` mints one. */
-function resolvePullRequestId() {
+export function resolvePullRequestId() {
   if (process.env.FG_PR_ID) return process.env.FG_PR_ID.replace(/^#/, '');
   return git(['rev-parse', '--abbrev-ref', 'HEAD']);
 }
 
 /** One row per accepted entry: `| pull request | entry | delta (bytes) | reason |`. A row covers
  * a run only when its recorded delta is at least the actual growth — a row written for 1,100 B
- * does not cover a later 4,000 B surprise on the same entry. */
-function readLedger() {
-  if (!existsSync(ledgerPath)) return [];
+ * does not cover a later 4,000 B surprise on the same entry.
+ *
+ * A line shaped like a table row — it opens and closes with `|` — but not readable as one throws,
+ * naming the line: a row that silently drops reads to the guard as "no exception recorded", which
+ * fails the pull request it meant to cover instead of telling the writer their row has a typo. */
+export function readLedger(filePath = ledgerPath) {
+  if (!existsSync(filePath)) return [];
   const rows = [];
-  for (const line of readFileSync(ledgerPath, 'utf8').split('\n')) {
+  const lines = readFileSync(filePath, 'utf8').split('\n');
+  for (const [index, line] of lines.entries()) {
     const cells = line
       .match(/^\s*\|(.+)\|\s*$/)?.[1]
       ?.split('|')
       .map((cell) => cell.trim());
-    if (!cells || cells.length !== 4) continue;
+    if (!cells) continue; // not shaped like a table row at all — ordinary prose
+    if (cells.every((cell) => /^:?-+:?$/.test(cell))) continue; // markdown header separator row
+
+    const lineNumber = index + 1;
+    if (cells.length !== 4) {
+      throw new Error(
+        `check-bundle-growth: ${filePath}:${lineNumber} looks like a table row but has ` +
+          `${cells.length} cells, not 4: "${line.trim()}"`,
+      );
+    }
     const [pullRequest, entry, delta, reason] = cells;
-    const recordedDelta = Number(delta);
-    if (!pullRequest || !entry || !Number.isFinite(recordedDelta) || !reason) continue;
     if (pullRequest.toLowerCase() === 'pull request') continue; // header row
+    const recordedDelta = Number(delta);
+    if (!pullRequest || !entry || !Number.isFinite(recordedDelta) || !reason) {
+      throw new Error(
+        `check-bundle-growth: ${filePath}:${lineNumber} does not parse as a ledger row: "${line.trim()}"`,
+      );
+    }
     rows.push({ pullRequest: pullRequest.replace(/^#/, ''), entry, recordedDelta, reason });
   }
   return rows;
 }
 
-function formatDelta(bytes) {
+export function formatDelta(bytes) {
   const sign = bytes > 0 ? '+' : '';
   return `${sign}${bytes} B`;
+}
+
+/** The budget, in the unit `size-limit` itself reports ("82.55 kB") — 1000 B reads as "1 kB", any
+ * other value reads in bytes. Both the PASS line and the FAILED line quote this, so neither can
+ * drift from `GROWTH_BUDGET_BYTES` the way the PASS line once did (#342 follow-up). */
+export function formatBudget(bytes) {
+  return bytes % 1000 === 0 ? `${bytes / 1000} kB` : `${bytes} B`;
+}
+
+/** One branch build against one base build, entry by entry, keyed by `entryKey` so a rename still
+ * finds its counterpart. Returns the report lines, the entries over budget with no ledger row to
+ * cover them, and `comparisons` — how many branch entries found a base counterpart at all. A
+ * caller treats `comparisons === 0` as "no growth check ran", never as "nothing grew" (#342
+ * follow-up). Takes no I/O: every caller, script and test alike, builds `branchSizes`/`baseSizes`
+ * itself, so a test can hand it a fabricated pair no build ever has to produce. */
+export function evaluateGrowth(branchSizes, baseSizes, { ledger, pullRequestId, growthBudgetBytes }) {
+  const lines = [];
+  const failures = [];
+  let comparisons = 0;
+  for (const [key, branch] of branchSizes) {
+    const base = baseSizes.get(key);
+    if (base === undefined) {
+      lines.push(`  ${branch.name}: ${branch.size} B (new entry, no baseline to compare)`);
+      continue;
+    }
+    comparisons++;
+    const delta = branch.size - base.size;
+    lines.push(`  ${branch.name}: ${base.size} B → ${branch.size} B (${formatDelta(delta)})`);
+
+    if (delta <= growthBudgetBytes) continue;
+
+    const covered = ledger.find(
+      (row) => row.pullRequest === pullRequestId && row.entry === branch.name && row.recordedDelta >= delta,
+    );
+    if (covered) {
+      lines.push(`    within budget by ledger row: "${covered.reason}"`);
+      continue;
+    }
+    failures.push({ name: branch.name, delta });
+  }
+  return { lines, failures, comparisons };
 }
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -155,51 +242,62 @@ if (isMain) {
   const baseSha = git(['merge-base', 'HEAD', baseRef]);
 
   const branchSizes = measureSizes(root);
+  if (branchSizes.size === 0) {
+    console.error('check-bundle-growth: measured no entry in .size-limit.json — nothing to compare.');
+    process.exit(1);
+  }
   // No point rebuilding an identical tree: a branch still at its merge-base (a fresh branch, or a
   // run on `main` itself) has nothing to grow against.
   const baseSizes = baseSha === headSha ? branchSizes : measureAtRef(baseSha);
+  if (baseSizes.size === 0) {
+    console.error(
+      `check-bundle-growth: measured no entry at ${baseRef}'s merge-base — nothing to compare against.`,
+    );
+    process.exit(1);
+  }
 
   const ledger = readLedger();
   const pullRequestId = resolvePullRequestId();
+  // `#342` reads as a pull request number; a branch name (the local, pre-pull-request fallback)
+  // does not, and `readLedger` only strips a leading `#`, never adds one — so the suggested row
+  // below must match what a reader actually needs to write for `pullRequestId` to match on replay.
+  const pullRequestLabel = /^\d+$/.test(pullRequestId) ? `#${pullRequestId}` : pullRequestId;
 
   console.log(
     `check-bundle-growth: comparing HEAD (${headSha.slice(0, 7)}) with ${baseRef}'s merge-base (${baseSha.slice(0, 7)})\n`,
   );
 
-  const failures = [];
-  for (const [name, branchSize] of branchSizes) {
-    const baseSize = baseSizes.get(name);
-    if (baseSize === undefined) {
-      console.log(`  ${name}: ${branchSize} B (new entry, no baseline to compare)`);
-      continue;
-    }
-    const delta = branchSize - baseSize;
-    console.log(`  ${name}: ${baseSize} B → ${branchSize} B (${formatDelta(delta)})`);
+  const { lines, failures, comparisons } = evaluateGrowth(branchSizes, baseSizes, {
+    ledger,
+    pullRequestId,
+    growthBudgetBytes: GROWTH_BUDGET_BYTES,
+  });
+  for (const line of lines) console.log(line);
 
-    if (delta <= GROWTH_BUDGET_BYTES) continue;
-
-    const covered = ledger.find(
-      (row) => row.pullRequest === pullRequestId && row.entry === name && row.recordedDelta >= delta,
+  // Every branch entry read as "new" means the base build and the branch build shared no entry at
+  // all — a wholesale rename, or a base measurement that silently measured the wrong thing. Either
+  // way no growth check ran, which must fail loud, not pass quiet (#342 follow-up).
+  if (comparisons === 0) {
+    console.error(
+      'check-bundle-growth: no branch entry matched a base entry by path + import — no comparison happened.',
     );
-    if (covered) {
-      console.log(`    within budget by ledger row: "${covered.reason}"`);
-      continue;
-    }
-    failures.push({ name, delta });
+    process.exit(1);
   }
 
   if (failures.length > 0) {
     console.error(
       `\ncheck-bundle-growth FAILED: ${failures
         .map((f) => `${f.name} grew ${formatDelta(f.delta)}`)
-        .join(', ')} — over the ${GROWTH_BUDGET_BYTES} B budget.`,
+        .join(', ')} — over the ${formatBudget(GROWTH_BUDGET_BYTES)} budget.`,
     );
     console.error(
-      `Add a row to bundle-size-exceptions.md ("| #${pullRequestId} | <entry> | <delta bytes> | <reason> |") ` +
+      `Add a row to bundle-size-exceptions.md ("| ${pullRequestLabel} | <entry> | <delta bytes> | <reason> |") ` +
         'to accept the growth, or shrink the bundle back under budget.',
     );
     process.exit(1);
   }
 
-  console.log('\ncheck-bundle-growth PASS — no entry grew past the 1 kB budget.');
+  console.log(
+    `\ncheck-bundle-growth PASS — no entry grew past the ${formatBudget(GROWTH_BUDGET_BYTES)} budget.`,
+  );
 }
