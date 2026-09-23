@@ -185,6 +185,9 @@ export interface CollapseChange {
 }
 
 // @public
+export type CollapseState = 'collapsed' | 'expanded' | 'leaf';
+
+// @public
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 // @public (undocumented)
@@ -1110,6 +1113,7 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
+    collapseStateOf(id: RowId | string): CollapseState | undefined;
     get commands(): CommandRegistry<TProps>;
     get dataset(): Dataset<TProps>;
     // (undocumented)
