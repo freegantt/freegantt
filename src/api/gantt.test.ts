@@ -139,6 +139,184 @@ describe('Gantt', () => {
   });
 });
 
+// Every plugin registration seam returns a Disposer (I2) — `on` is that seam for a Gantt event.
+describe('Gantt.on returns a Disposer', () => {
+  it('removes exactly the handler it was returned for, leaving another handler on the same event alone', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    let calls = 0;
+    let otherCalls = 0;
+    const dispose = gantt.on('themeChange', () => {
+      calls += 1;
+    });
+    gantt.on('themeChange', () => {
+      otherCalls += 1;
+    });
+
+    gantt.theme = 'dark';
+    dispose();
+    gantt.theme = 'light';
+
+    expect(calls).toBe(1);
+    expect(otherCalls).toBe(2);
+    gantt.destroy();
+  });
+
+  it('calling the Disposer twice is safe', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    const dispose = gantt.on('themeChange', () => {});
+    dispose();
+    expect(() => dispose()).not.toThrow();
+    gantt.destroy();
+  });
+});
+
+describe('ctx.events.on is removed on uninstall, like every other registration seam', () => {
+  it('removes a handler added during setup when the plugin is dropped from Gantt.plugins', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let calls = 0;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.listener',
+          view(ctx) {
+            ctx.events.on('themeChange', () => {
+              calls += 1;
+            });
+          },
+        },
+      ],
+    });
+
+    gantt.theme = 'dark';
+    gantt.plugins = [];
+    gantt.theme = 'light';
+
+    expect(calls).toBe(1);
+    gantt.destroy();
+  });
+
+  it('removes a handler added after setup returned', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let calls = 0;
+    let addLateHandler = (): void => undefined;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.late-listener',
+          view(ctx) {
+            addLateHandler = () =>
+              ctx.events.on('themeChange', () => {
+                calls += 1;
+              });
+          },
+        },
+      ],
+    });
+
+    addLateHandler();
+    gantt.theme = 'dark';
+    gantt.plugins = [];
+    gantt.theme = 'light';
+
+    expect(calls).toBe(1);
+    gantt.destroy();
+  });
+
+  it('calling its own events.on Disposer early, then uninstalling, throws nothing', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.early-dispose',
+          view(ctx) {
+            const dispose = ctx.events.on('themeChange', () => undefined);
+            dispose();
+          },
+        },
+      ],
+    });
+
+    expect(() => (gantt.plugins = [])).not.toThrow();
+    gantt.destroy();
+  });
+
+  it('leaves another plugin’s handler and the app’s own gantt.on handler firing', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let trackedCalls = 0;
+    let survivorCalls = 0;
+    let appCalls = 0;
+    const survivor = {
+      id: 'demo.survivor-listener',
+      view(ctx: PluginContext) {
+        ctx.events.on('themeChange', () => {
+          survivorCalls += 1;
+        });
+      },
+    };
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.tracked-listener',
+          view(ctx) {
+            ctx.events.on('themeChange', () => {
+              trackedCalls += 1;
+            });
+          },
+        },
+        survivor,
+      ],
+    });
+    gantt.on('themeChange', () => {
+      appCalls += 1;
+    });
+
+    gantt.plugins = [survivor];
+    gantt.theme = 'dark';
+
+    expect(trackedCalls).toBe(0);
+    expect(survivorCalls).toBe(1);
+    expect(appCalls).toBe(1);
+    gantt.destroy();
+  });
+
+  it('destroy() removes a handler added during setup', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let calls = 0;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.listener',
+          view(ctx) {
+            ctx.events.on('themeChange', () => {
+              calls += 1;
+            });
+          },
+        },
+      ],
+    });
+
+    gantt.destroy();
+    expect(calls).toBe(0);
+  });
+});
+
 describe('Gantt.dataset (#226)', () => {
   it('hands back the very Dataset it was constructed with', () => {
     const container = document.createElement('div');
@@ -6524,6 +6702,38 @@ describe('Gantt rows and collapse (S4.6)', () => {
     expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('All');
     expect(container.querySelector(`[data-row-id="${sampleEntries[0]!.id}"]`)).toBeNull();
     expect(container.querySelector('[data-row-id="r0"]')).not.toBeNull();
+    gantt.destroy();
+  });
+
+  it('a custom source’s resolve() is cached — reassigning rowSource is the refresh path (docs)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    let label = 'first';
+    const gantt = new Gantt({
+      container,
+      dataset,
+      rowSource: {
+        source: 'custom',
+        resolve: ({ entries }: { entries: readonly Entry[] }) => [
+          { id: 'h', label },
+          { id: 'r0', entryIds: [entries[0]!.id] },
+        ],
+      },
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('first');
+
+    // resolve() closes over `label`, which is page state — changing it alone changes nothing,
+    // because resolve() runs again only when `rowSource` itself is a new object.
+    label = 'second';
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('first');
+
+    // The documented refresh path: reassign `gantt.rowSource` (docs/07-row-source-updates.md).
+    gantt.rowSource = { ...gantt.rowSource };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('second');
+
     gantt.destroy();
   });
 

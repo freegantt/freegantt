@@ -295,6 +295,13 @@ plugins claim the same key.
 | `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 | `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
+| `events.on(name, handler)` | none | Additive — every handler runs, in registration order; the returned `Disposer` removes only that one handler | `src/data/event-bus.test.ts` |
+
+`events.on` is not gated — a plugin may call it after its own half returns,
+for example from inside another handler — but it is still tracked like every
+other seam: uninstalling the plugin, reassigning `plugins`, or calling
+`destroy()` removes the handler. The returned `Disposer` still works too, for
+a plugin that wants to remove its own handler early.
 
 `store.read<T>(pluginId)` is not a registration. It gives one plugin
 read-only access (`get`/`all`, no `set`/`remove`) to a store another plugin

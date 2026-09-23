@@ -2545,8 +2545,10 @@ export class GanttShell {
     this.#viewport.reveal({ x, y, width, height: this.#frameSettings.rowHeight });
   }
 
-  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
-    this.#events.on(name, handler);
+  /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
+   *  (I2); `on` is that seam for a Gantt event. */
+  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): Disposer {
+    return this.#events.on(name, handler);
   }
 
   off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
