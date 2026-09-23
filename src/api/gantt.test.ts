@@ -19,6 +19,7 @@ import {
   barId,
   contextMenu,
   diamond,
+  fixedWidthBar,
   CustomRowSourceNotFilterableOrSortableError,
 } from './index.js';
 import type {
@@ -37,6 +38,7 @@ import type {
 } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { diffMs, instant } from '../time/index.js';
+import { convenienceCommandIds } from './command.js';
 
 /** What a row's dates read now. A "before" reading is a value, never a row: one `Entry` per id, and
  *  every read is live, so a held row always agrees with itself (ADR 0017 rule 2). */
@@ -5002,6 +5004,209 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
   });
 });
 
+describe('Gantt entryActivate (#434)', () => {
+  /** `detail` is the click count a real browser stamps on its `click` event — 1 for a click on its
+   *  own, 2 for the second click of a physical double-click (never on `pointerup`: a real browser
+   *  never counts clicks there, only `entry-gestures.ts`'s own `onClick` reads it). `clickBar`
+   *  dispatches both, the same order a real browser does — `pointerup` first, so `selectFromHit`
+   *  names the activation candidate, then `click` on the bar itself, bubbling to confirm it — and
+   *  defaults `detail` to 1 so a lone call reads as an ordinary click. */
+  function clickBar(container: HTMLElement, bar: HTMLElement, detail = 1): void {
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    container
+      .querySelector<HTMLElement>('.fg-timeline-pane')!
+      .dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
+    document.elementFromPoint = original;
+    bar.dispatchEvent(new MouseEvent('click', { bubbles: true, detail }));
+  }
+
+  function dblclickBar(bar: HTMLElement): void {
+    bar.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
+  }
+
+  it('a plain click activates the bar’s own Entry (cause "click", target "bar")', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'click', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('Enter on a focused bar activates it (cause "key")', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    container.querySelector<HTMLElement>('.fg-bar')!.focus();
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'key', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('default mode (pointerActivation: "click"): a physical double-click activates once, not three times', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    // What a real double-click sends: two `click`-ish pointerups (detail 1, then 2), then the
+    // browser's own `dblclick`. Only the first click may activate here — see `dblclickBar` above.
+    clickBar(container, bar, 1);
+    clickBar(container, bar, 2);
+    dblclickBar(bar);
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'click', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('double-click mode (pointerActivation: "dblclick"): a single click does not activate', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
+
+    expect(activations).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('double-click mode (pointerActivation: "dblclick"): a double-click activates exactly once (cause "dblclick")', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    clickBar(container, bar, 1);
+    clickBar(container, bar, 2);
+    dblclickBar(bar);
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'dblclick', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  // #434 F4: a writable grid cell's double-click used to assume `canWrite` alone meant "an editor
+  // handles it" — with no `inlineEditing()` installed there is no editor, and the double-click did
+  // nothing. The fix asks one shared question instead (`#editorTakesFocusedCell`): does
+  // `freegantt.editFocusedCell` take this cell? With no `inlineEditing()`, core's own inert
+  // placeholder always declines, so this cell falls through to `entryActivate` the same way an
+  // unwritable cell already did.
+  it('double-click mode, no inlineEditing() installed: a writable grid cell still activates (#434 F4)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    const cell = container.querySelector<HTMLElement>('.fg-row-label[data-field="name"]')!;
+    cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'dblclick', target: 'gridCell' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('Enter still activates in double-click mode (cause "key")', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    container.querySelector<HTMLElement>('.fg-bar')!.focus();
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'key', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('I14: { select: false, activate: true } still activates on a plain click that selects nothing', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, capabilities: { select: false, activate: true } });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
+
+    expect(gantt.selectedEntryIds).toEqual([]);
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'click', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('{ activate: false } refuses a click, leaving the default select untouched', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, capabilities: { activate: false } });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
+
+    expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
+    expect(activations).toEqual([]);
+
+    gantt.destroy();
+  });
+});
+
 /** One plain Entry and one that draws two bars — the smallest dataset that tells "the Segment the
  *  pointer named" from "every Segment the row owns". Module-scoped: the Delete-key describe block
  *  below shares this fixture with the Segment-selection tests, rather than re-declaring it. */
@@ -6776,6 +6981,145 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
   });
 });
 
+describe('Gantt.convenienceChords (#262)', () => {
+  function keydown(key: string, extra: Partial<KeyboardEventInit> = {}): KeyboardEvent {
+    return new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra });
+  }
+
+  it('false leaves every convenience chord inert; the command still runs through commands.run', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, convenienceChords: false });
+
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+    expect(dataset.canUndo).toBe(true);
+    const notFired = container.dispatchEvent(keydown('z', { ctrlKey: true }));
+    expect(notFired).toBe(true); // unmatched: nothing preventedDefault
+    expect(dataset.canUndo).toBe(true); // the chord did not run undo
+
+    // The command itself still answers — the app's own UI (a toolbar button) still works.
+    gantt.commands.run('freegantt.undo');
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a per-command map turns undo off while redo still fires on its own chord', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, convenienceChords: { 'freegantt.undo': false } });
+
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+    container.dispatchEvent(keydown('z', { ctrlKey: true }));
+    expect(dataset.canUndo).toBe(true); // Mod+Z stayed silent
+
+    container.dispatchEvent(keydown('z', { ctrlKey: true, shiftKey: true }));
+    // Nothing to redo yet (undo never ran), so this is a true no-op — canRedo stays false, which is
+    // itself proof Mod+Shift+Z still reached the command (an inert chord would have thrown nothing
+    // either way, so the next assertion is the one that actually distinguishes the two).
+    expect(dataset.canRedo).toBe(false);
+
+    gantt.commands.run('freegantt.undo');
+    expect(dataset.canUndo).toBe(false);
+    expect(dataset.canRedo).toBe(true);
+    container.dispatchEvent(keydown('z', { ctrlKey: true, shiftKey: true }));
+    expect(dataset.canRedo).toBe(false); // Mod+Shift+Z (redo) ran
+
+    gantt.destroy();
+  });
+
+  it('an obligation chord still fires with every convenience chord off', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      convenienceChords: false,
+      selectedEntryIds: [sampleEntries[0]!.id],
+    });
+
+    // Escape (`freegantt.clearSelection`) is an obligation chord — [S5-A4]/WCAG 2.1.1 — so
+    // `convenienceChords: false` does not touch it.
+    expect(gantt.selectedEntryIds).toEqual([sampleEntries[0]!.id]);
+    container.dispatchEvent(keydown('Escape'));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    // Mod+A (`selectAll`) is a convenience chord, and stays silent under the same config.
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('pins convenienceCommandIds against the shell: every id in the list stays silent under convenienceChords: false, and an obligation chord (Escape) still fires', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+
+    // Mirrors the chord `view/gantt-shell.ts`'s `#registerCoreCommands` binds each id to — the
+    // pairing this test exists to pin. `freegantt.clearSelection` is the control: it is not a
+    // convenience id, and its own chord must fire no matter what `convenienceChords` says.
+    const CHORD_OF: Record<
+      (typeof convenienceCommandIds)[number] | 'freegantt.clearSelection',
+      KeyboardEventInit
+    > = {
+      'freegantt.undo': { key: 'z', ctrlKey: true },
+      'freegantt.redo': { key: 'z', ctrlKey: true, shiftKey: true },
+      'freegantt.selectAll': { key: 'a', ctrlKey: true },
+      'freegantt.deleteSelection': { key: 'Delete' },
+      'freegantt.zoomIn': { key: '=', ctrlKey: true },
+      'freegantt.zoomOut': { key: '-', ctrlKey: true },
+      'freegantt.panToToday': { key: '0', ctrlKey: true },
+      'freegantt.panRight': { key: 'ArrowRight', altKey: true },
+      'freegantt.panLeft': { key: 'ArrowLeft', altKey: true },
+      'freegantt.panToStart': { key: 'Home', ctrlKey: true },
+      'freegantt.panToEnd': { key: 'End', ctrlKey: true },
+      'freegantt.clearSelection': { key: 'Escape' },
+    };
+    const watchedIds = [...convenienceCommandIds, 'freegantt.clearSelection'] as const;
+
+    const runCounts: Partial<Record<(typeof watchedIds)[number], number>> = {};
+    const spy: ChromePlugin = {
+      id: 'test.convenience-chord-spy',
+      view(ctx) {
+        for (const id of watchedIds) {
+          runCounts[id] = 0;
+          ctx.commands.register({ id, label: id, run: () => (runCounts[id] = (runCounts[id] ?? 0) + 1) });
+        }
+        return () => {};
+      },
+    };
+    const gantt = new Gantt({ container, dataset, convenienceChords: false, plugins: [spy] });
+
+    for (const id of convenienceCommandIds) {
+      container.dispatchEvent(keydown(CHORD_OF[id].key!, CHORD_OF[id]));
+    }
+    for (const id of convenienceCommandIds) expect(runCounts[id]).toBe(0);
+
+    container.dispatchEvent(
+      keydown(CHORD_OF['freegantt.clearSelection'].key!, CHORD_OF['freegantt.clearSelection']),
+    );
+    expect(runCounts['freegantt.clearSelection']).toBe(1);
+
+    gantt.destroy();
+  });
+
+  it('is live: the next keystroke reads a reassigned convenienceChords, no remount', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    gantt.convenienceChords = false;
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    gantt.convenienceChords = {};
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual(sampleEntries.slice(0, 2).map((entry) => entry.id));
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue #137 F1)', () => {
   it('a chord registered through ctx.interaction.registerKeyHandler still fires for a key event whose target sits outside the container', () => {
     // A popup opened from a trigger that lives outside the Gantt's own container (a toolbar button
@@ -7582,6 +7926,184 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     expect(gantt.collapsed).toEqual([]);
 
     gantt.destroy();
+  });
+
+  it('collapseStateOf answers each state, a hidden descendant, a stale id, and a grouping header', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'category' }],
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', props: { category: 'group' } },
+        {
+          id: 'c',
+          name: 'c',
+          start: '2026-01-03',
+          end: '2026-01-04',
+          parentId: 'p',
+          props: { category: 'span' },
+        },
+        {
+          id: 'leaf',
+          name: 'leaf',
+          start: '2026-01-05',
+          end: '2026-01-06',
+          props: { category: 'milestone' },
+        },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    // Leaf: cannot expand.
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+
+    // Expandable, not collapsed.
+    expect(gantt.collapseStateOf('p')).toBe('expanded');
+
+    // Expandable, collapsed — and the child it now hides still answers from the row tree, not the
+    // frame (#424).
+    gantt.collapse('p');
+    expect(gantt.collapseStateOf('p')).toBe('collapsed');
+    expect(gantt.collapseStateOf('c')).toBe('leaf');
+
+    // No such row: a removed entry's id, answered right after the write, with no frame painted in
+    // between (#424).
+    dataset.entries.remove('leaf');
+    expect(gantt.collapseStateOf('leaf')).toBeUndefined();
+
+    // A stale id that never named a row.
+    expect(gantt.collapseStateOf('never-existed')).toBeUndefined();
+
+    // A grouping header row answers by the same rule as any other row, at once.
+    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.read('category') as string };
+    expect(gantt.collapseStateOf('group:group')).toBe('expanded');
+    gantt.collapse('group:group');
+    expect(gantt.collapseStateOf('group:group')).toBe('collapsed');
+
+    gantt.destroy();
+  });
+
+  it('collapseStateOf answers a synchronous add and reparent, with no frame painted in between (#424)', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'leaf', name: 'leaf', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'other', name: 'other', start: '2026-01-03', end: '2026-01-04' },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    // Leaf, before it gets a child.
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+
+    // Adding a child under a leaf turns its parent expandable — and expanded — at once.
+    dataset.entries.add({
+      id: 'child',
+      name: 'child',
+      start: '2026-01-05',
+      end: '2026-01-06',
+      parentId: 'leaf',
+    });
+    expect(gantt.collapseStateOf('leaf')).toBe('expanded');
+
+    // Reparenting the child under `other` turns `leaf` back into a plain leaf, and `other`
+    // expandable, at once.
+    dataset.entries.update('child', { parentId: 'other' });
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+    expect(gantt.collapseStateOf('other')).toBe('expanded');
+
+    gantt.destroy();
+  });
+
+  it('reveal lands on a row two writes added, right after a collapseStateOf read of it, with no frame painted in between (#424 review item 1)', () => {
+    // #424 review item 1: `collapseStateOf` calls `FrameLayout.ensureRowPlan`, which used to update
+    // `#plan` alone and leave `#memory` — the height index `rowTop` reads, the `rowById` map
+    // `barsForEntry` reads — behind. Two writes with no frame between them move the replanned row
+    // count two past what `#memory` was last built for, so a stale index cannot even answer in
+    // bounds. `reveal` right after `collapseStateOf` is the real caller this broke:
+    // `#expandAndFindRow` found the new row at once (no reason left to flush a frame), then
+    // `#revealRect` read `rowTop`/`barsForEntry` off the stale memory.
+    //
+    // The row's own `rowTop` cannot prove this alone: with every row the library's own uniform
+    // height (D-S4-19), a stale height index still answers `topAt(i)` correctly from row count
+    // alone (`row-height-index.ts`'s `heightAt` never bounds-checks `i`). `barsForEntry` is the one
+    // answer a stale `#memory` truly cannot fake — a `rowById` map still built for one row holds no
+    // Bars for row 'c' at all (`FrameMemory.rowMemory`'s `#noRow` fallback), so `reveal`'s x falls
+    // back to entry 'c's own `[start, end)` span instead of the fixed-width box its own `milestone`
+    // variant draws. The x this test checks is that fixed box's own left edge, reachable no other
+    // way — `rowTop` alone would pass whether `#memory` was in step or not.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scrollX = new ScrollAxis();
+      const scrollY = new ScrollAxis();
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        // Exact instants, not "through that day" (#421-adjacent): keeps this test's geometry exact
+        // arithmetic — the default 'inclusive' would add a day to every bare end date.
+        dateOnlyEnd: 'exclusive',
+        entries: [{ id: 'a', name: 'a', start: '2026-01-01', end: '2026-01-02' }],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        scroll: { x: scrollX, y: scrollY },
+        rowSource: { source: 'entries', tree: true },
+        // A fixed range and density, not `fitDataset`/`fit: 'pane'` (both library defaults): so this
+        // test's own pixel arithmetic below never depends on the measured pane, or on which entries
+        // had already arrived the one time the range was last resolved.
+        range: { start: '2026-01-01', end: '2026-01-10' },
+        fit: 0.001,
+        // Row 'c' alone draws a 20,000px fixed box instead of the plain span-following bar every
+        // other row draws — wide and far enough from its own `[start, end)` span's geometry that no
+        // floating-point noise could paper over the two answers landing on the same pixel.
+        variants: [{ name: 'milestone', when: (entry) => entry.id === 'c', bars: fixedWidthBar(20_000) }],
+      });
+      // A pane far short of row 'c's target, on both axes, so `reveal` has to move the scroll on
+      // both — an already-visible target would pass this test whether `#memory` was in step or not.
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 40 });
+
+      // Two writes, no frame painted between either of them and the read below.
+      dataset.entries.add({ id: 'b', name: 'b', start: '2026-01-03', end: '2026-01-04' });
+      dataset.entries.add({ id: 'c', name: 'c', start: '2026-01-05', end: '2026-01-06' });
+
+      expect(gantt.collapseStateOf('c')).toBe('leaf');
+
+      // `scroll.panTo` receives the raw target `reveal` computes, before `ScrollAxis` clamps it to
+      // its own content-driven max — a spy reads that raw target. Reading the clamped
+      // `scroll.state.position` instead would not work here: `max` only grows on a painted frame,
+      // and this test's whole point is that no frame paints between the writes and the reveal.
+      const panToX = vi.spyOn(scrollX, 'panTo');
+      const panToY = vi.spyOn(scrollY, 'panTo');
+
+      gantt.reveal(entryId('c'));
+
+      // Row 'c' is the third row (rowHeight 36, the library default): top 72, bottom 108. The pane
+      // is 40px tall, so "nearest edge" pans exactly enough to bring the bottom edge into view —
+      // 108 - 40 = 68.
+      expect(panToY).toHaveBeenLastCalledWith(68);
+
+      // Row 'c's own span is [Jan 5, Jan 6) — at `pxPerMs: 0.001` off a Jan 1 range start, x 345,600
+      // to x 432,000. The `milestone` variant's 20,000px box centres on that span's own midpoint
+      // (388,800): x 378,800 to x 398,800. The 300px pane's nearest edge pans exactly enough to
+      // bring the box's trailing edge into view — 398,800 - 300 = 398,500. A stale `#memory` answers
+      // `[]` for this row's Bars, and `reveal` falls back to the plain span above instead: nearest
+      // edge lands on 432,000 - 300 = 431,700, a different pixel entirely.
+      expect(panToX).toHaveBeenLastCalledWith(398_500);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('set range pins the time axis to a span; assigning fitDataset back releases it', () => {

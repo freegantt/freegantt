@@ -106,7 +106,7 @@ the built-in undo/redo use, published so a consumer can write their own History 
   resolved, and one setting changes by spreading that value — see
   [Row source updates](07-row-source-updates.md).
 - `rowSource.filter` and `groupBy` take the `Entry` alone, and read a value off it: `(entry) => entry.read('team') === 'Blue'`. `sort.compare(a, b, fields)` compares two *values* of `sort.field`, not two Entries, and its third argument is a `FieldContext` — the dataset `timeZone`, for a comparer that needs the zone to read a date.
-- `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()` — per-Gantt view state
+- `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()`, `collapseStateOf(id)` — per-Gantt view state; `collapseStateOf` reads back `'collapsed' | 'expanded' | 'leaf' | undefined`
 - Events: `beforeCollapseChange` / `collapseChange`
 - `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after the app rebuilds the Dataset). Do not copy `scrollTop` off the pane.
 - `variants` — the rules this Gantt paints rows with; `bar()`, `summary()`, `diamond()` are core's own shipped looks.

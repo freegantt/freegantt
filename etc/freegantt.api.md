@@ -111,7 +111,7 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
-export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
+export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
@@ -121,6 +121,7 @@ export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 
 
 // @public
 export interface Capabilities {
+    activate?: CapabilityRule;
     edit?: WriteRule;
     // (undocumented)
     move?: CapabilityRule;
@@ -183,6 +184,9 @@ export interface CollapseChange {
     // (undocumented)
     readonly to: readonly RowId[];
 }
+
+// @public
+export type CollapseState = 'collapsed' | 'expanded' | 'leaf';
 
 // @public
 export type ColumnAlign = 'start' | 'center' | 'end';
@@ -280,6 +284,12 @@ export interface ContextMenuOptions {
 }
 
 // @public
+export type ConvenienceChords = boolean | Partial<Record<ConvenienceCommandId, boolean>>;
+
+// @public
+export type ConvenienceCommandId = 'freegantt.undo' | 'freegantt.redo' | 'freegantt.selectAll' | 'freegantt.deleteSelection' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panToStart' | 'freegantt.panToEnd';
+
+// @public
 export type CoreFieldKey = keyof Omit<StoredEntry, 'id' | 'props'>;
 
 // @public
@@ -351,6 +361,7 @@ export class Dataset<TProps = unknown> {
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
+    editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     // (undocumented)
     get entries(): EntryStore<TProps>;
     field(key: FieldKey): Field | undefined;
@@ -379,6 +390,8 @@ export class Dataset<TProps = unknown> {
 export interface DatasetEditHook {
     // (undocumented)
     setExtender(wrap: ExtenderWrapper): void;
+    // (undocumented)
+    setLockRule(wrap: FieldLockRuleWrapper): void;
 }
 
 // @public
@@ -421,7 +434,7 @@ export interface DatasetHierarchy {
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    entries: readonly EntryInput<TProps>[];
+    entries: readonly FlatEntryInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: {
@@ -649,6 +662,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
 // @public
 export interface EditRequest {
     readonly addedEntryIds: ReadonlySet<EntryId>;
+    editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     entries: ReadonlyMap<EntryId, StoredEntry>;
     entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
     hasChildren(id: EntryId | string): boolean;
@@ -725,6 +739,16 @@ export interface Entry<TProps = Record<string, unknown>> {
     read<K extends FieldKey>(field: K): FieldValue<TProps, K> | undefined;
     readonly start?: Instant | undefined;
     toInput(): EntryInput<TProps>;
+}
+
+// @public
+export interface EntryActivate {
+    // (undocumented)
+    readonly cause: 'click' | 'key' | 'dblclick';
+    // (undocumented)
+    readonly entry: Entry;
+    // (undocumented)
+    readonly target: TargetKind;
 }
 
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
@@ -811,7 +835,7 @@ export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | E
 
 // @public
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
-    add(input: EntryInput<TProps>): Entry<TProps>;
+    add(input: FlatEntryInput<TProps>): Entry<TProps>;
     // (undocumented)
     remove(id: EntryId | string): void;
     // (undocumented)
@@ -925,6 +949,20 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
 export type FieldKey = CoreFieldKey | (string & {});
 
 // @public
+export interface FieldLockQuery {
+    // (undocumented)
+    readonly id: EntryId;
+    // (undocumented)
+    isDescendantOf(ancestorId: EntryId | string): boolean;
+}
+
+// @public
+export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEditable | undefined;
+
+// @public
+export type FieldLockRuleWrapper = (next: FieldLockRule) => FieldLockRule;
+
+// @public
 export type FieldMatch<TProps = Record<string, unknown>> = Partial<CoreFieldValues> & {
     [K in keyof TProps]?: TProps[K];
 } & {
@@ -994,6 +1032,17 @@ export interface FixedBarBox {
 
 // @public
 export function fixedWidthBar(px: number, anchor?: BarAnchor): BarProducer;
+
+// @public
+export type FlatEntryInput<TProps = Record<string, unknown>> = string extends keyof TProps ? EntryInput<TProps> : {
+    id: string;
+} & {
+    [K in keyof EntryEnvelope<TProps>]?: EntryEnvelope<TProps>[K];
+} & {
+    props?: Partial<TProps>;
+} & {
+    [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
+};
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -1110,7 +1159,10 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
+    collapseStateOf(id: RowId | string): CollapseState | undefined;
     get commands(): CommandRegistry<TProps>;
+    get convenienceChords(): ConvenienceChords;
+    set convenienceChords(next: ConvenienceChords);
     get dataset(): Dataset<TProps>;
     // (undocumented)
     get dateLineLabelPlacement(): DateLineLabelPlacement;
@@ -1158,6 +1210,8 @@ export class Gantt<TProps = unknown> {
     panToToday(align?: 'start' | 'center'): void;
     get plugins(): readonly ChromePlugin<TProps>[];
     set plugins(next: readonly ChromePlugin<TProps>[]);
+    get pointerActivation(): PointerActivation;
+    set pointerActivation(next: PointerActivation);
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
@@ -1238,6 +1292,7 @@ export interface GanttEventMap {
     beforeSelectionChange: SelectionChange;
     // (undocumented)
     collapseChange: CollapseChange;
+    entryActivate: EntryActivate;
     entryEdit: EntryFieldEdit;
     // (undocumented)
     entryMove: EntryMove;
@@ -1274,6 +1329,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     capabilities?: Capabilities;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
+    convenienceChords?: ConvenienceChords;
     dataset: Dataset<TProps>;
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
@@ -1286,6 +1342,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     minGridWidth?: number;
     overscan?: Overscan;
     plugins?: readonly ChromePlugin<TProps>[];
+    pointerActivation?: PointerActivation;
     rowSource?: RowSource;
     scroll?: ScrollAxes;
     selectedEntryIds?: readonly (EntryId | string)[];
@@ -1809,6 +1866,9 @@ export interface Point {
     // (undocumented)
     readonly y: number;
 }
+
+// @public
+export type PointerActivation = 'click' | 'dblclick';
 
 // @public (undocumented)
 export interface Popup {

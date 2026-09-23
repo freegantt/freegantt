@@ -4,8 +4,8 @@
 // class adds `transaction()` and the construction-time options a view never reads.
 
 import type { Entry } from './entry.js';
-import type { EntryEdit, EntryInput, StoredEntry } from './stored-entry.js';
-import type { Field, FieldKey } from './field.js';
+import type { EntryEdit, FlatEntryInput, StoredEntry } from './stored-entry.js';
+import type { Field, FieldEditable, FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
@@ -40,15 +40,14 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  `entries.add({ id, name, owner: 'Ali' })`. Nested `props` stays legal for a bag already held or
    *  a passenger key — naming one both there and at the top throws.
    *
-   *  Typed as plain `EntryInput<TProps>`, not the `& Partial<TProps>` intersection Q15's wording
-   *  suggests: that intersection is uninhabitable by a named `EntryInput<TProps>[]` value once
-   *  `TProps` defaults to an open record (`Partial<Record<string, unknown>>` demands an index
-   *  signature `EntryInput` does not carry), which broke every fixture that pre-types its own array.
-   *  Ingest itself still reads a flat declared key off any object at runtime — `propsFromInput`
-   *  (`entry-reader.ts`) does not consult this type — so a caller loses only the static
-   *  autocomplete/check, not the behaviour. Flagged for the author; still unresolved, and tracked
-   *  in `plans/issues/open/README.md`. */
-  add(input: EntryInput<TProps>): Entry<TProps>;
+   *  Typed as `FlatEntryInput<TProps>` (#281), not `EntryInput<TProps>` and not the `&
+   *  Partial<TProps>` intersection Q15's wording first suggested — that intersection is
+   *  uninhabitable by a named `EntryInput<TProps>[]` value once `TProps` defaults to an open record
+   *  (`Partial<Record<string, unknown>>` demands an index signature `EntryInput` does not carry),
+   *  which broke every fixture that pre-types its own array. `FlatEntryInput` closes the gap: see its
+   *  own comment (`stored-entry.ts`) for why re-deriving every piece as a mapped type, instead of
+   *  intersecting the named `EntryInput` interface, makes the flat key check compile. */
+  add(input: FlatEntryInput<TProps>): Entry<TProps>;
   update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
   remove(id: EntryId | string): void;
 }
@@ -65,6 +64,12 @@ export interface Dataset<TProps = Record<string, unknown>> {
   readonly fields: { readonly all: readonly Field[] };
   /** Resolved declaration for this key, or `undefined` when the key is not declared. */
   field(key: FieldKey): Field | undefined;
+  /** The effective lock on this Entry's cell (#473): a plugin's per-entry lock rule's own answer, or
+   *  the Field's own `editable` when the rule has no opinion. The same answer `entries.update()`, an
+   *  `EditExtender` cascade, and the grid already read (I14) — this is the query door onto it. An
+   *  undeclared key answers `'never'`: nothing is written to a key nothing declares. A `compute`
+   *  Field answers `'never'` too — it owns no stored home to write. */
+  editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
   /** Bumped on every committed changeset. Layout uses it as the pack-cache key (D-S4-26). */
   readonly datasetRevision: number;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;

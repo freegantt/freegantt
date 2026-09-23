@@ -15,6 +15,9 @@ export type {
   ExtenderWrapper,
   HierarchySource,
   HierarchySourceWrapper,
+  FieldLockQuery,
+  FieldLockRule,
+  FieldLockRuleWrapper,
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';
@@ -125,6 +128,7 @@ export type { PluginContextOf, PluginContextParts } from './plugin-context.js';
 export { definePlugin } from './define-plugin.js';
 export type {
   BuiltInCommandId,
+  ConvenienceCommandId,
   CommandId,
   CommandOf,
   CommandContextOf,
@@ -140,6 +144,9 @@ export type {
   GridWidth,
   ViewportGestures,
   ViewportGestureFlags,
+  PointerActivation,
+  ConvenienceChords,
+  CollapseState,
 } from '../view/index.js';
 export type {
   GanttEventMap,
@@ -158,6 +165,7 @@ export type {
   EntryMove,
   EntryResize,
   EntryFieldEdit,
+  EntryActivate,
 } from '../view/index.js';
 // S3, D-S3-9: `Gantt.capabilities`'s own type and the per-gesture rule shape (`view/capability.ts`).
 // #256: `WriteRule` is the shape of `capabilities.edit`, which answers one cell rather than one
@@ -313,9 +321,13 @@ export type {
   EntryStore,
 } from '../model/index.js';
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
-// Public because a consumer that types its own entry builder needs to name them.
+// Public because a consumer that types its own entry builder needs to name them. FlatEntryInput is
+// what `entries.add()` and `DatasetOptions.entries` actually take (#281) — a declared Field key sits
+// flat, the same shape `update()` takes; EntryInput stays the nested-`props`-only shape `entry.toInput()`
+// hands back.
 export type {
   EntryInput,
+  FlatEntryInput,
   InstantInput,
   TimeSpanInput,
   DateOnlyEndRule,
