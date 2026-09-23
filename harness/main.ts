@@ -113,6 +113,8 @@ const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
 const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
+const activationReadout = document.querySelector<HTMLParagraphElement>('#activation-readout')!;
+const dblclickActivatesCheckbox = document.querySelector<HTMLInputElement>('#dblclick-activates-checkbox')!;
 const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
 const lockGridCheckbox = document.querySelector<HTMLInputElement>('#lock-grid-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
@@ -154,6 +156,18 @@ function syncSelectionUi(): void {
 const log = document.querySelector<HTMLDivElement>('#log')!;
 
 gantt.on('selectionChange', syncSelectionUi);
+
+// #434: entryActivate fires on a click, an Enter, or (opted in below) a double-click — independent
+// of Selection, so this readout moves even when capabilities.select refuses the same row.
+gantt.on('entryActivate', ({ entry, cause }) => {
+  activationReadout.textContent = `Activated: ${entry.name} (${cause})`;
+});
+
+// #434: dblclickActivates is off by default so a bar's double-click never fights a grid cell's own
+// double-click editor. The checkbox reconfigures it live, the same shape gridResizable's does.
+dblclickActivatesCheckbox.addEventListener('change', () => {
+  gantt.dblclickActivates = dblclickActivatesCheckbox.checked;
+});
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
   syncSelectionUi();
