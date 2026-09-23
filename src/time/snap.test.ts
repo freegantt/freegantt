@@ -54,24 +54,26 @@ describe('snapInstant', () => {
 describe('nextTickBoundary', () => {
   it('walks forward to the next whole-unit boundary strictly after at', () => {
     const at = instant('2026-06-15T14:10:00Z'); // 10:10 EDT
-    expect(nextTickBoundary(ZONE, at, 'hour', 1)).toBe(instant('2026-06-15T15:00:00Z'));
+    expect(nextTickBoundary(ZONE, at, { unit: 'hour', increment: 1 })).toBe(instant('2026-06-15T15:00:00Z'));
   });
 
   it('steps past at even when at already sits on a boundary — never returns at itself (#476)', () => {
     const at = instant('2026-06-15T14:00:00Z'); // 10:00 EDT, already a whole hour
-    expect(nextTickBoundary(ZONE, at, 'hour', 1)).toBe(instant('2026-06-15T15:00:00Z'));
+    expect(nextTickBoundary(ZONE, at, { unit: 'hour', increment: 1 })).toBe(instant('2026-06-15T15:00:00Z'));
   });
 
   it('honours a multi-step increment, landing on the next multiple of the day-anchored grid (#489)', () => {
     // 14:40 EDT sits between the day-anchored 12:00 and 15:00 boundaries (00, 03, 06, …, 21 local) —
     // the next one strictly after it is 15:00, not 17:00 (14:40's own floor plus 3h).
     const at = instant('2026-06-15T18:40:00Z'); // 14:40 EDT
-    expect(nextTickBoundary(ZONE, at, 'hour', 3)).toBe(instant('2026-06-15T19:00:00Z'));
+    expect(nextTickBoundary(ZONE, at, { unit: 'hour', increment: 3 })).toBe(instant('2026-06-15T19:00:00Z'));
   });
 
   it('rejects a zero increment instead of looping forever (#201)', () => {
     const at = instant('2026-06-15T14:10:00Z');
-    expect(() => nextTickBoundary(ZONE, at, 'day', 0)).toThrow(InvalidSnapIncrementError);
+    expect(() => nextTickBoundary(ZONE, at, { unit: 'day', increment: 0 })).toThrow(
+      InvalidSnapIncrementError,
+    );
   });
 });
 
@@ -157,7 +159,8 @@ describe('snapInstant with a custom SnapRule', () => {
   it('composes with the library’s own tools — a rule built from nextTickBoundary', () => {
     // The documented shape of a real SnapRule: reach for the same tools ticks()/snapInstant use.
     const at = instant('2026-06-15T11:10:00Z'); // 07:10 EDT
-    const everySixHours: SnapRule = (zone, ruleAt) => nextTickBoundary(zone, ruleAt, 'hour', 6);
+    const everySixHours: SnapRule = (zone, ruleAt) =>
+      nextTickBoundary(zone, ruleAt, { unit: 'hour', increment: 6 });
     expect(snapInstant(ZONE, at, everySixHours)).toBe(instant('2026-06-15T16:00:00Z')); // 12:00 EDT
   });
 });

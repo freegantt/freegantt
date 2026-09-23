@@ -63,7 +63,7 @@ function fakeDataset(
       const declared = registry.get(key);
       return declared === undefined ? 'never' : editableOf(declared);
     },
-    on: () => {},
+    on: () => () => {},
     off: () => {},
   };
 }

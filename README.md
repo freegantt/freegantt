@@ -443,7 +443,7 @@ import { nextTickBoundary } from 'freegantt';
 gantt.snap = 'none'; // default: free placement, no snapping at all
 gantt.snap = 'tick'; // whatever the showing preset's own tick is
 gantt.snap = { unit: 'hour', increment: 2 }; // every 2 hours, anchored on the calendar (#489)
-gantt.snap = (zone, at) => nextTickBoundary(zone, at, 'hour', 6); // a custom SnapRule
+gantt.snap = (zone, at) => nextTickBoundary(zone, at, { unit: 'hour', increment: 6 }); // a custom SnapRule
 ```
 
 Holding **Alt** during a drag suspends snapping for that one gesture, regardless of the configured

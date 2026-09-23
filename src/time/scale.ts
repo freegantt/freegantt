@@ -5,14 +5,12 @@
 import type { Duration, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
 import { stepBy, tickFloor, nextTick } from './zone.js';
 import { instant } from './instant.js';
-import type { SnapRule } from './snap.js';
+import type { SnapRule, TickStep } from './snap.js';
 
-/** What a caller states about a stepping cadence — the shared shape `ViewPresetHeader` and
- * `TimeScale.ticks` both key off (S1.7 §3.3). */
-export interface TickStep {
-  readonly unit: TimeUnit;
-  readonly increment: number;
-}
+// `TickStep` is declared in `snap.ts` (`snapInstant`/`nextTickBoundary` need the same shape one
+// level below this module) and re-exported here, so a `TickStep` import from either module names
+// one type — `ViewPresetHeader` and `TimeScale.ticks` below still key off it.
+export type { TickStep };
 
 /** What a caller states that a drag snaps to (D-S3-12, D-S3-24, #489): a named unit and increment,
  *  one tick of whatever preset is showing, a custom `SnapRule`, or `'none'` for raw pixel placement

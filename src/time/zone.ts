@@ -397,7 +397,11 @@ export function nextTick(zone: string, boundary: Instant, unit: TimeUnit, increm
  * costs one `startOf`/`stepBy` pair regardless of `unit` or how far `at` sits from the origin.
  *
  * `increment: 1` always answers the same boundary `startOf(zone, at, unit)` already gave: one whole
- * `unit` from the container's own start is the boundary `at` already sits inside. */
+ * `unit` from the container's own start is the boundary `at` already sits inside.
+ *
+ * On a DST-transition day, `unitsBetween`'s real-time count keeps a tick's spacing even but drops
+ * it off a wall-clock multiple until the next day starts — a chosen trade-off, not a bug
+ * (ADR 0030). */
 export function tickFloor(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant {
   if (!Number.isInteger(increment) || increment <= 0) {
     throw new InvalidSnapIncrementError(unit, increment);
