@@ -8,6 +8,7 @@ import type {
   DatasetEventMap,
   DateOnlyEndRule,
   DurationMeasure,
+  EntryId,
   ProposedEdits,
   FlatEntryInput,
   EntryStore as EntryStoreContract,
@@ -173,6 +174,10 @@ export class Dataset<TProps = unknown> {
             gate.assertOpen();
             state.setExtender(wrap);
           },
+          setLockRule: (wrap) => {
+            gate.assertOpen();
+            state.setLockRule(wrap);
+          },
         },
         hierarchy: {
           // Trusted, unchecked TProps cast — the same trust boundary the class note above describes.
@@ -247,6 +252,14 @@ export class Dataset<TProps = unknown> {
    *  which values are writable at all. */
   setFieldEditable(key: FieldKey, editable: FieldEditable | boolean): void {
     this.#state.fields.setEditable(key, editable);
+  }
+
+  /** Call: `dataset.editableOf('van-1', 'cost')` — the effective lock on one cell (#473): a plugin's
+   *  own per-entry lock rule's answer, or the Field's own `editable` when the rule has no opinion.
+   *  The same resolver `entries.update()`, an `EditExtender` cascade, and the grid all read (I14). An
+   *  undeclared key answers `'never'`: nothing is written to a key nothing declares. */
+  editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
+    return this.#state.editableOf(id, field);
   }
 
   /** A counter that rises once per committed change. Call: `if (dataset.datasetRevision !== seen)`
@@ -353,6 +366,7 @@ export function extraEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedE
       hierarchySource: state.hierarchySource,
       committedChildIds: state.entries.committedChildIds(),
       fields: state.fields,
+      lockRule: state.lockRule,
     }),
   );
 }

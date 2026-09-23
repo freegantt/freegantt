@@ -5,7 +5,7 @@
 
 import type { Entry } from './entry.js';
 import type { EntryEdit, FlatEntryInput, StoredEntry } from './stored-entry.js';
-import type { Field, FieldKey } from './field.js';
+import type { Field, FieldEditable, FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
 
@@ -64,6 +64,12 @@ export interface Dataset<TProps = Record<string, unknown>> {
   readonly fields: { readonly all: readonly Field[] };
   /** Resolved declaration for this key, or `undefined` when the key is not declared. */
   field(key: FieldKey): Field | undefined;
+  /** The effective lock on this Entry's cell (#473): a plugin's per-entry lock rule's own answer, or
+   *  the Field's own `editable` when the rule has no opinion. The same answer `entries.update()`, an
+   *  `EditExtender` cascade, and the grid already read (I14) — this is the query door onto it. An
+   *  undeclared key answers `'never'`: nothing is written to a key nothing declares. A `compute`
+   *  Field answers `'never'` too — it owns no stored home to write. */
+  editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
   /** Bumped on every committed changeset. Layout uses it as the pack-cache key (D-S4-26). */
   readonly datasetRevision: number;
   on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;

@@ -18,20 +18,20 @@ import type {
   EntryId,
   FlatEntryInput,
   EntryEdit,
+  FieldEditable,
   FieldKey,
+  FieldLockRule,
+  FieldLockRuleWrapper,
   HierarchySource,
   HierarchySourceWrapper,
   RaiseError,
 } from '../model/index.js';
 import {
   entryId,
-  ComputedFieldCannotBeWrittenError,
   DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   EntryNotFoundError,
-  FieldNotEditableError,
   ParentCycleError,
-  UnknownFieldError,
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
@@ -57,7 +57,15 @@ import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hiera
 import type { CheckedHierarchy, ParentIndex } from './hierarchy-source.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import type { ResolvedField } from './fields/field-registry.js';
-import { isApiEditable, resolveWriteTarget } from './write-rule.js';
+import {
+  assertFieldTakesWrite,
+  editableAnswerFor,
+  fieldLockQueryFor,
+  identityFieldLockRule,
+  IGNORED_FIELD_LOCK_QUERY,
+  resolveWriteTarget,
+} from './write-rule.js';
+import type { FieldLockQuery } from '../model/index.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -118,6 +126,11 @@ export class EntryStore implements EntryStoreContract {
    *  plain field, because a plugin claims the seam after this store is built — every index below
    *  reads it, so composing a source invalidates them all. */
   #hierarchySource = signal<HierarchySource>(storedParentSource);
+  /** The per-entry lock rule's current occupant (#473). A plain field, not a `signal`: unlike
+   *  `#hierarchySource`, nothing here is a `computed` derived from it — it is read imperatively, once
+   *  per write, the same way `#registry` is. Silence (`identityFieldLockRule`) until a plugin composes
+   *  onto it through `setLockRule`. */
+  #lockRule: FieldLockRule = identityFieldLockRule;
   /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
    *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
    *  never depends on who read first (`F5`). `#reportRefusedHierarchyAnswers` raises. */
@@ -321,6 +334,12 @@ export class EntryStore implements EntryStoreContract {
     return this.#hierarchySource.get();
   }
 
+  /** The per-entry lock rule every write door reads (#473, I14): `entries.update()` and an
+   *  `EditExtender` cascade both resolve a write against this same occupant. */
+  get lockRule(): FieldLockRule {
+    return this.#lockRule;
+  }
+
   /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))`.
    *  Installing composes onto the current occupant rather than evicting it, the same way
    *  `setExtender` does (D-S5-23) — core's own `(entry) => entry.parentId` is the first occupant and
@@ -331,6 +350,42 @@ export class EntryStore implements EntryStoreContract {
     // A new occupant answers about the rows already here, so its refused answers are news now
     // (`F5`) — not when the next commit or the next read happens to ask.
     this.#reportRefusedHierarchyAnswers();
+  }
+
+  /** The per-entry lock rule's own answer for one cell (#473) — `entries.update()` and an
+   *  `EditExtender` cascade reach it through `#assertFieldTakesThisWrite`/`toEditsReading`; a plain
+   *  read reaches it here. `api/dataset.ts`'s `Dataset.editableOf` is the published door onto this.
+   *  `editableAnswerFor` answers `'never'` for the same undeclared-or-`compute` Field
+   *  `entries.update()` refuses (#473's ocr finding, I14).
+   *
+   *  `view/capability.ts`'s `canWrite` sits behind hover affordance resolution, so this stays
+   *  allocation-free with no plugin installed (I5, #473's ocr finding): `identityFieldLockRule`
+   *  never reads the query it is asked, so a Dataset with no lock rule installed answers through the
+   *  one shared `editableAnswerFor` order without building a fresh `FieldLockQuery` per cell. */
+  editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
+    const declared = this.#registry.get(field);
+    if (this.#lockRule === identityFieldLockRule) {
+      return editableAnswerFor(field, declared, IGNORED_FIELD_LOCK_QUERY, this.#lockRule);
+    }
+    return editableAnswerFor(field, declared, this.#lockQueryFor(entryId(id)), this.#lockRule);
+  }
+
+  /** One cell's address for the lock rule (#473) — the same construction `editableOf` and
+   *  `#assertFieldTakesThisWrite` both need, kept in one place so they cannot drift apart. */
+  #lockQueryFor(id: EntryId): FieldLockQuery {
+    return fieldLockQueryFor(
+      id,
+      (i) => this.storedEntry(i),
+      (e) => this.parentIdOf(e),
+    );
+  }
+
+  /** Call: `ctx.edits.setLockRule((next) => (entry, field) => field === 'cost' ? 'anywhere' : next(entry, field))`.
+   *  Installing composes onto the current occupant rather than evicting it, the same way
+   *  `setHierarchySource` and `setExtender` do (D-S5-23). Not on `EntryStoreView`: this is a
+   *  plugin-author door, and it reaches a plugin through `ctx.edits` alone. */
+  setLockRule(wrap: FieldLockRuleWrapper): void {
+    this.#lockRule = wrap(this.#lockRule);
   }
 
   /** Live rows; *which* rows is committed-only, so this array does not grow inside an open
@@ -477,7 +532,7 @@ export class EntryStore implements EntryStoreContract {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, operation);
       const declaredWrites = Object.keys(edit).map((field) =>
-        this.#assertFieldTakesThisWrite(field, operation),
+        this.#assertFieldTakesThisWrite(key, field, operation),
       );
       this.#assertNoDerivedWrite(key, declaredWrites, operation);
       if (edit.parentId !== undefined) {
@@ -490,23 +545,24 @@ export class EntryStore implements EntryStoreContract {
     });
   }
 
-  /** Does the Field this key names take a write from this door at all? Three questions, in the one
-   *  order that leaves the caller somewhere to go (ADR 0015).
+  /** Does the Field this key names take a write from this door, on this Entry, at all? Reads
+   *  `write-rule.ts`'s `assertFieldTakesWrite` — the one check an `EditExtender` cascade
+   *  (`entry-reader.ts`'s `toEditsReading`) runs too (ADR 0015, #473's ocr finding: a second copy here
+   *  once let a cascade write a `compute` Field through in silence).
    *
-   *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`:
-   *  a compute Field owns no stored home, and it may not carry `editable` either, so asking
-   *  `editable` first would answer "declare an editable" about a key the register door refuses. Then
-   *  the API threshold, which refuses the lock and nothing else.
-   *
-   *  It asks about the Field, never about the Entry. Whether *this* Entry's cell is the Rollup's own
-   *  is `#assertNoDerivedWrite`, below. It returns the Field it resolved, so that check reads the
-   *  same declaration instead of looking the key up again. */
-  #assertFieldTakesThisWrite(field: string, operation: string): DeclaredFieldWrite {
+   *  It asks about the Field on this Entry, never about the Entry's structure. Whether *this* Entry's
+   *  cell is the Rollup's own is `#assertNoDerivedWrite`, below. It returns the Field it resolved, so
+   *  that check reads the same declaration instead of looking the key up again. */
+  #assertFieldTakesThisWrite(id: EntryId, field: string, operation: string): DeclaredFieldWrite {
     const declared = this.#registry.get(field);
-    if (declared === undefined) throw new UnknownFieldError(field, operation);
-    if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
-    if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
-    return { field, declared };
+    const resolved = assertFieldTakesWrite(
+      field,
+      declared,
+      this.#lockQueryFor(id),
+      this.#lockRule,
+      operation,
+    );
+    return { field, declared: resolved };
   }
 
   /** Refuses a write aimed at a rolling-up parent's cell (ADR 0013). Every Field in the patch

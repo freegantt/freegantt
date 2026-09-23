@@ -7,6 +7,7 @@ import { entryId } from '../model/index.js';
 import type { Instant, StoredEntry } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
+import { editableOf } from '../data/fields/field-registry.js';
 
 function el(): HTMLElement {
   const node = document.createElement('div');
@@ -167,6 +168,10 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
       datasetRevision: 0,
       fields: { all: CORE_FIELDS },
       field: (fieldKey) => CORE_FIELDS.find((field) => String(field.key) === String(fieldKey)),
+      editableOf: (_id, fieldKey) => {
+        const declared = CORE_FIELDS.find((field) => String(field.key) === String(fieldKey));
+        return declared === undefined ? 'never' : editableOf(declared);
+      },
       on: () => {},
       off: () => {},
     };
