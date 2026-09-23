@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EXTENDER_OPERATION, moveEntryTo, toEditReading, toEditsReading, toEntries } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import { entryId, InvertedSpanError, UnknownFieldError } from '../model/index.js';
+import { entryId, FieldNotEditableError, InvertedSpanError, UnknownFieldError } from '../model/index.js';
 import type { StoredEntry, EntryEdit, EntryInput } from '../model/index.js';
 import { instant, toInstant } from '../time/index.js';
 import type { EntryEdits, ProposedEdit } from './edit-extension.js';
@@ -332,5 +332,43 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     const edits: EntryEdits = new Map([[entry.id, { notAField: 'x' }]]);
 
     expect(() => toEditsReading(edits, context, () => entry, registry)).toThrow(UnknownFieldError);
+  });
+});
+
+// #473: a cascade is a caller-side write, so it meets the same lock `entries.update()` meets
+// (ADR 0015, "a third door"). Only `'never'` is in question — `'api'` was always admitted.
+describe('toEditsReading honours the editable lock (#473, ADR 0015)', () => {
+  const lockedRegistry = new FieldRegistry({
+    fields: [
+      { key: 'start', editable: 'never' },
+      { key: 'owner', editable: 'api' },
+    ],
+  });
+
+  function lockedEntry(context: EntryReadContext): StoredEntry {
+    const [entry] = toEntries(
+      [{ id: 'e1', name: 'Design', start: '2026-01-01', end: '2026-01-05', props: { owner: 'ana' } }],
+      context,
+      lockedRegistry,
+    );
+    return entry!;
+  }
+
+  it("refuses a cascade onto a 'never' Field, and commits nothing", () => {
+    const context = createContext();
+    const entry = lockedEntry(context);
+    const edits: EntryEdits = new Map([[entry.id, { start: '2026-02-01' }]]);
+
+    expect(() => toEditsReading(edits, context, () => entry, lockedRegistry)).toThrow(FieldNotEditableError);
+  });
+
+  it("still admits a cascade onto an 'api' Field", () => {
+    const context = createContext();
+    const entry = lockedEntry(context);
+    const edits: EntryEdits = new Map([[entry.id, { owner: 'bo' }]]);
+
+    const reading = toEditsReading(edits, context, () => entry, lockedRegistry);
+
+    expect(reading.stored.get(entry.id)?.props?.['owner']).toBe('bo');
   });
 });

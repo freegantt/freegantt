@@ -8,6 +8,7 @@
 import {
   entryId,
   DuplicatePropsKeyError,
+  FieldNotEditableError,
   InvertedSpanError,
   spansTime,
   UnknownFieldError,
@@ -30,6 +31,7 @@ import {
 } from './fields/field-access.js';
 import { isCoreFieldKey } from './fields/core-fields.js';
 import type { FieldRegistry } from './fields/field-registry.js';
+import { isApiEditable } from './write-rule.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list. */
 export interface EntryReadContext {
@@ -237,6 +239,11 @@ export function toEditReading(
  * rule on every way in, and a silent drop is the fault #197 existed for. A `props` key with no
  * declaration is carried at construction ingest only (ADR 0011) — it is never a live way in.
  *
+ * A `'never'` Field is refused here too (ADR 0015, the cascade as a third door, #473): a cascade is
+ * a caller-side write, the same as `entries.update()`, so it meets the same lock and throws the same
+ * `FieldNotEditableError`. The whole changeset is refused, nothing is staged, and the loop below never
+ * reaches `stored.set` for any Entry in this map.
+ *
  * An id nothing knows is skipped — there is no Entry to read the edit against, and `diffEdit` emits
  * no row for such an id either (#209 Q3, tracked as #235).
  */
@@ -255,7 +262,11 @@ export function toEditsReading(
     const entry = entryFor(id);
     if (entry === undefined) continue;
     for (const key of Object.keys(edit)) {
-      if (!registry.has(key)) throw new UnknownFieldError(key, EXTENDER_OPERATION);
+      const declared = registry.get(key);
+      if (declared === undefined) throw new UnknownFieldError(key, EXTENDER_OPERATION);
+      // The cascade is a caller-side write, same as `entries.update()` (ADR 0015 §"a third door"):
+      // a plugin does not stand above the lock a consumer set with `setFieldEditable('never')`.
+      if (!isApiEditable(declared)) throw new FieldNotEditableError(key, EXTENDER_OPERATION);
     }
     const reading = toEditReading(edit, context, entry, registry, EXTENDER_OPERATION);
     stored.set(id, reading.stored);
