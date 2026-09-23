@@ -279,6 +279,7 @@ export {
   DuplicateRowIdError,
   MutationDuringNotificationError,
   MutationDuringExtensionHookError,
+  TransactionAlreadyOpenError,
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,

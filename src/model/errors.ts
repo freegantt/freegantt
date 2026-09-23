@@ -64,6 +64,7 @@ export type BuiltInThrownCode =
   | 'unknown-grid-column'
   | 'mutation-during-notification'
   | 'mutation-during-extension-hook'
+  | 'transaction-already-open'
   | 'mutation-cancelled'
   | 'unreadable-value'
   | 'invalid-replay-origin'
@@ -690,6 +691,24 @@ export class MutationDuringExtensionHookError extends FreeGanttError {
       `${operation}: you cannot change the Dataset while the extension hook runs. Nothing was saved. Return the edit from the hook. Do not write through the store.`,
     );
     this.name = 'MutationDuringExtensionHookError';
+    this.operation = operation;
+  }
+}
+
+/** `code: 'transaction-already-open'` — `entries.load()` (#496), or `entries.sync()` (#517), called
+ * inside an already-open `dataset.transaction()`. Both doors replace the whole Dataset's data in one
+ * step and always build and commit their own ChangeSet; unlike `add`/`update`/`remove`, neither joins
+ * a caller's open transaction (D-S2-8 does not apply here). The write set is discarded; the caller's
+ * own open transaction is not affected. */
+export class TransactionAlreadyOpenError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'transaction-already-open' satisfies BuiltInThrownCode,
+      `${operation}: you cannot call this inside dataset.transaction(). Call it on its own, outside the transaction.`,
+    );
+    this.name = 'TransactionAlreadyOpenError';
     this.operation = operation;
   }
 }

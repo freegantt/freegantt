@@ -1,0 +1,68 @@
+// data/ — the checks and the ordering a whole-list write runs before it stages anything (#496).
+// `entries.load()` is the one caller today; `entries.sync()` (#517) shares every function here, so
+// none of them read the store or a transaction — each is pure over the list a caller handed in.
+
+import type { EntryId, StoredEntry } from '../model/index.js';
+import {
+  DuplicateEntryIdError,
+  EntryNotFoundError,
+  ParentCycleError,
+  TransactionAlreadyOpenError,
+} from '../model/index.js';
+
+/** Does `entry`'s `parentId` chain loop back onto `entry` itself, self-parenting included? Walks
+ *  `byId` — the batch, never the live store — so this answers the same question
+ *  `EntryStore.#assertParentValid`'s walk does, over a list nothing has staged yet. */
+function parentChainLoopsBackTo(entry: StoredEntry, byId: ReadonlyMap<EntryId, StoredEntry>): boolean {
+  let current = entry.parentId;
+  const seen = new Set<EntryId>();
+  while (current !== undefined && !seen.has(current)) {
+    if (current === entry.id) return true;
+    seen.add(current);
+    current = byId.get(current)?.parentId;
+  }
+  return false;
+}
+
+/**
+ * Every reason a whole-list write refuses the batch, checked before any of it stages (#496 Q2):
+ * two entries name the same id (`DuplicateEntryIdError`), an entry's `parentId` names an id outside
+ * the batch (`EntryNotFoundError`), or a chain of `parentId`s loops (`ParentCycleError`). `load`
+ * replaces every entry, so "outside the batch" means exactly that — there is no existing store to
+ * fall back on for a `parentId` the list itself does not name.
+ *
+ * Throws on the first violation it finds; nothing about this list has staged when it does.
+ */
+export function assertEntryBatchIsSound(entries: readonly StoredEntry[], operation: string): void {
+  const byId = new Map<EntryId, StoredEntry>();
+  for (const entry of entries) {
+    if (byId.has(entry.id)) throw new DuplicateEntryIdError(entry.id);
+    byId.set(entry.id, entry);
+  }
+  for (const entry of entries) {
+    if (entry.parentId !== undefined && !byId.has(entry.parentId)) {
+      throw new EntryNotFoundError(entry.parentId, operation);
+    }
+  }
+  for (const entry of entries) {
+    if (parentChainLoopsBackTo(entry, byId)) throw new ParentCycleError(entry.id);
+  }
+}
+
+/** The order `entries.all` takes after a whole-list write: each id in the position the caller listed
+ *  it, first to last (#496 Q1). `load` stages its adds in this order. Sync's future order Field
+ *  (#528) writes each id's position here as that id's `siblingIndex`, so a caller with no sort
+ *  column of their own reads the list's own order back unchanged. */
+export function listOrderOf(entries: readonly StoredEntry[]): readonly EntryId[] {
+  return entries.map((entry) => entry.id);
+}
+
+/**
+ * Refuses a whole-list write called from inside an already-open `dataset.transaction()` (#496 Q4,
+ * #517 S9). `load` and sync are always their own transaction — unlike `add`/`update`/`remove`, which
+ * join one already open (D-S2-8), a whole-list write replaces every entry in one step and must not
+ * become a nested step inside a caller's own batch.
+ */
+export function assertNoOpenTransaction(openTransactions: number, operation: string): void {
+  if (openTransactions > 0) throw new TransactionAlreadyOpenError(operation);
+}

@@ -162,6 +162,28 @@ export function applyConstructionRollUp(data: TransactionData): void {
   }
 }
 
+/**
+ * The Rollup, run once against a batch of entries that is not (yet) the store's own committed rows
+ * — construction's own shape (no `pending`, `committedChildIds` unread whenever `pending` is
+ * `undefined`), open to a second caller. `entries.load()` (#496) is that caller: it replaces every
+ * entry, so it must roll up the input batch's own checked parents, never the store's.
+ *
+ * `rollUpFields` itself stays a leaf only this file and the commit path may import
+ * (`rollup-is-removable`, D-S4-7) — this is `entry-store.ts`'s one door onto it for `load`.
+ */
+export function rollUpFreshBatch(
+  data: Pick<TransactionData, 'fields' | 'fieldAccess'>,
+  byId: ReadonlyMap<EntryId, StoredEntry>,
+  committedParents: ParentIndex,
+  source: HierarchySource,
+): readonly FieldUpdated[] {
+  return rollUpFields(byId, undefined, data.fields, data.fieldAccess, {
+    committedParents,
+    committedChildIds: new Map(),
+    source,
+  }).updated;
+}
+
 /** Opens the write set on every store one transaction spans. Entries and plugin stores stage
  *  together and close together, so a plugin row and an entry edit are never half-committed. */
 function beginStores(data: TransactionData, token: TxToken): void {
