@@ -1689,7 +1689,7 @@ export interface NavigationChange {
 }
 
 // @public
-export function nextTickBoundary(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant;
+export function nextTickBoundary(zone: string, at: Instant, step: TickStep): Instant;
 
 // @public
 export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
@@ -2180,10 +2180,7 @@ export type SnapRule = (zone: string, at: Instant) => Instant;
 export type SnapSetting = TickStep | 'tick' | 'none' | SnapRule;
 
 // @public
-export type SnapUnit = {
-    unit: TimeUnit;
-    increment: number;
-} | 'none' | SnapRule;
+export type SnapUnit = TickStep | 'none' | SnapRule;
 
 // @public
 export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover;
