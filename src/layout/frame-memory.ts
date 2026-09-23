@@ -61,8 +61,13 @@ export class FrameMemory {
 
   /** Call: `memory.sync({ plan, rowHeight, entries, registry, datasetRevision })`. */
   sync(bind: FrameMemoryBind): void {
+    // #495, #414: `FrameLayout.computeFrame` hands back the same `#plan` array on a frame that
+    // replanned nothing (a scroll, a pan) — rebuilding this Map on every such frame costs one pass
+    // over every row for no reason: the row a `RowId` names cannot have changed underneath an array
+    // that is the very one already indexed here.
+    const planChanged = bind.plan !== this.#plan;
     this.#plan = bind.plan;
-    this.#rowById = new Map(bind.plan.map((row) => [row.id, row]));
+    if (planChanged) this.#rowById = new Map(bind.plan.map((row) => [row.id, row]));
     this.#rowHeight = bind.rowHeight;
     if (bind.entries !== this.#entriesForEntryById) {
       this.#entryById = new Map(bind.entries.map((entry) => [entry.id, entry]));

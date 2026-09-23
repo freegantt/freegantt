@@ -278,6 +278,7 @@ export {
   PluginSetupError,
   UnknownCommandError,
   RendererAlreadyRegisteredError,
+  CustomRowSourceNotFilterableOrSortableError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.

@@ -316,3 +316,120 @@ describe('FrameLayout row production (S4.8, [S4-A5])', () => {
     produceSpy.mockRestore();
   });
 });
+
+describe('FrameLayout row-plan cache (#495, #414)', () => {
+  it('reuses the same planned rows across a viewport-only change (scroll, pan)', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+    const before = layout.plannedRows();
+
+    // Neither `visible` nor `revision` is part of `RowPlanInput` — a scroll or a pan touches
+    // only these two, so the plan must come back as the very same array, not an equal one.
+    layout.computeFrame(input({ visible: { x: 0, y: 500, width: 800, height: 600 }, revision: 1 }));
+
+    expect(layout.plannedRows()).toBe(before);
+  });
+
+  it('does not re-resolve the row plan on a viewport-only change', () => {
+    const spy = vi.spyOn(resolveRowsMod, 'resolveOpenRows');
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+    spy.mockClear();
+
+    layout.computeFrame(input({ visible: { x: 0, y: 500, width: 800, height: 600 }, revision: 1 }));
+
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('re-resolves when the entries array identity changes', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ entries: [...sampleEntries] }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('re-resolves when datasetRevision changes', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ datasetRevision: 1 }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('re-resolves when rows (the RowSource) changes', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ rows: { source: 'entries', tree: true } }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('re-resolves when fieldCompares changes', () => {
+    const layout = new FrameLayout();
+    const compares: LayoutInput['fieldCompares'] = [];
+    layout.computeFrame(input({ fieldCompares: compares }));
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ fieldCompares: [...compares] }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('re-resolves when fieldContext changes', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ fieldContext: { timeZone: 'UTC' } }));
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ fieldContext: { timeZone: 'UTC' } }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('re-resolves when entryRulePorts changes', () => {
+    const ports: LayoutInput['entryRulePorts'] = { fieldFor: () => undefined, reportUnknownKey: () => {} };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entryRulePorts: ports }));
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ entryRulePorts: { ...ports } }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('re-resolves when collapsed changes', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ collapsed: [] }));
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ collapsed: [String(sampleEntries[0]!.id)] }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('re-resolves when fieldRegistryRevision changes, so a post-mount ctx.fields.register() invalidates the cache', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ fieldRegistryRevision: 0 }));
+    const before = layout.plannedRows();
+
+    layout.computeFrame(input({ fieldRegistryRevision: 1 }));
+
+    expect(layout.plannedRows()).not.toBe(before);
+  });
+
+  it('still runs placeFrame on a cached plan, so geometry keeps following the viewport', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+
+    const scrolled = layout.computeFrame(input({ visible: { x: 0, y: 500, width: 800, height: 600 } }));
+
+    expect(scrolled.rows.length).toBeGreaterThan(0);
+  });
+});

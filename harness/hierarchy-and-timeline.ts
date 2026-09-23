@@ -156,23 +156,18 @@ function applyRowsMode(): void {
 }
 
 function applyFilter(): void {
-  const current = gantt.rowSource;
-  if (current.source !== 'entries') return;
-  gantt.rowSource = {
-    ...current,
-    filter: filterTeam === null ? undefined : (entry: Entry) => entry.read('team') === filterTeam,
-  };
+  if (gantt.rowSource.source !== 'entries') return;
+  // #495 follow-up: `filterRows` is the read-back-and-spread shorthand — the sort `applySort` owns
+  // survives untouched.
+  gantt.filterRows(filterTeam === null ? undefined : (entry: Entry) => entry.read('team') === filterTeam);
   syncRowSourceControls();
 }
 
 function applySort(): void {
-  const current = gantt.rowSource;
-  if (current.source !== 'entries') return;
+  if (gantt.rowSource.source !== 'entries') return;
   const sortField = sortFieldSelect.value;
-  gantt.rowSource = {
-    ...current,
-    sort: sortField === 'none' ? undefined : { field: sortField as 'start' | 'cost' | 'name' },
-  };
+  // #495 follow-up: `sortRows` is `filterRows`'s sibling — same shorthand, `sort` instead of `filter`.
+  gantt.sortRows(sortField === 'none' ? undefined : { field: sortField as 'start' | 'cost' | 'name' });
   syncRowSourceControls();
 }
 

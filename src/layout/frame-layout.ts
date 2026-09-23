@@ -9,11 +9,73 @@ import { placeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { DecorationRunner } from './decorations.js';
-import type { PlannedRow, UnindexedRow } from './rows/row-source.js';
+import type { PlannedRow, RowSource, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
-import type { ChangeSet, EntryId, BarId, RowId } from '../model/index.js';
+import type { ChangeSet, EntryId, BarId, RowId, Entry, FieldContext } from '../model/index.js';
 import type { Bar } from './bars/bar.js';
+import type { FieldCompare } from './column.js';
+import type { EntryRulePorts } from './entry-rule.js';
+
+/** Every input the row plan (`resolveOpenRows` → `applyCollapse` → `stampIndex`) reads, and nothing
+ *  else (#495, #414). `#planRows` takes only this type, never `LayoutInput`, so a field it reads
+ *  that is missing here is a compile error, not a cache that silently ignores it. Compared field by
+ *  field, identity only:
+ *
+ *  - `entries` — `dataset.entries.all` keeps its array identity until a commit
+ *    (`docs/agents/modules/data.md`).
+ *  - `rows`, `fieldCompares`, `fieldContext` — `FrameSettings` replaces these whole, never mutates
+ *    in place (#187).
+ *  - `collapsed` — `TreeCollapse` replaces its frozen id array on every change (`view/tree-collapse.ts`).
+ *  - `entryRulePorts` — built once per Gantt; `fieldRegistryRevision` sits beside it because its own
+ *    `fieldFor` read has no cache of its own. */
+export interface RowPlanInput {
+  entries: readonly Entry[];
+  datasetRevision: number;
+  rows: RowSource | undefined;
+  fieldCompares: readonly FieldCompare[] | undefined;
+  fieldContext: FieldContext | undefined;
+  entryRulePorts: EntryRulePorts | undefined;
+  collapsed: readonly string[] | undefined;
+  fieldRegistryRevision: number;
+}
+
+type RowPlanInputKey = keyof RowPlanInput;
+
+/** One comparator per `RowPlanInput` field (`frame-settings.ts`'s `INVALIDATION` table is the same
+ *  shape) — the mapped type forces an entry for every key the interface declares, so a field added
+ *  there and forgotten here is a compile error, not a cache that silently ignores it. */
+const SAME_ROW_PLAN_INPUT: {
+  readonly [K in RowPlanInputKey]: (a: RowPlanInput, b: RowPlanInput) => boolean;
+} = Object.freeze({
+  entries: (a, b) => a.entries === b.entries,
+  datasetRevision: (a, b) => a.datasetRevision === b.datasetRevision,
+  rows: (a, b) => a.rows === b.rows,
+  fieldCompares: (a, b) => a.fieldCompares === b.fieldCompares,
+  fieldContext: (a, b) => a.fieldContext === b.fieldContext,
+  entryRulePorts: (a, b) => a.entryRulePorts === b.entryRulePorts,
+  collapsed: (a, b) => a.collapsed === b.collapsed,
+  fieldRegistryRevision: (a, b) => a.fieldRegistryRevision === b.fieldRegistryRevision,
+});
+
+function samePlanInput(a: RowPlanInput, b: RowPlanInput): boolean {
+  return (Object.keys(SAME_ROW_PLAN_INPUT) as RowPlanInputKey[]).every((key) =>
+    SAME_ROW_PLAN_INPUT[key](a, b),
+  );
+}
+
+function planInputFrom(input: LayoutInput): RowPlanInput {
+  return {
+    entries: input.entries,
+    datasetRevision: input.datasetRevision,
+    rows: input.rows,
+    fieldCompares: input.fieldCompares,
+    fieldContext: input.fieldContext,
+    entryRulePorts: input.entryRulePorts,
+    collapsed: input.collapsed,
+    fieldRegistryRevision: input.fieldRegistryRevision ?? 0,
+  };
+}
 
 /** What a reader asks the current frame about what it drew (#185, #199, #212). `FrameLayout`
  *  satisfies it; a test hands a literal. It is the read half of `FrameLayout`, the same split
@@ -37,6 +99,10 @@ export class FrameLayout implements FrameLayoutView {
   #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
   #frameRevision = 0;
+  /** What `#plan` (and the three maps above) were last planned from — `undefined` before the first
+   *  `computeFrame` call. `computeFrame` replans only when this frame's own `RowPlanInput` disagrees
+   *  with it (#495, #414). */
+  #lastPlanInput: RowPlanInput | undefined;
 
   get heightIndexRevision(): number {
     return this.#memory.heightIndexRevision;
@@ -52,15 +118,14 @@ export class FrameLayout implements FrameLayoutView {
 
   computeFrame(input: LayoutInput): GeometryFrame {
     this.#frameRevision++;
-    const open = resolveOpenRows({
-      entries: input.entries,
-      ...(input.rows !== undefined ? { rows: input.rows } : {}),
-      ...(input.fieldCompares !== undefined ? { fieldCompares: input.fieldCompares } : {}),
-      ...(input.fieldContext !== undefined ? { fieldContext: input.fieldContext } : {}),
-      ...(input.entryRulePorts !== undefined ? { entryRulePorts: input.entryRulePorts } : {}),
-    });
-    this.#indexOpenRows(open);
-    this.#plan = stampIndex(applyCollapse(open, new Set(input.collapsed ?? [])));
+    // #495, #414: does this frame ask a different question about which rows exist, in what order,
+    // than the last one did? A scroll or a pan never does — `visible`/`revision`/`rowHeight` are not
+    // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below.
+    const planInput = planInputFrom(input);
+    if (this.#lastPlanInput === undefined || !samePlanInput(this.#lastPlanInput, planInput)) {
+      this.#planRows(planInput);
+      this.#lastPlanInput = planInput;
+    }
     this.#memory.sync({
       plan: this.#plan,
       rowHeight: input.rowHeight,
@@ -69,6 +134,20 @@ export class FrameLayout implements FrameLayoutView {
       datasetRevision: input.datasetRevision,
     });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations);
+  }
+
+  // #495, #414: takes `RowPlanInput`, never `LayoutInput` — a field this method reads that is not
+  // on that type is a compile error, so the cache key can never fall out of step with what plans.
+  #planRows(planInput: RowPlanInput): void {
+    const open = resolveOpenRows({
+      entries: planInput.entries,
+      ...(planInput.rows !== undefined ? { rows: planInput.rows } : {}),
+      ...(planInput.fieldCompares !== undefined ? { fieldCompares: planInput.fieldCompares } : {}),
+      ...(planInput.fieldContext !== undefined ? { fieldContext: planInput.fieldContext } : {}),
+      ...(planInput.entryRulePorts !== undefined ? { entryRulePorts: planInput.entryRulePorts } : {}),
+    });
+    this.#indexOpenRows(open);
+    this.#plan = stampIndex(applyCollapse(open, new Set(planInput.collapsed ?? [])));
   }
 
   /** The row-height index's own `topAt`, exposed so `reveal` can ask for a row's position without a

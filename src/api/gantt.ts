@@ -20,6 +20,8 @@ import type {
   ViewPreset,
   RowSource,
   ResolvedRowSource,
+  RowFilter,
+  RowSort,
   Overscan,
 } from '../layout/index.js';
 import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
@@ -46,10 +48,10 @@ import type {
   ProposedEdits,
   TimeSpan,
 } from '../model/index.js';
-import { PluginSetupError } from '../model/index.js';
+import { CustomRowSourceNotFilterableOrSortableError, PluginSetupError } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
-import { extraEditsFor, type Dataset } from './dataset.js';
+import { extraEditsFor, fieldRegistryRevisionFor, type Dataset } from './dataset.js';
 import type { ChromePluginOf, DataPluginOf, PluginOf } from './plugin.js';
 import type { PluginContextOf } from './plugin-context.js';
 import type {
@@ -372,6 +374,9 @@ export class Gantt<TProps = unknown> {
       // value — it composes a second occupant after the shell exists, which no public route allows,
       // so `api/gantt.test.ts`'s "#186" suite cannot reach that case and does not claim to.
       extraEditsFor: (draft) => extraEditsFor(options.dataset, draft),
+      // #495, #414: read live off the Dataset, the same "closure over the friend function" shape
+      // `extraEditsFor` above takes — `FrameLayout`'s row-plan cache reads it every `render()`.
+      fieldRegistryRevision: () => fieldRegistryRevisionFor(options.dataset),
       wiring: {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,
@@ -669,6 +674,37 @@ export class Gantt<TProps = unknown> {
    *  actually passed. */
   set rowSource(next: RowSource) {
     this.#shell.rowSource = next;
+  }
+
+  /** Call: `gantt.filterRows((entry) => entry.read('team') === 'core')` — "filter rows by this
+   *  predicate, keep every other row-source setting." The shorthand for the read-back-and-spread
+   *  pattern `docs/07-row-source-updates.md` teaches: reads `gantt.rowSource` back, replaces its
+   *  `filter` key, and assigns the result, so a sort or a `childrenAsSegments` rule set through a
+   *  different control survives untouched.
+   *
+   *  ```ts
+   *  gantt.filterRows((entry) => entry.read('team') === 'core'); // filter on
+   *  gantt.filterRows(undefined);                                // filter off, sort kept
+   *  ```
+   *
+   *  Throws `CustomRowSourceNotFilterableOrSortableError` when `gantt.rowSource.source === 'custom'`
+   *  — that source resolves its own rows through `resolve` and carries no `filter` key to replace
+   *  (D-S4-21). Filter inside `resolve` instead. */
+  filterRows(filter: RowFilter | undefined): void {
+    const current = this.rowSource;
+    if (current.source === 'custom')
+      throw new CustomRowSourceNotFilterableOrSortableError('gantt.filterRows');
+    this.rowSource = { ...current, filter };
+  }
+
+  /** Call: `gantt.sortRows({ field: 'name' })` — the same read-back-and-spread shorthand
+   *  `filterRows` above takes, for `sort`. `gantt.sortRows(undefined)` turns sorting off and keeps
+   *  the current filter. Throws `CustomRowSourceNotFilterableOrSortableError` on a `'custom'` source,
+   *  for the same reason `filterRows` does. */
+  sortRows(sort: RowSort | undefined): void {
+    const current = this.rowSource;
+    if (current.source === 'custom') throw new CustomRowSourceNotFilterableOrSortableError('gantt.sortRows');
+    this.rowSource = { ...current, sort };
   }
 
   get collapsed(): readonly RowId[] {

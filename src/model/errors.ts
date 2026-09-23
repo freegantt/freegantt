@@ -76,7 +76,8 @@ export type BuiltInThrownCode =
   | 'plugin-setup-failed'
   | 'renderer-already-registered'
   | 'unknown-command'
-  | 'empty-covers';
+  | 'empty-covers'
+  | 'custom-row-source-not-filterable-or-sortable';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -867,6 +868,25 @@ export class EmptyCoversError extends FreeGanttError {
       `${operation}: "covers" must name at least one cover. An empty list has no complement.`,
     );
     this.name = 'EmptyCoversError';
+    this.operation = operation;
+  }
+}
+
+/** `code: 'custom-row-source-not-filterable-or-sortable'` — `gantt.filterRows()` or
+ *  `gantt.sortRows()` called while `gantt.rowSource.source === 'custom'` (#495 follow-up). A
+ *  `'custom'` source resolves its own rows through `resolve()` and carries no `filter`/`sort` key
+ *  for either helper to replace (D-S4-21) — there is nothing here to spread a new value onto.
+ *  `operation` names the caller, the same reason `EmptyCoversError` above takes it: two callers
+ *  reach this. */
+export class CustomRowSourceNotFilterableOrSortableError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'custom-row-source-not-filterable-or-sortable' satisfies BuiltInThrownCode,
+      `${operation}: the current row source is 'custom'. It resolves its own rows through "resolve", so it has no "filter" or "sort" to replace. Apply your own filtering or sorting inside "resolve" instead.`,
+    );
+    this.name = 'CustomRowSourceNotFilterableOrSortableError';
     this.operation = operation;
   }
 }

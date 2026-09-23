@@ -117,7 +117,7 @@ export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' |
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable';
 
 // @public
 export interface Capabilities {
@@ -324,6 +324,13 @@ export interface CustomRowSource {
     resolve(input: CustomRowInput): readonly CustomRow[];
     // (undocumented)
     source: 'custom';
+}
+
+// @public
+export class CustomRowSourceNotFilterableOrSortableError extends FreeGanttError {
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public (undocumented)
@@ -1116,6 +1123,7 @@ export class Gantt<TProps = unknown> {
     expand(id: RowId | string): void;
     // (undocumented)
     expandAll(): void;
+    filterRows(filter: RowFilter | undefined): void;
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
     get gridCellRenderer(): GridCellRenderer | undefined;
@@ -1169,6 +1177,7 @@ export class Gantt<TProps = unknown> {
     showGridColumn(field: FieldKey): void;
     get snap(): SnapSetting;
     set snap(next: SnapSetting | undefined);
+    sortRows(sort: RowSort | undefined): void;
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
