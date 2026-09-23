@@ -30,6 +30,9 @@ mountTimelineToolbar({
   showFit: true,
   showLocale: true,
   showTodayLineToggle: true,
+  // #101 items 1-2: sub-hour rungs and the day-letter band, shipped as presets but outside the
+  // default `zoomPresets` ladder (a custom preset is picked directly, never by stepping into it).
+  extraPresetIds: ['minute', 'fifteenMinute', 'sixHour', 'dayLetterAndWeek'],
 });
 
 // D-S1.12-16: swapping datasets shows the density floor's effect — `sample` fits comfortably at any
@@ -52,6 +55,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="dataset"]').forEach((ra
       showFit: true,
       showLocale: true,
       showTodayLineToggle: true,
+      extraPresetIds: ['minute', 'fifteenMinute', 'sixHour', 'dayLetterAndWeek'],
     });
   });
 });

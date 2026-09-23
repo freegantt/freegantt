@@ -116,6 +116,28 @@ function freezePreset(preset: ViewPreset): ViewPreset {
   return Object.freeze(preset);
 }
 
+/** #101 item 1: sub-hour presets for shift-roster and ops datasets, core's own domain and not only
+ * project plans. Custom presets already supported this density; these ship the discoverability.
+ * Same `formatHour` label ("9:05") and width floor as `hourPreset` below — the label is the same
+ * shape at every one of these steps, only the increment between ticks changes. */
+export const minutePreset: ViewPreset = freezePreset({
+  id: 'minute',
+  tickUnit: 'minute',
+  tickIncrement: 1,
+  headers: [{ unit: 'minute', increment: 1, format: formatHour }],
+  preferredTickWidthPx: 56,
+  minTickWidthPx: 48,
+});
+
+export const fifteenMinutePreset: ViewPreset = freezePreset({
+  id: 'fifteenMinute',
+  tickUnit: 'minute',
+  tickIncrement: 15,
+  headers: [{ unit: 'minute', increment: 15, format: formatHour }],
+  preferredTickWidthPx: 56,
+  minTickWidthPx: 48,
+});
+
 /** Shipped single-band presets, hour → year (plans/03 S1 scope). Every one is a plain config
  * object — a new zoom level is never a library edit. */
 export const hourPreset: ViewPreset = freezePreset({
@@ -126,6 +148,17 @@ export const hourPreset: ViewPreset = freezePreset({
   preferredTickWidthPx: 56,
   // Below 48px "23:00" clips or overlaps its neighbour (measured at a 12px tick label — header
   // readability follow-up to S1.12).
+  minTickWidthPx: 48,
+});
+
+/** #101 item 1: a coarser stepped rung between `hourPreset` and `dayPreset`, for a dataset a whole
+ * day of hourly ticks would crowd. */
+export const sixHourPreset: ViewPreset = freezePreset({
+  id: 'sixHour',
+  tickUnit: 'hour',
+  tickIncrement: 6,
+  headers: [{ unit: 'hour', increment: 6, format: formatHour }],
+  preferredTickWidthPx: 56,
   minTickWidthPx: 48,
 });
 
@@ -188,6 +221,21 @@ export const dayAndWeekPreset: ViewPreset = freezePreset({
   // its own 32px floor) until the header readability follow-up caught it.
   preferredTickWidthPx: 32,
   minTickWidthPx: 32,
+});
+
+/** #101 item 2: the day-letter finest band — a compact week view reading "S M T W T F S", one
+ * letter per day, under a week band that still spells out the dates. Format-only: `weekday:
+ * 'narrow'` needs no new `TimeUnit`, only a narrower `format` on `dayAndWeekPreset`'s own day band. */
+export const dayLetterAndWeekPreset: ViewPreset = freezePreset({
+  id: 'dayLetterAndWeek',
+  tickUnit: 'day',
+  tickIncrement: 1,
+  headers: [
+    { unit: 'week', increment: 1, format: DAY_FORMAT },
+    { unit: 'day', increment: 1, format: { weekday: 'narrow' } },
+  ],
+  preferredTickWidthPx: 24,
+  minTickWidthPx: 16,
 });
 
 export const weekAndMonthPreset: ViewPreset = freezePreset({
@@ -259,12 +307,16 @@ export const weekMonthYearPreset: ViewPreset = freezePreset({
 });
 
 export type ShippedPresetId =
+  | 'minute'
+  | 'fifteenMinute'
   | 'hour'
+  | 'sixHour'
   | 'day'
   | 'week'
   | 'month'
   | 'year'
   | 'dayAndWeek'
+  | 'dayLetterAndWeek'
   | 'weekAndMonth'
   | 'monthAndYear'
   | 'hourDayWeek'
@@ -272,12 +324,16 @@ export type ShippedPresetId =
   | 'weekMonthYear';
 
 export const presets: Readonly<Record<ShippedPresetId, ViewPreset>> = Object.freeze({
+  minute: minutePreset,
+  fifteenMinute: fifteenMinutePreset,
   hour: hourPreset,
+  sixHour: sixHourPreset,
   day: dayPreset,
   week: weekPreset,
   month: monthPreset,
   year: yearPreset,
   dayAndWeek: dayAndWeekPreset,
+  dayLetterAndWeek: dayLetterAndWeekPreset,
   weekAndMonth: weekAndMonthPreset,
   monthAndYear: monthAndYearPreset,
   hourDayWeek: hourDayWeekPreset,

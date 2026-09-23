@@ -273,6 +273,34 @@ describe('[S5-A1] contextMenu() (S5.5, D-S5-13/14)', () => {
     container.remove();
   });
 
+  it('a command with when: false does not appear, even with no target restriction', () => {
+    const { container, gantt } = makeGantt();
+    gantt.commands.register({ id: 'demo.hidden', label: 'Hidden', when: () => false, run: () => {} });
+
+    rightClick(bars(container)[0]!);
+    expect(commandIds(container)).not.toContain('demo.hidden');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('items() returning an empty list opens a menu with no items (empty menu)', () => {
+    const { container, gantt } = makeGantt({ items: () => [] });
+
+    rightClick(bars(container)[0]!);
+    expect(container.querySelector('.fg-menu')).not.toBeNull();
+    expect(menuItems(container)).toHaveLength(0);
+
+    // Arrow keys find no items to move between, so the menu leaves the key unconsumed. The key goes
+    // to the menu itself: `onDomEvent` ignores a target the Gantt does not own, like `document`.
+    const arrowDown = new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true });
+    container.querySelector('.fg-menu')!.dispatchEvent(arrowDown);
+    expect(arrowDown.defaultPrevented).toBe(false);
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('items() can append, reorder and replace the defaults', () => {
     const { container, gantt } = makeGantt({
       items: ({ defaults }) => [

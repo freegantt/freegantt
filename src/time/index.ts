@@ -47,12 +47,16 @@ export type {
   DateFormat,
 } from './scale.js';
 export {
+  minutePreset,
+  fifteenMinutePreset,
   hourPreset,
+  sixHourPreset,
   dayPreset,
   weekPreset,
   monthPreset,
   yearPreset,
   dayAndWeekPreset,
+  dayLetterAndWeekPreset,
   weekAndMonthPreset,
   monthAndYearPreset,
   hourDayWeekPreset,

@@ -110,6 +110,18 @@ describe('[S5-A1] tooltips() (S5.5, D-S5-13)', () => {
     container.remove();
   });
 
+  it('a hover on a row, not a bar, opens no tooltip (miss)', () => {
+    const { container, gantt } = makeGantt();
+    const row = container.querySelector<HTMLElement>('.fg-row')!;
+
+    row.dispatchEvent(new PointerEvent('pointerover', { bubbles: true }));
+    vi.advanceTimersByTime(100);
+    expect(container.querySelector('.fg-tooltip')).toBeNull();
+
+    gantt.destroy();
+    container.remove();
+  });
+
   it('a tooltipRenderer replaces the body', () => {
     const { container, gantt } = makeGantt();
     gantt.tooltipRenderer = () => ({ class: { 'my-tip': true }, text: 'custom tip' });
