@@ -5002,6 +5002,130 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
   });
 });
 
+describe('Gantt entryActivate (#434)', () => {
+  function clickBar(container: HTMLElement, bar: HTMLElement): void {
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    container
+      .querySelector<HTMLElement>('.fg-timeline-pane')!
+      .dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
+    document.elementFromPoint = original;
+  }
+
+  it('a plain click activates the bar’s own Entry (cause "click", target "bar")', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'click', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('Enter on a focused bar activates it (cause "key")', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    container.querySelector<HTMLElement>('.fg-bar')!.focus();
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'key', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a double-click never activates by default (dblclickActivates: false)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    container
+      .querySelector<HTMLElement>('.fg-bar')!
+      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+
+    expect(activations).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('dblclickActivates: true activates the bar on double-click (cause "dblclick")', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, dblclickActivates: true });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    container
+      .querySelector<HTMLElement>('.fg-bar')!
+      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'dblclick', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('I14: { select: false, activate: true } still activates on a plain click that selects nothing', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, capabilities: { select: false, activate: true } });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
+
+    expect(gantt.selectedEntryIds).toEqual([]);
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'click', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('{ activate: false } refuses a click, leaving the default select untouched', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, capabilities: { activate: false } });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
+
+    expect(gantt.selectedEntryIds).toEqual([entryId(sampleEntries[0]!.id)]);
+    expect(activations).toEqual([]);
+
+    gantt.destroy();
+  });
+});
+
 /** One plain Entry and one that draws two bars — the smallest dataset that tells "the Segment the
  *  pointer named" from "every Segment the row owns". Module-scoped: the Delete-key describe block
  *  below shares this fixture with the Segment-selection tests, rather than re-declaring it. */
