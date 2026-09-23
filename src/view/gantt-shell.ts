@@ -1045,11 +1045,10 @@ export class GanttShell {
     this.#container.addEventListener('keydown', this.#keymapListener);
     this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
     // #434: opt-in (`dblclickActivates`), always attached — the flag gates inside the handler, the
-    // same shape the wheel handlers gate on `#resolvedViewportGestures`. `targetUnder` never
-    // resolves a `'gridCell'` here into an activation: that node kind is excluded below on purpose,
-    // so a double-click on a grid cell (including the row-label cell) stays `inlineEditing()`'s own
-    // surface (`ctx.view.onDomEvent('dblclick', …)`) with no ordering dependency between the two —
-    // the two listeners never react to the same node kind.
+    // same shape the wheel handlers gate on `#resolvedViewportGestures`. The check below excludes
+    // `'gridCell'` on purpose: a double-click on a grid cell (including the row-label cell) stays
+    // `inlineEditing()`'s own surface (`ctx.view.onDomEvent('dblclick', …)`). Neither listener has
+    // an ordering dependency on the other — they never react to the same node kind.
     this.#dblClickListener = (event: MouseEvent) => {
       if (!this.#dblclickActivates || !(event.target instanceof Node)) return;
       const domTarget = this.#dom.targetUnder(event.target);
@@ -1586,9 +1585,9 @@ export class GanttShell {
     return this.#dblclickActivates;
   }
 
-  /** Live (#434): the next double-click reads the new flag — the listener is always attached, and
-   *  this alone gates it, the same shape `viewportGestures`'s resolved flags gate an already-attached
-   *  wheel handler. */
+  /** Live (#434): the next double-click reads the new flag. The listener is always attached, and
+   *  this alone gates it — the same shape `viewportGestures`'s resolved flags gate an
+   *  already-attached wheel handler. */
   set dblclickActivates(next: boolean) {
     this.#dblclickActivates = next;
   }
@@ -2056,10 +2055,10 @@ export class GanttShell {
     // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
     // both refuse the chord, the same way every other core binding already does.
     bind('Delete', 'freegantt.deleteSelection');
-    // #434: the fallback for `Enter` — `inlineEditing()`'s own binding to the same chord is
+    // #434: the fallback for `Enter`. `inlineEditing()`'s own binding to the same chord is
     // registered later (a plugin installs after `#registerCoreCommands` runs), so it is newer and
-    // gets first refusal (D-S5-7). Its `when` declines outside a focused, writable cell, and the
-    // resolver falls through to this one, whose own `when` then asks `canActivateFocused()`.
+    // gets first refusal (D-S5-7). Its `when` declines outside a focused, writable cell. The
+    // resolver then falls through to this one, whose own `when` asks `canActivateFocused()`.
     bind('Enter', 'freegantt.activateEntry');
   }
 
@@ -2080,10 +2079,10 @@ export class GanttShell {
     return entry !== undefined && this.#capabilities.can(capability, entry, edge);
   }
 
-  /** #434: the Entry a pointer hit stands for, for `EntryGestureContext.activation` — a bar names
-   *  its own Entry; a row names its subject, the row's first Entry (the same subject a `DomTarget`
-   *  reads for a row). `undefined` for a grouping header row, or a bar whose Entry is gone. Names
-   *  *which* Entry only; `interaction/` still asks `can('activate', entry)` itself (I14). */
+  /** #434: the Entry a pointer hit stands for, for `EntryGestureContext.activation`. A bar names its
+   *  own Entry; a row names its subject, the row's first Entry (the same subject a `DomTarget` reads
+   *  for a row). `undefined` for a grouping header row, or a bar whose Entry is gone. Names *which*
+   *  Entry only; `interaction/` still asks `can('activate', entry)` itself (I14). */
   #subjectEntryOf(hit: EntryHit): Entry | undefined {
     if (hit.kind === 'bar') return this.#entryFor(hit.barId);
     const row = this.#layout.plannedRows().find((row) => row.id === hit.rowId);
@@ -2098,11 +2097,11 @@ export class GanttShell {
     this.#emit('entryActivate', { entry, cause, target });
   }
 
-  /** #434, I14: the row, bar, or grid cell real keyboard focus sits on right now, and its own Entry,
-   *  when the `activate` capability allows it. A grid cell counts too: `freegantt.activateEntry` is
-   *  the `Enter` fallback (D-S5-7), so it only ever runs where `inlineEditing()`'s own
+  /** #434, I14: the row, bar, or grid cell real keyboard focus sits on right now, and its own
+   *  Entry, when the `activate` capability allows it. A grid cell counts too: `freegantt.activateEntry`
+   *  is the `Enter` fallback (D-S5-7). It only ever runs where `inlineEditing()`'s own
    *  `freegantt.editFocusedCell` declined — an unwritable cell, or no editing feature installed at
-   *  all. Shared by `canActivateFocused`/`activateFocused` (`CoreCommandPorts`) — the `when` and the
+   *  all. Shared by `canActivateFocused`/`activateFocused` (`CoreCommandPorts`): the `when` and the
    *  `run` of `freegantt.activateEntry` ask this the same way, rather than resolve focus twice for
    *  one keystroke. */
   #focusedActivationTarget(): { entry: Entry; kind: TargetKind } | undefined {

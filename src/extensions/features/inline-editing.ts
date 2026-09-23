@@ -831,13 +831,12 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
        *  checks. `Enter` with focus anywhere else (a row, a bar, a header, the splitter) opens
        *  nothing.
        *
-       *  #434: a `when`-gated command, not a raw handler — a raw `registerKeyHandler` always claims
-       *  its chord once it matches, with no way to decline and let an older binding try (`Keymap`'s
-       *  own contract). Core's own `Enter` fallback (`freegantt.activateEntry`, `gantt-shell.ts`)
-       *  needs exactly that decline, for a focused row or bar, or a focused cell this editor
-       *  refuses. A command's `when` gives it one: this binding is newer (a plugin installs after
-       *  core's own registration, D-S5-7), so it gets first refusal, and the resolver falls through
-       *  to core's when `when` says no. */
+       *  #434: a `when`-gated command, not a raw handler. A raw `registerKeyHandler` always claims
+       *  its chord once it matches, with no way to decline (`Keymap`'s own contract). Core's own
+       *  `Enter` fallback (`freegantt.activateEntry`, `gantt-shell.ts`) needs that decline, for a
+       *  focused row or bar, or a focused cell this editor refuses. A command's `when` gives it one:
+       *  this binding is newer (a plugin installs after core's own registration, D-S5-7), so it gets
+       *  first refusal. The resolver falls through to core's own `when` once this one says no. */
       const canEditFocusedCell = (): boolean => {
         const focused = ctx.view.focusedCell();
         if (focused === undefined) return false;
@@ -865,8 +864,8 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
 
       // The two `onDomEvent` listeners above remove themselves through `ctx.disposables`, which
       // runs ahead of this disposer (S5.1, D-S5-3). So does the command and the keybinding just
-      // above (S5.2, D-S5-6/D-S5-7): both are legal only while `setup` runs, and both auto-remove on
-      // uninstall, the same lifetime `ctx.commands.register('freegantt.discardCellEdit')` already
+      // above (S5.2, D-S5-6/D-S5-7). Both are legal only while `setup` runs, and both auto-remove
+      // on uninstall — the same lifetime `ctx.commands.register('freegantt.discardCellEdit')` already
       // gets above.
       return () => {
         editing.clear();
