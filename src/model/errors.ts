@@ -361,14 +361,18 @@ export class RevealTargetNotFoundError extends FreeGanttError {
 /** `code: 'duplicate-entry-id'` — `entries.add()` given an id already in the store (S2.3 §1.3). */
 export class DuplicateEntryIdError extends FreeGanttError {
   readonly entryId: EntryId;
+  readonly operation: string;
 
-  constructor(entryId: EntryId) {
+  constructor(entryId: EntryId, operation: string) {
     super(
       'duplicate-entry-id' satisfies BuiltInThrownCode,
-      `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`,
+      operation === 'entries.add'
+        ? `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`
+        : `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`,
     );
     this.name = 'DuplicateEntryIdError';
     this.entryId = entryId;
+    this.operation = operation;
   }
 }
 
