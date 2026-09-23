@@ -297,14 +297,17 @@ thing core must provide first. S2 is also the slice that first commits the `api-
 (D-S2-19), so it is the worst slice in which to freeze a staleness contract a slice or more before
 anything calls it.
 
-**What goes with it: the `ChangeOrigin` arms that had no producer.** `'load'` was `apply`'s and
-`fromJSON`'s — and `fromJSON` constructs a fresh `Dataset` rather than committing a changeset
-(D-S2-12), so it emits nothing. `'engine'` was never S2's either: a edit-extension patch lands in the
-**same** changeset as the edit that caused it, tagged with that changeset's origin (D-S2-22), so no
-S2 changeset is `'engine'`-originated. S2 therefore ships:
+**What goes with it: the `ChangeOrigin` arms that had no producer.** `'load'` was reserved here for
+`apply`'s and `fromJSON`'s skipped-write door — `fromJSON` constructs a fresh `Dataset` rather than
+committing a changeset (D-S2-12), so it emits nothing. `apply` (D-S2-11) never shipped, and #496 took
+the word `'load'` for a different door instead: `entries.load()`, a full fresh start that **clears**
+History rather than skipping it (`plans/02` §2, "Undo and redo"). Read every `'load'`/`apply` pairing
+below as S2's own historical record, superseded by #496. `'engine'` was never S2's either: a
+edit-extension patch lands in the **same** changeset as the edit that caused it, tagged with that
+changeset's origin (D-S2-22), so no S2 changeset is `'engine'`-originated. S2 therefore shipped:
 
 ```ts
-export type ChangeOrigin = 'user' | 'undo' | 'redo';   // 'engine' and 'load' arrive with their producers
+export type ChangeOrigin = 'user' | 'undo' | 'redo';   // 'engine' arrives with its own producer; 'load' arrived later, with #496, for a different meaning than this section first reserved it for
 ```
 
 Same rule as §0 Q2 applied to `StoreName`: a union arm nothing produces makes the type untypeable at
@@ -681,8 +684,9 @@ way the view does. That is what makes `history-is-removable` provable — `data/
 delete the file and the commit path does not change by one line.
 
 **The origin filter is the history's own policy, in one place.** It records `'user'`; it ignores
-`'undo'` and `'redo'`, so undoing does not push a new entry (D-S2-14). When `'load'` arrives with
-`apply` (D-S2-11) the filter needs no edit, because it names what it records.
+`'undo'` and `'redo'`, so undoing does not push a new entry (D-S2-14). `'load'` arrived later with
+#496, not with `apply` (D-S2-11) as this section first expected — and it neither records nor is
+ignored: it **clears** the stack (`plans/02` §2, "Undo and redo"; `src/data/history.ts`).
 
 **Subscriber order is insertion order** (`EventBus` iterates a `Set`), and the history subscribes at
 `Dataset` construction — before any `Gantt` exists. So `canUndo` is already true for every later

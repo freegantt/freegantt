@@ -68,7 +68,9 @@ This ruling touches only the editable-lock (`'never'`) case. The derived/rollup 
 
 **18.** One key, three named states. Absent is `'anywhere'` (grill 2026-09-10; was `'api'`). Copying the view rule lost. A three-way boolean lost. Do not special-case “has `column`”.
 
-**19.** Keep `{ key: 'start', editable: false }`. Create, ingest, and replay still write. `update()` and the grid refuse change. Un-date is a change. **Do not serialize the lock.** `fields.all` already reads the merge. `beforeChange` does not replace this.
+**19.** Keep `{ key: 'start', editable: false }`. Create, ingest, `load` (#496) and replay still write. `update()` and the grid refuse change. Un-date is a change. **Do not serialize the lock.** `fields.all` already reads the merge. `beforeChange` does not replace this.
+
+**`entries.load()` ignores a `'never'` lock, and a derived parent cell re-rolls, the same as construction (#496, Q3).** `load` is a full fresh start, not a caller-side write — it sits beside Create and ingest above, not beside `update()`'s cascade rule. It runs no `EditExtender` cascade either, because construction runs none (step 1 of #496 pinned this as fact, not assumption).
 
 **23.** `{ key: 'start', editable: false }` constructs. `{ key: 'start' }` is a no-op. `{ key: 'start', column }` throws.
 
