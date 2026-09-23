@@ -478,15 +478,17 @@ describe('FrameLayout.ensureRowPlan keeps #memory in step with #plan (#424 revie
     expect(layout.barsForEntry(added.id).length).toBeGreaterThan(0);
   });
 
-  it("rowTop answers the replanned row count, not the last painted frame's", () => {
+  it("rowTop answers the row height ensureRowPlan alone just synced, not the last painted frame's", () => {
     const layout = new FrameLayout();
-    // Two writes with no frame between them, so the replanned row count moves two past what
-    // `#memory`'s own height index was built for — the bug's stale index cannot even answer this
-    // index in bounds, let alone answer it correctly.
-    layout.computeFrame(input({ entries: sampleEntries.slice(0, 1) }));
-    const { plan, memory } = planFrom(input({ entries: sampleEntries.slice(0, 3) }));
+    // `rowHeight` sits in `RowPlanMemoryInput`, not `RowPlanInput` (#424 review, point 1): it never
+    // decides whether to replan, so a row-height change alone reaches `#memory` only through the
+    // `sync` call `ensureRowPlan` makes on every call — with a uniform row height, a stale height
+    // index still answers `topAt` from row *count* alone, so this is the one property a stale
+    // `#memory` cannot pass through by accident.
+    layout.computeFrame(input({ entries: sampleEntries.slice(0, 3), rowHeight: 20 }));
+    const { plan, memory } = planFrom(input({ entries: sampleEntries.slice(0, 3), rowHeight: 40 }));
     layout.ensureRowPlan(plan, memory);
 
-    expect(layout.rowTop(2)).toBe(2 * memory.rowHeight);
+    expect(layout.rowTop(2)).toBe(80);
   });
 });
