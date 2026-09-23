@@ -111,7 +111,7 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
-export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
+export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
@@ -1169,7 +1169,6 @@ export class Gantt<TProps = unknown> {
     panToToday(align?: 'start' | 'center'): void;
     get plugins(): readonly ChromePlugin<TProps>[];
     set plugins(next: readonly ChromePlugin<TProps>[]);
-    // Warning: (ae-forgotten-export) The symbol "PointerActivation" needs to be exported by the entry point index.d.ts
     get pointerActivation(): PointerActivation;
     set pointerActivation(next: PointerActivation);
     // (undocumented)
@@ -1825,6 +1824,9 @@ export interface Point {
     // (undocumented)
     readonly y: number;
 }
+
+// @public
+export type PointerActivation = 'click' | 'dblclick';
 
 // @public (undocumented)
 export interface Popup {

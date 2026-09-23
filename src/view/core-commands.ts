@@ -204,6 +204,17 @@ export function registerCoreCommands(
     when: () => false,
     run: () => {},
   });
+  // #434: the same #160/D-S5-47 shape as `freegantt.discardCellEdit` just above — registered first
+  // and inert, so `gantt.commands.run('freegantt.editFocusedCell')` answers on every Gantt, and
+  // `Enter`'s own `freegantt.activateEntry` fallback (bound below) has a real `when` to ask "did the
+  // editor take this cell?" even with no `inlineEditing()` installed. `inlineEditing()` overrides this
+  // the moment it installs (D-S5-7), with its own `when`/`run` closing over its `CellEditing`.
+  register({
+    id: 'freegantt.editFocusedCell',
+    label: 'Edit cell',
+    when: () => false,
+    run: () => {},
+  });
   register({
     id: 'freegantt.undo',
     label: 'Undo',

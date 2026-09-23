@@ -140,6 +140,7 @@ export type {
   GridWidth,
   ViewportGestures,
   ViewportGestureFlags,
+  PointerActivation,
 } from '../view/index.js';
 export type {
   GanttEventMap,

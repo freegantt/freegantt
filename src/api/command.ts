@@ -48,6 +48,7 @@ export type BuiltInCommandId =
   | 'freegantt.activateEntry'
   | 'freegantt.deleteSelection'
   | 'freegantt.discardCellEdit'
+  | 'freegantt.editFocusedCell'
   | 'freegantt.undo'
   | 'freegantt.redo'
   | 'freegantt.resizeColumnWider'

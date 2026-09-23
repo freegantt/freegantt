@@ -200,6 +200,17 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
     expect(registry.available(ctx).map((command) => command.id)).not.toContain('freegantt.discardCellEdit');
     expect(() => registry.run('freegantt.discardCellEdit')).not.toThrow();
   });
+
+  // #434: the same placeholder shape, one id over — `freegantt.editFocusedCell` answers on every
+  // Gantt, and stays unavailable until `inlineEditing()` overrides it.
+  it("#434: the catalog's editFocusedCell placeholder is never available — inlineEditing() overrides it", () => {
+    const ports = fakePorts();
+    const { registry, ctx } = makeRegistry();
+    registerCoreCommands(registry, ports);
+
+    expect(registry.available(ctx).map((command) => command.id)).not.toContain('freegantt.editFocusedCell');
+    expect(() => registry.run('freegantt.editFocusedCell')).not.toThrow();
+  });
 });
 
 describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, D-S5-18/D-S5-26)', () => {
