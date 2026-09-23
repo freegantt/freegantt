@@ -362,6 +362,70 @@ describe('attachEntryGestures — selection (S3.1)', () => {
   });
 });
 
+function click(detail = 1): MouseEvent {
+  return new MouseEvent('click', { bubbles: true, cancelable: true, detail });
+}
+
+// #434: `pendingActivation` names a candidate on `pointerup`; the native `click` that always
+// follows in the same synchronous dispatch confirms it. A candidate must live for exactly one
+// pointer sequence — stale past that, an unrelated later click could confirm the wrong Entry.
+describe('attachEntryGestures — activation candidate lifetime (#434)', () => {
+  it('a click that follows the naming pointerup confirms it', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A as the candidate
+    container.dispatchEvent(click());
+    expect(activations).toEqual([[A, 1, 'bar']]);
+  });
+
+  it('a candidate that never gets its click does not survive to confirm a later, unrelated click', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A — its own click never comes (drag, cancel, scroll…)
+    pane.dispatchEvent(down(99)); // a new pointer sequence, on empty space
+    pane.dispatchEvent(up(99)); // a miss — names nothing
+    container.dispatchEvent(click()); // an unrelated click must not confirm A
+
+    expect(activations).toEqual([]);
+  });
+
+  it('a pointercancel drops a named candidate', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A
+    pane.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1 }));
+    container.dispatchEvent(click());
+
+    expect(activations).toEqual([]);
+  });
+
+  it('a miss on pointerup drops a named candidate', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A
+    pane.dispatchEvent(up(99)); // a miss, same sequence's pointerup skipped by a stray extra up
+    container.dispatchEvent(click());
+
+    expect(activations).toEqual([]);
+  });
+});
+
 // Bug hunt (S5 fixes, "grid row highlight and row click"): a row click selects the same way a bar
 // click does, but never arms move/resize, and a grid miss never clears (only an empty timeline
 // click does).

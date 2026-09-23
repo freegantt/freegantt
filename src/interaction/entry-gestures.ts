@@ -168,6 +168,11 @@ export function attachEntryGestures(
   }
 
   function onPointerDown(e: PointerEvent): void {
+    // #434: a candidate lives for exactly one pointer sequence. Clearing here — before this
+    // pointerdown's own stream can name a new one — catches every way the last sequence's `click`
+    // never came: a `pointercancel`, a touch the browser turned into a scroll, or a `click` target
+    // outside `container`.
+    pendingActivation = undefined;
     // #199/#205 (mouse path): a right-button pointerdown arms no gesture, so a right-click never
     // steals the pointer stream from a later primary-button drag.
     if (!isPrimaryButton(e)) return;
@@ -204,6 +209,9 @@ export function attachEntryGestures(
     // too — only a genuine miss-clears-everything surface (the timeline) drops it here. A middle-click
     // (or any other non-clearing button) never clears either — see `isPrimaryButton`/`isRightClick`.
     if (hit === undefined || missesEveryEntry(hit)) {
+      // #434: a miss never activates, so any candidate an earlier, unconfirmed pointerup left
+      // pending must not survive to confirm on this miss's own `click`.
+      pendingActivation = undefined;
       if (clearOnMiss && (isPrimaryButton(e) || isRightClick(e))) {
         anchor = undefined;
         if (ctx.selection.entryIds().length > 0) ctx.selection.propose([]);
@@ -340,6 +348,9 @@ export function attachEntryGestures(
   // Bug hunt B6: a browser-issued cancel (touch interrupt, drag into a scrollbar) has no other path
   // to `cancel()` — Escape's own `drag.escape()` needs a keydown that a cancelled touch never sends.
   function onPointerCancel(e: PointerEvent): void {
+    // #434: a cancelled pointer sequence sends no `click`, so a candidate `selectFromHit` named on
+    // an earlier pointerup within this same sequence must not outlive it.
+    pendingActivation = undefined;
     drag.pointercancel(e);
   }
 
