@@ -2143,12 +2143,12 @@ export class GanttShell {
     return kind === 'row' || kind === 'bar' || kind === 'gridCell';
   }
 
-  /** #434: does `freegantt.editFocusedCell` take this cell? The same question `Enter`'s own Keymap
-   *  resolution already asks before falling through to `freegantt.activateEntry` (D-S5-7,
-   *  `extensions/keymap.ts`'s `resolve()`) — asked directly here because the `dblclick` listener has
-   *  no keymap resolving for it. One command's `when` answers both, so a plugin that changes what
-   *  "takes" a cell changes the pointer path and the key path together, instead of the pointer path
-   *  re-deriving `canWrite` on its own and drifting from what the command actually decides. */
+  /** #434: does `freegantt.editFocusedCell` take this cell? `Enter`'s own Keymap resolution already
+   *  asks the same question before falling through to `freegantt.activateEntry` (D-S5-7,
+   *  `extensions/keymap.ts`'s `resolve()`). Asked directly here, because the `dblclick` listener has
+   *  no keymap resolving for it. One command's `when` answers both. A plugin that changes what
+   *  "takes" a cell changes the pointer path and the key path together. The pointer path never
+   *  re-derives `canWrite` on its own, so it never drifts from what the command actually decides. */
   #editorTakesFocusedCell(): boolean {
     const command = this.#commandRegistry.find('freegantt.editFocusedCell');
     return command?.when?.(this.#buildCommandContext()) ?? false;
