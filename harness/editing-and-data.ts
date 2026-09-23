@@ -431,40 +431,15 @@ function parseDocument(json: string): EntryInput<EditingDataProps>[] | undefined
   return Array.isArray(parsed) ? (parsed as EntryInput<EditingDataProps>[]) : undefined;
 }
 
-/** `entries.add()` refuses a row whose `parentId` is not in the store yet — a document read back
- *  from `document-json` carries no such order guarantee, so Import sorts parent-before-child before
- *  it writes a single row. API gap, #496: delete this once the library has an order-tolerant bulk
- *  write. */
-function parentFirst(inputs: readonly EntryInput<EditingDataProps>[]): EntryInput<EditingDataProps>[] {
-  const byId = new Map(inputs.map((input) => [input.id, input]));
-  function depthOf(input: EntryInput<EditingDataProps>, seen: Set<string>): number {
-    const parentId = input.parentId;
-    if (parentId === undefined || seen.has(parentId)) return 0;
-    const parent = byId.get(parentId);
-    if (parent === undefined) return 0;
-    seen.add(parentId);
-    return 1 + depthOf(parent, seen);
-  }
-  return [...inputs].sort((a, b) => depthOf(a, new Set()) - depthOf(b, new Set()));
-}
-
-// Import replaces the whole document in one transaction: every root entry removed — which cascades
-// to its descendants (`entries.remove`) — then every row from the pasted document added back,
-// parent-first. Undo lifts the whole replacement in one press, the same as any other changeset.
+// Import is a load (#496): the pasted document may list a child before its parent, and `load`
+// replaces every entry in one commit regardless of the order they arrive in. It is a full fresh
+// start, not a merge — it clears undo, so the toolbar's Undo button goes dark right after.
 importBtn.addEventListener('click', () => {
   const parsed = parseDocument(documentJson.value);
   if (parsed === undefined) {
     logLine('document · import failed · not a JSON array');
     return;
   }
-  const rootIds = dataset.entries.all
-    .filter((entry) => entry.parent() === undefined)
-    .map((entry) => entry.id);
-  attemptMutation(() => {
-    dataset.transaction(() => {
-      for (const id of rootIds) dataset.entries.remove(id);
-      for (const input of parentFirst(parsed)) dataset.entries.add(input);
-    });
-  });
+  attemptMutation(() => dataset.entries.load(parsed));
   logLine(`document · imported ${parsed.length} entries`);
 });
