@@ -79,6 +79,21 @@ parents, no loop), put `entries.all` in list order, and refuse an open transacti
   then the order Field (#528), then `sync` (#517).
   `load`'s list-ordering function is written so the order Field can store its result.
 
+## #528 grill — the order Field in detail. Closed (owner, 2026-09-23)
+
+O1 changes a little: list position sets `siblingIndex` at ingest, and `update()` moves an entry
+after that. The Field is the one source of truth.
+
+- **Q1 — `editable: 'anywhere'`.** Drag can reorder. `'api'` stops drag and keeps code writes.
+  `'never'` stops all reorders. This needs [#529](https://github.com/freegantt/freegantt/issues/529):
+  `'api'` allows no gesture, for any Field.
+- **Q2 — A core Field**, next to `parentId` in `CORE_FIELDS`.
+- **Q3 — Every write that changes a sibling group renumbers it** in the same transaction.
+- **Q4 — In a `load` or `sync` list, list position wins.** A warning reports the dropped value.
+- **Q5 — An index out of range throws** a typed error.
+
+Full rulings: [#528](https://github.com/freegantt/freegantt/issues/528).
+
 ## Facts found
 
 - The Gantt redraws from row 0 on any ChangeSet with no field rows

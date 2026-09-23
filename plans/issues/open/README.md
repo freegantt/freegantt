@@ -16,10 +16,13 @@ issue plans land here as they're opened.
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
   Field (#528). Blocked by #496 and #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
 - [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
-  cannot be undone. Direction: `siblingIndex`, written by the library from list position. Blocked
-  by #496; blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
+  cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`.
+  Blocked by #496 and #529; blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
 - [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
   delta. Wishlist; blocked by #496 and #517. No plan yet.
+- [#529](https://github.com/freegantt/freegantt/issues/529) — `capabilities.edit` can reopen an
+  `'api'` Field for drag. Direction: `'api'` means code only. Blocks #528. No plan file; the issue
+  holds the work.
 
 **Closed:**
 
