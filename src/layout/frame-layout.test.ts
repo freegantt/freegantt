@@ -492,3 +492,65 @@ describe('FrameLayout.ensureRowPlan keeps #memory in step with #plan (#424 revie
     expect(layout.rowTop(2)).toBe(80);
   });
 });
+
+// #424 review, point 2: `ensureRowPlan` could replace `#plan` between frames without advancing
+// `frameRevision` — the stamp `view/gantt-dom.ts` keys its one-slot pointer memo on (#212). A write
+// then a between-frames `collapseStateOf` read replanned the rows while the stamp stayed equal, so
+// a memoized `DomTarget`'s `entryIds` could answer from a row tree the layout had already left.
+describe('FrameLayout.frameRevision advances with the row tree, not the frame (#424 review, point 2)', () => {
+  it('does not advance on a viewport-only computeFrame call (scroll, pan)', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+    const before = layout.frameRevision;
+
+    layout.computeFrame(input({ visible: { x: 0, y: 500, width: 800, height: 600 }, revision: 1 }));
+
+    expect(layout.frameRevision).toBe(before);
+  });
+
+  it('advances when a between-frames ensureRowPlan call actually replans', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: sampleEntries.slice(0, 2) }));
+    const before = layout.frameRevision;
+
+    // Same shape `entries.add()` leaves behind between two frames — no `computeFrame` call between.
+    const grown = sampleEntries.slice(0, 3);
+    layout.ensureRowPlan(
+      {
+        entries: grown,
+        datasetRevision: 0,
+        rows: undefined,
+        fieldCompares: undefined,
+        fieldContext: undefined,
+        entryRulePorts: undefined,
+        collapsed: undefined,
+        fieldRegistryRevision: 0,
+      },
+      { rowHeight: 32, registry: variantRegistry },
+    );
+
+    expect(layout.frameRevision).toBe(before + 1);
+  });
+
+  it('does not advance when a between-frames ensureRowPlan call finds the same row plan', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input());
+    const before = layout.frameRevision;
+
+    layout.ensureRowPlan(
+      {
+        entries: sampleEntries,
+        datasetRevision: 0,
+        rows: undefined,
+        fieldCompares: undefined,
+        fieldContext: undefined,
+        entryRulePorts: undefined,
+        collapsed: undefined,
+        fieldRegistryRevision: 0,
+      },
+      { rowHeight: 32, registry: variantRegistry },
+    );
+
+    expect(layout.frameRevision).toBe(before);
+  });
+});

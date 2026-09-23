@@ -205,6 +205,9 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   syncCrewDaysLabel();
 });
 gantt.on('selectionChange', renderSelection);
+// #424 review point 1: a collapse or expand fires `collapseChange` alone, with no `selectionChange`
+// and no dataset `change` — the readout needs this subscription too, or it goes stale.
+gantt.on('collapseChange', renderSelection);
 
 // S5.8, D-S5-19: fires before the built-in editor opens. Cy's day is locked the same way its
 // resize is (`capabilities.resize` above) — a double-click on it never opens an editor at all.

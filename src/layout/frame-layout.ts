@@ -120,19 +120,23 @@ export class FrameLayout implements FrameLayoutView {
     return this.#memory.heightIndexRevision;
   }
 
-  /** How many frames this layout has planned (#212). A reader that caches an answer taken from this
-   * layout holds this number beside it, and drops the cache once the layout has planned another
-   * frame. `view/gantt-dom.ts`'s one-slot pointer memo is that reader. A rendered node cannot report
-   * the same thing: a bar keeps its `data-bar-id` while what it draws can still change underneath. */
+  /** How many times this layout has planned a new row tree (#212, #424) — not how many frames it has
+   * drawn. A scroll or a pan frame that replans nothing leaves this unchanged; only `#planRows`
+   * advances it, and `ensureRowPlan` is the one place that calls `#planRows`, whether `computeFrame`
+   * reaches it or a synchronous reader like `collapseStateOf` calls it between frames. A reader that
+   * caches an answer taken from this layout holds this number beside it, and drops the cache once the
+   * layout has planned another row tree. `view/gantt-dom.ts`'s one-slot pointer memo is that reader.
+   * A rendered node cannot report the same thing: a bar keeps its `data-bar-id` while what it draws
+   * can still change underneath. */
   get frameRevision(): number {
     return this.#frameRevision;
   }
 
   computeFrame(input: LayoutInput): GeometryFrame {
-    this.#frameRevision++;
     // #495, #414: does this frame ask a different question about which rows exist, in what order,
     // than the last one did? A scroll or a pan never does — `visible`/`revision`/`rowHeight` are not
-    // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below.
+    // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below, and
+    // `frameRevision` (bumped inside `ensureRowPlan`, not here) stays put too.
     this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations);
   }
@@ -151,11 +155,16 @@ export class FrameLayout implements FrameLayoutView {
    *  to reason about. `sync` is itself a set of identity checks (`frame-memory.ts`), so a call where
    *  nothing moved costs one pass, not a rebuild — the same price `computeFrame` already pays on
    *  every scroll frame. `rowHeight`/`registry` sit outside `RowPlanInput` on purpose (they never
-   *  decide whether to replan), so the caller hands them here as `RowPlanMemoryInput`. */
+   *  decide whether to replan), so the caller hands them here as `RowPlanMemoryInput`.
+   *
+   *  #424 review point 2: `frameRevision` advances here, in the replan branch, and nowhere else — a
+   *  `#plan` that moved is exactly what `view/gantt-dom.ts`'s stamp must catch, whether `computeFrame`
+   *  reached this call or a between-frames reader like `collapseStateOf` did. */
   ensureRowPlan(input: RowPlanInput, memory: RowPlanMemoryInput): void {
     if (this.#lastPlanInput === undefined || !samePlanInput(this.#lastPlanInput, input)) {
       this.#planRows(input);
       this.#lastPlanInput = input;
+      this.#frameRevision++;
     }
     this.#memory.sync({
       plan: this.#plan,
