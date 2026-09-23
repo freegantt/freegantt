@@ -181,11 +181,13 @@ pointerActivationSelect.addEventListener('change', () => {
 // state on screen.
 let undoChordOffWanted = false;
 function applyConvenienceChords(): void {
-  gantt.convenienceChords = allChordsOffCheckbox.checked
-    ? false
-    : undoChordOffWanted
-      ? { 'freegantt.undo': false, 'freegantt.redo': false }
-      : true;
+  if (allChordsOffCheckbox.checked) {
+    gantt.convenienceChords = false;
+  } else if (undoChordOffWanted) {
+    gantt.convenienceChords = { 'freegantt.undo': false, 'freegantt.redo': false };
+  } else {
+    gantt.convenienceChords = true;
+  }
   undoChordOffCheckbox.checked = allChordsOffCheckbox.checked || undoChordOffWanted;
   undoChordOffCheckbox.disabled = allChordsOffCheckbox.checked;
 }

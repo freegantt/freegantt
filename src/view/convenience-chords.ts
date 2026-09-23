@@ -18,9 +18,13 @@ export type ResolvedConvenienceChords = Readonly<Record<ConvenienceCommandId, bo
 
 export function resolveConvenienceChords(input: ConvenienceChords | undefined): ResolvedConvenienceChords {
   const resolved = {} as Record<ConvenienceCommandId, boolean>;
+  if (input === false) {
+    for (const id of convenienceCommandIds) resolved[id] = false;
+    return resolved;
+  }
+  const allOn = input === true || input === undefined;
   for (const id of convenienceCommandIds) {
-    resolved[id] =
-      input === false ? false : input === true || input === undefined ? true : (input[id] ?? true);
+    resolved[id] = allOn ? true : (input[id] ?? true);
   }
   return resolved;
 }
