@@ -586,6 +586,40 @@ describe('Dataset generics (#123)', () => {
       dataset.entries.update('t1', { bogus: 1 });
     }
   });
+
+  // ADR 0011 Q15, #281: a declared Field key type-checks flat, at the top, at both doors that build
+  // a row — the constructor's `entries` array and `entries.add()` — the same shape `update()` already
+  // typed. Runtime already read the flat key either way (`propsFromInput`); this is the static half.
+  it('types a flat declared Field key at both doors: the constructor and entries.add() (#281)', () => {
+    const dataset = new Dataset<{ owner: string; cost?: number }>({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner' }, { key: 'cost' }],
+      // Flat, not `props: { owner: … }` — the constructor door.
+      entries: [{ id: 't1', name: 'Design', owner: 'Ali' }],
+    });
+    expect(dataset.entries.get('t1')?.read('owner')).toBe('Ali');
+
+    // Flat, not `props: { owner: … }` — the `add()` door.
+    const added = dataset.entries.add({ id: 't2', name: 'Build', owner: 'Sam', cost: 500 });
+    expect(added.read('owner')).toBe('Sam');
+    expect(added.read('cost')).toBe(500);
+
+    // Nested `props` still works too (a bag already held, or a passenger key) — unchanged by #281.
+    const nested = dataset.entries.add({ id: 't3', name: 'Ship', props: { owner: 'Ren' } });
+    expect(nested.read('owner')).toBe('Ren');
+
+    // Compile-time only: an undeclared flat key must still fail to type-check, at both doors, the
+    // same as it did before #281 — the fix widens what is accepted, never what is refused.
+    if (false as boolean) {
+      new Dataset<{ owner: string }>({
+        timeZone: 'UTC',
+        // @ts-expect-error — bogus is not a declared key
+        entries: [{ id: 't1', bogus: 'nope' }],
+      });
+      // @ts-expect-error — bogus is not a declared key
+      dataset.entries.add({ id: 't4', bogus: 'nope' });
+    }
+  });
 });
 
 // S5.10, D-S5-23/24/30/31: `DatasetOptions.plugins` is the public way in. Each case below writes a
