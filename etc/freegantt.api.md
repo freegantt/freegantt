@@ -1128,8 +1128,6 @@ export class Gantt<TProps = unknown> {
     set dateLineLabelPlacement(placement: DateLineLabelPlacement);
     get dateLines(): readonly DateLine[];
     set dateLines(lines: readonly DateLineInput[]);
-    get dblclickActivates(): boolean;
-    set dblclickActivates(next: boolean);
     // (undocumented)
     destroy(): void;
     // (undocumented)
@@ -1171,6 +1169,9 @@ export class Gantt<TProps = unknown> {
     panToToday(align?: 'start' | 'center'): void;
     get plugins(): readonly ChromePlugin<TProps>[];
     set plugins(next: readonly ChromePlugin<TProps>[]);
+    // Warning: (ae-forgotten-export) The symbol "PointerActivation" needs to be exported by the entry point index.d.ts
+    get pointerActivation(): PointerActivation;
+    set pointerActivation(next: PointerActivation);
     // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
@@ -1291,7 +1292,6 @@ export interface GanttOptionsBase<TProps = unknown> {
     dataset: Dataset<TProps>;
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
-    dblclickActivates?: boolean;
     gridCellRenderer?: GridCellRenderer;
     gridColumns?: readonly GridColumnInput[];
     gridResizable?: boolean;
@@ -1301,6 +1301,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     minGridWidth?: number;
     overscan?: Overscan;
     plugins?: readonly ChromePlugin<TProps>[];
+    pointerActivation?: PointerActivation;
     rowSource?: RowSource;
     scroll?: ScrollAxes;
     selectedEntryIds?: readonly (EntryId | string)[];
