@@ -4,8 +4,9 @@
 import { entryId } from 'freegantt';
 import type { DataPlugin, EntryId, FieldKey, PluginStore } from 'freegantt';
 
-/** What the store holds: the one subtree root currently open, or none. One key, the same reason
- *  `lock-entries.ts`'s `LockRow` gives (ADR 0002, D-S5-24). */
+/** What the store holds: the one subtree root currently open, or none. This is not per-entry data —
+ *  it names which subtree is open, not a fact about one Entry — so it stays in the plugin's own
+ *  store rather than a Field (#496 Q8, ADR 0002, D-S5-24). */
 interface UnlockRow {
   readonly rootId: EntryId;
 }

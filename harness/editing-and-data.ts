@@ -64,8 +64,8 @@ function withKindProps(entry: EntryInput<DemoEntryProps>): EntryInput<EditingDat
 }
 
 // S5.10, D-S5-24: one Dataset plugin owns every lock on this page — the checkbox below writes its
-// store, so the page keeps no lock state of its own. `Dataset.plugins` is read-only, so it installs
-// here, at construction.
+// `locked` Field (#496 Q8), so the page keeps no lock state of its own. `Dataset.plugins` is
+// read-only, so it installs here, at construction.
 const locks = lockEntries();
 
 // #473: `note` is locked (`editable: false`) everywhere, and this plugin's `setLockRule` is the

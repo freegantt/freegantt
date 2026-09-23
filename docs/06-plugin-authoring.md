@@ -264,6 +264,54 @@ do (D-S5-23): the wrapper receives the current occupant, so a second plugin's
 rule adds to the first's instead of evicting it. See "Every registration
 seam" below for `edits.setLockRule`'s row.
 
+## Data a consumer must keep
+
+A plugin's own store (`ctx.store.reserve<T>()`) is not export data. `entries.load()`
+(#496) does not read it, and `toInput()` does not either — a store is state the plugin
+needs while it runs, never a document (#496 Q8).
+
+Per-entry data a consumer must save and load back goes in a Field instead — the one door
+`toInput()` and `entries.load()` both read. Declare it `editable: 'api'`: an app writes
+it through `entries.update()`, and the grid's own cell editor stays dead. Give it no
+`column`, and no grid draws one either.
+
+`harness/plugins/lock-entries.ts` is the model case: `locked` is a Field, not a store
+row, so a saved document that names a locked entry loads locked again.
+
+**Where a Field does not fit:** data that is not about one entry — a link between two
+entries, or (`harness/plugins/subtree-unlock.ts`) which subtree is open right now —
+stays in the plugin's own store, and the plugin publishes its own reader and writer
+(ADR 0016).
+
+### Reacting to a load
+
+`entries.load()` replaces the whole Dataset in one commit, `origin: 'load'`. A plugin
+reads it the same way it reads any other commit — through `change`, which every `data`
+half already subscribes to:
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function resetsOnLoad() {
+  let cache: unknown;
+  return definePlugin({
+    id: 'demo.resetsOnLoad',
+    data(ctx) {
+      ctx.events.on('change', ({ changeSet }) => {
+        if (changeSet.origin === 'load') cache = undefined;
+      });
+    },
+  });
+}
+
+export { resetsOnLoad };
+```
+
+`beforeChange` carries the same `origin`, so a plugin may veto a load too. A veto that
+depends on state a load is about to remove has to let `origin: 'load'` through, or a
+load could never remove that state — `lock-entries.ts`'s "is this entry locked" refusal
+steps aside for a load for exactly this reason.
+
 ## Why a factory, not a name-keyed table
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin
@@ -359,17 +407,19 @@ A plugin may declare `requires: readonly PluginId[]` — the ids of plugins that
 must finish setting up first. One list covers both halves:
 
 ```ts
-import { definePlugin } from 'freegantt';
+import { definePlugin, fieldRowsOf } from 'freegantt';
 
 function lockAwareReport() {
   return definePlugin({
     id: 'demo.lockAwareReport',
     requires: ['demo.lockEntries'],
     data(ctx) {
-      const locks = ctx.store.read<{ isLocked: boolean }>('demo.lockEntries');
+      // `locked` is `demo.lockEntries`'s own Field (#496 Q8), read the same way any consumer reads
+      // it — not a store, so `requires` names an ordering preference here, not a read that would
+      // otherwise fail: every plugin's Field is registered before the first commit either way.
       ctx.events.on('beforeChange', ({ changeSet }) => {
-        const touchesLockedEntry = changeSet.updated.some(
-          (row) => row.store === 'entries' && locks?.get(row.id)?.isLocked,
+        const touchesLockedEntry = fieldRowsOf(changeSet).some(
+          (row) => ctx.dataset.entries.get(row.id)?.read('locked') === true,
         );
         return touchesLockedEntry ? false : undefined;
       });
