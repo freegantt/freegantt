@@ -3,6 +3,35 @@
 Read this first after the token reset. It says what is done, what is left, where each piece of
 information lives, and what the owner still has to decide.
 
+## Update, 2026-09-22 evening: every lane merged
+
+All five lanes are fixed, reviewed and merged. Each worktree is removed. Sections 0, 2, 2.1 and 3
+items 1–4 below are history. The work left starts at §3 item 5.
+
+| Pull request | Squash commit | Issues |
+|---|---|---|
+| #493 | `a0da5197` | #400 closed (the `prepare` build is a stopgap until #442) |
+| #494 | `c193958a` | #429 and #407 closed |
+| #498 | `9e6c86a2` | #406 closed. #414 part one and the #95 scroll numbers landed. Both issues stay open |
+| #499 | `d1d3928d` | #489 closed |
+| #501 | `73d1aae5` | #472 and #242 closed |
+| #502 | `dc2fbae9` | #335 closed. #101 items 1–2 landed. Item 3 stays open |
+
+**Owner rulings, answered this evening (§4):**
+- Item 3, the #489 anchor: a stepped tick counts from the next larger unit. A step that does not fit
+  in that unit counts from one fixed origin.
+- Item 9a, the #101 presets: hold `fifteenMinute` and `sixHour` until #489. They shipped in #502,
+  after #499.
+- Item 9, push and pull requests: yes.
+- New: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`. This reverses
+  Design #11 for that door.
+
+**Harness rule (owner):** `harness/e2e/` holds pages that exist only for e2e tests. The `harness/`
+root holds the themed demo pages.
+
+**Open item from #502:** the four #101 presets show only on the e2e zoom fixture
+(`harness/e2e/zoom.ts`). No themed demo page has a picker for them yet.
+
 ## 0. Start here
 
 1. **Do not merge any lane branch until its review findings are fixed** (§2.1). The review is
