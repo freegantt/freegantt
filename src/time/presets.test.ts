@@ -375,6 +375,74 @@ describe('#101 new shipped presets', () => {
     ]);
   });
 
+  // #489: the anchor fix — a stepped tick counts from the calendar (`tickFloor`), not from wherever
+  // the visible window's own left edge happens to sit, so two windows that start at different
+  // moments still draw the same boundaries.
+  it('fifteenMinutePreset ticks land on :00/:15/:30/:45 no matter where the window starts', () => {
+    const aligned = createTimeScale({
+      timeZone,
+      range: { start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-01T01:00:00Z') },
+      pxPerMs: 1,
+    });
+    // A window starting mid-step (7 minutes into the hour) — the same calendar hour, a different
+    // left edge.
+    const shifted = createTimeScale({
+      timeZone,
+      range: { start: instant('2026-09-01T00:07:00Z'), end: instant('2026-09-01T01:00:00Z') },
+      pxPerMs: 1,
+    });
+    const step = { unit: presets.fifteenMinute.tickUnit, increment: presets.fifteenMinute.tickIncrement };
+    const alignedTicks = aligned.ticks(step, { x: 0, width: aligned.contentWidth }).map((t) => t.instant);
+    const shiftedTicks = shifted.ticks(step, { x: 0, width: shifted.contentWidth }).map((t) => t.instant);
+    expect(alignedTicks).toEqual([
+      instant('2026-09-01T00:00:00Z'),
+      instant('2026-09-01T00:15:00Z'),
+      instant('2026-09-01T00:30:00Z'),
+      instant('2026-09-01T00:45:00Z'),
+    ]);
+    // The shifted window draws the same calendar boundaries — the tick that covers its own left
+    // edge (:00, drawn partial) then :15/:30/:45 — none of them drift to :07, :22, :37, :52.
+    expect(shiftedTicks).toEqual([
+      instant('2026-09-01T00:00:00Z'),
+      instant('2026-09-01T00:15:00Z'),
+      instant('2026-09-01T00:30:00Z'),
+      instant('2026-09-01T00:45:00Z'),
+    ]);
+  });
+
+  it('sixHourPreset ticks land on 00/06/12/18 no matter where the window starts', () => {
+    const aligned = createTimeScale({
+      timeZone,
+      range: { start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-02T00:00:00Z') },
+      pxPerMs: 1,
+    });
+    // A window starting mid-step (two hours into the first six-hour band) — the same calendar day,
+    // a different left edge.
+    const shifted = createTimeScale({
+      timeZone,
+      range: { start: instant('2026-09-01T02:00:00Z'), end: instant('2026-09-02T00:00:00Z') },
+      pxPerMs: 1,
+    });
+    const step = { unit: presets.sixHour.tickUnit, increment: presets.sixHour.tickIncrement };
+    const alignedTicks = aligned.ticks(step, { x: 0, width: aligned.contentWidth }).map((t) => t.instant);
+    const shiftedTicks = shifted.ticks(step, { x: 0, width: shifted.contentWidth }).map((t) => t.instant);
+    expect(alignedTicks).toEqual([
+      instant('2026-09-01T00:00:00Z'),
+      instant('2026-09-01T06:00:00Z'),
+      instant('2026-09-01T12:00:00Z'),
+      instant('2026-09-01T18:00:00Z'),
+    ]);
+    // The shifted window draws the same calendar boundaries — the tick that covers its own left
+    // edge (00:00, drawn partial) then 06:00/12:00/18:00 — none of them drift to 02:00, 08:00,
+    // 14:00, 20:00.
+    expect(shiftedTicks).toEqual([
+      instant('2026-09-01T00:00:00Z'),
+      instant('2026-09-01T06:00:00Z'),
+      instant('2026-09-01T12:00:00Z'),
+      instant('2026-09-01T18:00:00Z'),
+    ]);
+  });
+
   it('dayLetterAndWeekPreset carries its week band coarsest-first, day-letter finest', () => {
     expect(presets.dayLetterAndWeek.headers.map((h) => h.unit)).toEqual(['week', 'day']);
   });
