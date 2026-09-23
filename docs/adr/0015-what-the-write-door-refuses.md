@@ -48,6 +48,22 @@ The verb copies the Field and replaces `FieldRegistry.all`'s identity (#187). It
 
 This closes the asymmetry the issue raised: after `dataset.setFieldEditable('cost', 'never')`, a consumer's own `update()` call refused, and a plugin's cascade did not. Both refuse now. The three doors — the grid (`view/capability.ts`), `entries.update()`, and an `EditExtender` cascade — all read the one key at `data/write-rule.ts` and must agree (I14).
 
+### A per-entry lock rule, sharper than `Field.editable` ([#473](https://github.com/Pawel-IT/FreeGantt/issues/473))
+
+**Decision.** `Field.editable` locks a Field for every Entry alike. A plugin that must open one locked Field on one Entry, or on a whole subtree — a phase manager reopening `cost` under one branch, say — needs an answer sharper than the Field. `model/field-lock.ts` declares the seam: `FieldLockQuery` (which Entry, and `isDescendantOf(ancestorId)` for the subtree question), `FieldLockRule` (a query and a Field key in, `FieldEditable | undefined` out — `undefined` is silence), and `FieldLockRuleWrapper`, installed through `ctx.edits.setLockRule` the same composing way `setExtender` and `setHierarchySource` install (D-S5-23). Core's own occupant, `identityFieldLockRule`, answers every cell with silence.
+
+`data/write-rule.ts`'s `resolveFieldEditable(query, field, declared, lockRule)` is the one function that turns a rule's answer into the effective lock: the rule's own answer, or `Field.editable` when the rule has no opinion. `assertFieldTakesWrite` — the shared check `entries.update()` and an `EditExtender` cascade both run (#473's ocr finding folded two copies into one) — calls it after the existence and `compute` checks. This is not a second lock beside `Field.editable`; it is that rule's other input, so a plugin's per-entry unlock and the Field's own default answer through the one door every write already used (I14).
+
+`Dataset.editableOf(id, field)` and `EditRequest.editableOf(id, field)` publish the same answer: a consumer asks what the grid asks, and an `EditExtender` asks what its own cascade will meet, before it writes.
+
+### The `capabilities.edit` ruling: narrow, never widen, against the data answer
+
+**Decision.** `view/capability.ts`'s `canWrite` reads the per-entry lock (`CapabilityInputs.editableOf`) **before** `capabilities.edit` or a variant's own `edit` default. A `'never'` cell refuses outright, with no consumer or variant override — `capabilities.edit: true` narrows what the data layer already allows; it does not widen it. Only when the data layer has not refused does `canWrite` fall through the existing consumer → variant → library ladder, unchanged.
+
+**Why.** The alternative — let `capabilities.edit: true` open a cell the data layer refuses — opened the editor and then threw on commit, because `entries.update()` reads the same lock and has the last word regardless. A capability that opens a door the write door slams shut is not a capability; it is a bug wearing one. Narrowing against the data answer keeps `capabilities.edit` truthful: if it says a cell opens, a write there commits.
+
+This ruling touches only the editable-lock (`'never'`) case. The derived/rollup trade-off — a consumer's `capabilities.edit` opening a bar-move gesture on a rolling-up cell so the move writes descendants instead of the cell itself ([#470](https://github.com/Pawel-IT/FreeGantt/issues/470)) — is untouched; that seam answers a different question (*where does this write land*, not *does this cell accept one*) and stays out of scope here.
+
 ## Closed here — 18, 19, 23, and Q16
 
 **18.** One key, three named states. Absent is `'anywhere'` (grill 2026-09-10; was `'api'`). Copying the view rule lost. A three-way boolean lost. Do not special-case “has `column`”.

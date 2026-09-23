@@ -35,6 +35,7 @@ export type { HierarchySource, HierarchySourceWrapper } from '../model/index.js'
 // A plugin author writing a lock rule names both: the wrapper `setLockRule` takes, and the query the
 // rule reads. Here for the same reason the hierarchy source types are.
 export type { FieldLockQuery, FieldLockRule } from '../model/index.js';
+export type { FieldLockRuleWrapper };
 // The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`

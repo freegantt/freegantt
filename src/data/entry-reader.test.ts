@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { EXTENDER_OPERATION, moveEntryTo, toEditReading, toEditsReading, toEntries } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import { entryId, FieldNotEditableError, InvertedSpanError, UnknownFieldError } from '../model/index.js';
+import {
+  ComputedFieldCannotBeWrittenError,
+  entryId,
+  FieldNotEditableError,
+  InvertedSpanError,
+  UnknownFieldError,
+} from '../model/index.js';
 import type { StoredEntry, EntryEdit, EntryInput } from '../model/index.js';
 import { instant, toInstant } from '../time/index.js';
 import type { EntryEdits, ProposedEdit } from './edit-extension.js';
@@ -357,6 +363,22 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     expect(() =>
       toEditsReading(edits, context, () => entry, registry, identityFieldLockRule, storedParentSource),
     ).toThrow(UnknownFieldError);
+  });
+
+  // #473's ocr finding: this door and `entries.update()`'s `#assertFieldTakesThisWrite` used to be
+  // two copies, and this one skipped the `compute` arm — a cascade writing a `compute` Field passed
+  // in silence instead of throwing. Both now run `write-rule.ts`'s one shared `assertFieldTakesWrite`.
+  it('refuses a cascade onto a compute Field the same way entries.update() does', () => {
+    const context = createContext();
+    const computeRegistry = new FieldRegistry({
+      fields: [{ key: 'derived', compute: () => 0 }],
+    });
+    const entry = oneEntry(context);
+    const edits: EntryEdits = new Map([[entry.id, { derived: 5 }]]);
+
+    expect(() =>
+      toEditsReading(edits, context, () => entry, computeRegistry, identityFieldLockRule, storedParentSource),
+    ).toThrow(ComputedFieldCannotBeWrittenError);
   });
 });
 
