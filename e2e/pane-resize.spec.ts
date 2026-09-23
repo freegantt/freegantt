@@ -307,7 +307,9 @@ test('a splitter drag moves the visible span (#461)', async ({ page }) => {
   // toolbar readout is that value painted, so asserting on it proves the getter and the harness
   // wiring in one move.
   await page.goto('/generic.html');
-  const readout = page.locator('.toolbar-readout');
+  // `.toolbar-readout` now names two spans (issue #472 added the "Visible hours" one beside it) —
+  // this one is the "Showing …" span the visible-span assertion below is actually about.
+  const readout = page.getByText(/^Showing /);
   await expect(readout).not.toHaveText('');
 
   const before = await readout.textContent();
