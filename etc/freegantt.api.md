@@ -421,7 +421,7 @@ export interface DatasetHierarchy {
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    entries: readonly EntryInput<TProps>[];
+    entries: readonly FlatEntryInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: {
@@ -811,7 +811,7 @@ export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | E
 
 // @public
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
-    add(input: EntryInput<TProps>): Entry<TProps>;
+    add(input: FlatEntryInput<TProps>): Entry<TProps>;
     // (undocumented)
     remove(id: EntryId | string): void;
     // (undocumented)
@@ -994,6 +994,11 @@ export interface FixedBarBox {
 
 // @public
 export function fixedWidthBar(px: number, anchor?: BarAnchor): BarProducer;
+
+// Warning: (ae-forgotten-export) The symbol "FlatEntryInputDeclared" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type FlatEntryInput<TProps = Record<string, unknown>> = string extends keyof TProps ? EntryInput<TProps> : FlatEntryInputDeclared<TProps>;
 
 // @public
 export interface FormatContext extends FieldContext {
