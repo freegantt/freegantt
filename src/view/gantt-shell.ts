@@ -958,6 +958,10 @@ export class GanttShell {
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
       this.#entrySelection.forgetEntriesTheDatasetDropped(changeSet);
+      // #496 L2: a load is a new baseline, not an edit. Collapse state returns to where this Gantt
+      // started — the same way the selection above already clears, since every old id sits in
+      // `removed`.
+      if (changeSet.origin === 'load') this.#treeCollapse.resetToStartState();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -993,6 +997,7 @@ export class GanttShell {
           this.#layout.invalidateFrom(0);
           this.#frames.request();
         }),
+      announce: (change) => this.#emit('collapseChange', change),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
       // #424: a row hidden under a collapsed ancestor still answers its own state. A write since the

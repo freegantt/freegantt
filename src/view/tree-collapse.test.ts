@@ -38,9 +38,11 @@ function makeCollapse(
 ): {
   tree: TreeCollapse;
   confirm: ReturnType<typeof vi.fn<(change: CollapseChange) => boolean>>;
+  announce: ReturnType<typeof vi.fn<(change: CollapseChange) => void>>;
   proposeSelection: ReturnType<typeof vi.fn>;
 } {
   const confirm = vi.fn<(change: CollapseChange) => boolean>(() => true);
+  const announce = vi.fn<(change: CollapseChange) => void>();
   const proposeSelection = vi.fn();
   const plannedRows = options.plannedRows ?? [];
   const entries = options.entries ?? [];
@@ -54,6 +56,7 @@ function makeCollapse(
     selected: () => selected,
     proposeSelection,
     confirm,
+    announce,
     rowIdForEntry: options.rowIdForEntry ?? ((id) => rowId(id)),
     ancestorRowIds:
       options.ancestorRowIds ??
@@ -70,7 +73,7 @@ function makeCollapse(
       options.expandableOfRow ?? ((id) => plannedRows.find((candidate) => candidate.id === id)?.expandable),
   };
   const tree = new TreeCollapse(ctx);
-  return { tree, confirm, proposeSelection };
+  return { tree, confirm, announce, proposeSelection };
 }
 
 describe('TreeCollapse', () => {
@@ -213,6 +216,54 @@ describe('TreeCollapse', () => {
     confirm.mockReturnValue(false);
     tree.collapse('p');
     expect(tree.ids).toEqual([]);
+  });
+
+  describe('resetToStartState (#496 L2)', () => {
+    it('returns to the set hydrate wrote, dropping every collapse made since', () => {
+      const { tree, announce } = makeCollapse();
+      tree.hydrate(['p1']);
+      tree.collapse('p2');
+      expect(tree.ids).toEqual([rowId('p1'), rowId('p2')]);
+
+      tree.resetToStartState();
+
+      expect(tree.ids).toEqual([rowId('p1')]);
+      expect(announce).toHaveBeenCalledWith({
+        from: [rowId('p1'), rowId('p2')],
+        to: [rowId('p1')],
+      });
+    });
+
+    it('returns to an empty set when hydrate was never called', () => {
+      const { tree, announce } = makeCollapse();
+      tree.collapse('p1');
+
+      tree.resetToStartState();
+
+      expect(tree.ids).toEqual([]);
+      expect(announce).toHaveBeenCalledWith({ from: [rowId('p1')], to: [] });
+    });
+
+    it('is a no-op, and announces nothing, when the set already matches the start state', () => {
+      const { tree, announce } = makeCollapse();
+      tree.hydrate(['p1']);
+
+      tree.resetToStartState();
+
+      expect(tree.ids).toEqual([rowId('p1')]);
+      expect(announce).not.toHaveBeenCalled();
+    });
+
+    it('never asks confirm — a load already committed, so there is no gesture to veto', () => {
+      const { tree, confirm } = makeCollapse();
+      tree.hydrate(['p1']);
+      tree.collapse('p2');
+      confirm.mockClear();
+
+      tree.resetToStartState();
+
+      expect(confirm).not.toHaveBeenCalled();
+    });
   });
 
   describe('collapseStateOf', () => {

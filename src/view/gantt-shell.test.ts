@@ -1702,3 +1702,69 @@ describe("GanttShell's committed stored rows (I5, #246 S2-3)", () => {
     shell.destroy();
   });
 });
+
+describe('a load resets the view (#496 L2)', () => {
+  function loadFixture(): { dataset: DatasetState; shell: GanttShell } {
+    const dataset = new DatasetState({
+      entries: [
+        { id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+      ],
+      timeZone: 'UTC',
+    });
+    const container = document.createElement('div');
+    const shell = new GanttShell({
+      wiring: {},
+      container,
+      dataset,
+      selectedEntryIds: ['c'],
+      collapsed: [rowId('p')],
+    });
+    return { dataset, shell };
+  }
+
+  it("clears the selection — every previously-live id sits in the load ChangeSet's own `removed`", () => {
+    const { dataset, shell } = loadFixture();
+    expect(shell.selectedEntryIds).toEqual([entryId('c')]);
+
+    dataset.entries.load([{ id: 'x', name: 'Fresh', start: '2026-02-01', end: '2026-02-05' }]);
+
+    expect(shell.selectedEntryIds).toEqual([]);
+    shell.destroy();
+  });
+
+  it('resets collapse state to what the Gantt started with, dropping a collapse made since', () => {
+    const { dataset, shell } = loadFixture();
+    shell.collapse('c'); // c has no children, but this only tests the id lands in the set
+    expect(shell.collapsed.map(String)).toEqual(expect.arrayContaining(['p', 'c']));
+
+    dataset.entries.load([{ id: 'x', name: 'Fresh', start: '2026-02-01', end: '2026-02-05' }]);
+
+    expect(shell.collapsed).toEqual([rowId('p')]);
+    shell.destroy();
+  });
+
+  it('keeps scroll position and zoom — view settings, not data (L2)', () => {
+    const dataset = new DatasetState({
+      entries: [
+        { id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+      ],
+      timeZone: 'UTC',
+    });
+    const container = document.createElement('div');
+    const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.00001 });
+    const scrollX = new ScrollAxis();
+    const shell = new GanttShell({ wiring: {}, container, dataset, scale, scroll: { x: scrollX } });
+    shell.zoomBy(2);
+    scrollX.panTo(scrollX.state.max);
+    const pxPerMsBefore = scale.scale.pxPerMs;
+    const positionBefore = scrollX.state.position;
+
+    dataset.entries.load([{ id: 'x', name: 'Fresh', start: '2026-02-01', end: '2026-02-05' }]);
+
+    expect(scale.scale.pxPerMs).toBe(pxPerMsBefore);
+    expect(scrollX.state.position).toBe(positionBefore);
+    shell.destroy();
+  });
+});
