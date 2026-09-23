@@ -74,7 +74,7 @@
   },
   "dependencies": {
     "alien-signals": "^1.0.0",
-    "temporal-polyfill": "^1.0.4"
+    "temporal-polyfill": "^1"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
