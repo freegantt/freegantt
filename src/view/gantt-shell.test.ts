@@ -11,7 +11,7 @@ import {
 import { entryId, rowId, barId, RevealTargetNotFoundError, ContainerNotFoundError } from '../model/index.js';
 import type { EntryId, Field, Instant, BarId, StoredEntry } from '../model/index.js';
 import { DatasetState, EntryStore } from '../data/index.js';
-import { FieldRegistry } from '../data/fields/field-registry.js';
+import { editableOf, FieldRegistry } from '../data/fields/field-registry.js';
 import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
@@ -59,6 +59,10 @@ function fakeDataset(
     datasetRevision: 0,
     fields: { all: registry.all },
     field: (key) => registry.get(key),
+    editableOf: (_id, key) => {
+      const declared = registry.get(key);
+      return declared === undefined ? 'never' : editableOf(declared);
+    },
     on: () => {},
     off: () => {},
   };

@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { createEditRequest } from './edit-request.js';
 import { storedParentSource } from './hierarchy-source.js';
-import { resolveWriteTarget } from './write-rule.js';
+import { identityFieldLockRule, resolveWriteTarget } from './write-rule.js';
 import { entryId } from '../model/index.js';
-import type { Field, Instant, ProposedEdit, ProposedEdits, StoredEntry } from '../model/index.js';
+import type {
+  Field,
+  FieldLockRule,
+  Instant,
+  ProposedEdit,
+  ProposedEdits,
+  StoredEntry,
+} from '../model/index.js';
 
 /** No Field lookup is under test here — every request below asks nothing that reads one. */
 const noFields = { get: () => undefined };
@@ -50,6 +57,7 @@ function requestOver(
     hierarchySource: storedParentSource,
     committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
     fields,
+    lockRule: identityFieldLockRule,
   });
 }
 
@@ -83,6 +91,7 @@ describe('createEditRequest', () => {
       hierarchySource: storedParentSource,
       committedChildIds: new Map(),
       fields: noFields,
+      lockRule: identityFieldLockRule,
     });
 
     const seen = request.entryAfterEdits(entryId('a'));
@@ -108,6 +117,7 @@ describe('createEditRequest', () => {
       hierarchySource: storedParentSource,
       committedChildIds: new Map(),
       fields: noFields,
+      lockRule: identityFieldLockRule,
     });
 
     const seen = request.entryAfterEdits(entryId('a'));
@@ -171,5 +181,44 @@ describe('createEditRequest writeTarget', () => {
     expect(request.writeTarget('depot', 'nobodyDeclaredThis')).toBe(resolveWriteTarget(true, undefined));
     expect(request.writeTarget('van-1', 'nobodyDeclaredThis')).toBe(resolveWriteTarget(false, undefined));
     expect(request.writeTarget('depot', 'nobodyDeclaredThis')).toBe('entry');
+  });
+});
+
+describe('createEditRequest editableOf (#473)', () => {
+  /** Opens `cost` on `van-1` only — the same shape a plugin composes onto `identityFieldLockRule`. */
+  const vanOnly: FieldLockRule = (query, field) =>
+    query.id === entryId('van-1') && field === 'cost' ? 'anywhere' : undefined;
+
+  it("answers a plugin's own per-entry lock over the Field's own editable", () => {
+    const request = createEditRequest({
+      entries: depotTree(),
+      proposed: new Map() as ProposedEdits,
+      added: [],
+      removed: [],
+      hierarchySource: storedParentSource,
+      committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
+      fields: lookupOf({ key: 'cost', editable: false }),
+      lockRule: vanOnly,
+    });
+
+    expect(request.editableOf('van-1', 'cost')).toBe('anywhere');
+    expect(request.editableOf('crate-a', 'cost')).toBe('never');
+  });
+
+  it('answers for an entry this same transaction adds, not only a committed one', () => {
+    const added = entry('van-2', 0, 100, 'depot');
+    const request = createEditRequest({
+      entries: depotTree(),
+      proposed: new Map() as ProposedEdits,
+      added: [added],
+      removed: [],
+      hierarchySource: storedParentSource,
+      committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
+      fields: lookupOf({ key: 'cost', editable: false }),
+      lockRule: ((query, field) =>
+        query.id === entryId('van-2') && field === 'cost' ? 'anywhere' : undefined) satisfies FieldLockRule,
+    });
+
+    expect(request.editableOf('van-2', 'cost')).toBe('anywhere');
   });
 });

@@ -532,3 +532,70 @@ describe('a lock holds at every caller-facing door (ADR 0015)', () => {
     ).toEqual([entryId('c2')]);
   });
 });
+
+describe("a plugin's per-entry lock rule opens a locked Field (#473)", () => {
+  /** `start` is locked for every Entry; the plugin's own rule is the only door that reopens it,
+   *  and only for the Entry it names. */
+  function lockedDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1' },
+        { id: 'c1', parentId: 'p1', name: 'c1', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'c2', parentId: 'p1', name: 'c2', start: '2026-01-04', end: '2026-01-05' },
+      ],
+      fields: [{ key: 'start', editable: false }],
+    });
+  }
+
+  it('opens one Entry a plugin names, and leaves its sibling locked', () => {
+    const state = lockedDataset();
+    state.setLockRule(
+      (next) => (query, field) =>
+        query.id === entryId('c1') && field === 'start' ? 'anywhere' : next(query, field),
+    );
+
+    state.entries.update('c1', { start: '2026-01-03' });
+    expect(state.entries.get('c1')!.start).toBe(toInstant('UTC', '2026-01-03', 'test'));
+
+    expect(() => state.entries.update('c2', { start: '2026-01-03' })).toThrow(FieldNotEditableError);
+    expect(state.entries.get('c2')!.start).toBe(toInstant('UTC', '2026-01-04', 'test'));
+  });
+
+  it('opens a whole subtree with one rule, and leaves the root and outside rows locked', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'root', name: 'root' },
+        { id: 'p1', parentId: 'root', name: 'p1' },
+        { id: 'c1', parentId: 'p1', name: 'c1', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'c2', parentId: 'p1', name: 'c2', start: '2026-01-04', end: '2026-01-05' },
+        { id: 'outside', name: 'outside', start: '2026-02-01', end: '2026-02-02' },
+      ],
+      fields: [{ key: 'start', editable: false }],
+    });
+    state.setLockRule(
+      (next) => (query, field) =>
+        field === 'start' && query.isDescendantOf('p1') ? 'anywhere' : next(query, field),
+    );
+
+    state.entries.update('c1', { start: '2026-01-03' });
+    state.entries.update('c2', { start: '2026-01-06' });
+    expect(state.entries.get('c1')!.start).toBe(toInstant('UTC', '2026-01-03', 'test'));
+    expect(state.entries.get('c2')!.start).toBe(toInstant('UTC', '2026-01-06', 'test'));
+
+    expect(() => state.entries.update('outside', { start: '2026-02-03' })).toThrow(FieldNotEditableError);
+    expect(state.entries.get('outside')!.start).toBe(toInstant('UTC', '2026-02-01', 'test'));
+  });
+
+  it('Dataset.editableOf answers the same effective lock entries.update() writes against', () => {
+    const state = lockedDataset();
+    state.setLockRule(
+      (next) => (query, field) =>
+        query.id === entryId('c1') && field === 'start' ? 'anywhere' : next(query, field),
+    );
+
+    expect(state.editableOf('c1', 'start')).toBe('anywhere');
+    expect(state.editableOf('c2', 'start')).toBe('never');
+  });
+});

@@ -10,9 +10,9 @@
 // per Field. `Capabilities.edit` answered per Entry. The cell editor kept a third rule per cell. No
 // two of them could meet. A bar move wrote `start` and `end` and asked neither Field.
 
-import { libraryWriteRule, resolveWriteTarget, WRITABLE, NOT_WRITABLE } from '../data/write-rule.js';
+import { editableOf, resolveWriteTarget, WRITABLE, NOT_WRITABLE, DERIVED } from '../data/write-rule.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
-import type { Entry, Field, FieldKey } from '../model/index.js';
+import type { Entry, Field, FieldEditable, FieldKey } from '../model/index.js';
 import type { CapabilityRule, GestureCapability, Capabilities, WriteRule } from '../model/index.js';
 
 // ADR 0018: the four vocabulary types moved down to `model/`, so `EntryVariant.can` (a `layout/`
@@ -63,6 +63,13 @@ export interface CapabilityInputs {
    *  It sits one level below the consumer's own `capabilities`, and one level above the library
    *  rules. */
   variantCapabilitiesFor?: ((entry: Entry) => Capabilities | undefined) | undefined;
+  /** From the bound `Dataset` — `dataset.editableOf`. The effective lock on one cell (#473): a
+   *  plugin's per-entry lock rule's own answer, or the Field's own `editable` when the rule has no
+   *  opinion. `canWrite` reads this **before** `capabilities`/`variantCapabilitiesFor` and refuses a
+   *  `'never'` cell outright. A consumer's `edit: true` narrows what the data layer already allows,
+   *  and does not widen it (I14, #473's `capabilities.edit` ruling). Absent in a hand-built test
+   *  fixture, `canWrite` falls back to the declared Field's own `editable` unchanged. */
+  editableOf?: ((id: string, key: FieldKey) => FieldEditable) | undefined;
 }
 
 /** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
@@ -165,11 +172,17 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
     if (!hasSomewhereToWrite(declared)) return NOT_WRITABLE;
+    // #473's `capabilities.edit` ruling: a hard `'never'` lock refuses outright, before the consumer
+    // or the variant gets a say. Neither may widen what the data layer already refused — only the
+    // Field's own `'api'`/`'anywhere'` leaves room for `capabilities.edit` to narrow further below.
+    const effectiveEditable = inputs.editableOf?.(entry.id, field) ?? editableOf(declared);
+    if (effectiveEditable === 'never') return NOT_WRITABLE;
     const consumerAnswer = askWriteRule(capabilities?.edit, entry, field);
     if (consumerAnswer !== undefined) return consumerAnswer ? WRITABLE : NOT_WRITABLE;
     const variantAnswer = askWriteRule(variantCapabilitiesFor?.(entry)?.edit, entry, field);
     if (variantAnswer !== undefined) return variantAnswer ? WRITABLE : NOT_WRITABLE;
-    return libraryWriteRule(entry.hasChildren, declared);
+    if (resolveWriteTarget(entry.hasChildren, declared) === 'refused') return DERIVED;
+    return effectiveEditable === 'anywhere' ? WRITABLE : NOT_WRITABLE;
   };
 
   /** #470: does this row own the Field at all? `resolveWriteTarget` answers from the Field and

@@ -9,6 +9,7 @@
 import type { EntryId } from './ids.js';
 import type { EntryEdits, ProposedEdits, StoredEntry } from './stored-entry.js';
 import type { FieldKey } from './field-key.js';
+import type { FieldEditable } from './field.js';
 import type { WriteTarget } from './write-verdict.js';
 
 /** What the extension hook reads (D4, D-S2-6). It carries the same three members on a preview call
@@ -47,6 +48,11 @@ export interface EditRequest {
    *  A cascade that writes a cell it does not own is dropped in silence (ADR 0013, decision 5).
    *  Reads `write-rule.ts`, the resolver the grid and `update()` read (I14). */
   writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;
+  /** The effective lock on this cell (#473): a plugin's per-entry lock rule's own answer, or the
+   *  Field's own `editable` when the rule has no opinion. Reads `write-rule.ts`'s
+   *  `resolveFieldEditable`, the same resolver every write door reads (I14) — a cascade checks the
+   *  same lock `entries.update()` and the grid check before it writes. */
+  editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
 }
 
 /** Extra writes only; an empty map means no cascade. Lives in `model/` (not `data/`) so

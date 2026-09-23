@@ -29,6 +29,33 @@ export function parentIdFrom(source: HierarchySource, entry: StoredEntry): Entry
  *  Only an Entry with an accepted parent is in the map; everything else is a root. */
 export type ParentIndex = ReadonlyMap<EntryId, EntryId>;
 
+/** Is `id` under `ancestorId`, walking one parent at a time through whichever `parentIdOf` a caller
+ *  hands it (#473)? Generic over how a parent is read — `EntryStore` passes its own transaction-aware
+ *  `parentIdOf`, and a lazy `EditRequest` passes `entryAfterEdits` paired with the live source — so a
+ *  subtree lock rule answers the same "is this row under X" question every caller already asks, and
+ *  never a raw stored `parentId` alone (ADR 0020).
+ *
+ *  `seen` is the same cycle guard `breakCycles` runs once per revision on the committed tree; here the
+ *  walk simply stops rather than reporting, because a lock query answers `false` on a bad chain
+ *  instead of raising (`F5` — a query is a read, not a place to raise a fault). */
+export function isDescendantOf(
+  id: EntryId,
+  ancestorId: EntryId,
+  entryFor: (id: EntryId) => StoredEntry | undefined,
+  parentIdOf: (entry: StoredEntry) => EntryId | undefined,
+): boolean {
+  const seen = new Set<EntryId>();
+  let current = entryFor(id);
+  let parentId = current === undefined ? undefined : parentIdOf(current);
+  while (parentId !== undefined && !seen.has(parentId)) {
+    if (parentId === ancestorId) return true;
+    seen.add(parentId);
+    current = entryFor(parentId);
+    parentId = current === undefined ? undefined : parentIdOf(current);
+  }
+  return false;
+}
+
 /** The tree core will use, and every answer it refused on the way to it. Each refusal is an Error
  *  report the caller raises as it is — the raise site adds the `console` fallback, because the
  *  fallback is the same one line for all of them. */

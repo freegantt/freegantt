@@ -8,13 +8,32 @@
 // asks the API threshold before it stages a write. `entries.update()` keeps `UnknownFieldError` for
 // the existence arm.
 
-import type { Field, FieldKey, WriteRefusalReason, WriteTarget, WriteVerdict } from '../model/index.js';
+import type {
+  EntryId,
+  Field,
+  FieldEditable,
+  FieldKey,
+  FieldLockQuery,
+  FieldLockRule,
+  WriteRefusalReason,
+  WriteTarget,
+  WriteVerdict,
+} from '../model/index.js';
 import {
   ComputedFieldCannotBeWrittenError,
+  entryId,
   FieldNotEditableError,
   UnknownFieldError,
 } from '../model/index.js';
 import { editableOf, rollsUp } from './fields/field-registry.js';
+import { isDescendantOf } from './hierarchy-source.js';
+import type { StoredEntry } from '../model/index.js';
+
+// The Field's own `editable` is a fallback, so a caller that never wired a lock rule — most of this
+// file's own unit tests, and `view/capability.ts`'s `CapabilityInputs` when a test builds one by hand
+// — still gets the Field's own answer, not a broken import. `write-rule.ts` already reads it (above);
+// re-exporting it here saves every one of those callers a second import into `fields/field-registry.ts`.
+export { editableOf };
 
 /** `model/write-verdict.ts` declares the verdict pair (and, since #466, `WriteTarget`) under its
  *  public names, so a consumer can import what `view/capability.ts` republishes and what
@@ -69,28 +88,58 @@ export function isApiEditable(field: Field): boolean {
   return editableOf(field) !== 'never';
 }
 
+/** Core's own lock rule (#473): silence, on every cell. The first occupant of `ctx.edits.setLockRule`
+ *  — a plugin composes onto this the way it composes onto `identityExtender`/`storedParentSource`
+ *  (D-S5-23) — so a Dataset with no plugin installed answers every cell with `Field.editable` alone. */
+export const identityFieldLockRule: FieldLockRule = () => undefined;
+
+/** One cell's address, built from whichever lookup a caller holds — `EntryStore`'s own
+ *  transaction-aware `parentIdOf`, or an `EditRequest`'s lazy `entryAfterEdits`. The walk itself is
+ *  `hierarchy-source.ts`'s `isDescendantOf`; this just gives a `FieldLockRule` the shape it asks for. */
+export function fieldLockQueryFor(
+  id: EntryId,
+  entryFor: (id: EntryId) => StoredEntry | undefined,
+  parentIdOf: (entry: StoredEntry) => EntryId | undefined,
+): FieldLockQuery {
+  return {
+    id,
+    isDescendantOf: (ancestorId) => isDescendantOf(id, entryId(ancestorId), entryFor, parentIdOf),
+  };
+}
+
+/** The effective lock on one cell (#473): a plugin's own answer, or `Field.editable` when the rule
+ *  has no opinion (`undefined`). One function, so `entries.update()`, an `EditExtender` cascade, and
+ *  the grid (`view/capability.ts`) read the same answer for the same cell (I14) — a plugin's per-entry
+ *  unlock is not a second rule beside `Field.editable`, it is this rule's other input. */
+export function resolveFieldEditable(
+  query: FieldLockQuery,
+  field: FieldKey,
+  declared: Field,
+  lockRule: FieldLockRule,
+): FieldEditable {
+  return lockRule(query, field) ?? editableOf(declared);
+}
+
 /** Does this Field, on this Entry, take a write from this door at all? The one check
  *  `entries.update()` and an `EditExtender` cascade both run, in the one order that leaves the caller
- *  somewhere to go (ADR 0015; folded from two copies, #473's ocr finding: the cascade door used to
- *  skip the `compute` check, so a cascade writing a `compute` Field passed in silence instead of
- *  throwing `ComputedFieldCannotBeWrittenError` the way `entries.update()` already does).
+ *  somewhere to go (ADR 0015; folded from two copies, #473's ocr finding).
  *
  *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`: a
- *  compute Field owns no stored home, and it may not carry `editable` either, so asking `editable`
- *  first would answer "declare an editable" about a key the register door refuses. Then the API
- *  threshold, which refuses the lock and nothing else.
- *
- *  It asks about the Field, never about the Entry. It returns the Field it resolved, so a caller that
- *  needs the declaration again — `entry-store.ts`'s `#assertNoDerivedWrite` — reads the same one
- *  instead of looking the key up a second time. */
+ *  compute Field owns no stored home, and it may not carry `editable` either, so asking the lock
+ *  first would answer "declare an editable" about a key the register door refuses. Then the lock
+ *  itself, resolved per entry (#473) rather than off the Field declaration alone. */
 export function assertFieldTakesWrite(
   field: FieldKey,
   declared: Field | undefined,
+  query: FieldLockQuery,
+  lockRule: FieldLockRule,
   operation: string,
 ): Field {
   if (declared === undefined) throw new UnknownFieldError(field, operation);
   if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
-  if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
+  if (resolveFieldEditable(query, field, declared, lockRule) === 'never') {
+    throw new FieldNotEditableError(field, operation);
+  }
   return declared;
 }
 

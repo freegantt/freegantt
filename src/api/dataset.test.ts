@@ -791,6 +791,73 @@ describe('Dataset plugins (S5.10)', () => {
   });
 });
 
+describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () => {
+  /** Opens `owner` on `open` only; `locked` stays refused. Both are `editable: false` Fields, so
+   *  the cascade's only door onto `open` is this rule. */
+  const opensOneEntry: DataPlugin = {
+    id: 'demo.unlock',
+    data(ctx) {
+      ctx.edits.setLockRule(
+        (next) => (entry, field) =>
+          entry.id === entryId('open') && field === 'owner' ? 'anywhere' : next(entry, field),
+      );
+    },
+  };
+
+  function twoLockedEntries(cascadeTo: (id: string, owner: string) => DataPlugin['data']): Dataset {
+    return new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner', editable: false }],
+      entries: [
+        { id: 'open', name: 'Open', start: '2026-09-01', end: '2026-09-02', props: { owner: 'nobody' } },
+        { id: 'locked', name: 'Locked', start: '2026-09-01', end: '2026-09-02', props: { owner: 'nobody' } },
+      ],
+      plugins: [
+        opensOneEntry,
+        { id: 'demo.cascade', requires: ['demo.unlock'], data: cascadeTo('open', 'ana') },
+      ],
+    });
+  }
+
+  it('lets a cascade write the Entry the lock rule names, unchanged from a locked sibling', () => {
+    const cascadesOwner =
+      (id: string, owner: string): DataPlugin['data'] =>
+      (ctx) => {
+        ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
+      };
+    const dataset = twoLockedEntries(cascadesOwner);
+
+    dataset.entries.update('open', { name: 'Renamed' });
+
+    expect(dataset.entries.get('open')?.read('owner')).toBe('ana');
+    expect(dataset.entries.get('locked')?.read('owner')).toBe('nobody');
+  });
+
+  it('still refuses a cascade onto a cell the lock rule has no opinion on', () => {
+    const cascadesOwner =
+      (id: string, owner: string): DataPlugin['data'] =>
+      (ctx) => {
+        ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
+      };
+    const dataset = twoLockedEntries(() => cascadesOwner('locked', 'ana'));
+
+    expect(() => dataset.entries.update('open', { name: 'Renamed' })).toThrow(FieldNotEditableError);
+    expect(dataset.entries.get('locked')?.read('owner')).toBe('nobody');
+  });
+
+  it('Dataset.editableOf answers the same lock a cascade or entries.update() write against', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner', editable: false }],
+      entries: [oneEntry({ id: 'open', props: { owner: 'nobody' } })],
+      plugins: [opensOneEntry],
+    });
+
+    expect(dataset.editableOf('open', 'owner')).toBe('anywhere');
+    expect(dataset.editableOf('open', 'name')).toBe('anywhere');
+  });
+});
+
 describe('a plugin’s declared Field is the plugin’s, not the document’s (D-S5-33, #162)', () => {
   /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `props`. */
   const declaresRisk: DataPlugin = {

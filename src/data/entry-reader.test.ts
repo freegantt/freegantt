@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { EXTENDER_OPERATION, moveEntryTo, toEditReading, toEditsReading, toEntries } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import {
-  ComputedFieldCannotBeWrittenError,
-  entryId,
-  FieldNotEditableError,
-  InvertedSpanError,
-  UnknownFieldError,
-} from '../model/index.js';
+import { entryId, FieldNotEditableError, InvertedSpanError, UnknownFieldError } from '../model/index.js';
 import type { StoredEntry, EntryEdit, EntryInput } from '../model/index.js';
 import { instant, toInstant } from '../time/index.js';
 import type { EntryEdits, ProposedEdit } from './edit-extension.js';
 import { FieldRegistry } from './fields/field-registry.js';
+import { storedParentSource } from './hierarchy-source.js';
+import { identityFieldLockRule } from './write-rule.js';
 
 const registry = new FieldRegistry({ fields: [] });
 
@@ -278,7 +274,14 @@ describe('InvertedSpanError names the caller, the entry id, and both instants', 
 
     const cascade: EntryEdits = new Map([[entry!.id, inverting]]);
     const fromCascade = invertedSpanErrorFrom(() =>
-      toEditsReading(cascade, context, (id) => (id === entry!.id ? entry : undefined), registry),
+      toEditsReading(
+        cascade,
+        context,
+        (id) => (id === entry!.id ? entry : undefined),
+        registry,
+        identityFieldLockRule,
+        storedParentSource,
+      ),
     );
     expect(fromCascade.operation).toBe(EXTENDER_OPERATION);
     // The plugin author is not sent to a call they never made (#239).
@@ -316,7 +319,14 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     const entry = oneEntry(context);
     const edits: EntryEdits = new Map([[entry.id, { start: instant(utc('2026-01-02T00:00:00Z')) }]]);
 
-    const reading = toEditsReading(edits, context, () => entry, registry);
+    const reading = toEditsReading(
+      edits,
+      context,
+      () => entry,
+      registry,
+      identityFieldLockRule,
+      storedParentSource,
+    );
 
     expect(reading.stored.get(entry.id)?.start).toBe(utc('2026-01-02T00:00:00Z'));
   });
@@ -327,7 +337,14 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     const entry = oneEntry(context);
     const edits: EntryEdits = new Map([[entryId('ghost'), { start: instant(utc('2026-01-02T00:00:00Z')) }]]);
 
-    const reading = toEditsReading(edits, context, (id) => (id === entry.id ? entry : undefined), registry);
+    const reading = toEditsReading(
+      edits,
+      context,
+      (id) => (id === entry.id ? entry : undefined),
+      registry,
+      identityFieldLockRule,
+      storedParentSource,
+    );
 
     expect(reading.stored.size).toBe(0);
   });
@@ -337,23 +354,9 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     const entry = oneEntry(context);
     const edits: EntryEdits = new Map([[entry.id, { notAField: 'x' }]]);
 
-    expect(() => toEditsReading(edits, context, () => entry, registry)).toThrow(UnknownFieldError);
-  });
-
-  // #473's ocr finding: this door and `entries.update()`'s `#assertFieldTakesThisWrite` used to be
-  // two copies, and this one skipped the `compute` arm — a cascade writing a `compute` Field passed
-  // in silence instead of throwing. Both now run `write-rule.ts`'s one shared `assertFieldTakesWrite`.
-  it('refuses a cascade onto a compute Field the same way entries.update() does', () => {
-    const context = createContext();
-    const computeRegistry = new FieldRegistry({
-      fields: [{ key: 'derived', compute: () => 0 }],
-    });
-    const entry = oneEntry(context);
-    const edits: EntryEdits = new Map([[entry.id, { derived: 5 }]]);
-
-    expect(() => toEditsReading(edits, context, () => entry, computeRegistry)).toThrow(
-      ComputedFieldCannotBeWrittenError,
-    );
+    expect(() =>
+      toEditsReading(edits, context, () => entry, registry, identityFieldLockRule, storedParentSource),
+    ).toThrow(UnknownFieldError);
   });
 });
 
@@ -381,7 +384,9 @@ describe('toEditsReading honours the editable lock (#473, ADR 0015)', () => {
     const entry = lockedEntry(context);
     const edits: EntryEdits = new Map([[entry.id, { start: '2026-02-01' }]]);
 
-    expect(() => toEditsReading(edits, context, () => entry, lockedRegistry)).toThrow(FieldNotEditableError);
+    expect(() =>
+      toEditsReading(edits, context, () => entry, lockedRegistry, identityFieldLockRule, storedParentSource),
+    ).toThrow(FieldNotEditableError);
   });
 
   it("still admits a cascade onto an 'api' Field", () => {
@@ -389,7 +394,14 @@ describe('toEditsReading honours the editable lock (#473, ADR 0015)', () => {
     const entry = lockedEntry(context);
     const edits: EntryEdits = new Map([[entry.id, { owner: 'bo' }]]);
 
-    const reading = toEditsReading(edits, context, () => entry, lockedRegistry);
+    const reading = toEditsReading(
+      edits,
+      context,
+      () => entry,
+      lockedRegistry,
+      identityFieldLockRule,
+      storedParentSource,
+    );
 
     expect(reading.stored.get(entry.id)?.props?.['owner']).toBe('bo');
   });

@@ -6,6 +6,7 @@ import { entryId } from '../model/index.js';
 import type { Instant, StoredEntry } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
+import { editableOf } from '../data/fields/field-registry.js';
 
 function fakeDataset(list: readonly StoredEntry[]): GanttShellOptions['dataset'] {
   const context = {
@@ -18,6 +19,10 @@ function fakeDataset(list: readonly StoredEntry[]): GanttShellOptions['dataset']
     datasetRevision: 0,
     fields: { all: CORE_FIELDS },
     field: (key) => CORE_FIELDS.find((field) => String(field.key) === String(key)),
+    editableOf: (_id, key) => {
+      const declared = CORE_FIELDS.find((field) => String(field.key) === String(key));
+      return declared === undefined ? 'never' : editableOf(declared);
+    },
     on: () => {},
     off: () => {},
   };
