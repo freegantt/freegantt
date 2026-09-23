@@ -55,12 +55,35 @@ export function lockEntries(): LockEntriesPlugin {
 
   const isLockedEntry = (id: string): boolean => dataset?.entries.get(id)?.read(LOCKED_FIELD_KEY) === true;
 
+  // Which ids are locked right now — kept current by the `change` listener below, so the extender
+  // (run on every drag-preview frame) walks only the locked entries, never the whole request.
+  const lockedIds = new Set<EntryId>();
+
   return {
     id: 'demo.lockEntries',
 
     data(ctx) {
       dataset = ctx.dataset;
       ctx.fields.register({ key: LOCKED_FIELD_KEY, type: 'boolean', editable: 'api' });
+
+      // No seed walk here: `ctx.dataset` is not readable yet while `data()` runs (D-S5-4 — the
+      // Dataset wrapper this context hands back is still under construction), and a flat `locked:
+      // true` on a construction entry is dropped before any plugin installs anyway (ingest runs
+      // first). `lockedIds` starts empty and only ever grows through a later `lock()`/`unlock()`/
+      // `entries.load()` commit, which the listener below always sees.
+      //
+      // Every id a commit touched — added, removed, or field-written — re-read once, after the
+      // commit lands, so `lockedIds` never drifts from the Field it mirrors.
+      ctx.events.on('change', ({ changeSet }) => {
+        const touched = new Set<EntryId>();
+        for (const row of changeSet.added) touched.add(row.entity.id);
+        for (const row of changeSet.removed) touched.add(row.entity.id);
+        for (const row of fieldRowsOf(changeSet)) touched.add(row.id);
+        for (const id of touched) {
+          if (isLockedEntry(String(id))) lockedIds.add(id);
+          else lockedIds.delete(id);
+        }
+      });
 
       // What does a locked entry do while a neighbour moves? It moves too, so the drag preview shows
       // the cost of the lock before the drop lands.
@@ -70,10 +93,11 @@ export function lockEntries(): LockEntriesPlugin {
         // `EntryEdit` is the write shape — the same object `dataset.entries.update(id, edit)` takes
         // (#209). A cascade names it; it never states a storage shape of its own.
         const mine = new Map<EntryId, EntryEdit>();
-        for (const [id, entry] of request.entries) {
-          if (!isLockedEntry(String(id)) || request.proposed.has(id)) continue;
-          // A locked entry with no dates has nothing to move (ADR 0012).
-          if (entry.start === undefined) continue;
+        for (const id of lockedIds) {
+          if (request.proposed.has(id)) continue;
+          const entry = request.entries.get(id);
+          // A locked entry outside this request, or with no dates, has nothing to move (ADR 0012).
+          if (entry === undefined || entry.start === undefined) continue;
           // `moveEntryTo`, never `{ start, end }` written by hand: it is the one place that computes
           // the rigid translate (`end - start` held fixed), so a cascade never re-derives that math
           // (ADR 0026 retired the several-Segment case this comment used to guard against — a Bar is
