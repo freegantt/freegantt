@@ -430,11 +430,13 @@ describe('TimeScaleModel', () => {
 
     // #489: this model shares across `Gantt` instances (each with a possibly different
     // `zoomPresets` ladder of its own), so it has no ladder to search — unlike `Viewport.preset`,
-    // a custom id here is unknown even after it exists on some Gantt's own zoomPresets.
+    // a custom id here is unknown even after it exists on some Gantt's own zoomPresets. `sixHour`
+    // was this test's own example until #101 shipped it as a named preset; `twoHourShift` is a
+    // stand-in that stays custom-only.
     it('preset = stays shipped-only — a ladder-only id is still UnknownPresetError, naming no ladder', () => {
       const model = new TimeScaleModel();
       try {
-        model.preset = 'sixHour';
+        model.preset = 'twoHourShift';
         expect.unreachable('expected UnknownPresetError');
       } catch (error) {
         const unknown = error as UnknownPresetError;

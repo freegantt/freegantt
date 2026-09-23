@@ -38,9 +38,9 @@ const PRESET_LABELS: Readonly<Record<string, string>> = {
   hourDayWeek: 'Hour / Day / Week',
   dayWeekMonth: 'Day / Week / Month',
   weekMonthYear: 'Week / Month / Year',
-  // #489: a `tickIncrement > 1` custom preset a page splices into `gantt.zoomPresets` — the visible
-  // proof that a stepped Tick is anchored on the calendar (`time/zone.ts`'s `tickFloor`/`nextTick`),
-  // not on wherever the visible window's own left edge happens to sit.
+  // #489, #101: the shipped `sixHour` preset (item 1), a page splices into `gantt.zoomPresets` — the
+  // visible proof that a stepped Tick is anchored on the calendar (`time/zone.ts`'s
+  // `tickFloor`/`nextTick`), not on wherever the visible window's own left edge happens to sit.
   sixHour: 'Every 6 hours',
 };
 
