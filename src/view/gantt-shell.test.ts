@@ -1767,4 +1767,28 @@ describe('a load resets the view (#496 L2)', () => {
     expect(scrollX.state.position).toBe(positionBefore);
     shell.destroy();
   });
+
+  it('an id both the old data and the load name keeps no old selection or collapse state (L1)', () => {
+    const dataset = new DatasetState({
+      entries: [
+        { id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+      ],
+      timeZone: 'UTC',
+    });
+    const container = document.createElement('div');
+    // No `collapsed` option: this Gantt starts with nothing collapsed.
+    const shell = new GanttShell({ wiring: {}, container, dataset, selectedEntryIds: ['p'] });
+    shell.collapse('p');
+    expect(shell.selectedEntryIds).toEqual([entryId('p')]);
+    expect(shell.collapsed).toEqual([rowId('p')]);
+
+    // 'p' names an entry both the old data and the load below name — L1 says a kept id keeps no
+    // per-entry view state, so it must come back neither selected nor collapsed.
+    dataset.entries.load([{ id: 'p', name: 'Reloaded parent', start: '2026-02-01', end: '2026-02-05' }]);
+
+    expect(shell.selectedEntryIds).toEqual([]);
+    expect(shell.collapsed).toEqual([]); // back to this Gantt's own starting state, not kept
+    shell.destroy();
+  });
 });
