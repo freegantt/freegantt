@@ -14,7 +14,10 @@ issue plans land here as they're opened.
   [496-order-tolerant-bulk-write.md](./496-order-tolerant-bulk-write.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
-  Field. Blocked by #496. Grill round 3 (the order Field) open. Plan: [517-sync.md](./517-sync.md).
+  Field (#528). Blocked by #496 and #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
+- [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
+  cannot be undone. Direction: `siblingIndex`, written by the library from list position. Blocked
+  by #496; blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
 - [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
   delta. Wishlist; blocked by #496 and #517. No plan yet.
 
