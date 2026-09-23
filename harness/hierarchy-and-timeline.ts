@@ -141,9 +141,16 @@ mountGanttToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#t
 // page's own.
 gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7) }]));
 
+// #424: the selected row's own collapse state, read straight off `gantt.collapseStateOf` rather
+// than scanned out of `gantt.collapsed` — the row tree's answer, not a set membership test.
 function renderSelection(): void {
   const ids = gantt.selectedEntryIds;
-  selectionReadout.textContent = ids.length === 0 ? 'No selection' : `Selected: ${ids.join(', ')}`;
+  if (ids.length === 0) {
+    selectionReadout.textContent = 'No selection';
+    return;
+  }
+  const state = gantt.collapseStateOf(ids[0]!) ?? 'no row';
+  selectionReadout.textContent = `Selected: ${ids.join(', ')} (${state})`;
 }
 
 // #429: the page holds no second copy of an answer `gantt.rowSource` already gives. A filter or
