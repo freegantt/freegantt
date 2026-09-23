@@ -98,6 +98,7 @@ export class FrameLayout implements FrameLayoutView {
   #rowOfEntry = new Map<EntryId, RowId>();
   #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
+  #expandableOfRow = new Map<RowId, boolean>();
   #frameRevision = 0;
   /** What `#plan` (and the three maps above) were last planned from — `undefined` before the first
    *  `computeFrame` call. `computeFrame` replans only when this frame's own `RowPlanInput` disagrees
@@ -199,6 +200,13 @@ export class FrameLayout implements FrameLayoutView {
     return this.barsForEntry(id).map((bar) => bar.id);
   }
 
+  /** Whether this row can expand or collapse, read from the row tree before collapse hides
+   *  descendants — so a row a collapsed ancestor hides still answers (#424). `undefined` for an id
+   *  no current row plan holds: a removed row, or a stale id. */
+  expandableOfRow(id: RowId): boolean | undefined {
+    return this.#expandableOfRow.get(id);
+  }
+
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */
   ancestorRowIds(id: EntryId): readonly RowId[] {
     const ids: RowId[] = [];
@@ -240,10 +248,12 @@ export class FrameLayout implements FrameLayoutView {
     this.#rowOfEntry.clear();
     this.#entryIdsOfRow.clear();
     this.#parentOfRow.clear();
+    this.#expandableOfRow.clear();
     for (const row of open) {
       this.#entryIdsOfRow.set(row.id, row.entryIds);
       for (const id of row.entryIds) this.#rowOfEntry.set(id, row.id);
       if (row.parentRowId !== undefined) this.#parentOfRow.set(row.id, row.parentRowId);
+      this.#expandableOfRow.set(row.id, row.expandable);
     }
   }
 }

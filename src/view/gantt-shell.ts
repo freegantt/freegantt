@@ -132,6 +132,7 @@ import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
+import type { CollapseState } from './collapse-state.js';
 import { EntrySelection } from './entry-selection.js';
 import type { EntrySelectionPorts } from './entry-selection.js';
 
@@ -952,6 +953,7 @@ export class GanttShell {
         }),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
+      expandableOfRow: (id) => this.#layout.expandableOfRow(id),
     });
     this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
     this.#teardown.add(() => this.#rovingFocus.detach());
@@ -1278,6 +1280,10 @@ export class GanttShell {
 
   toggleCollapse(id: RowId | string): void {
     this.#treeCollapse.toggleCollapse(id);
+  }
+
+  collapseStateOf(id: RowId | string): CollapseState | undefined {
+    return this.#treeCollapse.collapseStateOf(id);
   }
 
   collapseAll(): void {
