@@ -16,11 +16,11 @@
 
 | # | Acceptance row | State | Carried by |
 |---|---|---|---|
-| **R1** | All §12-style budgets defined numerically from the spike and enforced in CI | Not started. The spike has not run, and no budget is defined. `pnpm measure:scale` now captures the browser half of it on demand (#403's branch) — a measurement, never a gate, per #95. See §5.1. | #95 (profile the harness), #342 (bundle number) |
+| **R1** | All §12-style budgets defined numerically from the spike and enforced in CI | The spike itself has not run, so the frame-time and reconciler budgets are still not defined. `pnpm measure:scale` now captures the browser half of it on demand (#403's branch) — a measurement, never a gate, per #95. **The bundle budget is done (#342, 2026-09-22):** `pnpm check-bundle-growth` guards on growth against `main`'s merge-base, 1 kB brotli per entry, ledger exception in `bundle-size-exceptions.md`. See §5.1. | #95 (profile the harness), #342 (bundle number, done) |
 | **R2** | 10k-entry fixture: smooth scroll, sub-frame hover, bulk edit in one transaction without jank | The fixture now seeds 10,000 (#406, 2026-09-22). The scroll half is measured — see below. Hover and bulk-edit are not yet measured, so the row stays open. | **#406** (fixture, done), #95 (measurement, partial) |
 | **R3** | Linked-scroll demo works with both axes shared, and with x shared while y stays private | **Done — ticked in `plans/03` §S6.** Shipped as D-S6-1 (#405): `ScrollModel` retired, `ScrollAxis` is the shared unit. The paragraph below is the reasoning that got there. `[S1-A4]` proves both-axis sharing. The second shape is a build, and the shape is settled: one **scroll axis** becomes the shared unit, so a caller shares x, y, both or neither — **D-S6-1**, §5.3. Shared y alone is representable and unadvertised. | **#405** |
 | **R4** | 100 mount/destroy cycles leak no nodes, listeners or observables | **Done, 2026-09-15.** Counted in `test/dom/leak-cycles.test.ts` (100 cycles, three shapes, plus the shared-model binding check) and in `e2e/mount-destroy.spec.ts` (Chromium nodes, listeners and heap). `GanttShell.destroy()` is one `disposeAll()`. | **#403** |
-| **R5** | `npm pack` output audited: internals unreachable, types complete, bundle within budget | **Internals unreachable and types complete are done.** `prepack` builds the library, so a packed tarball and a `github:` install both carry `dist/`; `scripts/check-pack-install.mjs` proves the install from outside the repository. Bundle within budget stays open — #342. | **#400** |
+| **R5** | `npm pack` output audited: internals unreachable, types complete, bundle within budget | **Internals unreachable and types complete are done.** `prepack` builds the library, so a packed tarball and a `github:` install both carry `dist/`; `scripts/check-pack-install.mjs` proves the install from outside the repository. **Bundle within budget is done (#342):** `pnpm check-bundle-growth` guards growth against `main`, 1 kB brotli per entry. | **#400** |
 
 ### R1 — budgets from a measured spike
 
@@ -89,7 +89,7 @@ Written as hygiene. It is now the blocker: `version` is `0.0.0`, `dist/` is giti
 | Error-path audit — typed errors everywhere | `BuiltInThrownCode` and `BuiltInReportCode` are both large and complete-looking. The audit is a read, not a build. |
 | `exports` map seals internals | The map is sealed. #400's acceptance proves it from outside the repository, which is the only proof that counts. |
 | Semver and API-report tooling, I11 automated | `pnpm api-report` runs in `verify`. "Automated" means a version bump refuses an unreported surface change. |
-| Bundle-size budget in CI | `size-limit` runs in `verify`. The number is parked — #342. |
+| Bundle-size budget in CI | **Done — #342.** `scripts/check-bundle-growth.mjs` runs in `verify`, guarding growth against `main`'s merge-base (1 kB brotli per `size-limit` entry, ledger exception in `bundle-size-exceptions.md`). `.size-limit.json`'s fixed `300 KB` placeholder is gone. |
 | Release plumbing: versioned docs, CHANGELOG, publishing pipeline | #400 covers the publishing pipeline. Versioned docs and CHANGELOG are untouched. |
 | **#112 Seam B** — `render/null` is unreachable from `view/` | Known gap, recorded in `plans/03` §S6 itself. `PaneLayout` mounts real `HTMLElement`s whichever backend paints them. Only needed if this slice's measurement work wants a DOM-free `view/`+`layout/` harness. Plan: `plans/issues/open/112-di-seams.md`. |
 
@@ -99,12 +99,12 @@ Written as hygiene. It is now the blocker: `version` is `0.0.0`, `dist/` is giti
 
 | Issue | Row | Note |
 |---|---|---|
-| **#400** | R5 | Unreachable internals and complete types are done — `prepack` builds the tarball, and `check-pack-install.mjs` proves the install. Bundle within budget stays open, on #342. |
+| **#400** | R5 | Unreachable internals and complete types are done — `prepack` builds the tarball, and `check-pack-install.mjs` proves the install. Bundle within budget is done too, on #342. |
 | **#403** | R4 | The shared-model case is the one that matters. |
 | **#405** | R3 | Per-axis sharing. **The design is settled — D-S6-1, §5.3**, which answers D-S1.5-3's two rejections rather than repeating them. `needs grill` is discharged; the issue is a build. |
 | **#406** | R2 | Raise the fixture to 10,000. Mechanical, and it gates every R2 measurement. |
 | #95 | R1, R2 | Profile the large-dataset harness in DevTools. The spike's first half. |
-| #342 | R1 | The bundle number. #400 does not wait for it. |
+| #342 | R1 | **Done.** The bundle number: guard on growth against `main`, 1 kB brotli per entry (`scripts/check-bundle-growth.mjs`). #400 did not wait for it. |
 | #317 | — | e2e has only ever run Chromium. A scale slice that measures on one engine measures one engine. |
 | #92 | — | Tree-shaking. `[S5-A6]` ticked it for features; the package-level check is #400's tarball. |
 | **#407** | — | The consumer brief's §1 maps nine of its concepts onto shipped API and closes "It works." One row was already wrong and cost #405. Nobody has checked the other eight. `quickie`. |
