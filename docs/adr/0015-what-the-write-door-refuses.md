@@ -40,6 +40,14 @@ The verb copies the Field and replaces `FieldRegistry.all`'s identity (#187). It
 
 **Claim I14 when this ADR lands, not after 0013.** 0013 closes the derived half. This ADR closes the editable half. Gestures ask `canWrite` (grid threshold). `update()` asks the same key against the API threshold. `e2e/write-refusal.spec.ts` must call `entries.update()`.
 
+### A third door: an `EditExtender`'s cascade ([#473](https://github.com/Pawel-IT/FreeGantt/issues/473))
+
+**Decision, owner ruling 2026-09-22.** A cascade an `EditExtender` writes onto a `'never'` Field does not commit. `toEditsReading` (`data/entry-reader.ts`) asks `isApiEditable` before it writes, the same API threshold `entries.update()` asks, and throws the same `FieldNotEditableError` for the whole changeset. A cascade onto an `'api'` Field is still admitted — only `'never'` was in question.
+
+**Why.** The exceptions this ADR already names — construction, `entries.add()`, History replay — are all *setup* writes: they write a value where none exists yet. A cascade edits an existing value on a caller's behalf, so it is a caller-side write and meets the same lock a person at a keyboard meets. A lock a plugin can bypass is not a lock.
+
+This closes the asymmetry the issue raised: after `dataset.setFieldEditable('cost', 'never')`, a consumer's own `update()` call refused, and a plugin's cascade did not. Both refuse now. The three doors — the grid (`view/capability.ts`), `entries.update()`, and an `EditExtender` cascade — all read the one key at `data/write-rule.ts` and must agree (I14).
+
 ## Closed here — 18, 19, 23, and Q16
 
 **18.** One key, three named states. Absent is `'anywhere'` (grill 2026-09-10; was `'api'`). Copying the view rule lost. A three-way boolean lost. Do not special-case “has `column`”.
