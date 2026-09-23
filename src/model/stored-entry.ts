@@ -106,6 +106,16 @@ type EntryEnvelope<TProps> = Omit<EntryInput<TProps>, 'id' | 'props'>;
  *  `entries.add({ id, name, owner: 'Ali' })` — and nested `props` still works for a bag already held
  *  or a passenger key ingest does not know about.
  *
+ *  **This type checks every `TProps` key flat, whether or not a Field declares it — ingest does not
+ *  (`propsFromInput`, `data/entry-reader.ts`).** A `TProps` key with no matching Field is an
+ *  undeclared key at ingest (ADR 0011: "an undeclared key is never written by the library, ever"):
+ *  `entries.add({ id, passengerKey: 1 })` type-checks and then warns and drops `passengerKey` at
+ *  runtime. This is not a gap `FlatEntryInput` could close — declaring a key is what tells the
+ *  library the home is safe to write to (ADR 0011, "declaring a key does not create it. Declaring
+ *  says what the library may do with it"), and `TProps` alone does not declare one. Nest the value
+ *  under `props` instead (`entries.add({ id, props: { passengerKey: 1 } })`), which ingest always
+ *  carries, declared or not.
+ *
  *  Conditional on whether `TProps` is declared. An open `TProps` (the default, or a plugin author's
  *  own erased `Record<string, unknown>`) has no declared key to check flatly, so this falls back to
  *  plain `EntryInput<TProps>` — exactly today's shape, already sound for that case. `keyof` an open

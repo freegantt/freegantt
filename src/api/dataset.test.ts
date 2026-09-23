@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Dataset, extraEditsFor } from './dataset.js';
 import { fieldRowsOf } from '../data/change-set.js';
 import {
@@ -619,6 +619,36 @@ describe('Dataset generics (#123)', () => {
       // @ts-expect-error — bogus is not a declared key
       dataset.entries.add({ id: 't4', bogus: 'nope' });
     }
+  });
+
+  // `FlatEntryInput` type-checks every `TProps` key flat, declared or not (#281's own doc note on
+  // `stored-entry.ts`). Ingest is narrower: `propsFromInput` (`data/entry-reader.ts`) only honours a
+  // flat key that names a declared Field, and warns-and-drops the rest (ADR 0011: "an undeclared key
+  // is never written by the library, ever"). This pins that gap so a future ingest change that closes
+  // it — or widens it by accident — shows here first.
+  it('a flat TProps key with no declared Field type-checks and still warns-and-drops at ingest (#281)', () => {
+    const warnings: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation((line: unknown) => {
+      warnings.push(String(line));
+    });
+
+    const dataset = new Dataset<{ owner: string; passengerKey: number }>({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner' }],
+      // `passengerKey` is in TProps, but no Field declares it — type-checks flat, drops at runtime.
+      entries: [{ id: 't1', owner: 'Ali', passengerKey: 1 }],
+    });
+
+    expect(dataset.entries.get('t1')?.toInput().props?.passengerKey).toBeUndefined();
+    expect(warnings.some((line) => line.includes('passengerKey'))).toBe(true);
+
+    // Nesting it under `props` instead — the documented way out — carries it through.
+    const nested = new Dataset<{ owner: string; passengerKey: number }>({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner' }],
+      entries: [{ id: 't1', owner: 'Ali', props: { passengerKey: 1 } }],
+    });
+    expect(nested.entries.get('t1')?.toInput().props?.passengerKey).toBe(1);
   });
 });
 
