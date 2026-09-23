@@ -35,6 +35,7 @@
           <div id="gantt"></div>
           <div class="statusbar">
             <span class="readout" id="selection-readout">No selection</span>
+            <span class="readout" id="activation-readout">Not activated</span>
           </div>
         </section>
 
@@ -92,6 +93,25 @@
               <div class="control-row">
                 <button id="add-entry" type="button">Add entry</button>
                 <button id="cost-btn" type="button">Set cost 500</button>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h3>Activation (#434)</h3>
+              <p>
+                Click a bar or a grid row, or press <code>Enter</code> on one, to fire
+                <code>entryActivate</code>. The readout above names the entry and the cause. Press
+                <code>Enter</code> on a non-editable grid cell (Duration) to activate from there too — an
+                editable cell opens its editor instead.
+              </p>
+              <div class="control-row">
+                <label
+                  >Activate on:
+                  <select id="pointer-activation-select">
+                    <option value="click">click</option>
+                    <option value="dblclick">double-click</option>
+                  </select>
+                </label>
               </div>
             </div>
 

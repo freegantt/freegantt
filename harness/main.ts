@@ -113,6 +113,8 @@ const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
 const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
+const activationReadout = document.querySelector<HTMLParagraphElement>('#activation-readout')!;
+const pointerActivationSelect = document.querySelector<HTMLSelectElement>('#pointer-activation-select')!;
 const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
 const lockGridCheckbox = document.querySelector<HTMLInputElement>('#lock-grid-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
@@ -154,6 +156,22 @@ function syncSelectionUi(): void {
 const log = document.querySelector<HTMLDivElement>('#log')!;
 
 gantt.on('selectionChange', syncSelectionUi);
+
+// #434: entryActivate fires on a click, an Enter, or (chosen below) a double-click — independent
+// of Selection, so this readout moves even when capabilities.select refuses the same row. The
+// count (a running total since page load, not per entry) is what tells a fixed double-click apart
+// from the three-fires-per-double-click bug (#434) that looked identical from the cause alone.
+let activationCount = 0;
+gantt.on('entryActivate', ({ entry, cause }) => {
+  activationCount += 1;
+  activationReadout.textContent = `Activated: ${entry.name} (${cause}) ×${activationCount}`;
+});
+
+// #434: `pointerActivation` defaults to `'click'` so a bar's double-click never fights a grid
+// cell's own double-click editor. The select reconfigures it live, the same shape gridResizable's does.
+pointerActivationSelect.addEventListener('change', () => {
+  gantt.pointerActivation = pointerActivationSelect.value === 'dblclick' ? 'dblclick' : 'click';
+});
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
   syncSelectionUi();

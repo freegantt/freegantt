@@ -72,6 +72,7 @@ function makeContext(overrides: ContextOverrides = {}): {
   proposals: (readonly EntryId[])[];
   previews: (EntryEdits | undefined)[];
   commits: [EntryGesture, EntryEdits][];
+  activations: [EntryId, number, 'bar' | 'row'][];
 } {
   const {
     entriesForGesture = (grabbed) => [entryFor(grabbed)],
@@ -85,6 +86,7 @@ function makeContext(overrides: ContextOverrides = {}): {
   const proposals: (readonly EntryId[])[] = [];
   const previews: (EntryEdits | undefined)[] = [];
   const commits: [EntryGesture, EntryEdits][] = [];
+  const activations: [EntryId, number, 'bar' | 'row'][] = [];
 
   const ctx: EntryGestureContext = {
     hitTest: (at) =>
@@ -145,10 +147,23 @@ function makeContext(overrides: ContextOverrides = {}): {
         return entry !== undefined && ctx.can('select', entry) ? [entry.id] : [];
       },
     },
+    // #434: the fake mirrors `selection.selectableEntriesOf` above — a bar names its own Entry, a
+    // row names the same-named Entry the fake's row ids stand for.
+    activation: {
+      subjectEntryOf: (hit) =>
+        hit.kind === 'bar'
+          ? ctx.entryFor(hit.barId)
+          : ORDER.includes(hit.rowId as unknown as EntryId)
+            ? entryFor(hit.rowId as unknown as EntryId)
+            : undefined,
+      activateFromClick: (entry, detail, target) => {
+        activations.push([entry.id, detail, target]);
+      },
+    },
     ...ctxOverrides,
   };
   Object.assign(ctx.selection, selectionOverrides);
-  return { ctx, proposals, previews, commits };
+  return { ctx, proposals, previews, commits, activations };
 }
 
 function mockPointerCapture(el: HTMLElement): void {
@@ -344,6 +359,105 @@ describe('attachEntryGestures — selection (S3.1)', () => {
     const selectStart = new Event('selectstart', { bubbles: true, cancelable: true });
     container.dispatchEvent(selectStart);
     expect(selectStart.defaultPrevented).toBe(true);
+  });
+});
+
+function click(detail = 1): MouseEvent {
+  return new MouseEvent('click', { bubbles: true, cancelable: true, detail });
+}
+
+// #434: `pendingActivation` names a candidate on `pointerup`; the native `click` that always
+// follows in the same synchronous dispatch confirms it. A candidate must live for exactly one
+// pointer sequence — stale past that, an unrelated later click could confirm the wrong Entry.
+describe('attachEntryGestures — activation candidate lifetime (#434)', () => {
+  it('a click that follows the naming pointerup confirms it', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A as the candidate
+    container.dispatchEvent(click());
+    expect(activations).toEqual([[A, 1, 'bar']]);
+  });
+
+  it('a candidate that never gets its click does not survive to confirm a later, unrelated click', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A — its own click never comes (drag, cancel, scroll…)
+    pane.dispatchEvent(down(99)); // a new pointer sequence, on empty space
+    pane.dispatchEvent(up(99)); // a miss — names nothing
+    container.dispatchEvent(click()); // an unrelated click must not confirm A
+
+    expect(activations).toEqual([]);
+  });
+
+  it('a pointercancel drops a named candidate', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A
+    pane.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1 }));
+    container.dispatchEvent(click());
+
+    expect(activations).toEqual([]);
+  });
+
+  it('a miss on pointerup drops a named candidate', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A
+    pane.dispatchEvent(up(99)); // a miss, same sequence's pointerup skipped by a stray extra up
+    container.dispatchEvent(click());
+
+    expect(activations).toEqual([]);
+  });
+
+  // #434 F7: a hit that exists (not a miss) but names no new candidate — a modifier held, or the
+  // hit itself refuses `activate` — used to leave an older, still-unconfirmed candidate in place.
+  // A later, unrelated click then wrongly confirmed it.
+  it('a hit that exists but is not activate-capable still drops an older, unconfirmed candidate', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(up(0)); // names A — its own click has not fired yet
+    pane.dispatchEvent(up(0, { shiftKey: true })); // same hit, shift held: names nothing new
+    container.dispatchEvent(click()); // must not confirm the stale A
+
+    expect(activations).toEqual([]);
+  });
+
+  // #434 F7: the grid pane's row layer arms no drag of its own, so it never had a
+  // `pointerdown`/`pointercancel` listener of its own to clear from — only `pane`'s did. A cancelled
+  // sequence that named its candidate through the row layer's own `pointerup` (`onRowLayerPointerUp`)
+  // must not outlive it either.
+  it('a pointercancel on the grid pane row layer drops a named candidate too', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const { ctx, activations } = makeContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(up(0)); // names A through the row layer's own pointerup
+    rowLayer.dispatchEvent(new PointerEvent('pointercancel', { pointerId: 1 }));
+    container.dispatchEvent(click());
+
+    expect(activations).toEqual([]);
   });
 });
 

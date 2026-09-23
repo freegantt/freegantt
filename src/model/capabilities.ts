@@ -34,9 +34,11 @@ export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
  *  reads that way too. A boolean pins every cell, with no fall-through. */
 export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | undefined);
 
-/** The gestures that arm and paint. A write is not one of them. It is the thing a gesture, a cell
- *  editor, or a keyboard nudge sets out to do, and `canWrite` decides it. */
-export type GestureCapability = 'move' | 'resize' | 'select';
+/** The gestures that arm and paint, plus `activate` (#434) — a click, a key, or a double-click
+ *  "opening" the Entry. A write is not one of them. It is the thing a gesture, a cell editor, or a
+ *  keyboard nudge sets out to do, and `canWrite` decides it. `activate` writes nothing either, so it
+ *  reads the same one-resolution ladder (I14) with no `canWrite` question to ask. */
+export type GestureCapability = 'move' | 'resize' | 'select' | 'activate';
 
 /** Live (S3/S5, D-S3-9). `linkCreate` stays off this type until S7 (I11: no unimplemented public
  *  key).
@@ -47,6 +49,10 @@ export interface Capabilities {
   move?: CapabilityRule;
   resize?: CapabilityRule;
   select?: CapabilityRule;
+  /** #434: may this Entry fire `entryActivate` — a click, `Enter`, or a double-click (opt-in)
+   *  "opening" it. Default `true`, and resolved independently of `select` (I14): a rollup row with
+   *  `{ select: false, activate: true }` still activates though it never selects. */
+  activate?: CapabilityRule;
   /** #256, S5.8, D-S5-19: the consumer's own answer to "may this cell's value change". It is the
    *  one override above `Field.editable`, and the only per-entry axis that key has.
    *

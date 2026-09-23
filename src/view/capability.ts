@@ -109,7 +109,8 @@ function gestureIsOffered(): boolean {
  *  sets both dates and needs both. That is the hole #256 found: a locked `start` hid its own handle,
  *  and a move rewrote it anyway. A parent bar sets no date of its own, so it asks what its
  *  move writes instead (`moveWritesSomething`). `resize` sets the dragged edge's own Field. `select`
- *  sets nothing.
+ *  sets nothing. `activate` (#434) sets nothing either — it opens or fires, and never itself writes
+ *  a Field.
  *
  *  A leaf bar is one child Entry (ADR 0026). A drag writes that Entry's own `start`/`end` directly.
  *  There is no separate envelope Field to keep in step with it, the way `segments` once needed
@@ -126,6 +127,7 @@ function mayWriteTheDatesItSets(
 ): boolean {
   switch (capability) {
     case 'select':
+    case 'activate':
       return true;
     case 'move':
       return moveWritesSomething(entry);
