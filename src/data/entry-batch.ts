@@ -37,7 +37,7 @@ function parentChainLoopsBackTo(entry: StoredEntry, byId: ReadonlyMap<EntryId, S
 export function assertEntryBatchIsSound(entries: readonly StoredEntry[], operation: string): void {
   const byId = new Map<EntryId, StoredEntry>();
   for (const entry of entries) {
-    if (byId.has(entry.id)) throw new DuplicateEntryIdError(entry.id);
+    if (byId.has(entry.id)) throw new DuplicateEntryIdError(entry.id, operation);
     byId.set(entry.id, entry);
   }
   for (const entry of entries) {

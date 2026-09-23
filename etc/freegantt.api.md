@@ -607,9 +607,11 @@ export interface DomTarget {
 
 // @public
 export class DuplicateEntryIdError extends FreeGanttError {
-    constructor(entryId: EntryId);
+    constructor(entryId: EntryId, operation: string);
     // (undocumented)
     readonly entryId: EntryId;
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public

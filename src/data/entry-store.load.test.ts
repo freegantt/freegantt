@@ -74,6 +74,12 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
     ).not.toThrow();
   });
 
+  it("a load batch's duplicate id names the door the caller used, not entries.add's advice", () => {
+    expect(() => assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'a' }]), 'entries.load')).toThrow(
+      'entries.load: the list names id "a" twice. Give each entry its own id.',
+    );
+  });
+
   it('listOrderOf reads back the ids in the list order it was given', () => {
     expect(listOrderOf(read([{ id: 'c' }, { id: 'a' }, { id: 'b' }]))).toEqual([
       entryId('c'),
