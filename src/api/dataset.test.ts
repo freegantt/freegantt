@@ -729,6 +729,76 @@ describe('Dataset plugins (S5.10)', () => {
     expect(open.pluginStore('demo.lock')?.all.size).toBe(0);
   });
 
+  it('removes a plugin’s ctx.events.on handler, added during setup, on destroy()', () => {
+    let calls = 0;
+    const plugin: DataPlugin = {
+      id: 'demo.listener',
+      data(ctx) {
+        ctx.events.on('beforeChange', () => {
+          calls += 1;
+        });
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [plugin] });
+    dataset.entries.update('t1', { name: 'Design v2' });
+    dataset.destroy();
+    expect(() => dataset.entries.update('t1', { name: 'Design v3' })).not.toThrow();
+    expect(calls).toBe(1);
+  });
+
+  it('removes a plugin’s ctx.events.on handler, added after setup returned, on destroy()', () => {
+    let calls = 0;
+    let addLateHandler = (): void => undefined;
+    const plugin: DataPlugin = {
+      id: 'demo.late-listener',
+      data(ctx) {
+        addLateHandler = () =>
+          ctx.events.on('beforeChange', () => {
+            calls += 1;
+          });
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [plugin] });
+    addLateHandler();
+    dataset.entries.update('t1', { name: 'Design v2' });
+    dataset.destroy();
+    dataset.entries.update('t1', { name: 'Design v3' });
+    expect(calls).toBe(1);
+  });
+
+  it('a plugin calling its own events.on Disposer early, then destroy(), throws nothing', () => {
+    const plugin: DataPlugin = {
+      id: 'demo.early-dispose',
+      data(ctx) {
+        const dispose = ctx.events.on('beforeChange', () => undefined);
+        dispose();
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [plugin] });
+    expect(() => dataset.destroy()).not.toThrow();
+  });
+
+  it('destroying one plugin leaves another plugin’s and the app’s own handlers firing', () => {
+    let pluginCalls = 0;
+    let appCalls = 0;
+    const plugin: DataPlugin = {
+      id: 'demo.tracked-listener',
+      data(ctx) {
+        ctx.events.on('beforeChange', () => {
+          pluginCalls += 1;
+        });
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [plugin] });
+    dataset.on('beforeChange', () => {
+      appCalls += 1;
+    });
+    dataset.destroy();
+    dataset.entries.update('t1', { name: 'Design v2' });
+    expect(pluginCalls).toBe(0);
+    expect(appCalls).toBe(1);
+  });
+
   it('throws RegistrationClosedError when a plugin registers a Field after setup returned', () => {
     let registerLate = (): void => undefined;
     const late: DataPlugin = {

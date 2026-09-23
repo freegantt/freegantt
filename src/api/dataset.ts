@@ -153,7 +153,11 @@ export class Dataset<TProps = unknown> {
       const context: DatasetPluginContextOf<Dataset<TProps>> = {
         dataset: this,
         events: {
-          on: (name, handler) => state.on(name, handler),
+          on: (name, handler) => {
+            const dispose = state.on(name, handler);
+            disposables.add(dispose);
+            return dispose;
+          },
           off: (name, handler) => state.off(name, handler),
         },
         fields: {

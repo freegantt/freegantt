@@ -54,7 +54,9 @@ export { moveEntryTo } from '../data/entry-reader.js';
  *  `beforeChange` handler vetoes the whole changeset — the refusal path a lock plugin uses (D-S5-24). */
 export interface DatasetEvents {
   /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
-   *  (I2); `on` is that seam for a Dataset event. */
+   *  (I2); `on` is that seam for a Dataset event. Not gated — a plugin may call this after its own
+   *  `data()` returns — but still tracked: the handler is removed when the plugin is uninstalled or
+   *  the Dataset is destroyed, the same as every other seam. */
   on<K extends keyof DatasetEventMap>(
     name: K,
     handler: (payload: DatasetEventMap[K]) => void | false,
