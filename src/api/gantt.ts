@@ -7,6 +7,7 @@ import type {
   GanttEventMap,
   GridWidth,
   Capabilities,
+  CollapseState,
   ResolvedTheme,
   Theme,
   ViewportGestures,
@@ -733,6 +734,15 @@ export class Gantt<TProps = unknown> {
 
   toggleCollapse(id: RowId | string): void {
     this.#shell.toggleCollapse(id);
+  }
+
+  /** Call: `gantt.collapseStateOf('p1')` → `'collapsed' | 'expanded' | 'leaf'`. A row a collapsed
+   *  ancestor hides still answers its own state — the answer comes from the row tree, not from what
+   *  the current frame draws. `undefined` for an id no current row holds: a removed row, or a stale
+   *  id, so "no such row" stays apart from `'leaf'`. A grouping header row answers by the same rule
+   *  as any other row. */
+  collapseStateOf(id: RowId | string): CollapseState | undefined {
+    return this.#shell.collapseStateOf(id);
   }
 
   collapseAll(): void {

@@ -10,6 +10,7 @@ import type {
   EntityRemoved,
   StoredEntry,
   EntryId,
+  FieldLockRule,
   FieldUpdated,
   HierarchySource,
   StoreRowUpdated,
@@ -61,6 +62,9 @@ export interface CommitChangeSetInput {
   readonly fieldAccess: FieldAccess;
   /** The tree the Rollup walks (ADR 0020) — see `TransactionData.hierarchySource`. */
   readonly hierarchySource: HierarchySource;
+  /** The per-entry lock rule `createEditRequest`'s `editableOf` reads (#473) — see
+   *  `TransactionData.lockRule`. */
+  readonly lockRule: FieldLockRule;
   nextChangeSetId(): ChangeSetId;
   /** ADR 0013, decision 5/6: where this commit's own dropped-derived-value warnings go. Read here,
    *  not threaded back out through the return value, because a commit that folds to `undefined`
@@ -144,6 +148,7 @@ export function buildCommitChangeSet(
       hierarchySource: data.hierarchySource,
       committedChildIds: data.entries.committedChildIds(),
       fields: data.fields,
+      lockRule: data.lockRule,
     }),
   );
   const extenderEdits: ProposedEdits = extenderReading.stored;

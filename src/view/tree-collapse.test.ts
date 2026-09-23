@@ -33,6 +33,7 @@ function makeCollapse(
     canSelect?: (id: EntryId) => boolean;
     rowIdForEntry?: (id: EntryId) => RowId | undefined;
     ancestorRowIds?: (id: EntryId) => readonly RowId[];
+    expandableOfRow?: (id: RowId) => boolean | undefined;
   } = {},
 ): {
   tree: TreeCollapse;
@@ -65,6 +66,8 @@ function makeCollapse(
         }
         return ids;
       }),
+    expandableOfRow:
+      options.expandableOfRow ?? ((id) => plannedRows.find((candidate) => candidate.id === id)?.expandable),
   };
   const tree = new TreeCollapse(ctx);
   return { tree, confirm, proposeSelection };
@@ -210,5 +213,45 @@ describe('TreeCollapse', () => {
     confirm.mockReturnValue(false);
     tree.collapse('p');
     expect(tree.ids).toEqual([]);
+  });
+
+  describe('collapseStateOf', () => {
+    it('answers leaf for a row that cannot expand', () => {
+      const { tree } = makeCollapse({ expandableOfRow: () => false });
+      expect(tree.collapseStateOf('c')).toBe('leaf');
+    });
+
+    it('answers expanded for an expandable row not in the collapsed set', () => {
+      const { tree } = makeCollapse({ expandableOfRow: () => true });
+      expect(tree.collapseStateOf('p')).toBe('expanded');
+    });
+
+    it('answers collapsed for an expandable row in the collapsed set', () => {
+      const { tree } = makeCollapse({ expandableOfRow: () => true });
+      tree.hydrate(['p']);
+      expect(tree.collapseStateOf('p')).toBe('collapsed');
+    });
+
+    it('answers undefined for an id no current row holds — a removed row or a stale id', () => {
+      const { tree } = makeCollapse({ expandableOfRow: () => undefined });
+      expect(tree.collapseStateOf('gone')).toBeUndefined();
+    });
+
+    it('answers a collapsed ancestor’s hidden child from the row tree, not the frame', () => {
+      // The row is hidden under a collapsed ancestor, so it carries no `plannedRows` entry — only
+      // `expandableOfRow`, sourced from the row tree, still knows about it (#424).
+      const { tree } = makeCollapse({
+        plannedRows: [],
+        expandableOfRow: (id) => (String(id) === 'child' ? true : undefined),
+      });
+      tree.hydrate(['parent']);
+      expect(tree.collapseStateOf('child')).toBe('expanded');
+    });
+
+    it('answers a grouping header row by the same rule as any other row', () => {
+      const { tree } = makeCollapse({ expandableOfRow: () => true });
+      tree.hydrate(['group:alpha']);
+      expect(tree.collapseStateOf('group:alpha')).toBe('collapsed');
+    });
   });
 });
