@@ -29,6 +29,17 @@ does not assume the old `fix/` prefix.
 Every command against the worktree needs its own `cd`/`-C` — state the absolute path out loud
 each time work moves into or out of it, so the user can always tell where changes are landing.
 
+## A subagent's worktree goes through the same door
+
+A subagent started with `isolation: "worktree"` does not get a `.claude/worktrees/agent-*`
+checkout. The `WorktreeCreate` hook (`.claude/hooks/worktree-create.sh`) runs
+`./scripts/create-worktree.sh --agent <name>` instead. The worktree lands in
+`/home/pawel/orca/workspaces/freegantt/<name>`, and Orca files it under the caller's worktree.
+
+The `WorktreeRemove` hook (`.claude/hooks/worktree-remove.sh`) runs when the subagent finishes. It
+removes the worktree only when it has no uncommitted file and no unpushed commit. Otherwise the
+worktree stays for the caller to push, and the rule in "Clean up when the work merges" applies.
+
 ## Orca already tracks the worktree
 
 `orca worktree create` registers the worktree with Orca as it creates it, so the caller's session

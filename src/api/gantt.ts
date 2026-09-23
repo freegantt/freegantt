@@ -7,9 +7,12 @@ import type {
   GanttEventMap,
   GridWidth,
   Capabilities,
+  CollapseState,
   ResolvedTheme,
   Theme,
   ViewportGestures,
+  PointerActivation,
+  ConvenienceChords,
 } from '../view/index.js';
 import { TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
 import type {
@@ -166,6 +169,12 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
    *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one rule (D-S5-35). */
   capabilities?: Capabilities;
+  /** Live (#434). Default `'click'`: `entryActivate` fires on a plain click of a bar or a row's own
+   *  background. `'dblclick'` replaces click as the pointer trigger: a single click only selects,
+   *  and a double-click activates once. On a grid cell, `'dblclick'` activates only a cell
+   *  `capabilities` refuses to write — a writable cell's double-click stays `inlineEditing()`'s own
+   *  (the same editable-cell-wins precedence `Enter` already gives the editor). */
+  pointerActivation?: PointerActivation;
   /** Live (D-S3-24). What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
    *  one tick of whatever preset is showing, or `'none'`. Omitted, the showing preset's own `snap`
    *  decides — which is `'tick'` for every shipped preset. */
@@ -173,6 +182,14 @@ export interface GanttOptionsBase<TProps = unknown> {
   /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
    *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
   viewportGestures?: ViewportGestures;
+  /** Live (#262). A convenience chord's default binding (`Mod+Z`, `Mod+A`, `Delete`, the pans,
+   *  the zoom/today chords) does the same job a button, a menu item, or a public method already
+   *  does, so an app author who wants that chord for something else may turn it off — `false` for
+   *  all of them, or a per-command map (`{ 'freegantt.undo': false }`) for one at a time. Default
+   *  `{}`: every convenience chord is on. An obligation chord (`Escape`, the column keys,
+   *  `Mod+Arrow` reach, `Enter`) is not in the map's key type and stays bound either way — `[S5-A4]`,
+   *  WCAG 2.1.1. The command itself stays reachable through `commands.run(id)` regardless. */
+  convenienceChords?: ConvenienceChords;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
   /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
@@ -334,8 +351,10 @@ export class Gantt<TProps = unknown> {
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
         'capabilities',
+        'pointerActivation',
         'snap',
         'viewportGestures',
+        'convenienceChords',
         'gridColumns',
         'rowSource',
         'collapsed',
@@ -727,6 +746,15 @@ export class Gantt<TProps = unknown> {
     this.#shell.toggleCollapse(id);
   }
 
+  /** Call: `gantt.collapseStateOf('p1')` → `'collapsed' | 'expanded' | 'leaf'`. A row a collapsed
+   *  ancestor hides still answers its own state — the answer comes from the row tree, not from what
+   *  the current frame draws. `undefined` for an id no current row holds: a removed row, or a stale
+   *  id, so "no such row" stays apart from `'leaf'`. A grouping header row answers by the same rule
+   *  as any other row. */
+  collapseStateOf(id: RowId | string): CollapseState | undefined {
+    return this.#shell.collapseStateOf(id);
+  }
+
   collapseAll(): void {
     this.#shell.collapseAll();
   }
@@ -926,6 +954,24 @@ export class Gantt<TProps = unknown> {
 
   set viewportGestures(next: ViewportGestures) {
     this.#shell.viewportGestures = next;
+  }
+
+  /** Live (#434): the next click or double-click reads the new option. */
+  get pointerActivation(): PointerActivation {
+    return this.#shell.pointerActivation;
+  }
+
+  set pointerActivation(next: PointerActivation) {
+    this.#shell.pointerActivation = next;
+  }
+
+  /** Live (#262): the next keystroke reads the new flags; no remount. */
+  get convenienceChords(): ConvenienceChords {
+    return this.#shell.convenienceChords;
+  }
+
+  set convenienceChords(next: ConvenienceChords) {
+    this.#shell.convenienceChords = next;
   }
 
   get canZoomIn(): boolean {

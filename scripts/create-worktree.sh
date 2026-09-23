@@ -4,23 +4,37 @@
 # folder inside this checkout — a stale-worktree sweep can delete that one, branch and all (#482).
 set -euo pipefail
 
-if [ "$#" -lt 2 ]; then
+usage() {
   echo "Usage: scripts/create-worktree.sh <issue-number> <slug> [base-branch]" >&2
+  echo "       scripts/create-worktree.sh --agent <name> [base-branch]" >&2
   echo "Example: scripts/create-worktree.sh 332 extender-preview-fault" >&2
-  exit 1
+}
+
+# --agent: a subagent's `isolation: "worktree"` checkout, made by .claude/hooks/worktree-create.sh.
+# It has no issue, and Orca files it under the caller's worktree, not at the top level.
+if [ "${1:-}" = "--agent" ]; then
+  if [ "$#" -lt 2 ]; then
+    usage
+    exit 1
+  fi
+  issue=""
+  name="$2"
+  base="${3:-origin/main}"
+else
+  if [ "$#" -lt 2 ]; then
+    usage
+    exit 1
+  fi
+  issue="$1"
+  slug="$2"
+  base="${3:-origin/main}"
+  if ! [[ "$issue" =~ ^[0-9]+$ ]]; then
+    echo "error: <issue-number> must be a number, got '$issue'." >&2
+    usage
+    exit 1
+  fi
+  name="${issue}-${slug}"
 fi
-
-issue="$1"
-slug="$2"
-base="${3:-origin/main}"
-
-if ! [[ "$issue" =~ ^[0-9]+$ ]]; then
-  echo "error: <issue-number> must be a number, got '$issue'." >&2
-  echo "Usage: scripts/create-worktree.sh <issue-number> <slug> [base-branch]" >&2
-  exit 1
-fi
-
-name="${issue}-${slug}"
 
 # Resolve the orca CLI executable for this session. See the user-level orca-cli skill
 # (~/.claude/skills/orca-cli/SKILL.md) for the environment variables an Orca-managed session sets.
@@ -126,12 +140,16 @@ if [ -n "$existing_path" ]; then
 fi
 
 echo "Creating worktree $name..."
+# An issue worktree stands alone. An agent worktree takes Orca's default: a child of the caller.
+lineage=()
+if [ -n "$issue" ]; then
+  lineage=(--issue "$issue" --no-parent)
+fi
 create_json="$(run_orca worktree create \
   --repo "id:$repo_id" \
   --name "$name" \
-  --issue "$issue" \
   --base-branch "$base" \
-  --no-parent \
+  "${lineage[@]}" \
   --json)"
 
 path="$(node -e '

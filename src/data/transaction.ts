@@ -9,6 +9,7 @@ import type {
   DatasetEventMap,
   StoredEntry,
   EntryId,
+  FieldLockRule,
   FieldUpdated,
   HierarchySource,
   StoreRowUpdated,
@@ -109,6 +110,10 @@ export interface TransactionData {
    *  onto the occupant while it sets up — the store and the Rollup read the same one, which is why
    *  a plugin that changes the tree has changed the Rollup and the two can never disagree. */
   readonly hierarchySource: HierarchySource;
+  /** The per-entry lock rule `createEditRequest`'s `editableOf` reads (#473) — a getter, not a fixed
+   *  field, for the same reason `hierarchySource` above is one: a plugin composes onto the occupant
+   *  while it sets up. */
+  readonly lockRule: FieldLockRule;
   bumpDatasetRevision(): void;
 }
 

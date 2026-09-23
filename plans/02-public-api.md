@@ -212,6 +212,19 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 
 `start` and `end` are optional on every Entry (ADR 0012). An Entry has dates if and only if it spans (`spansTime`, ADR 0012). `{ id: 'p1', name: 'Sitework' }` above is a dateless parent; the store does not mint a fake span from the dataset's reference date. `{ start: undefined, end: undefined }` un-dates. Omitting one field but not the other is `InvalidInstantError`: one date without the other names no span. The `Segment` type retired (ADR 0026, #421): there is no second, array-shaped date input left to be empty or absent — `start`/`end` alone say whether an Entry dates.
 
+**`*Input` vs `Resolved*` (#253).** Both suffixes answer "what a consumer writes, and what the library stores", and both stay — a reader meets whichever name the pair in front of them uses:
+
+- `*Input` names a pair whose *type* differs: the authored form and the stored form are shaped differently, such as a plain `string` id that gains the `EntryId` brand (`EntryInput` → `Entry`), or a loose date that resolves to an `Instant` (`InstantInput` → `Instant`).
+- `Resolved*` names a pair whose *completeness* differs, and whose type does not: the stored form is the authored form with its optional keys filled in, such as an omitted `filterPolicy` gaining its default (`RowSource` → `ResolvedRowSource`).
+
+`*Input` also names a second, unrelated thing: a parameter bag for one function — `LayoutInput`, `RowPassInput`, `CustomRowInput`, and others. That reuse is a known misfit, kept open for the 1.0 API review rather than fixed here (see the misfit list at the end of this section).
+
+**Misfits kept for the 1.0 API review.** These do not cleanly answer to either rule above, but a rename here would move the public API report, so nothing renames as part of this note:
+
+- `ResolvedTheme` (`'light' | 'dark'`) answers a question — "which theme actually painted, now that `'auto'` is settled" — it is not `Theme` (`'auto' | 'light' | 'dark'`) with a key filled in; `'auto'` is a variant removed, not a gap closed.
+- `ResolvedBarLabel` (`{ placement, text }`) is the per-bar answer computed from a `BarLabels` policy or spec; it does not extend `BarLabels` and shares none of its shape, so "resolved" here means "computed", not "filled in".
+- `*Input`'s second meaning (the parameter-bag family above) stays unresolved by this rule; splitting it off was option 3 on #253 and remains open.
+
 ---
 
 ## 3. Events — one bus, one vocabulary
@@ -425,6 +438,32 @@ Selection and belong on any consumer's cheat sheet:
 
 **Viewport gestures** are a separate knob (`Gantt.viewportGestures`): they are not per-entry, they write no data, and they do not belong on `capabilities`. `false` turns wheel zoom, shift+wheel pan, and keyboard pan off together; `{ wheelZoom: false }` pins one gesture and leaves the others on. `zoomBy` / `panToDate` / `zoomIn` stay available either way.
 
+**Convenience chords vs. obligation chords (#262).** Every default chord `view/gantt-shell.ts` binds falls into exactly one of these, and the split is written once, here, so the next chord has a rule to follow instead of re-litigating the question.
+
+A **convenience chord**'s command has another door — a button, a menu item, or a public method — so an app author embedding a Gantt in a page that wants the same chord for something else (its own undo stack, say) may take it back. `Gantt.convenienceChords` turns them off, `false` for all of them or a per-command map for one at a time (typed against `ConvenienceCommandId`, so an obligation id below does not compile there). Turning a chord off never removes the command: `gantt.commands.run(id)`, a menu item, or a toolbar button reach it either way.
+
+| Chord | Command | Why it is negotiable |
+|---|---|---|
+| `Mod+Z` / `Mod+Shift+Z` | `freegantt.undo` / `freegantt.redo` | `dataset.undo()` / `redo()`, and a toolbar button. |
+| `Mod+A` | `freegantt.selectAll` | `gantt.selectedEntryIds = ...`. |
+| `Delete` | `freegantt.deleteSelection` | `entries.update` (un-date a bar) / `entries.remove()` (drop a row) directly. |
+| `Mod+=` / `Mod+-` | `freegantt.zoomIn` / `freegantt.zoomOut` | The methods of the same name. |
+| `Mod+0` | `freegantt.panToToday` | The method of the same name. |
+| `Alt+ArrowRight` / `Alt+ArrowLeft` | `freegantt.panRight` / `freegantt.panLeft` | `gantt.panToDate(...)`. |
+| `Mod+Home` / `Mod+End` | `freegantt.panToStart` / `freegantt.panToEnd` | `gantt.panToDate(...)`. |
+
+An **obligation chord** is the only keyboard path to what it does, so `[S5-A4]` and WCAG 2.1.1 keep it bound no matter what `convenienceChords` says — a code comment names both at each one's registration.
+
+| Chord | Command | What it is the only keyboard path to |
+|---|---|---|
+| Plain arrows, `Home`/`End`, `Page Up`/`Page Down` | Roving focus (`view/roving-focus.ts`), not a `Command` | Moving DOM focus through the grid and timeline panes at all. |
+| The splitter's own arrows | `view/splitter.ts`, not a `Command` | Resizing the grid/timeline split without a pointer. |
+| `Shift+ArrowRight` / `Shift+ArrowLeft` | `freegantt.resizeColumnWider` / `freegantt.resizeColumnNarrower` | Resizing a focused grid column. |
+| `Alt+ArrowRight` / `Alt+ArrowLeft` (header focused) | `freegantt.moveColumnRight` / `freegantt.moveColumnLeft` | Reordering a focused grid column. |
+| `Mod+ArrowRight` / `Mod+ArrowLeft` | `freegantt.selectNextEntry` / `freegantt.selectPreviousEntry` | Reaching a second bar on a row that draws several (#212, ADR 0010, issue #218). |
+| `Escape` | `freegantt.clearSelection` | Clearing the Selection from the keyboard. |
+| `Enter` | `freegantt.activateEntry` | Firing `entryActivate` from the keyboard — a click activates too, and #434's ruling is that the one keyboard equivalent of a pointer capability is an obligation the same as any other. |
+
 ---
 
 ### 4.2 Fields and grid columns
@@ -577,6 +616,7 @@ gantt.expand('p1');
 gantt.toggleCollapse('p1');
 gantt.collapseAll();
 gantt.expandAll();
+gantt.collapseStateOf('p1');        // 'collapsed' | 'expanded' | 'leaf' | undefined for no such row
 
 gantt.on('beforeCollapseChange', ({ from, to }) => false);  // veto
 gantt.on('collapseChange', ({ to }) => saveCollapsed(to));
@@ -628,11 +668,25 @@ whose only half is `data`. There is no ordering knob.
 
 **The `data` half's own doors are namespaced, and every one is expert.** `ctx.fields.register` declares
 a Field, `ctx.store.reserve` takes this plugin's store, `ctx.edits.setExtender` claims the extension
-hook, and `ctx.hierarchy.setSource` claims the hierarchy source (ADR 0020). An app author never meets
-one: they write `parentId` on an Entry, and core's own source answers it. Each door takes one
-occupant that composes — a plugin receives the current occupant and may call it — so a second plugin
-adds to the first rather than evicting it (D-S5-23). All four are legal while `data()` runs and not
-after (D-S5-4).
+hook, `ctx.hierarchy.setSource` claims the hierarchy source (ADR 0020), and `ctx.edits.setLockRule`
+claims the per-entry lock rule (ADR 0015, #473). An app author never meets one: they write `parentId`
+on an Entry, and core's own source answers it. Each door takes one occupant that composes — a plugin
+receives the current occupant and may call it — so a second plugin adds to the first rather than
+evicting it (D-S5-23). All five are legal while `data()` runs and not after (D-S5-4).
+
+```ts
+ctx.edits.setLockRule((next) => (entry, field) =>
+  field === 'cost' && entry.isDescendantOf(unlockedSubtreeRootId) ? 'anywhere' : next(entry, field));
+```
+
+That reads: open `cost` under one subtree root, otherwise whatever the next rule says. `entry` is a
+`FieldLockQuery` (`id`, and `isDescendantOf(ancestorId)` for the subtree question) — not the live
+`Entry`, so a lock rule reads structure and nothing a Field write could see. The rule answers
+`FieldEditable | undefined`; `undefined` is silence, and the resolver falls to `Field.editable`
+(`data/write-rule.ts`'s `resolveFieldEditable`). Every write door — the grid, `entries.update()`, and
+an `EditExtender` cascade — reads the same resolved answer, and `Dataset.editableOf(id, field)` /
+`EditRequest.editableOf(id, field)` publish it so a consumer or a plugin can ask before it writes
+(I14).
 
 ```ts
 ctx.hierarchy.setSource<PlannerProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
@@ -649,8 +703,9 @@ a plugin-owned hierarchy is exactly a case where the two can disagree on purpose
 or `entry.parent()` is how a caller reads this source's own answer instead.
 
 Published types: `ChromePlugin`, `DataPlugin`, `Plugin`, `PluginContext`, `DatasetPluginContext`,
-`DatasetHierarchy`, `HierarchySource`, `HierarchySourceWrapper`, and the generic `*Of` shapes behind
-each. The retired pair is `GanttPlugin` / `DatasetPlugin`.
+`DatasetHierarchy`, `HierarchySource`, `HierarchySourceWrapper`, `FieldLockQuery`, `FieldLockRule`,
+`FieldLockRuleWrapper`, and the generic `*Of` shapes behind each. The retired pair is
+`GanttPlugin` / `DatasetPlugin`.
 
 ### 4.5 Plugin registrations: one collision policy, one lifetime (#155)
 

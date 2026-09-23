@@ -51,6 +51,41 @@ test('locking the selected entry refuses a rename, and the log names why', async
   expect(nameAfter).toBe(nameBefore);
 });
 
+test("unlocking Program's subtree opens note inside it, and leaves an outside entry locked", async ({
+  page,
+}) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  // 'entry-3' sits under 'program' (Program > entry-1 > entry-2 > entry-3); 'ops-oncall' is a
+  // separate root span (`fixtures/demo-dataset.ts`).
+  const before = await page.evaluate(() => ({
+    inside: window.__dataset.editableOf('entry-3', 'note'),
+    outside: window.__dataset.editableOf('ops-oncall', 'note'),
+  }));
+  expect(before.inside).toBe('never');
+  expect(before.outside).toBe('never');
+
+  await page.locator('#unlock-subtree-checkbox').check();
+
+  const after = await page.evaluate(() => ({
+    inside: window.__dataset.editableOf('entry-3', 'note'),
+    outside: window.__dataset.editableOf('ops-oncall', 'note'),
+  }));
+  expect(after.inside).toBe('anywhere');
+  expect(after.outside).toBe('never');
+
+  // The write lands: select the now-open entry and press the button.
+  await page.evaluate(() => window.__gantt.reveal('entry-3'));
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-3:"]').first();
+  await expect(bar).toBeVisible();
+  await bar.click();
+  await page.locator('#note-btn').click();
+
+  const noteAfter = await page.evaluate(() => window.__dataset.entries.get('entry-3')!.read('note'));
+  expect(noteAfter).toBe('Reviewed');
+});
+
 test('a beforeEntryMove veto refuses a drop before the Mobilization line', async ({ page }) => {
   await page.goto('/editing-and-data.html');
   await page.getByLabel('Snap').selectOption('none');

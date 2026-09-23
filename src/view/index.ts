@@ -2,8 +2,15 @@
 // Full grid/timeline/viewport split lands in S1. No view code reads/writes scroll except through the
 // bound ScrollAxis instances (I12).
 export { GanttShell } from './gantt-shell.js';
-export type { GanttShellOptions, GanttShellWiring, Theme, Detachable } from './gantt-shell.js';
+export type {
+  GanttShellOptions,
+  GanttShellWiring,
+  Theme,
+  Detachable,
+  PointerActivation,
+} from './gantt-shell.js';
 export type { GridWidth } from './grid-pane-width.js';
+export type { CollapseState } from './collapse-state.js';
 export type {
   GanttEventMap,
   GanttEventHandler,
@@ -21,6 +28,7 @@ export type {
   EntryMove,
   EntryResize,
   EntryFieldEdit,
+  EntryActivate,
 } from './event-bus.js';
 export type { ResolvedTheme } from './theme.js';
 export type {
@@ -38,6 +46,7 @@ export type { GanttDom, DomTarget } from './gantt-dom.js';
 export type { PaneName } from './pane-layout.js';
 export type { DomEventHandler, DomEventOptions, PluginContextParts } from './plugin-ports.js';
 export type { ViewportGestures, ViewportGestureFlags } from './viewport-gestures.js';
+export type { ConvenienceChords } from './convenience-chords.js';
 export type {
   DraftOptions,
   EntryGesture,
@@ -45,6 +54,7 @@ export type {
   EntryGestureSession,
   EntryHit,
   SelectionForGestures,
+  ActivationForGestures,
 } from './entry-gesture-context.js';
 export type {
   ColumnGestureContext,
