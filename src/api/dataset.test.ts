@@ -250,6 +250,33 @@ describe('Dataset transaction/on/off delegation', () => {
     expect(calls).toBe(0);
   });
 
+  // Every plugin registration seam returns a Disposer (I2) — `on` is that seam for a Dataset event.
+  it('on() returns a Disposer that removes exactly the handler it was returned for', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    let calls = 0;
+    let otherCalls = 0;
+    const dispose = dataset.on('beforeChange', () => {
+      calls += 1;
+    });
+    dataset.on('beforeChange', () => {
+      otherCalls += 1;
+    });
+
+    dataset.entries.update('t1', { name: 'Design v2' });
+    dispose();
+    dataset.entries.update('t1', { name: 'Design v3' });
+
+    expect(calls).toBe(1);
+    expect(otherCalls).toBe(2);
+  });
+
+  it('calling the on() Disposer twice is safe', () => {
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    const dispose = dataset.on('beforeChange', () => {});
+    dispose();
+    expect(() => dispose()).not.toThrow();
+  });
+
   it('[S4-A1] a Dataset rebuilt from entries.all still sums after a later child edit', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',

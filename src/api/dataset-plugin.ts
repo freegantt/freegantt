@@ -13,6 +13,7 @@ import type {
   Aggregator,
   AggregatorName,
   DatasetEventMap,
+  Disposer,
   ExtenderWrapper,
   Field,
   FieldLockRuleWrapper,
@@ -52,7 +53,12 @@ export { moveEntryTo } from '../data/entry-reader.js';
 /** `beforeChange`/`change`, the two events a Dataset raises (D-S2-5, D-S2-25). Returning `false` from a
  *  `beforeChange` handler vetoes the whole changeset — the refusal path a lock plugin uses (D-S5-24). */
 export interface DatasetEvents {
-  on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+  /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
+   *  (I2); `on` is that seam for a Dataset event. */
+  on<K extends keyof DatasetEventMap>(
+    name: K,
+    handler: (payload: DatasetEventMap[K]) => void | false,
+  ): Disposer;
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }
 

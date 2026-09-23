@@ -139,6 +139,39 @@ describe('Gantt', () => {
   });
 });
 
+// Every plugin registration seam returns a Disposer (I2) — `on` is that seam for a Gantt event.
+describe('Gantt.on returns a Disposer', () => {
+  it('removes exactly the handler it was returned for, leaving another handler on the same event alone', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    let calls = 0;
+    let otherCalls = 0;
+    const dispose = gantt.on('themeChange', () => {
+      calls += 1;
+    });
+    gantt.on('themeChange', () => {
+      otherCalls += 1;
+    });
+
+    gantt.theme = 'dark';
+    dispose();
+    gantt.theme = 'light';
+
+    expect(calls).toBe(1);
+    expect(otherCalls).toBe(2);
+    gantt.destroy();
+  });
+
+  it('calling the Disposer twice is safe', () => {
+    const container = document.createElement('div');
+    const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
+    const dispose = gantt.on('themeChange', () => {});
+    dispose();
+    expect(() => dispose()).not.toThrow();
+    gantt.destroy();
+  });
+});
+
 describe('Gantt.dataset (#226)', () => {
   it('hands back the very Dataset it was constructed with', () => {
     const container = document.createElement('div');
