@@ -11,18 +11,45 @@ import {
   TransactionAlreadyOpenError,
 } from '../model/index.js';
 
-/** Does `entry`'s `parentId` chain loop back onto `entry` itself, self-parenting included? Walks
- *  `byId` — the batch, never the live store — so this answers the same question
- *  `EntryStore.#assertParentValid`'s walk does, over a list nothing has staged yet. */
-function parentChainLoopsBackTo(entry: StoredEntry, byId: ReadonlyMap<EntryId, StoredEntry>): boolean {
-  let current = entry.parentId;
-  const seen = new Set<EntryId>();
-  while (current !== undefined && !seen.has(current)) {
-    if (current === entry.id) return true;
-    seen.add(current);
-    current = byId.get(current)?.parentId;
+/** Every id whose `parentId` chain loops back onto itself, self-parenting included — one colouring
+ *  walk over the whole batch (O(n), the same shape `hierarchy-source.ts`'s `breakCycles` walks),
+ *  not one walk per entry: a chain shared by a deep batch is walked once, not once per descendant.
+ *  Walks `byId` — the batch, never the live store — so this answers the same question
+ *  `EntryStore.#assertParentValid`'s walk does, over a list nothing has staged yet.
+ *
+ *  `settled` holds every id a finished walk already cleared, so a later start skips it outright.
+ *  `visiting` holds only the current walk's own chain, so revisiting one of its own ids is the loop
+ *  signal; revisiting a `settled` id just means this chain runs into ground a prior walk already
+ *  charted, cycle or not. */
+function cycleMemberIds(
+  entries: readonly StoredEntry[],
+  byId: ReadonlyMap<EntryId, StoredEntry>,
+): ReadonlySet<EntryId> {
+  const settled = new Set<EntryId>();
+  const visiting = new Set<EntryId>();
+  const members = new Set<EntryId>();
+
+  for (const start of entries) {
+    if (settled.has(start.id)) continue;
+    const chain: EntryId[] = [];
+    let current: EntryId | undefined = start.id;
+    while (current !== undefined && !settled.has(current) && !visiting.has(current)) {
+      visiting.add(current);
+      chain.push(current);
+      current = byId.get(current)?.parentId;
+    }
+    // `current` is still in this walk's own `visiting` set, so the chain arrived back at an id it
+    // already passed — everything from that id to the end of the chain is one loop.
+    if (current !== undefined && visiting.has(current)) {
+      const loopStart = chain.indexOf(current);
+      for (const id of chain.slice(loopStart)) members.add(id);
+    }
+    for (const id of chain) {
+      visiting.delete(id);
+      settled.add(id);
+    }
   }
-  return false;
+  return members;
 }
 
 /**
@@ -45,8 +72,9 @@ export function assertEntryBatchIsSound(entries: readonly StoredEntry[], operati
       throw new EntryNotFoundError(entry.parentId, operation);
     }
   }
+  const cycleMembers = cycleMemberIds(entries, byId);
   for (const entry of entries) {
-    if (parentChainLoopsBackTo(entry, byId)) throw new ParentCycleError(entry.id);
+    if (cycleMembers.has(entry.id)) throw new ParentCycleError(entry.id);
   }
 }
 

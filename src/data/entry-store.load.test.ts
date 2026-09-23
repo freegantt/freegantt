@@ -74,6 +74,21 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
     ).not.toThrow();
   });
 
+  it('a deep parent chain that loops at the far end still throws ParentCycleError, naming the earliest listed member', () => {
+    const depth = 2000;
+    const chain = Array.from({ length: depth }, (_, i) => ({
+      id: `n${i}`,
+      parentId: i === 0 ? `n${depth - 1}` : `n${i - 1}`,
+    }));
+
+    expect(() => assertEntryBatchIsSound(read(chain), 'test')).toThrow(ParentCycleError);
+    try {
+      assertEntryBatchIsSound(read(chain), 'test');
+    } catch (error) {
+      expect((error as ParentCycleError).entryId).toBe(entryId('n0'));
+    }
+  });
+
   it("a load batch's duplicate id names the door the caller used, not entries.add's advice", () => {
     expect(() => assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'a' }]), 'entries.load')).toThrow(
       'entries.load: the list names id "a" twice. Give each entry its own id.',
