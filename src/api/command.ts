@@ -45,6 +45,7 @@ export type BuiltInCommandId =
   | 'freegantt.clearSelection'
   | 'freegantt.selectNextEntry'
   | 'freegantt.selectPreviousEntry'
+  | 'freegantt.activateEntry'
   | 'freegantt.deleteSelection'
   | 'freegantt.discardCellEdit'
   | 'freegantt.undo'

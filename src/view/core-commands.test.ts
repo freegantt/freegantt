@@ -26,6 +26,8 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
     nothingSelected: vi.fn(() => true),
     selectNextEntry: vi.fn(),
     selectPreviousEntry: vi.fn(),
+    canActivateFocused: vi.fn(() => false),
+    activateFocused: vi.fn(),
     canClearDates: vi.fn(() => true),
     clearDates: vi.fn(),
     pageDown: vi.fn(),

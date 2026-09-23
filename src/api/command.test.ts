@@ -64,6 +64,7 @@ const EVERY_BUILT_IN_ID: Record<BuiltInCommandId, true> = {
   'freegantt.clearSelection': true,
   'freegantt.selectNextEntry': true,
   'freegantt.selectPreviousEntry': true,
+  'freegantt.activateEntry': true,
   'freegantt.deleteSelection': true,
   'freegantt.discardCellEdit': true,
   'freegantt.undo': true,

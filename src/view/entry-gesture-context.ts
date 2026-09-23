@@ -70,6 +70,18 @@ export interface SelectionForGestures {
   selectableEntriesOf(hit: EntryHit): readonly EntryId[];
 }
 
+/** #434: what a click activates, independent of Selection (I14) — the same shape `SelectionForGestures`
+ *  takes for `select`, one collaborator answering one hit's worth of questions. */
+export interface ActivationForGestures {
+  /** The Entry a hit stands for — a bar names its own Entry; a row names its subject, the row's
+   *  first Entry (the same subject a `DomTarget` reads for a row). `undefined` when the row owns
+   *  none, or the bar's Entry is gone. Names *which* Entry only; the caller still asks
+   *  `can('activate', entry)` before firing (I14). */
+  subjectEntryOf(hit: EntryHit): Entry | undefined;
+  /** Fires `entryActivate` with cause `'click'` (no veto: activation mutates nothing). */
+  activate(entry: Entry, cause: 'click', target: 'bar' | 'row'): void;
+}
+
 /** Grown from S3.1/S3.2's `EntrySelectionContext` into the full gesture context (D-S3-5/D-GH-1): the
  *  selection half (`hitTest`/`selectableEntriesInRowOrder`/`selection`/`setHovered`) is unchanged; `entryFor`/`can`
  *  replace `entryIdFor`/`canSelect` (one capability resolution serves both selection and gesture
@@ -84,6 +96,8 @@ export interface EntryGestureContext {
   can(capability: GestureCapability, entry: Entry, edge?: 'start' | 'end'): boolean;
   /** What is selected, and what a hit would select — one collaborator, one member (#230 R4). */
   selection: SelectionForGestures;
+  /** What a hit would activate, and the door to fire it (#434). */
+  activation: ActivationForGestures;
   /** S3.2 (D-S3-6): the bar id under the pointer, or undefined on pointerleave. */
   setHovered(barId: BarId | undefined): void;
   /** The grid row under the pointer, or undefined once it leaves the grid pane. The timeline pane

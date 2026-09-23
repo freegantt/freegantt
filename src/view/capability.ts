@@ -118,6 +118,7 @@ function mayWriteTheDatesItSets(
 ): boolean {
   switch (capability) {
     case 'select':
+    case 'activate':
       return true;
     case 'move':
       return moveWritesSomething(entry);

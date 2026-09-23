@@ -21,6 +21,7 @@ export type {
   EntryMove,
   EntryResize,
   EntryFieldEdit,
+  EntryActivate,
 } from './event-bus.js';
 export type { ResolvedTheme } from './theme.js';
 export type {

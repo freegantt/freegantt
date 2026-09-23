@@ -15,6 +15,7 @@ import type {
   GridColumn,
   Instant,
   Refusable,
+  TargetKind,
   TimeSpan,
 } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
@@ -65,6 +66,17 @@ export interface EntryFieldEdit {
   readonly field: FieldKey;
   readonly from: unknown;
   readonly to: unknown;
+}
+
+/** #434: what a click, `Enter` on a focused row/bar, or a double-click (opt-in,
+ *  `dblclickActivates`) fires. `target` names which of the two node kinds it landed on — 'row' or
+ *  'bar' — the same word `DomTarget.kind` and `CommandTarget.kind` use, so a handler that reads one
+ *  already knows the other. A grid cell never activates: that surface is reserved for the inline
+ *  cell editor's own double-click (`inlineEditing()`), so `target` here is never `'gridCell'`. */
+export interface EntryActivate {
+  readonly entry: Entry;
+  readonly cause: 'click' | 'key' | 'dblclick';
+  readonly target: TargetKind;
 }
 
 /** One Viewport Batch completed. Chrome re-reads these, or reads the live Gantt getters.
@@ -183,6 +195,10 @@ export interface GanttEventMap {
   beforeEntryEdit: EntryFieldEdit;
   /** S5.8, D-S5-19. Fires after the commit, `to` the value actually written. */
   entryEdit: EntryFieldEdit;
+  /** #434: a click, `Enter`, or an opt-in double-click "opening" an Entry — independent of
+   *  Selection and of `capabilities.select` (I14). Mutates nothing, so there is no `before*` pair,
+   *  the same reason `navigationChange`/`themeChange` have none. */
+  entryActivate: EntryActivate;
   /** S5.12, D-S5-40: every refusal and every recovered fault a Gantt observes — a vetoed drag, a
    *  renderer that threw, a plugin disposer that threw. The same name and the same payload the
    *  Dataset raises (`DatasetEventMap.error`), because a consumer knows one shape either way; the

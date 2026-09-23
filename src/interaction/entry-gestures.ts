@@ -204,6 +204,16 @@ export function attachEntryGestures(
     // Past the miss check, only a primary button may pick, replace, toggle, or range (`isPrimaryButton`).
     if (!isPrimaryButton(e)) return;
 
+    // #434, I14: independent of `select` — a plain click still activates a capable Entry even when
+    // its row/bar refuses `select` (`{ select: false, activate: true }` on a rollup row). Ctrl/Shift
+    // modify the Selection instead of opening anything, so neither modifier activates.
+    if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+      const subject = ctx.activation.subjectEntryOf(hit);
+      if (subject !== undefined && ctx.can('activate', subject)) {
+        ctx.activation.activate(subject, 'click', hit.kind);
+      }
+    }
+
     // #212: one hit resolves to a list of Entries — the pane picks the unit. A bar names its own
     // Entry; a row names every selectable Entry it owns. The rules below then run over the list as a
     // unit. An empty list means the hit landed on something no gesture may select, which writes

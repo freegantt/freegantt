@@ -166,6 +166,10 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
    *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one rule (D-S5-35). */
   capabilities?: Capabilities;
+  /** Live (#434). Default `false`: `entryActivate` fires only for `'click'` and `'key'`. `true`
+   *  adds `'dblclick'` — a double-click on a bar or a row's own background. A grid cell never
+   *  activates on double-click either way: that surface stays `inlineEditing()`'s own. */
+  dblclickActivates?: boolean;
   /** Live (D-S3-24). What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
    *  one tick of whatever preset is showing, or `'none'`. Omitted, the showing preset's own `snap`
    *  decides — which is `'tick'` for every shipped preset. */
@@ -334,6 +338,7 @@ export class Gantt<TProps = unknown> {
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
         'capabilities',
+        'dblclickActivates',
         'snap',
         'viewportGestures',
         'gridColumns',
@@ -926,6 +931,15 @@ export class Gantt<TProps = unknown> {
 
   set viewportGestures(next: ViewportGestures) {
     this.#shell.viewportGestures = next;
+  }
+
+  /** Live (#434): the next double-click reads the new flag. */
+  get dblclickActivates(): boolean {
+    return this.#shell.dblclickActivates;
+  }
+
+  set dblclickActivates(next: boolean) {
+    this.#shell.dblclickActivates = next;
   }
 
   get canZoomIn(): boolean {
