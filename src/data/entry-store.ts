@@ -59,11 +59,12 @@ import { FieldRegistry } from './fields/field-registry.js';
 import type { ResolvedField } from './fields/field-registry.js';
 import {
   assertFieldTakesWrite,
+  editableAnswerFor,
   fieldLockQueryFor,
   identityFieldLockRule,
-  resolveFieldEditable,
   resolveWriteTarget,
 } from './write-rule.js';
+import type { FieldLockQuery } from '../model/index.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -352,18 +353,23 @@ export class EntryStore implements EntryStoreContract {
 
   /** The per-entry lock rule's own answer for one cell (#473) — `entries.update()` and an
    *  `EditExtender` cascade reach it through `#assertFieldTakesThisWrite`/`toEditsReading`; a plain
-   *  read reaches it here. `api/dataset.ts`'s `Dataset.editableOf` is the published door onto this. An
-   *  undeclared key answers `'never'`: nothing is written to a key nothing declares. */
+   *  read reaches it here. `api/dataset.ts`'s `Dataset.editableOf` is the published door onto this.
+   *  `editableAnswerFor` answers `'never'` for the same undeclared-or-`compute` Field
+   *  `entries.update()` refuses (#473's ocr finding, I14). */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
     const key = entryId(id);
     const declared = this.#registry.get(field);
-    if (declared === undefined) return 'never';
-    const query = fieldLockQueryFor(
-      key,
+    return editableAnswerFor(field, declared, this.#lockQueryFor(key), this.#lockRule);
+  }
+
+  /** One cell's address for the lock rule (#473) — the same construction `editableOf` and
+   *  `#assertFieldTakesThisWrite` both need, kept in one place so they cannot drift apart. */
+  #lockQueryFor(id: EntryId): FieldLockQuery {
+    return fieldLockQueryFor(
+      id,
       (i) => this.storedEntry(i),
       (e) => this.parentIdOf(e),
     );
-    return resolveFieldEditable(query, field, declared, this.#lockRule);
   }
 
   /** Call: `ctx.edits.setLockRule((next) => (entry, field) => field === 'cost' ? 'anywhere' : next(entry, field))`.
@@ -541,12 +547,13 @@ export class EntryStore implements EntryStoreContract {
    *  that check reads the same declaration instead of looking the key up again. */
   #assertFieldTakesThisWrite(id: EntryId, field: string, operation: string): DeclaredFieldWrite {
     const declared = this.#registry.get(field);
-    const query = fieldLockQueryFor(
-      id,
-      (i) => this.storedEntry(i),
-      (e) => this.parentIdOf(e),
+    const resolved = assertFieldTakesWrite(
+      field,
+      declared,
+      this.#lockQueryFor(id),
+      this.#lockRule,
+      operation,
     );
-    const resolved = assertFieldTakesWrite(field, declared, query, this.#lockRule, operation);
     return { field, declared: resolved };
   }
 

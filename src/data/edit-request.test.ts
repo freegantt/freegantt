@@ -221,4 +221,23 @@ describe('createEditRequest editableOf (#473)', () => {
 
     expect(request.editableOf('van-2', 'cost')).toBe('anywhere');
   });
+
+  // #473's ocr finding: a compute Field owns no stored home, so `entries.update()` refuses it before
+  // the lock ever runs (`ComputedFieldCannotBeWrittenError`) — `editableOf` must answer `'never'` too,
+  // even when a lock rule would open every cell.
+  it('answers never for a compute Field, even under a lock rule that opens everything', () => {
+    const opensEverything: FieldLockRule = () => 'anywhere';
+    const request = createEditRequest({
+      entries: depotTree(),
+      proposed: new Map() as ProposedEdits,
+      added: [],
+      removed: [],
+      hierarchySource: storedParentSource,
+      committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
+      fields: lookupOf({ key: 'derived', compute: () => 0 }),
+      lockRule: opensEverything,
+    });
+
+    expect(request.editableOf('van-1', 'derived')).toBe('never');
+  });
 });

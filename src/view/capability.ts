@@ -10,7 +10,13 @@
 // per Field. `Capabilities.edit` answered per Entry. The cell editor kept a third rule per cell. No
 // two of them could meet. A bar move wrote `start` and `end` and asked neither Field.
 
-import { editableOf, resolveWriteTarget, WRITABLE, NOT_WRITABLE, DERIVED } from '../data/write-rule.js';
+import {
+  editableOf,
+  libraryWriteRule,
+  resolveWriteTarget,
+  NOT_WRITABLE,
+  WRITABLE,
+} from '../data/write-rule.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
 import type { Entry, Field, FieldEditable, FieldKey } from '../model/index.js';
 import type { CapabilityRule, GestureCapability, Capabilities, WriteRule } from '../model/index.js';
@@ -181,8 +187,9 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     if (consumerAnswer !== undefined) return consumerAnswer ? WRITABLE : NOT_WRITABLE;
     const variantAnswer = askWriteRule(variantCapabilitiesFor?.(entry)?.edit, entry, field);
     if (variantAnswer !== undefined) return variantAnswer ? WRITABLE : NOT_WRITABLE;
-    if (resolveWriteTarget(entry.hasChildren, declared) === 'refused') return DERIVED;
-    return effectiveEditable === 'anywhere' ? WRITABLE : NOT_WRITABLE;
+    // The library's own last word (#473's ocr finding). One home for "derived, or the effective
+    // editable" replaces a second copy of `libraryWriteRule`'s own two arms.
+    return libraryWriteRule(entry.hasChildren, declared, effectiveEditable);
   };
 
   /** #470: does this row own the Field at all? `resolveWriteTarget` answers from the Field and

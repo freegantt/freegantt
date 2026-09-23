@@ -71,23 +71,6 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field | undefine
   return 'refused';
 }
 
-/** May a person change this value by hand — the cell editor, a bar handle, a bar move? The **grid
- *  threshold** (ADR 0015): `'anywhere'`, and nothing else. `'api'` keeps the cell dead on purpose,
- *  for a value the app owns and the user does not type. */
-export function isUserEditable(field: Field): boolean {
-  return editableOf(field) === 'anywhere';
-}
-
-/** May `entries.update()` change this value? The **API threshold** (ADR 0015): anything but
- *  `'never'`. One key answers both thresholds, which is what keeps the two doors from disagreeing
- *  (I14). A `'never'` Field is a lock, and `entries.update()` throws `FieldNotEditableError`.
- *
- *  It names what a *caller* may write, never what the library may: construction, `entries.add()`
- *  and History replay all still write a locked Field. */
-export function isApiEditable(field: Field): boolean {
-  return editableOf(field) !== 'never';
-}
-
 /** Core's own lock rule (#473): silence, on every cell. The first occupant of `ctx.edits.setLockRule`
  *  — a plugin composes onto this the way it composes onto `identityExtender`/`storedParentSource`
  *  (D-S5-23) — so a Dataset with no plugin installed answers every cell with `Field.editable` alone. */
@@ -120,6 +103,22 @@ export function resolveFieldEditable(
   return lockRule(query, field) ?? editableOf(declared);
 }
 
+/** What `dataset.editableOf`/`EditRequest.editableOf` answer for one cell, in the one order
+ *  `assertFieldTakesWrite` below throws in — existence, then `compute`, then the lock (#473's ocr
+ *  finding). A query and a door built from two copies of that order can drift; built from one, they
+ *  cannot: an undeclared or `compute` Field answers `'never'` here for the same reason
+ *  `entries.update()` refuses it there, so a plugin that guards a write with `editableOf(...) !==
+ *  'never'` never passes a guard `entries.update()` then throws on. */
+export function editableAnswerFor(
+  field: FieldKey,
+  declared: Field | undefined,
+  query: FieldLockQuery,
+  lockRule: FieldLockRule,
+): FieldEditable {
+  if (declared === undefined || 'compute' in declared) return 'never';
+  return resolveFieldEditable(query, field, declared, lockRule);
+}
+
 /** Does this Field, on this Entry, take a write from this door at all? The one check
  *  `entries.update()` and an `EditExtender` cascade both run, in the one order that leaves the caller
  *  somewhere to go (ADR 0015; folded from two copies, #473's ocr finding).
@@ -127,7 +126,8 @@ export function resolveFieldEditable(
  *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`: a
  *  compute Field owns no stored home, and it may not carry `editable` either, so asking the lock
  *  first would answer "declare an editable" about a key the register door refuses. Then the lock
- *  itself, resolved per entry (#473) rather than off the Field declaration alone. */
+ *  itself, resolved per entry (#473) rather than off the Field declaration alone. `editableAnswerFor`
+ *  encodes this same order, so the two cannot drift. */
 export function assertFieldTakesWrite(
   field: FieldKey,
   declared: Field | undefined,
@@ -137,7 +137,7 @@ export function assertFieldTakesWrite(
 ): Field {
   if (declared === undefined) throw new UnknownFieldError(field, operation);
   if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
-  if (resolveFieldEditable(query, field, declared, lockRule) === 'never') {
+  if (editableAnswerFor(field, declared, query, lockRule) === 'never') {
     throw new FieldNotEditableError(field, operation);
   }
   return declared;
@@ -153,9 +153,15 @@ export function assertFieldTakesWrite(
  *  declaring a distribution policy (#470 retired that seam) — a rolling-up cell on a row with
  *  children refuses from every direction, with no exception left to name.
  *
- *  Everything else is the Field's own `editable`, read at the grid threshold. A Field that declares
- *  nothing is editable: `'anywhere'` is the default (ADR 0015). */
-export function libraryWriteRule(hasChildren: boolean, field: Field): FieldWriteVerdict {
+ *  Everything else is the **effective** editable at the grid threshold: `editable` defaults to the
+ *  Field's own `editable` (`editableOf`), but `view/capability.ts`'s `canWrite` passes the answer a
+ *  plugin's per-entry lock rule already resolved (#473), so a per-entry unlock and the Field's own
+ *  default meet in this one function instead of two copies of it (#473's ocr finding). */
+export function libraryWriteRule(
+  hasChildren: boolean,
+  field: Field,
+  editable: FieldEditable = editableOf(field),
+): FieldWriteVerdict {
   if (resolveWriteTarget(hasChildren, field) === 'refused') return DERIVED;
-  return isUserEditable(field) ? WRITABLE : NOT_WRITABLE;
+  return editable === 'anywhere' ? WRITABLE : NOT_WRITABLE;
 }

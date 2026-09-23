@@ -26,7 +26,7 @@ import {
 } from './entry-tree.js';
 import { entryAfterEdit } from './fields/field-access.js';
 import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
-import { fieldLockQueryFor, resolveFieldEditable, resolveWriteTarget } from './write-rule.js';
+import { editableAnswerFor, fieldLockQueryFor, resolveWriteTarget } from './write-rule.js';
 
 export interface CreateEditRequestOptions {
   readonly entries: ReadonlyMap<EntryId, StoredEntry>;
@@ -93,17 +93,16 @@ export function createEditRequest(options: CreateEditRequestOptions): EditReques
     return resolveWriteTarget(hasChildren(id), fields.get(field));
   }
 
-  /** The resolver's own answer, unchanged — `resolveFieldEditable`, the same one
-   *  `#assertFieldTakesThisWrite` and `toEditsReading` write against (I14). `entryAfterEdits` gives the
+  /** The resolver's own answer, unchanged — `editableAnswerFor`, the same one
+   *  `#assertFieldTakesThisWrite` and `toEditsReading` write against (I14), so an undeclared or
+   *  `compute` Field answers `'never'` here too (#473's ocr finding). `entryAfterEdits` gives the
    *  subtree walk this transaction's own body, not the pre-transaction snapshot, so an entry this
-   *  transaction itself adds still answers `isDescendantOf` correctly. An undeclared key answers
-   *  `'never'`: nothing is written to a key nothing declares. */
+   *  transaction itself adds still answers `isDescendantOf` correctly. */
   function editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
     const declared = fields.get(field);
-    if (declared === undefined) return 'never';
     const key = entryId(id);
     const query = fieldLockQueryFor(key, entryAfterEdits, (e) => parentIdFrom(hierarchySource, e));
-    return resolveFieldEditable(query, field, declared, lockRule);
+    return editableAnswerFor(field, declared, query, lockRule);
   }
 
   return {

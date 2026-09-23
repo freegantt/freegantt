@@ -8,6 +8,7 @@ import {
   invertChangeSet,
   mergeEntryEdits,
   InvalidReplayOriginError,
+  ComputedFieldCannotBeWrittenError,
   FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
@@ -855,6 +856,20 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
 
     expect(dataset.editableOf('open', 'owner')).toBe('anywhere');
     expect(dataset.editableOf('open', 'name')).toBe('anywhere');
+  });
+
+  // #473's ocr finding: `editableOf` used to default an undeclared `editable` to `'anywhere'` for a
+  // `compute` Field, so a plugin that guarded a write with `editableOf(...) !== 'never'` passed the
+  // guard and then met `ComputedFieldCannotBeWrittenError` from `entries.update()`.
+  it('answers never for a compute Field, the same refusal entries.update() gives it', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'derived', compute: () => 0 }],
+      entries: [oneEntry()],
+    });
+
+    expect(dataset.editableOf('t1', 'derived')).toBe('never');
+    expect(() => dataset.entries.update('t1', { derived: 1 })).toThrow(ComputedFieldCannotBeWrittenError);
   });
 });
 
