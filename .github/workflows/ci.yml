@@ -62,7 +62,12 @@ jobs:
       # repo's code, so no `.nvmrc` edit could ever silence it. Only a major bump does. Keep each
       # major at or above the first one that declares node24: checkout v5, setup-node v5, cache
       # v5, pnpm/action-setup v5.
+      # `check-bundle-growth` (#342) needs `main`'s history to find the merge-base, and the
+      # default shallow, single-ref checkout does not carry it. `fetch-depth: 0` is the full
+      # history, so `origin/main` resolves and `git merge-base` has commits to search.
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: pnpm/action-setup@v6
       # setup-node caches nothing here. The `actions/cache` steps below do the caching, on keys
       # this file owns. Keep it that way: setup-node v6 limits its own automatic cache to npm.
@@ -108,4 +113,13 @@ jobs:
       # The gate itself. Every check the local gate runs, in the same order, from one script that
       # reads its check list out of `package.json` at run time. A check cannot join `verify` and
       # miss CI, and CI cannot run a spelling of the gate that nobody runs locally.
+      #
+      # `FG_PR_ID` is `check-bundle-growth`'s (#342) ledger key. `pull_request` carries a number,
+      # so that wins when it exists. `workflow_dispatch` carries none — `pull_request.number` reads
+      # as an empty string there — so the branch name stands in, the same fallback the script
+      # itself uses locally (a pull request has no number yet there). `head.ref` over `ref_name`
+      # for the same reason the concurrency group above picks it: `ref_name` is `341/merge` on a
+      # `pull_request` event, not the branch name a local run's `git rev-parse` would find.
       - run: pnpm verify:full
+        env:
+          FG_PR_ID: ${{ github.event.pull_request.number || github.event.pull_request.head.ref || github.ref_name }}

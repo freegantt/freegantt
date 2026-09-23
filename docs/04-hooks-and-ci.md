@@ -26,7 +26,8 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating) | ~10s |
 | `check-doc-examples` | `node scripts/check-doc-examples.mjs` — typechecks the docs' code fences against the built `.d.ts`, so `pnpm build` runs first | ~5s |
 | `bundle-probe` | `node scripts/bundle-probe.mjs` | ~5s |
-| `size-limit` | `size-limit` (`.size-limit.json`) — a measurement with a ceiling, not a guard (§5) | ~10s |
+| `size-limit` | `size-limit` (`.size-limit.json`) — a measurement, no ceiling; `check-bundle-growth` is the guard that reads its numbers (§5) | ~10s |
+| `check-bundle-growth` | `node scripts/check-bundle-growth.mjs` — fails a pull request whose `.size-limit.json` entries grow more than 1 kB (brotli) past `main`'s merge-base, unless `bundle-size-exceptions.md` records the growth | ~10s |
 | `verify` | the check chain in `package.json` — every check except the browser one | ~60s |
 | `verify:full` | `node scripts/verify-full.mjs` — the `verify` chain, then `test:e2e`. **The gate** | ~75s |
 | `open-pr` | `node scripts/open-pr.mjs` — pushes the branch, opens a draft pull request (§5.2) | ~5s |
@@ -281,7 +282,7 @@ One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify
 **Rules for the pipeline itself:**
 
 - **No `continue-on-error`.** A check that can be yellow is a check that is off. The gate has one exit code and one verdict line.
-- **A measurement is not a guard.** `size-limit` and `perf` measure until the budget behind each one is measured rather than guessed. They are labeled as measurements where they are declared, not as guards.
+- **A measurement is not a guard.** `size-limit` reports raw byte counts and sets no ceiling; `check-bundle-growth` reads those counts and is the guard, failing on growth past `main` rather than a fixed number (§1). `perf` measures until the budget behind it is measured rather than guessed. Each is labeled as a measurement where it is declared, not as a guard.
 - **`api-report` failure is not a bug**, it is a semver decision: the fix is either "revert the surface change" or "commit the updated report and say so in the pull request." The check's message says exactly that.
 - **Required check on `main`: `gate`.** One job, so one required check. Later work adds `axe` and `perf` as checks inside the gate, never as jobs beside it.
 
