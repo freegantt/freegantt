@@ -30,12 +30,14 @@ export interface CoreCommandPorts {
    *  sits on. */
   selectNextEntry(): void;
   selectPreviousEntry(): void;
-  /** #434, I14: may the row/bar real focus sits on activate right now — independent of Selection,
-   *  so a `{ select: false, activate: true }` row still answers `true` here even with an empty
-   *  Selection. The `when` half of `freegantt.activateEntry`. */
+  /** #434, I14: may the row, bar, or grid cell real focus sits on activate right now — independent
+   *  of Selection, so a `{ select: false, activate: true }` row still answers `true` here even with
+   *  an empty Selection. A grid cell answers `true` only once `inlineEditing()`'s own
+   *  `freegantt.editFocusedCell` declines it (unwritable, or no editing feature installed). The
+   *  `when` half of `freegantt.activateEntry`. */
   canActivateFocused(): boolean;
-  /** #434: fires `entryActivate` (cause `'key'`) for the focused row/bar's own Entry. A no-op if
-   *  nothing focused answers `canActivateFocused()` — asked again rather than trusted from the
+  /** #434: fires `entryActivate` (cause `'key'`) for the focused row/bar/cell's own Entry. A no-op
+   *  if nothing focused answers `canActivateFocused()` — asked again rather than trusted from the
    *  `when` that gated this `run`, the same posture every command here takes. */
   activateFocused(): void;
   /** ADR 0012: may this Entry's own dates be cleared? A rolling-up parent's cannot — the Rollup

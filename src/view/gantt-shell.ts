@@ -2098,15 +2098,18 @@ export class GanttShell {
     this.#emit('entryActivate', { entry, cause, target });
   }
 
-  /** #434, I14: the row or bar real keyboard focus sits on right now, and its own Entry, when the
-   *  `activate` capability allows it. Shared by `canActivateFocused`/`activateFocused`
-   *  (`CoreCommandPorts`) — the `when` and the `run` of `freegantt.activateEntry` ask this the same
-   *  way, rather than resolve focus twice for one keystroke. */
-  #focusedActivationTarget(): { entry: Entry; kind: 'row' | 'bar' } | undefined {
+  /** #434, I14: the row, bar, or grid cell real keyboard focus sits on right now, and its own Entry,
+   *  when the `activate` capability allows it. A grid cell counts too: `freegantt.activateEntry` is
+   *  the `Enter` fallback (D-S5-7), so it only ever runs where `inlineEditing()`'s own
+   *  `freegantt.editFocusedCell` declined — an unwritable cell, or no editing feature installed at
+   *  all. Shared by `canActivateFocused`/`activateFocused` (`CoreCommandPorts`) — the `when` and the
+   *  `run` of `freegantt.activateEntry` ask this the same way, rather than resolve focus twice for
+   *  one keystroke. */
+  #focusedActivationTarget(): { entry: Entry; kind: TargetKind } | undefined {
     const focused = this.#rovingFocus.focusedElement();
     const domTarget = focused !== undefined ? this.#dom.targetUnder(focused) : undefined;
     if (domTarget === undefined || domTarget.entry === undefined) return undefined;
-    if (domTarget.kind !== 'row' && domTarget.kind !== 'bar') return undefined;
+    if (domTarget.kind === 'header' || domTarget.kind === 'splitter') return undefined;
     if (!this.#canGesture('activate', domTarget.entry.id)) return undefined;
     return { entry: domTarget.entry, kind: domTarget.kind };
   }

@@ -68,11 +68,14 @@ export interface EntryFieldEdit {
   readonly to: unknown;
 }
 
-/** #434: what a click, `Enter` on a focused row/bar, or a double-click (opt-in,
- *  `dblclickActivates`) fires. `target` names which of the two node kinds it landed on — 'row' or
- *  'bar' — the same word `DomTarget.kind` and `CommandTarget.kind` use, so a handler that reads one
- *  already knows the other. A grid cell never activates: that surface is reserved for the inline
- *  cell editor's own double-click (`inlineEditing()`), so `target` here is never `'gridCell'`. */
+/** #434: what a click, an `Enter`, or a double-click (opt-in, `dblclickActivates`) fires. `target`
+ *  names which node it landed on, the same word `DomTarget.kind` and `CommandTarget.kind` use, so a
+ *  handler that reads one already knows the other. A click or a double-click never lands on
+ *  `'gridCell'` — that surface is reserved for the inline cell editor's own double-click
+ *  (`inlineEditing()`), and a plain click on the grid pane never runs the bar/row gesture stream at
+ *  all. `Enter` can: it is the fallback once `inlineEditing()`'s own `Enter` binding declines an
+ *  unwritable cell (or no editing feature is installed), so `'gridCell'` reaches here only from
+ *  `cause: 'key'`. */
 export interface EntryActivate {
   readonly entry: Entry;
   readonly cause: 'click' | 'key' | 'dblclick';
