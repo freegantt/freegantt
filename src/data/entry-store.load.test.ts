@@ -8,12 +8,18 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   MutationCancelledError,
+  MutationDuringExtensionHookError,
   ParentCycleError,
   TransactionAlreadyOpenError,
   entryId,
 } from '../model/index.js';
-import type { ChangeSet, EntryInput, ErrorReport, FlatEntryInput } from '../model/index.js';
-import { assertEntryBatchIsSound, assertNoOpenTransaction, listOrderOf } from './entry-batch.js';
+import type { ChangeSet, EntryEdits, EntryInput, ErrorReport, FlatEntryInput } from '../model/index.js';
+import {
+  assertEntryBatchIsSound,
+  assertNoOpenTransaction,
+  assertNoRunningExtensionHook,
+  listOrderOf,
+} from './entry-batch.js';
 import { toEntries } from './entry-reader.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
@@ -79,6 +85,11 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
   it('assertNoOpenTransaction is silent at 0 and throws above it', () => {
     expect(() => assertNoOpenTransaction(0, 'test')).not.toThrow();
     expect(() => assertNoOpenTransaction(1, 'test')).toThrow(TransactionAlreadyOpenError);
+  });
+
+  it('assertNoRunningExtensionHook is silent when false and throws when true', () => {
+    expect(() => assertNoRunningExtensionHook(false, 'test')).not.toThrow();
+    expect(() => assertNoRunningExtensionHook(true, 'test')).toThrow(MutationDuringExtensionHookError);
   });
 });
 
@@ -199,6 +210,27 @@ describe('entries.load', () => {
       }),
     ).toThrow(TransactionAlreadyOpenError);
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('old')]);
+  });
+
+  it('an EditExtender that calls entries.load() throws MutationDuringExtensionHookError, and the user edit is not saved either (#323)', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      editExtender: (): EntryEdits => {
+        state.entries.load([{ id: 'new', name: 'New', start: 0, end: 1 }]);
+        return new Map();
+      },
+    });
+    let changeCount = 0;
+    state.on('change', () => {
+      changeCount += 1;
+    });
+
+    expect(() => state.entries.update(entryId('t1'), { name: 'a' })).toThrow(
+      MutationDuringExtensionHookError,
+    );
+    expect(changeCount).toBe(0);
+    expect(state.entries.all.map((e) => e.id)).toEqual([entryId('t1')]);
   });
 
   it('an id in both lists keeps no old plugin-store row, selection or other per-entry state (L1)', () => {
