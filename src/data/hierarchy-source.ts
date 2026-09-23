@@ -47,7 +47,7 @@ export function isDescendantOf(
   entryFor: (id: EntryId) => StoredEntry | undefined,
   parentIdOf: (entry: StoredEntry) => EntryId | undefined,
 ): boolean {
-  const seen = new Set<EntryId>();
+  const seen = new Set<EntryId>([id]);
   let current = entryFor(id);
   let parentId = current === undefined ? undefined : parentIdOf(current);
   while (parentId !== undefined && !seen.has(parentId)) {
