@@ -101,6 +101,59 @@ export interface EntryInput<TProps = Record<string, unknown>> {
  *  `props` (declared consumer keys sit flat on `EntryEdit`, never nested — decision 11). */
 type EntryEnvelope<TProps> = Omit<EntryInput<TProps>, 'id' | 'props'>;
 
+/** What `entries.add()` and the constructor's `entries` array both take (ADR 0011, Q15, #281): a
+ *  declared Field key sits flat, at the top, the same shape `update()` takes —
+ *  `entries.add({ id, name, owner: 'Ali' })` — and nested `props` still works for a bag already held
+ *  or a passenger key ingest does not know about.
+ *
+ *  **This type checks every `TProps` key flat, whether or not a Field declares it — ingest does not
+ *  (`propsFromInput`, `data/entry-reader.ts`).** A `TProps` key with no matching Field is an
+ *  undeclared key at ingest (ADR 0011: "an undeclared key is never written by the library, ever"):
+ *  `entries.add({ id, passengerKey: 1 })` type-checks and then warns and drops `passengerKey` at
+ *  runtime. This is not a gap `FlatEntryInput` could close — declaring a key is what tells the
+ *  library the home is safe to write to (ADR 0011, "declaring a key does not create it. Declaring
+ *  says what the library may do with it"), and `TProps` alone does not declare one. Nest the value
+ *  under `props` instead (`entries.add({ id, props: { passengerKey: 1 } })`), which ingest always
+ *  carries, declared or not.
+ *
+ *  Conditional on whether `TProps` is declared. An open `TProps` (the default, or a plugin author's
+ *  own erased `Record<string, unknown>`) has no declared key to check flatly, so this falls back to
+ *  plain `EntryInput<TProps>` — exactly today's shape, already sound for that case. `keyof` an open
+ *  record is `string`, an index signature; had the declared-key arm below run for that branch too,
+ *  its own mapped `[K in keyof TProps]` would grow that same index signature and refuse the named
+ *  `EntryInput<TProps>` value all over again — the identical trap `& Partial<TProps>` fell into, just
+ *  moved. A concrete `TProps` (a consumer's own declared props interface) has no index signature, so
+ *  the declared-key arm runs and the flat key type-checks.
+ *
+ *  The declared-key arm is inlined here, not a named helper type: a helper `api-extractor` cannot see
+ *  through a non-exported name (`ae-forgotten-export`), and this arm is never named on its own — a
+ *  consumer names `FlatEntryInput`, never a "declared" half of it. Every piece — the envelope,
+ *  `props`, and the declared keys — is its own mapped type, re-derived from `EntryEnvelope`/`TProps`
+ *  the way `EntryEdit` already builds itself below, never an intersection with the named `EntryInput`
+ *  interface. That is the whole fix: a mapped type carries no interface identity for TypeScript to
+ *  refuse, so where `EntryInput<TProps> & Partial<TProps>` (the shape Q15's wording first suggested)
+ *  was uninhabitable by a named `EntryInput<TProps>[]` value, this type takes one straight in — it is
+ *  a subset of what this type allows, `entry.toInput()`'s return included. */
+export type FlatEntryInput<TProps = Record<string, unknown>> = string extends keyof TProps
+  ? EntryInput<TProps>
+  : { id: string } & {
+      [K in keyof EntryEnvelope<TProps>]?: EntryEnvelope<TProps>[K];
+    } & { props?: Partial<TProps> } & {
+      // `Exclude<…, keyof EntryEnvelope<TProps> | 'id' | 'props'>`, not a bare `keyof TProps`: an
+      // envelope key (`name`, `start`, …) never joins a real `TProps`, so excluding it changes
+      // nothing today. It exists so a literal's own core fields can only ever explain themselves
+      // through the envelope mapped type above, never through this one — without it, `new
+      // Dataset({ entries: [{ id, name, start, end }] })` (no `<TProps>` named, ADR 0011 Q15's own
+      // common case) makes TypeScript try to infer `TProps` from `id`/`name`/`start`/`end`
+      // themselves, landing on a nonsense shape and refusing the call. `'props'` is excluded for the
+      // same reason, and it is not redundant with the envelope: `EntryEnvelope` already dropped
+      // `'props'` (this file's `Omit<…, 'id' | 'props'>` above), so a `TProps` that itself declares a
+      // key named `props` would otherwise land here and intersect with the `{ props?: Partial<TProps>
+      // }` arm above — `Partial<TProps>['props']` against this arm's `TProps['props']` — and refuse
+      // the nested-bag form entirely.
+      [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
+    };
+
 /** Every key a *stored* `Entry` may lack, restricted to the ones `EntryEnvelope` also carries —
  *  derived from `Entry` rather than hand-listed, so the moment `Entry.end` stops being optional, or a
  *  new optional key joins `Entry`, this (and `EntryEdit` below) follow with no edit to either. */
