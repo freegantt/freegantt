@@ -306,6 +306,8 @@ The gate and CI run Chromium only (#317). `.github/workflows/nightly-engines.yml
 
 GitHub cron runs in UTC. The workflow fires at 09:00 and 10:00 UTC, and keeps the one that is 3am in Denver on that day.
 
+A scheduled run is skipped when no commit landed on main in the last 25 hours. A merged PR and a direct push both count. A run started by hand always runs.
+
 A failed run calls `scripts/report-nightly-failures.mjs`:
 
 - No open issue has the `nightly-e2e-failure` label: the script opens one that lists each failure.
