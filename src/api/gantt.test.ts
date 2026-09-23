@@ -7584,6 +7584,65 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     gantt.destroy();
   });
 
+  it('collapseStateOf answers each state, a hidden descendant, a stale id, and a grouping header', async () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'category' }],
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', props: { category: 'group' } },
+        {
+          id: 'c',
+          name: 'c',
+          start: '2026-01-03',
+          end: '2026-01-04',
+          parentId: 'p',
+          props: { category: 'span' },
+        },
+        {
+          id: 'leaf',
+          name: 'leaf',
+          start: '2026-01-05',
+          end: '2026-01-06',
+          props: { category: 'milestone' },
+        },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    // Leaf: cannot expand.
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+
+    // Expandable, not collapsed.
+    expect(gantt.collapseStateOf('p')).toBe('expanded');
+
+    // Expandable, collapsed — and the child it now hides still answers from the row tree, not the
+    // frame (#424).
+    gantt.collapse('p');
+    expect(gantt.collapseStateOf('p')).toBe('collapsed');
+    expect(gantt.collapseStateOf('c')).toBe('leaf');
+
+    // No such row: a removed entry's id.
+    dataset.entries.remove('leaf');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(gantt.collapseStateOf('leaf')).toBeUndefined();
+
+    // A stale id that never named a row.
+    expect(gantt.collapseStateOf('never-existed')).toBeUndefined();
+
+    // A grouping header row answers by the same rule as any other row.
+    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.read('category') as string };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(gantt.collapseStateOf('group:group')).toBe('expanded');
+    gantt.collapse('group:group');
+    expect(gantt.collapseStateOf('group:group')).toBe('collapsed');
+
+    gantt.destroy();
+  });
+
   it('set range pins the time axis to a span; assigning fitDataset back releases it', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });
