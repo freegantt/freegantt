@@ -172,6 +172,151 @@ describe('Gantt.on returns a Disposer', () => {
   });
 });
 
+describe('ctx.events.on is removed on uninstall, like every other registration seam', () => {
+  it('removes a handler added during setup when the plugin is dropped from Gantt.plugins', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let calls = 0;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.listener',
+          view(ctx) {
+            ctx.events.on('themeChange', () => {
+              calls += 1;
+            });
+          },
+        },
+      ],
+    });
+
+    gantt.theme = 'dark';
+    gantt.plugins = [];
+    gantt.theme = 'light';
+
+    expect(calls).toBe(1);
+    gantt.destroy();
+  });
+
+  it('removes a handler added after setup returned', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let calls = 0;
+    let addLateHandler = (): void => undefined;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.late-listener',
+          view(ctx) {
+            addLateHandler = () =>
+              ctx.events.on('themeChange', () => {
+                calls += 1;
+              });
+          },
+        },
+      ],
+    });
+
+    addLateHandler();
+    gantt.theme = 'dark';
+    gantt.plugins = [];
+    gantt.theme = 'light';
+
+    expect(calls).toBe(1);
+    gantt.destroy();
+  });
+
+  it('calling its own events.on Disposer early, then uninstalling, throws nothing', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.early-dispose',
+          view(ctx) {
+            const dispose = ctx.events.on('themeChange', () => undefined);
+            dispose();
+          },
+        },
+      ],
+    });
+
+    expect(() => (gantt.plugins = [])).not.toThrow();
+    gantt.destroy();
+  });
+
+  it('leaves another plugin’s handler and the app’s own gantt.on handler firing', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let trackedCalls = 0;
+    let survivorCalls = 0;
+    let appCalls = 0;
+    const survivor = {
+      id: 'demo.survivor-listener',
+      view(ctx: PluginContext) {
+        ctx.events.on('themeChange', () => {
+          survivorCalls += 1;
+        });
+      },
+    };
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.tracked-listener',
+          view(ctx) {
+            ctx.events.on('themeChange', () => {
+              trackedCalls += 1;
+            });
+          },
+        },
+        survivor,
+      ],
+    });
+    gantt.on('themeChange', () => {
+      appCalls += 1;
+    });
+
+    gantt.plugins = [survivor];
+    gantt.theme = 'dark';
+
+    expect(trackedCalls).toBe(0);
+    expect(survivorCalls).toBe(1);
+    expect(appCalls).toBe(1);
+    gantt.destroy();
+  });
+
+  it('destroy() removes a handler added during setup', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    let calls = 0;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.listener',
+          view(ctx) {
+            ctx.events.on('themeChange', () => {
+              calls += 1;
+            });
+          },
+        },
+      ],
+    });
+
+    gantt.destroy();
+    expect(calls).toBe(0);
+  });
+});
+
 describe('Gantt.dataset (#226)', () => {
   it('hands back the very Dataset it was constructed with', () => {
     const container = document.createElement('div');
