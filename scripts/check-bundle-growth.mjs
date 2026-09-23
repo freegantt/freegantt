@@ -79,8 +79,10 @@ function measureAtRef(ref) {
   rmSync(workDir, { recursive: true, force: true }); // `git worktree add` wants to create this itself.
   git(['worktree', 'add', '--detach', workDir, ref]);
   try {
+    // `git()` trims its output, so `lockHere` is trimmed the same way — otherwise a trailing
+    // newline is the only difference and every run takes the slow path.
     const lockAtRef = git(['show', `${ref}:pnpm-lock.yaml`]);
-    const lockHere = readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8');
+    const lockHere = readFileSync(path.join(root, 'pnpm-lock.yaml'), 'utf8').trim();
     if (lockAtRef === lockHere) {
       symlinkSync(path.join(root, 'node_modules'), path.join(workDir, 'node_modules'));
     } else {
