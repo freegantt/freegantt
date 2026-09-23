@@ -101,8 +101,14 @@ export class RovingFocus {
   constructor(panes: Panes, ports: RovingFocusPorts) {
     this.#panes = panes;
     this.#ports = ports;
+    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to move focus through a
+    // grid row or cell (arrows, Home/End, PageUp/PageDown).
     this.#panes.rows.addEventListener('keydown', this.#onGridKeyDown);
+    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to move focus across a
+    // header cell (arrows).
     this.#panes.gridHeader.addEventListener('keydown', this.#onHeaderKeyDown);
+    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to move focus between bars
+    // on the timeline pane (arrows, Home/End).
     this.#panes.timeline.addEventListener('keydown', this.#onTimelineKeyDown);
     // The WAI-ARIA APG roving-tabindex pattern: a click or a Tab can move real focus without going
     // through `#handleGridKeyDown`/`#handleTimelineKeyDown` at all. `focusin` bubbles, unlike

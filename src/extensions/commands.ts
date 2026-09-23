@@ -10,8 +10,10 @@ import type { Disposer } from '../model/index.js';
 // registration mechanism every `register*` seam shares (#154, #155). A command id keyed to a stack
 // is what makes a plugin's override of a core command undo itself on uninstall (D-S5-7).
 import { createRegistrationTable } from '../layout/registration-table.js';
+import { convenienceCommandIds } from '../api/command.js';
 import type {
   BuiltInCommandId,
+  ConvenienceCommandId,
   CommandOf,
   CommandContextOf,
   CommandRegistryOf,
@@ -21,6 +23,12 @@ import type {
 /** #333: `view/core-commands.ts` types every registration against this, so a typo in a registered id
  *  fails to compile. It reaches the type here for the same reason it reaches `Command` here. */
 export type { BuiltInCommandId };
+
+/** #262: `view/convenience-chords.ts` resolves `Gantt.convenienceChords` against this — `view/` may
+ *  not import `api/command.ts` (plans/01 §1), so it reaches both the type and the list through this
+ *  file's own re-export, the same seam `BuiltInCommandId` already uses. */
+export type { ConvenienceCommandId };
+export { convenienceCommandIds };
 
 export type Command<TGantt = unknown> = CommandOf<TGantt>;
 export type CommandContext<TGantt = unknown> = CommandContextOf<TGantt>;

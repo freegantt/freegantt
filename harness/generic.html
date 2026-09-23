@@ -116,6 +116,27 @@
             </div>
 
             <div class="panel">
+              <h3>Convenience chords (#262)</h3>
+              <p>
+                <code>Mod+Z</code>/<code>Mod+Shift+Z</code> undo/redo are convenience chords: the toolbar's
+                Undo/Redo buttons run the same command another way, so an app is free to turn the chord off
+                and keep the keystroke for itself.
+              </p>
+              <div class="control-row">
+                <label
+                  ><input id="undo-chord-off-checkbox" type="checkbox" /> App owns undo: turn off Mod+Z /
+                  Mod+Shift+Z</label
+                >
+              </div>
+              <div class="control-row">
+                <label
+                  ><input id="all-chords-off-checkbox" type="checkbox" /> Turn off all convenience
+                  chords</label
+                >
+              </div>
+            </div>
+
+            <div class="panel">
               <h3>Vetoes and capabilities</h3>
               <p>
                 A Mobilization date line marks a hard boundary — <code>beforeEntryMove</code> refuses a drop

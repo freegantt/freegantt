@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { entryId } from '../model/index.js';
 import { registerCoreCommands } from '../view/core-commands.js';
 import type { CoreCommandPorts } from '../view/core-commands.js';
-import { resolveActedOn } from './command.js';
-import type { ActedOn, BuiltInCommandId } from './command.js';
+import { resolveActedOn, convenienceCommandIds } from './command.js';
+import type { ActedOn, BuiltInCommandId, ConvenienceCommandId } from './command.js';
 
 const A = entryId('a');
 const B = entryId('b');
@@ -82,5 +82,34 @@ describe('BuiltInCommandId (#236)', () => {
     registerCoreCommands({ register: (command) => void registered.push(command.id) }, {} as CoreCommandPorts);
 
     expect(registered.sort()).toEqual(Object.keys(EVERY_BUILT_IN_ID).sort());
+  });
+});
+
+/** #262: the same `Record<Id, true>` exhaustiveness shape `EVERY_BUILT_IN_ID` uses above, so an id
+ *  added to `ConvenienceCommandId` alone (with nothing here) fails to compile, and one added to
+ *  `convenienceCommandIds` alone (with nothing in the type) fails the test below. */
+const EVERY_CONVENIENCE_ID: Record<ConvenienceCommandId, true> = {
+  'freegantt.undo': true,
+  'freegantt.redo': true,
+  'freegantt.selectAll': true,
+  'freegantt.deleteSelection': true,
+  'freegantt.zoomIn': true,
+  'freegantt.zoomOut': true,
+  'freegantt.panToToday': true,
+  'freegantt.panRight': true,
+  'freegantt.panLeft': true,
+  'freegantt.panToStart': true,
+  'freegantt.panToEnd': true,
+};
+
+describe('ConvenienceCommandId (#262)', () => {
+  it('names exactly the ids convenienceCommandIds lists, and every one is a real BuiltInCommandId', () => {
+    expect([...convenienceCommandIds].sort()).toEqual(Object.keys(EVERY_CONVENIENCE_ID).sort());
+    expect(convenienceCommandIds.every((id) => id in EVERY_BUILT_IN_ID)).toBe(true);
+  });
+
+  it('names no obligation id — clearSelection and activateEntry stay out of the opt-out', () => {
+    expect(convenienceCommandIds).not.toContain('freegantt.clearSelection');
+    expect(convenienceCommandIds).not.toContain('freegantt.activateEntry');
   });
 });
