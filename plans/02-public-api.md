@@ -425,6 +425,32 @@ Selection and belong on any consumer's cheat sheet:
 
 **Viewport gestures** are a separate knob (`Gantt.viewportGestures`): they are not per-entry, they write no data, and they do not belong on `capabilities`. `false` turns wheel zoom, shift+wheel pan, and keyboard pan off together; `{ wheelZoom: false }` pins one gesture and leaves the others on. `zoomBy` / `panToDate` / `zoomIn` stay available either way.
 
+**Convenience chords vs. obligation chords (#262).** Every default chord `view/gantt-shell.ts` binds falls into exactly one of these, and the split is written once, here, so the next chord has a rule to follow instead of re-litigating the question.
+
+A **convenience chord**'s command has another door — a button, a menu item, or a public method — so an app author embedding a Gantt in a page that wants the same chord for something else (its own undo stack, say) may take it back. `Gantt.convenienceChords` turns them off, `false` for all of them or a per-command map for one at a time (typed against `ConvenienceCommandId`, so an obligation id below does not compile there). Turning a chord off never removes the command: `gantt.commands.run(id)`, a menu item, or a toolbar button reach it either way.
+
+| Chord | Command | Why it is negotiable |
+|---|---|---|
+| `Mod+Z` / `Mod+Shift+Z` | `freegantt.undo` / `freegantt.redo` | `dataset.undo()` / `redo()`, and a toolbar button. |
+| `Mod+A` | `freegantt.selectAll` | `gantt.selectedEntryIds = ...`. |
+| `Delete` | `freegantt.deleteSelection` | `entries.update` (un-date a bar) / `entries.remove()` (drop a row) directly. |
+| `Mod+=` / `Mod+-` | `freegantt.zoomIn` / `freegantt.zoomOut` | The methods of the same name. |
+| `Mod+0` | `freegantt.panToToday` | The method of the same name. |
+| `Alt+ArrowRight` / `Alt+ArrowLeft` | `freegantt.panRight` / `freegantt.panLeft` | `gantt.panToDate(...)`. |
+| `Mod+Home` / `Mod+End` | `freegantt.panToStart` / `freegantt.panToEnd` | `gantt.panToDate(...)`. |
+
+An **obligation chord** is the only keyboard path to what it does, so `[S5-A4]` and WCAG 2.1.1 keep it bound no matter what `convenienceChords` says — a code comment names both at each one's registration.
+
+| Chord | Command | What it is the only keyboard path to |
+|---|---|---|
+| Plain arrows, `Home`/`End`, `Page Up`/`Page Down` | Roving focus (`view/roving-focus.ts`), not a `Command` | Moving DOM focus through the grid and timeline panes at all. |
+| The splitter's own arrows | `view/splitter.ts`, not a `Command` | Resizing the grid/timeline split without a pointer. |
+| `Shift+ArrowRight` / `Shift+ArrowLeft` | `freegantt.resizeColumnWider` / `freegantt.resizeColumnNarrower` | Resizing a focused grid column. |
+| `Alt+ArrowRight` / `Alt+ArrowLeft` (header focused) | `freegantt.moveColumnRight` / `freegantt.moveColumnLeft` | Reordering a focused grid column. |
+| `Mod+ArrowRight` / `Mod+ArrowLeft` | `freegantt.selectNextEntry` / `freegantt.selectPreviousEntry` | Reaching a second bar on a row that draws several (#212, ADR 0010, issue #218). |
+| `Escape` | `freegantt.clearSelection` | Clearing the Selection from the keyboard. |
+| `Enter` | `freegantt.activateEntry` | Firing `entryActivate` from the keyboard — a click activates too, and #434's ruling is that the one keyboard equivalent of a pointer capability is an obligation the same as any other. |
+
 ---
 
 ### 4.2 Fields and grid columns

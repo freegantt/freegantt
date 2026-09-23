@@ -6979,6 +6979,93 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
   });
 });
 
+describe('Gantt.convenienceChords (#262)', () => {
+  function keydown(key: string, extra: Partial<KeyboardEventInit> = {}): KeyboardEvent {
+    return new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra });
+  }
+
+  it('false leaves every convenience chord inert; the command still runs through commands.run', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, convenienceChords: false });
+
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+    expect(dataset.canUndo).toBe(true);
+    const notFired = container.dispatchEvent(keydown('z', { ctrlKey: true }));
+    expect(notFired).toBe(true); // unmatched: nothing preventedDefault
+    expect(dataset.canUndo).toBe(true); // the chord did not run undo
+
+    // The command itself still answers — the app's own UI (a toolbar button) still works.
+    gantt.commands.run('freegantt.undo');
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a per-command map turns undo off while redo still fires on its own chord', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, convenienceChords: { 'freegantt.undo': false } });
+
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+    container.dispatchEvent(keydown('z', { ctrlKey: true }));
+    expect(dataset.canUndo).toBe(true); // Mod+Z stayed silent
+
+    container.dispatchEvent(keydown('z', { ctrlKey: true, shiftKey: true }));
+    // Nothing to redo yet (undo never ran), so this is a true no-op — canRedo stays false, which is
+    // itself proof Mod+Shift+Z still reached the command (an inert chord would have thrown nothing
+    // either way, so the next assertion is the one that actually distinguishes the two).
+    expect(dataset.canRedo).toBe(false);
+
+    gantt.commands.run('freegantt.undo');
+    expect(dataset.canUndo).toBe(false);
+    expect(dataset.canRedo).toBe(true);
+    container.dispatchEvent(keydown('z', { ctrlKey: true, shiftKey: true }));
+    expect(dataset.canRedo).toBe(false); // Mod+Shift+Z (redo) ran
+
+    gantt.destroy();
+  });
+
+  it('an obligation chord still fires with every convenience chord off', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      convenienceChords: false,
+      selectedEntryIds: [sampleEntries[0]!.id],
+    });
+
+    // Escape (`freegantt.clearSelection`) is an obligation chord — [S5-A4]/WCAG 2.1.1 — so
+    // `convenienceChords: false` does not touch it.
+    expect(gantt.selectedEntryIds).toEqual([sampleEntries[0]!.id]);
+    container.dispatchEvent(keydown('Escape'));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    // Mod+A (`selectAll`) is a convenience chord, and stays silent under the same config.
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('is live: the next keystroke reads a reassigned convenienceChords, no remount', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    gantt.convenienceChords = false;
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    gantt.convenienceChords = {};
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual(sampleEntries.slice(0, 2).map((entry) => entry.id));
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue #137 F1)', () => {
   it('a chord registered through ctx.interaction.registerKeyHandler still fires for a key event whose target sits outside the container', () => {
     // A popup opened from a trigger that lives outside the Gantt's own container (a toolbar button

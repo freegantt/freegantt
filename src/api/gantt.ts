@@ -11,6 +11,7 @@ import type {
   Theme,
   ViewportGestures,
   PointerActivation,
+  ConvenienceChords,
 } from '../view/index.js';
 import { TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
 import type {
@@ -180,6 +181,14 @@ export interface GanttOptionsBase<TProps = unknown> {
   /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
    *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
   viewportGestures?: ViewportGestures;
+  /** Live (#262). A convenience chord's default binding (`Mod+Z`, `Mod+A`, `Delete`, the pans,
+   *  the zoom/today chords) does the same job a button, a menu item, or a public method already
+   *  does, so an app author who wants that chord for something else may turn it off — `false` for
+   *  all of them, or a per-command map (`{ 'freegantt.undo': false }`) for one at a time. Default
+   *  `{}`: every convenience chord is on. An obligation chord (`Escape`, the column keys,
+   *  `Mod+Arrow` reach, `Enter`) is not in the map's key type and stays bound either way — `[S5-A4]`,
+   *  WCAG 2.1.1. The command itself stays reachable through `commands.run(id)` regardless. */
+  convenienceChords?: ConvenienceChords;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
   /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
@@ -344,6 +353,7 @@ export class Gantt<TProps = unknown> {
         'pointerActivation',
         'snap',
         'viewportGestures',
+        'convenienceChords',
         'gridColumns',
         'rowSource',
         'collapsed',
@@ -943,6 +953,15 @@ export class Gantt<TProps = unknown> {
 
   set pointerActivation(next: PointerActivation) {
     this.#shell.pointerActivation = next;
+  }
+
+  /** Live (#262): the next keystroke reads the new flags; no remount. */
+  get convenienceChords(): ConvenienceChords {
+    return this.#shell.convenienceChords;
+  }
+
+  set convenienceChords(next: ConvenienceChords) {
+    this.#shell.convenienceChords = next;
   }
 
   get canZoomIn(): boolean {

@@ -61,6 +61,40 @@ export type BuiltInCommandId =
  *  `FieldKey` keeps over `CoreFieldKey`. */
 export type CommandId = BuiltInCommandId | (string & {});
 
+/** #262: the default chords a keyboard user can already do the same job through another door — a
+ *  button, a menu item, or a public method — so an app author who wants that chord for something
+ *  else may turn it off. `undo`/`redo` have Undo/Redo, `deleteSelection` has `entries.remove()`,
+ *  `zoomIn`/`zoomOut`/`panToToday`/the pans have their own methods, `selectAll` has
+ *  `gantt.selectedEntryIds = ...`. `Gantt.convenienceChords`'s per-command map takes only these ids
+ *  — the `satisfies` below checks every member against `BuiltInCommandId` at compile time, so a typo
+ *  fails to compile the same way `view/core-commands.ts`'s own registrations do.
+ *
+ *  Every other command's default chord is an **obligation chord**: `[S5-A4]` and WCAG 2.1.1 keep it
+ *  bound no matter what this config says, because it is the only keyboard path to what it does —
+ *  `clearSelection` (`Escape`), the column keys, `Mod+Arrow` reach, and `Enter`
+ *  (`activateEntry` — the only keyboard path to click activation, #434). `plans/02` §4.1 states the
+ *  full split next to the chord table. */
+const CONVENIENCE_COMMAND_IDS = [
+  'freegantt.undo',
+  'freegantt.redo',
+  'freegantt.selectAll',
+  'freegantt.deleteSelection',
+  'freegantt.zoomIn',
+  'freegantt.zoomOut',
+  'freegantt.panToToday',
+  'freegantt.panRight',
+  'freegantt.panLeft',
+  'freegantt.panToStart',
+  'freegantt.panToEnd',
+] as const satisfies readonly BuiltInCommandId[];
+
+export type ConvenienceCommandId = (typeof CONVENIENCE_COMMAND_IDS)[number];
+
+/** `view/gantt-shell.ts` iterates this to resolve `Gantt.convenienceChords` once per assignment —
+ *  the same "resolve once" posture `resolveViewportGestures` takes. Not itself public: a consumer
+ *  types the per-command map against `ConvenienceCommandId` and never needs the list. */
+export const convenienceCommandIds: readonly ConvenienceCommandId[] = CONVENIENCE_COMMAND_IDS;
+
 /** What one invocation acts on (ADR 0010, ADR 0025, issue #212) — one set of Entry ids. A former
  *  Segment is an ordinary child Entry now, so there is no second reading to keep in step with this
  *  one. */

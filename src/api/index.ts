@@ -125,6 +125,7 @@ export type { PluginContextOf, PluginContextParts } from './plugin-context.js';
 export { definePlugin } from './define-plugin.js';
 export type {
   BuiltInCommandId,
+  ConvenienceCommandId,
   CommandId,
   CommandOf,
   CommandContextOf,
@@ -141,6 +142,7 @@ export type {
   ViewportGestures,
   ViewportGestureFlags,
   PointerActivation,
+  ConvenienceChords,
 } from '../view/index.js';
 export type {
   GanttEventMap,
