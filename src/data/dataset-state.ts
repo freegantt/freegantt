@@ -308,8 +308,11 @@ export class DatasetState implements Dataset {
     return runTransaction(this, body, 'user');
   }
 
-  on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void {
-    this.bus.on(name, handler);
+  on<K extends keyof DatasetEventMap>(
+    name: K,
+    handler: (payload: DatasetEventMap[K]) => void | false,
+  ): Disposer {
+    return this.bus.on(name, handler);
   }
 
   off<K extends keyof DatasetEventMap>(

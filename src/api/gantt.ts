@@ -38,6 +38,7 @@ import type {
   ResolvedVariant,
 } from '../layout/index.js';
 import type {
+  Disposer,
   Entry,
   EntryEdit,
   EntryId,
@@ -1087,8 +1088,11 @@ export class Gantt<TProps = unknown> {
     return this.#shell.commands;
   }
 
-  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {
-    this.#shell.on(name, handler);
+  /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
+   *  (I2); `on` is that seam for a Gantt event. `off(name, handler)` still works too, for a caller
+   *  that already held both. Calling the `Disposer` twice is safe, the same as calling `off` twice. */
+  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): Disposer {
+    return this.#shell.on(name, handler);
   }
 
   off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void {

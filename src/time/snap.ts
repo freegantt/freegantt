@@ -19,17 +19,26 @@ function assertAdvances(unit: TimeUnit, increment: number): void {
   }
 }
 
+/** What a caller states about a stepping cadence — declared here, not in `scale.ts`, because
+ *  `snapInstant`/`nextTickBoundary` need the same shape one level below `TimeScale.ticks`; `scale.ts`
+ *  re-exports it (`ViewPresetHeader` and `TimeScale.ticks` both key off it too, S1.7 §3.3) so a
+ *  `TickStep` import from either module names one type. */
+export interface TickStep {
+  readonly unit: TimeUnit;
+  readonly increment: number;
+}
+
 /** A consumer's own snap rule (D-S3-24, #489): decides exactly where `at` settles, in `zone`. The
- *  escape hatch for anything a plain `{ unit, increment }` step cannot state — business hours only,
- *  a fixed list of milestones. Built from the same tools `time/` uses for its own tick walk:
- *  `nextTickBoundary` for "the next drawn line", `snapInstant` for "the nearest one". */
+ *  escape hatch for anything a plain `TickStep` cannot state — business hours only, a fixed list of
+ *  milestones. Built from the same tools `time/` uses for its own tick walk: `nextTickBoundary` for
+ *  "the next drawn line", `snapInstant` for "the nearest one". */
 export type SnapRule = (zone: string, at: Instant) => Instant;
 
 /** What a gesture snaps to: a named unit/increment, a custom `SnapRule`, or `'none'` for raw
  *  pixel-to-millisecond conversion with no rounding. `Gantt.snap`'s `'tick'` member is resolved to a
- *  concrete `{ unit, increment }` by the caller (the current preset's own `tickUnit`/`tickIncrement`)
- *  before this function ever sees it — `time/` names units and increments, never a preset. */
-export type SnapUnit = { unit: TimeUnit; increment: number } | 'none' | SnapRule;
+ *  concrete `TickStep` by the caller (the current preset's own `tickUnit`/`tickIncrement`) before
+ *  this function ever sees it — `time/` names units and increments, never a preset. */
+export type SnapUnit = TickStep | 'none' | SnapRule;
 
 /** The nearest whole `snap` boundary to `at`, in `zone`. `'none'` returns `at` unchanged — a snap of
  *  milliseconds is not rounding at all. A function `snap` runs directly: the consumer's own rule
@@ -45,11 +54,14 @@ export function snapInstant(zone: string, at: Instant, snap: SnapUnit): Instant 
   return diffMs(upper, at) < diffMs(at, lower) ? upper : lower;
 }
 
-/** The first whole `unit`/`increment` boundary strictly after `at`, in `zone` — one step past
- *  `tickFloor`'s own answer, the same walk `snapInstant` above reads (#489). Never returns `at`'s own
- *  floor, even when `at` already sits on a boundary — a caller that arms something for the boundary
- *  `at` already sits on would fire immediately and never advance. */
-export function nextTickBoundary(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant {
+/** The first whole `step` boundary strictly after `at`, in `zone` — one step past `tickFloor`'s own
+ *  answer, the same walk `snapInstant` above reads (#489). Never returns `at`'s own floor, even when
+ *  `at` already sits on a boundary — a caller that arms something for the boundary `at` already sits
+ *  on would fire immediately and never advance. Takes the same `TickStep` shape `snapInstant` does —
+ *  the two used to disagree, one keyed on an object and the other on two positional arguments, for
+ *  no reason a caller could tell apart. */
+export function nextTickBoundary(zone: string, at: Instant, step: TickStep): Instant {
+  const { unit, increment } = step;
   return nextTick(zone, tickFloor(zone, at, unit, increment), unit, increment);
 }
 

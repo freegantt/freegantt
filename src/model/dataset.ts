@@ -8,6 +8,7 @@ import type { EntryEdit, FlatEntryInput, StoredEntry } from './stored-entry.js';
 import type { Field, FieldEditable, FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
+import type { Disposer } from './plugin.js';
 
 /** The Dataset's own read view onto its entries (D-S2-2). Every row it hands back is a live `Entry`
  *  and answers for now (ADR 0017).
@@ -72,6 +73,9 @@ export interface Dataset<TProps = Record<string, unknown>> {
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
   /** Bumped on every committed changeset. Layout uses it as the pack-cache key (D-S4-26). */
   readonly datasetRevision: number;
-  on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+  on<K extends keyof DatasetEventMap>(
+    name: K,
+    handler: (payload: DatasetEventMap[K]) => void | false,
+  ): Disposer;
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }

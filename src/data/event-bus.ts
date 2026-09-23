@@ -15,6 +15,8 @@
 // stays sync-only, unchanged). `GanttEventMap`'s `beforeEntryMove`/`beforeEntryResize` are the first
 // (and, for now, only) `TAsyncKeys` a caller names — see `view/event-bus.ts`'s `AsyncCancelableEvent`.
 
+import type { Disposer } from '../model/index.js';
+
 export type SyncVeto = void | false;
 
 /**
@@ -51,16 +53,22 @@ export class EventBus<TEvents, TAsyncKeys extends keyof TEvents = never> {
     Set<(payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>>
   >();
 
+  /** Every plugin registration seam returns a `Disposer` (I2); this is the one an event handler
+   *  gets. Calling it removes exactly this `handler` from `name` — `off(name, handler)` still works
+   *  too, for a caller that already held both. A second call is a no-op, the same as calling `off`
+   *  twice: `Set.delete` on an already-removed handler answers `false` and does nothing else. */
   on<K extends keyof TEvents>(
     name: K,
     handler: (payload: TEvents[K]) => SyncVeto | (K extends TAsyncKeys ? Promise<SyncVeto> : never),
-  ): void {
+  ): Disposer {
     let handlers = this.#handlers.get(name);
     if (!handlers) {
       handlers = new Set();
       this.#handlers.set(name, handlers);
     }
-    handlers.add(handler as (payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>);
+    const stored = handler as (payload: TEvents[keyof TEvents]) => SyncVeto | Promise<SyncVeto>;
+    handlers.add(stored);
+    return () => this.#handlers.get(name)?.delete(stored);
   }
 
   off<K extends keyof TEvents>(
