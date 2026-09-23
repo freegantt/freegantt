@@ -20,7 +20,12 @@ interface BrowserCensus {
 
 test('[S6-R4] repeated mount/destroy of a linked pair holds no nodes or listeners (#403)', async ({
   page,
+  browserName,
 }) => {
+  // #317: `Performance.getMetrics` is a CDP method, and CDP itself is Chromium-only — this
+  // census has no Firefox or WebKit equivalent, not a gap this spec can close.
+  test.skip(browserName !== 'chromium', 'the node/listener census needs CDP, Chromium-only');
+
   await page.goto('/e2e/mount-destroy.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 

@@ -224,11 +224,13 @@ test('a dragged parent bar moves, and its sibling parents stay put (ADR 0013)', 
   await dragRight(page, target);
   await firstChildMoved(page, target, childDatesBefore);
 
-  const after = await brackets();
-
   // The grabbed phase followed the children the gesture wrote. Nothing wrote the phase itself.
-  // 8px: well past the 4px drag threshold and past typical subpixel layout jitter.
-  expect(after[target.parentId]![0] - before[target.parentId]![0]).toBeGreaterThan(8);
+  // 8px: well past the 4px drag threshold and past typical subpixel layout jitter. Polled: the
+  // phase repaints a frame after its children, and WebKit reads that frame late (#317).
+  await expect
+    .poll(async () => (await brackets())[target.parentId]![0] - before[target.parentId]![0])
+    .toBeGreaterThan(8);
+  const after = await brackets();
 
   // Its siblings did not move. This is the half `hierarchy.html` cannot show: there the fitted range
   // shifts with the data, so every bar keeps its pixel and a drag that did nothing looks the same as
