@@ -114,9 +114,12 @@ jobs:
       # reads its check list out of `package.json` at run time. A check cannot join `verify` and
       # miss CI, and CI cannot run a spelling of the gate that nobody runs locally.
       #
-      # `FG_PR_ID` is `check-bundle-growth`'s (#342) ledger key. Locally it falls back to the
-      # branch name — a pull request has no number yet there — so this is the one place the real
-      # number is known and worth passing through.
+      # `FG_PR_ID` is `check-bundle-growth`'s (#342) ledger key. `pull_request` carries a number,
+      # so that wins when it exists. `workflow_dispatch` carries none — `pull_request.number` reads
+      # as an empty string there — so the branch name stands in, the same fallback the script
+      # itself uses locally (a pull request has no number yet there). `head.ref` over `ref_name`
+      # for the same reason the concurrency group above picks it: `ref_name` is `341/merge` on a
+      # `pull_request` event, not the branch name a local run's `git rev-parse` would find.
       - run: pnpm verify:full
         env:
-          FG_PR_ID: ${{ github.event.pull_request.number }}
+          FG_PR_ID: ${{ github.event.pull_request.number || github.event.pull_request.head.ref || github.ref_name }}
