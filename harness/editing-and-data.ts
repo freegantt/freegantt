@@ -143,6 +143,7 @@ const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
 const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
+const noteBtn = document.querySelector<HTMLButtonElement>('#note-btn')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const unlockSubtreeCheckbox = document.querySelector<HTMLInputElement>('#unlock-subtree-checkbox')!;
 
@@ -167,6 +168,7 @@ function refreshMutationButtons(): void {
   renameBtn.disabled = none;
   removeBtn.disabled = none;
   costBtn.disabled = none;
+  noteBtn.disabled = none;
 }
 
 // D-S2-25, made visible: the checkbox locks every currently selected entry, and reads back locked
@@ -260,8 +262,6 @@ costBtn.addEventListener('click', () => {
 });
 
 // ---- Per-entry lock rule (#473) -----------------------------------------------------------------
-
-const noteBtn = document.querySelector<HTMLButtonElement>('#note-btn')!;
 
 unlockSubtreeCheckbox.addEventListener('change', () => {
   if (unlockSubtreeCheckbox.checked) notes.openSubtree(NOTE_UNLOCK_ROOT_ID);
