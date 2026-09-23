@@ -83,7 +83,7 @@ function makeContext(
     // satisfy the interface, the same reason `selection.selectableEntriesOf` above is inert here.
     activation: {
       subjectEntryOf: () => undefined,
-      activate: () => {},
+      activateFromClick: () => {},
     },
     session: (grabbed, gesture): EntryGestureSession | undefined => {
       if (refuseSession.includes(grabbed)) return undefined;

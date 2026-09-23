@@ -5003,13 +5003,24 @@ describe('Gantt selection (S3.1, D-S3-10, [S3-A1])', () => {
 });
 
 describe('Gantt entryActivate (#434)', () => {
-  function clickBar(container: HTMLElement, bar: HTMLElement): void {
+  /** `detail` is the click count a real browser stamps on its `click` event — 1 for a click on its
+   *  own, 2 for the second click of a physical double-click (never on `pointerup`: a real browser
+   *  never counts clicks there, only `entry-gestures.ts`'s own `onClick` reads it). `clickBar`
+   *  dispatches both, the same order a real browser does — `pointerup` first, so `selectFromHit`
+   *  names the activation candidate, then `click` on the bar itself, bubbling to confirm it — and
+   *  defaults `detail` to 1 so a lone call reads as an ordinary click. */
+  function clickBar(container: HTMLElement, bar: HTMLElement, detail = 1): void {
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
     container
       .querySelector<HTMLElement>('.fg-timeline-pane')!
       .dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5 }));
     document.elementFromPoint = original;
+    bar.dispatchEvent(new MouseEvent('click', { bubbles: true, detail }));
+  }
+
+  function dblclickBar(bar: HTMLElement): void {
+    bar.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
   }
 
   it('a plain click activates the bar’s own Entry (cause "click", target "bar")', () => {
@@ -5051,7 +5062,7 @@ describe('Gantt entryActivate (#434)', () => {
     container.remove();
   });
 
-  it('a double-click never activates by default (dblclickActivates: false)', () => {
+  it('default mode (pointerActivation: "click"): a physical double-click activates once, not three times', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({ container, dataset });
@@ -5060,33 +5071,76 @@ describe('Gantt entryActivate (#434)', () => {
       activations.push(p);
     });
 
-    container
-      .querySelector<HTMLElement>('.fg-bar')!
-      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    // What a real double-click sends: two `click`-ish pointerups (detail 1, then 2), then the
+    // browser's own `dblclick`. Only the first click may activate here — see `dblclickBar` above.
+    clickBar(container, bar, 1);
+    clickBar(container, bar, 2);
+    dblclickBar(bar);
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'click', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+  });
+
+  it('double-click mode (pointerActivation: "dblclick"): a single click does not activate', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    clickBar(container, container.querySelector<HTMLElement>('.fg-bar')!);
 
     expect(activations).toEqual([]);
 
     gantt.destroy();
   });
 
-  it('dblclickActivates: true activates the bar on double-click (cause "dblclick")', () => {
+  it('double-click mode (pointerActivation: "dblclick"): a double-click activates exactly once (cause "dblclick")', () => {
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
-    const gantt = new Gantt({ container, dataset, dblclickActivates: true });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
     const activations: unknown[] = [];
     gantt.on('entryActivate', (p) => {
       activations.push(p);
     });
 
-    container
-      .querySelector<HTMLElement>('.fg-bar')!
-      .dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    clickBar(container, bar, 1);
+    clickBar(container, bar, 2);
+    dblclickBar(bar);
 
     expect(activations).toEqual([
       { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'dblclick', target: 'bar' },
     ]);
 
     gantt.destroy();
+  });
+
+  it('Enter still activates in double-click mode (cause "key")', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    container.querySelector<HTMLElement>('.fg-bar')!.focus();
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'key', target: 'bar' },
+    ]);
+
+    gantt.destroy();
+    container.remove();
   });
 
   it('I14: { select: false, activate: true } still activates on a plain click that selects nothing', () => {

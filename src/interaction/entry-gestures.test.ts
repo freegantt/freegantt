@@ -72,7 +72,7 @@ function makeContext(overrides: ContextOverrides = {}): {
   proposals: (readonly EntryId[])[];
   previews: (EntryEdits | undefined)[];
   commits: [EntryGesture, EntryEdits][];
-  activations: [EntryId, 'click', 'bar' | 'row'][];
+  activations: [EntryId, number, 'bar' | 'row'][];
 } {
   const {
     entriesForGesture = (grabbed) => [entryFor(grabbed)],
@@ -86,7 +86,7 @@ function makeContext(overrides: ContextOverrides = {}): {
   const proposals: (readonly EntryId[])[] = [];
   const previews: (EntryEdits | undefined)[] = [];
   const commits: [EntryGesture, EntryEdits][] = [];
-  const activations: [EntryId, 'click', 'bar' | 'row'][] = [];
+  const activations: [EntryId, number, 'bar' | 'row'][] = [];
 
   const ctx: EntryGestureContext = {
     hitTest: (at) =>
@@ -156,8 +156,8 @@ function makeContext(overrides: ContextOverrides = {}): {
           : ORDER.includes(hit.rowId as unknown as EntryId)
             ? entryFor(hit.rowId as unknown as EntryId)
             : undefined,
-      activate: (entry, cause, target) => {
-        activations.push([entry.id, cause, target]);
+      activateFromClick: (entry, detail, target) => {
+        activations.push([entry.id, detail, target]);
       },
     },
     ...ctxOverrides,

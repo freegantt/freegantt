@@ -1209,8 +1209,8 @@ describe('entryActivate precedence against inlineEditing() (#434)', () => {
 
   it('a double-click on an editable cell opens the editor and does not activate, even opted in', () => {
     const { container, gantt } = makeGantt();
-    // Opt in after mount — the getter/setter pair `Gantt.dblclickActivates` reconfigures live.
-    gantt.dblclickActivates = true;
+    // Opt in after mount — the getter/setter pair `Gantt.pointerActivation` reconfigures live.
+    gantt.pointerActivation = 'dblclick';
     const activations: unknown[] = [];
     gantt.on('entryActivate', (p) => {
       activations.push(p);
@@ -1220,6 +1220,26 @@ describe('entryActivate precedence against inlineEditing() (#434)', () => {
 
     expect(input(container).value).toBe('Task One');
     expect(activations).toEqual([]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a double-click on a non-editable cell activates in double-click mode', () => {
+    // 'end' is the fixture's own locked column (editable: false, see GRID_COLUMNS above).
+    const { container, gantt, dataset } = makeGantt();
+    gantt.pointerActivation = 'dblclick';
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    dblclick(cellFor(container, 'e1', 'end'));
+
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(activations).toEqual([
+      { entry: dataset.entries.get('e1'), cause: 'dblclick', target: 'gridCell' },
+    ]);
 
     gantt.destroy();
     container.remove();
