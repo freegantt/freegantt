@@ -2,10 +2,11 @@
 // DatasetState the way a consumer would reach them (`dataset.entries.add(...)`), not through the
 // TxToken-gated staging methods `transaction.test.ts` uses directly.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
+import * as writeRule from './write-rule.js';
 import {
   ComputedFieldCannotBeWrittenError,
   DerivedFieldNotWritableError,
@@ -597,5 +598,19 @@ describe("a plugin's per-entry lock rule opens a locked Field (#473)", () => {
 
     expect(state.editableOf('c1', 'start')).toBe('anywhere');
     expect(state.editableOf('c2', 'start')).toBe('never');
+  });
+
+  it('editableOf builds no FieldLockQuery when no plugin has installed a lock rule (I5, #473 ocr finding)', () => {
+    const state = lockedDataset();
+    const queryFor = vi.spyOn(writeRule, 'fieldLockQueryFor');
+
+    expect(state.editableOf('c1', 'start')).toBe('never');
+    expect(queryFor).not.toHaveBeenCalled();
+
+    state.setLockRule((next) => (query, field) => (field === 'start' ? 'anywhere' : next(query, field)));
+    expect(state.editableOf('c1', 'start')).toBe('anywhere');
+    expect(queryFor).toHaveBeenCalledTimes(1);
+
+    queryFor.mockRestore();
   });
 });

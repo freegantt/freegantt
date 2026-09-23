@@ -62,6 +62,7 @@ import {
   editableAnswerFor,
   fieldLockQueryFor,
   identityFieldLockRule,
+  IGNORED_FIELD_LOCK_QUERY,
   resolveWriteTarget,
 } from './write-rule.js';
 import type { FieldLockQuery } from '../model/index.js';
@@ -355,11 +356,18 @@ export class EntryStore implements EntryStoreContract {
    *  `EditExtender` cascade reach it through `#assertFieldTakesThisWrite`/`toEditsReading`; a plain
    *  read reaches it here. `api/dataset.ts`'s `Dataset.editableOf` is the published door onto this.
    *  `editableAnswerFor` answers `'never'` for the same undeclared-or-`compute` Field
-   *  `entries.update()` refuses (#473's ocr finding, I14). */
+   *  `entries.update()` refuses (#473's ocr finding, I14).
+   *
+   *  `view/capability.ts`'s `canWrite` sits behind hover affordance resolution, so this stays
+   *  allocation-free with no plugin installed (I5, #473's ocr finding): `identityFieldLockRule`
+   *  never reads the query it is asked, so a Dataset with no lock rule installed answers through the
+   *  one shared `editableAnswerFor` order without building a fresh `FieldLockQuery` per cell. */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
-    const key = entryId(id);
     const declared = this.#registry.get(field);
-    return editableAnswerFor(field, declared, this.#lockQueryFor(key), this.#lockRule);
+    if (this.#lockRule === identityFieldLockRule) {
+      return editableAnswerFor(field, declared, IGNORED_FIELD_LOCK_QUERY, this.#lockRule);
+    }
+    return editableAnswerFor(field, declared, this.#lockQueryFor(entryId(id)), this.#lockRule);
   }
 
   /** One cell's address for the lock rule (#473) — the same construction `editableOf` and

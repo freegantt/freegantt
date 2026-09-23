@@ -10,13 +10,8 @@
 // per Field. `Capabilities.edit` answered per Entry. The cell editor kept a third rule per cell. No
 // two of them could meet. A bar move wrote `start` and `end` and asked neither Field.
 
-import {
-  editableOf,
-  libraryWriteRule,
-  resolveWriteTarget,
-  NOT_WRITABLE,
-  WRITABLE,
-} from '../data/write-rule.js';
+import { libraryWriteRule, resolveWriteTarget, NOT_WRITABLE, WRITABLE } from '../data/write-rule.js';
+import { editableOf } from '../data/fields/field-registry.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
 import type { Entry, Field, FieldEditable, FieldKey } from '../model/index.js';
 import type { CapabilityRule, GestureCapability, Capabilities, WriteRule } from '../model/index.js';
@@ -169,9 +164,10 @@ function askWriteRule(rule: WriteRule | undefined, entry: Entry, field: FieldKey
  *  *whether the values it sets may change*.
  *
  *  So `capabilities: { resize: true }` opens the handle on a variant the library would have closed. It
- *  still cannot write a Field the consumer declared `editable: false`. To open that, open the Field,
- *  or answer `capabilities.edit` for the cell. One home for "may this value change" is the whole
- *  point (#256). */
+ *  still cannot write a Field locked `'never'` by a per-entry lock rule (#473's ruling). That refusal
+ *  is decided before `capabilities`/`variantCapabilitiesFor` get a say, and neither may widen it. Only
+ *  another per-entry lock rule reopens the cell. `capabilities.edit` only narrows what the data layer
+ *  already allows. One home for "may this value change" is the whole point (#256). */
 export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilities {
   const { capabilities, fieldFor, variantCapabilitiesFor } = inputs;
 

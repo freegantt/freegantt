@@ -29,12 +29,6 @@ import { editableOf, rollsUp } from './fields/field-registry.js';
 import { isDescendantOf } from './hierarchy-source.js';
 import type { StoredEntry } from '../model/index.js';
 
-// The Field's own `editable` is a fallback, so a caller that never wired a lock rule — most of this
-// file's own unit tests, and `view/capability.ts`'s `CapabilityInputs` when a test builds one by hand
-// — still gets the Field's own answer, not a broken import. `write-rule.ts` already reads it (above);
-// re-exporting it here saves every one of those callers a second import into `fields/field-registry.ts`.
-export { editableOf };
-
 /** `model/write-verdict.ts` declares the verdict pair (and, since #466, `WriteTarget`) under its
  *  public names, so a consumer can import what `view/capability.ts` republishes and what
  *  `EditRequest.writeTarget` returns (F1, `ae-forgotten-export`). This file keeps its own
@@ -75,6 +69,16 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field | undefine
  *  — a plugin composes onto this the way it composes onto `identityExtender`/`storedParentSource`
  *  (D-S5-23) — so a Dataset with no plugin installed answers every cell with `Field.editable` alone. */
 export const identityFieldLockRule: FieldLockRule = () => undefined;
+
+/** One frozen `FieldLockQuery`, safe to share across every cell for as long as `identityFieldLockRule`
+ *  is the occupant: that rule reads neither argument, so no caller of it ever needs a real query.
+ *  `EntryStore.editableOf` reads this on the no-plugin-installed path, in place of building a fresh
+ *  `fieldLockQueryFor(...)` (and its closures) per cell (#473's ocr finding, I5). It stays paired
+ *  with `identityFieldLockRule` here, and must not be handed to any other rule. */
+export const IGNORED_FIELD_LOCK_QUERY: FieldLockQuery = Object.freeze({
+  id: entryId(''),
+  isDescendantOf: () => false,
+});
 
 /** One cell's address, built from whichever lookup a caller holds — `EntryStore`'s own
  *  transaction-aware `parentIdOf`, or an `EditRequest`'s lazy `entryAfterEdits`. The walk itself is
@@ -153,14 +157,16 @@ export function assertFieldTakesWrite(
  *  declaring a distribution policy (#470 retired that seam) — a rolling-up cell on a row with
  *  children refuses from every direction, with no exception left to name.
  *
- *  Everything else is the **effective** editable at the grid threshold: `editable` defaults to the
- *  Field's own `editable` (`editableOf`), but `view/capability.ts`'s `canWrite` passes the answer a
- *  plugin's per-entry lock rule already resolved (#473), so a per-entry unlock and the Field's own
- *  default meet in this one function instead of two copies of it (#473's ocr finding). */
+ *  Everything else is the **effective** editable at the grid threshold: the caller passes it, most
+ *  often the Field's own `editable` (`editableOf`), or the answer a plugin's per-entry lock rule
+ *  already resolved (#473) — `view/capability.ts`'s `canWrite` is the one caller that ever has a lock
+ *  rule's answer to pass. `editable` is required, not defaulted (#473's ocr finding): a caller that
+ *  forgets it would silently skip the per-entry lock instead of the Field's own default, and every
+ *  caller already has one of the two answers in hand to pass. */
 export function libraryWriteRule(
   hasChildren: boolean,
   field: Field,
-  editable: FieldEditable = editableOf(field),
+  editable: FieldEditable,
 ): FieldWriteVerdict {
   if (resolveWriteTarget(hasChildren, field) === 'refused') return DERIVED;
   return editable === 'anywhere' ? WRITABLE : NOT_WRITABLE;
