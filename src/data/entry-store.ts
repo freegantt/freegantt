@@ -25,13 +25,10 @@ import type {
 } from '../model/index.js';
 import {
   entryId,
-  ComputedFieldCannotBeWrittenError,
   DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   EntryNotFoundError,
-  FieldNotEditableError,
   ParentCycleError,
-  UnknownFieldError,
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
@@ -57,7 +54,7 @@ import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hiera
 import type { CheckedHierarchy, ParentIndex } from './hierarchy-source.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import type { ResolvedField } from './fields/field-registry.js';
-import { isApiEditable, resolveWriteTarget } from './write-rule.js';
+import { assertFieldTakesWrite, resolveWriteTarget } from './write-rule.js';
 
 /** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
  *  an undo of an optional field's first edit must return the Entry to not having the key at all
@@ -490,22 +487,16 @@ export class EntryStore implements EntryStoreContract {
     });
   }
 
-  /** Does the Field this key names take a write from this door at all? Three questions, in the one
-   *  order that leaves the caller somewhere to go (ADR 0015).
-   *
-   *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`:
-   *  a compute Field owns no stored home, and it may not carry `editable` either, so asking
-   *  `editable` first would answer "declare an editable" about a key the register door refuses. Then
-   *  the API threshold, which refuses the lock and nothing else.
+  /** Does the Field this key names take a write from this door at all? Reads `write-rule.ts`'s
+   *  `assertFieldTakesWrite` — the one check an `EditExtender` cascade (`entry-reader.ts`'s
+   *  `toEditsReading`) runs too (ADR 0015, #473's ocr finding: a second copy here once let a cascade
+   *  write a `compute` Field through in silence).
    *
    *  It asks about the Field, never about the Entry. Whether *this* Entry's cell is the Rollup's own
    *  is `#assertNoDerivedWrite`, below. It returns the Field it resolved, so that check reads the
    *  same declaration instead of looking the key up again. */
   #assertFieldTakesThisWrite(field: string, operation: string): DeclaredFieldWrite {
-    const declared = this.#registry.get(field);
-    if (declared === undefined) throw new UnknownFieldError(field, operation);
-    if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
-    if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
+    const declared = assertFieldTakesWrite(field, this.#registry.get(field), operation);
     return { field, declared };
   }
 

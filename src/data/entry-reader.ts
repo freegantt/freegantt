@@ -5,14 +5,7 @@
 // zone, and what a date-only `end` means against half-open storage — belongs to `time/input.ts`
 // (I10); anything resembling date math here is a bug.
 
-import {
-  entryId,
-  DuplicatePropsKeyError,
-  FieldNotEditableError,
-  InvertedSpanError,
-  spansTime,
-  UnknownFieldError,
-} from '../model/index.js';
+import { entryId, DuplicatePropsKeyError, InvertedSpanError, spansTime } from '../model/index.js';
 import type {
   DateOnlyEndRule,
   StoredEntry,
@@ -31,7 +24,7 @@ import {
 } from './fields/field-access.js';
 import { isCoreFieldKey } from './fields/core-fields.js';
 import type { FieldRegistry } from './fields/field-registry.js';
-import { isApiEditable } from './write-rule.js';
+import { assertFieldTakesWrite } from './write-rule.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list. */
 export interface EntryReadContext {
@@ -235,13 +228,13 @@ export function toEditReading(
  * dataset's zone resolves its dates, `DateOnlyEndRule` decides what a date-only `end` means, and core
  * derives `proposedKeys` from the edit's own keys. A plugin author writes none of that.
  *
- * An undeclared Field key is refused here for the same reason `update()` refuses one (#209 Q2): one
- * rule on every way in, and a silent drop is the fault #197 existed for. A `props` key with no
- * declaration is carried at construction ingest only (ADR 0011) — it is never a live way in.
- *
- * A `'never'` Field is refused here too (ADR 0015, the cascade as a third door, #473): a cascade is
- * a caller-side write, the same as `entries.update()`, so it meets the same lock and throws the same
- * `FieldNotEditableError`. The whole changeset is refused, nothing is staged, and the loop below never
+ * Every key an edit names runs through `write-rule.ts`'s `assertFieldTakesWrite` — the one check
+ * `entries.update()` runs too (ADR 0015, "a third door"; folded from two copies, #473's ocr finding:
+ * a second copy here once skipped the `compute` arm, so a cascade writing a `compute` Field passed in
+ * silence instead of throwing `ComputedFieldCannotBeWrittenError` the way `entries.update()` already
+ * does). An undeclared key throws `UnknownFieldError`; a `'never'`-locked Field throws
+ * `FieldNotEditableError` — a cascade is a caller-side write, the same as `entries.update()`, so it
+ * meets the same lock. The whole changeset is refused, nothing is staged, and the loop below never
  * reaches `stored.set` for any Entry in this map.
  *
  * An id nothing knows is skipped — there is no Entry to read the edit against, and `diffEdit` emits
@@ -262,11 +255,7 @@ export function toEditsReading(
     const entry = entryFor(id);
     if (entry === undefined) continue;
     for (const key of Object.keys(edit)) {
-      const declared = registry.get(key);
-      if (declared === undefined) throw new UnknownFieldError(key, EXTENDER_OPERATION);
-      // The cascade is a caller-side write, same as `entries.update()` (ADR 0015 §"a third door"):
-      // a plugin does not stand above the lock a consumer set with `setFieldEditable('never')`.
-      if (!isApiEditable(declared)) throw new FieldNotEditableError(key, EXTENDER_OPERATION);
+      assertFieldTakesWrite(key, registry.get(key), EXTENDER_OPERATION);
     }
     const reading = toEditReading(edit, context, entry, registry, EXTENDER_OPERATION);
     stored.set(id, reading.stored);

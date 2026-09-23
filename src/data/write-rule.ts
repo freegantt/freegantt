@@ -8,7 +8,12 @@
 // asks the API threshold before it stages a write. `entries.update()` keeps `UnknownFieldError` for
 // the existence arm.
 
-import type { Field, WriteRefusalReason, WriteTarget, WriteVerdict } from '../model/index.js';
+import type { Field, FieldKey, WriteRefusalReason, WriteTarget, WriteVerdict } from '../model/index.js';
+import {
+  ComputedFieldCannotBeWrittenError,
+  FieldNotEditableError,
+  UnknownFieldError,
+} from '../model/index.js';
 import { editableOf, rollsUp } from './fields/field-registry.js';
 
 /** `model/write-verdict.ts` declares the verdict pair (and, since #466, `WriteTarget`) under its
@@ -62,6 +67,31 @@ export function isUserEditable(field: Field): boolean {
  *  and History replay all still write a locked Field. */
 export function isApiEditable(field: Field): boolean {
   return editableOf(field) !== 'never';
+}
+
+/** Does this Field, on this Entry, take a write from this door at all? The one check
+ *  `entries.update()` and an `EditExtender` cascade both run, in the one order that leaves the caller
+ *  somewhere to go (ADR 0015; folded from two copies, #473's ocr finding: the cascade door used to
+ *  skip the `compute` check, so a cascade writing a `compute` Field passed in silence instead of
+ *  throwing `ComputedFieldCannotBeWrittenError` the way `entries.update()` already does).
+ *
+ *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`: a
+ *  compute Field owns no stored home, and it may not carry `editable` either, so asking `editable`
+ *  first would answer "declare an editable" about a key the register door refuses. Then the API
+ *  threshold, which refuses the lock and nothing else.
+ *
+ *  It asks about the Field, never about the Entry. It returns the Field it resolved, so a caller that
+ *  needs the declaration again — `entry-store.ts`'s `#assertNoDerivedWrite` — reads the same one
+ *  instead of looking the key up a second time. */
+export function assertFieldTakesWrite(
+  field: FieldKey,
+  declared: Field | undefined,
+  operation: string,
+): Field {
+  if (declared === undefined) throw new UnknownFieldError(field, operation);
+  if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
+  if (!isApiEditable(declared)) throw new FieldNotEditableError(field, operation);
+  return declared;
 }
 
 /** The library's own last word on a cell. It is read when neither the consumer nor a plugin speaks.
