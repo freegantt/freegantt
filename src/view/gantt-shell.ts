@@ -39,6 +39,7 @@ import type {
   Bar,
   TimeScale,
   ResolvedColumn,
+  RowPlanInput,
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
@@ -132,6 +133,7 @@ import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
+import type { CollapseState } from './collapse-state.js';
 import { EntrySelection } from './entry-selection.js';
 import type { EntrySelectionPorts } from './entry-selection.js';
 
@@ -952,6 +954,20 @@ export class GanttShell {
         }),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
+      // #424: a row hidden under a collapsed ancestor still answers its own state. A write since the
+      // last painted frame — a remove, an add, a reparent, a `rowSource` change — must answer before
+      // the next frame draws. `ensureRowPlan` replans on demand, at the cost of an identity check
+      // when nothing changed. It also keeps `#layout`'s frame caches in step with the replanned row
+      // tree, at the same time (#424 review, point 1). So a `reveal` right after this read finds
+      // `rowTop`/`barsForEntry` answering about the row `expandableOfRow` just found, not the last
+      // painted frame's.
+      expandableOfRow: (id) => {
+        this.#layout.ensureRowPlan(this.#rowPlanInput(), {
+          rowHeight: this.#frameSettings.rowHeight,
+          registry: this.#registrations.variants,
+        });
+        return this.#layout.expandableOfRow(id);
+      },
     });
     this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
     this.#teardown.add(() => this.#rovingFocus.detach());
@@ -1278,6 +1294,10 @@ export class GanttShell {
 
   toggleCollapse(id: RowId | string): void {
     this.#treeCollapse.toggleCollapse(id);
+  }
+
+  collapseStateOf(id: RowId | string): CollapseState | undefined {
+    return this.#treeCollapse.collapseStateOf(id);
   }
 
   collapseAll(): void {
@@ -2506,6 +2526,26 @@ export class GanttShell {
       width: this.#paneBox.width,
       height: Math.max(0, this.#paneBox.height - headerHeight),
     });
+  }
+
+  /** What `FrameLayout.ensureRowPlan` needs to answer the row tree right now, built the same way
+   *  `render()` builds its half of a `LayoutInput` (#424). Cheap to call on every row-tree read: a
+   *  field here that has not changed since the last plan costs an identity check, not a replan. */
+  #rowPlanInput(): RowPlanInput {
+    // #167: `FrameSettings.rowPlanSettings()` is the one place the public `rowSource` setting
+    // translates into `LayoutInput`'s `rows`/`fieldCompares`/`fieldContext`. `toLayoutInput` reads
+    // the same method, so this can never re-derive its own answer and drift from that one.
+    const rowPlan = this.#frameSettings.rowPlanSettings();
+    return {
+      entries: this.#options.dataset.entries.all,
+      datasetRevision: this.#options.dataset.datasetRevision,
+      rows: rowPlan.rows,
+      fieldCompares: rowPlan.fieldCompares,
+      fieldContext: rowPlan.fieldContext,
+      entryRulePorts: this.#entryRulePorts,
+      collapsed: this.#treeCollapse.ids,
+      fieldRegistryRevision: this.#options.fieldRegistryRevision?.() ?? 0,
+    };
   }
 
   render(): void {

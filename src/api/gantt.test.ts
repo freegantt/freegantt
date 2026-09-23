@@ -19,6 +19,7 @@ import {
   barId,
   contextMenu,
   diamond,
+  fixedWidthBar,
   CustomRowSourceNotFilterableOrSortableError,
 } from './index.js';
 import type {
@@ -7582,6 +7583,184 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     expect(gantt.collapsed).toEqual([]);
 
     gantt.destroy();
+  });
+
+  it('collapseStateOf answers each state, a hidden descendant, a stale id, and a grouping header', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'category' }],
+      entries: [
+        { id: 'p', name: 'p', start: '2026-01-01', end: '2026-01-02', props: { category: 'group' } },
+        {
+          id: 'c',
+          name: 'c',
+          start: '2026-01-03',
+          end: '2026-01-04',
+          parentId: 'p',
+          props: { category: 'span' },
+        },
+        {
+          id: 'leaf',
+          name: 'leaf',
+          start: '2026-01-05',
+          end: '2026-01-06',
+          props: { category: 'milestone' },
+        },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    // Leaf: cannot expand.
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+
+    // Expandable, not collapsed.
+    expect(gantt.collapseStateOf('p')).toBe('expanded');
+
+    // Expandable, collapsed — and the child it now hides still answers from the row tree, not the
+    // frame (#424).
+    gantt.collapse('p');
+    expect(gantt.collapseStateOf('p')).toBe('collapsed');
+    expect(gantt.collapseStateOf('c')).toBe('leaf');
+
+    // No such row: a removed entry's id, answered right after the write, with no frame painted in
+    // between (#424).
+    dataset.entries.remove('leaf');
+    expect(gantt.collapseStateOf('leaf')).toBeUndefined();
+
+    // A stale id that never named a row.
+    expect(gantt.collapseStateOf('never-existed')).toBeUndefined();
+
+    // A grouping header row answers by the same rule as any other row, at once.
+    gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.read('category') as string };
+    expect(gantt.collapseStateOf('group:group')).toBe('expanded');
+    gantt.collapse('group:group');
+    expect(gantt.collapseStateOf('group:group')).toBe('collapsed');
+
+    gantt.destroy();
+  });
+
+  it('collapseStateOf answers a synchronous add and reparent, with no frame painted in between (#424)', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'leaf', name: 'leaf', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'other', name: 'other', start: '2026-01-03', end: '2026-01-04' },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    // Leaf, before it gets a child.
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+
+    // Adding a child under a leaf turns its parent expandable — and expanded — at once.
+    dataset.entries.add({
+      id: 'child',
+      name: 'child',
+      start: '2026-01-05',
+      end: '2026-01-06',
+      parentId: 'leaf',
+    });
+    expect(gantt.collapseStateOf('leaf')).toBe('expanded');
+
+    // Reparenting the child under `other` turns `leaf` back into a plain leaf, and `other`
+    // expandable, at once.
+    dataset.entries.update('child', { parentId: 'other' });
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+    expect(gantt.collapseStateOf('other')).toBe('expanded');
+
+    gantt.destroy();
+  });
+
+  it('reveal lands on a row two writes added, right after a collapseStateOf read of it, with no frame painted in between (#424 review item 1)', () => {
+    // #424 review item 1: `collapseStateOf` calls `FrameLayout.ensureRowPlan`, which used to update
+    // `#plan` alone and leave `#memory` — the height index `rowTop` reads, the `rowById` map
+    // `barsForEntry` reads — behind. Two writes with no frame between them move the replanned row
+    // count two past what `#memory` was last built for, so a stale index cannot even answer in
+    // bounds. `reveal` right after `collapseStateOf` is the real caller this broke:
+    // `#expandAndFindRow` found the new row at once (no reason left to flush a frame), then
+    // `#revealRect` read `rowTop`/`barsForEntry` off the stale memory.
+    //
+    // The row's own `rowTop` cannot prove this alone: with every row the library's own uniform
+    // height (D-S4-19), a stale height index still answers `topAt(i)` correctly from row count
+    // alone (`row-height-index.ts`'s `heightAt` never bounds-checks `i`). `barsForEntry` is the one
+    // answer a stale `#memory` truly cannot fake — a `rowById` map still built for one row holds no
+    // Bars for row 'c' at all (`FrameMemory.rowMemory`'s `#noRow` fallback), so `reveal`'s x falls
+    // back to entry 'c's own `[start, end)` span instead of the fixed-width box its own `milestone`
+    // variant draws. The x this test checks is that fixed box's own left edge, reachable no other
+    // way — `rowTop` alone would pass whether `#memory` was in step or not.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scrollX = new ScrollAxis();
+      const scrollY = new ScrollAxis();
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        // Exact instants, not "through that day" (#421-adjacent): keeps this test's geometry exact
+        // arithmetic — the default 'inclusive' would add a day to every bare end date.
+        dateOnlyEnd: 'exclusive',
+        entries: [{ id: 'a', name: 'a', start: '2026-01-01', end: '2026-01-02' }],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        scroll: { x: scrollX, y: scrollY },
+        rowSource: { source: 'entries', tree: true },
+        // A fixed range and density, not `fitDataset`/`fit: 'pane'` (both library defaults): so this
+        // test's own pixel arithmetic below never depends on the measured pane, or on which entries
+        // had already arrived the one time the range was last resolved.
+        range: { start: '2026-01-01', end: '2026-01-10' },
+        fit: 0.001,
+        // Row 'c' alone draws a 20,000px fixed box instead of the plain span-following bar every
+        // other row draws — wide and far enough from its own `[start, end)` span's geometry that no
+        // floating-point noise could paper over the two answers landing on the same pixel.
+        variants: [{ name: 'milestone', when: (entry) => entry.id === 'c', bars: fixedWidthBar(20_000) }],
+      });
+      // A pane far short of row 'c's target, on both axes, so `reveal` has to move the scroll on
+      // both — an already-visible target would pass this test whether `#memory` was in step or not.
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 40 });
+
+      // Two writes, no frame painted between either of them and the read below.
+      dataset.entries.add({ id: 'b', name: 'b', start: '2026-01-03', end: '2026-01-04' });
+      dataset.entries.add({ id: 'c', name: 'c', start: '2026-01-05', end: '2026-01-06' });
+
+      expect(gantt.collapseStateOf('c')).toBe('leaf');
+
+      // `scroll.panTo` receives the raw target `reveal` computes, before `ScrollAxis` clamps it to
+      // its own content-driven max — a spy reads that raw target. Reading the clamped
+      // `scroll.state.position` instead would not work here: `max` only grows on a painted frame,
+      // and this test's whole point is that no frame paints between the writes and the reveal.
+      const panToX = vi.spyOn(scrollX, 'panTo');
+      const panToY = vi.spyOn(scrollY, 'panTo');
+
+      gantt.reveal(entryId('c'));
+
+      // Row 'c' is the third row (rowHeight 36, the library default): top 72, bottom 108. The pane
+      // is 40px tall, so "nearest edge" pans exactly enough to bring the bottom edge into view —
+      // 108 - 40 = 68.
+      expect(panToY).toHaveBeenLastCalledWith(68);
+
+      // Row 'c's own span is [Jan 5, Jan 6) — at `pxPerMs: 0.001` off a Jan 1 range start, x 345,600
+      // to x 432,000. The `milestone` variant's 20,000px box centres on that span's own midpoint
+      // (388,800): x 378,800 to x 398,800. The 300px pane's nearest edge pans exactly enough to
+      // bring the box's trailing edge into view — 398,800 - 300 = 398,500. A stale `#memory` answers
+      // `[]` for this row's Bars, and `reveal` falls back to the plain span above instead: nearest
+      // edge lands on 432,000 - 300 = 431,700, a different pixel entirely.
+      expect(panToX).toHaveBeenLastCalledWith(398_500);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('set range pins the time axis to a span; assigning fitDataset back releases it', () => {

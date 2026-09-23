@@ -590,6 +590,7 @@ gantt.expand('p1');
 gantt.toggleCollapse('p1');
 gantt.collapseAll();
 gantt.expandAll();
+gantt.collapseStateOf('p1');        // 'collapsed' | 'expanded' | 'leaf' | undefined for no such row
 
 gantt.on('beforeCollapseChange', ({ from, to }) => false);  // veto
 gantt.on('collapseChange', ({ to }) => saveCollapsed(to));
