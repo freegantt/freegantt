@@ -1,10 +1,13 @@
 import { test, expect } from '@playwright/test';
 
 // #434: entryActivate over a real page — the click and key paths generic.html's own readout
-// wires (harness/main.ts), and the opt-in double-click behind the bench's own checkbox
-// (#dblclick-activates-checkbox). A unit test already pins the event payload and the capability
-// precedence (`src/api/gantt.test.ts`); this proves the same wiring survives real browser focus
-// and real pointer events, not `dispatchEvent`.
+// wires (harness/main.ts), and the pointer-trigger choice behind the bench's own select
+// (#pointer-activation-select: 'click' | 'dblclick'). A unit test already pins the event payload
+// and the capability precedence (`src/api/gantt.test.ts`); this proves the same wiring survives
+// real browser focus and real pointer events, not `dispatchEvent`. The readout's own count (a
+// running total since page load, `×N`) is what tells a real fix apart from the bug it fixes: a
+// double-click that fires `entryActivate` three times reads the same last cause a single-fire
+// double-click does, so only the count catches it.
 
 declare global {
   interface Window {
@@ -49,7 +52,7 @@ async function entryNameOfBar(page: import('@playwright/test').Page, barId: stri
   return name!;
 }
 
-test('a plain click activates the bar’s own Entry', async ({ page }) => {
+test('a plain click activates the bar’s own Entry, once', async ({ page }) => {
   await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
@@ -61,7 +64,7 @@ test('a plain click activates the bar’s own Entry', async ({ page }) => {
 
   await bar.click({ position: { x: 12, y: box!.height / 2 } });
 
-  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (click)`);
+  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (click) ×1`);
 });
 
 test('Enter on the just-clicked (now focused) bar activates it again, cause "key"', async ({ page }) => {
@@ -77,18 +80,17 @@ test('Enter on the just-clicked (now focused) bar activates it again, cause "key
   // A real click both activates (cause "click") and, being on a tabIndex-bearing bar, gives it
   // real DOM focus — the same focus `Enter` reads (D-S5-39).
   await bar.click({ position: { x: 12, y: box!.height / 2 } });
-  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (click)`);
+  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (click) ×1`);
 
   await page.keyboard.press('Enter');
 
-  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (key)`);
+  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (key) ×2`);
 });
 
-test('a double-click activates by its leading click alone until dblclickActivates is opted in, then by "dblclick"', async ({
-  page,
-}) => {
+test('default mode: a real double-click activates once, not three times', async ({ page }) => {
   await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await expect(page.locator('#pointer-activation-select')).toHaveValue('click');
 
   const bar = await unobstructedBar(page);
   const barId = (await bar.getAttribute('data-bar-id'))!;
@@ -97,13 +99,45 @@ test('a double-click activates by its leading click alone until dblclickActivate
   expect(box).not.toBeNull();
   const position = { x: 12, y: box!.height / 2 };
 
-  // Default `dblclickActivates: false`: the double-click's own leading click still activates —
-  // the readout must never read "(dblclick)" here.
-  await bar.dblclick({ position });
-  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (click)`);
-
-  await page.locator('#dblclick-activates-checkbox').check();
+  // The browser sends two `click`s and one `dblclick` for this one gesture. Default
+  // `pointerActivation: 'click'` must count it once — the bug this branch fixes counted it three
+  // times, indistinguishable from a single fire by cause alone, which is why the count is the
+  // assertion, not just the trailing "(click)".
   await bar.dblclick({ position });
 
-  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (dblclick)`);
+  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (click) ×1`);
+});
+
+test('double-click mode: a single click activates nothing', async ({ page }) => {
+  await page.goto('/generic.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.locator('#pointer-activation-select').selectOption('dblclick');
+
+  const bar = await unobstructedBar(page);
+  const box = await bar.boundingBox();
+  expect(box).not.toBeNull();
+
+  await bar.click({ position: { x: 12, y: box!.height / 2 } });
+
+  // Opting in to `'dblclick'` replaces click as the trigger — it does not add a second one — so a
+  // lone click must leave the readout at its page-load text, never a "(click) ×1".
+  await expect(page.locator('#activation-readout')).toHaveText('Not activated');
+});
+
+test('double-click mode: a real double-click activates exactly once, cause "dblclick"', async ({ page }) => {
+  await page.goto('/generic.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.locator('#pointer-activation-select').selectOption('dblclick');
+
+  const bar = await unobstructedBar(page);
+  const barId = (await bar.getAttribute('data-bar-id'))!;
+  const name = await entryNameOfBar(page, barId);
+  const box = await bar.boundingBox();
+  expect(box).not.toBeNull();
+
+  await bar.dblclick({ position: { x: 12, y: box!.height / 2 } });
+
+  await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (dblclick) ×1`);
 });
