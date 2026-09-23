@@ -494,24 +494,24 @@ describe('FrameLayout.ensureRowPlan keeps #memory in step with #plan (#424 revie
 });
 
 // #424 review, point 2: `ensureRowPlan` could replace `#plan` between frames without advancing
-// `frameRevision` — the stamp `view/gantt-dom.ts` keys its one-slot pointer memo on (#212). A write
+// `rowPlanRevision` — the stamp `view/gantt-dom.ts` keys its one-slot pointer memo on (#212). A write
 // then a between-frames `collapseStateOf` read replanned the rows while the stamp stayed equal, so
 // a memoized `DomTarget`'s `entryIds` could answer from a row tree the layout had already left.
-describe('FrameLayout.frameRevision advances with the row tree, not the frame (#424 review, point 2)', () => {
+describe('FrameLayout.rowPlanRevision advances with the row tree, not the frame (#424 review, point 2)', () => {
   it('does not advance on a viewport-only computeFrame call (scroll, pan)', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input());
-    const before = layout.frameRevision;
+    const before = layout.rowPlanRevision;
 
     layout.computeFrame(input({ visible: { x: 0, y: 500, width: 800, height: 600 }, revision: 1 }));
 
-    expect(layout.frameRevision).toBe(before);
+    expect(layout.rowPlanRevision).toBe(before);
   });
 
   it('advances when a between-frames ensureRowPlan call actually replans', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input({ entries: sampleEntries.slice(0, 2) }));
-    const before = layout.frameRevision;
+    const before = layout.rowPlanRevision;
 
     // Same shape `entries.add()` leaves behind between two frames — no `computeFrame` call between.
     const grown = sampleEntries.slice(0, 3);
@@ -529,13 +529,13 @@ describe('FrameLayout.frameRevision advances with the row tree, not the frame (#
       { rowHeight: 32, registry: variantRegistry },
     );
 
-    expect(layout.frameRevision).toBe(before + 1);
+    expect(layout.rowPlanRevision).toBe(before + 1);
   });
 
   it('does not advance when a between-frames ensureRowPlan call finds the same row plan', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input());
-    const before = layout.frameRevision;
+    const before = layout.rowPlanRevision;
 
     layout.ensureRowPlan(
       {
@@ -551,6 +551,6 @@ describe('FrameLayout.frameRevision advances with the row tree, not the frame (#
       { rowHeight: 32, registry: variantRegistry },
     );
 
-    expect(layout.frameRevision).toBe(before);
+    expect(layout.rowPlanRevision).toBe(before);
   });
 });
