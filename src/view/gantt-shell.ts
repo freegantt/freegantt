@@ -2531,12 +2531,16 @@ export class GanttShell {
    *  `render()` builds its half of a `LayoutInput` (#424). Cheap to call on every row-tree read: a
    *  field here that has not changed since the last plan costs an identity check, not a replan. */
   #rowPlanInput(): RowPlanInput {
+    // #167: `FrameSettings.rowPlanSettings()` is the one place the public `rowSource` setting
+    // translates into `LayoutInput`'s `rows`/`fieldCompares`/`fieldContext`. `toLayoutInput` reads
+    // the same method, so this can never re-derive its own answer and drift from that one.
+    const rowPlan = this.#frameSettings.rowPlanSettings();
     return {
       entries: this.#options.dataset.entries.all,
       datasetRevision: this.#options.dataset.datasetRevision,
-      rows: this.#frameSettings.rowSource,
-      fieldCompares: this.#frameSettings.fieldCompares,
-      fieldContext: this.#frameSettings.fieldContext,
+      rows: rowPlan.rows,
+      fieldCompares: rowPlan.fieldCompares,
+      fieldContext: rowPlan.fieldContext,
       entryRulePorts: this.#entryRulePorts,
       collapsed: this.#treeCollapse.ids,
       fieldRegistryRevision: this.#options.fieldRegistryRevision?.() ?? 0,

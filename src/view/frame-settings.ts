@@ -260,15 +260,18 @@ export class FrameSettings {
     return this.#metrics.rowHeight;
   }
 
-  /** The Field bind's own compares, read back by `GanttShell`'s row-plan input (#424). The row tree
-   *  sorts by them. A synchronous replan needs the same value `toLayoutInput` would send next. */
-  get fieldCompares(): readonly FieldCompare[] {
-    return this.#values.fieldCompares;
-  }
-
-  /** The Field bind's own context, same reason as `fieldCompares` above. */
-  get fieldContext(): FieldContext | undefined {
-    return this.#values.fieldContext;
+  /** The settings half of `RowPlanInput` (#424) — `rows`/`fieldCompares`/`fieldContext`, spelled in
+   *  `LayoutInput`'s own words. `toLayoutInput` below and `GanttShell#rowPlanInput` both need
+   *  exactly this trio. So this is the one place that translates the public `rowSource` setting into
+   *  `LayoutInput`'s `rows` (this file's own header: "the one place the two meet"). Reading it twice
+   *  costs nothing — plain field reads. A caller who read it once and mutated the settings in
+   *  between would be wrong to reuse it. So this is a method, not a cached getter. */
+  rowPlanSettings(): Pick<LayoutInput, 'rows' | 'fieldCompares' | 'fieldContext'> {
+    return {
+      rows: this.#values.rowSource,
+      fieldCompares: this.#values.fieldCompares,
+      ...(this.#values.fieldContext !== undefined ? { fieldContext: this.#values.fieldContext } : {}),
+    };
   }
 
   /** Minimum painted bar width in px, from `--fg-bar-min-width` — every bar's painted-span floor. */
@@ -308,10 +311,8 @@ export class FrameSettings {
       barHeightPx: this.#metrics.barHeightPx,
       todayLine: this.#values.todayLine,
       dateLines: this.#values.dateLines,
-      rows: this.#values.rowSource,
-      fieldCompares: this.#values.fieldCompares,
+      ...this.rowPlanSettings(),
       ...(this.#values.locale !== undefined ? { locale: this.#values.locale } : {}),
-      ...(this.#values.fieldContext !== undefined ? { fieldContext: this.#values.fieldContext } : {}),
     };
   }
 
