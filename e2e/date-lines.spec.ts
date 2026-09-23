@@ -99,8 +99,10 @@ test('a Date line stroke keeps no gap below it after a preset switch grows the h
         // The stroke's own bottom edge, in pane-local coordinates, plus whatever the pane has
         // already scrolled past — this is where the stroke ends inside the pane's full scrollable
         // content, which must reach the pane's own scrollHeight for there to be no gap below it.
-        return strokeRect.bottom - paneRect.top + pane.scrollTop - pane.scrollHeight;
+        return Math.abs(strokeRect.bottom - paneRect.top + pane.scrollTop - pane.scrollHeight);
       });
     })
-    .toBe(0);
+    // #317: Firefox's `getBoundingClientRect` rounds this sum to within 2e-5px of Chromium's,
+    // never exactly 0 — a real gap below the stroke reads in whole pixels, not fractions of one.
+    .toBeLessThan(0.01);
 });
