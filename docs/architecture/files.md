@@ -171,6 +171,7 @@ where they do something beyond re-export.
 | `view/entry-gesture-context.ts` | `EntryGestureContext, EntryGestureSession, EntryHit` | The type-seam between `view/` (which implements it) and `interaction/` (which drives it). |
 | `view/gesture-pipeline.ts` | `GesturePipeline` | Owns the full gesture lifecycle for move/resize — entry resolution, draft math, preview rAF coalescing, snap resolution, and a commit pipeline with sync/async veto. |
 | `view/viewport-gestures.ts` | `resolveViewportGestures()` | Resolves per-gesture on/off flags for wheel zoom/pan and keyboard pan. |
+| `view/convenience-chords.ts` | `ConvenienceChords, ResolvedConvenienceChords, resolveConvenienceChords()` | Resolves per-command on/off flags (#262) for the 11 convenience chords — the ones a chord shares with a button, a menu entry, or `commands.run`. |
 | `view/collapse-state.ts` | `CollapseChange` | The payload both collapse events carry. The state itself lives in `view/tree-collapse.ts`. |
 | `view/attach-row-twisty.ts` | `attachRowTwisty()` | Grid-pane click on a row twisty toggles collapse. Lives here, not in `interaction/`: collapse is viewport state, not a data gesture. |
 | `view/keyboard-navigation.ts` | `attachKeyboardNavigation()` | Keydown handler for viewport navigation when nothing is selected. |

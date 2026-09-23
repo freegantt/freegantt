@@ -1,5 +1,5 @@
 // view/ — the live switch for convenience keyboard chords (#262). A convenience chord's own default
-// binding does the same job a button, a menu item, or a public method already does — see
+// binding does the same job a button, a menu entry, or a public method already does — see
 // `api/command.ts`'s `ConvenienceCommandId` for the full list and why each member qualifies. An
 // obligation chord (`Escape`, the column keys, `Mod+Arrow` reach, `Enter`) never reaches this file:
 // `[S5-A4]` and WCAG 2.1.1 keep it bound, so `view/gantt-shell.ts` registers it with no `when` at all.

@@ -339,7 +339,7 @@ export interface GanttShellOptions {
   viewportGestures?: ViewportGestures;
   /** Live (#262). Default `{}`: every convenience chord is on. `false` turns them all off; a
    *  per-command map pins one at a time. An obligation chord (`Escape`, the column keys, `Mod+Arrow`
-   *  reach, `Enter`) is never in the map's key type and stays bound either way — `[S5-A4]`, WCAG
+   *  reach, `Enter`) is never in the map's key type. It stays bound either way — `[S5-A4]`, WCAG
    *  2.1.1. The command itself stays reachable through `commands.run(id)` regardless. */
   convenienceChords?: ConvenienceChords;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
@@ -2090,7 +2090,7 @@ export class GanttShell {
     // these two first. Their own `when` refuses unless a header cell is focused, so an unfocused
     // header falls through to the plain pan bound above it.
     // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to resize or reorder a
-    // column, so `convenienceChords` cannot silence these even while it silences the pan above.
+    // column. `convenienceChords` cannot silence these even while it silences the pan above.
     bind('Shift+ArrowRight', 'freegantt.resizeColumnWider');
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
     bind('Alt+ArrowRight', 'freegantt.moveColumnRight');
@@ -2106,14 +2106,14 @@ export class GanttShell {
     // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
     // both refuse the chord, the same way every other core binding already does.
     // Convenience (#262): a bar's Delete un-dates through `entries.update`, a row's through
-    // `entries.remove()` — both public, so an app that owns its own Delete may take the chord back.
+    // `entries.remove()` — both public. An app that owns its own Delete may take the chord back.
     bindConvenience('Delete', 'freegantt.deleteSelection');
     // #434: the fallback for `Enter`. `inlineEditing()`'s own binding to the same chord is
     // registered later (a plugin installs after `#registerCoreCommands` runs), so it is newer and
     // gets first refusal (D-S5-7). Its `when` declines outside a focused, writable cell. The
     // resolver then falls through to this one, whose own `when` asks `canActivateFocused()`.
     // Obligation (#262): a click activates too, and `[S5-A4]` requires a keyboard path for every
-    // pointer capability — `Enter` is the only one this capability has, so it stays unconditional.
+    // pointer capability. `Enter` is the only one this capability has, so it stays unconditional.
     bind('Enter', 'freegantt.activateEntry');
   }
 
