@@ -281,6 +281,12 @@ export interface ContextMenuOptions {
 }
 
 // @public
+export type ConvenienceChords = boolean | Partial<Record<ConvenienceCommandId, boolean>>;
+
+// @public
+export type ConvenienceCommandId = 'freegantt.undo' | 'freegantt.redo' | 'freegantt.selectAll' | 'freegantt.deleteSelection' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panToStart' | 'freegantt.panToEnd';
+
+// @public
 export type CoreFieldKey = keyof Omit<StoredEntry, 'id' | 'props'>;
 
 // @public
@@ -1122,6 +1128,8 @@ export class Gantt<TProps = unknown> {
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
     get commands(): CommandRegistry<TProps>;
+    get convenienceChords(): ConvenienceChords;
+    set convenienceChords(next: ConvenienceChords);
     get dataset(): Dataset<TProps>;
     // (undocumented)
     get dateLineLabelPlacement(): DateLineLabelPlacement;
@@ -1288,6 +1296,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     capabilities?: Capabilities;
     collapsed?: readonly (RowId | string)[];
     container: HTMLElement | string;
+    convenienceChords?: ConvenienceChords;
     dataset: Dataset<TProps>;
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
