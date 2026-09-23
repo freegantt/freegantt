@@ -1,6 +1,6 @@
 # #517 — `entries.sync()`: make a live Dataset match a full list, and record one undo step
 
-**Reported:** 2026-09-23. **Status:** grill in progress, no code. Labels: `needs grill`, `api change`.
+**Reported:** 2026-09-23. **Status:** grill closed 2026-09-23, no code. Labels: `needs grill`, `api change`.
 Split out of [#496](https://github.com/freegantt/freegantt/issues/496) (`load`). Plan for `load`:
 [496-order-tolerant-bulk-write.md](./496-order-tolerant-bulk-write.md).
 
@@ -64,18 +64,20 @@ parents, no loop), put `entries.all` in list order, and refuse an open transacti
   list's own order. A consumer whose server stores WBS codes sorts by them before `sync` (W8 ships
   the comparator). Rejected: (a), a snapshot row of all ids in the ChangeSet.
 
-## Open — round 3: the order Field
+## Round 3 — the order Field. Closed (owner, 2026-09-23, all on the recommendation)
 
-- **O1 — Who writes it.** (a) The library, from list position; the array stays the one way to
-  author order (W3, constructor), and a future move verb writes it. (b) The consumer, as a column
-  from their database; the library sorts siblings by it. Recommended: (a).
-- **O2 — Value.** Integer index among siblings, or a fractional key. Recommended: integer.
-- **O3 — Name.** Recommended: `siblingIndex`. `order` and `sort` collide with the Gantt's view sort
-  (D-S4-28); `position` is used 13 times in `CONTEXT.md` for pixels and WBS.
-- **O4 — Does `toInput()` carry it?** Recommended: no, under O1 (a).
-- **O5 — Scope and build order.** Recommended: its own issue. Build `load` (#496), then the order
-  Field, then `sync` (#517). `load`'s "put the list in order" helper is written so the order Field
-  can store its result.
+- **O1 — The library writes it, from list position.** The list order stays the one way to author
+  order (W3, the constructor). A consumer with a sort column sorts the list before the call. A
+  future move verb, such as drag-to-reorder, writes the Field too.
+- **O2 — An integer index among siblings.** A move rewrites at most one sibling group, and one undo
+  step reverts it. No fractional keys.
+- **O3 — The name is `siblingIndex`.** `order` and `sort` collide with the Gantt's view sort
+  (D-S4-28). `position` is used 13 times in `CONTEXT.md` for pixels and WBS.
+- **O4 — `toInput()` does not carry it.** The exported list is already in order. A carried number
+  would suggest that editing it moves the entry.
+- **O5 — Its own issue: [#528](https://github.com/freegantt/freegantt/issues/528).** Build order: `load` (#496),
+  then the order Field (#528), then `sync` (#517).
+  `load`'s list-ordering function is written so the order Field can store its result.
 
 ## Facts found
 
