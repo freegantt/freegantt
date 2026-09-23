@@ -248,14 +248,12 @@ rowsSourceBtn.addEventListener('click', () => {
 });
 
 filterTeamBtn.addEventListener('click', () => {
-  const current = gantt.rowSource;
-  if (current.source !== 'entries') return;
+  if (gantt.rowSource.source !== 'entries') return;
   filterTeam = NEXT_FILTER_TEAM[filterTeam ?? 'off'];
   const team = filterTeam;
-  gantt.rowSource = {
-    ...current,
-    filter: team === null ? undefined : (entry: Entry) => entry.read('team') === team,
-  };
+  // #495 follow-up: `filterRows` is the read-back-and-spread shorthand — the sort and
+  // `childrenAsSegments` the two buttons below own both survive untouched.
+  gantt.filterRows(team === null ? undefined : (entry: Entry) => entry.read('team') === team);
   refreshRowSourceUi();
 });
 
@@ -274,7 +272,8 @@ segmentRowBtn.addEventListener('click', () => {
 sortNameBtn.addEventListener('click', () => {
   const current = gantt.rowSource;
   if (current.source !== 'entries') return;
-  gantt.rowSource = { ...current, sort: current.sort === undefined ? { field: 'name' } : undefined };
+  // #495 follow-up: `sortRows` is `filterRows`'s sibling — same shorthand, `sort` instead of `filter`.
+  gantt.sortRows(current.sort === undefined ? { field: 'name' } : undefined);
   refreshRowSourceUi();
 });
 

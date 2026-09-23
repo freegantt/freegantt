@@ -408,6 +408,12 @@ export interface LayoutInput {
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
    *  matches nothing, same as `resolveRows`'s own default. */
   entryRulePorts?: EntryRulePorts;
+  /** `FieldRegistry.revision` (#495, #414) — how many post-mount `ctx.fields.register()` calls this
+   *  Dataset has answered. Feeds `FrameLayout`'s row-plan cache key: `entryRulePorts.fieldFor` reads
+   *  `dataset.field(key)` live, with no cache of its own, so a newly-registered Field a
+   *  `childrenAsSegments` rule reads can go stale with no other signal that anything changed.
+   *  Omitted → `0`, honest for a `layout/`-only test or caller with no registry to report. */
+  fieldRegistryRevision?: number;
   /** What one bar's label prints (#421 C5). `view/` builds this from the Gantt's own `barLabels`
    *  Field, merged with the row's own variant (`mergeBarLabels`) and read through `formatValue` —
    *  the same door a Grid cell reads through (D-S4-13). Read fresh every `placeFrame` call, never
