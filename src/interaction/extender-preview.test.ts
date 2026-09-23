@@ -112,6 +112,7 @@ function buildShell(options: { extender?: EditExtender; shell?: Partial<GanttShe
                 hierarchySource: state.hierarchySource,
                 committedChildIds: state.entries.committedChildIds(),
                 fields: state.fields,
+                lockRule: state.lockRule,
               }),
             ),
         }
@@ -210,6 +211,7 @@ describe('[S3-A4] extender preview', () => {
               hierarchySource: built.state.hierarchySource,
               committedChildIds: built.state.entries.committedChildIds(),
               fields: built.state.fields,
+              lockRule: built.state.lockRule,
             }),
           ),
       },

@@ -15,6 +15,7 @@ import type {
   DatasetEventMap,
   ExtenderWrapper,
   Field,
+  FieldLockRuleWrapper,
   FieldType,
   FieldTypeName,
   HierarchySourceWrapper,
@@ -31,6 +32,10 @@ export type { PluginStore, PluginStoreView, ExtenderWrapper };
 // source it composes onto. Here for the same reason the store types are — beside the contract that
 // hands them over.
 export type { HierarchySource, HierarchySourceWrapper } from '../model/index.js';
+// A plugin author writing a lock rule names both: the wrapper `setLockRule` takes, and the query the
+// rule reads. Here for the same reason the hierarchy source types are.
+export type { FieldLockQuery, FieldLockRule } from '../model/index.js';
+export type { FieldLockRuleWrapper };
 // The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
@@ -61,9 +66,15 @@ export interface DatasetFieldRegistrations {
 
 /** The extension hook, as a plugin claims it (D-S5-23). Installing composes: the wrapper receives the
  *  current occupant, so a second plugin adds to the first's cascade instead of evicting it. Merge the
- *  two results with `mergeEntryEdits`, never with a spread (#197). */
+ *  two results with `mergeEntryEdits`, never with a spread (#197).
+ *
+ *  `setLockRule` is the sibling seam a plugin uses to open one locked Field on one Entry, or on a
+ *  whole subtree (#473). Installing composes the same way: the wrapper receives the current occupant,
+ *  and falls through to it with `undefined` for "no opinion." Every write door — `entries.update()`,
+ *  the grid, and an `EditExtender` cascade — reads the composed rule before `Field.editable` (I14). */
 export interface DatasetEditHook {
   setExtender(wrap: ExtenderWrapper): void;
+  setLockRule(wrap: FieldLockRuleWrapper): void;
 }
 
 /** The tree, as a plugin claims it (ADR 0020). Installing composes: the wrapper receives the current

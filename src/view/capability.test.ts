@@ -236,11 +236,15 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
     expect(caps.can('resize', entry(), 'start')).toBe(true);
   });
 
-  it('capabilities.edit is the one override that opens a locked Field', () => {
+  // #473's `capabilities.edit` ruling: the hard `'never'` lock refuses before `capabilities.edit`
+  // gets a say — a consumer narrows what the data layer already allows, it does not widen it. A
+  // `'never'` Field opens only through the per-entry lock rule (`ctx.edits.setLockRule`), never
+  // through `capabilities.edit` alone.
+  it('capabilities.edit does not open a data-locked Field (#473)', () => {
     const caps = capabilities({ capabilities: { edit: true } }, lockedEnd);
-    expect(caps.canWrite(entry(), 'end').ok).toBe(true);
-    expect(caps.can('resize', entry(), 'end')).toBe(true);
-    expect(caps.can('move', entry())).toBe(true);
+    expect(caps.canWrite(entry(), 'end').ok).toBe(false);
+    expect(caps.can('resize', entry(), 'end')).toBe(false);
+    expect(caps.can('move', entry())).toBe(false);
   });
 
   it('capabilities.edit opens a roll-up parent cell it would otherwise refuse', () => {
@@ -345,9 +349,11 @@ describe("a variant's own `capabilities` (ADR 0018)", () => {
     expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'start').ok).toBe(true);
   });
 
-  it('a variant edit default opens a Field the library would have refused', () => {
+  // #473's `capabilities.edit` ruling applies to a variant's own `edit` the same way it applies to
+  // the consumer's: neither widens a data-locked `'never'` Field.
+  it('a variant edit default does not open a data-locked Field (#473)', () => {
     const caps = capabilities({ variantCapabilitiesFor: variantAllows('buffer', { edit: true }) }, lockedEnd);
-    expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'end').ok).toBe(true);
+    expect(caps.canWrite(entry({ props: { variant: 'buffer' } }), 'end').ok).toBe(false);
   });
 
   it('a variant `can` predicate that answers undefined falls through to the library rule', () => {

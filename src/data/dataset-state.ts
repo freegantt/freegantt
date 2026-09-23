@@ -9,10 +9,14 @@ import type {
   DateOnlyEndRule,
   Dataset,
   DatasetEventMap,
+  EntryId,
   FlatEntryInput,
   Field,
+  FieldEditable,
   DurationMeasure,
   FieldKey,
+  FieldLockRule,
+  FieldLockRuleWrapper,
   FieldType,
   Instant,
   Disposer,
@@ -211,6 +215,8 @@ export class DatasetState implements Dataset {
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
       this.fields,
+      this.entries.lockRule,
+      this.entries.hierarchySource,
     ).stored;
   }
 
@@ -226,6 +232,8 @@ export class DatasetState implements Dataset {
       this.#entryContext,
       (id) => request.entryAfterEdits(id),
       this.fields,
+      this.entries.lockRule,
+      this.entries.hierarchySource,
     );
   }
 
@@ -247,6 +255,28 @@ export class DatasetState implements Dataset {
    *  no priority machinery and `EditExtenderConflictError` never gets written (D-S5-23). */
   setExtender(wrap: ExtenderWrapper): void {
     this.#editExtender = wrap(this.#editExtender);
+  }
+
+  /** The per-entry lock rule every write door reads (#473, I14). Core's own occupant is silence
+   *  (`identityFieldLockRule`); the store holds whichever occupant a plugin composed onto it. */
+  get lockRule(): FieldLockRule {
+    return this.entries.lockRule;
+  }
+
+  /** Call: `ctx.edits.setLockRule((next) => (entry, field) => field === 'cost' && entry.isDescendantOf(unlockedId) ? 'anywhere' : next(entry, field))`.
+   *  Opens `cost` on every descendant of `unlockedId`, not on `unlockedId` itself —
+   *  `isDescendantOf` answers `false` for an Entry asked about itself (#473).
+   *  Installing composes onto the current occupant rather than evicting it, exactly the way
+   *  `setExtender` above does (D-S5-23). */
+  setLockRule(wrap: FieldLockRuleWrapper): void {
+    this.entries.setLockRule(wrap);
+  }
+
+  /** Call: `dataset.editableOf('van-1', 'cost')` — the effective lock on one cell (#473): a plugin's
+   *  own per-entry answer, or the Field's own `editable` when the rule has no opinion. The same
+   *  resolver `entries.update()` and an `EditExtender` cascade write against (I14). */
+  editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
+    return this.entries.editableOf(id, field);
   }
 
   /** Releases every installed plugin, in reverse setup order. */

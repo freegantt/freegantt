@@ -5,19 +5,15 @@
 // zone, and what a date-only `end` means against half-open storage — belongs to `time/input.ts`
 // (I10); anything resembling date math here is a bug.
 
-import {
-  entryId,
-  DuplicatePropsKeyError,
-  InvertedSpanError,
-  spansTime,
-  UnknownFieldError,
-} from '../model/index.js';
+import { entryId, DuplicatePropsKeyError, InvertedSpanError, spansTime } from '../model/index.js';
 import type {
   DateOnlyEndRule,
   StoredEntry,
   EntryEdit,
   EntryId,
+  FieldLockRule,
   FlatEntryInput,
+  HierarchySource,
   Instant,
 } from '../model/index.js';
 import { addMs, diffMs, toEndInstant, toInstant } from '../time/index.js';
@@ -30,6 +26,8 @@ import {
 } from './fields/field-access.js';
 import { isCoreFieldKey } from './fields/core-fields.js';
 import type { FieldRegistry } from './fields/field-registry.js';
+import { assertFieldTakesWrite, fieldLockQueryFor } from './write-rule.js';
+import { parentIdFrom } from './hierarchy-source.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list. */
 export interface EntryReadContext {
@@ -234,8 +232,14 @@ export function toEditReading(
  * dataset's zone resolves its dates, `DateOnlyEndRule` decides what a date-only `end` means, and core
  * derives `proposedKeys` from the edit's own keys. A plugin author writes none of that.
  *
- * An undeclared Field key is refused here for the same reason `update()` refuses one (#209 Q2): one
- * rule on every way in, and a silent drop is the fault #197 existed for. A `props` key with no
+ * Every Field key in every Entry's edit runs `write-rule.ts`'s `assertFieldTakesWrite` — the one check
+ * `entries.update()` runs too (ADR 0015, folded from two copies by #473's ocr finding): an undeclared
+ * key throws `UnknownFieldError` (#209 Q2, one rule on every way in — a silent drop is the fault #197
+ * existed for), a `compute` Field throws `ComputedFieldCannotBeWrittenError`, and a locked cell — the
+ * Field's own `'never'`, or a plugin's per-entry lock rule (#473) — throws `FieldNotEditableError`.
+ * A cascade is a caller-side write, same as `entries.update()`, so it meets the same lock a person at
+ * a keyboard meets (ADR 0015, "a third door"). The whole changeset is refused, nothing is staged, and
+ * the loop below never reaches `stored.set` for any Entry in this map. A `props` key with no
  * declaration is carried at construction ingest only (ADR 0011) — it is never a live way in.
  *
  * An id nothing knows is skipped — there is no Entry to read the edit against, and `diffEdit` emits
@@ -246,6 +250,8 @@ export function toEditsReading(
   context: EntryReadContext,
   entryFor: (id: EntryId) => StoredEntry | undefined,
   registry: FieldRegistry,
+  lockRule: FieldLockRule,
+  hierarchySource: HierarchySource,
 ): EditsReading {
   const stored = new Map<EntryId, ProposedEdit>();
   for (const [id, edit] of edits) {
@@ -255,8 +261,9 @@ export function toEditsReading(
     // #212 R2 finding A).
     const entry = entryFor(id);
     if (entry === undefined) continue;
+    const query = fieldLockQueryFor(id, entryFor, (e) => parentIdFrom(hierarchySource, e));
     for (const key of Object.keys(edit)) {
-      if (!registry.has(key)) throw new UnknownFieldError(key, EXTENDER_OPERATION);
+      assertFieldTakesWrite(key, registry.get(key), query, lockRule, EXTENDER_OPERATION);
     }
     const reading = toEditReading(edit, context, entry, registry, EXTENDER_OPERATION);
     stored.set(id, reading.stored);

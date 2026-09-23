@@ -15,6 +15,9 @@ export type {
   ExtenderWrapper,
   HierarchySource,
   HierarchySourceWrapper,
+  FieldLockQuery,
+  FieldLockRule,
+  FieldLockRuleWrapper,
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';

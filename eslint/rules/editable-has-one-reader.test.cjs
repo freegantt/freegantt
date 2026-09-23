@@ -12,9 +12,12 @@ const OTHER = '/repo/src/view/capability.ts';
 
 ruleTester.run('editable-has-one-reader', rule, {
   valid: [
-    // The two named thresholds are what every other file asks.
-    { code: 'const open = isUserEditable(field);', filename: OTHER },
-    { code: 'if (!isApiEditable(declared)) throw new FieldNotEditableError(key, op);', filename: OTHER },
+    // The one shared resolver is what every other file asks.
+    { code: 'const open = editableAnswerFor(field, declared, query, lockRule);', filename: OTHER },
+    {
+      code: "if (resolveFieldEditable(query, field, declared, lockRule) === 'never') throw new FieldNotEditableError(key, op);",
+      filename: OTHER,
+    },
     // A declaration is not a read: core Fields and Field types state the key in a literal.
     { code: "const field = { key: 'start', editable: 'anywhere' };", filename: OTHER },
     // The one owner resolves the aliases and the default.

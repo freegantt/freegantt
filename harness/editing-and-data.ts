@@ -25,6 +25,7 @@ import { mountGanttToolbar } from './gantt-toolbar.js';
 import { zoomPresetsWithSixHour } from './six-hour-preset.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
+import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
 import { overBudgetRows } from './plugins/over-budget-rows.js';
@@ -44,7 +45,12 @@ interface EditingDataProps extends DemoEntryProps {
   risk?: boolean;
   consumed?: boolean;
   accepted?: boolean;
+  note?: string;
 }
+
+// #473: the one Entry a per-entry lock rule opens `note` under — `subtreeUnlock()`'s checkbox below
+// unlocks this Entry's whole subtree, and nothing outside it.
+const NOTE_UNLOCK_ROOT_ID = 'program';
 
 // ADR 0018: this page's own words for two rows, read back by the two kind plugins' own rules — no
 // plugin holds a list of the ids it owns.
@@ -62,6 +68,10 @@ function withKindProps(entry: EntryInput<DemoEntryProps>): EntryInput<EditingDat
 // here, at construction.
 const locks = lockEntries();
 
+// #473: `note` is locked (`editable: false`) everywhere, and this plugin's `setLockRule` is the
+// only door that opens it — one subtree at a time, never the whole Field.
+const notes = subtreeUnlock('note');
+
 const dataset = new Dataset<EditingDataProps>({
   entries: demoTreeEntryInputs.map(withKindProps),
   timeZone: 'UTC',
@@ -71,8 +81,9 @@ const dataset = new Dataset<EditingDataProps>({
     { key: 'risk' },
     { key: 'consumed' },
     { key: 'accepted' },
+    { key: 'note', editable: false },
   ],
-  plugins: [locks],
+  plugins: [locks, notes],
 });
 
 // A hard boundary a `beforeEntryMove` veto below enforces — dropping a bar before it is refused. A
@@ -132,7 +143,9 @@ const nameInput = document.querySelector<HTMLInputElement>('#rename-input')!;
 const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
+const noteBtn = document.querySelector<HTMLButtonElement>('#note-btn')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
+const unlockSubtreeCheckbox = document.querySelector<HTMLInputElement>('#unlock-subtree-checkbox')!;
 
 function renderSelection(): void {
   const ids = gantt.selectedEntryIds;
@@ -155,6 +168,7 @@ function refreshMutationButtons(): void {
   renameBtn.disabled = none;
   removeBtn.disabled = none;
   costBtn.disabled = none;
+  noteBtn.disabled = none;
 }
 
 // D-S2-25, made visible: the checkbox locks every currently selected entry, and reads back locked
@@ -166,11 +180,18 @@ function refreshLockCheckbox(): void {
   lockCheckbox.checked = ids.length > 0 && ids.every((id) => locks.isLocked(id));
 }
 
+// #473: undo/redo can close or open the subtree without the checkbox ever firing its own `change`
+// event, so the checkbox reads `notes.isOpen()` fresh on every selection sync, not just on click.
+function refreshUnlockCheckbox(): void {
+  unlockSubtreeCheckbox.checked = notes.isOpen();
+}
+
 function syncSelectionUi(): void {
   renderSelection();
   refreshNameInput();
   refreshMutationButtons();
   refreshLockCheckbox();
+  refreshUnlockCheckbox();
 }
 
 gantt.on('selectionChange', syncSelectionUi);
@@ -236,6 +257,36 @@ costBtn.addEventListener('click', () => {
   attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.update(entry.id, { cost: 500 });
+    });
+  });
+});
+
+// ---- Per-entry lock rule (#473) -----------------------------------------------------------------
+
+unlockSubtreeCheckbox.addEventListener('change', () => {
+  if (unlockSubtreeCheckbox.checked) notes.openSubtree(NOTE_UNLOCK_ROOT_ID);
+  else notes.closeSubtree();
+});
+
+// `dataset.editableOf` is the same answer `entries.update()` writes against (I14) — asking first
+// means the button logs a clear refusal instead of an uncaught `FieldNotEditableError`.
+noteBtn.addEventListener('click', () => {
+  const entries = gantt.selectedEntries;
+  if (entries.length === 0) return;
+  const writable = entries.filter((entry) => dataset.editableOf(entry.id, 'note') !== 'never');
+  if (writable.length === 0) {
+    logLine("note: every selected entry is locked — unlock Program's subtree first");
+    return;
+  }
+  // A mixed selection writes the open rows and says which ones it skipped, so a locked row in the
+  // middle of a selection is a line in the log, not a silently dropped write.
+  const skipped = entries.filter((entry) => !writable.includes(entry));
+  if (skipped.length > 0) {
+    logLine(`note: skipped ${skipped.length} locked row(s) — ${skipped.map((entry) => entry.id).join(', ')}`);
+  }
+  attemptMutation(() => {
+    dataset.transaction(() => {
+      for (const entry of writable) dataset.entries.update(entry.id, { note: 'Reviewed' });
     });
   });
 });

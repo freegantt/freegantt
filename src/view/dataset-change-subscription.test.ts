@@ -16,6 +16,7 @@ function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void
     datasetRevision: 0,
     fields: { all: [] },
     field: () => undefined,
+    editableOf: () => 'never',
     on: (_name, handler) => {
       handlers.add(handler);
     },

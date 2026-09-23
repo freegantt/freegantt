@@ -351,6 +351,7 @@ export class Dataset<TProps = unknown> {
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
+    editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     // (undocumented)
     get entries(): EntryStore<TProps>;
     field(key: FieldKey): Field | undefined;
@@ -379,6 +380,8 @@ export class Dataset<TProps = unknown> {
 export interface DatasetEditHook {
     // (undocumented)
     setExtender(wrap: ExtenderWrapper): void;
+    // (undocumented)
+    setLockRule(wrap: FieldLockRuleWrapper): void;
 }
 
 // @public
@@ -649,6 +652,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
 // @public
 export interface EditRequest {
     readonly addedEntryIds: ReadonlySet<EntryId>;
+    editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     entries: ReadonlyMap<EntryId, StoredEntry>;
     entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
     hasChildren(id: EntryId | string): boolean;
@@ -923,6 +927,20 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
 
 // @public
 export type FieldKey = CoreFieldKey | (string & {});
+
+// @public
+export interface FieldLockQuery {
+    // (undocumented)
+    readonly id: EntryId;
+    // (undocumented)
+    isDescendantOf(ancestorId: EntryId | string): boolean;
+}
+
+// @public
+export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEditable | undefined;
+
+// @public
+export type FieldLockRuleWrapper = (next: FieldLockRule) => FieldLockRule;
 
 // @public
 export type FieldMatch<TProps = Record<string, unknown>> = Partial<CoreFieldValues> & {

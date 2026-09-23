@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Gantt } from '../../api/gantt.js';
 import { Dataset } from '../../api/dataset.js';
 import type {
+  DataPlugin,
   Entry,
   EntryFieldEdit,
   EntryInput,
@@ -267,6 +268,44 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     dataset.entries.update('e1', { owner: 'bo' });
 
     expect(dataset.entries.get('e1')?.read('owner')).toBe('bo');
+    gantt.destroy();
+    container.remove();
+  });
+
+  // #473: a plugin's per-entry lock rule opens a Field `Field.editable` itself locks for every
+  // Entry. `end` stays `'never'` on the Field, and the cell opens on `e1` only — `e2` stays dead.
+  it("a plugin's per-entry lock rule opens one locked cell, and its sibling stays locked", () => {
+    const opensEndOnE1: DataPlugin = {
+      id: 'demo.unlock',
+      data(ctx) {
+        ctx.edits.setLockRule(
+          (next) => (entry, field) =>
+            entry.id === entryId('e1') && field === 'end' ? 'anywhere' : next(entry, field),
+        );
+      },
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset<Meta>({
+      entries: structuredClone([...ENTRIES]),
+      timeZone: 'UTC',
+      fields: [{ key: 'end', editable: false }],
+      plugins: [opensEndOnE1],
+    });
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'end'], plugins: [inlineEditing()] });
+    const before = dataset.entries.get('e1')!.end;
+
+    dblclick(cellFor(container, 'e1', 'end'));
+    const el = input(container);
+    el.value = '2026-01-10';
+    enter(el);
+    expect(dataset.entries.get('e1')!.end).not.toBe(before);
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+
+    dblclick(cellFor(container, 'e2', 'end'));
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(refusal(container)).toBeNull();
+
     gantt.destroy();
     container.remove();
   });

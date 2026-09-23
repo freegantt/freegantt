@@ -28,6 +28,7 @@ export type { EditRequest, EditExtender, ExtenderWrapper } from './edit-request.
 // ids.ts and errors.ts — see `spansTime`'s own comment for why the carve-out admits it.
 export { spansTime } from './stored-entry.js';
 export type { HierarchySource, HierarchySourceWrapper } from './hierarchy-source.js';
+export type { FieldLockQuery, FieldLockRule, FieldLockRuleWrapper } from './field-lock.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { ElementDescription } from './render.js';
 export type { Dataset, EntryStore, EntryStoreView } from './dataset.js';

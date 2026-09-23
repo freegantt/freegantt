@@ -104,6 +104,23 @@
             </div>
 
             <div class="panel">
+              <h3>Per-entry lock rule (#473)</h3>
+              <p>
+                The Note field is locked (<code>editable: false</code>) everywhere. A plugin's
+                <code>setLockRule</code> opens it for one subtree at a time — sharper than the Field itself,
+                and read by every write door, so the button below refuses the same rows the lock rule does.
+              </p>
+              <div class="control-row">
+                <label
+                  ><input id="unlock-subtree-checkbox" type="checkbox" /> Unlock Note under Program</label
+                >
+              </div>
+              <div class="control-row">
+                <button id="note-btn" type="button">Set note "Reviewed"</button>
+              </div>
+            </div>
+
+            <div class="panel">
               <h3>Plugins</h3>
               <p>
                 Three plugins over the public contract: <code>bufferKind()</code>/<code>riskKind()</code>

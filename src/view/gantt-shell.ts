@@ -1493,6 +1493,7 @@ export class GanttShell {
       capabilities: this.#capabilityRules,
       fieldFor: (key) => this.#options.dataset.field(key),
       variantCapabilitiesFor: (entry) => this.#registrations.variants.resolveFor(entry).capabilities,
+      editableOf: (id, key) => this.#options.dataset.editableOf(id, key),
     });
   }
 

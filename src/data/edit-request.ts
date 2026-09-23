@@ -7,7 +7,9 @@ import { entryId } from '../model/index.js';
 import type {
   EditRequest,
   EntryId,
+  FieldEditable,
   FieldKey,
+  FieldLockRule,
   FieldLookup,
   HierarchySource,
   ProposedEdits,
@@ -23,8 +25,8 @@ import {
   parentIdIn,
 } from './entry-tree.js';
 import { entryAfterEdit } from './fields/field-access.js';
-import { checkHierarchyAnswers, storedParentSource } from './hierarchy-source.js';
-import { resolveWriteTarget } from './write-rule.js';
+import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hierarchy-source.js';
+import { editableAnswerFor, fieldLockQueryFor, resolveWriteTarget } from './write-rule.js';
 
 export interface CreateEditRequestOptions {
   readonly entries: ReadonlyMap<EntryId, StoredEntry>;
@@ -36,6 +38,9 @@ export interface CreateEditRequestOptions {
    *  re-derived, on the commit that `commitMovesNoRow` proves cannot have moved a row (#421 C4). */
   readonly committedChildIds: ReadonlyMap<EntryId, readonly EntryId[]>;
   readonly fields: FieldLookup;
+  /** The per-entry lock rule's current occupant (#473) — `editableOf` below reads it, the same
+   *  resolver `entries.update()` and the grid read (I14). */
+  readonly lockRule: FieldLockRule;
 }
 
 /** Builds the object `EditExtender` reads (D4, D-S2-6). The effective child index `hasChildren` and
@@ -45,7 +50,7 @@ export interface CreateEditRequestOptions {
  *  when nothing added, removed or reparented under core's own hierarchy source, the store's committed
  *  index already holds the answer, and no `Map` is walked to reach it. */
 export function createEditRequest(options: CreateEditRequestOptions): EditRequest {
-  const { entries, proposed, added, removed, hierarchySource, committedChildIds, fields } = options;
+  const { entries, proposed, added, removed, hierarchySource, committedChildIds, fields, lockRule } = options;
 
   const addedEntryIds = added.length === 0 ? EMPTY_ENTRY_IDS : new Set(added.map((entry) => entry.id));
   const removedEntryIds = removed.length === 0 ? EMPTY_ENTRY_IDS : new Set(removed.map((entry) => entry.id));
@@ -88,6 +93,18 @@ export function createEditRequest(options: CreateEditRequestOptions): EditReques
     return resolveWriteTarget(hasChildren(id), fields.get(field));
   }
 
+  /** The resolver's own answer, unchanged — `editableAnswerFor`, the same one
+   *  `#assertFieldTakesThisWrite` and `toEditsReading` write against (I14), so an undeclared or
+   *  `compute` Field answers `'never'` here too (#473's ocr finding). `entryAfterEdits` gives the
+   *  subtree walk this transaction's own body, not the pre-transaction snapshot, so an entry this
+   *  transaction itself adds still answers `isDescendantOf` correctly. */
+  function editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
+    const declared = fields.get(field);
+    const key = entryId(id);
+    const query = fieldLockQueryFor(key, entryAfterEdits, (e) => parentIdFrom(hierarchySource, e));
+    return editableAnswerFor(field, declared, query, lockRule);
+  }
+
   return {
     entries,
     proposed,
@@ -96,5 +113,6 @@ export function createEditRequest(options: CreateEditRequestOptions): EditReques
     removedEntryIds,
     hasChildren,
     writeTarget,
+    editableOf,
   };
 }

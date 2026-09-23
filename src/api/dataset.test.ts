@@ -8,6 +8,7 @@ import {
   invertChangeSet,
   mergeEntryEdits,
   InvalidReplayOriginError,
+  ComputedFieldCannotBeWrittenError,
   FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
@@ -852,6 +853,88 @@ describe('Dataset plugins (S5.10)', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [noisy] });
     dataset.destroy();
     expect(released).toEqual(['demo.noisy']);
+  });
+});
+
+describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () => {
+  /** Opens `owner` on `open` only; `locked` stays refused. Both are `editable: false` Fields, so
+   *  the cascade's only door onto `open` is this rule. */
+  const opensOneEntry: DataPlugin = {
+    id: 'demo.unlock',
+    data(ctx) {
+      ctx.edits.setLockRule(
+        (next) => (entry, field) =>
+          entry.id === entryId('open') && field === 'owner' ? 'anywhere' : next(entry, field),
+      );
+    },
+  };
+
+  function twoLockedEntries(cascadeTo: (id: string, owner: string) => DataPlugin['data']): Dataset {
+    return new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner', editable: false }],
+      entries: [
+        { id: 'open', name: 'Open', start: '2026-09-01', end: '2026-09-02', props: { owner: 'nobody' } },
+        { id: 'locked', name: 'Locked', start: '2026-09-01', end: '2026-09-02', props: { owner: 'nobody' } },
+      ],
+      plugins: [
+        opensOneEntry,
+        { id: 'demo.cascade', requires: ['demo.unlock'], data: cascadeTo('open', 'ana') },
+      ],
+    });
+  }
+
+  it('lets a cascade write the Entry the lock rule names, unchanged from a locked sibling', () => {
+    const cascadesOwner =
+      (id: string, owner: string): DataPlugin['data'] =>
+      (ctx) => {
+        ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
+      };
+    const dataset = twoLockedEntries(cascadesOwner);
+
+    dataset.entries.update('open', { name: 'Renamed' });
+
+    expect(dataset.entries.get('open')?.read('owner')).toBe('ana');
+    expect(dataset.entries.get('locked')?.read('owner')).toBe('nobody');
+  });
+
+  it('still refuses a cascade onto a cell the lock rule has no opinion on', () => {
+    const cascadesOwner =
+      (id: string, owner: string): DataPlugin['data'] =>
+      (ctx) => {
+        ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
+      };
+    const dataset = twoLockedEntries(() => cascadesOwner('locked', 'ana'));
+
+    expect(() => dataset.entries.update('open', { name: 'Renamed' })).toThrow(FieldNotEditableError);
+    expect(dataset.entries.get('locked')?.read('owner')).toBe('nobody');
+    expect(dataset.entries.get('open')?.name).toBe('Open');
+  });
+
+  it('Dataset.editableOf answers the same lock a cascade or entries.update() write against', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner', editable: false }],
+      entries: [oneEntry({ id: 'open', props: { owner: 'nobody' } })],
+      plugins: [opensOneEntry],
+    });
+
+    expect(dataset.editableOf('open', 'owner')).toBe('anywhere');
+    expect(dataset.editableOf('open', 'name')).toBe('anywhere');
+  });
+
+  // #473's ocr finding: `editableOf` used to default an undeclared `editable` to `'anywhere'` for a
+  // `compute` Field, so a plugin that guarded a write with `editableOf(...) !== 'never'` passed the
+  // guard and then met `ComputedFieldCannotBeWrittenError` from `entries.update()`.
+  it('answers never for a compute Field, the same refusal entries.update() gives it', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'derived', compute: () => 0 }],
+      entries: [oneEntry()],
+    });
+
+    expect(dataset.editableOf('t1', 'derived')).toBe('never');
+    expect(() => dataset.entries.update('t1', { derived: 1 })).toThrow(ComputedFieldCannotBeWrittenError);
   });
 });
 

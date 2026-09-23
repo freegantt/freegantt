@@ -641,11 +641,25 @@ whose only half is `data`. There is no ordering knob.
 
 **The `data` half's own doors are namespaced, and every one is expert.** `ctx.fields.register` declares
 a Field, `ctx.store.reserve` takes this plugin's store, `ctx.edits.setExtender` claims the extension
-hook, and `ctx.hierarchy.setSource` claims the hierarchy source (ADR 0020). An app author never meets
-one: they write `parentId` on an Entry, and core's own source answers it. Each door takes one
-occupant that composes — a plugin receives the current occupant and may call it — so a second plugin
-adds to the first rather than evicting it (D-S5-23). All four are legal while `data()` runs and not
-after (D-S5-4).
+hook, `ctx.hierarchy.setSource` claims the hierarchy source (ADR 0020), and `ctx.edits.setLockRule`
+claims the per-entry lock rule (ADR 0015, #473). An app author never meets one: they write `parentId`
+on an Entry, and core's own source answers it. Each door takes one occupant that composes — a plugin
+receives the current occupant and may call it — so a second plugin adds to the first rather than
+evicting it (D-S5-23). All five are legal while `data()` runs and not after (D-S5-4).
+
+```ts
+ctx.edits.setLockRule((next) => (entry, field) =>
+  field === 'cost' && entry.isDescendantOf(unlockedSubtreeRootId) ? 'anywhere' : next(entry, field));
+```
+
+That reads: open `cost` under one subtree root, otherwise whatever the next rule says. `entry` is a
+`FieldLockQuery` (`id`, and `isDescendantOf(ancestorId)` for the subtree question) — not the live
+`Entry`, so a lock rule reads structure and nothing a Field write could see. The rule answers
+`FieldEditable | undefined`; `undefined` is silence, and the resolver falls to `Field.editable`
+(`data/write-rule.ts`'s `resolveFieldEditable`). Every write door — the grid, `entries.update()`, and
+an `EditExtender` cascade — reads the same resolved answer, and `Dataset.editableOf(id, field)` /
+`EditRequest.editableOf(id, field)` publish it so a consumer or a plugin can ask before it writes
+(I14).
 
 ```ts
 ctx.hierarchy.setSource<PlannerProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
@@ -662,8 +676,9 @@ a plugin-owned hierarchy is exactly a case where the two can disagree on purpose
 or `entry.parent()` is how a caller reads this source's own answer instead.
 
 Published types: `ChromePlugin`, `DataPlugin`, `Plugin`, `PluginContext`, `DatasetPluginContext`,
-`DatasetHierarchy`, `HierarchySource`, `HierarchySourceWrapper`, and the generic `*Of` shapes behind
-each. The retired pair is `GanttPlugin` / `DatasetPlugin`.
+`DatasetHierarchy`, `HierarchySource`, `HierarchySourceWrapper`, `FieldLockQuery`, `FieldLockRule`,
+`FieldLockRuleWrapper`, and the generic `*Of` shapes behind each. The retired pair is
+`GanttPlugin` / `DatasetPlugin`.
 
 ### 4.5 Plugin registrations: one collision policy, one lifetime (#155)
 
