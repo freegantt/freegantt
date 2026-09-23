@@ -111,7 +111,7 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
-export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
+export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'time-of-day' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
@@ -121,6 +121,7 @@ export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 
 
 // @public
 export interface Capabilities {
+    activate?: CapabilityRule;
     edit?: WriteRule;
     // (undocumented)
     move?: CapabilityRule;
@@ -727,6 +728,16 @@ export interface Entry<TProps = Record<string, unknown>> {
     toInput(): EntryInput<TProps>;
 }
 
+// @public
+export interface EntryActivate {
+    // (undocumented)
+    readonly cause: 'click' | 'key' | 'dblclick';
+    // (undocumented)
+    readonly entry: Entry;
+    // (undocumented)
+    readonly target: TargetKind;
+}
+
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "RemovableEntryKey" needs to be exported by the entry point index.d.ts
 //
@@ -1117,6 +1128,8 @@ export class Gantt<TProps = unknown> {
     set dateLineLabelPlacement(placement: DateLineLabelPlacement);
     get dateLines(): readonly DateLine[];
     set dateLines(lines: readonly DateLineInput[]);
+    get dblclickActivates(): boolean;
+    set dblclickActivates(next: boolean);
     // (undocumented)
     destroy(): void;
     // (undocumented)
@@ -1238,6 +1251,7 @@ export interface GanttEventMap {
     beforeSelectionChange: SelectionChange;
     // (undocumented)
     collapseChange: CollapseChange;
+    entryActivate: EntryActivate;
     entryEdit: EntryFieldEdit;
     // (undocumented)
     entryMove: EntryMove;
@@ -1277,6 +1291,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     dataset: Dataset<TProps>;
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
+    dblclickActivates?: boolean;
     gridCellRenderer?: GridCellRenderer;
     gridColumns?: readonly GridColumnInput[];
     gridResizable?: boolean;
