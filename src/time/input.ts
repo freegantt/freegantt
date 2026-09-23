@@ -10,13 +10,7 @@
 import type { DateOnlyEndRule, Instant, InstantInput, PlainTimeInput } from '../model/index.js';
 import { InvalidPlainTimeError } from '../model/index.js';
 import { addMs, instant } from './instant.js';
-import {
-  NOT_FINITE,
-  NO_SUCH_DATE,
-  NULL_VALUE,
-  UNREADABLE,
-  invalidInstant as invalid,
-} from './instant-fault.js';
+import { invalidInstant as invalid } from './instant-fault.js';
 import { addDays, fromPlain, toPlain } from './zone.js';
 
 /** A calendar date with no time of day — `'2026-09-08'`. */
@@ -43,7 +37,7 @@ function isDateOnly(input: InstantInput): boolean {
  * mode to catch. Only the date is compared — a Plain time inside a DST gap legitimately shifts its
  * hour, and that is a resolution, not an error.
  */
-function fromPlainString(zone: string, value: string, operation: string | undefined): Instant | undefined {
+function fromPlainString(zone: string, value: string, operation: string): Instant | undefined {
   const parts = DATE_ONLY.exec(value) ?? PLAIN_DATE_TIME.exec(value);
   if (!parts) return undefined;
 
@@ -64,12 +58,12 @@ function fromPlainString(zone: string, value: string, operation: string | undefi
   try {
     resolved = fromPlain(zone, plain);
   } catch {
-    throw invalid(value, NO_SUCH_DATE, operation);
+    throw invalid(value, 'no-such-date', operation);
   }
 
   const readBack = toPlain(zone, resolved);
   if (readBack.year !== plain.year || readBack.month !== plain.month || readBack.day !== plain.day) {
-    throw invalid(value, NO_SUCH_DATE, operation);
+    throw invalid(value, 'no-such-date', operation);
   }
 
   // A fractional second is added to the resolved Instant rather than carried into the zone lookup:
@@ -87,32 +81,32 @@ function fromPlainString(zone: string, value: string, operation: string | undefi
  * absolute and ignores `zone`. Every other string is a Plain time and resolves through `zone`, with
  * a date-only string meaning that day's start.
  */
-export function toInstant(zone: string, input: InstantInput, operation?: string): Instant {
+export function toInstant(zone: string, input: InstantInput, operation: string): Instant {
   if (typeof input === 'string') {
     const plain = fromPlainString(zone, input, operation);
     if (plain !== undefined) return plain;
     try {
       return instant(input);
     } catch {
-      throw invalid(input, UNREADABLE, operation);
+      throw invalid(input, 'unreadable', operation);
     }
   }
   if (input === null) {
-    throw invalid(input, NULL_VALUE, operation);
+    throw invalid(input, 'null-value', operation);
   }
   if (input instanceof Date) {
-    if (Number.isNaN(input.getTime())) throw invalid(input, UNREADABLE, operation);
+    if (Number.isNaN(input.getTime())) throw invalid(input, 'unreadable', operation);
     return instant(input);
   }
   if (typeof input === 'number') {
-    if (!Number.isFinite(input)) throw invalid(input, NOT_FINITE, operation);
+    if (!Number.isFinite(input)) throw invalid(input, 'not-finite', operation);
     return instant(input);
   }
   // TypeScript's InstantInput rules out everything else, but a consumer feeding this from JSON or an
   // untyped record has no compiler left by the time it gets here — a boolean or a plain object lands
   // here at runtime (#431). It gets the same fault as an unparsable string: both are a value this
   // library cannot read as a date.
-  throw invalid(input, UNREADABLE, operation);
+  throw invalid(input, 'unreadable', operation);
 }
 
 /**
@@ -127,7 +121,7 @@ export function toEndInstant(
   zone: string,
   input: InstantInput,
   rule: DateOnlyEndRule,
-  operation?: string,
+  operation: string,
 ): Instant {
   const boundary = toInstant(zone, input, operation);
   if (rule === 'exclusive' || !isDateOnly(input)) return boundary;

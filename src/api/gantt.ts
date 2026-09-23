@@ -411,21 +411,21 @@ export class Gantt<TProps = unknown> {
   #toRange(r: 'fitDataset' | { start: InstantInput; end: InstantInput }): 'fitDataset' | TimeSpan {
     if (r === 'fitDataset') return r;
     const zone = this.#dataset.timeZone;
-    return { start: toInstant(zone, r.start), end: toInstant(zone, r.end) };
+    return { start: toInstant(zone, r.start, 'gantt.range'), end: toInstant(zone, r.end, 'gantt.range') };
   }
 
   /** Reads `todayLine`'s loose pinned form through the dataset's zone (S1.13, D-S1.13-4) — booleans
    *  pass through untouched, so `true`/`false` never take a clock read they don't need. */
   #toTodayLine(todayLine: boolean | InstantInput): boolean | Instant {
     if (typeof todayLine === 'boolean') return todayLine;
-    return toInstant(this.#dataset.timeZone, todayLine);
+    return toInstant(this.#dataset.timeZone, todayLine, 'gantt.todayLine');
   }
 
   /** `#toRange`'s counterpart for `dateLines` (S1.13, D-S1.13-2): one `toInstant` call per entry. */
   #toDateLines(lines: readonly DateLineInput[]): readonly DateLine[] {
     const zone = this.#dataset.timeZone;
     return lines.map((line) => {
-      const spec: DateLine = { placeAt: toInstant(zone, line.placeAt) };
+      const spec: DateLine = { placeAt: toInstant(zone, line.placeAt, 'gantt.dateLines') };
       if (line.label !== undefined) spec.label = line.label;
       if (line.className !== undefined) spec.className = line.className;
       return spec;
@@ -925,13 +925,16 @@ export class Gantt<TProps = unknown> {
    *  a span too long to be legible fills the pane only as far as the floor allows. */
   zoomToSpan(span: { start: InstantInput; end: InstantInput }): void {
     const zone = this.#dataset.timeZone;
-    this.#shell.zoomToSpan({ start: toInstant(zone, span.start), end: toInstant(zone, span.end) });
+    this.#shell.zoomToSpan({
+      start: toInstant(zone, span.start, 'gantt.zoomToSpan'),
+      end: toInstant(zone, span.end, 'gantt.zoomToSpan'),
+    });
   }
 
   /** Pans so `date` sits at `align` within the pane (S1.12, D-S1.12-8). Loose input: a string, a
    *  `Date`, an epoch number or an `Instant` all work, read through the dataset's zone. */
   panToDate(date: InstantInput, align: 'start' | 'center' = 'start'): void {
-    this.#shell.panToInstant(toInstant(this.#dataset.timeZone, date), align);
+    this.#shell.panToInstant(toInstant(this.#dataset.timeZone, date, 'gantt.panToDate'), align);
   }
 
   /** Pans to `now()` (`time/` owns the clock read, I10), leaving `todayLineMarginTicks`' worth of

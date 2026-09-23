@@ -1,7 +1,7 @@
 // time/ owns all zone-aware date arithmetic and is the only place Date/Date.now/magic time constants are allowed (I10).
 
-import type { Instant } from '../model/index.js';
-import { NOT_FINITE, NULL_VALUE, UNREADABLE, ZONELESS, invalidInstant } from './instant-fault.js';
+import type { Instant, TimeSpan } from '../model/index.js';
+import { invalidInstant } from './instant-fault.js';
 
 const MS_PER_SECOND = 1000;
 const MS_PER_MINUTE = MS_PER_SECOND * 60;
@@ -35,22 +35,22 @@ const OPENS_LIKE_A_DATE = /^\d{4}-\d{2}-\d{2}/;
 export function instant(value: Date | number | string): Instant {
   if (value instanceof Date) {
     const ms = value.getTime();
-    if (Number.isNaN(ms)) throw invalidInstant(value, UNREADABLE);
+    if (Number.isNaN(ms)) throw invalidInstant(value, 'unreadable', 'instant');
     return ms as Instant;
   }
   if (typeof value === 'number') {
-    if (!Number.isFinite(value)) throw invalidInstant(value, NOT_FINITE);
+    if (!Number.isFinite(value)) throw invalidInstant(value, 'not-finite', 'instant');
     return value as Instant;
   }
   // The declared type rules the rest out, but a consumer feeding this from JSON or an untyped record
   // has no compiler left by the time it gets here (#431).
-  if (value === null || value === undefined) throw invalidInstant(value, NULL_VALUE);
-  if (typeof value !== 'string') throw invalidInstant(value, UNREADABLE);
+  if (value === null || value === undefined) throw invalidInstant(value, 'null-value', 'instant');
+  if (typeof value !== 'string') throw invalidInstant(value, 'unreadable', 'instant');
   if (!OFFSET_ISO.test(value)) {
-    throw invalidInstant(value, OPENS_LIKE_A_DATE.test(value) ? ZONELESS : UNREADABLE);
+    throw invalidInstant(value, OPENS_LIKE_A_DATE.test(value) ? 'zoneless' : 'unreadable', 'instant');
   }
   const ms = new Date(value).getTime();
-  if (Number.isNaN(ms)) throw invalidInstant(value, UNREADABLE);
+  if (Number.isNaN(ms)) throw invalidInstant(value, 'unreadable', 'instant');
   return ms as Instant;
 }
 
@@ -80,3 +80,20 @@ export const MS = {
   HOUR: MS_PER_HOUR,
   DAY: MS_PER_DAY,
 } as const;
+
+/**
+ * The part `a` and `b` share, or `undefined` when they do not touch. Half-open, like every stored
+ * `TimeSpan` (plans/01 §5): two spans that only touch at a boundary — `a.end === b.start` — share no
+ * instant, so that case answers `undefined` too, not a zero-length span.
+ *
+ * The library clips a `TimeSpan` to a window this way in three places already (`layout/frame.ts`'s
+ * box clip, `time-shading-covers.ts`'s day clip, `time/scale.ts`'s tick clip); this is that one rule,
+ * public. Without it a consumer totalling a Field over `gantt.visibleSpan` has to write
+ * `Math.max`/`Math.min` on two `Instant`s and cast the bare `number` back — the hand arithmetic I10
+ * exists to stop (#472).
+ */
+export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined {
+  const start = Math.max(a.start, b.start) as Instant;
+  const end = Math.min(a.end, b.end) as Instant;
+  return start < end ? { start, end } : undefined;
+}
