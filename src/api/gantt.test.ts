@@ -19,6 +19,7 @@ import {
   barId,
   contextMenu,
   diamond,
+  CustomRowSourceNotFilterableOrSortableError,
 } from './index.js';
 import type {
   ChangeSet,
@@ -6318,6 +6319,64 @@ describe('Gantt rows and collapse (S4.6)', () => {
     expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('All');
     expect(container.querySelector(`[data-row-id="${sampleEntries[0]!.id}"]`)).toBeNull();
     expect(container.querySelector('[data-row-id="r0"]')).not.toBeNull();
+    gantt.destroy();
+  });
+
+  it('filterRows replaces filter and keeps the current sort (#495 follow-up)', () => {
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', sort: { field: 'name' } },
+    });
+
+    gantt.filterRows((entry: Entry) => entry.id === sampleEntries[0]!.id);
+
+    expect(gantt.rowSource).toMatchObject({ source: 'entries', sort: { field: 'name' } });
+    expect(typeof (gantt.rowSource as { filter?: unknown }).filter).toBe('function');
+
+    gantt.filterRows(undefined);
+    expect((gantt.rowSource as { filter?: unknown }).filter).toBeUndefined();
+    expect(gantt.rowSource).toMatchObject({ sort: { field: 'name' } });
+
+    gantt.destroy();
+  });
+
+  it('sortRows replaces sort and keeps the current filter (#495 follow-up)', () => {
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const filter = (entry: Entry) => entry.id === sampleEntries[0]!.id;
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', filter },
+    });
+
+    gantt.sortRows({ field: 'name' });
+
+    expect(gantt.rowSource).toMatchObject({ source: 'entries', sort: { field: 'name' }, filter });
+
+    gantt.sortRows(undefined);
+    expect((gantt.rowSource as { sort?: unknown }).sort).toBeUndefined();
+    expect(gantt.rowSource).toMatchObject({ filter });
+
+    gantt.destroy();
+  });
+
+  it('filterRows and sortRows throw CustomRowSourceNotFilterableOrSortableError on a custom source (#495 follow-up)', () => {
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: {
+        source: 'custom',
+        resolve: ({ entries }: { entries: readonly Entry[] }) =>
+          entries.map((entry) => ({ id: String(entry.id), entryIds: [entry.id] })),
+      },
+    });
+
+    expect(() => gantt.filterRows(undefined)).toThrow(CustomRowSourceNotFilterableOrSortableError);
+    expect(() => gantt.sortRows(undefined)).toThrow(CustomRowSourceNotFilterableOrSortableError);
+
     gantt.destroy();
   });
 });

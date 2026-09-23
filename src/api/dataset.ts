@@ -356,3 +356,17 @@ export function extraEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedE
     }),
   );
 }
+
+/** This Dataset's `FieldRegistry.revision` (#495, #414) — how many `register()` calls it has
+ *  answered. Not a `Dataset` method, for the same reason `extraEditsFor` above is not one: `layout/`'s
+ *  row-plan cache is the one honest caller, and `GanttShell` binds to `model/`'s narrow `Dataset`,
+ *  which carries no `fields` to read a registry off. `api/gantt.ts` passes a closure over this into
+ *  `GanttShellOptions.fieldRegistryRevision`, the same shape `extraEditsFor` already takes. Exported
+ *  from `api/` only, never from `api/index.ts`. */
+export function fieldRegistryRevisionFor<TProps>(dataset: Dataset<TProps>): number {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('fieldRegistryRevisionFor: dataset was not constructed through the Dataset constructor');
+  }
+  return state.fields.revision;
+}

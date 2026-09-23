@@ -188,6 +188,14 @@ export class FieldRegistry {
   readonly #consumerOverriddenCoreKeys = new Set<string>();
   readonly #aggregators: Record<string, Aggregator>;
   readonly #fieldTypes: Record<string, FieldType>;
+  /** Bumped once per `register()` call (#495, #414): a plugin that calls `ctx.fields.register` after
+   *  mount can add a Field a `childrenAsSegments` rule already reads through `EntryRulePorts.fieldFor`
+   *  (`layout/entry-rule.ts`) — that read stays live, with no cache of its own, so nothing else marks
+   *  the moment it could start answering differently. `layout/`'s row-plan cache (`FrameLayout`) reads
+   *  this number into its own cache key, so a post-mount `register()` still invalidates a cached plan.
+   *  Construction seeds `#resolved` through the same `#add` path but does not bump this — a Gantt's
+   *  first frame has no cached plan yet to invalidate. */
+  #revision = 0;
 
   constructor(options: FieldRegistryOptions = {}) {
     this.#aggregators = { ...SHIPPED_AGGREGATORS, ...options.aggregators };
@@ -215,12 +223,21 @@ export class FieldRegistry {
     return this.#aggregators;
   }
 
+  /** How many `register()` calls this registry has answered since construction (#495, #414). A
+   *  cache keyed on a Field read taken through this registry — `layout/`'s row-plan cache is the one
+   *  today — reads this number beside its other inputs, so a post-mount `register()` still counts as
+   *  a change even though nothing else about the cache's own inputs moved. */
+  get revision(): number {
+    return this.#revision;
+  }
+
   /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' })`. Same rules a constructor-time
    *  declaration obeys — a duplicate key, an unknown Field type, an unknown Aggregator and a
    *  `compute` Field naming `rollUp`/`editable` each throw the error they already throw at
    *  construction. */
   register(field: Field): void {
     this.#add(field, true);
+    this.#revision++;
   }
 
   /** Call: `ctx.fields.registerType('money', { rollUp: 'sum' })`. Register a type before the Field
