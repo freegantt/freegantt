@@ -954,10 +954,10 @@ export class GanttShell {
         }),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
-      // #424: a row hidden under a collapsed ancestor still answers its own state, and a write since
-      // the last painted frame — a remove, an add, a reparent, a `rowSource` change — must answer
-      // before the next frame, not after it. `ensureRowPlan` replans on demand, at the cost of an
-      // identity check when nothing changed.
+      // #424: a row hidden under a collapsed ancestor still answers its own state. A write since the
+      // last painted frame — a remove, an add, a reparent, a `rowSource` change — must answer before
+      // the next frame draws. `ensureRowPlan` replans on demand, at the cost of an identity check
+      // when nothing changed.
       expandableOfRow: (id) => {
         this.#layout.ensureRowPlan(this.#rowPlanInput());
         return this.#layout.expandableOfRow(id);
