@@ -2,8 +2,8 @@
 // declaration: `{ key: 'progress', type: 'percent' }` resolves on its own. `currency({ code })` is a
 // factory, not a seeded name: pass the bundle inline, or register it under a name of your own.
 
-import type { Duration, FieldType, FormatContext, Instant } from '../../model/index.js';
-import { DATE_TIME_FORMAT, diffMs, formatDate, MS } from '../../time/index.js';
+import type { Duration, Entry, FieldType, FormatContext, Instant } from '../../model/index.js';
+import { addMs, DATE_TIME_FORMAT, diffDays, diffMs, formatDate, MS } from '../../time/index.js';
 
 /** Stringifies a primitive Field value for display; anything else (undefined, object) renders empty. */
 export function stringifyPrimitive(value: unknown): string {
@@ -44,12 +44,17 @@ function compareInstant(a: Instant | undefined, b: Instant | undefined): number 
   return diffMs(a, b);
 }
 
-/** Today's day formatter: a whole number of days is `12 d`; anything else keeps one decimal. The
- *  unit is always millisecond (`measureEntryDuration`), so this divide is correct by construction
- *  rather than by luck (#274). */
-export function formatDuration(value: unknown): string {
+/** Today's day formatter: a whole number of days is `12 d`; anything else keeps one decimal.
+ *
+ *  Counts calendar days in `ctx.timeZone`, anchored at `entry.start` — the elapsed millisecond
+ *  value re-laid from that instant, so a 3-day Entry crossing a DST change (71 or 73 real hours)
+ *  still reads `3 d` (#518). A `duration` Field authored with no `entry.start` (no Entry dates to
+ *  anchor to) falls back to a plain 24-hour-day count. */
+export function formatDuration(value: unknown, ctx: FormatContext, entry: Entry): string {
   if (value === undefined || value === null) return '';
-  const days = (value as Duration).value / MS.DAY;
+  const ms = (value as Duration).value;
+  const days =
+    entry.start === undefined ? ms / MS.DAY : diffDays(ctx.timeZone, entry.start, addMs(entry.start, ms));
   if (Number.isInteger(days)) return `${days} d`;
   return `${days.toFixed(1)} d`;
 }
