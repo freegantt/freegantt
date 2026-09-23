@@ -3,7 +3,7 @@
 
 import { rowId } from '../model/index.js';
 import type { Entry, EntryId, RowId } from '../model/index.js';
-import type { CollapseChange } from './collapse-state.js';
+import type { CollapseChange, CollapseState } from './collapse-state.js';
 
 /** The PlannedRow fields this module reads. Layout keeps the full row. */
 export interface TreeCollapseRow {
@@ -25,6 +25,9 @@ export interface TreeCollapseContext {
   confirm(change: CollapseChange): boolean;
   rowIdForEntry(id: EntryId): RowId | undefined;
   ancestorRowIds(id: EntryId): readonly RowId[];
+  /** Call: `expandableOfRow(rowId)` — the row tree's own answer, read past a collapsed ancestor
+   *  (#424). `undefined` when no current row holds this id. */
+  expandableOfRow(id: RowId): boolean | undefined;
 }
 
 function sameIds(a: readonly string[], b: readonly string[]): boolean {
@@ -68,6 +71,18 @@ export class TreeCollapse {
     const branded = rowId(String(id));
     if (this.#ids.includes(branded)) this.expand(branded);
     else this.collapse(branded);
+  }
+
+  /** Call: `tree.collapseStateOf('p1')` — the row tree's own answer, not the frame's (#424): a row a
+   *  collapsed ancestor hides still answers its own state. `undefined` for an id no current row
+   *  holds, so "no such row" stays apart from `'leaf'`. A grouping header row answers by the same
+   *  rule as any other row. */
+  collapseStateOf(id: RowId | string): CollapseState | undefined {
+    const branded = rowId(String(id));
+    const expandable = this.#ctx.expandableOfRow(branded);
+    if (expandable === undefined) return undefined;
+    if (!expandable) return 'leaf';
+    return this.#ids.includes(branded) ? 'collapsed' : 'expanded';
   }
 
   /** Collapses every expandable row in the current plan, and keeps ids already in the set. */

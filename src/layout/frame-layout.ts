@@ -13,7 +13,7 @@ import type { PlannedRow, RowSource, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
 import type { ChangeSet, EntryId, BarId, RowId, Entry, FieldContext } from '../model/index.js';
-import type { Bar } from './bars/bar.js';
+import type { Bar, VariantBars } from './bars/bar.js';
 import type { FieldCompare } from './column.js';
 import type { EntryRulePorts } from './entry-rule.js';
 
@@ -41,6 +41,16 @@ export interface RowPlanInput {
 }
 
 type RowPlanInputKey = keyof RowPlanInput;
+
+/** What `ensureRowPlan` needs beyond `RowPlanInput` to keep `#memory` in step with `#plan` (#424
+ *  review, point 1). Neither field ever moves a row between parents or hides one, so neither belongs
+ *  in `RowPlanInput`'s own replan gate — a row-height or a registry change never changes which rows
+ *  exist. `FrameMemory.sync` still needs both on every call, replan or not: see `ensureRowPlan`'s
+ *  own comment for why the sync itself is unconditional. */
+export interface RowPlanMemoryInput {
+  rowHeight: number;
+  registry: VariantBars;
+}
 
 /** One comparator per `RowPlanInput` field (`frame-settings.ts`'s `INVALIDATION` table is the same
  *  shape) — the mapped type forces an entry for every key the interface declares, so a field added
@@ -84,7 +94,7 @@ export interface FrameLayoutView {
   barsForEntry(id: EntryId): readonly Bar[];
   barIdsForEntry(id: EntryId): readonly BarId[];
   entryIdsForRow(id: RowId): readonly EntryId[];
-  readonly frameRevision: number;
+  readonly rowPlanRevision: number;
 }
 
 /** One Gantt's layout pass, with the row-height index kept alive between passes. One instance per
@@ -98,42 +108,71 @@ export class FrameLayout implements FrameLayoutView {
   #rowOfEntry = new Map<EntryId, RowId>();
   #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
-  #frameRevision = 0;
-  /** What `#plan` (and the three maps above) were last planned from — `undefined` before the first
-   *  `computeFrame` call. `computeFrame` replans only when this frame's own `RowPlanInput` disagrees
-   *  with it (#495, #414). */
+  #expandableOfRow = new Map<RowId, boolean>();
+  #rowPlanRevision = 0;
+  /** What `#plan` (and the four maps above) were last planned from — `undefined` before the first
+   *  `ensureRowPlan` call. `ensureRowPlan` replans only when its own `RowPlanInput` disagrees with
+   *  it (#495, #414). `computeFrame` is one caller, not the only one (#424): a synchronous reader
+   *  like `collapseStateOf` calls `ensureRowPlan` too, between frames. */
   #lastPlanInput: RowPlanInput | undefined;
 
   get heightIndexRevision(): number {
     return this.#memory.heightIndexRevision;
   }
 
-  /** How many frames this layout has planned (#212). A reader that caches an answer taken from this
-   * layout holds this number beside it, and drops the cache once the layout has planned another
-   * frame. `view/gantt-dom.ts`'s one-slot pointer memo is that reader. A rendered node cannot report
-   * the same thing: a bar keeps its `data-bar-id` while what it draws can still change underneath. */
-  get frameRevision(): number {
-    return this.#frameRevision;
+  /** How many times this layout has planned a new row tree (#212, #424) — not how many frames it has
+   * drawn. A scroll or a pan frame that replans nothing leaves this unchanged; only `#planRows`
+   * advances it, and `ensureRowPlan` is the one place that calls `#planRows`, whether `computeFrame`
+   * reaches it or a synchronous reader like `collapseStateOf` calls it between frames. A reader that
+   * caches an answer taken from this layout holds this number beside it, and drops the cache once the
+   * layout has planned another row tree. `view/gantt-dom.ts`'s one-slot pointer memo is that reader.
+   * A rendered node cannot report the same thing: a bar keeps its `data-bar-id` while what it draws
+   * can still change underneath. */
+  get rowPlanRevision(): number {
+    return this.#rowPlanRevision;
   }
 
   computeFrame(input: LayoutInput): GeometryFrame {
-    this.#frameRevision++;
     // #495, #414: does this frame ask a different question about which rows exist, in what order,
     // than the last one did? A scroll or a pan never does — `visible`/`revision`/`rowHeight` are not
-    // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below.
-    const planInput = planInputFrom(input);
-    if (this.#lastPlanInput === undefined || !samePlanInput(this.#lastPlanInput, planInput)) {
-      this.#planRows(planInput);
-      this.#lastPlanInput = planInput;
+    // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below, and
+    // `rowPlanRevision` (bumped inside `ensureRowPlan`, not here) stays put too.
+    this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
+    return placeFrame(input, this.#plan, this.#memory, this.#decorations);
+  }
+
+  /** Brings `#plan` — and `#memory`, the height index and `rowMemory` a Bar read answers from — up
+   *  to date with `input`, without painting a frame (#424). A write between frames —
+   *  `entries.remove()`, `entries.add()`, a reparent, a `rowSource` change — leaves the row tree
+   *  this planned stale until the next `computeFrame` call; a synchronous reader like
+   *  `collapseStateOf` cannot wait for that, and neither can a `reveal` that follows it in the same
+   *  tick: `rowTop`/`barsForEntry` must answer about the same row tree `rowIndexForEntry` just did.
+   *
+   *  Review #424 point 1 named the gap this closes: an earlier cut synced `#plan` here but left
+   *  `#memory` behind, so a read landed between two different row trees — `rowIndexForEntry` saw the
+   *  new one, `rowTop`/`barsForEntry` still saw the last painted frame's. Chosen fix: `#memory.sync`
+   *  runs here too, every call, replan or not — never a second, memory-only staleness for a caller
+   *  to reason about. `sync` is itself a set of identity checks (`frame-memory.ts`), so a call where
+   *  nothing moved costs one pass, not a rebuild — the same price `computeFrame` already pays on
+   *  every scroll frame. `rowHeight`/`registry` sit outside `RowPlanInput` on purpose (they never
+   *  decide whether to replan), so the caller hands them here as `RowPlanMemoryInput`.
+   *
+   *  #424 review point 2: `rowPlanRevision` advances here, in the replan branch, and nowhere else — a
+   *  `#plan` that moved is exactly what `view/gantt-dom.ts`'s stamp must catch, whether `computeFrame`
+   *  reached this call or a between-frames reader like `collapseStateOf` did. */
+  ensureRowPlan(input: RowPlanInput, memory: RowPlanMemoryInput): void {
+    if (this.#lastPlanInput === undefined || !samePlanInput(this.#lastPlanInput, input)) {
+      this.#planRows(input);
+      this.#lastPlanInput = input;
+      this.#rowPlanRevision++;
     }
     this.#memory.sync({
       plan: this.#plan,
-      rowHeight: input.rowHeight,
+      rowHeight: memory.rowHeight,
       entries: input.entries,
-      registry: input.variants,
+      registry: memory.registry,
       datasetRevision: input.datasetRevision,
     });
-    return placeFrame(input, this.#plan, this.#memory, this.#decorations);
   }
 
   // #495, #414: takes `RowPlanInput`, never `LayoutInput` — a field this method reads that is not
@@ -199,6 +238,13 @@ export class FrameLayout implements FrameLayoutView {
     return this.barsForEntry(id).map((bar) => bar.id);
   }
 
+  /** Whether this row can expand or collapse, read from the row tree before collapse hides
+   *  descendants — so a row a collapsed ancestor hides still answers (#424). `undefined` for an id
+   *  no current row plan holds: a removed row, or a stale id. */
+  expandableOfRow(id: RowId): boolean | undefined {
+    return this.#expandableOfRow.get(id);
+  }
+
   /** Collapsed ancestors of this entry's row, walking `parentRowId` recorded before collapse. */
   ancestorRowIds(id: EntryId): readonly RowId[] {
     const ids: RowId[] = [];
@@ -240,10 +286,12 @@ export class FrameLayout implements FrameLayoutView {
     this.#rowOfEntry.clear();
     this.#entryIdsOfRow.clear();
     this.#parentOfRow.clear();
+    this.#expandableOfRow.clear();
     for (const row of open) {
       this.#entryIdsOfRow.set(row.id, row.entryIds);
       for (const id of row.entryIds) this.#rowOfEntry.set(id, row.id);
       if (row.parentRowId !== undefined) this.#parentOfRow.set(row.id, row.parentRowId);
+      this.#expandableOfRow.set(row.id, row.expandable);
     }
   }
 }

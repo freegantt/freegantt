@@ -324,6 +324,7 @@ gantt.collapse('p1');
 gantt.expand('p1');
 gantt.collapseAll();
 gantt.expandAll();
+gantt.collapseStateOf('p1'); // 'collapsed' | 'expanded' | 'leaf' | undefined for no such row
 gantt.on('collapseChange', ({ to }) => save(to));
 ```
 

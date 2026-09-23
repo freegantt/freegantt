@@ -4,6 +4,7 @@
 export { GanttShell } from './gantt-shell.js';
 export type { GanttShellOptions, GanttShellWiring, Theme, Detachable } from './gantt-shell.js';
 export type { GridWidth } from './grid-pane-width.js';
+export type { CollapseState } from './collapse-state.js';
 export type {
   GanttEventMap,
   GanttEventHandler,
