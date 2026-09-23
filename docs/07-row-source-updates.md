@@ -62,6 +62,26 @@ A `'custom'` source resolves its own rows through `resolve`, so it carries no `f
 either call to replace. `filterRows` and `sortRows` throw
 `CustomRowSourceNotFilterableOrSortableError` in that case. Filter or sort inside `resolve` instead.
 
+### `resolve` runs once per `rowSource` object, not once per frame
+
+The Gantt caches the rows `resolve` returns and calls it again only when `rowSource` becomes a new
+object — a scroll, a pan, or a setting on another Field never re-runs it. A `resolve` that reads page
+state (a filter picked on a toolbar, a value from a closure) goes stale until you reassign
+`rowSource`:
+
+```ts
+import type { Gantt } from 'freegantt';
+
+export function refreshCustomRows(gantt: Gantt): void {
+  // A new object — same `resolve`, same settings, forces a fresh resolve() call.
+  gantt.rowSource = { ...gantt.rowSource };
+}
+```
+
+Call this after the page state your `resolve` reads changes. `filterByTeam` above works without this
+step because `filterRows` already assigns a new object for you; a `'custom'` source has no such
+helper, since it owns its own filtering inside `resolve`.
+
 ## A filter closure must not read page state that changes later
 
 `filterRows` takes a function. That function runs later, on a future render, not at the moment you

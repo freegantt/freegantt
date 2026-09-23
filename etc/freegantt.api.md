@@ -330,7 +330,6 @@ export interface CustomRowInput {
 
 // @public (undocumented)
 export interface CustomRowSource {
-    // (undocumented)
     resolve(input: CustomRowInput): readonly CustomRow[];
     // (undocumented)
     source: 'custom';
