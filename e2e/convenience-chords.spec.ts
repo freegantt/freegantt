@@ -81,3 +81,56 @@ test('with the undo chord off, Control+Z inside the Gantt leaves an edit standin
     .poll(() => page.evaluate((id) => window.__dataset.entries.get(id)!.name, entryId))
     .toBe(original);
 });
+
+test('with every convenience chord off, Control+Z is inert but Escape still clears the selection', async ({
+  page,
+}) => {
+  await page.goto('/generic.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const bar = await unobstructedBar(page);
+  const box = await bar.boundingBox();
+  expect(box).not.toBeNull();
+  const position = { x: 12, y: box!.height / 2 };
+  await bar.click({ position });
+  const barId = (await bar.getAttribute('data-bar-id'))!;
+  const entryId = barId.split(':')[0]!;
+  const original = await page.evaluate((id) => window.__dataset.entries.get(id)!.name, entryId);
+
+  // Turn every convenience chord off — the boolean `false` shape of `convenienceChords` — through
+  // the harness checkbox, which writes nothing but that one public property (harness/main.ts).
+  await page.check('#all-chords-off-checkbox');
+
+  await page.fill('#rename-input', 'Renamed with every chord off');
+  await page.click('#rename-btn');
+  await expect
+    .poll(() => page.evaluate((id) => window.__dataset.entries.get(id)!.name, entryId))
+    .toBe('Renamed with every chord off');
+
+  await bar.click({ position });
+  await expect(page.locator('#selection-readout')).toHaveText(`Selected: ${entryId}`);
+
+  // Control+Z is a convenience chord for `freegantt.undo` — inert with every chord off, so the
+  // rename stands.
+  await page.keyboard.press('Control+z');
+  await expect
+    .poll(() => page.evaluate((id) => window.__dataset.entries.get(id)!.name, entryId))
+    .toBe('Renamed with every chord off');
+
+  // The browser's own unhandled-Ctrl+Z fallback moves focus back to `#rename-input` (the last
+  // field it edited), so the bar needs a fresh click before the next chord — proof itself that the
+  // library never called `preventDefault()` on that keydown.
+  await bar.click({ position });
+
+  // Escape binds `freegantt.clearSelection` with no `when` at all (gantt-shell.ts) — an obligation
+  // chord, so it still fires even though every convenience chord is off.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#selection-readout')).toHaveText('No selection');
+
+  // The command itself is still reachable — the toolbar's Undo button runs
+  // `gantt.commands.run('freegantt.undo')` (gantt-toolbar.ts), untouched by the chord being off.
+  await page.locator('[aria-label="Undo"]').click();
+  await expect
+    .poll(() => page.evaluate((id) => window.__dataset.entries.get(id)!.name, entryId))
+    .toBe(original);
+});
