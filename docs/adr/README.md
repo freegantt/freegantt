@@ -41,6 +41,7 @@ frontmatter.
 | [0027](0027-a-spanning-entry-draws-a-bar.md) | A spanning Entry draws a Bar | accepted | A spanning Entry draws one Bar; a segmented parent draws no Bar of its own |
 | [0028](0028-a-plugins-impossible-proposal-is-a-refusal.md) | A plugin's impossible proposal is a refusal | accepted | An extender proposing an impossible value is refused at `warning` with `by` naming it; an extender that throws is a `'error'` fault |
 | [0029](0029-the-app-pushes-the-theme.md) | The app pushes the theme; the library never asks | accepted | `theme` is three literals; the app writes `gantt.theme` or pins `data-fg-theme`, and the library never calls back or watches attributes it does not own |
+| [0030](0030-a-multi-hour-tick-counts-real-time-on-a-dst-day.md) | A multi-hour tick counts real time on a DST day | accepted | On a DST day a tick with increment > 1 keeps equal real spacing from its day start (00/07/13/19), not wall-clock multiples |
 
 ## The gap at 0014
 
