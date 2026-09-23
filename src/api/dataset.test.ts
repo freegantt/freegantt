@@ -844,6 +844,7 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
 
     expect(() => dataset.entries.update('open', { name: 'Renamed' })).toThrow(FieldNotEditableError);
     expect(dataset.entries.get('locked')?.read('owner')).toBe('nobody');
+    expect(dataset.entries.get('open')?.name).toBe('Open');
   });
 
   it('Dataset.editableOf answers the same lock a cascade or entries.update() write against', () => {

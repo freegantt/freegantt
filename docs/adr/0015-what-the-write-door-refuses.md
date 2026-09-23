@@ -1,6 +1,6 @@
 ---
 status: accepted — verdict: `verify:full PASS — all 16 checks green, test:e2e included (71s).` (Build 5, 2026-09-11). The api report was reviewed and accepted in the same commit. Spike report: [reviews/2026-09-10-0015-write-door-spikes](../../plans/field-redesign/reviews/2026-09-10-0015-write-door-spikes/README.md). Split out of ADR 0011 on 2026-09-09.
-decided: `editable: false` refuses `entries.update()` — one rule at two doors, not two rules. Keep `{ key: 'start', editable: false }` (19). The serialize-as-`"never"` half has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md); the lock itself stands. Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'anywhere'` (18, grill 2026-09-10). After setup, only `editable` may change; no new Field keys. Live call is `dataset.setFieldEditable('start', 'never')` (Q16, grill 2026-09-10).
+decided: `editable: false` refuses `entries.update()` — one rule at every door, not one rule per door. Keep `{ key: 'start', editable: false }` (19). The serialize-as-`"never"` half has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md); the lock itself stands. Three declaration shapes (23). `editable` is `'never' | 'api' | 'anywhere'`, default `'anywhere'` (18, grill 2026-09-10). After setup, only `editable` may change; no new Field keys. Live call is `dataset.setFieldEditable('start', 'never')` (Q16, grill 2026-09-10).
 open: none. The working material is in `plans/field-redesign/0015-write-door/`.
 ---
 
@@ -42,7 +42,7 @@ The verb copies the Field and replaces `FieldRegistry.all`'s identity (#187). It
 
 ### A third door: an `EditExtender`'s cascade ([#473](https://github.com/Pawel-IT/FreeGantt/issues/473))
 
-**Decision, owner ruling 2026-09-22.** A cascade an `EditExtender` writes onto a `'never'` Field does not commit. `toEditsReading` (`data/entry-reader.ts`) asks `isApiEditable` before it writes, the same API threshold `entries.update()` asks, and throws the same `FieldNotEditableError` for the whole changeset. A cascade onto an `'api'` Field is still admitted — only `'never'` was in question.
+**Decision, owner ruling 2026-09-22.** A cascade an `EditExtender` writes onto a `'never'` Field does not commit. `toEditsReading` (`data/entry-reader.ts`) asks `write-rule.ts`'s `assertFieldTakesWrite` before it writes — the same check `entries.update()` runs — and throws the same `FieldNotEditableError` for the whole changeset. A cascade onto an `'api'` Field is still admitted — only `'never'` was in question.
 
 **Why.** The exceptions this ADR already names — construction, `entries.add()`, History replay — are all *setup* writes: they write a value where none exists yet. A cascade edits an existing value on a caller's behalf, so it is a caller-side write and meets the same lock a person at a keyboard meets. A lock a plugin can bypass is not a lock.
 
