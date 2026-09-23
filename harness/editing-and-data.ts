@@ -25,6 +25,7 @@ import { mountGanttToolbar } from './gantt-toolbar.js';
 import { zoomPresetsWithSixHour } from './six-hour-preset.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { lockEntries } from './plugins/lock-entries.js';
+import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
 import { overBudgetRows } from './plugins/over-budget-rows.js';
@@ -44,7 +45,12 @@ interface EditingDataProps extends DemoEntryProps {
   risk?: boolean;
   consumed?: boolean;
   accepted?: boolean;
+  note?: string;
 }
+
+// #473: the one Entry a per-entry lock rule opens `note` under — `subtreeUnlock()`'s checkbox below
+// unlocks this Entry's whole subtree, and nothing outside it.
+const NOTE_UNLOCK_ROOT_ID = 'program';
 
 // ADR 0018: this page's own words for two rows, read back by the two kind plugins' own rules — no
 // plugin holds a list of the ids it owns.
@@ -62,6 +68,10 @@ function withKindProps(entry: EntryInput<DemoEntryProps>): EntryInput<EditingDat
 // here, at construction.
 const locks = lockEntries();
 
+// #473: `note` is locked (`editable: false`) everywhere, and this plugin's `setLockRule` is the
+// only door that opens it — one subtree at a time, never the whole Field.
+const notes = subtreeUnlock('note');
+
 const dataset = new Dataset<EditingDataProps>({
   entries: demoTreeEntryInputs.map(withKindProps),
   timeZone: 'UTC',
@@ -71,8 +81,9 @@ const dataset = new Dataset<EditingDataProps>({
     { key: 'risk' },
     { key: 'consumed' },
     { key: 'accepted' },
+    { key: 'note', editable: false },
   ],
-  plugins: [locks],
+  plugins: [locks, notes],
 });
 
 // A hard boundary a `beforeEntryMove` veto below enforces — dropping a bar before it is refused. A
@@ -236,6 +247,33 @@ costBtn.addEventListener('click', () => {
   attemptMutation(() => {
     dataset.transaction(() => {
       for (const entry of entries) dataset.entries.update(entry.id, { cost: 500 });
+    });
+  });
+});
+
+// ---- Per-entry lock rule (#473) -----------------------------------------------------------------
+
+const unlockSubtreeCheckbox = document.querySelector<HTMLInputElement>('#unlock-subtree-checkbox')!;
+const noteBtn = document.querySelector<HTMLButtonElement>('#note-btn')!;
+
+unlockSubtreeCheckbox.addEventListener('change', () => {
+  if (unlockSubtreeCheckbox.checked) notes.openSubtree(NOTE_UNLOCK_ROOT_ID);
+  else notes.closeSubtree();
+});
+
+// `dataset.editableOf` is the same answer `entries.update()` writes against (I14) — asking first
+// means the button logs a clear refusal instead of an uncaught `FieldNotEditableError`.
+noteBtn.addEventListener('click', () => {
+  const entries = gantt.selectedEntries;
+  if (entries.length === 0) return;
+  const writable = entries.filter((entry) => dataset.editableOf(entry.id, 'note') !== 'never');
+  if (writable.length === 0) {
+    logLine("note: every selected entry is locked — unlock Program's subtree first");
+    return;
+  }
+  attemptMutation(() => {
+    dataset.transaction(() => {
+      for (const entry of writable) dataset.entries.update(entry.id, { note: 'Reviewed' });
     });
   });
 });
