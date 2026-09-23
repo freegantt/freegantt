@@ -46,6 +46,7 @@ export type { GanttDom, DomTarget } from './gantt-dom.js';
 export type { PaneName } from './pane-layout.js';
 export type { DomEventHandler, DomEventOptions, PluginContextParts } from './plugin-ports.js';
 export type { ViewportGestures, ViewportGestureFlags } from './viewport-gestures.js';
+export type { ConvenienceChords } from './convenience-chords.js';
 export type {
   DraftOptions,
   EntryGesture,

@@ -148,6 +148,8 @@ export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): Spl
       handle.addEventListener('pointerdown', onPointerDown);
       handle.addEventListener('pointermove', onPointerMove);
       handle.addEventListener('pointerup', onPointerUp);
+      // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to resize the grid pane
+      // (arrows, Home/End).
       handle.addEventListener('keydown', onSplitterKeyDown);
       handle.tabIndex = 0;
       handle.removeAttribute('data-resize-off');

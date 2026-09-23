@@ -61,6 +61,54 @@ export type BuiltInCommandId =
  *  `FieldKey` keeps over `CoreFieldKey`. */
 export type CommandId = BuiltInCommandId | (string & {});
 
+/** #262: the default chords a keyboard user can already do the same job through another door — a
+ *  button, a menu item, or a public method — so an app author who wants that chord for something
+ *  else may turn it off. `undo`/`redo` have Undo/Redo, `deleteSelection` has `entries.remove()`,
+ *  `zoomIn`/`zoomOut`/`panToToday`/the pans have their own methods, `selectAll` has
+ *  `gantt.selectedEntryIds = ...`. `Gantt.convenienceChords`'s per-command map takes only these ids.
+ *  `api/command.test.ts`'s own `EVERY_CONVENIENCE_ID` — the same `Record<Id, true>` exhaustiveness
+ *  shape `BuiltInCommandId`'s test above already uses — pins this list against
+ *  `convenienceCommandIds` below, so the two can never drift.
+ *
+ *  Every other command's default chord is an **obligation chord**: `[S5-A4]` and WCAG 2.1.1 keep it
+ *  bound no matter what this config says, because it is the only keyboard path to what it does —
+ *  `clearSelection` (`Escape`), the column keys, `Mod+Arrow` reach, and `Enter`
+ *  (`activateEntry` — the only keyboard path to click activation, #434). `plans/02` §4.1 states the
+ *  full split next to the chord table. */
+export type ConvenienceCommandId =
+  | 'freegantt.undo'
+  | 'freegantt.redo'
+  | 'freegantt.selectAll'
+  | 'freegantt.deleteSelection'
+  | 'freegantt.zoomIn'
+  | 'freegantt.zoomOut'
+  | 'freegantt.panToToday'
+  | 'freegantt.panRight'
+  | 'freegantt.panLeft'
+  | 'freegantt.panToStart'
+  | 'freegantt.panToEnd';
+
+/** `view/gantt-shell.ts` iterates this to resolve `Gantt.convenienceChords` once per assignment —
+ *  the same "resolve once" posture `resolveViewportGestures` takes. A plain array, not derived from
+ *  `ConvenienceCommandId` by `typeof` (api-extractor cannot document a public type built from a
+ *  module-private symbol — an "ae-forgotten-export" warning, not a real gap): the type above is the
+ *  source of truth, and `api/command.test.ts` is what keeps this list honest against it. Not itself
+ *  public: a consumer types the per-command map against `ConvenienceCommandId` and never needs the
+ *  list. */
+export const convenienceCommandIds: readonly ConvenienceCommandId[] = [
+  'freegantt.undo',
+  'freegantt.redo',
+  'freegantt.selectAll',
+  'freegantt.deleteSelection',
+  'freegantt.zoomIn',
+  'freegantt.zoomOut',
+  'freegantt.panToToday',
+  'freegantt.panRight',
+  'freegantt.panLeft',
+  'freegantt.panToStart',
+  'freegantt.panToEnd',
+] as const;
+
 /** What one invocation acts on (ADR 0010, ADR 0025, issue #212) — one set of Entry ids. A former
  *  Segment is an ordinary child Entry now, so there is no second reading to keep in step with this
  *  one. */

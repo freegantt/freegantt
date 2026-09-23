@@ -84,6 +84,9 @@ import type { RowTwistyAttachment } from './attach-row-twisty.js';
 import { panToTodayLine } from './today-landing.js';
 import { resolveViewportGestures } from './viewport-gestures.js';
 import type { ViewportGestures } from './viewport-gestures.js';
+import { resolveConvenienceChords } from './convenience-chords.js';
+import type { ConvenienceChords } from './convenience-chords.js';
+import type { ConvenienceCommandId } from '../extensions/commands.js';
 import { ensureBaseStyles } from './styles.js';
 import { attachVariantStyles } from './variant-styles.js';
 import type { VariantStyles } from './variant-styles.js';
@@ -336,6 +339,11 @@ export interface GanttShellOptions {
    *  is on. `false` turns them all off. The imperative `zoomBy`/`panToDate` surface does not
    *  consult this. */
   viewportGestures?: ViewportGestures;
+  /** Live (#262). Default `{}`: every convenience chord is on. `false` turns them all off; a
+   *  per-command map pins one at a time. An obligation chord (`Escape`, the column keys, `Mod+Arrow`
+   *  reach, `Enter`) is never in the map's key type. It stays bound either way — `[S5-A4]`, WCAG
+   *  2.1.1. The command itself stays reachable through `commands.run(id)` regardless. */
+  convenienceChords?: ConvenienceChords;
   /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
   /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
@@ -540,6 +548,8 @@ export class GanttShell {
    *  `e.detail`). `'dblclick'` gates the click path off entirely and gates the `dblclick` listener
    *  below on instead. */
   #pointerActivation: PointerActivation = 'click';
+  #convenienceChords: ConvenienceChords = {};
+  #resolvedConvenienceChords = resolveConvenienceChords(undefined);
   #capabilities: ResolvedCapabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
@@ -967,6 +977,8 @@ export class GanttShell {
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
     this.#pointerActivation = options.pointerActivation ?? 'click';
+    this.#convenienceChords = options.convenienceChords ?? {};
+    this.#resolvedConvenienceChords = resolveConvenienceChords(this.#convenienceChords);
     this.#capabilities = this.#resolveCapabilities();
     this.#entrySelection = new EntrySelection(this.#entrySelectionPorts());
     this.#treeCollapse = new TreeCollapse({
@@ -1627,6 +1639,16 @@ export class GanttShell {
     this.#pointerActivation = next;
   }
 
+  get convenienceChords(): ConvenienceChords {
+    return this.#convenienceChords;
+  }
+
+  /** Live (#262): the next keystroke reads the new flags; no remount. */
+  set convenienceChords(next: ConvenienceChords) {
+    this.#convenienceChords = next;
+    this.#resolvedConvenienceChords = resolveConvenienceChords(next);
+  }
+
   /** S5.2, D-S5-6: the live `CommandContext` builder.
    *
    *  `entry` is the first selected entry, or `undefined` when nothing is selected. `target` names
@@ -2048,6 +2070,13 @@ export class GanttShell {
     const bind = (chord: string, command: string): void => {
       this.#keymap.register({ chord, command });
     };
+    // #262: a convenience chord carries one extra `when` no obligation chord needs — whether
+    // `Gantt.convenienceChords` still turns this command's own chord on. `[S5-A4]`/WCAG 2.1.1 keep
+    // every obligation chord below on `bind` instead, with no way to silence it. The gate touches
+    // only the chord: the command itself stays reachable through `commands.run(id)` either way.
+    const bindConvenience = (chord: string, command: ConvenienceCommandId): void => {
+      this.#keymap.register({ chord, command, when: () => this.#resolvedConvenienceChords[command] });
+    };
     // S5.11, D-S5-26: roving focus (`view/roving-focus.ts`) now owns the plain arrows, Home/End
     // and Page Up/Down in both panes. A grid-pane arrow moves focus between rows and cells. A
     // timeline-pane arrow nudges the focused bar instead (`interaction/keyboard-editing.ts`).
@@ -2056,26 +2085,33 @@ export class GanttShell {
     // `Alt+ArrowLeft`/`Alt+ArrowRight`. Vertical panning gets none, since a focused row is always
     // already visible. `Mod+Home`/`Mod+End` are the same fallback for the whole time axis. That
     // differs from the grid pane's own `Home`/`End`, which jump to the first and last row.
-    bind('Alt+ArrowRight', 'freegantt.panRight');
-    bind('Alt+ArrowLeft', 'freegantt.panLeft');
-    bind('Mod+Home', 'freegantt.panToStart');
-    bind('Mod+End', 'freegantt.panToEnd');
+    // Convenience (#262): `panToDate` reaches the same spot without the chord.
+    bindConvenience('Alt+ArrowRight', 'freegantt.panRight');
+    bindConvenience('Alt+ArrowLeft', 'freegantt.panLeft');
+    bindConvenience('Mod+Home', 'freegantt.panToStart');
+    bindConvenience('Mod+End', 'freegantt.panToEnd');
     // S5.11, D-S5-26: keyboard zoom did not exist before this slice (S3.7 shipped only the
     // ctrl/⌘+wheel pointer gesture). `Mod+=`/`Mod+-` mirror the browser's own page-zoom chords;
     // `Mod+0` mirrors the browser's own reset-zoom chord, repurposed here for "pan to today".
-    bind('Mod+=', 'freegantt.zoomIn');
-    bind('Mod+-', 'freegantt.zoomOut');
-    bind('Mod+0', 'freegantt.panToToday');
-    bind('Mod+A', 'freegantt.selectAll');
+    // Convenience (#262): `zoomIn`/`zoomOut`/`panToToday` are public methods too.
+    bindConvenience('Mod+=', 'freegantt.zoomIn');
+    bindConvenience('Mod+-', 'freegantt.zoomOut');
+    bindConvenience('Mod+0', 'freegantt.panToToday');
+    // Convenience (#262): `gantt.selectedEntryIds = ...` selects everything without the chord.
+    bindConvenience('Mod+A', 'freegantt.selectAll');
+    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path that clears the Selection.
     bind('Escape', 'freegantt.clearSelection');
     // #119: the whole-Gantt undo/redo chord. `captureInEditable` stays at its default `false`
     // (same gate `Delete` below relies on), so an `<input>`'s own native undo keeps this chord.
-    bind('Mod+Z', 'freegantt.undo');
-    bind('Mod+Shift+Z', 'freegantt.redo');
+    // Convenience (#262): Undo/Redo has a button; `dataset.undo()`/`redo()` has a method.
+    bindConvenience('Mod+Z', 'freegantt.undo');
+    bindConvenience('Mod+Shift+Z', 'freegantt.redo');
     // S5.7, D-S5-18/D-S5-26: `resizeColumnWider`/`moveColumnRight` and their pair share a chord
     // with `panRight`/`panLeft` above. `Keymap.resolve()`'s newest-first order (D-S5-7) checks
     // these two first. Their own `when` refuses unless a header cell is focused, so an unfocused
     // header falls through to the plain pan bound above it.
+    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to resize or reorder a
+    // column. `convenienceChords` cannot silence these even while it silences the pan above.
     bind('Shift+ArrowRight', 'freegantt.resizeColumnWider');
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
     bind('Alt+ArrowRight', 'freegantt.moveColumnRight');
@@ -2084,16 +2120,21 @@ export class GanttShell {
     // needs a way to move the Selection from one bar of a row to the next. `interaction/
     // keyboard-editing.ts` leaves a modified arrow alone, so this chord never also nudges the entry
     // it just reselected.
+    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to a second bar on a row.
     bind('Mod+ArrowRight', 'freegantt.selectNextEntry');
     bind('Mod+ArrowLeft', 'freegantt.selectPreviousEntry');
     // #212, ADR 0010: the same command the right-click menu offers. `captureInEditable` stays at
     // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
     // both refuse the chord, the same way every other core binding already does.
-    bind('Delete', 'freegantt.deleteSelection');
+    // Convenience (#262): a bar's Delete un-dates through `entries.update`, a row's through
+    // `entries.remove()` — both public. An app that owns its own Delete may take the chord back.
+    bindConvenience('Delete', 'freegantt.deleteSelection');
     // #434: the fallback for `Enter`. `inlineEditing()`'s own binding to the same chord is
     // registered later (a plugin installs after `#registerCoreCommands` runs), so it is newer and
     // gets first refusal (D-S5-7). Its `when` declines outside a focused, writable cell. The
     // resolver then falls through to this one, whose own `when` asks `canActivateFocused()`.
+    // Obligation (#262): a click activates too, and `[S5-A4]` requires a keyboard path for every
+    // pointer capability. `Enter` is the only one this capability has, so it stays unconditional.
     bind('Enter', 'freegantt.activateEntry');
   }
 

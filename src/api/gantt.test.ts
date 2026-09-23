@@ -38,6 +38,7 @@ import type {
 } from './index.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import { diffMs, instant } from '../time/index.js';
+import { convenienceCommandIds } from './command.js';
 
 /** What a row's dates read now. A "before" reading is a value, never a row: one `Entry` per id, and
  *  every read is live, so a held row always agrees with itself (ADR 0017 rule 2). */
@@ -6975,6 +6976,145 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
       RegistrationClosedError,
     );
     expect(() => capturedCtx!.view.registerGridColumn({ field: 'name' })).toThrow(RegistrationClosedError);
+
+    gantt.destroy();
+  });
+});
+
+describe('Gantt.convenienceChords (#262)', () => {
+  function keydown(key: string, extra: Partial<KeyboardEventInit> = {}): KeyboardEvent {
+    return new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra });
+  }
+
+  it('false leaves every convenience chord inert; the command still runs through commands.run', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, convenienceChords: false });
+
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+    expect(dataset.canUndo).toBe(true);
+    const notFired = container.dispatchEvent(keydown('z', { ctrlKey: true }));
+    expect(notFired).toBe(true); // unmatched: nothing preventedDefault
+    expect(dataset.canUndo).toBe(true); // the chord did not run undo
+
+    // The command itself still answers — the app's own UI (a toolbar button) still works.
+    gantt.commands.run('freegantt.undo');
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a per-command map turns undo off while redo still fires on its own chord', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, convenienceChords: { 'freegantt.undo': false } });
+
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+    container.dispatchEvent(keydown('z', { ctrlKey: true }));
+    expect(dataset.canUndo).toBe(true); // Mod+Z stayed silent
+
+    container.dispatchEvent(keydown('z', { ctrlKey: true, shiftKey: true }));
+    // Nothing to redo yet (undo never ran), so this is a true no-op — canRedo stays false, which is
+    // itself proof Mod+Shift+Z still reached the command (an inert chord would have thrown nothing
+    // either way, so the next assertion is the one that actually distinguishes the two).
+    expect(dataset.canRedo).toBe(false);
+
+    gantt.commands.run('freegantt.undo');
+    expect(dataset.canUndo).toBe(false);
+    expect(dataset.canRedo).toBe(true);
+    container.dispatchEvent(keydown('z', { ctrlKey: true, shiftKey: true }));
+    expect(dataset.canRedo).toBe(false); // Mod+Shift+Z (redo) ran
+
+    gantt.destroy();
+  });
+
+  it('an obligation chord still fires with every convenience chord off', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      convenienceChords: false,
+      selectedEntryIds: [sampleEntries[0]!.id],
+    });
+
+    // Escape (`freegantt.clearSelection`) is an obligation chord — [S5-A4]/WCAG 2.1.1 — so
+    // `convenienceChords: false` does not touch it.
+    expect(gantt.selectedEntryIds).toEqual([sampleEntries[0]!.id]);
+    container.dispatchEvent(keydown('Escape'));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    // Mod+A (`selectAll`) is a convenience chord, and stays silent under the same config.
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    gantt.destroy();
+  });
+
+  it('pins convenienceCommandIds against the shell: every id in the list stays silent under convenienceChords: false, and an obligation chord (Escape) still fires', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+
+    // Mirrors the chord `view/gantt-shell.ts`'s `#registerCoreCommands` binds each id to — the
+    // pairing this test exists to pin. `freegantt.clearSelection` is the control: it is not a
+    // convenience id, and its own chord must fire no matter what `convenienceChords` says.
+    const CHORD_OF: Record<
+      (typeof convenienceCommandIds)[number] | 'freegantt.clearSelection',
+      KeyboardEventInit
+    > = {
+      'freegantt.undo': { key: 'z', ctrlKey: true },
+      'freegantt.redo': { key: 'z', ctrlKey: true, shiftKey: true },
+      'freegantt.selectAll': { key: 'a', ctrlKey: true },
+      'freegantt.deleteSelection': { key: 'Delete' },
+      'freegantt.zoomIn': { key: '=', ctrlKey: true },
+      'freegantt.zoomOut': { key: '-', ctrlKey: true },
+      'freegantt.panToToday': { key: '0', ctrlKey: true },
+      'freegantt.panRight': { key: 'ArrowRight', altKey: true },
+      'freegantt.panLeft': { key: 'ArrowLeft', altKey: true },
+      'freegantt.panToStart': { key: 'Home', ctrlKey: true },
+      'freegantt.panToEnd': { key: 'End', ctrlKey: true },
+      'freegantt.clearSelection': { key: 'Escape' },
+    };
+    const watchedIds = [...convenienceCommandIds, 'freegantt.clearSelection'] as const;
+
+    const runCounts: Partial<Record<(typeof watchedIds)[number], number>> = {};
+    const spy: ChromePlugin = {
+      id: 'test.convenience-chord-spy',
+      view(ctx) {
+        for (const id of watchedIds) {
+          runCounts[id] = 0;
+          ctx.commands.register({ id, label: id, run: () => (runCounts[id] = (runCounts[id] ?? 0) + 1) });
+        }
+        return () => {};
+      },
+    };
+    const gantt = new Gantt({ container, dataset, convenienceChords: false, plugins: [spy] });
+
+    for (const id of convenienceCommandIds) {
+      container.dispatchEvent(keydown(CHORD_OF[id].key!, CHORD_OF[id]));
+    }
+    for (const id of convenienceCommandIds) expect(runCounts[id]).toBe(0);
+
+    container.dispatchEvent(
+      keydown(CHORD_OF['freegantt.clearSelection'].key!, CHORD_OF['freegantt.clearSelection']),
+    );
+    expect(runCounts['freegantt.clearSelection']).toBe(1);
+
+    gantt.destroy();
+  });
+
+  it('is live: the next keystroke reads a reassigned convenienceChords, no remount', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset });
+
+    gantt.convenienceChords = false;
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual([]);
+
+    gantt.convenienceChords = {};
+    container.dispatchEvent(keydown('a', { ctrlKey: true }));
+    expect(gantt.selectedEntryIds).toEqual(sampleEntries.slice(0, 2).map((entry) => entry.id));
 
     gantt.destroy();
   });
