@@ -8,6 +8,15 @@ issue plans land here as they're opened.
 **Open:**
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
+- [#496](https://github.com/freegantt/freegantt/issues/496) — no order-tolerant bulk write, so a
+  restore button sorts entries parent-first itself. Direction: `entries.load()`, which clears undo
+  history; the undoable diffing door is #517. Grill closed; no code written yet. Plan:
+  [496-order-tolerant-bulk-write.md](./496-order-tolerant-bulk-write.md).
+- [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
+  refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
+  Field. Blocked by #496. Grill round 3 (the order Field) open. Plan: [517-sync.md](./517-sync.md).
+- [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
+  delta. Wishlist; blocked by #496 and #517. No plan yet.
 
 **Closed:**
 
