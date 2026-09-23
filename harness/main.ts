@@ -115,6 +115,8 @@ const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const activationReadout = document.querySelector<HTMLParagraphElement>('#activation-readout')!;
 const pointerActivationSelect = document.querySelector<HTMLSelectElement>('#pointer-activation-select')!;
+const undoChordOffCheckbox = document.querySelector<HTMLInputElement>('#undo-chord-off-checkbox')!;
+const allChordsOffCheckbox = document.querySelector<HTMLInputElement>('#all-chords-off-checkbox')!;
 const toggleBudgetBtn = document.querySelector<HTMLButtonElement>('#toggle-budget-btn')!;
 const lockGridCheckbox = document.querySelector<HTMLInputElement>('#lock-grid-checkbox')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
@@ -172,6 +174,26 @@ gantt.on('entryActivate', ({ entry, cause }) => {
 pointerActivationSelect.addEventListener('change', () => {
   gantt.pointerActivation = pointerActivationSelect.value === 'dblclick' ? 'dblclick' : 'click';
 });
+
+// #262: convenienceChords takes a per-command map or a single `boolean` for every convenience
+// chord at once. "All off" already turns undo's chord off, so once it is checked the undo checkbox
+// would lie by sitting unchecked — force it to agree and disable it instead of leaving a false
+// state on screen.
+let undoChordOffWanted = false;
+function applyConvenienceChords(): void {
+  gantt.convenienceChords = allChordsOffCheckbox.checked
+    ? false
+    : undoChordOffWanted
+      ? { 'freegantt.undo': false, 'freegantt.redo': false }
+      : true;
+  undoChordOffCheckbox.checked = allChordsOffCheckbox.checked || undoChordOffWanted;
+  undoChordOffCheckbox.disabled = allChordsOffCheckbox.checked;
+}
+undoChordOffCheckbox.addEventListener('change', () => {
+  undoChordOffWanted = undoChordOffCheckbox.checked;
+  applyConvenienceChords();
+});
+allChordsOffCheckbox.addEventListener('change', applyConvenienceChords);
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
   syncSelectionUi();
