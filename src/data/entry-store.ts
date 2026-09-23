@@ -16,7 +16,7 @@ import type {
   Entry,
   StoredEntry,
   EntryId,
-  EntryInput,
+  FlatEntryInput,
   EntryEdit,
   FieldEditable,
   FieldKey,
@@ -507,7 +507,7 @@ export class EntryStore implements EntryStoreContract {
   // ---- Public mutators (S2.3 §1.1): validate against the write set, then stage; each auto-wraps in
   // a transaction via `runTransaction`, which joins one already open (D-S2-8) ----
 
-  add(input: EntryInput): Entry {
+  add(input: FlatEntryInput): Entry {
     return this.#mutate((token) => {
       const id = entryId(input.id);
       if (this.has(id)) throw new DuplicateEntryIdError(id);

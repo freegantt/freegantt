@@ -212,6 +212,19 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 
 `start` and `end` are optional on every Entry (ADR 0012). An Entry has dates if and only if it spans (`spansTime`, ADR 0012). `{ id: 'p1', name: 'Sitework' }` above is a dateless parent; the store does not mint a fake span from the dataset's reference date. `{ start: undefined, end: undefined }` un-dates. Omitting one field but not the other is `InvalidInstantError`: one date without the other names no span. The `Segment` type retired (ADR 0026, #421): there is no second, array-shaped date input left to be empty or absent — `start`/`end` alone say whether an Entry dates.
 
+**`*Input` vs `Resolved*` (#253).** Both suffixes answer "what a consumer writes, and what the library stores", and both stay — a reader meets whichever name the pair in front of them uses:
+
+- `*Input` names a pair whose *type* differs: the authored form and the stored form are shaped differently, such as a plain `string` id that gains the `EntryId` brand (`EntryInput` → `Entry`), or a loose date that resolves to an `Instant` (`InstantInput` → `Instant`).
+- `Resolved*` names a pair whose *completeness* differs, and whose type does not: the stored form is the authored form with its optional keys filled in, such as an omitted `filterPolicy` gaining its default (`RowSource` → `ResolvedRowSource`).
+
+`*Input` also names a second, unrelated thing: a parameter bag for one function — `LayoutInput`, `RowPassInput`, `CustomRowInput`, and others. That reuse is a known misfit, kept open for the 1.0 API review rather than fixed here (see the misfit list at the end of this section).
+
+**Misfits kept for the 1.0 API review.** These do not cleanly answer to either rule above, but a rename here would move the public API report, so nothing renames as part of this note:
+
+- `ResolvedTheme` (`'light' | 'dark'`) answers a question — "which theme actually painted, now that `'auto'` is settled" — it is not `Theme` (`'auto' | 'light' | 'dark'`) with a key filled in; `'auto'` is a variant removed, not a gap closed.
+- `ResolvedBarLabel` (`{ placement, text }`) is the per-bar answer computed from a `BarLabels` policy or spec; it does not extend `BarLabels` and shares none of its shape, so "resolved" here means "computed", not "filled in".
+- `*Input`'s second meaning (the parameter-bag family above) stays unresolved by this rule; splitting it off was option 3 on #253 and remains open.
+
 ---
 
 ## 3. Events — one bus, one vocabulary

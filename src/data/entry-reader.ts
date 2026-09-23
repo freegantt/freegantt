@@ -11,8 +11,8 @@ import type {
   StoredEntry,
   EntryEdit,
   EntryId,
-  EntryInput,
   FieldLockRule,
+  FlatEntryInput,
   HierarchySource,
   Instant,
 } from '../model/index.js';
@@ -54,7 +54,7 @@ export const EXTENDER_OPERATION = 'edit extender';
  * other is legal, so this never demands the pair the way `toEntrySpan` used to). An unreadable date
  * is still refused by `toInstant`/`toEndInstant`; a pair that inverts is `InvertedSpanError`. */
 function toEntryDates(
-  input: EntryInput,
+  input: FlatEntryInput,
   context: EntryReadContext,
   owner: EditOrigin,
 ): { start?: Instant; end?: Instant } {
@@ -90,7 +90,7 @@ function warnIngest(message: string): void {
  * definition wins; the value is carried nowhere and is unreachable through `read`).
  */
 function propsFromInput(
-  input: EntryInput,
+  input: FlatEntryInput,
   registry: FieldRegistry,
   id: EntryId,
 ): Readonly<Record<string, unknown>> {
@@ -119,9 +119,10 @@ function propsFromInput(
 /** Optional fields are copied only when present: `exactOptionalPropertyTypes` makes an explicit
  * `undefined` a different thing from an absent key, and an `Entry` must not gain keys its input
  * never had. Exported for `entries.add()` (S2.3 §1.1), which reads one input the same way
- * construction reads every entry in `entries: EntryInput[]` — one function, both call sites. */
+ * construction reads every entry in `entries: FlatEntryInput[]` — one function, both call sites
+ * (#281). */
 export function toEntry(
-  input: EntryInput,
+  input: FlatEntryInput,
   context: EntryReadContext,
   registry: FieldRegistry,
   operation: string,
@@ -141,7 +142,7 @@ export function toEntry(
 }
 
 export function toEntries(
-  inputs: readonly EntryInput[],
+  inputs: readonly FlatEntryInput[],
   context: EntryReadContext,
   registry: FieldRegistry,
   operation = 'construction',

@@ -10,7 +10,7 @@ import type {
   DurationMeasure,
   EntryId,
   ProposedEdits,
-  EntryInput,
+  FlatEntryInput,
   EntryStore as EntryStoreContract,
   Field,
   FieldEditable,
@@ -55,10 +55,10 @@ export interface DatasetOptions<TProps = unknown> {
    *
    * A declared Field key sits flat, at the top level, the same shape `add()`/`update()` take (ADR
    * 0011, Q15); a nested `props` stays legal for passenger keys and for a bag already held. Typed as
-   * plain `EntryInput<TProps>` — see `model/dataset.ts`'s `EntryStore.add` for why the `&
-   * Partial<TProps>` intersection Q15 suggests is not soundly expressible here; ingest still reads a
-   * flat declared key off any object at runtime regardless of this static type. */
-  entries: readonly EntryInput<TProps>[];
+   * `FlatEntryInput<TProps>` (#281) — see `model/dataset.ts`'s `EntryStore.add` for why plain
+   * `EntryInput<TProps>` did not type-check the flat key, and why the `& Partial<TProps>`
+   * intersection Q15's wording first suggested was uninhabitable. */
+  entries: readonly FlatEntryInput<TProps>[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,
    * week starts) resolves through it, so two users in different zones see identical day boundaries.
    * It is also the zone a Plain (zoneless) date in `entries` resolves through.
