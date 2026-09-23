@@ -1210,6 +1210,87 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
   });
 });
 
+describe('entryActivate precedence against inlineEditing() (#434)', () => {
+  it('Enter on an editable, focused cell opens the editor and does not activate', () => {
+    const { container, gantt } = makeGantt();
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    cellFor(container, 'e1', 'name').focus();
+    enter(container);
+
+    expect(input(container).value).toBe('Task One');
+    expect(activations).toEqual([]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('Enter on a non-editable, focused cell activates instead of opening an editor', () => {
+    // 'end' is the fixture's own locked column (editable: false, see GRID_COLUMNS above).
+    const { container, gantt, dataset } = makeGantt();
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    cellFor(container, 'e1', 'end').focus();
+    enter(container);
+
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(activations).toEqual([{ entry: dataset.entries.get('e1'), cause: 'key', target: 'gridCell' }]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a double-click on an editable cell opens the editor and does not activate, even opted in', () => {
+    const { container, gantt } = makeGantt();
+    // Opt in after mount — the getter/setter pair `Gantt.pointerActivation` reconfigures live.
+    gantt.pointerActivation = 'dblclick';
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    // #434: a real double-click's first mousedown moves DOM focus onto the cell before `dblclick`
+    // fires — the gantt-shell listener asks the same "does the editor take this cell?" question
+    // `Enter` does, off that same real focus (D-S5-39). This synthetic `dblclick` carries no
+    // mousedown of its own, so the test moves focus itself first.
+    const cell = cellFor(container, 'e1', 'name');
+    cell.focus();
+    dblclick(cell);
+
+    expect(input(container).value).toBe('Task One');
+    expect(activations).toEqual([]);
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a double-click on a non-editable cell activates in double-click mode', () => {
+    // 'end' is the fixture's own locked column (editable: false, see GRID_COLUMNS above).
+    const { container, gantt, dataset } = makeGantt();
+    gantt.pointerActivation = 'dblclick';
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    dblclick(cellFor(container, 'e1', 'end'));
+
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(activations).toEqual([
+      { entry: dataset.entries.get('e1'), cause: 'dblclick', target: 'gridCell' },
+    ]);
+
+    gantt.destroy();
+    container.remove();
+  });
+});
+
 // Review A5: the session is an object, so these run it with no mounted Gantt at all. They pass
 // plain ports, a plain row, and a control that answers whatever the test needs.
 describe('CellEditorSession (S5.8, review A5/C2b)', () => {

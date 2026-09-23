@@ -58,7 +58,13 @@ import { GridPaneWidth } from './grid-pane-width.js';
 import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
-import type { AsyncCancelableEvent, GanttEventHandler, GanttEventMap, GanttEvents } from './event-bus.js';
+import type {
+  AsyncCancelableEvent,
+  EntryActivate,
+  GanttEventHandler,
+  GanttEventMap,
+  GanttEvents,
+} from './event-bus.js';
 import { PluginRuntime } from '../extensions/plugin-runtime.js';
 import type { ShellPlugin } from '../extensions/plugin-runtime.js';
 import { CommandRegistry } from '../extensions/commands.js';
@@ -108,6 +114,7 @@ import type {
   RowId,
   Size,
   ProposedEdits,
+  TargetKind,
   TimeSpan,
 } from '../model/index.js';
 import { resolveCapabilities } from './capability.js';
@@ -121,7 +128,7 @@ import { FrameSettings } from './frame-settings.js';
 import type { FrameSettingsPatch, FrameSettingsPorts } from './frame-settings.js';
 import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
-import type { EntryGestureContext } from './entry-gesture-context.js';
+import type { EntryGestureContext, EntryHit } from './entry-gesture-context.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
@@ -262,6 +269,13 @@ export interface GanttShellWiring {
   now?: () => Instant;
 }
 
+/** #434: which pointer gesture fires `entryActivate`. `'click'` (the default) activates on a plain
+ *  click, once per physical click — a double-click's second click does not activate again.
+ *  `'dblclick'` replaces click as the trigger: a single click only selects, and a double-click
+ *  activates once. The two never both fire — this chooses the trigger, it does not add a second
+ *  one. */
+export type PointerActivation = 'click' | 'dblclick';
+
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
   container: HTMLElement | string;
@@ -309,6 +323,12 @@ export interface GanttShellOptions {
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
    *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
   capabilities?: Capabilities;
+  /** Live (#434). Default `'click'`: `entryActivate` fires on a plain click of a bar or a row's own
+   *  background. `'dblclick'` replaces click as the pointer trigger: a single click only selects,
+   *  and a double-click activates once. On a grid cell, `'dblclick'` activates only a cell
+   *  `capabilities` refuses to write. A writable cell's double-click stays `inlineEditing()`'s own —
+   *  the same editable-cell-wins precedence `Enter` already gives the editor. */
+  pointerActivation?: PointerActivation;
   /** Live (D-S3-24). What a drag snaps to on this Gantt, over the showing preset's own `snap`.
    *  Omitted, the preset decides. */
   snap?: SnapSetting;
@@ -515,6 +535,11 @@ export class GanttShell {
   #snap: SnapSetting | undefined;
   #viewportGestures: ViewportGestures = {};
   #resolvedViewportGestures = resolveViewportGestures(undefined);
+  /** #434: which pointer gesture fires `entryActivate` — see `PointerActivation`. `'click'`
+   *  (default) gates a click's own activation to its first physical click (`selectFromHit` reads
+   *  `e.detail`). `'dblclick'` gates the click path off entirely and gates the `dblclick` listener
+   *  below on instead. */
+  #pointerActivation: PointerActivation = 'click';
   #capabilities: ResolvedCapabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
@@ -575,6 +600,9 @@ export class GanttShell {
   #commandRegistry!: CommandRegistry<unknown>;
   #keymap!: Keymap<unknown>;
   #keymapListener!: (event: KeyboardEvent) => void;
+  /** #434: opt-in double-click activation — declared here so the constructor's assignment below is
+   *  typed, the same shape `#keymapListener` takes. */
+  #dblClickListener!: (event: MouseEvent) => void;
   #documentKeymapListener!: (event: KeyboardEvent) => void;
   /** What does this shell have to let go of?
    *
@@ -938,6 +966,7 @@ export class GanttShell {
     this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
+    this.#pointerActivation = options.pointerActivation ?? 'click';
     this.#capabilities = this.#resolveCapabilities();
     this.#entrySelection = new EntrySelection(this.#entrySelectionPorts());
     this.#treeCollapse = new TreeCollapse({
@@ -1016,6 +1045,12 @@ export class GanttShell {
         selectableEntriesInRowOrder: () => this.#entrySelection.selectableEntriesInRowOrder(),
         selectableEntriesOf: (hit) => this.#entrySelection.selectableEntriesOf(hit),
       },
+      // #434: independent of `selection` above — a rollup row with `{ select: false, activate: true
+      // }` names no selectable Entry there but still names an activation subject here.
+      activation: {
+        subjectEntryOf: (hit) => this.#subjectEntryOf(hit),
+        activateFromClick: (entry, detail, target) => this.#activateFromClick(entry, detail, target),
+      },
       setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,
@@ -1035,6 +1070,25 @@ export class GanttShell {
     };
     this.#container.addEventListener('keydown', this.#keymapListener);
     this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
+    // #434: opt-in (`pointerActivation: 'dblclick'`), always attached — the option gates inside the
+    // handler, the same shape the wheel handlers gate on `#resolvedViewportGestures`. A grid cell's
+    // double-click asks the one decision `Enter`'s own Keymap resolution already asks
+    // (`#editorTakesFocusedCell`, D-S5-7): does `freegantt.editFocusedCell` take this cell? A
+    // writable cell's double-click stays the editor's own (`ctx.view.onDomEvent('dblclick', …)`)
+    // and does not also activate here. This listener sits on `#container`, a bubble-phase ancestor
+    // of `inlineEditing()`'s document-level one. So a `return` here always reaches that listener
+    // next — no explicit ordering needed beyond where each one attaches.
+    this.#dblClickListener = (event: MouseEvent) => {
+      if (this.#pointerActivation !== 'dblclick' || !(event.target instanceof Node)) return;
+      const domTarget = this.#dom.targetUnder(event.target);
+      if (domTarget === undefined || domTarget.entry === undefined) return;
+      if (!this.#isActivatableTargetKind(domTarget.kind)) return;
+      if (domTarget.kind === 'gridCell' && this.#editorTakesFocusedCell()) return;
+      if (!this.#canGesture('activate', domTarget.entry.id)) return;
+      this.#activateEntry(domTarget.entry, 'dblclick', domTarget.kind);
+    };
+    this.#container.addEventListener('dblclick', this.#dblClickListener);
+    this.#teardown.add(() => this.#container.removeEventListener('dblclick', this.#dblClickListener));
     // Document-level capture-phase fallback (issue #137 F1,
     // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
     // key event whose target sits inside `#container`. A popup opened from an outside trigger has
@@ -1562,6 +1616,17 @@ export class GanttShell {
     this.#resolvedViewportGestures = resolveViewportGestures(next);
   }
 
+  get pointerActivation(): PointerActivation {
+    return this.#pointerActivation;
+  }
+
+  /** Live (#434): the next click or double-click reads the new option. The `dblclick` listener is
+   *  always attached, and this alone gates it — the same shape `viewportGestures`'s resolved flags
+   *  gate an already-attached wheel handler. */
+  set pointerActivation(next: PointerActivation) {
+    this.#pointerActivation = next;
+  }
+
   /** S5.2, D-S5-6: the live `CommandContext` builder.
    *
    *  `entry` is the first selected entry, or `undefined` when nothing is selected. `target` names
@@ -1654,6 +1719,11 @@ export class GanttShell {
       nothingSelected: () => this.#entrySelection.entryIds.length === 0,
       selectNextEntry: () => this.#entrySelection.step(1),
       selectPreviousEntry: () => this.#entrySelection.step(-1),
+      canActivateFocused: () => this.#focusedActivationTarget() !== undefined,
+      activateFocused: () => {
+        const target = this.#focusedActivationTarget();
+        if (target !== undefined) this.#activateEntry(target.entry, 'key', target.kind);
+      },
       canClearDates: (id) => this.#canClearDates(id),
       clearDates: (id) => {
         this.#options.dataset.entries.update(id, { start: undefined, end: undefined });
@@ -2020,6 +2090,11 @@ export class GanttShell {
     // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
     // both refuse the chord, the same way every other core binding already does.
     bind('Delete', 'freegantt.deleteSelection');
+    // #434: the fallback for `Enter`. `inlineEditing()`'s own binding to the same chord is
+    // registered later (a plugin installs after `#registerCoreCommands` runs), so it is newer and
+    // gets first refusal (D-S5-7). Its `when` declines outside a focused, writable cell. The
+    // resolver then falls through to this one, whose own `when` asks `canActivateFocused()`.
+    bind('Enter', 'freegantt.activateEntry');
   }
 
   #panBy(dx: number, dy: number): void {
@@ -2037,6 +2112,67 @@ export class GanttShell {
   #canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean {
     const entry = this.#options.dataset.entries.get(id);
     return entry !== undefined && this.#capabilities.can(capability, entry, edge);
+  }
+
+  /** #434: the Entry a pointer hit stands for, for `EntryGestureContext.activation`. A bar names its
+   *  own Entry; a row names its subject, the row's first Entry (the same subject a `DomTarget` reads
+   *  for a row). `undefined` for a grouping header row, or a bar whose Entry is gone. Names *which*
+   *  Entry only; `interaction/` still asks `can('activate', entry)` itself (I14). */
+  #subjectEntryOf(hit: EntryHit): Entry | undefined {
+    if (hit.kind === 'bar') return this.#entryFor(hit.barId);
+    const id = this.#layout.entryIdsForRow(hit.rowId)[0];
+    return id === undefined ? undefined : this.#options.dataset.entries.get(id);
+  }
+
+  /** #434: fires `entryActivate`. No veto and no `before*` pair (activation mutates nothing) — the
+   *  one place this event actually reaches the bus, for every cause. */
+  #activateEntry(entry: Entry, cause: EntryActivate['cause'], target: TargetKind): void {
+    this.#emit('entryActivate', { entry, cause, target });
+  }
+
+  /** #434: `EntryGestureContext.activation.activateFromClick` — gates a click's own activation on
+   *  `#pointerActivation`. `'dblclick'` mode makes click stop being a trigger at all: its opt-in
+   *  *replaces* click, it does not add `'dblclick'` alongside it. So this never fires there.
+   *  `'click'` mode (default) still fires only once per physical double-click. The browser sends
+   *  two `click` events before one `dblclick`, and `detail` is their own click count. `>= 2` names
+   *  the second one, already accounted for by the first click's own activation. */
+  #activateFromClick(entry: Entry, detail: number, target: 'bar' | 'row'): void {
+    if (this.#pointerActivation !== 'click' || detail >= 2) return;
+    this.#activateEntry(entry, 'click', target);
+  }
+
+  /** #434, I14: the row, bar, or grid cell real keyboard focus sits on right now, and its own
+   *  Entry, when the `activate` capability allows it. A grid cell counts too: `freegantt.activateEntry`
+   *  is the `Enter` fallback (D-S5-7). It only ever runs where `inlineEditing()`'s own
+   *  `freegantt.editFocusedCell` declined — an unwritable cell, or no editing feature installed at
+   *  all. Shared by `canActivateFocused`/`activateFocused` (`CoreCommandPorts`): the `when` and the
+   *  `run` of `freegantt.activateEntry` ask this the same way, rather than resolve focus twice for
+   *  one keystroke. */
+  #focusedActivationTarget(): { entry: Entry; kind: TargetKind } | undefined {
+    const focused = this.#rovingFocus.focusedElement();
+    const domTarget = focused !== undefined ? this.#dom.targetUnder(focused) : undefined;
+    if (domTarget === undefined || domTarget.entry === undefined) return undefined;
+    if (!this.#isActivatableTargetKind(domTarget.kind)) return undefined;
+    if (!this.#canGesture('activate', domTarget.entry.id)) return undefined;
+    return { entry: domTarget.entry, kind: domTarget.kind };
+  }
+
+  /** #434: which `TargetKind`s a hit may activate — a row, a bar, or a grid cell, never a header or
+   *  the splitter. One predicate for both the `dblclick` listener's allow-list and
+   *  `#focusedActivationTarget`'s deny-list, so the two stop being two lists that could drift. */
+  #isActivatableTargetKind(kind: TargetKind): boolean {
+    return kind === 'row' || kind === 'bar' || kind === 'gridCell';
+  }
+
+  /** #434: does `freegantt.editFocusedCell` take this cell? `Enter`'s own Keymap resolution already
+   *  asks the same question before falling through to `freegantt.activateEntry` (D-S5-7,
+   *  `extensions/keymap.ts`'s `resolve()`). Asked directly here, because the `dblclick` listener has
+   *  no keymap resolving for it. One command's `when` answers both. A plugin that changes what
+   *  "takes" a cell changes the pointer path and the key path together. The pointer path never
+   *  re-derives `canWrite` on its own, so it never drifts from what the command actually decides. */
+  #editorTakesFocusedCell(): boolean {
+    const command = this.#commandRegistry.find('freegantt.editFocusedCell');
+    return command?.when?.(this.#buildCommandContext()) ?? false;
   }
 
   #setHovered(next: BarId | undefined): void {

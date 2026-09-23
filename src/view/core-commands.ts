@@ -30,6 +30,16 @@ export interface CoreCommandPorts {
    *  sits on. */
   selectNextEntry(): void;
   selectPreviousEntry(): void;
+  /** #434, I14: may the row, bar, or grid cell real focus sits on activate right now — independent
+   *  of Selection, so a `{ select: false, activate: true }` row still answers `true` here even with
+   *  an empty Selection. A grid cell answers `true` only once `inlineEditing()`'s own
+   *  `freegantt.editFocusedCell` declines it (unwritable, or no editing feature installed). The
+   *  `when` half of `freegantt.activateEntry`. */
+  canActivateFocused(): boolean;
+  /** #434: fires `entryActivate` (cause `'key'`) for the focused row/bar/cell's own Entry. A no-op
+   *  if nothing focused answers `canActivateFocused()` — asked again rather than trusted from the
+   *  `when` that gated this `run`, the same posture every command here takes. */
+  activateFocused(): void;
   /** ADR 0012: may this Entry's own dates be cleared? A rolling-up parent's cannot — the Rollup
    *  writes them, not the user (ADR 0013) — so a Delete on its bar passes over it and the row
    *  stays, which is what `e2e/hierarchy.spec.ts` pins. A dateless Entry has nothing to clear and
@@ -134,6 +144,16 @@ export function registerCoreCommands(
     when: () => ports.hasSelection(),
     run: () => ports.selectPreviousEntry(),
   });
+  // #434: registered before any plugin (D-S5-7's newest-first order), so `inlineEditing()`'s own
+  // `Enter` binding — bound to its own `when`-gated command, not a raw handler — gets first refusal
+  // on a focused cell and falls through to this one everywhere else: a focused row or bar, or a
+  // focused cell that refuses the editor. `entryActivate`'s own doc names the cause `'key'`.
+  register({
+    id: 'freegantt.activateEntry',
+    label: 'Activate entry',
+    when: () => ports.canActivateFocused(),
+    run: () => ports.activateFocused(),
+  });
   // #212, ADR 0010, ADR 0025: the right-click menu and the `Delete` key run this one command, and
   // every target kind names the Entries it acts on in `entryIds` — ADR 0025 retired the second id
   // set a `'bar'` target used to carry.
@@ -181,6 +201,17 @@ export function registerCoreCommands(
   register({
     id: 'freegantt.discardCellEdit',
     label: 'Discard edit',
+    when: () => false,
+    run: () => {},
+  });
+  // #434: the same #160/D-S5-47 shape as `freegantt.discardCellEdit` just above — registered first
+  // and inert, so `gantt.commands.run('freegantt.editFocusedCell')` answers on every Gantt, and
+  // `Enter`'s own `freegantt.activateEntry` fallback (bound below) has a real `when` to ask "did the
+  // editor take this cell?" even with no `inlineEditing()` installed. `inlineEditing()` overrides this
+  // the moment it installs (D-S5-7), with its own `when`/`run` closing over its `CellEditing`.
+  register({
+    id: 'freegantt.editFocusedCell',
+    label: 'Edit cell',
     when: () => false,
     run: () => {},
   });

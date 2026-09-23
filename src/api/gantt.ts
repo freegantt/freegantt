@@ -11,6 +11,7 @@ import type {
   ResolvedTheme,
   Theme,
   ViewportGestures,
+  PointerActivation,
 } from '../view/index.js';
 import { TimeScaleModel, pickDefined, resolveRowSource } from '../layout/index.js';
 import type {
@@ -167,6 +168,12 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
    *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one rule (D-S5-35). */
   capabilities?: Capabilities;
+  /** Live (#434). Default `'click'`: `entryActivate` fires on a plain click of a bar or a row's own
+   *  background. `'dblclick'` replaces click as the pointer trigger: a single click only selects,
+   *  and a double-click activates once. On a grid cell, `'dblclick'` activates only a cell
+   *  `capabilities` refuses to write — a writable cell's double-click stays `inlineEditing()`'s own
+   *  (the same editable-cell-wins precedence `Enter` already gives the editor). */
+  pointerActivation?: PointerActivation;
   /** Live (D-S3-24). What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
    *  one tick of whatever preset is showing, or `'none'`. Omitted, the showing preset's own `snap`
    *  decides — which is `'tick'` for every shipped preset. */
@@ -335,6 +342,7 @@ export class Gantt<TProps = unknown> {
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
         'capabilities',
+        'pointerActivation',
         'snap',
         'viewportGestures',
         'gridColumns',
@@ -936,6 +944,15 @@ export class Gantt<TProps = unknown> {
 
   set viewportGestures(next: ViewportGestures) {
     this.#shell.viewportGestures = next;
+  }
+
+  /** Live (#434): the next click or double-click reads the new option. */
+  get pointerActivation(): PointerActivation {
+    return this.#shell.pointerActivation;
+  }
+
+  set pointerActivation(next: PointerActivation) {
+    this.#shell.pointerActivation = next;
   }
 
   get canZoomIn(): boolean {
