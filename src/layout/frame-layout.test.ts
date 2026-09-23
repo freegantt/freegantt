@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { computeFrame } from './frame.js';
 import { FrameLayout } from './frame-layout.js';
+import type { RowPlanInput, RowPlanMemoryInput } from './frame-layout.js';
 import { createVariantRegistry } from './bars/variants.js';
 import { fixedWidthBar } from './bars/bar.js';
 import { sampleEntries, sampleStoredEntries } from '../../fixtures/sample-dataset.js';
@@ -431,5 +432,61 @@ describe('FrameLayout row-plan cache (#495, #414)', () => {
     const scrolled = layout.computeFrame(input({ visible: { x: 0, y: 500, width: 800, height: 600 } }));
 
     expect(scrolled.rows.length).toBeGreaterThan(0);
+  });
+});
+
+// #424 review, point 1: an earlier cut of `ensureRowPlan` replanned `#plan` and the row-id maps but
+// left `#memory` — the height index, `rowById` — behind. A read between two `computeFrame` calls
+// then answered from two different row trees at once: `rowIndexForEntry` saw the replanned rows,
+// `rowTop`/`barsForEntry` still saw the last painted frame's. Chosen fix: `ensureRowPlan` syncs
+// `#memory` on every call, replan or not, so no caller can ever observe the two apart.
+describe('FrameLayout.ensureRowPlan keeps #memory in step with #plan (#424 review, point 1)', () => {
+  /** `ensureRowPlan` takes `RowPlanInput` + `RowPlanMemoryInput`, not `LayoutInput` — this mirrors
+   *  `frame-layout.ts`'s own (private) `planInputFrom`, so a test can build the same call a real
+   *  `collapseStateOf` read makes, from the same `input()` fixture every other test in this file
+   *  uses. */
+  function planFrom(li: LayoutInput): { plan: RowPlanInput; memory: RowPlanMemoryInput } {
+    return {
+      plan: {
+        entries: li.entries,
+        datasetRevision: li.datasetRevision,
+        rows: li.rows,
+        fieldCompares: li.fieldCompares,
+        fieldContext: li.fieldContext,
+        entryRulePorts: li.entryRulePorts,
+        collapsed: li.collapsed,
+        fieldRegistryRevision: li.fieldRegistryRevision ?? 0,
+      },
+      memory: { rowHeight: li.rowHeight, registry: li.variants },
+    };
+  }
+
+  it('barsForEntry answers a row ensureRowPlan alone just planned, with no computeFrame call in between', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: sampleEntries.slice(0, 2) }));
+
+    // A write grows the entries — the same shape `entries.add()` leaves behind, between two frames.
+    const grown = sampleEntries.slice(0, 3);
+    const added = grown[2]!;
+    const { plan, memory } = planFrom(input({ entries: grown }));
+    layout.ensureRowPlan(plan, memory);
+
+    // `rowIndexForEntry` reads `#plan`/`#rowOfEntry` — both maps `ensureRowPlan` always kept current.
+    expect(layout.rowIndexForEntry(added.id)).toBe(2);
+    // `barsForEntry` reads `#memory.rowMemory`, keyed by `#rowById` — the map the bug left behind at
+    // two rows. Answering `[]` here is exactly the review's traced symptom.
+    expect(layout.barsForEntry(added.id).length).toBeGreaterThan(0);
+  });
+
+  it("rowTop answers the replanned row count, not the last painted frame's", () => {
+    const layout = new FrameLayout();
+    // Two writes with no frame between them, so the replanned row count moves two past what
+    // `#memory`'s own height index was built for — the bug's stale index cannot even answer this
+    // index in bounds, let alone answer it correctly.
+    layout.computeFrame(input({ entries: sampleEntries.slice(0, 1) }));
+    const { plan, memory } = planFrom(input({ entries: sampleEntries.slice(0, 3) }));
+    layout.ensureRowPlan(plan, memory);
+
+    expect(layout.rowTop(2)).toBe(2 * memory.rowHeight);
   });
 });

@@ -957,9 +957,15 @@ export class GanttShell {
       // #424: a row hidden under a collapsed ancestor still answers its own state. A write since the
       // last painted frame — a remove, an add, a reparent, a `rowSource` change — must answer before
       // the next frame draws. `ensureRowPlan` replans on demand, at the cost of an identity check
-      // when nothing changed.
+      // when nothing changed. It also keeps `#layout`'s frame caches in step with the replanned row
+      // tree, at the same time (#424 review, point 1). So a `reveal` right after this read finds
+      // `rowTop`/`barsForEntry` answering about the row `expandableOfRow` just found, not the last
+      // painted frame's.
       expandableOfRow: (id) => {
-        this.#layout.ensureRowPlan(this.#rowPlanInput());
+        this.#layout.ensureRowPlan(this.#rowPlanInput(), {
+          rowHeight: this.#frameSettings.rowHeight,
+          registry: this.#registrations.variants,
+        });
         return this.#layout.expandableOfRow(id);
       },
     });

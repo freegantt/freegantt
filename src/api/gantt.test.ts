@@ -7678,6 +7678,61 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     gantt.destroy();
   });
 
+  it('reveal lands on a row two writes added, right after a collapseStateOf read of it, with no frame painted in between (#424 review item 1)', () => {
+    // #424 review item 1: `collapseStateOf` calls `FrameLayout.ensureRowPlan`, which used to update
+    // `#plan` alone and leave `#memory` — the height index `rowTop` reads, the `rowById` map
+    // `barsForEntry` reads — behind. Two writes with no frame between them move the replanned row
+    // count two past what `#memory` was last built for, so a stale index cannot even answer in
+    // bounds. `reveal` right after `collapseStateOf` is the real caller this broke:
+    // `#expandAndFindRow` found the new row at once (no reason left to flush a frame), then
+    // `#revealRect` read `rowTop`/`barsForEntry` off the stale memory.
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scroll = new ScrollAxis();
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        entries: [{ id: 'a', name: 'a', start: '2026-01-01', end: '2026-01-02' }],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        scroll: { y: scroll },
+        rowSource: { source: 'entries', tree: true },
+      });
+      // A pane shorter than three rows, so `reveal` has to move the scroll to answer — an
+      // already-visible target would pass this test whether `#memory` was in step or not.
+      FakeResizeObserver.instances[0]!.fire({ width: 300, height: 40 });
+
+      // Two writes, no frame painted between either of them and the read below.
+      dataset.entries.add({ id: 'b', name: 'b', start: '2026-01-03', end: '2026-01-04' });
+      dataset.entries.add({ id: 'c', name: 'c', start: '2026-01-05', end: '2026-01-06' });
+
+      expect(gantt.collapseStateOf('c')).toBe('leaf');
+
+      // `scroll.panTo` receives the raw target `reveal` computes, before `ScrollAxis` clamps it to
+      // its own content-driven max — a spy reads that raw target. Reading the clamped
+      // `scroll.state.position` instead would not work here: `max` only grows on a painted frame,
+      // and this test's whole point is that no frame paints between the writes and the reveal.
+      const panTo = vi.spyOn(scroll, 'panTo');
+
+      gantt.reveal(entryId('c'));
+
+      // Row 'c' is the third row (rowHeight 36, the library default): top 72, bottom 108. The pane
+      // is 40px tall, so "nearest edge" pans exactly enough to bring the bottom edge into view —
+      // 108 - 40 = 68. `#memory` left at one row (from mount) would answer this row's top from an
+      // index built for a single row, and its Bars from a `rowById` map that does not hold this
+      // row's id at all — either one throws off this number, or leaves the scroll unmoved.
+      expect(panTo).toHaveBeenLastCalledWith(68);
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('set range pins the time axis to a span; assigning fitDataset back releases it', () => {
     const container = document.createElement('div');
     const gantt = new Gantt({ container, dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }) });

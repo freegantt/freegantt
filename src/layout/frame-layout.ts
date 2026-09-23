@@ -13,7 +13,7 @@ import type { PlannedRow, RowSource, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
 import type { ChangeSet, EntryId, BarId, RowId, Entry, FieldContext } from '../model/index.js';
-import type { Bar } from './bars/bar.js';
+import type { Bar, VariantBars } from './bars/bar.js';
 import type { FieldCompare } from './column.js';
 import type { EntryRulePorts } from './entry-rule.js';
 
@@ -41,6 +41,16 @@ export interface RowPlanInput {
 }
 
 type RowPlanInputKey = keyof RowPlanInput;
+
+/** What `ensureRowPlan` needs beyond `RowPlanInput` to keep `#memory` in step with `#plan` (#424
+ *  review, point 1). Neither field ever moves a row between parents or hides one, so neither belongs
+ *  in `RowPlanInput`'s own replan gate — a row-height or a registry change never changes which rows
+ *  exist. `FrameMemory.sync` still needs both on every call, replan or not: see `ensureRowPlan`'s
+ *  own comment for why the sync itself is unconditional. */
+export interface RowPlanMemoryInput {
+  rowHeight: number;
+  registry: VariantBars;
+}
 
 /** One comparator per `RowPlanInput` field (`frame-settings.ts`'s `INVALIDATION` table is the same
  *  shape) — the mapped type forces an entry for every key the interface declares, so a field added
@@ -100,9 +110,10 @@ export class FrameLayout implements FrameLayoutView {
   #parentOfRow = new Map<RowId, RowId>();
   #expandableOfRow = new Map<RowId, boolean>();
   #frameRevision = 0;
-  /** What `#plan` (and the three maps above) were last planned from — `undefined` before the first
-   *  `computeFrame` call. `computeFrame` replans only when this frame's own `RowPlanInput` disagrees
-   *  with it (#495, #414). */
+  /** What `#plan` (and the four maps above) were last planned from — `undefined` before the first
+   *  `ensureRowPlan` call. `ensureRowPlan` replans only when its own `RowPlanInput` disagrees with
+   *  it (#495, #414). `computeFrame` is one caller, not the only one (#424): a synchronous reader
+   *  like `collapseStateOf` calls `ensureRowPlan` too, between frames. */
   #lastPlanInput: RowPlanInput | undefined;
 
   get heightIndexRevision(): number {
@@ -122,26 +133,37 @@ export class FrameLayout implements FrameLayoutView {
     // #495, #414: does this frame ask a different question about which rows exist, in what order,
     // than the last one did? A scroll or a pan never does — `visible`/`revision`/`rowHeight` are not
     // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below.
-    this.ensureRowPlan(planInputFrom(input));
-    this.#memory.sync({
-      plan: this.#plan,
-      rowHeight: input.rowHeight,
-      entries: input.entries,
-      registry: input.variants,
-      datasetRevision: input.datasetRevision,
-    });
+    this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations);
   }
 
-  /** Brings the row plan up to date with `input`, without painting a frame (#424). A write between
-   *  frames — `entries.remove()`, `entries.add()`, a reparent, a `rowSource` change — leaves the row
-   *  tree this planned stale until the next `computeFrame` call; a synchronous reader like
-   *  `collapseStateOf` cannot wait for that. Costs an identity comparison per `RowPlanInput` field
-   *  when the plan is already current, the same check `computeFrame` itself makes on every frame. */
-  ensureRowPlan(input: RowPlanInput): void {
-    if (this.#lastPlanInput !== undefined && samePlanInput(this.#lastPlanInput, input)) return;
-    this.#planRows(input);
-    this.#lastPlanInput = input;
+  /** Brings `#plan` — and `#memory`, the height index and `rowMemory` a Bar read answers from — up
+   *  to date with `input`, without painting a frame (#424). A write between frames —
+   *  `entries.remove()`, `entries.add()`, a reparent, a `rowSource` change — leaves the row tree
+   *  this planned stale until the next `computeFrame` call; a synchronous reader like
+   *  `collapseStateOf` cannot wait for that, and neither can a `reveal` that follows it in the same
+   *  tick: `rowTop`/`barsForEntry` must answer about the same row tree `rowIndexForEntry` just did.
+   *
+   *  Review #424 point 1 named the gap this closes: an earlier cut synced `#plan` here but left
+   *  `#memory` behind, so a read landed between two different row trees — `rowIndexForEntry` saw the
+   *  new one, `rowTop`/`barsForEntry` still saw the last painted frame's. Chosen fix: `#memory.sync`
+   *  runs here too, every call, replan or not — never a second, memory-only staleness for a caller
+   *  to reason about. `sync` is itself a set of identity checks (`frame-memory.ts`), so a call where
+   *  nothing moved costs one pass, not a rebuild — the same price `computeFrame` already pays on
+   *  every scroll frame. `rowHeight`/`registry` sit outside `RowPlanInput` on purpose (they never
+   *  decide whether to replan), so the caller hands them here as `RowPlanMemoryInput`. */
+  ensureRowPlan(input: RowPlanInput, memory: RowPlanMemoryInput): void {
+    if (this.#lastPlanInput === undefined || !samePlanInput(this.#lastPlanInput, input)) {
+      this.#planRows(input);
+      this.#lastPlanInput = input;
+    }
+    this.#memory.sync({
+      plan: this.#plan,
+      rowHeight: memory.rowHeight,
+      entries: input.entries,
+      registry: memory.registry,
+      datasetRevision: input.datasetRevision,
+    });
   }
 
   // #495, #414: takes `RowPlanInput`, never `LayoutInput` — a field this method reads that is not
