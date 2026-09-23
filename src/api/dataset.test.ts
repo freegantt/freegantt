@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Dataset, extraEditsFor } from './dataset.js';
 import { fieldRowsOf } from '../data/change-set.js';
 import {
@@ -8,6 +8,7 @@ import {
   invertChangeSet,
   mergeEntryEdits,
   InvalidReplayOriginError,
+  ComputedFieldCannotBeWrittenError,
   FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
@@ -586,6 +587,70 @@ describe('Dataset generics (#123)', () => {
       dataset.entries.update('t1', { bogus: 1 });
     }
   });
+
+  // ADR 0011 Q15, #281: a declared Field key type-checks flat, at the top, at both doors that build
+  // a row — the constructor's `entries` array and `entries.add()` — the same shape `update()` already
+  // typed. Runtime already read the flat key either way (`propsFromInput`); this is the static half.
+  it('types a flat declared Field key at both doors: the constructor and entries.add() (#281)', () => {
+    const dataset = new Dataset<{ owner: string; cost?: number }>({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner' }, { key: 'cost' }],
+      // Flat, not `props: { owner: … }` — the constructor door.
+      entries: [{ id: 't1', name: 'Design', owner: 'Ali' }],
+    });
+    expect(dataset.entries.get('t1')?.read('owner')).toBe('Ali');
+
+    // Flat, not `props: { owner: … }` — the `add()` door.
+    const added = dataset.entries.add({ id: 't2', name: 'Build', owner: 'Sam', cost: 500 });
+    expect(added.read('owner')).toBe('Sam');
+    expect(added.read('cost')).toBe(500);
+
+    // Nested `props` still works too (a bag already held, or a passenger key) — unchanged by #281.
+    const nested = dataset.entries.add({ id: 't3', name: 'Ship', props: { owner: 'Ren' } });
+    expect(nested.read('owner')).toBe('Ren');
+
+    // Compile-time only: an undeclared flat key must still fail to type-check, at both doors, the
+    // same as it did before #281 — the fix widens what is accepted, never what is refused.
+    if (false as boolean) {
+      new Dataset<{ owner: string }>({
+        timeZone: 'UTC',
+        // @ts-expect-error — bogus is not a declared key
+        entries: [{ id: 't1', bogus: 'nope' }],
+      });
+      // @ts-expect-error — bogus is not a declared key
+      dataset.entries.add({ id: 't4', bogus: 'nope' });
+    }
+  });
+
+  // `FlatEntryInput` type-checks every `TProps` key flat, declared or not (#281's own doc note on
+  // `stored-entry.ts`). Ingest is narrower: `propsFromInput` (`data/entry-reader.ts`) only honours a
+  // flat key that names a declared Field, and warns-and-drops the rest (ADR 0011: "an undeclared key
+  // is never written by the library, ever"). This pins that gap so a future ingest change that closes
+  // it — or widens it by accident — shows here first.
+  it('a flat TProps key with no declared Field type-checks and still warns-and-drops at ingest (#281)', () => {
+    const warnings: string[] = [];
+    vi.spyOn(console, 'warn').mockImplementation((line: unknown) => {
+      warnings.push(String(line));
+    });
+
+    const dataset = new Dataset<{ owner: string; passengerKey: number }>({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner' }],
+      // `passengerKey` is in TProps, but no Field declares it — type-checks flat, drops at runtime.
+      entries: [{ id: 't1', owner: 'Ali', passengerKey: 1 }],
+    });
+
+    expect(dataset.entries.get('t1')?.toInput().props?.passengerKey).toBeUndefined();
+    expect(warnings.some((line) => line.includes('passengerKey'))).toBe(true);
+
+    // Nesting it under `props` instead — the documented way out — carries it through.
+    const nested = new Dataset<{ owner: string; passengerKey: number }>({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner' }],
+      entries: [{ id: 't1', owner: 'Ali', props: { passengerKey: 1 } }],
+    });
+    expect(nested.entries.get('t1')?.toInput().props?.passengerKey).toBe(1);
+  });
 });
 
 // S5.10, D-S5-23/24/30/31: `DatasetOptions.plugins` is the public way in. Each case below writes a
@@ -788,6 +853,88 @@ describe('Dataset plugins (S5.10)', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [noisy] });
     dataset.destroy();
     expect(released).toEqual(['demo.noisy']);
+  });
+});
+
+describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () => {
+  /** Opens `owner` on `open` only; `locked` stays refused. Both are `editable: false` Fields, so
+   *  the cascade's only door onto `open` is this rule. */
+  const opensOneEntry: DataPlugin = {
+    id: 'demo.unlock',
+    data(ctx) {
+      ctx.edits.setLockRule(
+        (next) => (entry, field) =>
+          entry.id === entryId('open') && field === 'owner' ? 'anywhere' : next(entry, field),
+      );
+    },
+  };
+
+  function twoLockedEntries(cascadeTo: (id: string, owner: string) => DataPlugin['data']): Dataset {
+    return new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner', editable: false }],
+      entries: [
+        { id: 'open', name: 'Open', start: '2026-09-01', end: '2026-09-02', props: { owner: 'nobody' } },
+        { id: 'locked', name: 'Locked', start: '2026-09-01', end: '2026-09-02', props: { owner: 'nobody' } },
+      ],
+      plugins: [
+        opensOneEntry,
+        { id: 'demo.cascade', requires: ['demo.unlock'], data: cascadeTo('open', 'ana') },
+      ],
+    });
+  }
+
+  it('lets a cascade write the Entry the lock rule names, unchanged from a locked sibling', () => {
+    const cascadesOwner =
+      (id: string, owner: string): DataPlugin['data'] =>
+      (ctx) => {
+        ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
+      };
+    const dataset = twoLockedEntries(cascadesOwner);
+
+    dataset.entries.update('open', { name: 'Renamed' });
+
+    expect(dataset.entries.get('open')?.read('owner')).toBe('ana');
+    expect(dataset.entries.get('locked')?.read('owner')).toBe('nobody');
+  });
+
+  it('still refuses a cascade onto a cell the lock rule has no opinion on', () => {
+    const cascadesOwner =
+      (id: string, owner: string): DataPlugin['data'] =>
+      (ctx) => {
+        ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
+      };
+    const dataset = twoLockedEntries(() => cascadesOwner('locked', 'ana'));
+
+    expect(() => dataset.entries.update('open', { name: 'Renamed' })).toThrow(FieldNotEditableError);
+    expect(dataset.entries.get('locked')?.read('owner')).toBe('nobody');
+    expect(dataset.entries.get('open')?.name).toBe('Open');
+  });
+
+  it('Dataset.editableOf answers the same lock a cascade or entries.update() write against', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'owner', editable: false }],
+      entries: [oneEntry({ id: 'open', props: { owner: 'nobody' } })],
+      plugins: [opensOneEntry],
+    });
+
+    expect(dataset.editableOf('open', 'owner')).toBe('anywhere');
+    expect(dataset.editableOf('open', 'name')).toBe('anywhere');
+  });
+
+  // #473's ocr finding: `editableOf` used to default an undeclared `editable` to `'anywhere'` for a
+  // `compute` Field, so a plugin that guarded a write with `editableOf(...) !== 'never'` passed the
+  // guard and then met `ComputedFieldCannotBeWrittenError` from `entries.update()`.
+  it('answers never for a compute Field, the same refusal entries.update() gives it', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'derived', compute: () => 0 }],
+      entries: [oneEntry()],
+    });
+
+    expect(dataset.editableOf('t1', 'derived')).toBe('never');
+    expect(() => dataset.entries.update('t1', { derived: 1 })).toThrow(ComputedFieldCannotBeWrittenError);
   });
 });
 

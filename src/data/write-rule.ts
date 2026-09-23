@@ -8,8 +8,26 @@
 // asks the API threshold before it stages a write. `entries.update()` keeps `UnknownFieldError` for
 // the existence arm.
 
-import type { Field, WriteRefusalReason, WriteTarget, WriteVerdict } from '../model/index.js';
+import type {
+  EntryId,
+  Field,
+  FieldEditable,
+  FieldKey,
+  FieldLockQuery,
+  FieldLockRule,
+  WriteRefusalReason,
+  WriteTarget,
+  WriteVerdict,
+} from '../model/index.js';
+import {
+  ComputedFieldCannotBeWrittenError,
+  entryId,
+  FieldNotEditableError,
+  UnknownFieldError,
+} from '../model/index.js';
 import { editableOf, rollsUp } from './fields/field-registry.js';
+import { isDescendantOf } from './hierarchy-source.js';
+import type { StoredEntry } from '../model/index.js';
 
 /** `model/write-verdict.ts` declares the verdict pair (and, since #466, `WriteTarget`) under its
  *  public names, so a consumer can import what `view/capability.ts` republishes and what
@@ -47,21 +65,86 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field | undefine
   return 'refused';
 }
 
-/** May a person change this value by hand — the cell editor, a bar handle, a bar move? The **grid
- *  threshold** (ADR 0015): `'anywhere'`, and nothing else. `'api'` keeps the cell dead on purpose,
- *  for a value the app owns and the user does not type. */
-export function isUserEditable(field: Field): boolean {
-  return editableOf(field) === 'anywhere';
+/** Core's own lock rule (#473): silence, on every cell. The first occupant of `ctx.edits.setLockRule`
+ *  — a plugin composes onto this the way it composes onto `identityExtender`/`storedParentSource`
+ *  (D-S5-23) — so a Dataset with no plugin installed answers every cell with `Field.editable` alone. */
+export const identityFieldLockRule: FieldLockRule = () => undefined;
+
+/** One frozen `FieldLockQuery`, safe to share across every cell for as long as `identityFieldLockRule`
+ *  is the occupant: that rule reads neither argument, so no caller of it ever needs a real query.
+ *  `EntryStore.editableOf` reads this on the no-plugin-installed path, in place of building a fresh
+ *  `fieldLockQueryFor(...)` (and its closures) per cell (#473's ocr finding, I5). It stays paired
+ *  with `identityFieldLockRule` here, and must not be handed to any other rule. */
+export const IGNORED_FIELD_LOCK_QUERY: FieldLockQuery = Object.freeze({
+  id: entryId(''),
+  isDescendantOf: () => false,
+});
+
+/** One cell's address, built from whichever lookup a caller holds — `EntryStore`'s own
+ *  transaction-aware `parentIdOf`, or an `EditRequest`'s lazy `entryAfterEdits`. The walk itself is
+ *  `hierarchy-source.ts`'s `isDescendantOf`; this just gives a `FieldLockRule` the shape it asks for. */
+export function fieldLockQueryFor(
+  id: EntryId,
+  entryFor: (id: EntryId) => StoredEntry | undefined,
+  parentIdOf: (entry: StoredEntry) => EntryId | undefined,
+): FieldLockQuery {
+  return {
+    id,
+    isDescendantOf: (ancestorId) => isDescendantOf(id, entryId(ancestorId), entryFor, parentIdOf),
+  };
 }
 
-/** May `entries.update()` change this value? The **API threshold** (ADR 0015): anything but
- *  `'never'`. One key answers both thresholds, which is what keeps the two doors from disagreeing
- *  (I14). A `'never'` Field is a lock, and `entries.update()` throws `FieldNotEditableError`.
+/** The effective lock on one cell (#473): a plugin's own answer, or `Field.editable` when the rule
+ *  has no opinion (`undefined`). One function, so `entries.update()`, an `EditExtender` cascade, and
+ *  the grid (`view/capability.ts`) read the same answer for the same cell (I14) — a plugin's per-entry
+ *  unlock is not a second rule beside `Field.editable`, it is this rule's other input. */
+export function resolveFieldEditable(
+  query: FieldLockQuery,
+  field: FieldKey,
+  declared: Field,
+  lockRule: FieldLockRule,
+): FieldEditable {
+  return lockRule(query, field) ?? editableOf(declared);
+}
+
+/** What `dataset.editableOf`/`EditRequest.editableOf` answer for one cell, in the one order
+ *  `assertFieldTakesWrite` below throws in — existence, then `compute`, then the lock (#473's ocr
+ *  finding). A query and a door built from two copies of that order can drift; built from one, they
+ *  cannot: an undeclared or `compute` Field answers `'never'` here for the same reason
+ *  `entries.update()` refuses it there, so a plugin that guards a write with `editableOf(...) !==
+ *  'never'` never passes a guard `entries.update()` then throws on. */
+export function editableAnswerFor(
+  field: FieldKey,
+  declared: Field | undefined,
+  query: FieldLockQuery,
+  lockRule: FieldLockRule,
+): FieldEditable {
+  if (declared === undefined || 'compute' in declared) return 'never';
+  return resolveFieldEditable(query, field, declared, lockRule);
+}
+
+/** Does this Field, on this Entry, take a write from this door at all? The one check
+ *  `entries.update()` and an `EditExtender` cascade both run, in the one order that leaves the caller
+ *  somewhere to go (ADR 0015; folded from two copies, #473's ocr finding).
  *
- *  It names what a *caller* may write, never what the library may: construction, `entries.add()`
- *  and History replay all still write a locked Field. */
-export function isApiEditable(field: Field): boolean {
-  return editableOf(field) !== 'never';
+ *  Existence first — an undeclared key names no Field to ask anything about. Then `compute`: a
+ *  compute Field owns no stored home, and it may not carry `editable` either, so asking the lock
+ *  first would answer "declare an editable" about a key the register door refuses. Then the lock
+ *  itself, resolved per entry (#473) rather than off the Field declaration alone. `editableAnswerFor`
+ *  encodes this same order, so the two cannot drift. */
+export function assertFieldTakesWrite(
+  field: FieldKey,
+  declared: Field | undefined,
+  query: FieldLockQuery,
+  lockRule: FieldLockRule,
+  operation: string,
+): Field {
+  if (declared === undefined) throw new UnknownFieldError(field, operation);
+  if ('compute' in declared) throw new ComputedFieldCannotBeWrittenError(field, operation);
+  if (editableAnswerFor(field, declared, query, lockRule) === 'never') {
+    throw new FieldNotEditableError(field, operation);
+  }
+  return declared;
 }
 
 /** The library's own last word on a cell. It is read when neither the consumer nor a plugin speaks.
@@ -74,9 +157,17 @@ export function isApiEditable(field: Field): boolean {
  *  declaring a distribution policy (#470 retired that seam) — a rolling-up cell on a row with
  *  children refuses from every direction, with no exception left to name.
  *
- *  Everything else is the Field's own `editable`, read at the grid threshold. A Field that declares
- *  nothing is editable: `'anywhere'` is the default (ADR 0015). */
-export function libraryWriteRule(hasChildren: boolean, field: Field): FieldWriteVerdict {
+ *  Everything else is the **effective** editable at the grid threshold: the caller passes it, most
+ *  often the Field's own `editable` (`editableOf`), or the answer a plugin's per-entry lock rule
+ *  already resolved (#473) — `view/capability.ts`'s `canWrite` is the one caller that ever has a lock
+ *  rule's answer to pass. `editable` is required, not defaulted (#473's ocr finding): a caller that
+ *  forgets it would silently skip the per-entry lock instead of the Field's own default, and every
+ *  caller already has one of the two answers in hand to pass. */
+export function libraryWriteRule(
+  hasChildren: boolean,
+  field: Field,
+  editable: FieldEditable,
+): FieldWriteVerdict {
   if (resolveWriteTarget(hasChildren, field) === 'refused') return DERIVED;
-  return isUserEditable(field) ? WRITABLE : NOT_WRITABLE;
+  return editable === 'anywhere' ? WRITABLE : NOT_WRITABLE;
 }

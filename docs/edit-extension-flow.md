@@ -16,7 +16,7 @@ many — and the hook always sees the whole batch at once, never one edit at a t
 | `EntryEdit` | `Partial<EntryInput>` minus `id` | **The write shape.** One Entry's proposed field changes, dates loose — the same object `dataset.entries.update(id, edit)` takes |
 | `EntryEdits` | `ReadonlyMap<EntryId, EntryEdit>` | A batch of those, keyed by Entry — what an extender returns, whether the batch holds one entry or many |
 | `ProposedEdit` / `ProposedEdits` | dates as `Instant`, `proposedKeys` stated | **The read shape.** The same edit after core read it. A plugin author reads one off `request.proposed` and never builds one |
-| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds, hasChildren, writeTarget }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state, the two sets below, and two structural questions by id — `hasChildren(id)` and `writeTarget(id, field)` (`WriteTarget`), so a cascade can check before it writes instead of learning after the fact from a `derived-values-dropped` report |
+| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds, hasChildren, writeTarget, editableOf }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state, the two sets below, and three structural questions by id — `hasChildren(id)`, `writeTarget(id, field)` (`WriteTarget`), and `editableOf(id, field)` (`FieldEditable`) — so a cascade can check before it writes instead of learning after the fact from a `derived-values-dropped` report or a `FieldNotEditableError` |
 | `EditExtender` | `(request: EditRequest) => EntryEdits` | The function occupying the hook — `identityExtender` when nothing is installed |
 
 There is no wrapper type around the extender's return value. An extender returns extra writes, in the
@@ -49,6 +49,13 @@ never states `proposedKeys`, and never computes an envelope.
   roll up from them. A direct write to a rolling-up parent's own dates is refused
   (`DerivedFieldNotWritableError`) — and a cascade that proposes one is not refused but **overwritten
   by the Rollup and reported once** as `derived-values-dropped`.
+
+**A cascade onto a locked Field.** A cascade is a caller-side write, so it meets the same lock
+`entries.update()` meets. A `'never'` Field refuses the whole batch with `FieldNotEditableError`
+(ADR 0015, "a third door"). A plugin can open one Field on one Entry, or on a whole subtree, without
+touching `Field.editable` itself. `ctx.edits.setLockRule` installs a per-entry rule the same door
+reads. `request.editableOf(id, field)` lets a cascade check before it writes, instead of learning
+about the lock from a throw. See "Edit extender" in `docs/06-plugin-authoring.md` for the full seam.
 
 **A cascade onto an Entry the same transaction adds.** This case has no base Entry in the committed
 store, so `diffEdit` cannot produce an update row for it. The cascade still lands: it folds into the

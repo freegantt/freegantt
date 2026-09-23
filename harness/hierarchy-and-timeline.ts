@@ -141,9 +141,16 @@ mountGanttToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#t
 // page's own.
 gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7) }]));
 
+// #424: the selected row's own collapse state, read straight off `gantt.collapseStateOf` rather
+// than scanned out of `gantt.collapsed` — the row tree's answer, not a set membership test.
 function renderSelection(): void {
   const ids = gantt.selectedEntryIds;
-  selectionReadout.textContent = ids.length === 0 ? 'No selection' : `Selected: ${ids.join(', ')}`;
+  if (ids.length === 0) {
+    selectionReadout.textContent = 'No selection';
+    return;
+  }
+  const state = gantt.collapseStateOf(ids[0]!) ?? 'no row';
+  selectionReadout.textContent = `Selected: ${ids.join(', ')} (${state})`;
 }
 
 // #429: the page holds no second copy of an answer `gantt.rowSource` already gives. A filter or
@@ -198,6 +205,9 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   syncCrewDaysLabel();
 });
 gantt.on('selectionChange', renderSelection);
+// #424 review point 1: a collapse or expand fires `collapseChange` alone, with no `selectionChange`
+// and no dataset `change` — the readout needs this subscription too, or it goes stale.
+gantt.on('collapseChange', renderSelection);
 
 // S5.8, D-S5-19: fires before the built-in editor opens. Cy's day is locked the same way its
 // resize is (`capabilities.resize` above) — a double-click on it never opens an editor at all.

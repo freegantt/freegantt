@@ -142,7 +142,7 @@ export class ContainerDom implements GanttDom {
    *  stamps go stale together with the node. Virtualization recycles a row node under a new entry,
    *  and the stamps say so before this seam hands the cached object back.
    *
-   *  The frame stamp catches what the node's own stamps cannot (#212). A row keeps its
+   *  The row-plan stamp catches what the node's own stamps cannot (#212). A row keeps its
    *  `data-row-id`/`data-entry-id` while the set of Entries it owns changes underneath. A child
    *  added or removed leaves every node stamp equal, and the cached `entryIds` set stale. One number
    *  compare per event, and no allocation (I5). */
@@ -150,7 +150,7 @@ export class ContainerDom implements GanttDom {
   #memoBarId: string | undefined;
   #memoEntryId: string | undefined;
   #memoField: string | undefined;
-  #memoFrameRevision: number | undefined;
+  #memoRowPlanRevision: number | undefined;
   #memoTarget: DomTarget | undefined;
 
   constructor(ports: ContainerDomPorts) {
@@ -168,14 +168,14 @@ export class ContainerDom implements GanttDom {
     const barIdAttr = element.dataset[BAR_ID_KEY];
     const entryIdAttr = element.dataset[ENTRY_ID_KEY];
     const fieldAttr = element.dataset[FIELD_KEY];
-    const frameRevision = this.#ports.layout.frameRevision;
+    const rowPlanRevision = this.#ports.layout.rowPlanRevision;
     if (
       this.#memoTarget !== undefined &&
       this.#memoElement === element &&
       this.#memoBarId === barIdAttr &&
       this.#memoEntryId === entryIdAttr &&
       this.#memoField === fieldAttr &&
-      this.#memoFrameRevision === frameRevision
+      this.#memoRowPlanRevision === rowPlanRevision
     ) {
       return this.#memoTarget;
     }
@@ -184,7 +184,7 @@ export class ContainerDom implements GanttDom {
     this.#memoBarId = barIdAttr;
     this.#memoEntryId = entryIdAttr;
     this.#memoField = fieldAttr;
-    this.#memoFrameRevision = frameRevision;
+    this.#memoRowPlanRevision = rowPlanRevision;
     this.#memoTarget = target;
     return target;
   }

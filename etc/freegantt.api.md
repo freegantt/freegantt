@@ -186,6 +186,9 @@ export interface CollapseChange {
 }
 
 // @public
+export type CollapseState = 'collapsed' | 'expanded' | 'leaf';
+
+// @public
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 // @public (undocumented)
@@ -358,6 +361,7 @@ export class Dataset<TProps = unknown> {
     // (undocumented)
     get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
+    editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     // (undocumented)
     get entries(): EntryStore<TProps>;
     field(key: FieldKey): Field | undefined;
@@ -386,6 +390,8 @@ export class Dataset<TProps = unknown> {
 export interface DatasetEditHook {
     // (undocumented)
     setExtender(wrap: ExtenderWrapper): void;
+    // (undocumented)
+    setLockRule(wrap: FieldLockRuleWrapper): void;
 }
 
 // @public
@@ -428,7 +434,7 @@ export interface DatasetHierarchy {
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    entries: readonly EntryInput<TProps>[];
+    entries: readonly FlatEntryInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: {
@@ -656,6 +662,7 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
 // @public
 export interface EditRequest {
     readonly addedEntryIds: ReadonlySet<EntryId>;
+    editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     entries: ReadonlyMap<EntryId, StoredEntry>;
     entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
     hasChildren(id: EntryId | string): boolean;
@@ -828,7 +835,7 @@ export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | E
 
 // @public
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
-    add(input: EntryInput<TProps>): Entry<TProps>;
+    add(input: FlatEntryInput<TProps>): Entry<TProps>;
     // (undocumented)
     remove(id: EntryId | string): void;
     // (undocumented)
@@ -942,6 +949,20 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
 export type FieldKey = CoreFieldKey | (string & {});
 
 // @public
+export interface FieldLockQuery {
+    // (undocumented)
+    readonly id: EntryId;
+    // (undocumented)
+    isDescendantOf(ancestorId: EntryId | string): boolean;
+}
+
+// @public
+export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEditable | undefined;
+
+// @public
+export type FieldLockRuleWrapper = (next: FieldLockRule) => FieldLockRule;
+
+// @public
 export type FieldMatch<TProps = Record<string, unknown>> = Partial<CoreFieldValues> & {
     [K in keyof TProps]?: TProps[K];
 } & {
@@ -1011,6 +1032,17 @@ export interface FixedBarBox {
 
 // @public
 export function fixedWidthBar(px: number, anchor?: BarAnchor): BarProducer;
+
+// @public
+export type FlatEntryInput<TProps = Record<string, unknown>> = string extends keyof TProps ? EntryInput<TProps> : {
+    id: string;
+} & {
+    [K in keyof EntryEnvelope<TProps>]?: EntryEnvelope<TProps>[K];
+} & {
+    props?: Partial<TProps>;
+} & {
+    [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
+};
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -1127,6 +1159,7 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get collapsed(): readonly RowId[];
     set collapsed(ids: readonly (RowId | string)[]);
+    collapseStateOf(id: RowId | string): CollapseState | undefined;
     get commands(): CommandRegistry<TProps>;
     get convenienceChords(): ConvenienceChords;
     set convenienceChords(next: ConvenienceChords);
