@@ -67,6 +67,13 @@ export interface CustomRow {
 
 export interface CustomRowSource {
   source: 'custom';
+  /** Runs once per `rows` object identity, not once per frame (#504): `layout/` caches the rows this
+   *  returns and calls it again only when `gantt.rowSource` is reassigned to a new object — a scroll,
+   *  a pan, or an unrelated setting change never re-runs it. A `resolve` that reads page state (a
+   *  filter picked on a toolbar, a value from a closure) goes stale until that reassignment. Force a
+   *  fresh call the same way any other row-source setting change does: read `gantt.rowSource` back
+   *  and assign a new object (`docs/07-row-source-updates.md`'s refresh path), for example
+   *  `gantt.rowSource = { ...gantt.rowSource }`. */
   resolve(input: CustomRowInput): readonly CustomRow[];
 }
 

@@ -150,7 +150,10 @@ export interface GanttShellPorts {
  *  disposes cleanly on uninstall. The return value is what lets a plugin retract a registration
  *  while it is still installed — a column it shows in one mode only. Calling it twice is safe. */
 export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
-  /** `on`/`off` over `GanttEventMap`, including the cancelable `before*` pairs. */
+  /** `on`/`off` over `GanttEventMap`, including the cancelable `before*` pairs. Not gated — a
+   *  plugin may call `on` after its own `view()` returns. It is still tracked, the same as every
+   *  other seam: the plugin's own `DisposableStore` holds the returned `Disposer`. Uninstalling the
+   *  plugin, a `plugins` reassignment, or `Gantt.destroy()` all remove the handler. */
   events: GanttEvents;
   /** S5.12, D-S5-40: raises one Error report on this Gantt's `error` event. `by` is filled with this
    *  plugin's own id, so a subscriber can always tell which plugin spoke. Use `severity: 'info'` for
@@ -420,6 +423,19 @@ export function buildPluginPorts(
     return remove;
   };
 
+  /** An event handler is a registration seam like any other (I2), so it lives exactly as long as
+   *  the plugin that added it. Not gated by `RegistrationGate`, unlike `registerWhileOpen`'s
+   *  callers: a plugin may legally call `events.on` after `setup()` returns, from inside another
+   *  handler, for instance. This still tracks that handler. */
+  const events: GanttEvents = {
+    on: (name, handler) => {
+      const dispose = shell.events.on(name, handler);
+      disposables.add(dispose);
+      return dispose;
+    },
+    off: (name, handler) => shell.events.off(name, handler),
+  };
+
   const commands: CommandRegistryOf<unknown> = {
     // #155: a plugin's command lives exactly as long as the plugin. Uninstalling restores whatever
     // the id held before — the core catalog's own command, where the plugin overrode one (D-S5-7).
@@ -462,7 +478,7 @@ export function buildPluginPorts(
   };
 
   const parts: PluginContextParts = {
-    events: shell.events,
+    events,
     raiseError: (report) => shell.raiseError({ ...report, by: pluginId }),
     disposables,
     commands,

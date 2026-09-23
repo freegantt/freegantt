@@ -68,3 +68,38 @@ describe('EventBus async veto (D-S3-17)', () => {
     vi.unstubAllGlobals();
   });
 });
+
+// Every plugin registration seam returns a Disposer (I2) — `on` is that seam for an event.
+describe('EventBus.on returns a Disposer', () => {
+  it('removes exactly the handler it was returned for, leaving another handler on the same event alone', () => {
+    const bus = new EventBus<{ tick: number }>();
+    const seenA: number[] = [];
+    const seenB: number[] = [];
+    const disposeA = bus.on('tick', (n) => {
+      seenA.push(n);
+    });
+    bus.on('tick', (n) => {
+      seenB.push(n);
+    });
+
+    bus.emit('tick', 1);
+    disposeA();
+    bus.emit('tick', 2);
+
+    expect(seenA).toEqual([1]);
+    expect(seenB).toEqual([1, 2]);
+  });
+
+  it('calling the Disposer twice is safe — the second call is a no-op', () => {
+    const bus = new EventBus<{ tick: number }>();
+    const seen: number[] = [];
+    const dispose = bus.on('tick', (n) => {
+      seen.push(n);
+    });
+
+    dispose();
+    expect(() => dispose()).not.toThrow();
+    bus.emit('tick', 1);
+    expect(seen).toEqual([]);
+  });
+});

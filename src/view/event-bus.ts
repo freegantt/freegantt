@@ -8,6 +8,7 @@
 
 import type { TimeScaleFit } from '../layout/index.js';
 import type {
+  Disposer,
   Entry,
   EntryId,
   ErrorReport,
@@ -223,6 +224,8 @@ export type GanttEventHandler<K extends keyof GanttEventMap> = (
  *  a plugin gets a plain object built from them, not the shell itself (no back-door to its other
  *  public methods). */
 export interface GanttEvents {
-  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+  /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
+   *  (I2); `on` is that seam for a Gantt event. */
+  on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): Disposer;
   off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
 }

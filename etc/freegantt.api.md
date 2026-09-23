@@ -330,7 +330,6 @@ export interface CustomRowInput {
 
 // @public (undocumented)
 export interface CustomRowSource {
-    // (undocumented)
     resolve(input: CustomRowInput): readonly CustomRow[];
     // (undocumented)
     source: 'custom';
@@ -370,8 +369,7 @@ export class Dataset<TProps = unknown> {
     };
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
-    // (undocumented)
-    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
     get plugins(): readonly PluginOf<unknown, Dataset<TProps>>[];
     pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
     // (undocumented)
@@ -411,8 +409,7 @@ export interface DatasetEventMap {
 export interface DatasetEvents {
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
-    // (undocumented)
-    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
 }
 
 // @public
@@ -1202,8 +1199,7 @@ export class Gantt<TProps = unknown> {
     set minGridWidth(px: number);
     // (undocumented)
     off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
-    // (undocumented)
-    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): Disposer;
     get overscan(): Overscan;
     set overscan(o: Overscan);
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
@@ -1314,8 +1310,7 @@ export interface GanttEventMap {
 export interface GanttEvents {
     // (undocumented)
     off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
-    // (undocumented)
-    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): Disposer;
 }
 
 // @public (undocumented)
@@ -1689,7 +1684,7 @@ export interface NavigationChange {
 }
 
 // @public
-export function nextTickBoundary(zone: string, at: Instant, unit: TimeUnit, increment: number): Instant;
+export function nextTickBoundary(zone: string, at: Instant, step: TickStep): Instant;
 
 // @public
 export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
@@ -2180,10 +2175,7 @@ export type SnapRule = (zone: string, at: Instant) => Instant;
 export type SnapSetting = TickStep | 'tick' | 'none' | SnapRule;
 
 // @public
-export type SnapUnit = {
-    unit: TimeUnit;
-    increment: number;
-} | 'none' | SnapRule;
+export type SnapUnit = TickStep | 'none' | SnapRule;
 
 // @public
 export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover;

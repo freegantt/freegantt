@@ -19,6 +19,7 @@ function fakeDataset(): { dataset: Dataset; emit: (changeSet: ChangeSet) => void
     editableOf: () => 'never',
     on: (_name, handler) => {
       handlers.add(handler);
+      return () => handlers.delete(handler);
     },
     off: (_name, handler) => {
       handlers.delete(handler);

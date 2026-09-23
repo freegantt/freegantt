@@ -18,6 +18,7 @@ concurrency:
 jobs:
   when:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       run: ${{ steps.denver.outputs.run }}
     steps:
@@ -66,13 +67,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FG_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-      - if: steps.e2e.outcome == 'failure'
+      # `always()` matters here: without it, this step's condition is implicitly ANDed with
+      # `success()` (GitHub's own default), so a throw in the report step above — which has no
+      # `continue-on-error` — would skip this upload and the fail step below even though e2e itself
+      # failed. `always()` makes `steps.e2e.outcome` the only thing that decides whether these run.
+      - if: always() && steps.e2e.outcome == 'failure'
         uses: actions/upload-artifact@v7
         with:
           name: nightly-engines-test-results
           path: test-results/
           retention-days: 14
-      - if: steps.e2e.outcome == 'failure'
+      - if: always() && steps.e2e.outcome == 'failure'
         run: |
           echo "The nightly engine run failed. See the nightly-e2e-failure issue."
           exit 1

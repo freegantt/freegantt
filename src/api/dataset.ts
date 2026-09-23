@@ -7,6 +7,7 @@ import type {
   ChangeSet,
   DatasetEventMap,
   DateOnlyEndRule,
+  Disposer,
   DurationMeasure,
   EntryId,
   ProposedEdits,
@@ -152,7 +153,11 @@ export class Dataset<TProps = unknown> {
       const context: DatasetPluginContextOf<Dataset<TProps>> = {
         dataset: this,
         events: {
-          on: (name, handler) => state.on(name, handler),
+          on: (name, handler) => {
+            const dispose = state.on(name, handler);
+            disposables.add(dispose);
+            return dispose;
+          },
           off: (name, handler) => state.off(name, handler),
         },
         fields: {
@@ -277,8 +282,13 @@ export class Dataset<TProps = unknown> {
     return this.#state.transaction(body);
   }
 
-  on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void {
-    this.#state.on(name, handler);
+  /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
+   *  (I2); `on` is that seam for a Dataset event. `off(name, handler)` still works too. */
+  on<K extends keyof DatasetEventMap>(
+    name: K,
+    handler: (payload: DatasetEventMap[K]) => void | false,
+  ): Disposer {
+    return this.#state.on(name, handler);
   }
 
   off<K extends keyof DatasetEventMap>(
