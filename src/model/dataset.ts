@@ -68,7 +68,8 @@ export interface Dataset<TProps = Record<string, unknown>> {
   /** The effective lock on this Entry's cell (#473): a plugin's per-entry lock rule's own answer, or
    *  the Field's own `editable` when the rule has no opinion. The same answer `entries.update()`, an
    *  `EditExtender` cascade, and the grid already read (I14) — this is the query door onto it. An
-   *  undeclared key answers `'never'`: nothing is written to a key nothing declares. */
+   *  undeclared key answers `'never'`: nothing is written to a key nothing declares. A `compute`
+   *  Field answers `'never'` too — it owns no stored home to write. */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
   /** Bumped on every committed changeset. Layout uses it as the pack-cache key (D-S4-26). */
   readonly datasetRevision: number;

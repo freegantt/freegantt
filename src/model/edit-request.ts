@@ -49,9 +49,10 @@ export interface EditRequest {
    *  Reads `write-rule.ts`, the resolver the grid and `update()` read (I14). */
   writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;
   /** The effective lock on this cell (#473): a plugin's per-entry lock rule's own answer, or the
-   *  Field's own `editable` when the rule has no opinion. Reads `write-rule.ts`'s
-   *  `resolveFieldEditable`, the same resolver every write door reads (I14) — a cascade checks the
-   *  same lock `entries.update()` and the grid check before it writes. */
+   *  Field's own `editable` when the rule has no opinion. An undeclared key or a `compute` Field
+   *  answers `'never'`, same as `Dataset.editableOf`. Reads `write-rule.ts`'s `editableAnswerFor`,
+   *  the same resolver every write door reads (I14) — a cascade checks the same lock
+   *  `entries.update()` and the grid check before it writes. */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
 }
 
