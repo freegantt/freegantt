@@ -10,7 +10,6 @@ import {
   gridContentWidth,
   totalColumnWidth,
   isTimeUnit,
-  isPlannedHeaderRow,
   nestsRows,
 } from '../layout/index.js';
 import type {
@@ -1057,21 +1056,18 @@ export class GanttShell {
     this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
     // #434: opt-in (`pointerActivation: 'dblclick'`), always attached — the option gates inside the
     // handler, the same shape the wheel handlers gate on `#resolvedViewportGestures`. A grid cell's
-    // double-click mirrors the `Enter` precedence `inlineEditing()` already gives the editor
-    // (`canEditFocusedCell`). A writable cell's double-click stays the editor's own
-    // (`ctx.view.onDomEvent('dblclick', …)`) and does not also activate here. So this listener
-    // checks writability itself before falling through. This listener sits on `#container`, a
-    // bubble-phase ancestor of `inlineEditing()`'s document-level one. So a `return` here always
-    // reaches that listener next — no explicit ordering needed beyond where each one attaches.
+    // double-click asks the one decision `Enter`'s own Keymap resolution already asks
+    // (`#editorTakesFocusedCell`, D-S5-7): does `freegantt.editFocusedCell` take this cell? A
+    // writable cell's double-click stays the editor's own (`ctx.view.onDomEvent('dblclick', …)`)
+    // and does not also activate here. This listener sits on `#container`, a bubble-phase ancestor
+    // of `inlineEditing()`'s document-level one. So a `return` here always reaches that listener
+    // next — no explicit ordering needed beyond where each one attaches.
     this.#dblClickListener = (event: MouseEvent) => {
       if (this.#pointerActivation !== 'dblclick' || !(event.target instanceof Node)) return;
       const domTarget = this.#dom.targetUnder(event.target);
       if (domTarget === undefined || domTarget.entry === undefined) return;
-      if (domTarget.kind !== 'row' && domTarget.kind !== 'bar' && domTarget.kind !== 'gridCell') return;
-      if (domTarget.kind === 'gridCell') {
-        const field = domTarget.field;
-        if (field !== undefined && this.#capabilities.canWrite(domTarget.entry, field).ok) return;
-      }
+      if (!this.#isActivatableTargetKind(domTarget.kind)) return;
+      if (domTarget.kind === 'gridCell' && this.#editorTakesFocusedCell()) return;
       if (!this.#canGesture('activate', domTarget.entry.id)) return;
       this.#activateEntry(domTarget.entry, 'dblclick', domTarget.kind);
     };
@@ -2103,9 +2099,7 @@ export class GanttShell {
    *  Entry only; `interaction/` still asks `can('activate', entry)` itself (I14). */
   #subjectEntryOf(hit: EntryHit): Entry | undefined {
     if (hit.kind === 'bar') return this.#entryFor(hit.barId);
-    const row = this.#layout.plannedRows().find((row) => row.id === hit.rowId);
-    if (row === undefined || isPlannedHeaderRow(row)) return undefined;
-    const id = row.entryIds[0];
+    const id = this.#layout.entryIdsForRow(hit.rowId)[0];
     return id === undefined ? undefined : this.#options.dataset.entries.get(id);
   }
 
@@ -2137,9 +2131,27 @@ export class GanttShell {
     const focused = this.#rovingFocus.focusedElement();
     const domTarget = focused !== undefined ? this.#dom.targetUnder(focused) : undefined;
     if (domTarget === undefined || domTarget.entry === undefined) return undefined;
-    if (domTarget.kind === 'header' || domTarget.kind === 'splitter') return undefined;
+    if (!this.#isActivatableTargetKind(domTarget.kind)) return undefined;
     if (!this.#canGesture('activate', domTarget.entry.id)) return undefined;
     return { entry: domTarget.entry, kind: domTarget.kind };
+  }
+
+  /** #434: which `TargetKind`s a hit may activate — a row, a bar, or a grid cell, never a header or
+   *  the splitter. One predicate for both the `dblclick` listener's allow-list and
+   *  `#focusedActivationTarget`'s deny-list, so the two stop being two lists that could drift. */
+  #isActivatableTargetKind(kind: TargetKind): boolean {
+    return kind === 'row' || kind === 'bar' || kind === 'gridCell';
+  }
+
+  /** #434: does `freegantt.editFocusedCell` take this cell? The same question `Enter`'s own Keymap
+   *  resolution already asks before falling through to `freegantt.activateEntry` (D-S5-7,
+   *  `extensions/keymap.ts`'s `resolve()`) — asked directly here because the `dblclick` listener has
+   *  no keymap resolving for it. One command's `when` answers both, so a plugin that changes what
+   *  "takes" a cell changes the pointer path and the key path together, instead of the pointer path
+   *  re-deriving `canWrite` on its own and drifting from what the command actually decides. */
+  #editorTakesFocusedCell(): boolean {
+    const command = this.#commandRegistry.find('freegantt.editFocusedCell');
+    return command?.when?.(this.#buildCommandContext()) ?? false;
   }
 
   #setHovered(next: BarId | undefined): void {

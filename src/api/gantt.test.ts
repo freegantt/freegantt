@@ -5122,6 +5122,31 @@ describe('Gantt entryActivate (#434)', () => {
     gantt.destroy();
   });
 
+  // #434 F4: a writable grid cell's double-click used to assume `canWrite` alone meant "an editor
+  // handles it" — with no `inlineEditing()` installed there is no editor, and the double-click did
+  // nothing. The fix asks one shared question instead (`#editorTakesFocusedCell`): does
+  // `freegantt.editFocusedCell` take this cell? With no `inlineEditing()`, core's own inert
+  // placeholder always declines, so this cell falls through to `entryActivate` the same way an
+  // unwritable cell already did.
+  it('double-click mode, no inlineEditing() installed: a writable grid cell still activates (#434 F4)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const gantt = new Gantt({ container, dataset, pointerActivation: 'dblclick' });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    const cell = container.querySelector<HTMLElement>('.fg-row-label[data-field="name"]')!;
+    cell.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
+
+    expect(activations).toEqual([
+      { entry: dataset.entries.get(sampleEntries[0]!.id), cause: 'dblclick', target: 'gridCell' },
+    ]);
+
+    gantt.destroy();
+  });
+
   it('Enter still activates in double-click mode (cause "key")', () => {
     const container = document.createElement('div');
     document.body.append(container);

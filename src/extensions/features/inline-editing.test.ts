@@ -1216,7 +1216,13 @@ describe('entryActivate precedence against inlineEditing() (#434)', () => {
       activations.push(p);
     });
 
-    dblclick(cellFor(container, 'e1', 'name'));
+    // #434: a real double-click's first mousedown moves DOM focus onto the cell before `dblclick`
+    // fires — the gantt-shell listener asks the same "does the editor take this cell?" question
+    // `Enter` does, off that same real focus (D-S5-39). This synthetic `dblclick` carries no
+    // mousedown of its own, so the test moves focus itself first.
+    const cell = cellFor(container, 'e1', 'name');
+    cell.focus();
+    dblclick(cell);
 
     expect(input(container).value).toBe('Task One');
     expect(activations).toEqual([]);
