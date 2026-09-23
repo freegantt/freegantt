@@ -4,7 +4,8 @@
 // re-read (D-S2-17). Rename/move/remove target `gantt.selectedEntryIds` (S3.1), not a parallel entry picker.
 // The lock checkbox is D-S2-25's `beforeChange` veto, made visible: the bar does
 // not move and `attemptMutation` returns `false` instead of throwing. S5.10 moved the veto itself
-// into a Dataset plugin (`plugins/lock-entries.ts`), so the flag lives in that plugin's own store.
+// into a Dataset plugin (`plugins/lock-entries.ts`), so the flag lives in that plugin's own `locked`
+// Field (#496 Q8), not a store row.
 //
 // S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
@@ -99,10 +100,10 @@ const ROLLUP_TREE = [
   },
 ];
 
-// S5.10, D-S5-24: the lock checkbox writes this plugin's own store instead of the page keeping a
-// flag of its own, and the plugin's `beforeChange` is what refuses the write. `Dataset.plugins` is
-// read-only, so every Dataset this page builds — including the imported one below — installs a
-// fresh one at construction.
+// S5.10, D-S5-24: the lock checkbox writes this plugin's own `locked` Field instead of the page
+// keeping a flag of its own, and the plugin's `beforeChange` is what refuses the write.
+// `Dataset.plugins` is read-only, so every Dataset this page builds — including the imported one
+// below — installs a fresh one at construction.
 const locks = lockEntries();
 
 /** This page's own Field values (ADR 0011) — `cost` is what `splitCostOverLeaves` below writes,

@@ -52,8 +52,8 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
 ];
 
 // S5.10, D-S5-24: one Dataset plugin owns every lock on this page — the checkbox below and the
-// right-click Lock/Unlock items both write its store, so the page keeps no lock state of its own.
-// `Dataset.plugins` is read-only, so it is installed here, at construction.
+// right-click Lock/Unlock items both write its `locked` Field (#496 Q8), so the page keeps no lock
+// state of its own. `Dataset.plugins` is read-only, so it is installed here, at construction.
 const locks = lockEntries();
 
 // `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A
@@ -348,8 +348,9 @@ costBtn.addEventListener('click', () => {
 });
 
 // D-S2-25 / S5.10: the checkbox locks the dataset's current first entry through the same plugin the
-// right-click menu uses. Locking is a real dataset write — it commits, it logs like every other
-// change, and Ctrl+Z unlocks (#156). The refusal itself is the plugin's own `beforeChange`.
+// right-click menu uses. Locking writes the plugin's `locked` Field — a real dataset write, so it
+// commits, it logs like every other change, and Ctrl+Z unlocks (#156). The refusal itself is the
+// plugin's own `beforeChange`.
 function firstEntryId(): string | undefined {
   return dataset.entries.all[0]?.id;
 }
