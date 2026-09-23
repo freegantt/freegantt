@@ -170,6 +170,85 @@ A plugin with a `data` half handed to a `Gantt` raises `PluginSetupError`, and
 the message names the Dataset as the site to use instead
 (`src/api/define-plugin.test.ts`, "the message says where to install it").
 
+## Edit extender
+
+A `data` half can cascade one edit into more writes — a `Field` a document
+computes for itself, a scheduling plugin that shifts a dependent's dates when
+its predecessor moves. `ctx.edits.setExtender` claims the one hook every
+proposed edit passes through before it commits. `docs/edit-extension-flow.md`
+walks the whole mechanism; this section covers the two seams a plugin author
+reaches through `ctx.edits` — the extender, and the per-entry lock rule.
+
+```ts
+import { definePlugin, mergeEntryEdits } from 'freegantt';
+import type { EditExtender } from 'freegantt';
+
+const cascadeStartDate: EditExtender = ({ entries, proposed }) => {
+  const extraEdits = new Map();
+  for (const [id, edit] of proposed) {
+    if (edit.start === undefined) continue;
+    const dependent = [...entries.values()].find((e) => e.parentId === id);
+    if (dependent) extraEdits.set(dependent.id, { start: edit.start });
+  }
+  return extraEdits;
+};
+
+function cascadesStart() {
+  return definePlugin({
+    id: 'demo.cascadesStart',
+    data(ctx) {
+      ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), cascadeStartDate(request)));
+    },
+  });
+}
+
+export { cascadesStart };
+```
+
+### Opening a locked Field for one Entry, or a subtree
+
+`Field.editable` locks a Field for every Entry alike — the grid never opens
+it, and `entries.update()` refuses it. A plugin that must open one locked
+Field on one Entry, or on a whole subtree, installs a per-entry lock rule
+instead of asking for the Field to reopen everywhere:
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function unlockCostUnder(subtreeRootId: string) {
+  return definePlugin({
+    id: 'demo.unlockCost',
+    data(ctx) {
+      ctx.edits.setLockRule(
+        (next) => (entry, field) =>
+          field === 'cost' && entry.isDescendantOf(subtreeRootId) ? 'anywhere' : next(entry, field),
+      );
+    },
+  });
+}
+
+export { unlockCostUnder };
+```
+
+That reads: open `cost` under one subtree root, otherwise whatever the next
+rule says. `entry` is a `FieldLockQuery` — `id`, and `isDescendantOf(ancestorId)`
+for the subtree question — not the live `Entry`. `undefined` is silence: the
+resolver falls back to `Field.editable` when no installed rule has an
+opinion on a cell.
+
+**The cascade meets the same lock a person at a keyboard meets.** A cascade
+that writes a `'never'` Field throws `FieldNotEditableError`, the same as
+`entries.update()`, unless a lock rule opened that cell first
+(`docs/edit-extension-flow.md`, "A cascade onto a locked Field"). An extender
+can check `request.editableOf(id, field)` before it writes, and a consumer
+can check the same answer through `dataset.editableOf(id, field)` — one
+resolved answer, published on both doors (I14, `plans/01` §11).
+
+**Installing composes**, the same way `setExtender` and `hierarchy.setSource`
+do (D-S5-23): the wrapper receives the current occupant, so a second plugin's
+rule adds to the first's instead of evicting it. See "Every registration
+seam" below for `edits.setLockRule`'s row.
+
 ## Why a factory, not a name-keyed table
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin
@@ -200,6 +279,7 @@ plugins claim the same key.
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
 | `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
+| `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
 
 `store.read<T>(pluginId)` is not a registration. It gives one plugin
 read-only access (`get`/`all`, no `set`/`remove`) to a store another plugin
