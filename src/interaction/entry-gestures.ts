@@ -10,7 +10,7 @@
 // threshold (a plain click) still resolves through `selectFromHit` on pointerup, unchanged; `mousedown`
 // itself still writes nothing — it exists only so a double-click cannot start a native text range.
 
-import type { EntryId, BarId } from '../model/index.js';
+import type { Entry, EntryId, BarId } from '../model/index.js';
 import { entryIdOfBar } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
 import type {
@@ -72,6 +72,16 @@ export function attachEntryGestures(
    *  0025). Cleared on an empty-click or Escape clear, so a shift-click right after either one
    *  degenerates to selecting just its target (there is no prior anchor to range from). */
   let anchor: EntryId | undefined;
+
+  /** #434: the activation candidate `selectFromHit` names on `pointerup`, held until the native
+   *  `click` that always follows it in the same synchronous dispatch. `PointerEvent.detail` never
+   *  counts clicks (Chromium always reports `0` there); `MouseEvent.detail` on `click` does (`1`,
+   *  then `2` for a double-click's second one — the browser's own count, no timer needed). So
+   *  `selectFromHit` only names *what* would activate; `onClick` below reads `event.detail` off the
+   *  one event that actually carries it, and fires. A pointerup that never reaches `selectFromHit`
+   *  (a drag release, `onPointerUp`'s own `drag.up(e)` early return) leaves this `undefined`, so the
+   *  `click` a completed drag still dispatches confirms nothing. */
+  let pendingActivation: { entry: Entry; target: 'bar' | 'row' } | undefined;
 
   /** Set on pointerdown when the hit is a `move`-capable bar or a `resize`-capable handle; cleared
    *  once the pointer stream for that gesture ends (commit or cancel), never read past that point. */
@@ -206,11 +216,13 @@ export function attachEntryGestures(
 
     // #434, I14: independent of `select` — a plain click still activates a capable Entry even when
     // its row/bar refuses `select` (`{ select: false, activate: true }` on a rollup row). Ctrl/Shift
-    // modify the Selection instead of opening anything, so neither modifier activates.
+    // modify the Selection instead of opening anything, so neither modifier activates. This only
+    // *names* the candidate — `onClick` below confirms it once the native `click` that always
+    // follows this `pointerup` carries the real click count (see `pendingActivation`'s own comment).
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
       const subject = ctx.activation.subjectEntryOf(hit);
       if (subject !== undefined && ctx.can('activate', subject)) {
-        ctx.activation.activate(subject, 'click', hit.kind);
+        pendingActivation = { entry: subject, target: hit.kind };
       }
     }
 
@@ -277,6 +289,18 @@ export function attachEntryGestures(
     if (ctx.selection.entryIds().length > 0) ctx.selection.propose([]);
   }
 
+  /** #434: confirms `pendingActivation` with the click count the browser's own `click` event
+   *  carries (`e.detail`) — see that field's own doc comment for why `pointerup` cannot read this
+   *  itself. Runs on `container` so one listener covers both the timeline pane's bars/rows and the
+   *  grid pane's own row layer. A `click` the browser dispatches with nothing pending (a drag
+   *  release, or a miss) is a no-op — `pendingActivation` is `undefined` there. */
+  function onClick(e: MouseEvent): void {
+    const pending = pendingActivation;
+    pendingActivation = undefined;
+    if (pending === undefined) return;
+    ctx.activation.activateFromClick(pending.entry, e.detail, pending.target);
+  }
+
   /** `user-select: none` stops highlight *inside* the Gantt. A double-click still starts a native
    *  word range on nearby page text (the harness chrome). `detail > 1` is the second click of that
    *  sequence; the first click still focuses the container (preventDefault on mousedown would not). */
@@ -330,6 +354,7 @@ export function attachEntryGestures(
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('mousedown', onMouseDown);
   container.addEventListener('selectstart', onSelectStart);
+  container.addEventListener('click', onClick);
 
   return {
     detach(): void {
@@ -345,6 +370,7 @@ export function attachEntryGestures(
       container.removeEventListener('keydown', onKeyDown);
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('selectstart', onSelectStart);
+      container.removeEventListener('click', onClick);
     },
   };
 }

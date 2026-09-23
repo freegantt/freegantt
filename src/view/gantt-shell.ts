@@ -268,6 +268,13 @@ export interface GanttShellWiring {
   now?: () => Instant;
 }
 
+/** #434: which pointer gesture fires `entryActivate`. `'click'` (the default) activates on a plain
+ *  click, once per physical click — a double-click's second click does not activate again.
+ *  `'dblclick'` replaces click as the trigger: a single click only selects, and a double-click
+ *  activates once. The two never both fire — this chooses the trigger, it does not add a second
+ *  one. */
+export type PointerActivation = 'click' | 'dblclick';
+
 export interface GanttShellOptions {
   /** Element or CSS selector (plans/02 §2); a selector that matches nothing throws (#38). */
   container: HTMLElement | string;
@@ -315,10 +322,12 @@ export interface GanttShellOptions {
   /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
    *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
   capabilities?: Capabilities;
-  /** Live (#434). Default `false`: `entryActivate` fires only for `'click'` and `'key'`. `true`
-   *  adds `'dblclick'` — a double-click on a bar or a row's own background (never a grid cell,
-   *  `'gridCell'` stays reserved for `inlineEditing()`'s own double-click). */
-  dblclickActivates?: boolean;
+  /** Live (#434). Default `'click'`: `entryActivate` fires on a plain click of a bar or a row's own
+   *  background. `'dblclick'` replaces click as the pointer trigger: a single click only selects,
+   *  and a double-click activates once. On a grid cell, `'dblclick'` activates only a cell
+   *  `capabilities` refuses to write — a writable cell's double-click stays `inlineEditing()`'s own
+   *  (the same editable-cell-wins precedence `Enter` already gives the editor). */
+  pointerActivation?: PointerActivation;
   /** Live (D-S3-24). What a drag snaps to on this Gantt, over the showing preset's own `snap`.
    *  Omitted, the preset decides. */
   snap?: SnapSetting;
@@ -525,9 +534,11 @@ export class GanttShell {
   #snap: SnapSetting | undefined;
   #viewportGestures: ViewportGestures = {};
   #resolvedViewportGestures = resolveViewportGestures(undefined);
-  /** #434: gates the `dblclick` listener below. `false` (default): a double-click never activates,
-   *  only `'click'` and `'key'` do. */
-  #dblclickActivates = false;
+  /** #434: which pointer gesture fires `entryActivate` — see `PointerActivation`. `'click'`
+   *  (default) gates a click's own activation to its first physical click (`selectFromHit` reads
+   *  `e.detail`); `'dblclick'` gates the click path off entirely and gates the `dblclick` listener
+   *  below on instead. */
+  #pointerActivation: PointerActivation = 'click';
   #capabilities: ResolvedCapabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
@@ -954,7 +965,7 @@ export class GanttShell {
     this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
     this.#resolvedViewportGestures = resolveViewportGestures(this.#viewportGestures);
-    this.#dblclickActivates = options.dblclickActivates ?? false;
+    this.#pointerActivation = options.pointerActivation ?? 'click';
     this.#capabilities = this.#resolveCapabilities();
     this.#entrySelection = new EntrySelection(this.#entrySelectionPorts());
     this.#treeCollapse = new TreeCollapse({
@@ -1023,7 +1034,7 @@ export class GanttShell {
       // }` names no selectable Entry there but still names an activation subject here.
       activation: {
         subjectEntryOf: (hit) => this.#subjectEntryOf(hit),
-        activate: (entry, cause, target) => this.#activateEntry(entry, cause, target),
+        activateFromClick: (entry, detail, target) => this.#activateFromClick(entry, detail, target),
       },
       setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
@@ -1044,16 +1055,23 @@ export class GanttShell {
     };
     this.#container.addEventListener('keydown', this.#keymapListener);
     this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
-    // #434: opt-in (`dblclickActivates`), always attached — the flag gates inside the handler, the
-    // same shape the wheel handlers gate on `#resolvedViewportGestures`. The check below excludes
-    // `'gridCell'` on purpose: a double-click on a grid cell (including the row-label cell) stays
-    // `inlineEditing()`'s own surface (`ctx.view.onDomEvent('dblclick', …)`). Neither listener has
-    // an ordering dependency on the other — they never react to the same node kind.
+    // #434: opt-in (`pointerActivation: 'dblclick'`), always attached — the option gates inside the
+    // handler, the same shape the wheel handlers gate on `#resolvedViewportGestures`. A grid cell's
+    // double-click mirrors the `Enter` precedence `inlineEditing()` already gives the editor
+    // (`canEditFocusedCell`): a writable cell's double-click stays the editor's own
+    // (`ctx.view.onDomEvent('dblclick', …)`) and does not also activate here, so this listener
+    // checks writability itself before falling through. This listener sits on `#container`, a
+    // bubble-phase ancestor of `inlineEditing()`'s document-level one, so a `return` here always
+    // reaches that listener next — no explicit ordering needed beyond where each one attaches.
     this.#dblClickListener = (event: MouseEvent) => {
-      if (!this.#dblclickActivates || !(event.target instanceof Node)) return;
+      if (this.#pointerActivation !== 'dblclick' || !(event.target instanceof Node)) return;
       const domTarget = this.#dom.targetUnder(event.target);
       if (domTarget === undefined || domTarget.entry === undefined) return;
-      if (domTarget.kind !== 'row' && domTarget.kind !== 'bar') return;
+      if (domTarget.kind !== 'row' && domTarget.kind !== 'bar' && domTarget.kind !== 'gridCell') return;
+      if (domTarget.kind === 'gridCell') {
+        const field = domTarget.field;
+        if (field !== undefined && this.#capabilities.canWrite(domTarget.entry, field).ok) return;
+      }
       if (!this.#canGesture('activate', domTarget.entry.id)) return;
       this.#activateEntry(domTarget.entry, 'dblclick', domTarget.kind);
     };
@@ -1581,15 +1599,15 @@ export class GanttShell {
     this.#resolvedViewportGestures = resolveViewportGestures(next);
   }
 
-  get dblclickActivates(): boolean {
-    return this.#dblclickActivates;
+  get pointerActivation(): PointerActivation {
+    return this.#pointerActivation;
   }
 
-  /** Live (#434): the next double-click reads the new flag. The listener is always attached, and
-   *  this alone gates it — the same shape `viewportGestures`'s resolved flags gate an
-   *  already-attached wheel handler. */
-  set dblclickActivates(next: boolean) {
-    this.#dblclickActivates = next;
+  /** Live (#434): the next click or double-click reads the new option. The `dblclick` listener is
+   *  always attached, and this alone gates it — the same shape `viewportGestures`'s resolved flags
+   *  gate an already-attached wheel handler. */
+  set pointerActivation(next: PointerActivation) {
+    this.#pointerActivation = next;
   }
 
   /** S5.2, D-S5-6: the live `CommandContext` builder.
@@ -2095,6 +2113,17 @@ export class GanttShell {
    *  one place this event actually reaches the bus, for every cause. */
   #activateEntry(entry: Entry, cause: EntryActivate['cause'], target: TargetKind): void {
     this.#emit('entryActivate', { entry, cause, target });
+  }
+
+  /** #434: `EntryGestureContext.activation.activateFromClick` — gates a click's own activation on
+   *  `#pointerActivation`. `'dblclick'` mode makes click stop being a trigger at all: its opt-in
+   *  *replaces* click, it does not add `'dblclick'` alongside it, so this never fires there. `'click'`
+   *  mode (default) still fires only once per physical double-click: the browser sends two `click`
+   *  events before one `dblclick`, and `detail` is their own click count — `>= 2` names the second
+   *  one, already accounted for by the first click's own activation. */
+  #activateFromClick(entry: Entry, detail: number, target: 'bar' | 'row'): void {
+    if (this.#pointerActivation !== 'click' || detail >= 2) return;
+    this.#activateEntry(entry, 'click', target);
   }
 
   /** #434, I14: the row, bar, or grid cell real keyboard focus sits on right now, and its own

@@ -78,8 +78,13 @@ export interface ActivationForGestures {
    *  none, or the bar's Entry is gone. Names *which* Entry only; the caller still asks
    *  `can('activate', entry)` before firing (I14). */
   subjectEntryOf(hit: EntryHit): Entry | undefined;
-  /** Fires `entryActivate` with cause `'click'` (no veto: activation mutates nothing). */
-  activate(entry: Entry, cause: 'click', target: 'bar' | 'row'): void;
+  /** Fires `entryActivate` with cause `'click'`, gated by both the pointer trigger
+   *  (`GanttShellOptions.pointerActivation`) and `detail`, the click's own click count. Under
+   *  `pointerActivation: 'click'` (default) this fires only for a click's first physical press —
+   *  `detail >= 2` is a no-op, so one physical double-click still activates once, not twice. Under
+   *  `'dblclick'` this never fires at all; that mode's only pointer trigger is `GanttShell`'s own
+   *  native `dblclick` listener. No veto: activation mutates nothing. */
+  activateFromClick(entry: Entry, detail: number, target: 'bar' | 'row'): void;
 }
 
 /** Grown from S3.1/S3.2's `EntrySelectionContext` into the full gesture context (D-S3-5/D-GH-1): the
