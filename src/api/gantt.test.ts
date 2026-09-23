@@ -7584,7 +7584,7 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     gantt.destroy();
   });
 
-  it('collapseStateOf answers each state, a hidden descendant, a stale id, and a grouping header', async () => {
+  it('collapseStateOf answers each state, a hidden descendant, a stale id, and a grouping header', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'category' }],
@@ -7625,20 +7625,55 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     expect(gantt.collapseStateOf('p')).toBe('collapsed');
     expect(gantt.collapseStateOf('c')).toBe('leaf');
 
-    // No such row: a removed entry's id.
+    // No such row: a removed entry's id, answered right after the write, with no frame painted in
+    // between (#424).
     dataset.entries.remove('leaf');
-    await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(gantt.collapseStateOf('leaf')).toBeUndefined();
 
     // A stale id that never named a row.
     expect(gantt.collapseStateOf('never-existed')).toBeUndefined();
 
-    // A grouping header row answers by the same rule as any other row.
+    // A grouping header row answers by the same rule as any other row, at once.
     gantt.rowSource = { source: 'group', groupBy: (item: Entry) => item.read('category') as string };
-    await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(gantt.collapseStateOf('group:group')).toBe('expanded');
     gantt.collapse('group:group');
     expect(gantt.collapseStateOf('group:group')).toBe('collapsed');
+
+    gantt.destroy();
+  });
+
+  it('collapseStateOf answers a synchronous add and reparent, with no frame painted in between (#424)', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'leaf', name: 'leaf', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'other', name: 'other', start: '2026-01-03', end: '2026-01-04' },
+      ],
+    });
+    const gantt = new Gantt({
+      container: document.createElement('div'),
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+    });
+
+    // Leaf, before it gets a child.
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+
+    // Adding a child under a leaf turns its parent expandable — and expanded — at once.
+    dataset.entries.add({
+      id: 'child',
+      name: 'child',
+      start: '2026-01-05',
+      end: '2026-01-06',
+      parentId: 'leaf',
+    });
+    expect(gantt.collapseStateOf('leaf')).toBe('expanded');
+
+    // Reparenting the child under `other` turns `leaf` back into a plain leaf, and `other`
+    // expandable, at once.
+    dataset.entries.update('child', { parentId: 'other' });
+    expect(gantt.collapseStateOf('leaf')).toBe('leaf');
+    expect(gantt.collapseStateOf('other')).toBe('expanded');
 
     gantt.destroy();
   });

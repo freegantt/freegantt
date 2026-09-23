@@ -260,6 +260,17 @@ export class FrameSettings {
     return this.#metrics.rowHeight;
   }
 
+  /** The Field bind's own compares, read back by `GanttShell`'s row-plan input (#424): the row tree
+   *  sorts by them, so a synchronous replan needs the same value `toLayoutInput` would send next. */
+  get fieldCompares(): readonly FieldCompare[] {
+    return this.#values.fieldCompares;
+  }
+
+  /** The Field bind's own context, same reason as `fieldCompares` above. */
+  get fieldContext(): FieldContext | undefined {
+    return this.#values.fieldContext;
+  }
+
   /** Minimum painted bar width in px, from `--fg-bar-min-width` — every bar's painted-span floor. */
   get minBarWidthPx(): number {
     return this.#metrics.minBarWidthPx;

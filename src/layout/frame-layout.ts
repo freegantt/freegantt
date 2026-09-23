@@ -122,11 +122,7 @@ export class FrameLayout implements FrameLayoutView {
     // #495, #414: does this frame ask a different question about which rows exist, in what order,
     // than the last one did? A scroll or a pan never does — `visible`/`revision`/`rowHeight` are not
     // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below.
-    const planInput = planInputFrom(input);
-    if (this.#lastPlanInput === undefined || !samePlanInput(this.#lastPlanInput, planInput)) {
-      this.#planRows(planInput);
-      this.#lastPlanInput = planInput;
-    }
+    this.ensureRowPlan(planInputFrom(input));
     this.#memory.sync({
       plan: this.#plan,
       rowHeight: input.rowHeight,
@@ -135,6 +131,17 @@ export class FrameLayout implements FrameLayoutView {
       datasetRevision: input.datasetRevision,
     });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations);
+  }
+
+  /** Brings the row plan up to date with `input`, without painting a frame (#424). A write between
+   *  frames — `entries.remove()`, `entries.add()`, a reparent, a `rowSource` change — leaves the row
+   *  tree this planned stale until the next `computeFrame` call; a synchronous reader like
+   *  `collapseStateOf` cannot wait for that. Costs an identity comparison per `RowPlanInput` field
+   *  when the plan is already current, the same check `computeFrame` itself makes on every frame. */
+  ensureRowPlan(input: RowPlanInput): void {
+    if (this.#lastPlanInput !== undefined && samePlanInput(this.#lastPlanInput, input)) return;
+    this.#planRows(input);
+    this.#lastPlanInput = input;
   }
 
   // #495, #414: takes `RowPlanInput`, never `LayoutInput` — a field this method reads that is not

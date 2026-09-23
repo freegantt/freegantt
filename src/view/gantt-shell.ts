@@ -39,6 +39,7 @@ import type {
   Bar,
   TimeScale,
   ResolvedColumn,
+  RowPlanInput,
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
@@ -953,7 +954,14 @@ export class GanttShell {
         }),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
-      expandableOfRow: (id) => this.#layout.expandableOfRow(id),
+      // #424: a row hidden under a collapsed ancestor still answers its own state, and a write since
+      // the last painted frame — a remove, an add, a reparent, a `rowSource` change — must answer
+      // before the next frame, not after it. `ensureRowPlan` replans on demand, at the cost of an
+      // identity check when nothing changed.
+      expandableOfRow: (id) => {
+        this.#layout.ensureRowPlan(this.#rowPlanInput());
+        return this.#layout.expandableOfRow(id);
+      },
     });
     this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
     this.#teardown.add(() => this.#rovingFocus.detach());
@@ -2511,6 +2519,22 @@ export class GanttShell {
       width: this.#paneBox.width,
       height: Math.max(0, this.#paneBox.height - headerHeight),
     });
+  }
+
+  /** What `FrameLayout.ensureRowPlan` needs to answer the row tree right now, built the same way
+   *  `render()` builds its half of a `LayoutInput` (#424). Cheap to call on every row-tree read: a
+   *  field here that has not changed since the last plan costs an identity check, not a replan. */
+  #rowPlanInput(): RowPlanInput {
+    return {
+      entries: this.#options.dataset.entries.all,
+      datasetRevision: this.#options.dataset.datasetRevision,
+      rows: this.#frameSettings.rowSource,
+      fieldCompares: this.#frameSettings.fieldCompares,
+      fieldContext: this.#frameSettings.fieldContext,
+      entryRulePorts: this.#entryRulePorts,
+      collapsed: this.#treeCollapse.ids,
+      fieldRegistryRevision: this.#options.fieldRegistryRevision?.() ?? 0,
+    };
   }
 
   render(): void {
