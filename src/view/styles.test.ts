@@ -23,7 +23,7 @@ function fakeDataset(list: readonly StoredEntry[]): GanttShellOptions['dataset']
       const declared = CORE_FIELDS.find((field) => String(field.key) === String(key));
       return declared === undefined ? 'never' : editableOf(declared);
     },
-    on: () => {},
+    on: () => () => {},
     off: () => {},
   };
 }

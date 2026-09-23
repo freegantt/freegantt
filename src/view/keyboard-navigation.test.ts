@@ -172,7 +172,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
         const declared = CORE_FIELDS.find((field) => String(field.key) === String(fieldKey));
         return declared === undefined ? 'never' : editableOf(declared);
       },
-      on: () => {},
+      on: () => () => {},
       off: () => {},
     };
   }

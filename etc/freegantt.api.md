@@ -369,8 +369,7 @@ export class Dataset<TProps = unknown> {
     };
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
-    // (undocumented)
-    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
     get plugins(): readonly PluginOf<unknown, Dataset<TProps>>[];
     pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
     // (undocumented)
@@ -410,8 +409,7 @@ export interface DatasetEventMap {
 export interface DatasetEvents {
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
-    // (undocumented)
-    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
+    on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
 }
 
 // @public
@@ -1201,8 +1199,7 @@ export class Gantt<TProps = unknown> {
     set minGridWidth(px: number);
     // (undocumented)
     off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
-    // (undocumented)
-    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): Disposer;
     get overscan(): Overscan;
     set overscan(o: Overscan);
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
@@ -1313,8 +1310,7 @@ export interface GanttEventMap {
 export interface GanttEvents {
     // (undocumented)
     off<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
-    // (undocumented)
-    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): void;
+    on<K extends keyof GanttEventMap>(name: K, handler: GanttEventHandler<K>): Disposer;
 }
 
 // @public (undocumented)
