@@ -14,8 +14,8 @@
 // `Gantt` and its `Dataset` in `refresh()`, which the library's own events drive. A toolbar that
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
-import type { Gantt, SnapSetting } from 'freegantt';
-import { formatDate, formatEndInclusive, isTimeUnit } from 'freegantt';
+import type { Gantt, SnapSetting, TimeSpan } from 'freegantt';
+import { diffMs, formatDate, formatEndInclusive, isTimeUnit, MS, overlap } from 'freegantt';
 
 export interface GanttToolbarOptions {
   gantt: Gantt;
@@ -139,12 +139,19 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
   const spanReadout = document.createElement('span');
   spanReadout.className = 'toolbar-readout';
 
+  // How much of the dataset falls inside that window? Every entry counts, including one scrolled
+  // above or below the pane — only the horizontal window filters (issue #472). `overlap()` clips
+  // each leaf's span to `visibleSpan`; a row that pokes half out of the window on one side counts
+  // half its own duration, so this is a window total, not a per-row read.
+  const hoursReadout = document.createElement('span');
+  hoursReadout.className = 'toolbar-readout';
+
   bar.append(
     group(undoBtn, redoBtn),
     group(collapseBtn, expandBtn),
     group(zoomMeasure),
     group(todayBtn),
-    group(spanReadout),
+    group(spanReadout, hoursReadout),
   );
 
   // What do dragged edges land on?
@@ -175,6 +182,20 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
     return isTimeUnit(value) ? { unit: value, increment: 1 } : 'tick';
   }
 
+  // The window total the readout shows. Walks every leaf — a row with children already rolls its
+  // children's values up onto itself (#270), so counting the parent too would double the hours.
+  function visibleHours(span: TimeSpan): number {
+    let hours = 0;
+    for (const entry of dataset.entries.all) {
+      if (entry.start === undefined || entry.end === undefined) continue;
+      if (entry.hasChildren) continue;
+      const visible = overlap({ start: entry.start, end: entry.end }, span);
+      if (visible === undefined) continue;
+      hours += diffMs(visible.end, visible.start) / MS.HOUR;
+    }
+    return hours;
+  }
+
   // One place reads the live state back. Nothing here is cached; every value comes off the Gantt or
   // the Dataset that owns it.
   function refresh(): void {
@@ -188,6 +209,7 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
     const span = gantt.visibleSpan;
     const zone = dataset.timeZone;
     spanReadout.textContent = `Showing ${formatDate(zone, span.start)} – ${formatEndInclusive(zone, span)}`;
+    hoursReadout.textContent = `Visible hours: ${Math.round(visibleHours(span))}`;
   }
 
   undoBtn.addEventListener('click', () => gantt.commands.run('freegantt.undo'));

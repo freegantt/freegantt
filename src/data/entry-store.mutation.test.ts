@@ -77,7 +77,7 @@ describe('entries.add', () => {
     const state = dataset();
     const entry = state.entries.add({ id: 't9', name: 'Roofing', start: 0 });
 
-    expect(entry.start).toBe(toInstant('UTC', 0));
+    expect(entry.start).toBe(toInstant('UTC', 0, 'test'));
     expect(entry.end).toBeUndefined();
   });
 });
@@ -121,8 +121,8 @@ describe('entries.update', () => {
 
     expect(updated.start).toBe(constructed.start);
     expect(updated.end).toBe(constructed.end);
-    expect(updated.start).toBe(toInstant('UTC', '2026-09-08'));
-    expect(updated.end).toBe(toEndInstant('UTC', '2026-09-09', 'inclusive'));
+    expect(updated.start).toBe(toInstant('UTC', '2026-09-08', 'test'));
+    expect(updated.end).toBe(toEndInstant('UTC', '2026-09-09', 'inclusive', 'test'));
   });
 
   it('an unknown id throws EntryNotFoundError', () => {
@@ -288,8 +288,8 @@ describe('rollup (§1.5)', () => {
 
     const mid = state.entries.get('mid')!;
     const root = state.entries.get('root')!;
-    expect(mid.start).toBe(toInstant('UTC', '2026-04-01'));
-    expect(mid.end).toBe(toEndInstant('UTC', '2026-04-10', 'inclusive'));
+    expect(mid.start).toBe(toInstant('UTC', '2026-04-01', 'test'));
+    expect(mid.end).toBe(toEndInstant('UTC', '2026-04-10', 'inclusive', 'test'));
     expect(root.start).toBe(mid.start);
     expect(root.end).toBe(mid.end);
   });
@@ -301,8 +301,8 @@ describe('rollup (§1.5)', () => {
     ]);
 
     const p1 = state.entries.get('p1')!;
-    expect(p1.start).toBe(toInstant('UTC', '2026-01-01'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive'));
+    expect(p1.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
+    expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
   });
 
   it('an Entry written as a leaf keeps the proposed span when the same transaction gives it a child', () => {
@@ -320,8 +320,8 @@ describe('rollup (§1.5)', () => {
     });
 
     const x = state.entries.get('x')!;
-    expect(x.start).toBe(toInstant('UTC', '2026-09-01'));
-    expect(x.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive'));
+    expect(x.start).toBe(toInstant('UTC', '2026-09-01', 'test'));
+    expect(x.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive', 'test'));
   });
 });
 
@@ -414,8 +414,8 @@ describe('removability (D-S2-23)', () => {
     state.entries.update('c1', { start: '2026-05-01', end: '2026-05-10' });
 
     const p1 = state.entries.get('p1')!;
-    expect(p1.start).toBe(toInstant('UTC', '2026-05-01'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-05-10', 'inclusive'));
+    expect(p1.start).toBe(toInstant('UTC', '2026-05-01', 'test'));
+    expect(p1.end).toBe(toEndInstant('UTC', '2026-05-10', 'inclusive', 'test'));
   });
 });
 
@@ -437,14 +437,14 @@ describe('the write door: what entries.update() refuses (ADR 0015)', () => {
     const state = doorDataset();
 
     expect(() => state.entries.update('e1', { start: '2026-03-01' })).toThrow(FieldNotEditableError);
-    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
   });
 
   it("un-dating a 'never' Field is a change too, so it throws as well", () => {
     const state = doorDataset();
 
     expect(() => state.entries.update('e1', { start: undefined })).toThrow(FieldNotEditableError);
-    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
   });
 
   it("writes an 'api' Field — that state closes the grid cell, never this door", () => {
@@ -478,10 +478,10 @@ describe('the write door: what entries.update() refuses (ADR 0015)', () => {
   // A lock names what a *caller* may write, never what the library may.
   it('lets construction, entries.add() and History replay write a locked Field', () => {
     const state = doorDataset();
-    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01'));
+    expect(state.entries.get('e1')!.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
 
     state.entries.add({ id: 'e2', name: 'e2', start: '2026-02-01', end: '2026-02-03' });
-    expect(state.entries.get('e2')!.start).toBe(toInstant('UTC', '2026-02-01'));
+    expect(state.entries.get('e2')!.start).toBe(toInstant('UTC', '2026-02-01', 'test'));
 
     // The replay half: move a date while the Field is open, lock it, then undo. The undo replays a
     // `start` write onto a Field the consumer has since locked, and it must still land.
@@ -491,7 +491,7 @@ describe('the write door: what entries.update() refuses (ADR 0015)', () => {
 
     openThenLocked.undo();
 
-    expect(openThenLocked.entries.get('x')!.start).toBe(toInstant('UTC', '2026-01-01'));
+    expect(openThenLocked.entries.get('x')!.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
   });
 });
 
@@ -509,7 +509,7 @@ describe('a lock holds at every caller-facing door (ADR 0015)', () => {
     });
 
     expect(() => state.entries.update('e1', { end: undefined })).toThrow(FieldNotEditableError);
-    expect(state.entries.get('e1')!.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+    expect(state.entries.get('e1')!.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
   });
 
   it('removes a child Entry whose own dates are open, as it always did', () => {

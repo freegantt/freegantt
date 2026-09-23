@@ -1437,10 +1437,17 @@ export type InstantInput = Instant | Date | number | string;
 
 // @public
 export class InvalidInstantError extends FreeGanttError {
-    constructor(message: string, value?: unknown);
+    constructor(value: unknown, reason: InvalidInstantReason, operation: string);
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly reason: InvalidInstantReason;
     // (undocumented)
     readonly value: unknown;
 }
+
+// @public
+export type InvalidInstantReason = 'unreadable' | 'no-such-date' | 'not-finite' | 'null-value' | 'zoneless';
 
 // @public
 export class InvalidPlainTimeError extends FreeGanttError {
@@ -1623,6 +1630,9 @@ export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 
 // @public (undocumented)
 export function now(): Instant;
+
+// @public
+export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined;
 
 // @public
 export interface Overscan {

@@ -154,16 +154,81 @@ export class ContainerNotFoundError extends FreeGanttError {
   }
 }
 
-/** `code: 'invalid-instant'` — a consumer wrote a value on an `InstantInput` field that names no instant
- * (an unparseable string, or a calendar date that does not exist such as `'2026-02-31'`). `value` is
- * the thing they wrote, so a bulk loader can name the row it came from. */
+/** Why `toInstant`/`instant` refused a value — the closed set `InvalidInstantError.reason` takes, so
+ *  a consumer branches on data instead of parsing the message (#242).
+ *
+ *  - `'unreadable'` — not a date this library reads at all: an unparseable string, a boolean, a
+ *    plain object, an array. The catch-all for everything the other four reasons do not name.
+ *  - `'no-such-date'` — a calendar date the calendar does not have, such as `'2026-02-31'`.
+ *  - `'not-finite'` — a `number` that is not a finite count of epoch milliseconds (`NaN`, `Infinity`).
+ *  - `'null-value'` — `null` or `undefined`. Not a zone problem: an absent date is a value left out,
+ *    not a null one (#431 F6).
+ *  - `'zoneless'` — a real wall-clock reading with no zone attached, handed to `instant()`, which
+ *    resolves no zone. Only `instant()` produces it — `toInstant` has a zone and resolves such a
+ *    string instead of refusing it. */
+export type InvalidInstantReason = 'unreadable' | 'no-such-date' | 'not-finite' | 'null-value' | 'zoneless';
+
+/** `code: 'invalid-instant'` — a consumer wrote a value on an `InstantInput` field that names no
+ *  instant. `value` is the thing they wrote, so a bulk loader can name the row it came from; `reason`
+ *  is why, so a consumer branches on data rather than parsing the message. `operation` names the
+ *  public call the consumer made — required, because `time/`'s internal door (`invalidInstant()`)
+ *  takes it as a required parameter too, so no caller can forget it (#242).
+ *
+ *  The two `private static` readers below build the message from `value`/`reason` alone — no shared
+ *  state, nothing beyond what this one class already carries — the same reason `PluginSetupError`
+ *  above keeps its own alternate constructor rather than reaching out of the class for one. */
 export class InvalidInstantError extends FreeGanttError {
   readonly value: unknown;
+  readonly reason: InvalidInstantReason;
+  readonly operation: string;
 
-  constructor(message: string, value?: unknown) {
-    super('invalid-instant' satisfies BuiltInThrownCode, message);
+  constructor(value: unknown, reason: InvalidInstantReason, operation: string) {
+    super(
+      'invalid-instant' satisfies BuiltInThrownCode,
+      `${operation}: ${InvalidInstantError.readAs(value)} ${InvalidInstantError.explain(reason)}`,
+    );
     this.name = 'InvalidInstantError';
     this.value = value;
+    this.reason = reason;
+    this.operation = operation;
+  }
+
+  /** How the bad value reads back to the consumer who wrote it. `String` alone is not enough on an
+   *  untyped door (#431): a plain object prints as "[object Object]" and an array prints as the
+   *  empty string, so a JSON-sourced `start: {}` would name nothing at all and a `start: []` would
+   *  leave a bare gap before the reason. A string is quoted, so an empty string and a stray space
+   *  are both visible. Everything else prints as itself — `String(new Date(NaN))` is already the
+   *  words "Invalid Date". A structure that cannot be serialized at all (a cycle, a BigInt) falls
+   *  back to its own type name, because a thrown message is worse than a vague one. */
+  private static readAs(value: unknown): string {
+    if (typeof value === 'string') return JSON.stringify(value);
+    // A `Date` prints itself, never its JSON: `JSON.stringify(new Date(NaN))` is the word "null",
+    // which would name the wrong reason outright — the one reason whose own text is `'null-value'`.
+    if (value === null || value instanceof Date || typeof value !== 'object') return String(value);
+    try {
+      return JSON.stringify(value) ?? Object.prototype.toString.call(value);
+    } catch {
+      return Object.prototype.toString.call(value);
+    }
+  }
+
+  /** The sentence each `InvalidInstantReason` prints — what happened, then what to write instead. */
+  private static explain(reason: InvalidInstantReason): string {
+    switch (reason) {
+      case 'unreadable':
+        return 'is not a date this library reads. Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.';
+      case 'no-such-date':
+        return 'names a date the calendar does not have. Write a date the calendar has.';
+      case 'not-finite':
+        return 'is not a finite count of epoch milliseconds. Write an ISO date such as "2026-09-08", a count of epoch milliseconds, or a Date.';
+      case 'null-value':
+        return 'names no instant. An absent date is a value left out, not a null one. Write a date, or leave it out.';
+      case 'zoneless':
+        return (
+          'is a plain time and names no instant until a zone resolves it. Write an explicit offset or "Z", ' +
+          "or read it in a zone — `fromPlain(zone, parts)`, or any Dataset write, which uses the dataset's zone."
+        );
+    }
   }
 }
 

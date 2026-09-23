@@ -237,6 +237,9 @@ export type {
 // `BuiltInThrownCode` names every code a consumer can catch, so a `switch` on `.code` is exhaustive;
 // `ThrownCode` is that plus a consumer's own, for a subclass they write themselves.
 export type { BuiltInThrownCode, ThrownCode } from '../model/index.js';
+// `InvalidInstantError.reason`'s closed set (#242) — exported so a consumer can branch on it by type,
+// not just read it off a caught error.
+export type { InvalidInstantReason } from '../model/index.js';
 export {
   FreeGanttError,
   UnsupportedUnitError,
@@ -427,6 +430,9 @@ export { currency } from '../data/fields/field-types.js';
 // button then used `instant(Date.now())` the same way). `diffMs` is `addMs`'s pair, added in S5.10
 // for the same reason: `harness/plugins/lock-entries.ts` reads how far a proposed edit moved an
 // entry, and subtracting two `Instant`s by hand is exactly the arithmetic I10 exists to stop.
+// `overlap` clips one `TimeSpan` to another, added in #472 for the same reason: a consumer totalling
+// a Field over `gantt.visibleSpan` had no public way to clip an entry's span to the window without
+// the same hand `Math.max`/`Math.min`-and-cast.
 // Named preset constants and `resolvePreset` stay internal — resolving a `PresetRef` is core's job.
 export {
   presets,
@@ -434,6 +440,7 @@ export {
   now,
   addMs,
   diffMs,
+  overlap,
   MS,
   formatDate,
   formatEndInclusive,

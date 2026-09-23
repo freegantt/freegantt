@@ -19,7 +19,7 @@ describe('the extension hook may not propose a field the body already proposed o
       // The extender always answers with its own start, on the same entry the body's write targets.
       editExtender: (): EntryEdits =>
         new Map<ReturnType<typeof entryId>, EntryEdit>([
-          [entryId('t1'), { start: toInstant('UTC', '2026-01-05') }],
+          [entryId('t1'), { start: toInstant('UTC', '2026-01-05', 'test') }],
         ]),
     });
 
@@ -29,14 +29,14 @@ describe('the extension hook may not propose a field the body already proposed o
     });
     const revisionBefore = state.datasetRevision;
 
-    expect(() => state.entries.update('t1', { start: toInstant('UTC', '2026-01-01') })).toThrow(
+    expect(() => state.entries.update('t1', { start: toInstant('UTC', '2026-01-01', 'test') })).toThrow(
       /extension hook proposed field "start" on entry "t1", which the transaction body already proposed/,
     );
 
     expect(committed).toHaveLength(0);
     expect(state.datasetRevision).toBe(revisionBefore);
     const entry = state.entries.get('t1')!;
-    expect(entry.start).toBe(toInstant('UTC', '2026-01-01'));
-    expect(entry.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive'));
+    expect(entry.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
+    expect(entry.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
   });
 });

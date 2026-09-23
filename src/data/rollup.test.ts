@@ -109,8 +109,8 @@ describe('rollUpFields (S4.2)', () => {
     });
 
     const rolled = state.entries.get('g1')!;
-    expect(rolled.start).toBe(toInstant('UTC', '2026-03-01'));
-    expect(rolled.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
+    expect(rolled.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
+    expect(rolled.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive', 'test'));
   });
 
   it('D-S4-9: a throwing Aggregator raises AggregatorFailedError and commits nothing', () => {
@@ -177,7 +177,7 @@ describe('rollUpFields (S4.2)', () => {
 
     const parent = state.entries.get('p1')!;
     expect(parent.read('notes')).toBe(5);
-    expect(parent.start).toBe(toInstant('UTC', '2026-06-01'));
+    expect(parent.start).toBe(toInstant('UTC', '2026-06-01', 'test'));
   });
   describe('#470: a core Field may opt out of the Rollup with rollUp: none', () => {
     it('a parent whose start/end opt out keeps its authored dates, and the Rollup writes neither', () => {
@@ -200,8 +200,8 @@ describe('rollUpFields (S4.2)', () => {
       state.entries.update('c1', { start: '2026-06-01', end: '2026-06-10' });
 
       const parent = state.entries.get('p1')!;
-      expect(parent.start).toBe(toInstant('UTC', '2026-01-01'));
-      expect(parent.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+      expect(parent.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
+      expect(parent.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
       expect(changeSet).toBeDefined();
       const parentWrite = changeSet!.updated.find(
         (row) => row.store === 'entries' && row.id === entryId('p1'),
@@ -222,8 +222,8 @@ describe('rollUpFields (S4.2)', () => {
       state.entries.add({ id: 'child', name: 'child', parentId: 'leaf' });
 
       const promoted = state.entries.get('leaf')!;
-      expect(promoted.start).toBe(toInstant('UTC', '2026-01-01'));
-      expect(promoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+      expect(promoted.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
+      expect(promoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
     });
 
     it('a parent that loses its last child keeps its authored dates (demotion clears nothing)', () => {
@@ -242,8 +242,8 @@ describe('rollUpFields (S4.2)', () => {
       state.entries.remove('c1');
 
       const demoted = state.entries.get('p1')!;
-      expect(demoted.start).toBe(toInstant('UTC', '2026-01-01'));
-      expect(demoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
+      expect(demoted.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
+      expect(demoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
     });
   });
 
@@ -371,7 +371,7 @@ describe('rollUpFields (S4.2)', () => {
 
       const parent = state.entries.get('p1')!;
       // The Rollup's own answer wins — the earliest child's start — not the cascade's 2026-01-15.
-      expect(parent.start).toBe(toInstant('UTC', '2026-02-01'));
+      expect(parent.start).toBe(toInstant('UTC', '2026-02-01', 'test'));
       expect(reports).toHaveLength(1);
       expect(reports[0]?.code).toBe('derived-values-dropped');
       expect(reports[0]?.severity).toBe('warning');
@@ -404,14 +404,14 @@ describe('rollUpFields (S4.2)', () => {
       ]);
 
       const before = state.entries.get('p')!;
-      expect(before.end).toBe(toEndInstant('UTC', '2026-06-10', 'inclusive'));
+      expect(before.end).toBe(toEndInstant('UTC', '2026-06-10', 'inclusive', 'test'));
 
       state.entries.remove('b');
 
       const after = state.entries.get('p')!;
       expect(costOf(state, 'p')).toBe(10);
-      expect(after.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive'));
-      expect(after.start).toBe(toInstant('UTC', '2026-01-01'));
+      expect(after.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
+      expect(after.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
     });
 
     it('[P1 / D-S4-8] removing a grandchild recomputes every roll-up ancestor in one commit', () => {

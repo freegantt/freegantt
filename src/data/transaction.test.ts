@@ -782,8 +782,8 @@ describe('runTransaction', () => {
     state.entries.update('c1', { parentId: 'p1' });
 
     const parent = state.entries.get('p1')!;
-    expect(parent.start).toBe(toInstant('UTC', '2026-03-01'));
-    expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive'));
+    expect(parent.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
+    expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive', 'test'));
   });
 });
 
@@ -807,8 +807,8 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
           [
             entryId('t1'),
             {
-              start: toInstant('UTC', '2026-02-01'),
-              end: toEndInstant('UTC', '2026-02-05', 'inclusive'),
+              start: toInstant('UTC', '2026-02-01', 'test'),
+              end: toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'),
             },
           ],
         ]),
@@ -821,8 +821,8 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
     );
 
     const entry = state.entries.get(entryId('t1'))!;
-    expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
-    expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+    expect(entry.start).toBe(toInstant('UTC', '2026-02-01', 'test'));
+    expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'));
   });
 
   it(
@@ -834,7 +834,7 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
         timeZone: 'UTC',
         editExtender: (): EntryEdits =>
           new Map<ReturnType<typeof entryId>, EntryEdit>([
-            [entryId('t1'), { start: toInstant('UTC', '2026-02-01') }],
+            [entryId('t1'), { start: toInstant('UTC', '2026-02-01', 'test') }],
           ]),
       });
 
@@ -847,8 +847,8 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
             // The cascade below moves start to 2026-02-01, so the added entity's own end sits after
             // that or the move itself would be an inverted span the #143 ruling now refuses — not the
             // reconciliation-target bug this test is about.
-            start: toInstant('UTC', '2026-01-01'),
-            end: toInstant('UTC', '2026-03-01'),
+            start: toInstant('UTC', '2026-01-01', 'test'),
+            end: toInstant('UTC', '2026-03-01', 'test'),
             props: {},
           }),
         'user',
@@ -859,8 +859,8 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
       // separately, `addedEntitiesForFold` only overlaid hierarchy edits, so even a correctly
       // reconciled cascade never reached the entity the changeset published.
       const entry = state.entries.get(entryId('t1'))!;
-      expect(entry.start).toBe(toInstant('UTC', '2026-02-01'));
-      expect(entry.end).toBe(toInstant('UTC', '2026-03-01'));
+      expect(entry.start).toBe(toInstant('UTC', '2026-02-01', 'test'));
+      expect(entry.end).toBe(toInstant('UTC', '2026-03-01', 'test'));
     },
   );
 
@@ -875,7 +875,7 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
         editExtender: (request): EntryEdits => {
           // The pre-transaction snapshot still shows the original start — this is the rewrite the hook
           // must not be graded against (`entries.get` alone answers the wrong question here).
-          expect(request.entries.get(entryId('t1'))?.start).toBe(toInstant('UTC', '2026-01-01'));
+          expect(request.entries.get(entryId('t1'))?.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
           // F19: a plain string, not `entryId('t1')` — `entryAfterEdits` is loose on this scalar id
           // (#305).
           sawStartAtHookTime = request.entryAfterEdits('t1')?.start;
@@ -886,11 +886,15 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
       runTransaction(
         state,
         (token) =>
-          state.entries.stageUpdate(token, entryId('t1'), edit({ start: toInstant('UTC', '2026-01-04') })),
+          state.entries.stageUpdate(
+            token,
+            entryId('t1'),
+            edit({ start: toInstant('UTC', '2026-01-04', 'test') }),
+          ),
         'user',
       );
 
-      expect(sawStartAtHookTime).toBe(toInstant('UTC', '2026-01-04'));
+      expect(sawStartAtHookTime).toBe(toInstant('UTC', '2026-01-04', 'test'));
     },
   );
 
@@ -917,12 +921,12 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
 
       const startRow = rows.find((row) => row.field === 'start');
       const endRow = rows.find((row) => row.field === 'end');
-      expect(startRow?.to).toBe(toInstant('UTC', '2026-01-05'));
-      expect(endRow?.to).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+      expect(startRow?.to).toBe(toInstant('UTC', '2026-01-05', 'test'));
+      expect(endRow?.to).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'));
 
       const entry = state.entries.get(entryId('t1'))!;
-      expect(entry.start).toBe(toInstant('UTC', '2026-01-05'));
-      expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive'));
+      expect(entry.start).toBe(toInstant('UTC', '2026-01-05', 'test'));
+      expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'));
     },
   );
 });
@@ -958,13 +962,13 @@ describe('the extension hook writes the loose shape (#209)', () => {
     // inverted span, and `toEditReading` refuses one for a plugin exactly as it does for `update()`.
     const state = datasetCascading({ start: '2026-02-01', end: '2026-02-03' }, 'America/Denver');
     renameT1(state);
-    expect(state.entries.get(entryId('t2'))?.start).toBe(toInstant('America/Denver', '2026-02-01'));
+    expect(state.entries.get(entryId('t2'))?.start).toBe(toInstant('America/Denver', '2026-02-01', 'test'));
   });
 
   it('reads a date-only end by the dataset’s DateOnlyEndRule, not as a raw midnight', () => {
     const state = datasetCascading({ end: '2026-02-05' });
     renameT1(state);
-    expect(state.entries.get(entryId('t2'))?.end).toBe(toInstant('UTC', '2026-02-06'));
+    expect(state.entries.get(entryId('t2'))?.end).toBe(toInstant('UTC', '2026-02-06', 'test'));
   });
 
   it('derives the proposed keys, so a props-addressed Field write is still recognized', () => {

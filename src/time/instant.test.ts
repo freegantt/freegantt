@@ -1,6 +1,8 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { instant } from './instant.js';
+import { instant, overlap } from './instant.js';
 import { InvalidInstantError } from '../model/index.js';
+import type { Instant, TimeSpan } from '../model/index.js';
 
 describe('instant()', () => {
   it('accepts an ISO string carrying an explicit Z offset', () => {
@@ -69,3 +71,64 @@ describe('instant()', () => {
     expect(instant(d)).toBe(d.getTime());
   });
 });
+
+describe('overlap()', () => {
+  const day = 1000 * 60 * 60 * 24;
+  const span = (startDay: number, endDay: number): TimeSpan => ({
+    start: (startDay * day) as Instant,
+    end: (endDay * day) as Instant,
+  });
+
+  it('answers the shared part of two overlapping spans', () => {
+    expect(overlap(span(0, 10), span(5, 15))).toEqual(span(5, 10));
+  });
+
+  it('answers undefined for two spans that do not touch', () => {
+    expect(overlap(span(0, 5), span(10, 15))).toBeUndefined();
+  });
+
+  it('answers undefined for two spans that only touch at a boundary — half-open, so they share no instant', () => {
+    expect(overlap(span(0, 5), span(5, 10))).toBeUndefined();
+  });
+
+  it('answers the smaller span when one fully contains the other', () => {
+    expect(overlap(span(0, 20), span(5, 10))).toEqual(span(5, 10));
+  });
+
+  it('is symmetric: overlap(a, b) equals overlap(b, a)', () => {
+    fc.assert(
+      fc.property(arbitrarySpan(), arbitrarySpan(), (a, b) => {
+        expect(overlap(a, b)).toEqual(overlap(b, a));
+      }),
+    );
+  });
+
+  it('answers a span within both a and b whenever the spans touch', () => {
+    fc.assert(
+      fc.property(arbitrarySpan(), arbitrarySpan(), (a, b) => {
+        const result = overlap(a, b);
+        if (result === undefined) return;
+        expect(result.start).toBeGreaterThanOrEqual(a.start);
+        expect(result.start).toBeGreaterThanOrEqual(b.start);
+        expect(result.end).toBeLessThanOrEqual(a.end);
+        expect(result.end).toBeLessThanOrEqual(b.end);
+        expect(result.start).toBeLessThan(result.end);
+      }),
+    );
+  });
+
+  it('answers undefined whenever a and b share no instant', () => {
+    fc.assert(
+      fc.property(arbitrarySpan(), arbitrarySpan(), (a, b) => {
+        const disjoint = a.end <= b.start || b.end <= a.start;
+        if (disjoint) expect(overlap(a, b)).toBeUndefined();
+      }),
+    );
+  });
+});
+
+function arbitrarySpan(): fc.Arbitrary<TimeSpan> {
+  return fc
+    .tuple(fc.integer({ min: 0, max: 1000 }), fc.integer({ min: 0, max: 1000 }))
+    .map(([x, y]): TimeSpan => ({ start: Math.min(x, y) as Instant, end: Math.max(x, y) as Instant }));
+}
