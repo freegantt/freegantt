@@ -9,7 +9,7 @@ import type {
   DateOnlyEndRule,
   Dataset,
   DatasetEventMap,
-  EntryInput,
+  FlatEntryInput,
   Field,
   DurationMeasure,
   FieldKey,
@@ -46,7 +46,7 @@ import { ComputedFieldCache } from './computed-cache.js';
 export type { HistoryOptions };
 
 export interface DatasetStateOptions {
-  entries: readonly EntryInput[];
+  entries: readonly FlatEntryInput[];
   timeZone: string;
   dateOnlyEnd?: DateOnlyEndRule;
   /** Undo/redo capacity (`plans/s2-data-core/s2.5-undo-redo.md` §1). Defaults to a 100-entry history —

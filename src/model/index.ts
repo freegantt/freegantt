@@ -16,6 +16,7 @@ export type { Entry } from './entry.js';
 export type {
   StoredEntry,
   EntryInput,
+  FlatEntryInput,
   EntryEdit,
   PropsEdit,
   ProposedEdit,

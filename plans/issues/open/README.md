@@ -9,17 +9,16 @@ issue plans land here as they're opened.
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 
-- **A declared Field key written flat does not typecheck, though it works at runtime.** No issue
-  number yet; flagged for the author in `src/model/dataset.ts` and carried here when the field
-  redesign's build log was deleted. `new Dataset({ entries: [{ id: 'd1', hours: 8 }] })` raises
-  TS2353, because an excess-property check hits a fresh literal; hoisting the array to a `const`
-  first compiles. `dataset.entries.update('t2', { cost: 12_000 })` raises TS2353 unless the Dataset
-  names its props (`new Dataset<{ cost: number }>(...)`), because inference gives `TProps = unknown`.
-  Ingest reads the flat key at runtime either way (`propsFromInput` in `entry-reader.ts`), so a
-  caller loses the static check, not the behaviour. The docs hoist and name the type to stay honest.
-  The ergonomics are the author's call.
-
 **Closed:**
+
+- [#281](https://github.com/Pawel-IT/FreeGantt/issues/281) — a declared Field key written flat did
+  not typecheck at `entries.add()` or the constructor, though it worked at runtime. Closed by the
+  type design pass ADR 0011 Q15 records: `FlatEntryInput` (`src/model/stored-entry.ts`) replaces
+  `EntryInput` at both doors, and `entries.update('t2', { cost: 12_000 })` still raises TS2353 unless
+  the Dataset names its props (`new Dataset<{ cost: number }>(...)`) — inference gives `TProps =
+  unknown` with none named, same as before #281 and out of its scope. Ingest read the flat key at
+  runtime either way (`propsFromInput` in `entry-reader.ts`); the caller now keeps the static check
+  too.
 
 - [#470](https://github.com/freegantt/freegantt/issues/470) — one rule for a derived
   cell: the Rollup owns it, or the consumer owns the Field. Shipped in #482: `writeToChildren`
