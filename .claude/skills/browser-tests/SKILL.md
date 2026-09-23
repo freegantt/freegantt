@@ -40,6 +40,10 @@ A regex over a style string breaks silently the moment the library changes how i
 
 `playwright.config.ts` sets `retries`. Do not write a manual retry loop inside a test — that is a sign rule 1 or rule 2 was skipped.
 
+## 6. Put the harness page in the right folder
+
+A page that exists only for an e2e test goes in `harness/e2e/`. A themed demo page goes in `harness/`.
+
 ## Checklist before you commit
 
 - [ ] No `waitForTimeout` in the diff.
@@ -47,3 +51,4 @@ A regex over a style string breaks silently the moment the library changes how i
 - [ ] No hardcoded fixture name, id, or row count.
 - [ ] No regex over a `style` attribute.
 - [ ] Any numeric tolerance (a pixel margin, a threshold) has a comment that states why that number.
+- [ ] An e2e-only harness page sits in `harness/e2e/`, not `harness/`.
