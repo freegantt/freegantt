@@ -35,6 +35,9 @@ export type ParentIndex = ReadonlyMap<EntryId, EntryId>;
  *  subtree lock rule answers the same "is this row under X" question every caller already asks, and
  *  never a raw stored `parentId` alone (ADR 0020).
  *
+ *  `isDescendantOf(id, id)` is `false`: the walk starts at `id`'s own parent, so an Entry is never
+ *  under itself. A rule that opens a subtree by this check leaves the root Entry itself locked.
+ *
  *  `seen` is the same cycle guard `breakCycles` runs once per revision on the committed tree; here the
  *  walk simply stops rather than reporting, because a lock query answers `false` on a bad chain
  *  instead of raising (`F5` — a query is a read, not a place to raise a fault). */

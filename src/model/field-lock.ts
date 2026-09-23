@@ -13,6 +13,10 @@ import type { FieldEditable, FieldKey } from './field.js';
  * One cell's address, for a lock rule to answer about: which Entry, and whether it sits under
  * another. `isDescendantOf` walks the live hierarchy (ADR 0020), so a plugin that unlocks a whole
  * subtree writes one rule against it, not a hand-rolled walk of its own.
+ *
+ * `isDescendantOf(id)` is `false` (#473): an Entry is not its own ancestor, so a rule that opens
+ * "everything under `subtreeRootId`" leaves `subtreeRootId` itself locked. Write
+ * `entry.id === subtreeRootId || entry.isDescendantOf(subtreeRootId)` to open the root too.
  */
 export interface FieldLockQuery {
   readonly id: EntryId;
@@ -35,6 +39,7 @@ export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEdi
  *   field === 'cost' && entry.isDescendantOf(unlockedSubtreeRootId) ? 'anywhere' : next(entry, field));
  * ```
  *
- * That reads: open `cost` under one subtree root, otherwise whatever the next rule says.
+ * That reads: open `cost` on every descendant of one subtree root, otherwise whatever the next
+ * rule says. The root itself stays locked — `isDescendantOf` answers `false` for itself (#473).
  */
 export type FieldLockRuleWrapper = (next: FieldLockRule) => FieldLockRule;

@@ -144,6 +144,7 @@ const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
+const unlockSubtreeCheckbox = document.querySelector<HTMLInputElement>('#unlock-subtree-checkbox')!;
 
 function renderSelection(): void {
   const ids = gantt.selectedEntryIds;
@@ -177,11 +178,18 @@ function refreshLockCheckbox(): void {
   lockCheckbox.checked = ids.length > 0 && ids.every((id) => locks.isLocked(id));
 }
 
+// #473: undo/redo can close or open the subtree without the checkbox ever firing its own `change`
+// event, so the checkbox reads `notes.isOpen()` fresh on every selection sync, not just on click.
+function refreshUnlockCheckbox(): void {
+  unlockSubtreeCheckbox.checked = notes.isOpen();
+}
+
 function syncSelectionUi(): void {
   renderSelection();
   refreshNameInput();
   refreshMutationButtons();
   refreshLockCheckbox();
+  refreshUnlockCheckbox();
 }
 
 gantt.on('selectionChange', syncSelectionUi);
@@ -253,7 +261,6 @@ costBtn.addEventListener('click', () => {
 
 // ---- Per-entry lock rule (#473) -----------------------------------------------------------------
 
-const unlockSubtreeCheckbox = document.querySelector<HTMLInputElement>('#unlock-subtree-checkbox')!;
 const noteBtn = document.querySelector<HTMLButtonElement>('#note-btn')!;
 
 unlockSubtreeCheckbox.addEventListener('change', () => {
@@ -270,6 +277,12 @@ noteBtn.addEventListener('click', () => {
   if (writable.length === 0) {
     logLine("note: every selected entry is locked — unlock Program's subtree first");
     return;
+  }
+  // A mixed selection writes the open rows and says which ones it skipped, so a locked row in the
+  // middle of a selection is a line in the log, not a silently dropped write.
+  const skipped = entries.filter((entry) => !writable.includes(entry));
+  if (skipped.length > 0) {
+    logLine(`note: skipped ${skipped.length} locked row(s) — ${skipped.map((entry) => entry.id).join(', ')}`);
   }
   attemptMutation(() => {
     dataset.transaction(() => {

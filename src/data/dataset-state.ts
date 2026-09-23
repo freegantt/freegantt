@@ -264,6 +264,8 @@ export class DatasetState implements Dataset {
   }
 
   /** Call: `ctx.edits.setLockRule((next) => (entry, field) => field === 'cost' && entry.isDescendantOf(unlockedId) ? 'anywhere' : next(entry, field))`.
+   *  Opens `cost` on every descendant of `unlockedId`, not on `unlockedId` itself —
+   *  `isDescendantOf` answers `false` for an Entry asked about itself (#473).
    *  Installing composes onto the current occupant rather than evicting it, exactly the way
    *  `setExtender` above does (D-S5-23). */
   setLockRule(wrap: FieldLockRuleWrapper): void {

@@ -230,11 +230,26 @@ function unlockCostUnder(subtreeRootId: string) {
 export { unlockCostUnder };
 ```
 
-That reads: open `cost` under one subtree root, otherwise whatever the next
-rule says. `entry` is a `FieldLockQuery` — `id`, and `isDescendantOf(ancestorId)`
-for the subtree question — not the live `Entry`. `undefined` is silence: the
-resolver falls back to `Field.editable` when no installed rule has an
-opinion on a cell.
+That reads: open `cost` on every descendant of one subtree root, otherwise
+whatever the next rule says. `entry` is a `FieldLockQuery` — `id`, and
+`isDescendantOf(ancestorId)` for the subtree question — not the live `Entry`.
+`undefined` is silence: the resolver falls back to `Field.editable` when no
+installed rule has an opinion on a cell.
+
+**The root itself stays locked.** `isDescendantOf(subtreeRootId)` answers
+`false` when `entry.id` is `subtreeRootId` — an Entry is not its own
+ancestor (#473). A caller who checks before writing sees the difference:
+
+```ts
+function checkCostLock(request: import('freegantt').EditRequest, subtreeRootId: string, childId: string) {
+  const rootLock = request.editableOf(subtreeRootId, 'cost'); // 'never' unless Field.editable already opened it
+  const childLock = request.editableOf(childId, 'cost'); // 'anywhere', once childId sits under subtreeRootId
+  return { rootLock, childLock };
+}
+```
+
+Write `entry.id === subtreeRootId || entry.isDescendantOf(subtreeRootId)` in
+the lock rule itself to open the root too.
 
 **The cascade meets the same lock a person at a keyboard meets.** A cascade
 that writes a `'never'` Field throws `FieldNotEditableError`, the same as
