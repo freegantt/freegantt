@@ -6527,6 +6527,38 @@ describe('Gantt rows and collapse (S4.6)', () => {
     gantt.destroy();
   });
 
+  it('a custom source’s resolve() is cached — reassigning rowSource is the refresh path (docs)', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 2), timeZone: 'UTC' });
+    let label = 'first';
+    const gantt = new Gantt({
+      container,
+      dataset,
+      rowSource: {
+        source: 'custom',
+        resolve: ({ entries }: { entries: readonly Entry[] }) => [
+          { id: 'h', label },
+          { id: 'r0', entryIds: [entries[0]!.id] },
+        ],
+      },
+    });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('first');
+
+    // resolve() closes over `label`, which is page state — changing it alone changes nothing,
+    // because resolve() runs again only when `rowSource` itself is a new object.
+    label = 'second';
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('first');
+
+    // The documented refresh path: reassign `gantt.rowSource` (docs/07-row-source-updates.md).
+    gantt.rowSource = { ...gantt.rowSource };
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(container.querySelector('[data-row-id="h"]')?.textContent).toContain('second');
+
+    gantt.destroy();
+  });
+
   it('filterRows replaces filter and keeps the current sort (#495 follow-up)', () => {
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
     const gantt = new Gantt({

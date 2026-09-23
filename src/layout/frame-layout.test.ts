@@ -433,6 +433,37 @@ describe('FrameLayout row-plan cache (#495, #414)', () => {
 
     expect(scrolled.rows.length).toBeGreaterThan(0);
   });
+
+  // #504: `resolve()` is a `RowPlanInput` read like any other row source's own fields —
+  // it runs again only when `rows` (the authored object) changes identity, never on every frame. A
+  // `resolve()` that reads page state stays stale until the caller reassigns `gantt.rowSource`
+  // (`docs/07-row-source-updates.md`'s own refresh path).
+  it('a custom source’s resolve() is cached — it does not run again while `rows` keeps its identity', () => {
+    const resolve = vi.fn((planInput: { entries: readonly Entry[] }) =>
+      planInput.entries.map((entry) => ({ id: String(entry.id) })),
+    );
+    const rows: LayoutInput['rows'] = { source: 'custom', resolve };
+    const layout = new FrameLayout();
+
+    layout.computeFrame(input({ rows }));
+    expect(resolve).toHaveBeenCalledTimes(1);
+
+    layout.computeFrame(input({ rows }));
+    expect(resolve).toHaveBeenCalledTimes(1);
+  });
+
+  it('reassigning `rows` to a new object is the refresh path — resolve() runs again', () => {
+    const resolve = vi.fn((planInput: { entries: readonly Entry[] }) =>
+      planInput.entries.map((entry) => ({ id: String(entry.id) })),
+    );
+    const layout = new FrameLayout();
+
+    layout.computeFrame(input({ rows: { source: 'custom', resolve } }));
+    expect(resolve).toHaveBeenCalledTimes(1);
+
+    layout.computeFrame(input({ rows: { source: 'custom', resolve } }));
+    expect(resolve).toHaveBeenCalledTimes(2);
+  });
 });
 
 // #424 review, point 1: an earlier cut of `ensureRowPlan` replanned `#plan` and the row-id maps but
