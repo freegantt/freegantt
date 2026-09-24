@@ -12,6 +12,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`docs/09-integration-pitfalls.md`](09-integration-pitfalls.md) | Traps real integrators hit — theme and an application's `dark` class, the zoom notification, `overscan`, the row click |
 | [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
 | [`docs/07-row-source-updates.md`](07-row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
+| [`docs/11-server-data.md`](11-server-data.md) | Polling a server with `entries.sync()` — the conflict rule, what undo/redo do across a sync, and what changes |
 
 ## What a Gantt shows
 
@@ -47,7 +48,7 @@ dataset.on('change', ({ changeSet }) => {
 
   for (const row of fieldRowsOf(changeSet)) {
     // row: { store: 'entries', id, field, from, to }
-    // on undo, from/to is inverted: `from` is the edit being reverted, `to` the restored value
+    // on undo, `from` is the value the undo replaced, `to` is the value it wrote back
     console.log(`${verb} ${String(row.id)} ${row.field}: ${row.from} -> ${row.to}`);
   }
   // changeSet.added / changeSet.removed carry the entries an undo restored or a redo removed
@@ -84,6 +85,13 @@ the built-in undo/redo use, published so a consumer can write their own History 
 `on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` alone. `replay` writes each row
 onto the store's current value, not the recorded one — a row a sync has already settled since
 the step was recorded writes nothing for it, and the rest of the changeset still lands.
+
+### Undo after a sync
+
+`entries.sync()` (a poll against a server list) records no undo step of its own — the user's own
+earlier edits stay undoable across a poll. Undoing one of those edits later writes the value it
+held before the edit, even when a sync changed it since; redoing gives the sync's value back. See
+[`docs/11-server-data.md`](11-server-data.md) for the full set of rules a poll needs.
 
 ## Hierarchy and rows
 
