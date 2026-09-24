@@ -79,23 +79,14 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
-  /** Installs this Dataset's plugin list and returns the disposer for the whole set. Called
-   *  at the one legal moment: after the entry store exists, so a `setup`-time store write can wrap
-   *  itself in a transaction, and before the construction Rollup, because a Field a plugin declares
-   *  must exist before the Rollup first walks (D-S5-4).
-   *
-   *  A callback, not a plugin array, because `extensions/install-dataset-plugins.ts` is where installation
-   *  lives and `data/` may not import `extensions/` (plans/01 §1). `api/dataset.ts` is the composition
-   *  root that ties the two together, the same way it already wires view/ and interaction/. */
-  installPlugins?: (state: DatasetState) => Disposer;
   /** Every installed plugin's own `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) — one
    *  entry per plugin, in `DatasetOptions.plugins` order. `api/dataset.ts` builds this from
    *  `Dataset<TProps>`'s own plugin list; `data/` never imports `api/`, so it takes the plain shape
    *  rather than the plugin objects themselves. Merged with this Dataset's own `fields`/`fieldTypes`/
-   *  `aggregators` and registered before `entries` is read (`mergedFieldRegistryOptions` below) —
-   *  the one moment early enough that a flat value an entry carries for a plugin's Field is not yet
-   *  an undeclared key, and late enough that `installPlugins` (called after, once `entries` exists)
-   *  still runs every plugin's `data()` before the construction Rollup, same as before. */
+   *  `aggregators` and registered before `entries` is read (`mergedFieldRegistryOptions` below) — the
+   *  one moment early enough that a flat value an entry carries for a plugin's Field is not yet an
+   *  undeclared key. `api/dataset.ts` runs every plugin's `data()` only after this whole Dataset —
+   *  the construction Rollup included — is built (ADR 0031). */
   pluginFieldDeclarations?: readonly FieldDeclarationSource[];
   /** Every installed plugin's declared `hierarchySource`, in setup order (ADR 0031) —
    *  `api/dataset.ts` builds this with `resolveSetupOrder`, same as `pluginFieldDeclarations`. Folded
@@ -180,7 +171,6 @@ export class DatasetState implements Dataset {
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
   readonly #history: History;
-  readonly #disposePlugins: Disposer | undefined;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
@@ -230,18 +220,15 @@ export class DatasetState implements Dataset {
       hierarchySource,
     );
     this.pluginStores = new PluginStores(this);
-    // Plugins set up here and nowhere else: the entry store exists, so a `setup`-time store write
-    // wraps itself in a transaction, and the construction Rollup below has not run, so a Field a
-    // plugin declares is in the registry before the Rollup first walks (D-S5-4). History subscribes
-    // after, so installing a plugin is not itself an undoable step.
-    this.#disposePlugins = options.installPlugins?.(this);
     // `01` §2.6 / README.md D-S2-22: a parent given children only through the initial array gets
     // real rolled-up values before anyone reads it, not just after the first later transaction
-    // touches one of those children.
+    // touches one of those children. No plugin has run yet (ADR 0031): a Dataset builds completely
+    // — Field, hierarchy source and this Rollup all settle — before the first `data()` call.
     applyConstructionRollUp(this);
-    // Subscribes to `change` right here, before the constructor returns and so before any consumer
-    // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a
-    // later-registered handler first sees.
+    // Subscribes to `change` right here, so it is the first subscriber ahead of every plugin's own
+    // `data()` handler (ADR 0031) — a plugin's setup write records like any other commit, and
+    // `Dataset`'s constructor clears the stack after the last `data()` returns (`clearHistory`
+    // below), so `canUndo` still reads `false` once `new Dataset()` returns.
     this.#history = new History(this, options.history);
   }
 
@@ -340,9 +327,12 @@ export class DatasetState implements Dataset {
     return this.entries.editableOf(id, field);
   }
 
-  /** Releases every installed plugin, in reverse setup order. */
-  destroy(): void {
-    this.#disposePlugins?.();
+  /** `Dataset`'s constructor calls this once, right after the last plugin's `data()` returns (D6,
+   *  ADR 0031): a plugin's setup write is an ordinary commit, so it records like one, and this is
+   *  what un-does that — the stack `undo()` reads goes back to empty, so `canUndo` reads `false`
+   *  once `new Dataset()` returns (#137). */
+  clearHistory(): void {
+    this.#history.clear();
   }
 
   nextChangeSetId(): ChangeSetId {

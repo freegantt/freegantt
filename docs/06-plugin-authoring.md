@@ -17,7 +17,7 @@ A plugin is one object. It names an `id`, and it fills one or both halves.
 
 | Half | What it sees | Context type | DOM access | Runs |
 | --- | --- | --- | --- | --- |
-| `data(ctx)` | fields, edits, events, its own store | `DatasetPluginContextOf` | No | once, as the `Dataset` constructs |
+| `data(ctx)` | fields, edits, events, its own store | `DatasetPluginContextOf` | No | once, on the finished Dataset |
 | `view(ctx)` | rendering, interaction, commands | `PluginContextOf` | Yes | once per `Gantt`, as that Gantt mounts |
 
 **The install site is where the state lives.** A plugin with a `data` half

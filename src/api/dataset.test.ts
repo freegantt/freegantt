@@ -15,6 +15,7 @@ import {
   MissingPluginError,
   MutationCancelledError,
   ParentCycleError,
+  PluginSetupError,
   RegistrationClosedError,
   UnknownFieldError,
   DuplicatePluginIdError,
@@ -765,7 +766,7 @@ describe('Dataset plugins (S5.10)', () => {
     expect(dataset.plugins).toEqual([plugin]);
   });
 
-  it('seeds a store during setup, before any consumer handler or history exists', () => {
+  it('seeds a store during setup, before any consumer handler exists, leaving canUndo false', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
     expect(dataset.canUndo).toBe(false);
     expect(dataset.pluginStore('demo.lock')?.get('t1')).toEqual({ locked: true });
@@ -1006,6 +1007,95 @@ describe('Dataset plugins (S5.10)', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [noisy] });
     dataset.destroy();
     expect(released).toEqual(['demo.noisy']);
+  });
+
+  // ADR 0031: a Dataset builds completely — Field, hierarchy source, construction Rollup all settle —
+  // before the first plugin's data() runs. The five tests below read that finished Dataset back.
+
+  it('reads every entry through ctx.dataset.entries.all inside data()', () => {
+    let seenIds: string[] = [];
+    const reads: DataPlugin = {
+      id: 'demo.reads',
+      data(ctx) {
+        seenIds = [...ctx.dataset.entries.all].map((entry) => entry.id);
+      },
+    };
+    new Dataset({ timeZone: 'UTC', entries: [oneEntry(), oneEntry({ id: 't2' })], plugins: [reads] });
+    expect(seenIds).toEqual(['t1', 't2']);
+  });
+
+  it('reads a rolled-up parent value inside data(), already settled by the construction Rollup', () => {
+    let parentCost: number | undefined;
+    const reads: DataPlugin = {
+      id: 'demo.reads-rollup',
+      data(ctx) {
+        parentCost = ctx.dataset.entries.get('p1')?.read('cost') as number | undefined;
+      },
+    };
+    new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [{ id: 'p1', name: 'Sitework' }, oneEntry({ id: 't1', parentId: 'p1', props: { cost: 500 } })],
+      plugins: [reads],
+    });
+    expect(parentCost).toBe(500);
+  });
+
+  it('fires change to an earlier plugin’s handler when a later plugin seeds its store, and leaves canUndo false', () => {
+    const seenByFirst: unknown[] = [];
+    const first: DataPlugin = {
+      id: 'demo.first',
+      data(ctx) {
+        ctx.events.on('change', ({ changeSet }) => {
+          seenByFirst.push(changeSet.origin);
+        });
+      },
+    };
+    const second: DataPlugin = {
+      id: 'demo.second',
+      requires: ['demo.first'],
+      data(ctx) {
+        ctx.store.reserve<LockRow>().set(entryId('t1'), { locked: true });
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [first, second] });
+    expect(seenByFirst).toEqual(['user']);
+    expect(dataset.canUndo).toBe(false);
+  });
+
+  it('reads canUndo true inside a plugin’s change handler, for a user edit after construction', () => {
+    let canUndoDuringHandler: boolean | undefined;
+    const watches: DataPlugin = {
+      id: 'demo.watches',
+      data(ctx) {
+        ctx.events.on('change', () => {
+          canUndoDuringHandler = ctx.dataset.canUndo;
+        });
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [watches] });
+    dataset.entries.update('t1', { name: 'Renamed' });
+    expect(canUndoDuringHandler).toBe(true);
+  });
+
+  it('disposes the earlier plugins and throws PluginSetupError when a later data() throws', () => {
+    const released: string[] = [];
+    const ok: DataPlugin = {
+      id: 'demo.ok',
+      data: () => () => released.push('demo.ok'),
+    };
+    const throws: DataPlugin = {
+      id: 'demo.throws',
+      requires: ['demo.ok'],
+      data() {
+        throw new Error('setup failed');
+      },
+    };
+    expect(() => new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [ok, throws] })).toThrow(
+      PluginSetupError,
+    );
+    expect(released).toEqual(['demo.ok']);
   });
 });
 
