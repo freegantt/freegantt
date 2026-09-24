@@ -636,7 +636,8 @@ export class EntryStore implements EntryStoreContract {
       siblingIndexDropped,
     } = readEntryBatch(inputs, this.#context, this.#registry, source, 'entries.load');
     if (siblingIndexDropped.length > 0) {
-      raiseErrorOn(runner.bus, buildSiblingIndexDroppedReport(siblingIndexDropped));
+      const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
+      raiseErrorOn(runner.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
     }
 
     const byId = new Map(read.map((entry) => [entry.id, entry]));

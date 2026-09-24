@@ -2,7 +2,7 @@
 // consumer would reach it (`dataset.entries.load(...)`), the same posture entry-store.mutation.test.ts
 // takes for add/update/remove.
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import {
   DuplicateEntryIdError,
@@ -394,5 +394,59 @@ describe('entries.load', () => {
     expect(reports[0]?.code).toBe('derived-values-dropped');
     expect(reports[0]?.message).toContain('"cost"');
     expect(reports[0]?.message).toContain('"p1"');
+  });
+
+  describe('a load that authors a siblingIndex diverging from list position (D9)', () => {
+    it('with an error subscriber, gives exactly one report that lists only the ids whose value differed', () => {
+      const state = dataset();
+      const reports: ErrorReport[] = [];
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+
+      state.entries.load([
+        { id: 'a', name: 'a', siblingIndex: 9 },
+        { id: 'b', name: 'b' },
+      ]);
+
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('sibling-index-dropped');
+      expect(reports[0]?.message).toContain('"a"');
+      expect(reports[0]?.message).not.toContain('"b"');
+    });
+
+    it('with no error subscriber, warns once on console.warn instead of dropping the report silently', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const state = dataset();
+      state.entries.load([
+        { id: 'a', name: 'a', siblingIndex: 9 },
+        { id: 'b', name: 'b' },
+      ]);
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain('"a"');
+
+      warn.mockRestore();
+    });
+
+    it('an authored value equal to its list position gives no report and no console.warn', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const state = dataset();
+      const reports: ErrorReport[] = [];
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+
+      state.entries.load([
+        { id: 'a', name: 'a', siblingIndex: 0 },
+        { id: 'b', name: 'b', siblingIndex: 1 },
+      ]);
+
+      expect(reports).toHaveLength(0);
+      expect(warn).not.toHaveBeenCalled();
+
+      warn.mockRestore();
+    });
   });
 });
