@@ -342,6 +342,26 @@ export class EntryStore implements EntryStoreContract {
     return parentIdFrom(this.#hierarchySource, entry);
   }
 
+  /** `#askSource`'s answer, downgraded to a root the same way `checkHierarchyAnswers` would: an id no
+   *  Entry holds, or a chain that loops back to `id` itself, both read as `undefined`. The sibling
+   *  order log reads a group through this, never through `#askSource` alone — `committedSiblingIds`
+   *  is keyed by the checked answer (ADR 0020), so a write against an already-refused entry must
+   *  count against the same group that index already holds it under, not an empty one of its own. A
+   *  live re-check of one entry, not the committed index's own once-per-revision pass: an open
+   *  transaction cannot re-run that pass on every write and stay O(chain) (`#askSource`'s own note). */
+  #checkedGroupFor(id: EntryId, entry: UnplacedEntry): EntryId | undefined {
+    const raw = this.#askSource(entry);
+    if (raw === undefined || !this.has(raw)) return undefined;
+    let current: EntryId | undefined = raw;
+    const seen = new Set<EntryId>();
+    while (current !== undefined && !seen.has(current)) {
+      if (current === id) return undefined;
+      seen.add(current);
+      current = this.#parentIdInWriteSet(current);
+    }
+    return raw;
+  }
+
   /** Which Entry is the parent of this row, as the rest of the library must read it (ADR 0020).
    *  Committed, it is the checked answer the index holds. Inside an open transaction, it is what the
    *  source says about the row this transaction leaves. Takes the source's own shape, never a placed
@@ -529,7 +549,7 @@ export class EntryStore implements EntryStoreContract {
       // Placed at `input.siblingIndex`, or at the end of its group with no index named (ADR 0034). The
       // group's own live count — this transaction's own writes included, not only the committed count
       // — so a second `add()` into the same group in the same transaction lands after the first.
-      const group = this.#askSource(unplaced);
+      const group = this.#checkedGroupFor(id, unplaced);
       const othersCount = this.#liveSiblingGroupSize(group);
       const siblingIndex = input.siblingIndex ?? othersCount;
       if (input.siblingIndex !== undefined) {
@@ -822,7 +842,8 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** `group`'s committed member ids, in sibling order — what the renumber pass seeds a touched
-   *  group's replay from. `group` is always what `#askSource` answers, `EntryId | undefined`; the
+   *  group's replay from. `group` is `#checkedGroupFor`'s answer, `EntryId | undefined`, never
+   *  `#askSource`'s raw one: a refused entry's raw answer names no Entry this index groups by. The
    *  wider `SiblingGroupKey` the interface names is a plugin-source door the committed index, keyed by
    *  the checked hierarchy answer, already narrows to that same shape. */
   committedSiblingIds(group: SiblingGroupKey): readonly EntryId[] {
@@ -946,7 +967,7 @@ export class EntryStore implements EntryStoreContract {
   #logSiblingDeparture(id: EntryId): void {
     const writeSet = this.#openWriteSet();
     if (writeSet.departedSiblingIds.has(id)) return;
-    const group = this.#askSource(this.storedEntry(id)!);
+    const group = this.#checkedGroupFor(id, this.storedEntry(id)!);
     writeSet.departedSiblingIds.add(id);
     this.#adjustLiveSiblingGroupSize(group, -1);
     writeSet.siblingChanges.push({ id });
@@ -964,9 +985,9 @@ export class EntryStore implements EntryStoreContract {
     edit: EntryEdit,
     operation: string,
   ): (SiblingChange & { readonly group: SiblingGroupKey; readonly at: number }) | undefined {
-    const previousGroup = this.#askSource(current);
+    const previousGroup = this.#checkedGroupFor(id, current);
     const prospective = entryAfterEdit(current, reading.stored);
-    const group = this.#askSource(prospective);
+    const group = this.#checkedGroupFor(id, prospective);
     const explicitIndex = edit.siblingIndex !== undefined;
     if (!explicitIndex && group === previousGroup) return undefined;
     // Leaving its own group first (mirroring `renumberSiblingGroups`) means an entry that stays in its
