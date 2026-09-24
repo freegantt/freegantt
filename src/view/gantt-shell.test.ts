@@ -1840,3 +1840,99 @@ describe('a load resets the view (#496 L2)', () => {
     shell.destroy();
   });
 });
+
+describe('a sync leaves the view alone (#517)', () => {
+  function syncFixture(): { dataset: DatasetState; shell: GanttShell } {
+    const dataset = new DatasetState({
+      entries: [
+        { id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+        { id: 'gone', name: 'Gone', start: '2026-01-01', end: '2026-01-05' },
+      ],
+      timeZone: 'UTC',
+    });
+    const container = document.createElement('div');
+    const shell = paintedShell({
+      wiring: {},
+      container,
+      dataset,
+      selectedEntryIds: ['c', 'gone'],
+      collapsed: [rowId('p')],
+    });
+    return { dataset, shell };
+  }
+
+  it('a selected kept id stays selected, and a selected removed id drops', () => {
+    const { dataset, shell } = syncFixture();
+    expect(shell.selectedEntryIds).toEqual([entryId('c'), entryId('gone')]);
+
+    dataset.entries.sync([
+      { id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' },
+      { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+    ]);
+
+    expect(shell.selectedEntryIds).toEqual([entryId('c')]);
+    shell.destroy();
+  });
+
+  it('a collapsed kept parent stays collapsed', () => {
+    const { dataset, shell } = syncFixture();
+    expect(shell.collapsed).toEqual([rowId('p')]);
+
+    dataset.entries.sync([
+      { id: 'p', name: 'Parent renamed', start: '2026-01-01', end: '2026-01-10' },
+      { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+    ]);
+
+    expect(shell.collapsed).toEqual([rowId('p')]);
+    shell.destroy();
+  });
+
+  it('does not move scrollTop — a sync is not a new baseline', () => {
+    const dataset = new DatasetState({
+      entries: [
+        { id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+      ],
+      timeZone: 'UTC',
+    });
+    const container = document.createElement('div');
+    const scrollY = new ScrollAxis();
+    const shell = paintedShell({ wiring: {}, container, dataset, scroll: { y: scrollY } });
+    scrollY.panTo(scrollY.state.max);
+    const positionBefore = scrollY.state.position;
+
+    dataset.entries.sync([
+      { id: 'p', name: 'Parent renamed', start: '2026-01-01', end: '2026-01-10' },
+      { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+    ]);
+
+    expect(scrollY.state.position).toBe(positionBefore);
+    shell.destroy();
+  });
+
+  it('a sync with no changes requests no frame', async () => {
+    const dataset = new DatasetState({
+      entries: [{ id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' }],
+      timeZone: 'UTC',
+    });
+    const calls = { count: 0 };
+    const shell = paintedShell({
+      wiring: {},
+      container: document.createElement('div'),
+      dataset,
+      backend: countingDomBackend(calls),
+    });
+    // The first paint's own layout settles one frame after construction (its header/viewport
+    // geometry request, unrelated to any dataset write) — wait it out before the count below,
+    // so it does not read as a frame the no-op sync requested.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    calls.count = 0;
+
+    dataset.entries.sync(dataset.entries.all.map((entry) => entry.toInput()));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(calls.count).toBe(0);
+    shell.destroy();
+  });
+});

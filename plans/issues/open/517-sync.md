@@ -336,6 +336,11 @@ the same files, so two implementers can write them in parallel. They still commi
    - Update the comment at `gantt-shell.ts:947-950` to name sync.
    - Measure a scratch script on `seeded(10k)`: a sync with no changes, and a sync with 1% changes.
      Record the numbers in this plan. Add no timing gate.
+     - Measured (scratch script, not committed; Node 24.18.0, AMD Ryzen 9 9950X, WSL2 Linux):
+       10 runs each, a fresh 10,000-entry `seeded()` Dataset per run, `entries.sync()` alone timed.
+       No changes: median 20.12 ms (range 18.27-29.63 ms). 1% changed (100 renamed entries):
+       median 20.30 ms (range 18.25-24.24 ms). Both well under the 30 ms follow-up threshold this
+       plan's Risks section names.
 7. **Harness and e2e** (medium, about 2 h).
    - Build D13.
    - Page brief: sync records one undo step, and Import (`load`) clears undo.
