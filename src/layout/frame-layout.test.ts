@@ -468,6 +468,18 @@ describe('FrameLayout.rowIndexForEntry (#528)', () => {
     expect(layout.rowIndexForEntry(entryId('e9999'))).toBe(9999);
     expect(layout.rowIndexForEntry(entryId('not-a-row'))).toBe(-1);
   });
+
+  it('answers the first row when one entry sits on two planned rows', () => {
+    const shared = String(sampleEntries[0]!.id);
+    const layout = new FrameLayout();
+    const resolve = () => [
+      { id: 'row-a', entryIds: [shared] },
+      { id: 'row-b', entryIds: [shared] },
+    ];
+    layout.computeFrame(input({ entries: [sampleEntries[0]!], rows: { source: 'custom', resolve } }));
+
+    expect(layout.rowIndexForEntry(entryId(shared))).toBe(0);
+  });
 });
 
 // #424 review, point 1: an earlier cut of `ensureRowPlan` replanned `#plan` and the row-id maps but
