@@ -17,11 +17,7 @@ issue plans land here as they're opened.
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
-  Field (#528). Blocked by #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
-- [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
-  cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`; a write that
-  moves an entry renumbers its sibling group once, at commit, so one move is one undo step
-  (ADR 0034). Planned; no code yet. Blocks #517. Plan: [528-sibling-index.md](./528-sibling-index.md).
+  Field (#528). Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
 - [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
   delta. Wishlist; blocked by #517. No plan yet.
 - [#530](https://github.com/freegantt/freegantt/issues/530) — a plugin cannot write its own Field
@@ -30,6 +26,11 @@ issue plans land here as they're opened.
 
 **Closed:**
 
+- [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
+  could not be undone. Shipped: `siblingIndex`, a core Field, `editable: 'anywhere'`; a write that
+  moves an entry renumbers its sibling group once, at commit, after the Rollup, so one move is one
+  undo step. A sibling group is the Hierarchy source's checked tree, not the raw `parentId` (ADR
+  0034). See [../closed/528-sibling-index.md](../closed/528-sibling-index.md).
 - [#529](https://github.com/freegantt/freegantt/issues/529) — `capabilities.edit` could reopen an
   `'api'` Field for a drag. Shipped: `canWrite` now refuses a cell the effective `editable` or the
   library's own rule already closed — an `'api'` cell, a `'never'` cell, or a rolling-up parent's

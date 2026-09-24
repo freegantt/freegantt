@@ -1,6 +1,6 @@
 ---
 status: accepted — ruled 2026-09-23. Working material:
-  [`plans/issues/open/528-sibling-index.md`](../../plans/issues/open/528-sibling-index.md).
+  [`plans/issues/closed/528-sibling-index.md`](../../plans/issues/closed/528-sibling-index.md).
 decided: `siblingIndex` is an ordinary core Field: an integer, `editable: 'anywhere'`, storing each
   entry's place among its siblings. A sibling group is the Hierarchy source's checked tree, not the
   raw `parentId`. A write that changes a sibling group renumbers that group once, in the same
