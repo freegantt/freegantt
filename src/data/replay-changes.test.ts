@@ -197,6 +197,29 @@ describe('replay removes the entry as it stands now, and its children the step d
     ]);
   });
 
+  it('a cascaded id keeps the value it held before this same step, not the value this step also wrote it', () => {
+    const state = dataset([{ id: 'q', name: 'Server' }]);
+    state.entries.add({ id: 'p', name: 'P' });
+    // A foreign write joins q to p before the undo step below replays — the same reach a sync gives.
+    state.entries.update('q', { parentId: 'p' });
+    const staleP = state.entries.storedEntry('p')!;
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        removed: [{ store: 'entries', entity: staleP }],
+        updated: [{ store: 'entries', id: entryId('q'), field: 'name', from: 'Old', to: 'New' }],
+      }),
+    );
+
+    expect(state.entries.has('q')).toBe(false);
+    const removedQ = seen[0]!.removed.find((row) => row.entity.id === entryId('q'))!;
+    // q's own name row is moot — q leaves with p in this same step — so the captured entity keeps
+    // the value q held before this step touched it, not the value the now-dropped row would have
+    // written.
+    expect(removedQ.entity.name).toBe('Server');
+  });
+
   it('an added entity the cascade carries away in the same step is never added', () => {
     const state = dataset([
       { id: 'p', name: 'P' },
