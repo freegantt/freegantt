@@ -264,6 +264,57 @@ describe('rollUpFields (S4.2)', () => {
     expect(costOf(state, 'b')).toBe(20);
   });
 
+  it('reparenting a leaf onto a leaf mid-transaction promotes the new parent, and both it and its own ancestor roll up from the fresh child — a same-transaction write to the newly-promoted parent is dropped (2026-09-24 ruling)', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p', name: 'p' },
+        { id: 'a', name: 'a', parentId: 'p', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'b', name: 'b', parentId: 'p', start: '2026-06-01', end: '2026-06-10' },
+      ],
+      timeZone: 'UTC',
+    });
+    const reports: ErrorReport[] = [];
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    state.transaction(() => {
+      // Legal when it is made: `b` is still a leaf. Picks a span neither `a`'s nor `b`'s seed span
+      // shares, so a stale value here would be easy to tell apart from the Rollup's own answer.
+      state.entries.update('b', { start: '2026-07-01', end: '2026-07-10' });
+      // The same transaction reparents `a` onto `b`, so `b` is a parent by commit.
+      state.entries.update('a', { parentId: 'b' });
+    });
+
+    const b = state.entries.get('b')!;
+    expect(b.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
+    expect(b.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
+
+    // `p` keeps only `b` as a child now, and reads `b`'s fresh, rolled-up span — never `b`'s dropped
+    // write, and never `b`'s stale pre-transaction span.
+    const p = state.entries.get('p')!;
+    expect(p.start).toBe(b.start);
+    expect(p.end).toBe(b.end);
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('derived-values-dropped');
+    expect(reports[0]?.severity).toBe('warning');
+  });
+
+  it('an Entry that stops being a parent in a transaction keeps the body write to its former rolling-up Field (2026-09-24 ruling)', () => {
+    const state = treeDataset([{ id: 'p' }, { id: 'a', parentId: 'p', props: { cost: 10 } }]);
+    expect(costOf(state, 'p')).toBe(10);
+
+    state.transaction(() => {
+      // `p` loses its only child first, so the write below is legal when it is made: `p` is no
+      // longer a parent by the time this call checks.
+      state.entries.update('a', { parentId: undefined });
+      state.entries.update('p', { cost: 42 });
+    });
+
+    expect(costOf(state, 'p')).toBe(42);
+  });
+
   describe('ADR 0013, decision 5/6: one report when the Rollup drops a value nobody may keep', () => {
     it('construction drops an authored value on a parent whose only child has none, and reaches console.warn', () => {
       // No plugin's `data()` can subscribe early enough to see this (ADR 0031): every plugin's own
@@ -333,7 +384,7 @@ describe('rollUpFields (S4.2)', () => {
       expect(reports).toHaveLength(1);
       expect(reports[0]?.code).toBe('derived-values-dropped');
       expect(reports[0]?.severity).toBe('warning');
-      expect(reports[0]?.message).toContain('cascade');
+      expect(reports[0]?.message).toContain('the Rollup owns it');
       expect(reports[0]?.message).toContain('"cost"');
     });
 
@@ -365,7 +416,7 @@ describe('rollUpFields (S4.2)', () => {
       expect(costOf(state, 'p1')).toBe(10); // the Rollup's own answer wins, not the cascade's 999
       expect(reports).toHaveLength(1);
       expect(reports[0]?.code).toBe('derived-values-dropped');
-      expect(reports[0]?.message).toContain('cascade');
+      expect(reports[0]?.message).toContain('the Rollup owns it');
       expect(reports[0]?.message).toContain('"cost"');
 
       expect(seen).toHaveLength(1);
@@ -407,7 +458,7 @@ describe('rollUpFields (S4.2)', () => {
       expect(reports).toHaveLength(1);
       expect(reports[0]?.code).toBe('derived-values-dropped');
       expect(reports[0]?.severity).toBe('warning');
-      expect(reports[0]?.message).toContain('cascade');
+      expect(reports[0]?.message).toContain('the Rollup owns it');
       expect(reports[0]?.message).toContain('"start"');
     });
   });

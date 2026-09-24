@@ -21,7 +21,7 @@ import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.
 import { createEditRequest } from './edit-request.js';
 import type { ErrorBus } from './error-reporting.js';
 import {
-  buildCascadeDroppedReport,
+  buildRollUpOverwroteProposalReport,
   buildDerivedValuesDroppedReport,
   raiseErrorOn,
 } from './error-reporting.js';
@@ -248,7 +248,7 @@ export function buildCommitChangeSet(
           return extra === undefined ? row : { ...row, entity: entryAfterEdit(row.entity, extra) };
         });
 
-  const { updated: rollupUpdated, cascadeDropped } = rollUpFields(
+  const { updated: rollupUpdated, overwrittenProposals } = rollUpFields(
     byId,
     {
       added: addedEntitiesForFold.map((row) => row.entity),
@@ -264,10 +264,11 @@ export function buildCommitChangeSet(
     },
   );
 
-  // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the
-  // Rollup overwrote it anyway. One report for the whole commit, never one per row.
-  if (cascadeDropped.length > 0) {
-    raiseErrorOn(data.bus, buildCascadeDroppedReport(cascadeDropped));
+  // ADR 0013, decision 5, and its 2026-09-24 ruling: the transaction body or an extension-hook
+  // cascade proposed a rolling-up Field the Rollup owns, and the Rollup overwrote it anyway. One
+  // report for the whole commit, never one per row.
+  if (overwrittenProposals.length > 0) {
+    raiseErrorOn(data.bus, buildRollUpOverwroteProposalReport(overwrittenProposals));
   }
 
   // ADR 0013, decision 6: an entity `entries.add()` just created was already a parent by the time

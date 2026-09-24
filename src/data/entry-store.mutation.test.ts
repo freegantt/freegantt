@@ -19,7 +19,7 @@ import {
   UnknownFieldError,
   entryId,
 } from '../model/index.js';
-import type { ChangeSet, EntryEdit, EntryId, EntryInput } from '../model/index.js';
+import type { ChangeSet, EntryEdit, EntryId, EntryInput, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 
@@ -595,14 +595,16 @@ describe('rollup (§1.5)', () => {
     expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
   });
 
-  it('an Entry written as a leaf keeps the proposed span when the same transaction gives it a child', () => {
-    // Decision 5: the Rollup yields to a field the caller proposed in the same transaction. This
-    // test used to seed `p1` with a child already in place and write `p1`'s span through the
-    // consumer door. The ADR 0013 amendment (2026-09-11) refuses that write from every direction,
-    // so the case moved to the structure that makes it honest: `x` is a **leaf** when the write is
-    // proposed, so the write is legal, and it gains a child in the same transaction. The claim is
-    // unchanged — the proposal wins over the cascade — and the write is one the door still allows.
+  it('an Entry written as a leaf drops its proposed span when the same transaction gives it a child — the Rollup owns it, with one warning', () => {
+    // The write is legal when it is made: `x` is a leaf then. The same transaction goes on to give
+    // `x` a child, so by commit `x` is a parent — the Rollup owns every rolling-up Field of a parent,
+    // whether the same-transaction proposal came first or not (2026-09-24 ruling). One report for the
+    // whole commit names the dropped span, not one per field.
+    const reports: ErrorReport[] = [];
     const state = dataset([{ id: 'x', start: '2026-01-01', end: '2026-01-05' }]);
+    state.on('error', (report) => {
+      reports.push(report);
+    });
 
     state.transaction(() => {
       state.entries.update('x', { start: '2026-09-01', end: '2026-09-02' });
@@ -610,8 +612,11 @@ describe('rollup (§1.5)', () => {
     });
 
     const x = state.entries.get('x')!;
-    expect(x.start).toBe(toInstant('UTC', '2026-09-01', 'test'));
-    expect(x.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive', 'test'));
+    expect(x.start).toBe(toInstant('UTC', '2026-12-01', 'test'));
+    expect(x.end).toBe(toEndInstant('UTC', '2026-12-02', 'inclusive', 'test'));
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('derived-values-dropped');
+    expect(reports[0]?.severity).toBe('warning');
   });
 });
 
