@@ -373,7 +373,10 @@ steps aside for a load for exactly this reason.
 `entries.sync()` also commits its whole change in one step, `origin: 'sync'` — but unlike
 a load, a sync carries only the rows that changed: entry Field rows for an added, removed
 or edited entry, and a plugin-store row only for a removed id. A plugin reads a sync the
-same `change` subscription reads a load, and does not need a second one:
+same `change` subscription reads a load, and does not need a second one. It reads every
+other origin — `'user'`, `'undo'`, `'redo'` — the same way: only `'load'` is a fresh start,
+so a plugin folds `added`/`removed`/`updated` into its cache on every other origin, sync
+included, rather than singling sync out:
 
 ```ts
 import { definePlugin } from 'freegantt';
@@ -389,9 +392,8 @@ function resetsOnLoadOnly() {
           cache.clear(); // a full fresh start: nothing survives
           return;
         }
-        if (changeSet.origin !== 'sync') return;
-        // a 'sync' commit carries only the rows that changed: update the cache from
-        // added, removed and updated instead of resetting it
+        // Every other origin — a user edit, an undo, a redo, a sync — carries only the rows
+        // that changed: fold them into the cache instead of resetting it.
         for (const { entity } of changeSet.removed) cache.delete(entity.id);
         for (const { entity } of changeSet.added) cache.set(entity.id, entity.name ?? '');
         for (const row of changeSet.updated) {
@@ -407,8 +409,8 @@ export { resetsOnLoadOnly };
 
 A plugin must not reset a cache on `origin: 'sync'` the way it does on `'load'`: sync keeps
 per-entry state for a kept id on purpose, and clearing a cache on every poll throws that
-away for no reason. It must instead fold the sync's own `added`, `removed` and `updated`
-rows into the cache it already holds.
+away for no reason. It must instead fold the changed rows into the cache it already holds —
+on every origin but `'load'`, not sync alone, or a rename or an undo leaves the cache stale.
 
 ## Why a factory, not a name-keyed table
 
