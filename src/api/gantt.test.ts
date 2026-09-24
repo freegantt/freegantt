@@ -6047,6 +6047,44 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
     document.elementFromPoint = original;
     gantt.destroy();
   });
+
+  it("an 'api' start cannot be dragged, even when capabilities.edit answers true", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      entries: sampleEntries,
+      timeZone: 'UTC',
+      fields: [{ key: 'start', editable: 'api' }],
+    });
+    const gantt = new Gantt({ container, dataset, capabilities: { edit: () => true } });
+
+    const bar = container.querySelector<HTMLElement>('.fg-bar')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId(sampleEntries[0]!.id);
+    const before = datesOf(dataset.entries.get(id)!);
+
+    const afterEvents: unknown[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+
+    expect(afterEvents).toEqual([]);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
+    expect(dataset.canUndo).toBe(false);
+
+    dataset.entries.update(id, { start: before.start });
+    expect(dataset.entries.get(id)!.start).toBe(before.start);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
 });
 
 describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {

@@ -13,12 +13,13 @@ import type { ElementDescription } from './render.js';
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
 export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | (string & {});
 
-/** How far a Field's value may change (ADR 0015). One key, two thresholds: the grid writes it only
- *  at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
+/** How far a Field's value may change (ADR 0015, amended by ADR 0033). One key, two thresholds: the
+ *  grid writes it only at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
  *
  *  - `'anywhere'` — the cell editor opens, a drag writes it, and `update()` writes it. The default.
- *  - `'api'` — `update()` writes it; the grid cell is dead. A value the app owns and the user does
- *    not type.
+ *  - `'api'` — `update()` writes it; no gesture does. A value the app owns and the user does not
+ *    type. No capability rule reopens it — `capabilities.edit` and a variant's own `edit` only
+ *    narrow an `'anywhere'` Field.
  *  - `'never'` — a lock. `update()` throws `FieldNotEditableError`.
  *
  *  `true` and `false` are input-only aliases for `'anywhere'` and `'never'`, the same way
@@ -115,14 +116,14 @@ export type Field<TValue = unknown> =
       type?: FieldTypeName | FieldType<TValue>;
       /** Name only — a function does not serialize (ADR 0005). */
       rollUp?: AggregatorName;
-      /** Where this Field's value may change (ADR 0015). **One key, two thresholds** — the grid
-       *  writes it only at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
-       *  That is I14: the inline cell editor (S5.8), bar drag-resize for `start`/`end` (#142) and the
-       *  API door all read this one key, and never disagree about it.
+      /** Where this Field's value may change (ADR 0015, amended by ADR 0033). **One key, two
+       *  thresholds** — the grid writes it only at `'anywhere'`, and `entries.update()` writes it at
+       *  anything but `'never'`. That is I14: the inline cell editor (S5.8), bar drag-resize for
+       *  `start`/`end` (#142) and the API door all read this one key, and never disagree about it.
        *
        *  - `'anywhere'` — the cell editor opens, a drag writes it, and `update()` writes it.
-       *  - `'api'` — `update()` writes it; the grid cell is dead. A value the app owns and the user
-       *    does not type.
+       *  - `'api'` — `update()` writes it; no gesture does. `capabilities.edit` and a variant's own
+       *    `edit` only narrow an `'anywhere'` Field, so neither reopens this one.
        *  - `'never'` — a lock. `update()` throws `FieldNotEditableError`.
        *
        *  **Absent means `'anywhere'`.** `true` and `false` are input-only aliases for `'anywhere'`

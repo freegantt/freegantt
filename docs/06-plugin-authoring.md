@@ -307,8 +307,8 @@ needs while it runs, never a document (#496 Q8).
 
 Per-entry data a consumer must save and load back goes in a Field instead — the one door
 `toInput()` and `entries.load()` both read. Declare it `editable: 'api'`: an app writes
-it through `entries.update()`, and the grid's own cell editor stays dead. Give it no
-`column`, and no grid draws one either.
+it through `entries.update()`, and no gesture writes it — not the cell editor, not a
+drag, not a resize. Give it no `column`, and no grid draws one either.
 
 `harness/plugins/lock-entries.ts` is the model case: `locked` is a Field, not a store
 row, so a saved document that names a locked entry loads locked again.
