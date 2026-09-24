@@ -16,7 +16,7 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { SiblingIndexOutOfRangeError } from '../model/index.js';
-import { diffEdit, foldChangeSet, mergeUpdatedRows } from './change-set.js';
+import { diffEdit, foldChangeSet, foldRollUpRowsOntoAdded, mergeUpdatedRows } from './change-set.js';
 import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.js';
 import { createEditRequest } from './edit-request.js';
 import type { ErrorBus } from './error-reporting.js';
@@ -27,12 +27,7 @@ import {
 } from './error-reporting.js';
 import type { EditsReading } from './entry-reader.js';
 import { EXTENDER_OPERATION } from './entry-reader.js';
-import {
-  applyFieldRow,
-  mergeProposedEditsByEntry,
-  entryAfterEdit,
-  proposedKeysOf,
-} from './fields/field-access.js';
+import { mergeProposedEditsByEntry, entryAfterEdit, proposedKeysOf } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
@@ -284,29 +279,8 @@ export function buildCommitChangeSet(
   // An added entity carries the values the commit settles on, not a row: nothing reads an Entries row
   // for an id that has no prior committed value to diff against. A Rollup row for an added id folds
   // onto that entity instead, the same reason the sibling rank below folds onto the entity too.
-  const rollupUpdatedForAdded = new Map<EntryId, FieldUpdated[]>();
-  const rollupUpdatedForOthers: FieldUpdated[] = [];
-  for (const row of rollupUpdated) {
-    if (!addedIds.has(row.id)) {
-      rollupUpdatedForOthers.push(row);
-      continue;
-    }
-    const rows = rollupUpdatedForAdded.get(row.id) ?? [];
-    rows.push(row);
-    rollupUpdatedForAdded.set(row.id, rows);
-  }
-  const rolledUpEntitiesForFold =
-    rollupUpdatedForAdded.size === 0
-      ? addedEntitiesForFold
-      : addedEntitiesForFold.map((row) => {
-          const rows = rollupUpdatedForAdded.get(row.entity.id);
-          if (rows === undefined) return row;
-          const entity = rows.reduce(
-            (acc, fieldRow) => applyFieldRow(acc, fieldRow.field, fieldRow.to, data.fields),
-            row.entity,
-          );
-          return { ...row, entity };
-        });
+  const rollupUpdatedForOthers = rollupUpdated.filter((row) => !addedIds.has(row.id));
+  const rolledUpEntitiesForFold = foldRollUpRowsOntoAdded(addedEntitiesForFold, rollupUpdated, data.fields);
 
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
