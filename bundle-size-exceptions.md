@@ -6,5 +6,6 @@ when its recorded delta is at least the actual growth for that pull request and 
 
 Decision record: issue #342.
 
-| Pull request | Entry | Delta (bytes) | Reason |
-| ------------ | ----- | ------------- | ------ |
+| Pull request               | Entry                                         | Delta (bytes) | Reason                                                                                                                                                                 |
+| -------------------------- | --------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pawel-IT/528-sibling-index | core + tooltips + contextMenu + inlineEditing | 1100          | The sibling-order renumber pass (ADR 0034): a write-set log in `EntryStore`, the `buildCommitChangeSet` replay after the Rollup, and each call site's own range check. |

@@ -10,6 +10,7 @@ import type { EditExtender } from './edit-extension.js';
 import * as writeRule from './write-rule.js';
 import {
   ComputedFieldCannotBeWrittenError,
+  SiblingIndexOutOfRangeError,
   DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   EntryNotFoundError,
@@ -170,6 +171,127 @@ describe('entries.remove', () => {
   it('an unknown id throws EntryNotFoundError', () => {
     const state = dataset();
     expect(() => state.entries.remove('missing')).toThrow(EntryNotFoundError);
+  });
+});
+
+describe('every write renumbers its group (ADR 0034)', () => {
+  function ranksOf(state: DatasetState, ids: readonly string[]): number[] {
+    return ids.map((id) => state.entries.get(id)!.read('siblingIndex') as number);
+  }
+
+  it('two add() calls into one group in one transaction get distinct indexes, not both 0', () => {
+    const state = dataset([{ id: 'p' }]);
+
+    state.transaction(() => {
+      state.entries.add({ id: 'a', parentId: 'p' });
+      state.entries.add({ id: 'b', parentId: 'p' });
+    });
+
+    expect(ranksOf(state, ['a', 'b'])).toEqual([0, 1]);
+  });
+
+  it('add at index 0 shifts every existing sibling up by one', () => {
+    const state = dataset([{ id: 'p' }, { id: 'a', parentId: 'p' }, { id: 'b', parentId: 'p' }]);
+
+    state.entries.add({ id: 'c', parentId: 'p', siblingIndex: 0 });
+
+    expect(ranksOf(state, ['c', 'a', 'b'])).toEqual([0, 1, 2]);
+  });
+
+  it('remove closes the gap it leaves behind', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p' },
+      { id: 'b', parentId: 'p' },
+      { id: 'c', parentId: 'p' },
+    ]);
+
+    state.entries.remove('b');
+
+    expect(ranksOf(state, ['a', 'c'])).toEqual([0, 1]);
+  });
+
+  it('a reparent with an explicit siblingIndex renumbers both groups, and one undo restores both', () => {
+    const state = dataset([
+      { id: 'p1' },
+      { id: 'p2' },
+      { id: 't1', parentId: 'p1' },
+      { id: 't7', parentId: 'p1' },
+      { id: 't8', parentId: 'p2' },
+    ]);
+
+    state.entries.update('t7', { parentId: 'p2', siblingIndex: 0 });
+
+    expect(ranksOf(state, ['t1'])).toEqual([0]);
+    expect(ranksOf(state, ['t7', 't8'])).toEqual([0, 1]);
+
+    state.undo();
+
+    expect(ranksOf(state, ['t1', 't7'])).toEqual([0, 1]);
+    expect(ranksOf(state, ['t8'])).toEqual([0]);
+  });
+
+  it('an out-of-range, negative, or non-integer siblingIndex throws and stages nothing', () => {
+    const state = dataset([{ id: 'p' }, { id: 'a', parentId: 'p' }]);
+    const seen = changeSets(state);
+
+    expect(() => state.entries.add({ id: 'b', parentId: 'p', siblingIndex: 5 })).toThrow(
+      SiblingIndexOutOfRangeError,
+    );
+    expect(() => state.entries.add({ id: 'b', parentId: 'p', siblingIndex: -1 })).toThrow(
+      SiblingIndexOutOfRangeError,
+    );
+    expect(() => state.entries.add({ id: 'b', parentId: 'p', siblingIndex: 0.5 })).toThrow(
+      SiblingIndexOutOfRangeError,
+    );
+    expect(() => state.entries.update('a', { siblingIndex: 5 })).toThrow(SiblingIndexOutOfRangeError);
+
+    expect(seen).toHaveLength(0);
+    expect(state.entries.has('b')).toBe(false);
+  });
+
+  it('several moves in one transaction apply in call order', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p' },
+      { id: 'b', parentId: 'p' },
+      { id: 'c', parentId: 'p' },
+    ]);
+
+    state.transaction(() => {
+      state.entries.update('c', { siblingIndex: 0 });
+      state.entries.update('a', { siblingIndex: 2 });
+    });
+
+    expect(ranksOf(state, ['c', 'b', 'a'])).toEqual([0, 1, 2]);
+  });
+
+  it('a phaseId-sourced move with no explicit index goes to the end of the new group', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'design' },
+        { id: 'build' },
+        { id: 'a', name: 'a', start: 0, end: 1, props: { phaseId: 'design' } },
+        { id: 'b', name: 'b', start: 0, end: 1, props: { phaseId: 'build' } },
+        { id: 'c', name: 'c', start: 0, end: 1, props: { phaseId: 'build' } },
+      ],
+      timeZone: 'UTC',
+      fields: [{ key: 'phaseId', type: 'text', editable: 'anywhere' }],
+      hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
+    });
+
+    state.entries.update('a', { phaseId: 'build' });
+
+    expect(ranksOf(state, ['b', 'c', 'a'])).toEqual([0, 1, 2]);
+  });
+
+  it('a move to the same place commits nothing', () => {
+    const state = dataset([{ id: 'p' }, { id: 'a', parentId: 'p' }, { id: 'b', parentId: 'p' }]);
+    const seen = changeSets(state);
+
+    state.entries.update('a', { siblingIndex: 0 });
+
+    expect(seen).toHaveLength(0);
   });
 });
 

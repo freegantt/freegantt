@@ -31,12 +31,15 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   ParentCycleError,
+  SiblingIndexOutOfRangeError,
 } from '../model/index.js';
+import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
 import { toEditReading, toEntry } from './entry-reader.js';
+import type { EditReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import type { UnplacedEntry } from './hierarchy-source.js';
 import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
@@ -118,6 +121,19 @@ interface WriteSet {
    *  5,000 of them in one commit. It stays off the hot path — one transaction per gesture, at
    *  commit, never once per frame (I5). */
   stagedParents: Set<EntryId>;
+  /** This write set's own sibling-order log, in call order (ADR 0034) — `pendingSiblingChanges` hands
+   *  this straight to the renumber pass at commit. Every entry below keeps this transaction's own
+   *  view of "how many siblings does this group have right now" current one write at a time, so two
+   *  `add()` calls into the same group in one transaction see each other rather than both reading the
+   *  same committed count. */
+  siblingChanges: SiblingChange[];
+  /** Each touched group's live member count, seeded lazily from the committed count the first time a
+   *  write asks about that group. */
+  siblingGroupCounts: Map<SiblingGroupKey, number>;
+  /** Every id this transaction has logged a departure for and not yet re-placed — the same guard
+   *  `renumberSiblingGroups` keeps, so a second departure for one id (a remove replayed, or a move
+   *  logged twice) does not double-decrement a group's live count. */
+  departedSiblingIds: Set<EntryId>;
 }
 
 export class EntryStore implements EntryStoreContract {
@@ -517,12 +533,18 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
       const unplaced = toEntry(input, this.#context, this.#registry, 'entries.add');
-      // Placed at the end of its group, from the committed group's own count (ADR 0034): an explicit
-      // `siblingIndex` write door opens in a later step; for now every new Entry appends.
+      // Placed at `input.siblingIndex`, or at the end of its group with no index named (ADR 0034). The
+      // group's own live count — this transaction's own writes included, not only the committed count
+      // — so a second `add()` into the same group in the same transaction lands after the first.
       const group = this.#askSource(unplaced);
-      const siblingIndex = (this.#byParent().get(group) ?? []).length;
+      const othersCount = this.#liveSiblingGroupSize(group);
+      const siblingIndex = input.siblingIndex ?? othersCount;
+      if (input.siblingIndex !== undefined) {
+        this.#assertSiblingIndexInRange(id, siblingIndex, othersCount, 'entries.add');
+      }
       const entry: StoredEntry = { ...unplaced, siblingIndex };
       this.stageAdd(token, entry);
+      this.#logSiblingPlacement({ id, group, at: siblingIndex });
       return this.get(id)!;
     });
   }
@@ -547,7 +569,9 @@ export class EntryStore implements EntryStoreContract {
       }
       const current = this.storedEntry(key)!;
       const reading = toEditReading(edit, this.#context, current, this.#registry, operation);
+      const move = this.#siblingMoveFor(key, current, reading, edit, operation);
       this.stageUpdate(token, key, reading.stored);
+      if (move) this.#logSiblingPlacement(move);
       return this.get(key)!;
     });
   }
@@ -593,6 +617,9 @@ export class EntryStore implements EntryStoreContract {
     this.#mutate((token) => {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.remove');
+      // Only the top id leaves its group (ADR 0034) — its subtree goes with it, so a descendant logs
+      // no departure of its own: it was never a member of a group `renumberSiblingGroups` renumbers.
+      this.#logSiblingDeparture(key);
       for (const descendantId of this.#subtreeOf(key)) this.stageRemove(token, descendantId);
       this.stageRemove(token, key);
     });
@@ -730,6 +757,9 @@ export class EntryStore implements EntryStoreContract {
       removed: new Set(),
       edits: new Map(),
       stagedParents: new Set(),
+      siblingChanges: [],
+      siblingGroupCounts: new Map(),
+      departedSiblingIds: new Set(),
     };
   }
 
@@ -790,6 +820,20 @@ export class EntryStore implements EntryStoreContract {
 
   pendingEdits(): ProposedEdits {
     return this.#writeSet?.edits ?? new Map();
+  }
+
+  /** This write set's own sibling-order log, in call order — the renumber pass in
+   *  `buildCommitChangeSet` is this log's one reader. */
+  pendingSiblingChanges(): readonly SiblingChange[] {
+    return this.#writeSet?.siblingChanges ?? [];
+  }
+
+  /** `group`'s committed member ids, in sibling order — what the renumber pass seeds a touched
+   *  group's replay from. `group` is always what `#askSource` answers, `EntryId | undefined`; the
+   *  wider `SiblingGroupKey` the interface names is a plugin-source door the committed index, keyed by
+   *  the checked hierarchy answer, already narrows to that same shape. */
+  committedSiblingIds(group: SiblingGroupKey): readonly EntryId[] {
+    return (this.#byParent().get(group as EntryId | undefined) ?? []).map((entry) => entry.id);
   }
 
   /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It raises no
@@ -891,5 +935,85 @@ export class EntryStore implements EntryStoreContract {
     if (!this.#writeSet)
       throw new Error('EntryStore: no open transaction — data/transaction.ts always opens one first');
     return this.#writeSet;
+  }
+
+  // ---- Sibling order (ADR 0034): every write's own place in its group, decided at the call site and
+  // logged for the renumber pass in `buildCommitChangeSet` to replay at commit ----
+
+  /** `group`'s live member count — this transaction's own writes folded in, not only the committed
+   *  count (`committedSiblingIds`), seeded lazily the first time a write asks about this group. */
+  #liveSiblingGroupSize(group: SiblingGroupKey): number {
+    const writeSet = this.#openWriteSet();
+    const known = writeSet.siblingGroupCounts.get(group);
+    if (known !== undefined) return known;
+    const seeded = this.committedSiblingIds(group).length;
+    writeSet.siblingGroupCounts.set(group, seeded);
+    return seeded;
+  }
+
+  #adjustLiveSiblingGroupSize(group: SiblingGroupKey, delta: number): void {
+    const size = this.#liveSiblingGroupSize(group);
+    this.#openWriteSet().siblingGroupCounts.set(group, size + delta);
+  }
+
+  /** 0 to the group's own live count is legal (D8) — an `add` counts the whole existing group, since
+   *  the new entry is not yet a member; an `update` that stays in its group counts every other member,
+   *  already excluded by the caller before this runs. */
+  #assertSiblingIndexInRange(id: EntryId, at: number, othersCount: number, operation: string): void {
+    if (!Number.isInteger(at) || at < 0 || at > othersCount) {
+      throw new SiblingIndexOutOfRangeError(id, at, othersCount, operation);
+    }
+  }
+
+  /** Logs a placement and keeps the live group counts current: the target group gains a member, and
+   *  — mirroring `renumberSiblingGroups`'s own unconditional leave-then-place — an id this
+   *  transaction already logged a departure for stops counting as departed. An `add`'s id was never a
+   *  member of any group, so it never reaches `departedSiblingIds` in the first place; this is a
+   *  no-op for it. */
+  #logSiblingPlacement(
+    change: SiblingChange & { readonly group: SiblingGroupKey; readonly at: number },
+  ): void {
+    const writeSet = this.#openWriteSet();
+    writeSet.siblingChanges.push(change);
+    writeSet.departedSiblingIds.delete(change.id);
+    this.#adjustLiveSiblingGroupSize(change.group, 1);
+  }
+
+  /** Logs a departure — a `remove`, or the first half of a move this call site already decided —
+   *  guarded by `departedSiblingIds` the same way `renumberSiblingGroups` guards its own replay: a
+   *  second departure for one id decrements nothing a second time. */
+  #logSiblingDeparture(id: EntryId): void {
+    const writeSet = this.#openWriteSet();
+    if (writeSet.departedSiblingIds.has(id)) return;
+    const group = this.#askSource(this.storedEntry(id)!);
+    writeSet.departedSiblingIds.add(id);
+    this.#adjustLiveSiblingGroupSize(group, -1);
+    writeSet.siblingChanges.push({ id });
+  }
+
+  /** What `update`'s own edit does to `id`'s sibling order, or `undefined` when it does nothing (no
+   *  group change, no named `siblingIndex`): computed and range-checked against a *preview* of the
+   *  post-edit row (`entryAfterEdit`, not yet staged), so an out-of-range index throws before anything
+   *  stages (S2.3 §1.3's own "nothing stages when one does" rule, carried to this door). */
+  #siblingMoveFor(
+    id: EntryId,
+    current: StoredEntry,
+    reading: EditReading,
+    edit: EntryEdit,
+    operation: string,
+  ): (SiblingChange & { readonly group: SiblingGroupKey; readonly at: number }) | undefined {
+    const previousGroup = this.#askSource(current);
+    const prospective = entryAfterEdit(current, reading.stored);
+    const group = this.#askSource(prospective);
+    const explicitIndex = edit.siblingIndex !== undefined;
+    if (!explicitIndex && group === previousGroup) return undefined;
+    // Leaving its own group first (mirroring `renumberSiblingGroups`) means an entry that stays in its
+    // group is not counted among its own "others" — moving across groups needs no such adjustment,
+    // since the live count there never included this id.
+    const othersCount = this.#liveSiblingGroupSize(group) - (group === previousGroup ? 1 : 0);
+    const at = explicitIndex ? edit.siblingIndex! : othersCount;
+    if (explicitIndex) this.#assertSiblingIndexInRange(id, at, othersCount, operation);
+    this.#logSiblingDeparture(id);
+    return { id, group, at };
   }
 }

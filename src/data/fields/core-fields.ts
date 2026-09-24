@@ -66,12 +66,12 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
   {
     // An ordinary Field, stored on every Entry (ADR 0034) — no `column`, so the grid never shows a
-    // "siblingIndex" header on its own. `editable: 'never'` here: a write door for it opens once the
-    // renumber pass that keeps every group dense and gapless lands beside it.
+    // "siblingIndex" header on its own. `editable: 'anywhere'`: an explicit write moves the entry, and
+    // the write's own group renumbers around it in the same transaction (`entry-store.ts`).
     key: 'siblingIndex',
     type: 'number',
     equals: byReference,
-    editable: 'never',
+    editable: 'anywhere',
   },
   {
     key: 'duration',
