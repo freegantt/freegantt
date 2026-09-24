@@ -21,27 +21,6 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import type { TransactionalPluginStores, TransactionData } from './transaction.js';
 
-/** Every committed id under `id`, through the committed child index — the same worklist shape
- *  `EntryStore.#subtreeOf` walks for `entries.remove()`'s own cascade, run here over ids instead of
- *  live rows. `seen` guards a source that loops, so a bad tree cascades finitely instead of forever. */
-function committedDescendantsOf(
-  id: EntryId,
-  committedChildIds: ReadonlyMap<EntryId, readonly EntryId[]>,
-): readonly EntryId[] {
-  const found: EntryId[] = [];
-  const seen = new Set<EntryId>([id]);
-  const pending: EntryId[] = [id];
-  while (pending.length > 0) {
-    for (const childId of committedChildIds.get(pending.pop()!) ?? []) {
-      if (seen.has(childId)) continue;
-      seen.add(childId);
-      found.push(childId);
-      pending.push(childId);
-    }
-  }
-  return found;
-}
-
 /** Drops `entity.parentId`, the way `applyFieldRow` drops an optional key an edit clears: no stored
  *  key at all, never a key holding `undefined` (`exactOptionalPropertyTypes`). */
 function asRoot(entity: StoredEntry): StoredEntry {
@@ -51,7 +30,7 @@ function asRoot(entity: StoredEntry): StoredEntry {
 }
 
 /** An `added` row whose id already exists is skipped — the server's re-sent copy stays. Runs after
- *  `removedRowsToReplay`, the same order `EntryStore.endTransaction` applies a changeset in: a
+ *  `recordedRowsToReplay`, the same order `EntryStore.endTransaction` applies a changeset in: a
  *  replace's own `removed` row clears the slot first, so its `added` row lands instead of being read
  *  as "still there, must be a sync." Every kept row lands on `working` before any of them is judged
  *  for its parent — a subtree remove's own `added` rows recorded a child before its parent (the order
@@ -78,36 +57,56 @@ function addedRowsToReplay(
 }
 
 /** A `removed` row whose id is already gone is skipped. A kept row removes the entity as `working`
- *  holds it now, and cascades to every committed descendant this step does not itself remove — the
- *  same reach `entries.remove()` has — so an undo or a redo never strands a child under a parent that
- *  just left. Their plugin-store rows go with them (`changesToReplay`'s `pendingRows` call). */
-function removedRowsToReplay(
+ *  holds it now — no cascade here: which descendant this step also carries away is not settled until
+ *  every `added` row, every `parentId` row and the loop check have all landed. `cascadeIdsToReplay`
+ *  runs later, over that final tree. */
+function recordedRowsToReplay(
   rows: readonly EntityRemoved[],
   working: Map<EntryId, StoredEntry>,
-  committedChildIds: ReadonlyMap<EntryId, readonly EntryId[]>,
+): readonly EntityRemoved[] {
+  const removed: EntityRemoved[] = [];
+  for (const row of rows) {
+    const entity = working.get(row.entity.id);
+    if (!entity) continue; // already gone
+    removed.push({ store: 'entries', entity });
+    working.delete(row.entity.id);
+  }
+  return removed;
+}
+
+/** Every id still in `working` whose raw `parentId` chain reaches a `removed` id, read from the
+ *  step's finished tree — after every `added` row, every `parentId` row and the loop check have all
+ *  landed — rather than the committed one. An id this same step reparents away from a removed
+ *  ancestor, in the very row that named the removal, never cascades: it already carries a new, sound
+ *  parent by the time this walk runs, the same reach `entries.remove()` gives a live write. A
+ *  descendant of a descendant cascades too, one level at a time; a cascaded id's own child sees its
+ *  parent already gone from `working` by the time this walk reaches it, so it cascades next. */
+function cascadeIdsToReplay(
+  working: Map<EntryId, StoredEntry>,
+  removedIds: ReadonlySet<EntryId>,
 ): { readonly removed: readonly EntityRemoved[]; readonly cascadeIds: readonly EntryId[] } {
-  const recordedIds = new Set(rows.map((row) => row.entity.id));
+  const childrenOf = new Map<EntryId, EntryId[]>();
+  for (const [id, entity] of working) {
+    if (entity.parentId === undefined) continue;
+    const siblings = childrenOf.get(entity.parentId);
+    if (siblings) siblings.push(id);
+    else childrenOf.set(entity.parentId, [id]);
+  }
+
   const removed: EntityRemoved[] = [];
   const cascadeIds: EntryId[] = [];
-  const cascadeSeen = new Set<EntryId>();
-
-  const remove = (id: EntryId): void => {
-    const entity = working.get(id);
-    if (!entity) return;
-    removed.push({ store: 'entries', entity });
-    working.delete(id);
-  };
-
-  for (const row of rows) {
-    if (!working.has(row.entity.id)) continue; // already gone
-    remove(row.entity.id);
-    for (const descendantId of committedDescendantsOf(row.entity.id, committedChildIds)) {
-      if (recordedIds.has(descendantId) || cascadeSeen.has(descendantId) || !working.has(descendantId)) {
-        continue;
-      }
-      cascadeSeen.add(descendantId);
-      cascadeIds.push(descendantId);
-      remove(descendantId);
+  const seen = new Set<EntryId>(removedIds);
+  const pending: EntryId[] = [...removedIds];
+  while (pending.length > 0) {
+    for (const childId of childrenOf.get(pending.pop()!) ?? []) {
+      if (seen.has(childId)) continue;
+      seen.add(childId);
+      const entity = working.get(childId);
+      if (!entity) continue; // defensive: already gone
+      removed.push({ store: 'entries', entity });
+      working.delete(childId);
+      cascadeIds.push(childId);
+      pending.push(childId);
     }
   }
   return { removed, cascadeIds };
@@ -118,11 +117,11 @@ function removedRowsToReplay(
  *  skipped too — the entry stays under its current parent, the nearest sound place available, and
  *  this never raises: `change` carries exactly what still applies (§2b's skip rule extended to
  *  hierarchy). Every other `parentId` row lands, even one that provisionally makes two rows in the
- *  same step look like each other's ancestor — `soundenTree` judges the whole step's rows together,
- *  once every one of them has landed, never one row against the others' unwritten state. Every other
- *  kind of row overwrites: `from` is the value `working` holds now, never the recorded `from`. A kept
- *  row lands back on `working`, so a duplicate row for the same id and Field diffs against what this
- *  step already wrote. */
+ *  same step look like each other's ancestor — `revertLoopingParentRows` judges the whole step's rows
+ *  together, once every one of them has landed, never one row against the others' unwritten state.
+ *  Every other kind of row overwrites: `from` is the value `working` holds now, never the recorded
+ *  `from`. A kept row lands back on `working`, so a duplicate row for the same id and Field diffs
+ *  against what this step already wrote. */
 function fieldRowToReplay(
   row: FieldUpdated,
   working: Map<EntryId, StoredEntry>,
@@ -181,7 +180,7 @@ function loopedIds(working: ReadonlyMap<EntryId, StoredEntry>): ReadonlySet<Entr
  *
  *  Returns the ids whose `parentId` row was reverted — `changesToReplay` drops that row from the
  *  changeset it emits, the same way a dangling target already does. */
-function soundenTree(
+function revertLoopingParentRows(
   working: Map<EntryId, StoredEntry>,
   registry: FieldRegistry,
   parentIdRows: ReadonlyMap<EntryId, FieldUpdated>,
@@ -227,10 +226,13 @@ function storeRowToReplay(
  * Recorded rows keep the order `changeSet` gave them. A cascade's extra `removed` rows and their
  * plugin-store rows are appended after, never interleaved with the rows the step itself named.
  *
- * Judges `removed`, then `added`, then `updated` — the same order `EntryStore.endTransaction` applies
- * a committed changeset in. A replace (a remove and a re-add of one id) names that id in both
- * `removed` and `added`; judging `removed` first clears the slot before `added` asks whether the id is
- * already there, so a replace's own pair never reads as "the server got here first."
+ * Judges the step's recorded `removed` rows first, then `added`, then `updated` — the same order
+ * `EntryStore.endTransaction` applies a committed changeset in. A replace (a remove and a re-add of
+ * one id) names that id in both `removed` and `added`; judging `removed` first clears the slot before
+ * `added` asks whether the id is already there, so a replace's own pair never reads as "the server got
+ * here first." The cascade itself judges last, once `added`, `updated` and the loop check have all
+ * landed on `working` — only then does the step's own tree say which surviving id still hangs off a
+ * removed one.
  *
  * Call: `changesToReplay(data, invertChangeSet(step))` (undo), `changesToReplay(data, { ...step,
  * origin: 'redo' })` (redo), or `changesToReplay(data, changeSet)` (`dataset.replay`).
@@ -238,11 +240,7 @@ function storeRowToReplay(
 export function changesToReplay(data: TransactionData, changeSet: ChangeSet): ChangeSet | undefined {
   const working = new Map(data.entries.committedById());
 
-  const { removed, cascadeIds } = removedRowsToReplay(
-    changeSet.removed,
-    working,
-    data.entries.committedChildIds(),
-  );
+  const recordedRemoved = recordedRowsToReplay(changeSet.removed, working);
   const added = addedRowsToReplay(changeSet.added, working);
 
   const updated: UpdatedRow[] = [];
@@ -257,13 +255,19 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
     if (replayed.store === 'entries' && replayed.field === 'parentId')
       parentIdRows.set(replayed.id, replayed);
   }
-  const reverted = soundenTree(working, data.fields, parentIdRows);
+  const reverted = revertLoopingParentRows(working, data.fields, parentIdRows);
   const soundUpdated =
     reverted.size === 0
       ? updated
       : updated.filter(
           (row) => !(row.store === 'entries' && row.field === 'parentId' && reverted.has(row.id)),
         );
+
+  // The cascade runs last, over the step's finished tree: an id this same step reparented away from
+  // a removed ancestor already has its new, sound parent by now, and never cascades with it.
+  const recordedRemovedIds = new Set(recordedRemoved.map((row) => row.entity.id));
+  const { removed: cascadeRemoved, cascadeIds } = cascadeIdsToReplay(working, recordedRemovedIds);
+  const removed = [...recordedRemoved, ...cascadeRemoved];
   if (cascadeIds.length > 0) soundUpdated.push(...data.pluginStores.pendingRows(cascadeIds));
 
   if (added.length === 0 && removed.length === 0 && soundUpdated.length === 0) return undefined;
