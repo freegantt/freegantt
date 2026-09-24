@@ -101,6 +101,9 @@ export class FrameLayout implements FrameLayoutView {
    *  `run()` recomputes only when the window actually changed since the last `computeFrame` call. */
   #decorations = new DecorationRunner();
   #plan: readonly PlannedRow[] = [];
+  /** First planned row index for an entry, kept beside `#plan` so `rowIndexForEntry` never scans it
+   *  (#528). Built once per replan in `#planRows`, not per lookup. */
+  #rowIndexOfEntry = new Map<EntryId, number>();
   #rowOfEntry = new Map<EntryId, RowId>();
   #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
@@ -183,6 +186,18 @@ export class FrameLayout implements FrameLayoutView {
     });
     this.#indexOpenRows(open);
     this.#plan = stampIndex(applyCollapse(open, new Set(planInput.collapsed ?? [])));
+    this.#indexPlanRows();
+  }
+
+  /** Rebuilds `#rowIndexOfEntry` from `#plan` — the first row each entry appears in wins, matching
+   *  what a left-to-right scan of `#plan` would have found. */
+  #indexPlanRows(): void {
+    this.#rowIndexOfEntry.clear();
+    this.#plan.forEach((row, index) => {
+      for (const id of row.entryIds) {
+        if (!this.#rowIndexOfEntry.has(id)) this.#rowIndexOfEntry.set(id, index);
+      }
+    });
   }
 
   /** The row-height index's own `topAt`, exposed so `reveal` can ask for a row's position without a
@@ -194,7 +209,7 @@ export class FrameLayout implements FrameLayoutView {
 
   /** Index of the first planned row that carries this entry, or `-1` when collapse hid it. */
   rowIndexForEntry(id: EntryId): number {
-    return this.#plan.findIndex((row) => row.entryIds.includes(id));
+    return this.#rowIndexOfEntry.get(id) ?? -1;
   }
 
   /** Row that currently displays this entry, including a row collapse later hid (D4). */
