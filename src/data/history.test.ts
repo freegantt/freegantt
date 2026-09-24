@@ -156,6 +156,8 @@ describe('History', () => {
     expect(state.entries.has('parent')).toBe(true);
     expect(state.entries.has('child')).toBe(true);
     expect(state.entries.has('grandchild')).toBe(true);
+    expect(state.entries.get('child')?.read('parentId')).toBe('parent');
+    expect(state.entries.get('grandchild')?.read('parentId')).toBe('child');
   });
 
   it('a refused undo throws MutationCancelledError and leaves the stack exactly where it was', () => {

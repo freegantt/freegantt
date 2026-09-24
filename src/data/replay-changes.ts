@@ -53,29 +53,28 @@ function asRoot(entity: StoredEntry): StoredEntry {
 /** An `added` row whose id already exists is skipped — the server's re-sent copy stays. Runs after
  *  `removedRowsToReplay`, the same order `EntryStore.endTransaction` applies a changeset in: a
  *  replace's own `removed` row clears the slot first, so its `added` row lands instead of being read
- *  as "still there, must be a sync." A kept row lands on `working`, so a later row in the same step
- *  sees it.
+ *  as "still there, must be a sync." Every kept row lands on `working` before any of them is judged
+ *  for its parent — a subtree remove's own `added` rows recorded a child before its parent (the order
+ *  the cascade removed them in), and judging row by row would root that child, reading its own soon-
+ *  to-be-restored parent as "still missing."
  *
- *  A kept entity whose `parentId` names an id absent from `working` lands as a root instead: the
- *  server removed that parent since the step was recorded, and a re-added entity has no place of its
- *  own to fall back to, unlike an existing entry a dropped `parentId` row simply leaves where it was
- *  (`parentIdRowIsSound`). This never throws — `#assertParentValid`'s door onto a live store is
- *  `EntryStore.add`/`update`, neither of which replay calls. */
+ *  A kept entity whose `parentId` names an id absent from `working`, once every kept row has landed,
+ *  lands as a root instead: the server removed that parent since the step was recorded, and a
+ *  re-added entity has no place of its own to fall back to, unlike an existing entry a dropped
+ *  `parentId` row simply leaves where it was. This never throws — `#assertParentValid`'s door onto a
+ *  live store is `EntryStore.add`/`update`, neither of which replay calls. */
 function addedRowsToReplay(
   rows: readonly EntityAdded[],
   working: Map<EntryId, StoredEntry>,
 ): readonly EntityAdded[] {
-  const kept: EntityAdded[] = [];
-  for (const row of rows) {
-    if (working.has(row.entity.id)) continue;
-    const entity =
-      row.entity.parentId !== undefined && !working.has(row.entity.parentId)
-        ? asRoot(row.entity)
-        : row.entity;
-    kept.push(entity === row.entity ? row : { ...row, entity });
+  const kept = rows.filter((row) => !working.has(row.entity.id));
+  for (const row of kept) working.set(row.entity.id, row.entity);
+  return kept.map((row) => {
+    if (row.entity.parentId === undefined || working.has(row.entity.parentId)) return row;
+    const entity = asRoot(row.entity);
     working.set(entity.id, entity);
-  }
-  return kept;
+    return { ...row, entity };
+  });
 }
 
 /** A `removed` row whose id is already gone is skipped. A kept row removes the entity as `working`
@@ -114,33 +113,14 @@ function removedRowsToReplay(
   return { removed, cascadeIds };
 }
 
-/** A `parentId` row is sound when its target is a root write (`undefined`), or names an id `working`
- *  still holds whose own raw `parentId` chain never reaches `id` back — the same walk
- *  `EntryStore.#assertParentValid` runs over the live store, run here over the batch this replay is
- *  building. Read through `working`'s raw `parentId` only, never a plugin hierarchy source's checked
- *  answer, the same rule the construction batch check applies (`entry-batch.ts`'s `cycleMemberIds`). */
-function parentIdRowIsSound(
-  id: EntryId,
-  targetId: EntryId | undefined,
-  working: ReadonlyMap<EntryId, StoredEntry>,
-): boolean {
-  if (targetId === undefined) return true;
-  if (!working.has(targetId)) return false;
-  const seen = new Set<EntryId>();
-  let current: EntryId | undefined = targetId;
-  while (current !== undefined && !seen.has(current)) {
-    if (current === id) return false;
-    seen.add(current);
-    current = working.get(current)?.parentId;
-  }
-  return true;
-}
-
 /** A Field row for an id gone after the replay, or whose current value already equals `to`
- *  (`registry.valuesEqual`), is skipped. A `parentId` row that fails `parentIdRowIsSound` is skipped
- *  too — the entry stays under its current parent, the nearest sound place available, and this never
- *  raises: `change` carries exactly what still applies (§2b's skip rule extended to hierarchy). Every
- *  other row overwrites: `from` is the value `working` holds now, never the recorded `from`. A kept
+ *  (`registry.valuesEqual`), is skipped. A `parentId` row naming a target absent from `working` is
+ *  skipped too — the entry stays under its current parent, the nearest sound place available, and
+ *  this never raises: `change` carries exactly what still applies (§2b's skip rule extended to
+ *  hierarchy). Every other `parentId` row lands, even one that provisionally makes two rows in the
+ *  same step look like each other's ancestor — `soundenTree` judges the whole step's rows together,
+ *  once every one of them has landed, never one row against the others' unwritten state. Every other
+ *  kind of row overwrites: `from` is the value `working` holds now, never the recorded `from`. A kept
  *  row lands back on `working`, so a duplicate row for the same id and Field diffs against what this
  *  step already wrote. */
 function fieldRowToReplay(
@@ -151,13 +131,73 @@ function fieldRowToReplay(
 ): FieldUpdated | undefined {
   const current = working.get(row.id);
   if (!current) return undefined;
-  if (row.field === 'parentId' && !parentIdRowIsSound(row.id, row.to as EntryId | undefined, working)) {
+  if (row.field === 'parentId' && row.to !== undefined && !working.has(row.to as EntryId)) {
     return undefined;
   }
   const from = readFieldRow(current, row.field, registry, access);
   if (registry.valuesEqual(row.field, from, row.to)) return undefined;
   working.set(row.id, applyFieldRow(current, row.field, row.to, registry));
   return { store: 'entries', id: row.id, field: row.field, from, to: row.to };
+}
+
+/** Every id whose raw `parentId` chain in `working` loops back onto itself, self-parenting included —
+ *  the same walk `entry-batch.ts`'s `cycleMemberIds` runs over a whole-list write's own batch, run
+ *  here over the batch this replay is building instead. */
+function loopedIds(working: ReadonlyMap<EntryId, StoredEntry>): ReadonlySet<EntryId> {
+  const settled = new Set<EntryId>();
+  const visiting = new Set<EntryId>();
+  const members = new Set<EntryId>();
+
+  for (const startId of working.keys()) {
+    if (settled.has(startId)) continue;
+    const chain: EntryId[] = [];
+    let current: EntryId | undefined = startId;
+    while (current !== undefined && !settled.has(current) && !visiting.has(current)) {
+      visiting.add(current);
+      chain.push(current);
+      current = working.get(current)?.parentId;
+    }
+    // `current` is still in this walk's own `visiting` set, so the chain arrived back at an id it
+    // already passed — everything from that id to the end of the chain is one loop.
+    if (current !== undefined && visiting.has(current)) {
+      const loopStart = chain.indexOf(current);
+      for (const id of chain.slice(loopStart)) members.add(id);
+    }
+    for (const id of chain) {
+      visiting.delete(id);
+      settled.add(id);
+    }
+  }
+  return members;
+}
+
+/** Judges the whole step's `parentId` rows together, after every one of them has already landed on
+ *  `working` (`fieldRowToReplay` only refuses a row whose target is missing outright, not one that
+ *  provisionally loops with another row from the same step). A loop left standing is broken one row
+ *  at a time: revert this step's own row that closes it, back to the value it held before this step
+ *  touched it, then look again — until none is left. With no foreign write between the step's
+ *  recording and its replay, the tree these rows rebuild is one the store already held committed, so
+ *  there is nothing left to revert (`loopedIds` finds nothing, and the loop below never runs).
+ *
+ *  Returns the ids whose `parentId` row was reverted — `changesToReplay` drops that row from the
+ *  changeset it emits, the same way a dangling target already does. */
+function soundenTree(
+  working: Map<EntryId, StoredEntry>,
+  registry: FieldRegistry,
+  parentIdRows: ReadonlyMap<EntryId, FieldUpdated>,
+): ReadonlySet<EntryId> {
+  const remaining = new Map(parentIdRows);
+  const reverted = new Set<EntryId>();
+  for (;;) {
+    const looped = loopedIds(working);
+    if (looped.size === 0) return reverted;
+    const closingId = [...looped].find((id) => remaining.has(id));
+    if (closingId === undefined) return reverted; // defensive: this pass never meets a foreign loop
+    const row = remaining.get(closingId)!;
+    working.set(closingId, applyFieldRow(working.get(closingId)!, 'parentId', row.from, registry));
+    remaining.delete(closingId);
+    reverted.add(closingId);
+  }
 }
 
 /** A store row that writes a value (`to` is not `undefined`) for an entity gone after the replay is
@@ -206,15 +246,26 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   const added = addedRowsToReplay(changeSet.added, working);
 
   const updated: UpdatedRow[] = [];
+  const parentIdRows = new Map<EntryId, FieldUpdated>();
   for (const row of changeSet.updated) {
     const replayed =
       row.store === 'entries'
         ? fieldRowToReplay(row, working, data.fields, data.fieldAccess)
         : storeRowToReplay(row, working, data.pluginStores);
-    if (replayed) updated.push(replayed);
+    if (!replayed) continue;
+    updated.push(replayed);
+    if (replayed.store === 'entries' && replayed.field === 'parentId')
+      parentIdRows.set(replayed.id, replayed);
   }
-  if (cascadeIds.length > 0) updated.push(...data.pluginStores.pendingRows(cascadeIds));
+  const reverted = soundenTree(working, data.fields, parentIdRows);
+  const soundUpdated =
+    reverted.size === 0
+      ? updated
+      : updated.filter(
+          (row) => !(row.store === 'entries' && row.field === 'parentId' && reverted.has(row.id)),
+        );
+  if (cascadeIds.length > 0) soundUpdated.push(...data.pluginStores.pendingRows(cascadeIds));
 
-  if (added.length === 0 && removed.length === 0 && updated.length === 0) return undefined;
-  return { id: data.nextChangeSetId(), origin: changeSet.origin, added, removed, updated };
+  if (added.length === 0 && removed.length === 0 && soundUpdated.length === 0) return undefined;
+  return { id: data.nextChangeSetId(), origin: changeSet.origin, added, removed, updated: soundUpdated };
 }
