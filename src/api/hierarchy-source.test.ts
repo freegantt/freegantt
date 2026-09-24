@@ -313,6 +313,36 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     expect(warnings).toHaveLength(1);
   });
 
+  it('warns once for a refusal that exists only after the construction Rollup writes rows', () => {
+    // The source reads a rolled-up Field: "p" holds no cost of its own until the Rollup sums its
+    // child's, so this refusal cannot exist before that write lands.
+    const ghost = () =>
+      definePlugin({
+        id: 'demo.ghost',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        hierarchySource: () => (entry) => {
+          const cost = (entry.props as { cost?: number }).cost;
+          return entry.id === 'p' && cost === 500 ? 'nobody' : entry.parentId;
+        },
+        data() {},
+      });
+    const warnings = captureWarnings();
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'root', name: 'Root' },
+        { id: 'p', name: 'P', parentId: 'root' },
+        { id: 'c', name: 'C', parentId: 'p', props: { cost: 500 } },
+      ],
+      plugins: [ghost()],
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('"p"');
+    expect(dataset.entries.get('p')?.parent()).toBeUndefined();
+  });
+
   it('a commit that nothing reads still reports (`F5`)', () => {
     const ghost = () =>
       definePlugin({

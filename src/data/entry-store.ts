@@ -139,7 +139,7 @@ export class EntryStore implements EntryStoreContract {
   #lockRule: FieldLockRule = identityFieldLockRule;
   /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
    *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
-   *  never depends on who read first (`F5`). `#reportRefusedHierarchyAnswers` raises. */
+   *  never depends on who read first (`F5`). `reportRefusedHierarchyAnswers` raises. */
   #hierarchy: () => CheckedHierarchy;
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
   /** `#byParent`, ids only and with the root key (`undefined`) dropped — the same shape
@@ -254,8 +254,6 @@ export class EntryStore implements EntryStoreContract {
       walk(undefined, 0);
       return depthById;
     });
-    // The authored rows are answers too, and nobody has read a row yet (`F5`).
-    this.#reportRefusedHierarchyAnswers();
   }
 
   /** The checked tree for the committed rows. Memoized per revision, so the commit path, the Rollup
@@ -273,18 +271,21 @@ export class EntryStore implements EntryStoreContract {
 
   /** Raises every answer core refused (ADR 0020, `F5`).
    *
-   *  Called where the answers can change and nowhere else — at construction and on every commit,
-   *  each exactly once per revision, so this plain loop over `#hierarchy()` never raises the same
-   *  answer twice for one revision without needing its own de-dupe. Not from the read path: a Fault
-   *  that waits for somebody to look is a Fault a headless Dataset never sees, and a plugin's own
-   *  tests run headless. A construction-time refusal reaches the `console` fallback and no `error`
-   *  handler, because no consumer can subscribe before the constructor returns — the same posture
-   *  the construction Rollup's own `derived-values-dropped` report already takes (ADR 0013,
+   *  Called where the answers can change and nowhere else — once after the construction Rollup, and
+   *  on every later commit, each exactly once per revision, so this plain loop over `#hierarchy()`
+   *  never raises the same answer twice for one revision without needing its own de-dupe.
+   *  `DatasetState` is the construction-time caller: a hierarchy source may read a Field the Rollup
+   *  rolls up, so an answer can still change between the authored rows and the Rollup's own write,
+   *  and only a call placed after both sees every refusal construction can produce. Not from the read
+   *  path: a Fault that waits for somebody to look is a Fault a headless Dataset never sees, and a
+   *  plugin's own tests run headless. A construction-time refusal reaches the `console` fallback and
+   *  no `error` handler, because no consumer can subscribe before the constructor returns — the same
+   *  posture the construction Rollup's own `derived-values-dropped` report already takes (ADR 0013,
    *  decision 5).
    *
    *  The raise lands after the write set closes and before `change` fans out, so a handler that
    *  writes in response is outside the notification window `data/` forbids a mutation in. */
-  #reportRefusedHierarchyAnswers(): void {
+  reportRefusedHierarchyAnswers(): void {
     for (const report of this.#hierarchy().refused) {
       this.#raiseError(report, () => console.warn(`FreeGantt: ${report.message}`));
     }
@@ -767,11 +768,10 @@ export class EntryStore implements EntryStoreContract {
     return this.#writeSet?.edits ?? new Map();
   }
 
-  /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It checks the
-   *  tree again — `#421 C4`'s fast path stays the first *user* commit's own privilege, not something
-   *  this Field write can hand it for free — but it raises no refusal of its own: the constructor's
-   *  report, just before this call, already covers every answer this Dataset checks at construction,
-   *  so raising here would only repeat it. */
+  /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It reads the
+   *  checked tree now, so the first user commit finds it memoized instead of re-deriving it — but it
+   *  raises no refusal of its own: `DatasetState` calls `reportRefusedHierarchyAnswers` once, right
+   *  after this write lands, so every answer construction can produce is covered there instead. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void {
     if (updated.length === 0) return;
     this.#applyUpdatedRows(updated);
@@ -795,7 +795,7 @@ export class EntryStore implements EntryStoreContract {
       this.#restoreAdded(changeSet);
       this.#applyUpdatedRows(changeSet.updated);
       this.#revision.set(this.#revision.get() + 1);
-      this.#reportRefusedHierarchyAnswers();
+      this.reportRefusedHierarchyAnswers();
     }
     this.#writeSet = null;
   }
