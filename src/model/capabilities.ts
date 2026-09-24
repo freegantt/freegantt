@@ -53,7 +53,7 @@ export interface Capabilities {
    *  "opening" it. Default `true`, and resolved independently of `select` (I14): a rollup row with
    *  `{ select: false, activate: true }` still activates though it never selects. */
   activate?: CapabilityRule;
-  /** #256, S5.8, D-S5-19: the consumer's own answer to "may this cell's value change" — for a cell
+  /** #256: the consumer's own answer to "may this cell's value change" — for a cell
    *  `Field.editable` already leaves open. It narrows an `'anywhere'` Field per entry; it never
    *  reopens an `'api'` or a `'never'` Field, no matter what it answers.
    *

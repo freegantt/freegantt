@@ -247,12 +247,12 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
     expect(caps.can('move', entry())).toBe(false);
   });
 
-  it('capabilities.edit opens a roll-up parent cell it would otherwise refuse', () => {
+  it('capabilities.edit does not open a roll-up parent cell — the derived refusal answers first', () => {
     const caps = capabilities({ capabilities: { edit: true } });
     const parent = family({})[0]!;
-    expect(caps.canWrite(parent, 'start').ok).toBe(true);
-    // ADR 0013: the parent's own cell is open, and its move still does not write it. What a parent
-    // bar's move writes is the subtree below it, and nothing below this one holds a date.
+    expect(caps.canWrite(parent, 'start')).toEqual({ ok: false, reason: 'derived-value' });
+    // ADR 0013: the parent's move still does not write its own cell either way. What a parent bar's
+    // move writes is the subtree below it, and nothing below this one holds a date.
     expect(caps.can('move', parent)).toBe(false);
   });
 });
@@ -467,8 +467,15 @@ describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar t
     const caps = capabilities({ capabilities: { edit: true } });
     const parent = rollUpParent();
     expect(caps.entriesMovedBy(parent)).toEqual(parent.descendants());
-    expect(caps.canWrite(parent, 'start').ok).toBe(true); // the cell looks open (#256's known trade-off) …
-    expect(caps.can('move', parent)).toBe(true); // … but the move still writes the subtree, never the parent.
+    expect(caps.canWrite(parent, 'start')).toEqual({ ok: false, reason: 'derived-value' });
+    expect(caps.can('move', parent)).toBe(true); // the move still writes the subtree, never the parent.
+  });
+
+  it("edit: true paints no resize handle on a deriving parent's own edge", () => {
+    const caps = capabilities({ capabilities: { edit: true } });
+    const parent = rollUpParent();
+    expect(caps.can('resize', parent, 'start')).toBe(false);
+    expect(caps.can('resize', parent, 'end')).toBe(false);
   });
 
   // A summary-bar move never reads the parent's own canWrite: it moves the dated descendants below
