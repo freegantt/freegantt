@@ -14,7 +14,9 @@ export function logEverything(writeLog: WriteLog) {
       const onSelectionChange = (): void =>
         writeLog(`selectionChange: ${ctx.gantt.selectedEntryIds.length} selected`);
       ctx.events.on('selectionChange', onSelectionChange);
-      writeLog('logEverything: installed');
+      // ADR 0032: view() runs on a finished Gantt, so this reads the real starting selection
+      // instead of a constant.
+      writeLog(`logEverything: installed, ${ctx.gantt.selectedEntryIds.length} selected`);
       return () => {
         ctx.events.off('selectionChange', onSelectionChange);
         writeLog('logEverything: disposed');
