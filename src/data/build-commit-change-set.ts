@@ -32,7 +32,6 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
 import type { ParentIndex } from './hierarchy-source.js';
-import { parentIdFrom } from './hierarchy-source.js';
 import { renumberSiblingGroups } from './sibling-order.js';
 import type { SiblingChange, SiblingGroupKey, SiblingPlacement } from './sibling-order.js';
 import { isDevMode } from './dev-mode.js';
@@ -59,6 +58,11 @@ export interface CommitChangeSetEntryStore {
    *  the same count `add()`/`update()` range-check a body write's explicit `siblingIndex` against.
    *  The extender cascade's own moves range-check against this too — see `EntryStore.liveSiblingGroupSize`. */
   liveSiblingGroupSize(group: SiblingGroupKey): number;
+  /** `entry`'s group, checked the way a body write's own group already is — see
+   *  `EntryStore.checkedSiblingGroupOf`. The extender cascade reads a group through this too, never
+   *  through the raw hierarchy source, so a cascade edit on an already-refused entry counts against
+   *  the same group the body's own writes would. */
+  checkedSiblingGroupOf(id: EntryId, entry: StoredEntry): EntryId | undefined;
 }
 
 /** Staged plugin-store state the commit pipeline reads — mirrors `TransactionalPluginStores` without
@@ -139,6 +143,10 @@ function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extende
  *  entity this same transaction added is not skipped: `addedEntitiesForFold` folds this edit's other
  *  fields onto it, but only this log can place it at a rank in a group.
  *
+ *  Each group comes from `checkedSiblingGroupOf`, never the raw hierarchy source: an entity whose
+ *  answer core refused counts against the same checked root group a body write against it already
+ *  would, not an empty group of its own (see `EntryStore.checkedSiblingGroupOf`).
+ *
  *  A named index outside the group throws the same error an explicit `entries.update()` write throws,
  *  labelled with the extender's own operation name rather than the caller's. The count it range-checks
  *  against is the store's own live count (`EntryStore.liveSiblingGroupSize`, the same one `update()`
@@ -147,7 +155,7 @@ function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extende
 function siblingChangesFromExtenderEdits(
   entryAfterEdits: (id: EntryId) => StoredEntry | undefined,
   extenderEdits: ProposedEdits,
-  hierarchySource: HierarchySource,
+  checkedSiblingGroupOf: (id: EntryId, entry: StoredEntry) => EntryId | undefined,
   liveSiblingGroupSize: (group: SiblingGroupKey) => number,
 ): SiblingPlacement[] {
   const changes: SiblingPlacement[] = [];
@@ -159,8 +167,8 @@ function siblingChangesFromExtenderEdits(
     const current = entryAfterEdits(id);
     if (current === undefined) continue;
     const explicitIndex = edit.siblingIndex !== undefined;
-    const previousGroup = parentIdFrom(hierarchySource, current);
-    const group = parentIdFrom(hierarchySource, entryAfterEdit(current, edit));
+    const previousGroup = checkedSiblingGroupOf(id, current);
+    const group = checkedSiblingGroupOf(id, entryAfterEdit(current, edit));
     if (!explicitIndex && group === previousGroup) continue;
     const othersCount = liveSize(group) - (group === previousGroup ? 1 : 0);
     const at = explicitIndex ? edit.siblingIndex! : othersCount;
@@ -283,7 +291,7 @@ export function buildCommitChangeSet(
     ...siblingChangesFromExtenderEdits(
       (id) => editRequest.entryAfterEdits(id),
       extenderEdits,
-      data.hierarchySource,
+      (id, entry) => data.entries.checkedSiblingGroupOf(id, entry),
       (group) => data.entries.liveSiblingGroupSize(group),
     ),
   ];

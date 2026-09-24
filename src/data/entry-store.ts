@@ -342,14 +342,22 @@ export class EntryStore implements EntryStoreContract {
     return parentIdFrom(this.#hierarchySource, entry);
   }
 
-  /** `#askSource`'s answer, downgraded to a root the same way `checkHierarchyAnswers` would: an id no
-   *  Entry holds, or a chain that loops back to `id` itself, both read as `undefined`. The sibling
-   *  order log reads a group through this, never through `#askSource` alone — `committedSiblingIds`
-   *  is keyed by the checked answer (ADR 0020), so a write against an already-refused entry must
-   *  count against the same group that index already holds it under, not an empty one of its own. A
-   *  live re-check of one entry, not the committed index's own once-per-revision pass: an open
-   *  transaction cannot re-run that pass on every write and stay O(chain) (`#askSource`'s own note). */
-  #checkedGroupFor(id: EntryId, entry: UnplacedEntry): EntryId | undefined {
+  /** `#askSource`'s answer, downgraded to a root: an id no Entry holds, or a chain that loops back
+   *  to `id` itself, both read as `undefined`. This is not `checkHierarchyAnswers`'s own cycle break
+   *  — that pass walks every chain once and refuses only the one link that closes a loop, so the
+   *  other members of the same cycle keep pointing into it. This is a live, per-id check: it asks
+   *  only whether `id`'s own chain loops back to `id`, a rougher rule than the committed pass. Two
+   *  entries in one cycle can each read as a root this way, where the committed index would have
+   *  named only one of them a root and left the rest chained. A tie this produces — two entries
+   *  sharing one group with no order between them — breaks by store order, the same fault-only tie
+   *  ADR 0034 already names for the committed pass.
+   *
+   *  The sibling order log reads a group through this, never through `#askSource` alone —
+   *  `committedSiblingIds` is keyed by the checked answer (ADR 0020), so a write against an
+   *  already-refused entry must count against the same group that index already holds it under, not
+   *  an empty one of its own. The commit path's own extender cascade reads a group through this too
+   *  (`build-commit-change-set.ts`), for the same reason. */
+  checkedSiblingGroupOf(id: EntryId, entry: UnplacedEntry): EntryId | undefined {
     const raw = this.#askSource(entry);
     if (raw === undefined || !this.has(raw)) return undefined;
     let current: EntryId | undefined = raw;
@@ -549,7 +557,7 @@ export class EntryStore implements EntryStoreContract {
       // Placed at `input.siblingIndex`, or at the end of its group with no index named (ADR 0034). The
       // group's own live count — this transaction's own writes included, not only the committed count
       // — so a second `add()` into the same group in the same transaction lands after the first.
-      const group = this.#checkedGroupFor(id, unplaced);
+      const group = this.checkedSiblingGroupOf(id, unplaced);
       const othersCount = this.#liveSiblingGroupSize(group);
       const siblingIndex = input.siblingIndex ?? othersCount;
       if (input.siblingIndex !== undefined) {
@@ -842,7 +850,7 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** `group`'s committed member ids, in sibling order — what the renumber pass seeds a touched
-   *  group's replay from. `group` is `#checkedGroupFor`'s answer, `EntryId | undefined`, never
+   *  group's replay from. `group` is `checkedSiblingGroupOf`'s answer, `EntryId | undefined`, never
    *  `#askSource`'s raw one: a refused entry's raw answer names no Entry this index groups by. The
    *  wider `SiblingGroupKey` the interface names is a plugin-source door the committed index, keyed by
    *  the checked hierarchy answer, already narrows to that same shape. */
@@ -967,7 +975,7 @@ export class EntryStore implements EntryStoreContract {
   #logSiblingDeparture(id: EntryId): void {
     const writeSet = this.#openWriteSet();
     if (writeSet.departedSiblingIds.has(id)) return;
-    const group = this.#checkedGroupFor(id, this.storedEntry(id)!);
+    const group = this.checkedSiblingGroupOf(id, this.storedEntry(id)!);
     writeSet.departedSiblingIds.add(id);
     this.#adjustLiveSiblingGroupSize(group, -1);
     writeSet.siblingChanges.push({ id });
@@ -985,9 +993,9 @@ export class EntryStore implements EntryStoreContract {
     edit: EntryEdit,
     operation: string,
   ): (SiblingChange & { readonly group: SiblingGroupKey; readonly at: number }) | undefined {
-    const previousGroup = this.#checkedGroupFor(id, current);
+    const previousGroup = this.checkedSiblingGroupOf(id, current);
     const prospective = entryAfterEdit(current, reading.stored);
-    const group = this.#checkedGroupFor(id, prospective);
+    const group = this.checkedSiblingGroupOf(id, prospective);
     const explicitIndex = edit.siblingIndex !== undefined;
     if (!explicitIndex && group === previousGroup) return undefined;
     // Leaving its own group first (mirroring `renumberSiblingGroups`) means an entry that stays in its

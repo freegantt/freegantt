@@ -32,8 +32,8 @@ import type { StoredEntry } from './stored-entry.js';
  * **A source that reads a rolling-up Field sees a pre-Rollup value, at construction and at `load`.**
  * Both doors ask the source for every entry's parent before the Rollup runs (`dataset-state.ts`'s
  * constructor, `entry-store.ts`'s `load`), so a `min`/`max`/`sum` Field still holds its authored,
- * unrolled value at that point. A source may still read such a Field where the exact answer does
- * not matter, but it must not, where the tree's order has to be exact.
+ * unrolled value at that point. Do not read such a Field in a source when the order must stay
+ * exact.
  */
 export type HierarchySource<TProps = Record<string, unknown>> = (
   entry: Omit<StoredEntry<TProps>, 'siblingIndex'>,

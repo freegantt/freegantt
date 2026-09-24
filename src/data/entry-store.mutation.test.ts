@@ -423,6 +423,22 @@ describe('an extender edit renumbers its own group too (ADR 0034)', () => {
     expect(state.entries.get('x')!.read('parentId')).toBe(entryId('p1'));
     expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
   });
+
+  it('an extender edit on an entity whose raw hierarchy answer is refused range-checks against the checked root group it actually joins, not an empty one of its own', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'r' }, { id: 'x', name: 'x', start: 0, end: 1, props: { phaseId: 'ghost' } }],
+      timeZone: 'UTC',
+      fields: [{ key: 'phaseId', type: 'text', editable: 'anywhere' }],
+      hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('x'))) return new Map();
+        return new Map([[entryId('x'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    expect(() => state.entries.update('x', { name: 'x (renamed)' })).not.toThrow();
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+  });
 });
 
 describe('the renumber pass at 10,000 rows (ADR 0034)', () => {
