@@ -31,15 +31,15 @@ import type {
 import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
-import { assertEntryBatchIsSound } from './entry-batch.js';
+import { readEntryBatch } from './entry-batch.js';
 import { storedParentSource } from './hierarchy-source.js';
-import { toEditsReading, toEntries } from './entry-reader.js';
+import { toEditsReading } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import { identityExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
 import { EventBus } from './event-bus.js';
-import { createErrorRaiser } from './error-reporting.js';
+import { buildSiblingIndexDroppedReport, createErrorRaiser, raiseErrorOn } from './error-reporting.js';
 import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
@@ -202,14 +202,25 @@ export class DatasetState implements Dataset {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
     };
-    const read = toEntries(options.entries, this.#entryContext, this.fields, 'new Dataset');
-    assertEntryBatchIsSound(read, 'new Dataset');
     // Folded onto core's own source, in setup order (ADR 0031): the first wrapper wraps
     // `storedParentSource`, a later one wraps the one before it, and the last one answers first.
+    // Built before the entries below are read: a sibling group is the source's own checked tree
+    // (ADR 0034), so the source must exist before `readEntryBatch` can ask it.
     const hierarchySource = (options.hierarchySourceWrappers ?? []).reduce<HierarchySource>(
       (source, wrap) => wrap(source),
       storedParentSource,
     );
+    const { entries: read, siblingIndexDropped } = readEntryBatch(
+      options.entries,
+      this.#entryContext,
+      this.fields,
+      hierarchySource,
+      'new Dataset',
+    );
+    if (siblingIndexDropped.length > 0) {
+      const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
+      raiseErrorOn(this.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
+    }
     this.entries = new EntryStore(
       read,
       this.#entryContext,

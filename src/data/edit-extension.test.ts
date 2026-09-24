@@ -17,6 +17,7 @@ const noFields = { get: () => undefined };
 function entry(id: string): StoredEntry {
   return {
     id: entryId(id),
+    siblingIndex: 0,
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,

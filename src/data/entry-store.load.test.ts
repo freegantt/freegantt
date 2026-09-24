@@ -18,9 +18,10 @@ import {
   assertEntryBatchIsSound,
   assertNoOpenTransaction,
   assertNoRunningExtensionHook,
-  listOrderOf,
+  readEntryBatch,
 } from './entry-batch.js';
 import { toEntries } from './entry-reader.js';
+import { storedParentSource } from './hierarchy-source.js';
 import { FieldRegistry } from './fields/field-registry.js';
 
 interface Seed extends Partial<Omit<EntryInput, 'id'>> {
@@ -95,12 +96,22 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
     );
   });
 
-  it('listOrderOf reads back the ids in the list order it was given', () => {
-    expect(listOrderOf(read([{ id: 'c' }, { id: 'a' }, { id: 'b' }]))).toEqual([
-      entryId('c'),
-      entryId('a'),
-      entryId('b'),
-    ]);
+  it('readEntryBatch ranks siblings by list order, not the order ids were typed', () => {
+    const { entries } = readEntryBatch(
+      [
+        { id: 'c', name: 'c', start: 0, end: 1, props: {} },
+        { id: 'a', name: 'a', start: 0, end: 1, props: {} },
+        { id: 'b', name: 'b', start: 0, end: 1, props: {} },
+      ],
+      context,
+      registry,
+      storedParentSource,
+      'test',
+    );
+    const rankById = new Map(entries.map((entry) => [entry.id, entry.siblingIndex]));
+    expect(rankById.get(entryId('c'))).toBe(0);
+    expect(rankById.get(entryId('a'))).toBe(1);
+    expect(rankById.get(entryId('b'))).toBe(2);
   });
 
   it('assertNoOpenTransaction is silent at 0 and throws above it', () => {
@@ -115,7 +126,7 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
 });
 
 describe('entries.load', () => {
-  it('a child listed before its parent lands, and entries.all takes the list order (Q1)', () => {
+  it('a child listed before its parent lands, and entries.all walks the tree depth-first (Q1)', () => {
     const state = dataset();
     state.entries.load([
       { id: 'c', parentId: 'a', name: 'Child', start: 0, end: 1 },
@@ -123,7 +134,9 @@ describe('entries.load', () => {
       { id: 'b', name: 'Sibling', start: 0, end: 1 },
     ]);
 
-    expect(state.entries.all.map((e) => e.id)).toEqual([entryId('c'), entryId('a'), entryId('b')]);
+    // Root order comes from list position among roots ('a' before 'b'), and 'a' carries its own
+    // child right after it — depth-first, not the flat list order the input named them in.
+    expect(state.entries.all.map((e) => e.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
     expect(state.entries.get('c')!.parent()?.id).toBe(entryId('a'));
   });
 
@@ -195,7 +208,9 @@ describe('entries.load', () => {
       ];
       expect(() => state.entries.load(inputs)).not.toThrow();
 
-      expect(state.entries.all.map((e) => e.id)).toEqual([entryId('a'), entryId('b')]);
+      // The cycle breaks at 'b': its own answer is the one dropped, so 'b' reads as a root and 'a'
+      // keeps its answer of "'b' is my parent" — `all` walks that surviving tree depth-first.
+      expect(state.entries.all.map((e) => e.id)).toEqual([entryId('b'), entryId('a')]);
       expect(reports.map((report) => [report.code, report.by])).toContainEqual(['hierarchy-cycle', 'plugin']);
     });
 

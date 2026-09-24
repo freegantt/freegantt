@@ -23,9 +23,14 @@ import type { StoredEntry } from './stored-entry.js';
  * A plain `string` is a legal answer, the way it is on every other way into the library: core brands
  * it. `TProps` types `entry.props`, so a source that reads a consumer key names that key's own type
  * — `definePlugin<PlannerProps>({ hierarchySource })`.
+ *
+ * **It never reads `siblingIndex`** (ADR 0034): an entry's tree parent is asked for before its
+ * sibling rank exists — construction and `load` place an entry by asking the source first — and a
+ * source that read the rank a renumber pass is about to write could loop with that pass. The
+ * omitted key is a real rule, not an accident of typing.
  */
 export type HierarchySource<TProps = Record<string, unknown>> = (
-  entry: StoredEntry<TProps>,
+  entry: Omit<StoredEntry<TProps>, 'siblingIndex'>,
 ) => EntryId | string | undefined;
 
 /**

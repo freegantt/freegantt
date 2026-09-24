@@ -65,6 +65,15 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     editable: 'api',
   },
   {
+    // An ordinary Field, stored on every Entry (ADR 0034) — no `column`, so the grid never shows a
+    // "siblingIndex" header on its own. `editable: 'never'` here: a write door for it opens once the
+    // renumber pass that keeps every group dense and gapless lands beside it.
+    key: 'siblingIndex',
+    type: 'number',
+    equals: byReference,
+    editable: 'never',
+  },
+  {
     key: 'duration',
     type: 'duration',
     compute: (_entry, ctx) => ctx.duration(),

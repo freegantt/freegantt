@@ -13,6 +13,7 @@ function entry(id: string, props?: Record<string, unknown>): StoredEntry {
     start: 0 as Instant,
     end: 1 as Instant,
     props: props ?? {},
+    siblingIndex: 0,
   };
 }
 

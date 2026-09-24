@@ -23,6 +23,7 @@ import { fieldRowsOf } from '../change-set.js';
 const span = (props?: Record<string, unknown>): StoredEntry => {
   return {
     id: entryId('t1'),
+    siblingIndex: 0,
     name: 't1',
     start: 0 as Instant,
     end: 1 as Instant,
@@ -91,7 +92,7 @@ describe('readField / writeField (D-S4-2)', () => {
   });
 
   it('durationOf reads undefined for a dateless Entry, never NaN (ADR 0012)', () => {
-    const dateless: StoredEntry = { id: entryId('t2'), name: 't2', props: {} };
+    const dateless: StoredEntry = { id: entryId('t2'), siblingIndex: 0, name: 't2', props: {} };
     expect(readField(dateless, duration, fieldCtx)).toBeUndefined();
   });
 
@@ -151,6 +152,7 @@ describe('readField / writeField (D-S4-2)', () => {
 describe('the pass surface answers children/descendants/leaves/hasChildren about any row (#466)', () => {
   const row = (id: string, parentId?: string): StoredEntry => ({
     id: entryId(id),
+    siblingIndex: 0,
     name: id,
     props: {},
     ...(parentId !== undefined ? { parentId: entryId(parentId) } : {}),
@@ -451,5 +453,28 @@ describe('a cross-door invariant: every door agrees on a stored Field (ADR 0024,
     expect(entry.read('hierarchyParentId')).toBe('p');
     expect('hierarchyParentId' in entry.toInput()).toBe(false);
     expect(fieldRowsOf(seen[0]!).some((row) => row.field === 'hierarchyParentId')).toBe(false);
+  });
+
+  it('siblingIndex is the one stored Field toInput() never names: construction and load place the row, so an input never authors its slot (ADR 0034)', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'Parent' },
+        { id: 'a', name: 'A', parentId: 'p' },
+      ],
+    });
+
+    const seen: ChangeSet[] = [];
+    state.on('change', ({ changeSet }) => {
+      seen.push(changeSet);
+    });
+    state.entries.update('a', { name: 'A renamed' });
+
+    const entry = state.entries.get('a')!;
+    // The stored value, on the doors that name it.
+    expect(entry.read('siblingIndex')).toBe(0);
+    expect(state.entries.storedValues.get(entry.id)!.siblingIndex).toBe(0);
+    expect('siblingIndex' in entry.toInput()).toBe(false);
+    expect(fieldRowsOf(seen[0]!).some((row) => row.field === 'siblingIndex')).toBe(false);
   });
 });

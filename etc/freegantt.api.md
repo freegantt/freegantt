@@ -798,6 +798,7 @@ export interface EntryInput<TProps = Record<string, unknown>> {
     name?: string | undefined;
     parentId?: string | undefined;
     props?: Partial<TProps>;
+    siblingIndex?: number | undefined;
     start?: InstantInput | undefined;
 }
 
@@ -1449,7 +1450,7 @@ export interface HeaderRendererContext {
 }
 
 // @public
-export type HierarchySource<TProps = Record<string, unknown>> = (entry: StoredEntry<TProps>) => EntryId | string | undefined;
+export type HierarchySource<TProps = Record<string, unknown>> = (entry: Omit<StoredEntry<TProps>, 'siblingIndex'>) => EntryId | string | undefined;
 
 // @public
 export type HierarchySourceWrapper<TProps = Record<string, unknown>> = (next: HierarchySource<TProps>) => HierarchySource<TProps>;
@@ -2197,6 +2198,7 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
     name?: string;
     parentId?: EntryId;
     props: Readonly<Partial<TProps>>;
+    siblingIndex: number;
     start?: Instant;
 }
 

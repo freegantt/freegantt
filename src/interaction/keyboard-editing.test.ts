@@ -17,12 +17,13 @@ function toInstant(ms: number): Instant {
 /** The rows a gesture reads, built through the real store. `interaction/` may reach `data/`, and the
  *  store is the one place a live `Entry` is built (ADR 0017). */
 const rows = new EntryStore(
-  ORDER.map((id) => ({
+  ORDER.map((id, index) => ({
     id,
     name: id,
     start: toInstant(0),
     end: toInstant(1),
     props: {},
+    siblingIndex: index,
   })),
   { timeZone: 'UTC', dateOnlyEnd: 'inclusive' },
 );

@@ -20,6 +20,13 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
   /** Hierarchy; roots have none. An Entry has no stored classification (ADR 0013): it derives when
    *  it has children, and `Entry.hasChildren` is what answers that. */
   parentId?: EntryId;
+  /** This Entry's rank among its siblings — an ordinary integer index, always present, never
+   *  negative (ADR 0034). List position carries the value at construction and at `load`; after
+   *  that, an explicit write moves an entry and the write's own group renumbers around it. Read it
+   *  with `entry.read('siblingIndex')`, the same way `parentId` has no dedicated `Entry` member
+   *  either. `HierarchySource` never reads this key — a source answers before an entry's index
+   *  exists (`UnplacedEntry`, `data/hierarchy-source.ts`). */
+  siblingIndex: number;
   /** What this row is called, or `undefined` when no author gave it one (#421 C5). Not a required
    *  field: a row with no name still stores, still spans, still draws — core defaults nothing off
    *  it beyond the Grid's `name` column and the default bar label reading the same Field. */
@@ -77,6 +84,11 @@ export interface EntryInput<TProps = Record<string, unknown>> {
   id: string;
   /** Hierarchy; roots have none. */
   parentId?: string | undefined;
+  /** This Entry's rank among its siblings (ADR 0034). `add()` places a new entry at this index when
+   *  given one; the constructor and `load` read list position instead and drop an authored value
+   *  that disagrees with it, with one aggregated warning (`data/error-reporting.ts`,
+   *  `'sibling-index-dropped'`). Omit it to append. */
+  siblingIndex?: number | undefined;
   /** No stored classification (ADR 0013). An Entry derives when it has children — gaining one
    *  promotes it, losing the last one demotes it, and nothing here says which.
    *
