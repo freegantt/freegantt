@@ -219,6 +219,8 @@ describe('replay removes the entry as it stands now, and its children the step d
     expect(state.entries.has('q')).toBe(false);
     const qAddedRows = seen[0]!.added.filter((row) => row.entity.id === entryId('q'));
     expect(qAddedRows).toEqual([]);
+    const qRemovedRows = seen[0]!.removed.filter((row) => row.entity.id === entryId('q'));
+    expect(qRemovedRows).toEqual([]);
     const qUpdatedRows = seen[0]!.updated.filter((row) => row.id === entryId('q'));
     expect(qUpdatedRows).toEqual([]);
   });
@@ -305,6 +307,34 @@ describe('replay judges a same-id replace in the store’s own apply order — r
     state.redo();
     expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
     expect(state.entries.get('b')!.name).toBe('New B');
+  });
+
+  it('a replace that also adds a child under the replaced id: undo restores both old rows, redo brings back both new ones', () => {
+    const state = dataset([
+      { id: 'p', name: 'P' },
+      { id: 'c', name: 'C', parentId: 'p' },
+    ]);
+
+    state.transaction(() => {
+      state.entries.remove('p');
+      state.entries.add({ id: 'p', name: 'P2', start: 0, end: 1 });
+      state.entries.add({ id: 'c', name: 'C2', parentId: 'p', start: 0, end: 1 });
+    });
+    expect(state.entries.get('p')!.name).toBe('P2');
+    expect(state.entries.get('c')!.name).toBe('C2');
+    expect(state.entries.get('c')!.read('parentId')).toBe('p');
+
+    state.undo();
+    expect(state.entries.get('p')!.name).toBe('P');
+    expect(state.entries.get('c')!.name).toBe('C');
+    expect(state.entries.get('c')!.read('parentId')).toBe('p');
+
+    state.redo();
+    expect(state.entries.get('p')!.name).toBe('P2');
+    expect(state.entries.get('c')!.name).toBe('C2');
+    expect(state.entries.get('c')!.read('parentId')).toBe('p');
+    expect(state.canUndo).toBe(true);
+    expect(state.canRedo).toBe(false);
   });
 
   it('undoing every step after a replace returns to the seed, with no step stuck mid-stack', () => {
