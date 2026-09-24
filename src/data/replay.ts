@@ -21,6 +21,13 @@ export function replayChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   if (changeSet.origin !== 'undo' && changeSet.origin !== 'redo') {
     throw new InvalidReplayOriginError(changeSet.origin);
   }
+  // An already-empty recorded step (a hand-built `dataset.replay()` call, or a step every Field
+  // settled back to nothing) answers the same no-op `changesToReplay` would, without paying for
+  // the committed-map clone and the hierarchy and cycle passes underneath it. `history.ts` calls
+  // this once per undo/redo step it probes, so the guard sits on a hot path.
+  if (changeSet.added.length === 0 && changeSet.removed.length === 0 && changeSet.updated.length === 0) {
+    return;
+  }
   const replayed = changesToReplay(data, changeSet);
   if (replayed) commitChangeSet(data, replayed);
 }
