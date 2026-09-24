@@ -23,6 +23,7 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { checkHierarchyAnswers } from './hierarchy-source.js';
 import type { ParentIndex } from './hierarchy-source.js';
+import { findParentCycleMembers } from './parent-cycle.js';
 import { renumberSiblingGroups } from './sibling-order.js';
 import type { SiblingChange, SiblingPlacement } from './sibling-order.js';
 import { rollUpFreshBatch } from './transaction.js';
@@ -191,34 +192,10 @@ function fieldRowToReplay(
 }
 
 /** Every id whose raw `parentId` chain in `working` loops back onto itself, self-parenting included —
- *  the same walk `entry-batch.ts`'s `cycleMemberIds` runs over a whole-list write's own batch, run
- *  here over the batch this replay is building instead. */
+ *  the same walk `entry-batch.ts` runs over a whole-list write's own batch, run here over the batch
+ *  this replay is building instead. */
 function loopedIds(working: ReadonlyMap<EntryId, StoredEntry>): ReadonlySet<EntryId> {
-  const settled = new Set<EntryId>();
-  const visiting = new Set<EntryId>();
-  const members = new Set<EntryId>();
-
-  for (const startId of working.keys()) {
-    if (settled.has(startId)) continue;
-    const chain: EntryId[] = [];
-    let current: EntryId | undefined = startId;
-    while (current !== undefined && !settled.has(current) && !visiting.has(current)) {
-      visiting.add(current);
-      chain.push(current);
-      current = working.get(current)?.parentId;
-    }
-    // `current` is still in this walk's own `visiting` set, so the chain arrived back at an id it
-    // already passed — everything from that id to the end of the chain is one loop.
-    if (current !== undefined && visiting.has(current)) {
-      const loopStart = chain.indexOf(current);
-      for (const id of chain.slice(loopStart)) members.add(id);
-    }
-    for (const id of chain) {
-      visiting.delete(id);
-      settled.add(id);
-    }
-  }
-  return members;
+  return findParentCycleMembers(working.keys(), working);
 }
 
 /** Judges the whole step's `parentId` rows together, after every one of them has already landed on
