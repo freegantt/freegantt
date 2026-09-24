@@ -486,3 +486,78 @@ describe('replay renumbers the sibling groups it touches, dense from 0', () => {
     expect(state.entries.get('b')!.read('siblingIndex')).toBe(2);
   });
 });
+
+describe('replay re-rolls a parent whose other child changed since the step', () => {
+  it('after a foreign write moves a child’s dates, undo of a user edit leaves the parent rolled up correctly', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'c1', parentId: 'p', start: 10, end: 20 },
+      { id: 'c2', parentId: 'p', start: 20, end: 30 },
+    ]);
+    expect(state.entries.get('p')!.start).toBe(10);
+
+    state.entries.update('c1', { start: 5 });
+    expect(state.entries.get('p')!.start).toBe(5);
+
+    // A foreign write moves c2 earlier than c1's own edit did — a date the user's step never saw.
+    state.entries.sync([
+      { id: 'p' },
+      { id: 'c1', parentId: 'p', start: 5, end: 20 },
+      { id: 'c2', parentId: 'p', start: 1, end: 30 },
+    ]);
+    expect(state.entries.get('p')!.start).toBe(1);
+
+    // The c1 step's own recorded inverse rows — the field it moved, and the stale Rollup row the
+    // live commit carried alongside it, both as `invertChangeSet` would hand them to `undo()`.
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('c1'), field: 'start', from: 5, to: 10 },
+          { store: 'entries', id: entryId('p'), field: 'start', from: 5, to: 10 },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('c1')!.start).toBe(10);
+    // p's rolled-up start still reflects c2's foreign date, not the stale value the c1 step
+    // recorded — undoing c1's edit alone never makes p older than its youngest child.
+    expect(state.entries.get('p')!.start).toBe(1);
+  });
+
+  it('plain undo of adding a first child to leaf p gives p its old authored start back', () => {
+    const state = dataset([{ id: 'p', start: 5, end: 6 }]);
+    expect(state.entries.get('p')!.start).toBe(5);
+
+    state.transaction(() => {
+      state.entries.add({ id: 'c1', parentId: 'p', name: 'C1', start: 1, end: 2 });
+    });
+    // p is promoted: the live commit rolls its start up from its first child.
+    expect(state.entries.get('p')!.start).toBe(1);
+
+    state.undo();
+
+    expect(state.entries.has('c1')).toBe(false);
+    // p is a leaf again. The construction-shape Rollup never visits a leaf, so it never clears
+    // the value the plain field-row replay already restored.
+    expect(state.entries.get('p')!.start).toBe(5);
+  });
+
+  it('a plain undo with no foreign write emits no Rollup row', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'c1', parentId: 'p', start: 10, end: 20 },
+      { id: 'c2', parentId: 'p', start: 20, end: 30 },
+    ]);
+    expect(state.entries.get('p')!.start).toBe(10);
+
+    state.entries.update('c1', { start: 5 });
+    expect(state.entries.get('p')!.start).toBe(5);
+
+    const seen = changeSets(state);
+    state.undo();
+
+    expect(state.entries.get('p')!.start).toBe(10);
+    const pRows = seen[0]!.updated.filter((row) => row.id === entryId('p'));
+    expect(pRows).toEqual([{ store: 'entries', id: entryId('p'), field: 'start', from: 5, to: 10 }]);
+  });
+});
