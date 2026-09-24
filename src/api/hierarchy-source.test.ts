@@ -27,8 +27,8 @@ const phaseRows: EntryInput<PhaseProps>[] = [
 const phases = () =>
   definePlugin({
     id: 'demo.phases',
+    fields: [{ key: 'phaseId' }],
     data(ctx) {
-      ctx.fields.register({ key: 'phaseId' });
       ctx.hierarchy.setSource<PhaseProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
     },
   });
@@ -424,8 +424,8 @@ describe('the cost shape holds with a source installed', () => {
     const counting = () =>
       definePlugin({
         id: 'demo.counting',
+        fields: [{ key: 'phaseId' }],
         data(ctx) {
-          ctx.fields.register({ key: 'phaseId' });
           ctx.hierarchy.setSource<PhaseProps>((next) => (entry) => {
             asked(entry.id);
             return entry.props.phaseId ?? next(entry);

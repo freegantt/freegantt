@@ -98,8 +98,8 @@ plugin with a Token and never has to know your selector.
 
 ## The smallest working `data` half
 
-A `data` half declares a field and reads it back through the dataset's own
-field system — no new API, the same path a core field takes:
+A plugin declares a field on itself, the same shape `Dataset`'s own `fields`
+option takes — no new API, the same path a core field takes:
 
 ```ts
 import { definePlugin } from 'freegantt';
@@ -107,18 +107,19 @@ import { definePlugin } from 'freegantt';
 function ownerField() {
   return definePlugin({
     id: 'demo.ownerField',
-    data(ctx) {
-      ctx.fields.register({ key: 'owner', type: 'text', editable: true });
-    },
+    fields: [{ key: 'owner', type: 'text', editable: true }],
+    data() {},
   });
 }
 
 export { ownerField };
 ```
 
-`ctx.fields.register` runs once, while `data` is on the stack. After that,
-the field is a normal field: `dataset.entries.update(id, { owner: 'Ada' })`
-reads and writes it like any other.
+Every plugin's `fields` list is registered before any entry is read, so a
+flat `owner: 'Ada'` value on a construction entry lands the same way
+`entries.load()` already reads it. After that, the field is a normal field:
+`dataset.entries.update(id, { owner: 'Ada' })` reads and writes it like any
+other.
 
 ## Installing a plugin
 
@@ -336,14 +337,19 @@ plugins claim the same key.
 | `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: a second plugin claiming the whole bar point throws, naming both plugin ids" |
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
-| `fields.register(field)` | `field.key` | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
-| `fields.registerType(name, type)` | type name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
-| `fields.registerAggregator(name, fn)` | aggregator name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
 | `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 | `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
 | `events.on(name, handler)` | none | Additive — every handler runs, in registration order; the returned `Disposer` removes only that one handler | `src/data/event-bus.test.ts` |
+
+A Field, a Field type or an Aggregator is not on this table: a plugin
+declares those on itself — `fields`, `fieldTypes`, `aggregators` — never
+through a `ctx` call (#496 grill round 3, R1/R2). `Dataset`'s constructor
+registers every plugin's declarations, alongside its own, before any entry
+is read — a key two sources both declare throws `DuplicateFieldKeyError`,
+the same error a claimed key in the table above throws. See "The smallest
+working `data` half" above.
 
 `events.on` is not gated — a plugin may call it after its own half returns,
 for example from inside another handler — but it is still tracked like every
@@ -357,9 +363,11 @@ reserved, or `undefined` if that plugin never reserved one.
 
 ## The registration gate
 
-Every `register*` and `fields.register*` call is legal only while that
-plugin's own half is running. The moment that half returns, the gate closes for
-that plugin.
+Every `register*` call in the table above is legal only while that plugin's
+own half is running. The moment that half returns, the gate closes for that
+plugin. `fields`/`fieldTypes`/`aggregators` are not on this gate at all —
+they are read before `data()` ever runs (see "Every registration seam"
+above), so there is no later call to refuse.
 
 Calling a gated method after that half has returned throws
 `RegistrationClosedError`:

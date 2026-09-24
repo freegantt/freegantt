@@ -19,8 +19,8 @@ export interface PhaseProps {
  * ```
  *
  * Two seams, two jobs:
- * - **the Field** — `phaseId` has to be declared before anything may write it (ADR 0011), and a
- *   plugin declares its own keys while `data()` runs (D-S5-4).
+ * - **the Field** — `phaseId` has to be declared before anything may write it (ADR 0011), so this
+ *   plugin declares it on itself, before any entry is read (#496 grill round 3, R1).
  * - **the hierarchy source** — which Entry is the parent of this one? The phase id when there is
  *   one, otherwise whatever the next source says. Core's own source answers `parentId`, so a row
  *   with no phase id keeps the tree it was authored with.
@@ -33,8 +33,8 @@ export interface PhaseProps {
 export function phaseHierarchy(): DataPlugin {
   return definePlugin({
     id: 'demo.phaseHierarchy',
+    fields: [{ key: 'phaseId' }],
     data(ctx) {
-      ctx.fields.register({ key: 'phaseId' });
       ctx.hierarchy.setSource<PhaseProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
     },
   });

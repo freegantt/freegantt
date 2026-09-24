@@ -62,15 +62,18 @@ export function lockEntries(): LockEntriesPlugin {
   return {
     id: 'demo.lockEntries',
 
+    fields: [{ key: LOCKED_FIELD_KEY, type: 'boolean', editable: 'api' }],
+
     data(ctx) {
       dataset = ctx.dataset;
-      ctx.fields.register({ key: LOCKED_FIELD_KEY, type: 'boolean', editable: 'api' });
 
       // No seed walk here: `ctx.dataset` is not readable yet while `data()` runs (D-S5-4 — the
-      // Dataset wrapper this context hands back is still under construction), and a flat `locked:
-      // true` on a construction entry is dropped before any plugin installs anyway (ingest runs
-      // first). `lockedIds` starts empty and only ever grows through a later `lock()`/`unlock()`/
-      // `entries.load()` commit, which the listener below always sees.
+      // Dataset wrapper this context hands back is still under construction). `isLockedEntry` and
+      // `beforeChange` below still read a construction-time `locked: true` correctly, straight off
+      // the Field (#496 grill round 3, R1); `lockedIds` is a narrower cache, for the drag-preview
+      // cascade alone, and it only grows once a commit exists for this listener to see. So a row
+      // locked from construction is refused a direct edit from the first frame, and joins the
+      // cascade from its own next commit on.
       //
       // Every id a commit touched — added, removed, or field-written — re-read once, after the
       // commit lands, so `lockedIds` never drifts from the Field it mirrors.

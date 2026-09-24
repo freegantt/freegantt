@@ -6,7 +6,6 @@ export type { DatasetOptions, DatasetPluginContext } from './dataset.js';
 export type {
   DatasetPluginContextOf,
   DatasetEvents,
-  DatasetFieldRegistrations,
   DatasetEditHook,
   DatasetHierarchy,
   DatasetStoreAccess,

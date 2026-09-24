@@ -799,25 +799,24 @@ describe('Dataset plugins (S5.10)', () => {
     expect(appCalls).toBe(1);
   });
 
-  it('throws RegistrationClosedError when a plugin registers a Field after setup returned', () => {
-    let registerLate = (): void => undefined;
+  it('throws RegistrationClosedError when a plugin claims the extension hook after setup returned', () => {
+    let setExtenderLate = (): void => undefined;
     const late: DataPlugin = {
       id: 'demo.late',
       data(ctx) {
-        registerLate = () => ctx.fields.register({ key: 'cost' });
+        setExtenderLate = () => ctx.edits.setExtender((next) => next);
       },
     };
     new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [late] });
-    expect(registerLate).toThrow(RegistrationClosedError);
+    expect(setExtenderLate).toThrow(RegistrationClosedError);
   });
 
-  it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4)', () => {
+  it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4, #496 R1)', () => {
     const declaresCost: DataPlugin = {
       id: 'demo.cost',
-      data(ctx) {
-        ctx.fields.registerType('money', { rollUp: 'sum' });
-        ctx.fields.register({ key: 'cost', type: 'money' });
-      },
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      data() {},
     };
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -1039,9 +1038,8 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
   /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `props`. */
   const declaresRisk: DataPlugin = {
     id: 'demo.risk',
-    data(ctx) {
-      ctx.fields.register({ key: 'risk', rollUp: 'none' });
-    },
+    fields: [{ key: 'risk', rollUp: 'none' }],
+    data() {},
   };
 
   const withRisk = (): Dataset =>
