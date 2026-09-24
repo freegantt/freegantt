@@ -16,7 +16,7 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { SiblingIndexOutOfRangeError } from '../model/index.js';
-import { diffEdit, foldChangeSet } from './change-set.js';
+import { diffEdit, foldChangeSet, mergeUpdatedRows } from './change-set.js';
 import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.js';
 import { createEditRequest } from './edit-request.js';
 import type { ErrorBus } from './error-reporting.js';
@@ -283,9 +283,10 @@ export function buildCommitChangeSet(
   // settled before order is decided for it. This pass owns every `siblingIndex` row: a write that
   // named the Field (`entries.update(id, { siblingIndex })`, or an extender edit that does the same)
   // already reached `bodyAndExtenderUpdated` through the ordinary diff, and that row is dropped here
-  // rather than folded beside this pass's own — two rows for one (id, field) is not a shape
-  // `foldChangeSet` resolves. The extender's own moves land after the body's, so a cascade lands on
-  // top of whatever the body itself placed.
+  // outright rather than left for `mergeUpdatedRows` below: the renumber pass may settle a group back
+  // to its committed order and write no row at all, and a merge would then keep the body's stale row
+  // — the wrong net effect, not merely a duplicate one. The extender's own moves land after the
+  // body's, so a cascade lands on top of whatever the body itself placed.
   const siblingChanges: readonly SiblingChange[] = [
     ...data.entries.pendingSiblingChanges(),
     ...siblingChangesFromExtenderEdits(
@@ -327,10 +328,18 @@ export function buildCommitChangeSet(
   }
   const updatedWithoutBodySiblingIndex = bodyAndExtenderUpdated.filter((row) => row.field !== 'siblingIndex');
 
-  return foldChangeSet(data.nextChangeSetId(), origin, rankedEntitiesForFold, removedEntities, [
-    ...updatedWithoutBodySiblingIndex,
-    ...rollupUpdated,
-    ...pluginRows,
-    ...siblingIndexUpdated,
-  ]);
+  // The body and the Rollup can each propose a row for the same (id, field) — the body's own `end`
+  // write, then the Rollup's recompute of that same `end` once the write set settles. One net row per
+  // key, not both in sequence: `invertChangeSet` keeps row order, so two rows for one key would invert
+  // to two rows too, and undo would land on the middle value instead of the one committed here.
+  return foldChangeSet(
+    data.nextChangeSetId(),
+    origin,
+    rankedEntitiesForFold,
+    removedEntities,
+    mergeUpdatedRows(
+      [...updatedWithoutBodySiblingIndex, ...rollupUpdated, ...pluginRows, ...siblingIndexUpdated],
+      data.fields,
+    ),
+  );
 }
