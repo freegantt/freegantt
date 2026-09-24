@@ -884,7 +884,7 @@ interface DatasetPluginContext {
 `Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin declares its Fields and its
 hierarchy source on its own definition (ADR 0031), before the Dataset builds, so a consumer who wants
 a different plugin set builds a new Dataset instead of reconfiguring one live. Every register* call
-above is legal only while the half that owns it runs (D5, `plans/s5.1`); a later call throws
+above is legal only while the half that owns it runs (ADR 0031); a later call throws
 `RegistrationClosedError`. Every plugin's
 `ctx.disposables` retracts its own registrations on uninstall, so a plugin returns a Disposer only
 for a resource it owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
