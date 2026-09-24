@@ -442,6 +442,292 @@ Coordinator rulings:
   to write (f2).
 - **U7.** #419 reuses History's `'sync'` arm (decision i).
 
+### Decisions a–i (local undo, owner 2026-09-24)
+
+#### a. Where the undo-time capture lives
+
+**Decision: in replay. `replayChangeSet` writes each row onto the current values. History keeps what each
+undo and redo actually wrote.**
+
+- New file `src/data/replay-changes.ts` exports `changesToReplay(data, changeSet): ChangeSet | undefined`.
+  - Call site in `replay.ts`: `const replayed = changesToReplay(data, changeSet); if (replayed) commitChangeSet(data, replayed);`
+  - Read aloud: "the changes to replay". This is the same shape as `changesToMatchBatch` ("the changes to
+    match the batch").
+  - Do not use "fit": `CONTEXT.md` Fit is the TimeScale density mode. Do not use "rebase": it is a git word,
+    and "rebase" is also a different undo pattern.
+  - Run the `naming` skill on this name before step 2.
+- It returns the ChangeSet that replay commits. Its `from` values are the values the store holds now. It
+  returns `undefined` when nothing is left to write.
+- History (`history.ts`), in the `change` arms it already has:
+  - `'undo'`: `this.#cursor -= 1; this.#stack[this.#cursor] = invertChangeSet(changeSet);`
+    Redo re-applies the inverse of what undo wrote.
+  - `'redo'`: `this.#stack[this.#cursor] = changeSet; this.#cursor += 1;`
+    The next undo inverts what redo wrote.
+  - Why this gives neutrality: undo commits `{ from: server, to: old }`. The stored entry becomes
+    `{ from: old, to: server }`. Redo then writes `server` back. The same holds in the other direction.
+- Why replay and not History:
+  - History stays "a consumer can write this file from the public surface". `dataset.replay` gets the same
+    rules, so a consumer History gets them too.
+  - History would otherwise need store reads and the Rollup, which breaks its removability story.
+  - The commit path (`transaction.ts`, `build-commit-change-set.ts`) does not change.
+- Why not EntryStore: the fit needs the plugin stores, the hierarchy source and the Rollup together. The
+  `TransactionData` seam already carries all three. EntryStore sees only entries.
+- Seam change: `TransactionalPluginStores` gains `committedRow(store: PluginStoreName, id: EntryId): object | undefined`.
+  It reads `#committed`. `PluginStores` already has the private `#read`, so this is one line.
+- Public `dataset.replay(changeSet)` stays `void`. Its doc changes (step 2).
+  - How History knows a replay wrote nothing: the cursor did not move. `#onChange` moves the cursor, and it
+    runs only when `change` fires. See decision f2.
+  - Alternative rejected: make `replay` return the ChangeSet it wrote. That breaks the rule
+    "what an undo did arrives on `change`" (`plans/02` "Undo and redo").
+
+#### b. Skip rules
+
+**Decision: skip silently. Raise no new report.** The `change` event carries exactly what the undo wrote.
+That is the whole report.
+
+| Row in the step being replayed | Store now | Replay writes |
+|---|---|---|
+| `added` entity | id absent | the entity (parent and index per c, d) |
+| `added` entity | **id present** (the server re-sent it) | nothing. The server's copy stays. |
+| `removed` entity | id present | removes the **current** entity object (captured) |
+| `removed` entity | id absent | nothing |
+| `removed` entity | id present, and the current store holds children that the step does not remove | removes those descendants too, the same as `entries.remove()`, plus their store rows (`pluginStores.pendingRows(extraIds)`). |
+| Field row | id absent after the replay | nothing |
+| Field row | value already equals `to` (`registry.valuesEqual`) | nothing |
+| Field row | otherwise | `{ from: current value, to: row.to }`. **Overwrite** |
+| store row | its entry is absent after the replay | nothing (no orphan rows) |
+| store row | `Object.is(current, to)` | nothing |
+| store row | otherwise | `{ from: current, to }` |
+
+- Keep the recorded row order. Put the extra rows (the cascade, the sibling rows, the Rollup rows) after the
+  recorded ones. Then a no-sync undo commits rows in the same order as today.
+- Read the current value with the same read the diff uses: `readField` for a declared Field, and the raw key
+  for an undeclared one, the same way `applyFieldRow` reads it (`entry-store.ts:89`). Move `applyFieldRow`
+  into `fields/field-access.ts`, or export it, so both files share one copy.
+- Owner-confirmed: `added` with a present id **skips**. The alternative was to write the snapshot's Fields
+  over the server's copy. Skip is the safer choice: the entry already exists, so "undo my remove" is already
+  true.
+- Owner-confirmed: undo of an add **cascades** to the children the server put under it since. The
+  alternative was to re-root those children. Cascade matches `remove()` and never leaves a dangling
+  `parentId`.
+- Owner-confirmed: skips raise **no report**. A later issue (#419 or a new one) can add one.
+
+#### c. Parent loops and missing parents
+
+**Decision: replay never stores a raw `parentId` loop or a dangling `parentId`. It drops a bad `parentId`
+row, and it lands a re-added entity with a missing parent as a root. It never throws.**
+
+- Today: the undo lands, and a Fault re-raises on every later commit. `toInput()` exports the bad
+  `parentId`, so a later `load` throws.
+- The rule, applied on the working batch (the current store with this replay's rows applied):
+  1. An `added` entity whose `parentId` names an id absent after the replay lands as a root: `parentId`
+     is cleared on the entity.
+  2. `parentId` rows, in ChangeSet order: keep a row only if its target is absent (`undefined`), or the target
+     exists after the replay and the target's raw chain does not reach the row's own id. Otherwise drop the
+     row, and the entry stays under its current parent. Use a walk with a `seen` guard, the same way
+     `#assertParentValid` walks.
+  3. An existing entry whose parent this replay removes is handled by the cascade in b.
+- Why not let the ADR 0020 Fault rule read it as a root:
+  - The stored data then breaks the batch rule every other door enforces.
+  - It re-raises on every commit.
+  - `toInput()` → `load` throws.
+  - ADR 0020 still covers a plugin source's own loops. That rule does not change.
+- Why "drop the row" and not "make it a root": the entry keeps the place the server gave it. That is the
+  nearest sound place. A re-added entity has no current place, so a root is its nearest sound place.
+- With a plugin hierarchy source, check the **raw** `parentId` only. That is the same rule the construction
+  batch check uses. The source's own answers still go through `checkHierarchyAnswers`.
+- The user never gets stuck. A step whose only row gets dropped becomes empty, and f2 then forgets it.
+- Test impact: `cyclic-hierarchy.test.ts`'s `replayRawEntries` stops producing a raw loop.
+  - Rewrite those five tests to build an `EntryStore` directly from raw entries (its constructor runs no
+    batch check). Or use a looping `phaseId` hierarchy source where the test is about a source loop.
+  - Update the comments that name replay as "the door a raw loop reaches the store through":
+    - `entry-store.ts` `#assertParentValid` doc (`:824-831`)
+    - `cyclic-hierarchy.test.ts:59-61`, `:109-110`, `:145-146`, `:161`
+
+#### d. Sibling order
+
+**Decision: replay renumbers every sibling group it touches, in the same commit. It reuses
+`renumberSiblingGroups`, with no new sibling function.** One move stays one undo step, because the renumber
+rows go in the same undo commit.
+
+- Build the change log for `renumberSiblingGroups`:
+  1. Departures first, one per id: every removed id, and every id the replay places.
+  2. Then placements, sorted by `at` ascending (a stable sort in ChangeSet order).
+- An id is **placed** when either is true:
+  - It is an `added` entity. `at` is its snapshot `siblingIndex`.
+  - It has a kept `siblingIndex` row, or its **checked** group changes. `at` is its post-replay
+    `siblingIndex` value.
+- `group` is the post-replay checked parent: `checkHierarchyAnswers(working, source).parents`.
+- `committedSiblingsOf` is `data.entries.committedSiblingIds`. `committedGroupOf` is
+  `data.entries.committedParents().get`.
+- Do not log a departure for an `added` id. It has no committed group, and a departure would seed the root
+  group for nothing.
+- Emit results onto the ChangeSet the same way `buildCommitChangeSet` does:
+  - An added entity takes its rank on the entity itself.
+  - A kept id gets a `siblingIndex` row only when its rank differs from its current value. Merge that row
+    with a replayed row for the same key: `from` is the current value, and `to` is the rank.
+- Why the no-sync result is identical: the placed ids are exactly the ids whose index changed, and they
+  insert in ascending target order. The unplaced ids keep their relative order. So the ranks equal the
+  recorded `to` values, and the replay emits no extra row.
+- After a sync inserts or reorders: the user's entries claim their old indexes. The server's entries fill
+  the rest in their current order. The group ends dense, 0..n-1.
+- Rejected: rely on the store-order tie-break. The tie-break is `#byId` insertion order, which is an
+  accident. Equal indexes would become routine, but ADR 0034 limits them to "a fault or a hand-built
+  replay". The next `update(id, { siblingIndex })` would also range-check against a group with gaps.
+- This amends ADR 0034. Its decision says undo, redo and replay write `siblingIndex` rows "exactly as
+  given, with no renumbering of their own". The amendment: they now renumber the groups they touch, and with
+  no foreign write in between that emits no row. So the guarantee "an undo never renumbers a second time on
+  top of the rows it restores" still holds. Add an "amended by 0035" note to ADR 0034's status line. Leave
+  its body as it is.
+
+#### e. Rollup
+
+**Decision: replay re-runs the Rollup once, over the working batch, before it commits. The Rollup's rows
+merge into the replayed ChangeSet.** Use the construction shape, `rollUpFreshBatch(data, working,
+checkedParents, source)`: it visits every current parent, and it never demotes.
+
+- How to merge:
+  - A Rollup row whose `(id, field)` the replay already writes sets that row's `to`.
+  - Any other Rollup row is appended as `{ from: current value, to }`.
+  - A Rollup value on an added id goes onto the entity itself.
+  - A row whose `from` equals its `to` is dropped.
+- Why the construction shape and not the commit shape (`pending`):
+  - The commit shape demotes a parent that lost its last child. Demotion clears its rolled-up cells.
+  - Plain undo of "add a first child to leaf p" must give p its old authored `start` back. The commit shape
+    would clear it, and that would change plain undo.
+  - The construction shape never visits a leaf. So p keeps the value the replay restored.
+- Why the no-sync result is identical: after an exact inverse, the store holds a state that was committed
+  before, and every commit leaves every parent rolled up. The pass therefore finds nothing to change.
+- Rejected: stop recording derived rows. `change` must carry them (a redraw, a server save), and History
+  records what `change` carries.
+- Rejected: "recompute derived rows at capture time only". That is this decision; the Rollup runs inside
+  `changesToReplay`, which is capture time.
+- Cost: O(n) per undo, for the hierarchy check and the Rollup. Undo is a click, not a frame, so the frame
+  performance invariant does not apply. Step 9 measures `seeded(10k)`.
+  - Threshold: 30 ms, the same number the #517 plan used for `sync`. Above it, open a follow-up that limits
+    the pass to the ancestors of the touched ids.
+  - Allowed shortcut, following `committedTreeStillAnswers` in `rollup.ts`: when the replay has no
+    `parentId` row, no add and no remove, and the source is `storedParentSource`, reuse
+    `data.entries.committedParents()`.
+- This amends the rule that replay never re-runs the Rollup. The part that matters stays true: the
+  extension hook never runs, so an engine that changed between versions cannot rewrite History. The Rollup
+  writes nothing on a plain undo. ADR 0035 records this.
+- Edge case accepted: a user step recorded a rolled-up cell on p. The server then removes all of p's
+  children, so p is now a leaf. Undo writes the old rolled-up value onto the leaf p, because the overwrite
+  rule applies. It is rare, and it follows the conflict rule.
+
+#### f. Plain undo and redo stay identical
+
+- **f1.** When no sync ran, every row of the step still applies, and its `from` already equals the current
+  value. The parent rule drops nothing, the sibling pass adds nothing, and the Rollup adds nothing. So the
+  ChangeSet has the same rows in the same order. The replaced stack entry has the same content as the
+  recorded one.
+- **f2. A step with nothing left to write.** `undo()` loops. It replays the step at the cursor. If the
+  cursor did not move, `change` did not fire, so History drops that step (`#forgetStep(index)`: splice it,
+  and move the cursor down when the index is below the cursor) and tries the next step. `redo()` loops the
+  same way.
+  - This never triggers without a sync. A recorded step always has at least one row that still applies.
+  - Owner-confirmed: the alternative was "consume the empty step, and the click does nothing". Rejected:
+    the user would click Undo and see nothing happen.
+- How the tests prove f:
+  1. `history.test.ts`, `history.property.test.ts`, `api/dataset.test.ts` (consumer History) and
+     `entry-store.mutation.test.ts:565` pass unchanged. Run them before and after each step.
+  2. A new property (step 8, test "undo and redo with no sync write exactly the inverted and the recorded
+     rows"): random user op sequences, reusing `history.property.test.ts`'s op arbitraries. It records each
+     `'user'` ChangeSet. Then undo-all, then redo-all. Each committed `'undo'` ChangeSet must equal
+     `invertChangeSet(recorded)` row for row (id, field, `valuesEqual` on from/to, order included). Each
+     `'redo'` must equal the recorded step.
+  3. The same property with a rolling-up `cost` Field and a two-level tree, so that the Rollup and sibling
+     paths run.
+
+#### g. The event contract
+
+- The origin stays `'undo'` / `'redo'`. It does not change. Plugins and apps that fold on every origin
+  except `'load'` keep working (`docs/06` example).
+- `change` fires once, with exactly the rows the replay wrote:
+  - `from` is the value just before this undo or redo. After a sync, that can be the server's value.
+  - `to` is the value written.
+  - `removed` carries the entity as it stands now.
+  - The rows can include `siblingIndex` and rolled-up parent rows that the recorded step did not have.
+  - The rows can leave out recorded rows that were skipped.
+- `beforeChange` sees this same ChangeSet. A veto throws `MutationCancelledError`, and the stack does not
+  change. That is today's behaviour.
+- When nothing is left to write, neither `beforeChange` nor `change` fires, and History moves to the next
+  step (f2).
+- There is no new report code and no new event.
+- Fix the `docs/05` comment "on undo, from/to is inverted: `from` is the edit being reverted" to: "`from`
+  is the value the undo replaced, `to` the value it wrote back".
+
+#### h. Tests
+
+Existing tests to change (all in step 6 unless noted):
+
+| File:line | Today | Becomes |
+|---|---|---|
+| `entry-store.sync.test.ts:68` "commits one change … canUndo reads true" | canUndo true | "commits one change with origin sync, and records no undo step": canUndo false on a fresh Dataset |
+| `:79` "undo restores the rows, a removed entry's slot and its plugin store rows" | undo of sync | Delete. Merge its store-row half into `:198`, and assert `canUndo` stays false |
+| `:92` "redo re-applies the sync" | | Delete (there is no sync step) |
+| `:103` "a sync erases Redo, the same as a user edit" | canRedo false | "a sync keeps Redo, and redo re-applies the user's edit" |
+| `:209` "a local edit … undo brings it back" | undo = local edit | "a local edit the server has not seen is overwritten; undo writes the value before the edit, and redo gives the server's value back" |
+| `:235` "undo of a sync restores removed entries in their old sibling order" | | Replace with the order case below |
+| `entry-store.sync.property.test.ts:153` property (b) "undo after a sync gives back the state before the sync" | | "a sync records no undo step and leaves canUndo and canRedo as they were". Keep its store-row "removed right away" check |
+| `e2e/editing-and-data.spec.ts:189-213` | Undo enabled after sync, then Undo gives the old name | step 6: Undo stays disabled after a sync. Step 7: the full scenario below |
+| `harness/editing-and-data.ts:452-454` comment "records one undo step" | | "records no undo step; your own edits stay undoable" |
+| `harness/editing-and-data.html:143-144`, `harness/docs/page-brief.ts:71` | "records one undo step" | the same wording as the harness comment |
+| `cyclic-hierarchy.test.ts` (5 uses of `replayRawEntries`) | raw loop through replay | step 3: build `EntryStore` directly |
+
+New tests. Write each one first and see it fail. Test names state the rule, with no labels.
+
+- Step 2, `src/data/replay-changes.test.ts`, through `state.replay(...)` with a stale ChangeSet:
+  - "replay writes each row onto the current value, and the change carries the value it replaced"
+  - "replay of a row for an id that is gone writes nothing for it"
+  - "replay re-adds a missing id, and skips an id that already exists"
+  - "replay removes the entry as it stands now, and its children the step did not name"
+  - "replay drops a store row whose entry is gone"
+  - "replay that has nothing left to write fires no beforeChange and no change"
+- Step 3:
+  - "replay drops a parentId row that would close a loop, and raises no hierarchy fault"
+  - "replay lands a re-added entry whose parent is gone as a root, and toInput() loads again"
+- Step 4: "replay puts the entries it moves back at their old indexes, and the group stays dense"
+- Step 5: "replay re-rolls a parent whose other child changed since the step"
+- Step 6, the History × sync describe block in `entry-store.sync.test.ts`:
+  - "undo of a user edit after a sync changed the same Field writes the user's old value"
+  - "undo then redo after a sync gives the server's value back"
+  - "a sync keeps Redo"
+  - "undo of an add whose id the server removed skips that step and undoes the step before it"
+  - "undo of a remove whose id the server re-sent keeps the server's entry and restores its store rows"
+  - Loop case: a under b. The user moves a to root. The server puts b under a. Undo leaves a as a root,
+    throws nothing, and raises no `hierarchy-cycle`.
+  - Order case: a, b, c. The user moves c to the front. The server list is a, d, b, c. Undo gives a, b, c, d
+    with indexes 0..3. Redo gives the server's c-first order back.
+  - Rollup case: p with children c1 and c2, `start` is `min`. The user moves c1 earlier. The server moves c2
+    even earlier. After undo, `p.start` equals c2's server start.
+- Step 8, `src/data/history.sync.property.test.ts` (fast-check):
+  - (P1) no-sync identity (f).
+  - (P2) interleave random user ops with random syncs. The sync targets come from the current `toInput()`
+    with renames, removes, adds, reparents and reorders. Then undo k times and redo k times, with no sync
+    between. The state (ids, Fields, tree, store rows) must equal the state before the undos.
+  - (P3) after any sequence, the Dataset stays loadable and consistent: a fresh Dataset built from
+    `toInput()` in `entries.all` order does not throw, and it has the same ids, tree, declared Field values
+    and `siblingIndex`. This covers loops, dangling parents, dense groups and a stale Rollup in one check.
+  - (P4) a sync never changes the number of steps History holds.
+
+#### i. Coordination with #419 (a write door that records no undo)
+
+- History's `#onChange` becomes an exhaustive `switch` over `ChangeOrigin`, with a `never` check in its
+  default. The arms:
+  - `'user'` records a step.
+  - `'undo'` / `'redo'` move the cursor and keep what they wrote.
+  - `'load'` clears.
+  - `'sync'` does nothing. The comment says: "a write the user did not make records no step and erases no
+    Redo".
+- #419's door, whatever it is named, joins the `'sync'` arm. The compiler forces the choice when it adds an
+  origin.
+- The replay rules in this plan answer #419's Q5 (Redo survives) and Q7 ("does undo across it make
+  sense?").
+- Close-out: post one comment on #419 that names the arm and links ADR 0035. Strike S8
+  ("stays separate from #419") and replace it with "sync uses the History rule #419 reuses".
+
 ### Owner rulings on the open questions (2026-09-24, "agree")
 
 All open questions go as recommended:

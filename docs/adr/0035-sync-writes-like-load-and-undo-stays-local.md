@@ -1,7 +1,7 @@
 ---
 status: accepted — verdict pending (this build). Amends [ADR 0015](0015-what-the-write-door-refuses.md),
   [ADR 0034](0034-sibling-order-is-a-field.md) (undo and redo renumber the sibling groups they touch)
-  and the S2 rule that replay never re-runs the Rollup (undo and redo now re-roll the parents they touch).
+  and the rule that replay never re-runs the Rollup (undo and redo now re-roll the parents they touch).
 decided: `entries.sync(list)` writes through the same write door `entries.load()` uses, not through
   `entries.update()`. A `'never'` lock does not refuse it, a derived parent cell re-rolls instead of
   taking an authored value, and no `EditExtender` cascade runs. `beforeChange` can still veto the
@@ -33,13 +33,6 @@ the server sent, not data the user wrote; it erases Redo on every poll, even one
 nothing the user touched; and a frequent poll fills the stack with server writes, pushing the user's
 own edits off it. A server refresh is not a user's undoable act.
 
-**Survey.** Collaborative editors and online office suites that merge remote changes into a live
-document keep undo scoped to the local user's own edits, and let a later remote write overwrite a
-value the user is mid-edit on rather than rewinding the merge itself. One commercial Gantt vendor's
-live-update feature ships an equivalent choice behind an opt-in flag, rather than always recording
-the remote write as a step. Neither source is checkable in the way a spec decision must be, so this
-survey line names them for context only — the decision below stands on its own reasoning.
-
 ## Decision
 
 Sync writes through the door `load` uses, not through `entries.update()`. So:
@@ -63,6 +56,10 @@ Sync writes through the door `load` uses, not through `entries.update()`. So:
      just replaced — so undo followed by redo always ends on the server's newer value, the same
      result a fresh sync would give. A row for an id or a Field no longer present writes nothing,
      and raises no report.
+   - An added row whose id already exists (the server re-sent it since) is skipped: the server's
+     copy stays, and raises no report.
+   - Undo of an add also removes the children the server put under that entry since, the same as
+     `remove()` — a re-added entity never keeps a child it never had while it was gone.
    - The tree stays sound: a replayed `parentId` that would close a loop, or that names an id
      absent after the replay, is dropped rather than stored; a re-added entry whose old parent is
      gone lands as a root instead.
@@ -70,7 +67,7 @@ Sync writes through the door `load` uses, not through `entries.update()`. So:
      group stays dense and one move stays one undo step (amends ADR 0034's "written exactly as
      given, with no renumbering of their own" for `undo`/`redo`/`replay`).
    - The Rollup runs once, over the store as this step leaves it, before the step commits, so a
-     rolled-up parent is never left stale (amends the S2 rule that replay never re-runs the Rollup).
+     rolled-up parent is never left stale (amends the rule that replay never re-runs the Rollup).
      The extension hook still never runs: an engine whose cascade rule changed between library
      versions cannot rewrite History.
    - A step left with nothing to write is forgotten. `undo()`/`redo()` then move on to the step
@@ -81,8 +78,8 @@ Sync writes through the door `load` uses, not through `entries.update()`. So:
 
 - Plain undo and redo, with no sync in between, write exactly the rows they always did — the rules
   above only add rows once a sync has changed the store since a step was recorded.
-- A local edit the server has not seen is overwritten by a sync, last write wins (decision 2 stays
-  from the write-door rules). Undoing that edit afterwards still restores it.
+- A local edit the server has not seen is overwritten by a sync, last write wins. Undoing the edit
+  writes the value the edit replaced, and redo gives the server's value back.
 - `dataset.replay(changeSet)` carries the same rules as `undo()`/`redo()`, since a consumer's own
   History is built on it.
 - A `beforeChange` veto can still refuse an `'undo'`/`'redo'` step. A lock a server sets through a
@@ -104,8 +101,9 @@ Sync writes through the door `load` uses, not through `entries.update()`. So:
 - **Drop a step ahead of time once a sync would conflict with it.** Rejected: the same information
   loss as clearing History, aimed at one step instead of the whole stack.
 - **Rebase the stack's recorded rows onto the server's new state**, the way a version-control rebase
-  moves a change onto a new base. Rejected: it would rewrite what History records after the fact,
-  breaking "an undo replays a cascade exactly as it committed."
+  moves a change onto a new base. Rejected: a rebase rewrites every recorded step at each sync, even
+  when the user never undoes anything. This record changes a step only when an undo or a redo
+  actually runs it.
 
 ## Out of scope
 
