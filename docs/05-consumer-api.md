@@ -80,11 +80,7 @@ dataset.on('change', () => {
 ```
 
 `updated` also carries plugin-store rows (`store: 'plugin:…'`, whole-value, no `field` key).
-`fieldRowsOf(changeSet)` filters to Field rows. `dataset.replay(changeSet)` is the write path
-the built-in undo/redo use, published so a consumer can write their own History against
-`on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` alone. `replay` writes each row
-onto the store's current value, not the recorded one — a row a sync has already settled since
-the step was recorded writes nothing for it, and the rest of the changeset still lands.
+`fieldRowsOf(changeSet)` filters to Field rows.
 
 ### Undo after a sync
 
@@ -92,6 +88,48 @@ the step was recorded writes nothing for it, and the rest of the changeset still
 earlier edits stay undoable across a poll. Undoing one of those edits later writes the value it
 held before the edit, even when a sync changed it since; redoing gives the sync's value back. See
 [`docs/11-server-data.md`](11-server-data.md) for the full set of rules a poll needs.
+
+### Advanced: your own History with `dataset.replay()`
+
+Most apps call `undo()` and `redo()` and never touch this. Reach for `dataset.replay()` only when
+the app keeps its own undo stack outside the library — one stack per user, or a stack a server
+keeps.
+
+`replay(changeSet)` is the write `undo()` and `redo()` use. It writes the `ChangeSet` you give it.
+It keeps no stack of its own and moves no cursor: `dataset.canUndo` and `dataset.canRedo` do not
+see a `replay()` call.
+
+`changeSet.origin` must be `'undo'` or `'redo'`. `'user'` throws `InvalidReplayOriginError`.
+
+`replay()` writes onto the store's **current** values, not the recorded ones. A row a sync has
+already settled since the step was recorded writes nothing; the rest of the changeset still lands.
+See [`docs/11-server-data.md`](11-server-data.md) for the full set of rules a sync needs.
+
+`replay()` renumbers every sibling group it touches, and re-rolls every parent it touches, the same
+way an ordinary commit does. No extension hook runs.
+
+A step with nothing left to write fires no event. Otherwise `beforeChange` fires, then `change`. A
+veto throws `MutationCancelledError` and writes nothing.
+
+<!-- doc-example-setup
+declare const undoButton: HTMLButtonElement;
+-->
+
+```ts
+import { invertChangeSet, type ChangeSet } from 'freegantt';
+
+// A minimal History: record every 'user' step, undo the last one on a click.
+const undoStack: ChangeSet[] = [];
+
+dataset.on('change', ({ changeSet }) => {
+  if (changeSet.origin === 'user') undoStack.push(changeSet);
+});
+
+undoButton.addEventListener('click', () => {
+  const step = undoStack.pop();
+  if (step !== undefined) dataset.replay(invertChangeSet(step));
+});
+```
 
 ## Hierarchy and rows
 

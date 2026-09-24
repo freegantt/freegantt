@@ -56,8 +56,8 @@ dataset.redo(); // 't1'.name goes back to the server's value
 ```
 
 Undo and redo both write onto the entry's **current** value, not the one the step recorded — see
-[`docs/05-consumer-api.md`](05-consumer-api.md#undo-redo-and-the-change-event) for `Dataset.replay`,
-the primitive both are built on.
+[`docs/05-consumer-api.md`](05-consumer-api.md#advanced-your-own-history-with-datasetreplay) for
+`Dataset.replay`, the primitive both are built on.
 
 ## A step with nothing left to write is skipped
 
