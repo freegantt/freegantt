@@ -40,6 +40,12 @@ const OWN_SESSION_TIMEOUT_MILLISECONDS = 60_000;
 const OCR_JSON_MAX_BUFFER = 64 * 1024 * 1024;
 // `ocr` writes this as `end_time` on a session it has not finished yet (Go's zero `time.Time`).
 const UNSET_END_TIME = '0001-01-01T00:00:00Z';
+// `ocr` sometimes writes a session's `start_time` truncated to the whole second (no fraction at
+// all), even when the real instant is partway into that second — later than a `notBefore` captured
+// with `toISOString()`'s milliseconds. Without this grace, the run's own session can look like it
+// started before its own launch and get filtered out. Comfortably covers a whole second of
+// truncation with room to spare.
+const SESSION_START_GRACE_MILLISECONDS = 2_000;
 
 export const EXIT_CODE = { pass: 0, partial: 1, stalled: 2, failed: 3 };
 
@@ -49,7 +55,7 @@ export const EXIT_CODE = { pass: 0, partial: 1, stalled: 2, failed: 3 };
  *  from the fraction, so e.g. `.1Z` and `.120Z` sort the wrong way as strings even though `.120Z` is
  *  later. */
 export function findOwnSession(sessions, { repoDir, notBefore }) {
-  const notBeforeMs = Date.parse(notBefore);
+  const notBeforeMs = Date.parse(notBefore) - SESSION_START_GRACE_MILLISECONDS;
   let newest;
   for (const session of sessions) {
     if (session.repoDir !== repoDir) continue;

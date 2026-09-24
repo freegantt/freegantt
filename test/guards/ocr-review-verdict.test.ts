@@ -107,6 +107,17 @@ describe('ocr-review picks the session this run just opened', () => {
       findOwnSession([earlier, later], { repoDir: REPO, notBefore: '2026-09-24T20:00:00Z' })?.sessionId,
     ).toBe('later');
   });
+
+  it('still picks its own session when ocr wrote its start time truncated to the whole second', () => {
+    // A real launch was missed this way: notBefore captured with milliseconds (e.g.
+    // "...:51.752Z"), but ocr wrote the session's own start_time as "...:51Z" — no fraction — even
+    // though the true instant was a moment into that second. A strict `startTime < notBefore` read
+    // that as "started before launch" and dropped the run's own session.
+    const own = session({ sessionId: 'own', startTime: '2026-09-24T21:26:51Z' });
+    expect(findOwnSession([own], { repoDir: REPO, notBefore: '2026-09-24T21:26:51.752Z' })?.sessionId).toBe(
+      'own',
+    );
+  });
 });
 
 describe('ocr-review only reports a finding once', () => {
