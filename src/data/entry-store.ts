@@ -908,8 +908,8 @@ export class EntryStore implements EntryStoreContract {
     this.#openWriteSet().siblingGroupCounts.set(group, size + delta);
   }
 
-  /** 0 to the group's own live count is legal (D8) — an `add` counts the whole existing group, since
-   *  the new entry is not yet a member; an `update` that stays in its group counts every other member,
+  /** 0 to the group's own live count is legal — an `add` counts the whole existing group, since the
+   *  new entry is not yet a member; an `update` that stays in its group counts every other member,
    *  already excluded by the caller before this runs. */
   #assertSiblingIndexInRange(id: EntryId, at: number, othersCount: number, operation: string): void {
     if (!Number.isInteger(at) || at < 0 || at > othersCount) {
@@ -946,7 +946,8 @@ export class EntryStore implements EntryStoreContract {
   /** What `update`'s own edit does to `id`'s sibling order, or `undefined` when it does nothing (no
    *  group change, no named `siblingIndex`): computed and range-checked against a *preview* of the
    *  post-edit row (`entryAfterEdit`, not yet staged), so an out-of-range index throws before anything
-   *  stages (S2.3 §1.3's own "nothing stages when one does" rule, carried to this door). */
+   *  stages — the same "nothing stages when one write in the request fails" rule every write door
+   *  already keeps. */
   #siblingMoveFor(
     id: EntryId,
     current: StoredEntry,

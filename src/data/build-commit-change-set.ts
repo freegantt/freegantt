@@ -255,7 +255,7 @@ export function buildCommitChangeSet(
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
-  // The renumber pass (ADR 0034 D4): every write this transaction staged replays here, once, over the
+  // The renumber pass (ADR 0034): every write this transaction staged replays here, once, over the
   // committed groups it touched — after the Rollup, so a reparent's own group change is already
   // settled before order is decided for it. This pass owns every `siblingIndex` row: a write that
   // named the Field (`entries.update(id, { siblingIndex })`, or an extender edit that does the same)
@@ -278,7 +278,7 @@ export function buildCommitChangeSet(
           (id) => data.entries.committedParents().get(id),
         );
   const removedIds = new Set(removedEntities.map((row) => row.entity.id));
-  // An added entity carries its final rank on the entity itself, not a row (D4): nothing reads a
+  // An added entity carries its final rank on the entity itself, not a row: nothing reads a
   // `siblingIndex` row for an id that has no prior committed value to diff against.
   const rankedEntitiesForFold = addedEntitiesForFold.map((row) => {
     const rank = siblingRanks.get(row.entity.id);
