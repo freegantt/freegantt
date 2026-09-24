@@ -234,7 +234,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       plugins: [loop()],
     });
 
-    // The plugin composed the seam, and that alone is the news — nothing has read a row yet (`F5`).
+    // The construction check is the news — nothing has read a row yet (`F5`).
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('the source makes "b" its own ancestor');
 
