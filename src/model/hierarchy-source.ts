@@ -22,7 +22,7 @@ import type { StoredEntry } from './stored-entry.js';
  *
  * A plain `string` is a legal answer, the way it is on every other way into the library: core brands
  * it. `TProps` types `entry.props`, so a source that reads a consumer key names that key's own type
- * — the plugin's own `hierarchySource` member declares `definePlugin<PlannerProps>(…)`.
+ * — `definePlugin<PlannerProps>({ hierarchySource })`.
  */
 export type HierarchySource<TProps = Record<string, unknown>> = (
   entry: StoredEntry<TProps>,
