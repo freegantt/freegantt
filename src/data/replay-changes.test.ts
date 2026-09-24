@@ -373,3 +373,84 @@ describe('replay judges a step’s parentId rows against each other, not one row
     expect(state.entries.get('a')?.read('parentId')).toBeUndefined();
   });
 });
+
+describe('replay renumbers the sibling groups it touches, dense from 0', () => {
+  it('undo of a subtree remove restores the children in dense order after a foreign removal', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p' },
+      { id: 'b', parentId: 'p' },
+      { id: 'c', parentId: 'p' },
+    ]);
+    const staleA = state.entries.storedEntry('a')!;
+    const staleC = state.entries.storedEntry('c')!;
+    state.entries.remove('a');
+    state.entries.remove('c');
+    state.entries.remove('b'); // a foreign write this step never named
+
+    state.replay(
+      step({
+        added: [
+          { store: 'entries', entity: staleA },
+          { store: 'entries', entity: staleC },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('c')!.read('siblingIndex')).toBe(1);
+  });
+
+  it('undo of a cross-group move restores both groups densely', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'q' },
+      { id: 'b', parentId: 'p' },
+      { id: 'a', parentId: 'q' },
+      { id: 'x', parentId: 'q' },
+    ]);
+    // A foreign write joins p before a's move back to p replays.
+    state.entries.add({ id: 'z', name: 'Z', parentId: 'p', start: 0, end: 1 });
+
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'parentId', from: entryId('q'), to: entryId('p') },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('a')!.read('parentId')).toBe('p');
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(1);
+    expect(state.entries.get('z')!.read('siblingIndex')).toBe(2);
+    // q loses a and closes the gap behind it.
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+  });
+
+  it('after a foreign reorder, undo leaves the touched group dense', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p' },
+      { id: 'b', parentId: 'p' },
+      { id: 'c', parentId: 'p' },
+    ]);
+    const staleA = state.entries.storedEntry('a')!;
+    state.entries.remove('a');
+
+    // A foreign reorder swaps b and c ahead of a's undo landing back in the group.
+    state.entries.sync([
+      { id: 'p', start: 0, end: 1 },
+      { id: 'c', parentId: 'p', start: 0, end: 1 },
+      { id: 'b', parentId: 'p', start: 0, end: 1 },
+    ]);
+    expect(state.entries.get('c')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(1);
+
+    state.replay(step({ added: [{ store: 'entries', entity: staleA }] }));
+
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('c')!.read('siblingIndex')).toBe(1);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(2);
+  });
+});

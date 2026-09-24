@@ -1,7 +1,8 @@
 // data/ — the pure math behind the sibling-order Field. What rank does an entry hold among its
 // siblings, and what rank does it hold after a write moves it? Neither question touches the store:
 // a caller hands in the facts (list order, or a log of moves plus the committed groups), and reads
-// back a rank per id. `buildCommitChangeSet` is the one caller that turns these ranks into rows.
+// back a rank per id. `buildCommitChangeSet` turns these ranks into rows for a live write; replay
+// (`changesToReplay`) reuses the same math to renumber the sibling groups undo and redo touch.
 
 import type { EntryId } from '../model/index.js';
 
