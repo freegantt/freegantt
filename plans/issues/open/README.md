@@ -6,13 +6,6 @@ body is just an unexplained external link, with no actionable scope.) New
 issue plans land here as they're opened.
 
 **Open:**
-- [#533](https://github.com/Pawel-IT/FreeGantt/issues/533) — plugin code ran inside the
-  `DatasetState` constructor, before `ctx.dataset.*` worked, before Rollup values existed and
-  before History existed. Direction (ADR 0031): a plugin declares everything that shapes
-  construction — `fields`, `fieldTypes`, `aggregators`, `hierarchySource` — on its own definition;
-  the Dataset builds completely before any plugin's `data(ctx)` runs, and `new Dataset({ entries })`
-  checks the batch like `load`. PR 1 of 2; PR 2 covers the Gantt `view()` half. Plan:
-  [533-plugin-lifecycle.md](./533-plugin-lifecycle.md).
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
@@ -28,6 +21,18 @@ issue plans land here as they're opened.
   typed Dataset accepts it. No plan file; the issue holds the rulings.
 
 **Closed:**
+
+- [#533](https://github.com/Pawel-IT/FreeGantt/issues/533) — plugin code ran inside the
+  `DatasetState` constructor, before `ctx.dataset.*` worked, and inside an unfinished `Gantt`,
+  before its first frame. Shipped in two PRs. PR 1 (ADR 0031): a plugin declares everything that
+  shapes construction — `fields`, `fieldTypes`, `aggregators`, `hierarchySource` — on its own
+  definition; the Dataset builds completely before any plugin's `data(ctx)` runs, and
+  `new Dataset({ entries })` checks the batch like `load`. PR 2 (ADR 0032): a finished Gantt is
+  built and configured, but not painted, before any plugin's `view(ctx)` runs; the constructor
+  installs this Gantt's own plugins through the public `plugins` setter, then paints frame 1, and a
+  throwing `view()` tears the half-built shell down through `destroy()`. See
+  [../closed/533-plugin-lifecycle.md](../closed/533-plugin-lifecycle.md) (PR 1),
+  [../closed/533-gantt-view-lifecycle.md](../closed/533-gantt-view-lifecycle.md) (PR 2).
 
 - [#529](https://github.com/freegantt/freegantt/issues/529) — `capabilities.edit` could reopen an
   `'api'` Field for a drag. Shipped: `canWrite` now refuses a cell the effective `editable` or the
