@@ -89,10 +89,10 @@ export interface DatasetStateOptions {
    *  the construction Rollup included — is built (ADR 0031). */
   pluginFieldDeclarations?: readonly FieldDeclarationSource[];
   /** Every installed plugin's declared `hierarchySource`, in setup order (ADR 0031) —
-   *  `api/dataset.ts` builds this with `resolveSetupOrder`, same as `pluginFieldDeclarations`. Folded
-   *  onto `storedParentSource` right here, before `entries` is built: the first wrapper wraps core's
-   *  own source, a later one wraps the one before it, and the last one answers first — the order
-   *  `data()` runs its own registrations in. */
+   *  `api/dataset.ts` builds this with `resolveSetupOrder`. Folded onto `storedParentSource` right
+   *  here, before `entries` is built: the first wrapper wraps core's own source, a later one wraps the
+   *  one before it, and the last one answers first — the order `data()` runs its own registrations
+   *  in. */
   hierarchySourceWrappers?: readonly HierarchySourceWrapper[];
 }
 

@@ -904,9 +904,9 @@ export class PluginSetupError extends FreeGanttError {
   }
 
   /** ADR 0019: a plugin with a `data` half, or a Dataset-only member (`fields`, `fieldTypes`,
-   *  `aggregators`, `hierarchySource`), was handed to a `Gantt`. It arrived too late to declare a
-   *  Field, so it fails loudly and says where it goes instead. Same error, same `code` — a misplaced
-   *  plugin is a setup that did not happen, and it needs no type of its own.
+   *  `aggregators`, `hierarchySource`), was handed to a `Gantt`. It arrived too late to shape the
+   *  Dataset's own construction, so it fails loudly and says where it goes instead. Same error,
+   *  same `code` — a misplaced plugin is a setup that did not happen, and it needs no type of its own.
    *
    *  The message quotes the id and shows the **site**, never a call (`F26`). A `PluginId` is a dotted
    *  string, so `plugins: [acme.locks]` reads as a property access on an object named `acme` — it is
