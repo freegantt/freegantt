@@ -304,6 +304,40 @@ describe('replay drops a store row whose entry is gone', () => {
     expect(seen).toEqual([]);
     expect(state.pluginStores.read<{ locked: true }>('demo.lock')?.get('a')).toEqual(settled);
   });
+
+  it('a NUL-bearing id and a NUL-bearing plugin id never chain one store row off another', () => {
+    // `PluginId` is a bare string (`model/plugin.ts`) and `EntryId` casts with no format check
+    // (`model/ids.ts`) — a joined `store\u0000id` key would let `(store 'plugin:x', id 'y\u0000z')`
+    // collide with `(store 'plugin:x\u0000y', id 'z')`. Both rows below join to the same string;
+    // the second must still read its own store's committed value, not the first row's `to`.
+    const state = dataset([
+      { id: 'y\u0000z', name: 'A' },
+      { id: 'z', name: 'B' },
+    ]);
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        updated: [
+          {
+            store: pluginStoreName('x'),
+            id: entryId('y\u0000z'),
+            from: undefined,
+            to: { n: 1 },
+          },
+          {
+            store: pluginStoreName('x\u0000y'),
+            id: entryId('z'),
+            from: undefined,
+            to: { n: 2 },
+          },
+        ],
+      }),
+    );
+
+    const secondRow = seen[0]!.updated.find((row) => row.id === entryId('z'))!;
+    expect(secondRow.from).toBeUndefined();
+  });
 });
 
 describe('a store deletion row applies even when its entry is gone', () => {
@@ -608,6 +642,21 @@ describe('replay renumbers the sibling groups it touches, dense from 0', () => {
     expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
     expect(state.entries.get('c')!.read('siblingIndex')).toBe(1);
     expect(state.entries.get('b')!.read('siblingIndex')).toBe(2);
+  });
+
+  it('a hand-built step whose siblingIndex row carries no number keeps the committed rank, not a crash', () => {
+    const state = dataset([{ id: 'p' }, { id: 'a', parentId: 'p' }, { id: 'b', parentId: 'p' }]);
+
+    // `dataset.replay()` takes a `ChangeSet` unchecked — a `to` this file never authored itself, an
+    // explicit clear of a Field that is never actually optional.
+    state.replay(
+      step({
+        updated: [{ store: 'entries', id: entryId('a'), field: 'siblingIndex', from: 0, to: undefined }],
+      }),
+    );
+
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(1);
   });
 });
 
