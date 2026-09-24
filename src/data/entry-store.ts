@@ -700,10 +700,12 @@ export class EntryStore implements EntryStoreContract {
    *  included (S2.3 §1.3). Read through the write set, so a reparent earlier in the same transaction
    *  is seen.
    *
-   *  `seen` is the same guard `#depthOf` carries. Ingest checks no authored `parentId`, so a
-   *  consumer can construct a loop with no plugin at all; without the guard the next edit that names
-   *  a row inside that loop walks it forever. A loop the edit is not part of stops the walk and
-   *  passes — the committed check reports it as one `hierarchy-cycle` Fault (ADR 0020). */
+   *  `seen` is the same guard `#depthOf` carries. `new Dataset({ entries })` and `entries.load` both
+   *  check the raw batch and throw on a loop (ADR 0031, Q3), but `replay()` applies an already-built
+   *  `ChangeSet` unchecked (`data/replay.ts`), so a raw loop can still land on a live store that way;
+   *  without the guard the next edit that names a row inside that loop walks it forever. A loop the
+   *  edit is not part of stops the walk and passes — the committed check reports it as one
+   *  `hierarchy-cycle` Fault (ADR 0020). */
   #assertParentValid(id: EntryId, parentId: EntryId, operation: string): void {
     if (!this.has(parentId)) throw new EntryNotFoundError(parentId, operation);
     let current: EntryId | undefined = parentId;

@@ -283,49 +283,34 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ]);
   });
 
-  it("a consumer's own bad parentId is reported as theirs, with no plugin installed (`F4`)", () => {
-    const warnings = captureWarnings();
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: [{ id: 'a', name: 'A', parentId: 'nope' }],
-    });
-
-    expect(warnings).toEqual([
-      'FreeGantt: hierarchy: the row\'s own parentId names "nope" as the parent of "a", and no Entry holds that id. "a" reads as a root.',
-    ]);
-    expect(dataset.entries.get('a')?.parent()).toBeUndefined();
-
-    const reports: ErrorReport[] = [];
-    dataset.on('error', (report) => {
-      reports.push(report);
-    });
-    dataset.entries.update('a', { name: 'A2' });
-    expect(reports.map((report) => [report.code, report.by, report.entryId])).toEqual([
-      ['unknown-parent', 'consumer', 'a'],
-    ]);
+  it('a raw dangling parentId throws at construction, with no plugin installed (`F4`)', () => {
+    // Construction checks the raw batch the same way `load` does (ADR 0031, Q3) — a dangling
+    // parentId no longer reaches the plugin source or a construction-time warning at all.
+    expect(
+      () => new Dataset({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A', parentId: 'nope' }] }),
+    ).toThrow('new Dataset: there is no entry with id "nope". Check the id, or add the entry first.');
   });
 
   it("a plugin that falls through still names the consumer's own parentId (`F4`)", () => {
-    const warnings = captureWarnings();
-    // The ADR's own composing shape: it answers for the rows it owns and hands the rest back.
+    // A sound batch at construction: `sketch`'s raw parentId and its `phaseId` both name a real
+    // entry, so nothing refuses yet. Removing `build` and then clearing `phaseId` makes the plugin
+    // source fall through to the now-dangling raw value, at runtime — the door this case is about.
     const dataset = new Dataset<PhaseProps>({
       timeZone: 'UTC',
       entries: [
         { id: 'design', name: 'Design' },
-        { id: 'sketch', name: 'Sketch', parentId: 'nope' },
+        { id: 'build', name: 'Build' },
+        { id: 'sketch', name: 'Sketch', parentId: 'build', props: { phaseId: 'design' } },
       ],
       plugins: [phases()],
     });
-
-    expect(warnings).toEqual([
-      'FreeGantt: hierarchy: the row\'s own parentId names "nope" as the parent of "sketch", and no Entry holds that id. "sketch" reads as a root.',
-    ]);
 
     const reports: ErrorReport[] = [];
     dataset.on('error', (report) => {
       reports.push(report);
     });
-    dataset.entries.update('design', { name: 'Design 2' });
+    dataset.entries.remove('build');
+    dataset.entries.update('sketch', { phaseId: undefined });
     expect(reports.map((report) => [report.code, report.by])).toEqual([['unknown-parent', 'consumer']]);
   });
 

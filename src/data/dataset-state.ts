@@ -31,6 +31,7 @@ import type {
 import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
+import { assertEntryBatchIsSound } from './entry-batch.js';
 import { toEditsReading, toEntries } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
@@ -204,8 +205,10 @@ export class DatasetState implements Dataset {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
     };
+    const read = toEntries(options.entries, this.#entryContext, this.fields, 'new Dataset');
+    assertEntryBatchIsSound(read, 'new Dataset');
     this.entries = new EntryStore(
-      toEntries(options.entries, this.#entryContext, this.fields),
+      read,
       this.#entryContext,
       this.fields,
       this.fieldAccess,

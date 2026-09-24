@@ -9,9 +9,12 @@ import {
   mergeEntryEdits,
   InvalidReplayOriginError,
   ComputedFieldCannotBeWrittenError,
+  DuplicateEntryIdError,
+  EntryNotFoundError,
   FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
+  ParentCycleError,
   RegistrationClosedError,
   UnknownFieldError,
   DuplicatePluginIdError,
@@ -160,6 +163,58 @@ describe('new Dataset()', () => {
     ).toThrow(
       'null names no instant. An absent date is a value left out, not a null one. Write a date, or leave it out.',
     );
+  });
+
+  describe('checks its own batch the same way entries.load does (ADR 0031, Q3)', () => {
+    it('throws DuplicateEntryIdError for two entries naming the same id', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a' }), oneEntry({ id: 'a' })],
+          }),
+      ).toThrow(DuplicateEntryIdError);
+    });
+
+    it('throws EntryNotFoundError for a parentId naming no id in the batch', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a', parentId: 'ghost' })],
+          }),
+      ).toThrow(EntryNotFoundError);
+    });
+
+    it('throws ParentCycleError for a parentId loop', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a', parentId: 'b' }), oneEntry({ id: 'b', parentId: 'a' })],
+          }),
+      ).toThrow(ParentCycleError);
+    });
+
+    it('does not throw when a child is listed before its parent', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'b', parentId: 'a' }), oneEntry({ id: 'a' })],
+          }),
+      ).not.toThrow();
+    });
+
+    it("names 'new Dataset' as the door, not entries.load", () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a' }), oneEntry({ id: 'a' })],
+          }),
+      ).toThrow('new Dataset');
+    });
   });
 });
 
