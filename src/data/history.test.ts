@@ -301,6 +301,69 @@ describe('History', () => {
     expect(state.entries.get('t1')?.name).toBe('outside-write');
   });
 
+  it('ignores an outside redo replay with a full stack instead of appending a phantom step', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'Roofing' });
+    state.undo();
+    state.redo(); // canRedo now false, nothing above the top of the stack
+
+    state.replay({
+      id: changeSetId(99),
+      origin: 'redo',
+      added: [],
+      removed: [],
+      updated: [{ store: 'entries', id: entryId('t1'), field: 'name', from: 'Roofing', to: 'outside-write' }],
+    });
+
+    expect(state.entries.get('t1')?.name).toBe('outside-write');
+    // No phantom entry appended, and the cursor did not advance past the real top.
+    expect(state.canRedo).toBe(false);
+    expect(state.canUndo).toBe(true);
+    state.undo();
+    expect(state.entries.get('t1')?.name).toBe('t1'); // the real step 1, not the outside write
+  });
+
+  it('ignores an outside undo replay against a non-empty stack instead of corrupting the stack slot', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'Roofing' }); // the one real undoable step
+
+    state.replay({
+      id: changeSetId(99),
+      origin: 'undo',
+      added: [],
+      removed: [],
+      updated: [{ store: 'entries', id: entryId('t1'), field: 'name', from: 'Roofing', to: 'outside-write' }],
+    });
+    expect(state.entries.get('t1')?.name).toBe('outside-write');
+
+    state.undo(); // must still invert the real step 1, not the outside write it never recorded
+
+    expect(state.entries.get('t1')?.name).toBe('t1');
+  });
+
+  it('a refused undo un-forgets a moot step the same click already forgot on the way to the throw', () => {
+    const state = dataset([{ id: 't1' }]); // name starts as 't1'
+    state.entries.update('t1', { name: 'b' }); // step 1
+    state.entries.update('t1', { name: 'c' }); // step 2
+
+    // A sync independently sets the field back to what undoing step 2 would write — step 2 is
+    // moot, and undo() forgets it on the way to step 1 in the same click.
+    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]);
+
+    const refuse = (): false => false;
+    state.on('beforeChange', refuse);
+    expect(() => state.undo()).toThrow(MutationCancelledError);
+    state.off('beforeChange', refuse);
+
+    // Step 1's write never landed, and step 2 — forgotten mid-click — is back too.
+    expect(state.entries.get('t1')?.name).toBe('b');
+    expect(state.canUndo).toBe(true);
+    expect(state.canRedo).toBe(false);
+
+    state.undo(); // step 2 is moot again and forgotten; step 1 lands
+    expect(state.entries.get('t1')?.name).toBe('t1');
+  });
+
   it('undo of a declared props key removes the key instead of writing undefined onto props', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
