@@ -293,10 +293,10 @@ can check `request.editableOf(id, field)` before it writes, and a consumer
 can check the same answer through `dataset.editableOf(id, field)` — one
 resolved answer, published on both doors (I14, `plans/01` §11).
 
-**Installing composes**, the same way `setExtender` and `hierarchy.setSource`
-do (D-S5-23): the wrapper receives the current occupant, so a second plugin's
-rule adds to the first's instead of evicting it. See "Every registration
-seam" below for `edits.setLockRule`'s row.
+**Installing composes**, the same way `setExtender` and a declared
+`hierarchySource` do (D-S5-23): the wrapper receives the current occupant, so
+a second plugin's rule adds to the first's instead of evicting it. See
+"Every registration seam" below for `edits.setLockRule`'s row.
 
 ## Data a consumer must keep
 
@@ -371,7 +371,6 @@ plugins claim the same key.
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
-| `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 | `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
 | `events.on(name, handler)` | none | Additive — every handler runs, in registration order; the returned `Disposer` removes only that one handler | `src/data/event-bus.test.ts` |

@@ -38,7 +38,7 @@ function boundTreeReads(store: EntryStore): void {
  *  Committed rows go through core's check; rows a transaction has edited do not, which is the door
  *  this describe block walks. */
 function phaseSourced(): DatasetState {
-  const state = new DatasetState({
+  return new DatasetState({
     timeZone: 'UTC',
     entries: [
       { id: 'a', name: 'A' },
@@ -46,9 +46,8 @@ function phaseSourced(): DatasetState {
       { id: 'c', name: 'C' },
     ],
     fields: [{ key: 'phaseId' }],
+    hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
   });
-  state.setHierarchySource(() => (entry) => (entry.props as { phaseId?: string }).phaseId);
-  return state;
 }
 
 /** Writes the loop `a → b → a` into the open transaction's write set. */

@@ -23,7 +23,6 @@ import type {
   FieldLockRule,
   FieldLockRuleWrapper,
   HierarchySource,
-  HierarchySourceWrapper,
   RaiseError,
 } from '../model/index.js';
 import {
@@ -35,7 +34,6 @@ import {
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
-import type { Signal } from './reactivity.js';
 import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
 import { toEditReading, toEntries, toEntry } from './entry-reader.js';
@@ -130,10 +128,10 @@ export class EntryStore implements EntryStoreContract {
   /** The same array identity rule as `#all`, one revision at a time — the elements are the live
    *  rows `layout/` receives (`gantt-shell.ts` hands this straight on). */
   #allLive: () => readonly Entry[];
-  /** Which Entry the hierarchy source says is the parent of this one (ADR 0020). A `signal`, not a
-   *  plain field, because a plugin claims the seam after this store is built — every index below
-   *  reads it, so composing a source invalidates them all. */
-  #hierarchySource: Signal<HierarchySource>;
+  /** Which Entry the hierarchy source says is the parent of this one (ADR 0020). A plain readonly
+   *  field: the constructor receives the final, already-composed source, and nothing sets it later
+   *  (ADR 0031 — a plugin declares its source; it does not claim a seam after setup). */
+  readonly #hierarchySource: HierarchySource;
   /** The per-entry lock rule's current occupant (#473). A plain field, not a `signal`: unlike
    *  `#hierarchySource`, nothing here is a `computed` derived from it — it is read imperatively, once
    *  per write, the same way `#registry` is. Silence (`identityFieldLockRule`) until a plugin composes
@@ -185,7 +183,7 @@ export class EntryStore implements EntryStoreContract {
     this.#raiseError = raiseError;
     this.#context = context;
     this.#registry = registry;
-    this.#hierarchySource = signal<HierarchySource>(hierarchySource);
+    this.#hierarchySource = hierarchySource;
     // The store is the tree a Field read walks: a `compute` Field asking `ctx.children(row)` outside
     // a Rollup pass means the row the store holds now (#214).
     this.#access = readingParentFrom(
@@ -221,7 +219,7 @@ export class EntryStore implements EntryStoreContract {
     this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
     this.#hierarchy = computed(() => {
       this.#revision.get();
-      return checkHierarchyAnswers(this.#byId, this.#hierarchySource.get());
+      return checkHierarchyAnswers(this.#byId, this.#hierarchySource);
     });
     this.#byParent = computed(() => {
       // Core inverts the source's answer (ADR 0020). One parent per Entry goes in, so nothing can
@@ -327,7 +325,7 @@ export class EntryStore implements EntryStoreContract {
   /** One call to whichever source is current, branded. Every tree read inside an open transaction
    *  goes through this — the committed index goes through `checkHierarchyAnswers` instead. */
   #askSource(entry: StoredEntry): EntryId | undefined {
-    return parentIdFrom(this.#hierarchySource.get(), entry);
+    return parentIdFrom(this.#hierarchySource, entry);
   }
 
   /** Which Entry is the parent of this row, as the rest of the library must read it (ADR 0020).
@@ -341,25 +339,13 @@ export class EntryStore implements EntryStoreContract {
   /** The source every tree read in this store goes through. `data/`'s commit path and the Rollup
    *  read the same one, so the tree and the Rollup can never disagree (ADR 0020). */
   get hierarchySource(): HierarchySource {
-    return this.#hierarchySource.get();
+    return this.#hierarchySource;
   }
 
   /** The per-entry lock rule every write door reads (#473, I14): `entries.update()` and an
    *  `EditExtender` cascade both resolve a write against this same occupant. */
   get lockRule(): FieldLockRule {
     return this.#lockRule;
-  }
-
-  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))`.
-   *  Installing composes onto the current occupant rather than evicting it, the same way
-   *  `setExtender` does (D-S5-23) — core's own `(entry) => entry.parentId` is the first occupant and
-   *  has no special claim on the seam. Not on `EntryStoreView`: this is a plugin-author door, and it
-   *  reaches a plugin through `ctx.hierarchy` alone. */
-  setHierarchySource(wrap: HierarchySourceWrapper): void {
-    this.#hierarchySource.set(wrap(this.#hierarchySource.get()));
-    // A new occupant answers about the rows already here, so its refused answers are news now
-    // (`F5`) — not when the next commit or the next read happens to ask.
-    this.#reportRefusedHierarchyAnswers();
   }
 
   /** The per-entry lock rule's own answer for one cell (#473) — `entries.update()` and an
@@ -392,8 +378,8 @@ export class EntryStore implements EntryStoreContract {
 
   /** Call: `ctx.edits.setLockRule((next) => (entry, field) => field === 'cost' ? 'anywhere' : next(entry, field))`.
    *  Installing composes onto the current occupant rather than evicting it, the same way
-   *  `setHierarchySource` and `setExtender` do (D-S5-23). Not on `EntryStoreView`: this is a
-   *  plugin-author door, and it reaches a plugin through `ctx.edits` alone. */
+   *  `setExtender` does (D-S5-23). Not on `EntryStoreView`: this is a plugin-author door, and it
+   *  reaches a plugin through `ctx.edits` alone. */
   setLockRule(wrap: FieldLockRuleWrapper): void {
     this.#lockRule = wrap(this.#lockRule);
   }
@@ -636,7 +622,7 @@ export class EntryStore implements EntryStoreContract {
     assertEntryBatchIsSound(read, 'entries.load');
 
     const byId = new Map(read.map((entry) => [entry.id, entry]));
-    const source = this.#hierarchySource.get();
+    const source = this.#hierarchySource;
     const { parents } = checkHierarchyAnswers(byId, source);
     // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
     // itself stays a leaf only that file and the commit path may import, `rollup-is-removable`):

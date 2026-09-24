@@ -751,11 +751,11 @@ describe('the Rollup fast path skips re-deriving the committed tree (#421 C4)', 
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
       fields: [{ key: 'cost', type: 'money' }, { key: 'phaseId' }],
+      // The tree lives in `props.phaseId`, never `parentId` — the shape ADR 0020's own example
+      // takes. This write names no `parentId`, so it would take the fast path under core's own
+      // source; a plugin source may read any field, so it must not.
+      hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
     });
-    // The tree lives in `props.phaseId`, never `parentId` — the shape ADR 0020's own example
-    // takes. This write names no `parentId`, so it would take the fast path under core's own
-    // source; a plugin source may read any field, so it must not.
-    state.setHierarchySource(() => (entry) => (entry.props as { phaseId?: string }).phaseId);
 
     const { checks, childIndexBuilds } = countTreeRederivations(() => {
       state.entries.update('c', { cost: 20 });

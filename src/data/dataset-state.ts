@@ -100,8 +100,8 @@ export interface DatasetStateOptions {
   /** Every installed plugin's declared `hierarchySource`, in setup order (ADR 0031) —
    *  `api/dataset.ts` builds this with `resolveSetupOrder`, same as `pluginFieldDeclarations`. Folded
    *  onto `storedParentSource` right here, before `entries` is built: the first wrapper wraps core's
-   *  own source, a later one wraps the one before it, and the last one answers first — the same order
-   *  a plugin's own `ctx.hierarchy.setSource` call would have composed in. */
+   *  own source, a later one wraps the one before it, and the last one answers first — the order
+   *  `data()` runs its own registrations in. */
   hierarchySourceWrappers?: readonly HierarchySourceWrapper[];
 }
 
@@ -309,13 +309,6 @@ export class DatasetState implements Dataset {
    *  `(entry) => entry.parentId`; the store holds whichever occupant plugins composed onto it. */
   get hierarchySource(): HierarchySource {
     return this.entries.hierarchySource;
-  }
-
-  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))`.
-   *  Installing composes onto the current occupant rather than evicting it, exactly the way
-   *  `setExtender` below does (D-S5-23, ADR 0020). */
-  setHierarchySource(wrap: HierarchySourceWrapper): void {
-    this.entries.setHierarchySource(wrap);
   }
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.
