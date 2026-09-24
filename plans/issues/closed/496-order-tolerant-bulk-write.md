@@ -257,6 +257,33 @@ Each step ends green (`pnpm verify:full`). Each step is one commit.
 8. **Close out.** Move this file to `plans/issues/closed/`. Update `plans/issues/open/README.md`.
    The PR body says `Closes #496`.
 
+## Owner grill, round 3 — a plugin Field at construction (2026-09-23)
+
+The `ocr` review found a gap that step 6 opened. The constructor reads the entries
+(`src/data/dataset-state.ts:156`) before plugins install (`:169`). So `new Dataset` drops a flat
+`locked: true` with an "undeclared key" warning, and `load` keeps it. That breaks the Q1 oracle.
+Step 6 removed `lockEntries({ initiallyLocked })`, so this branch caused the gap.
+
+- **Rejected: install plugins before the entries are read.** During `data()`, `entries.all` would
+  be empty, with no error. The owner called it "a foot bazooka".
+- **Rejected: read the entries twice.** Setup would see entries with the plugin keys missing.
+- **Rejected: a separate `declare()` step.** It does what a list does, with more code per plugin.
+- **R1 — A plugin declares with `fields`, `fieldTypes` and `aggregators`. Closed.** The same names
+  and shapes as `DatasetOptions` (`src/api/dataset.ts:79-83`). Construction order: register the
+  Dataset's and every plugin's declarations (a duplicate throws here), read the entries, run each
+  `data()`, run the Rollup. `data()` sees every entry, as before.
+- **R2 — Remove `ctx.fields.register`, `registerType` and `registerAggregator`. Closed.** One way to
+  declare, so the gap cannot come back. A plugin whose Fields depend on its options builds the list
+  in its factory.
+- **R3 — It lands on this branch, as its own commits, before the PR leaves draft. Closed.**
+
+Build steps, one commit each, each green on `verify:full`:
+
+1. A test that fails today: `new Dataset` keeps a plugin Field value (`locked`, `phaseId`).
+2. Add the three plugin settings. Register them before the entries are read.
+3. Remove `ctx.fields.register*`. Move the plugins and the tests to the new settings.
+4. Fix the lock doc sample and `docs/06-plugin-authoring.md`. State the change in the PR body.
+
 ## Out of scope
 
 - The undoable, diffing door. That is [#517](https://github.com/freegantt/freegantt/issues/517). It
