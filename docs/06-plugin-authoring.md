@@ -412,6 +412,11 @@ per-entry state for a kept id on purpose, and clearing a cache on every poll thr
 away for no reason. It must instead fold the changed rows into the cache it already holds —
 on every origin but `'load'`, not sync alone, or a rename or an undo leaves the cache stale.
 
+A sync is not an undo step: it records nothing on the History stack. An undo after a sync
+can carry rows the recorded step never had — it writes onto the entry's current value, not
+the value the step recorded, so a plugin's `change` handler must read `row.to`, never assume
+it matches what the plugin remembers recording earlier (`docs/11-server-data.md`).
+
 ## Why a factory, not a name-keyed table
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin

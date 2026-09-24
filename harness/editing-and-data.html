@@ -141,7 +141,8 @@
               <p>
                 Round-trips the whole Dataset through the public <code>toInput()</code>/<code>add()</code>
                 pair. Import replaces every entry and clears undo. Sync diffs a fetched list against the live
-                data instead, keeps a kept row's selection and collapse state, and records one undo step.
+                data instead, keeps a kept row's selection and collapse state, and records no undo step — your
+                own edits stay undoable across a poll.
               </p>
               <div class="control-row">
                 <button id="export-btn" type="button">Export</button>
