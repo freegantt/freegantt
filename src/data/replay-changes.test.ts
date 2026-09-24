@@ -142,6 +142,28 @@ describe('replay removes the entry as it stands now, and its children the step d
 
     expect(seen).toEqual([]);
   });
+
+  it('undo of a remove does not cascade onto a root this same step reparented away from it', () => {
+    const state = dataset([
+      { id: 'a', name: 'A' },
+      { id: 'b', name: 'B' },
+      { id: 'c', name: 'C' },
+      { id: 'x', name: 'X' },
+    ]);
+
+    state.transaction(() => {
+      state.entries.add({ id: 'n1', name: 'N1', start: 0, end: 1 });
+      state.entries.update('a', { parentId: 'n1' });
+    });
+    expect(state.entries.get('a')!.read('parentId')).toBe('n1');
+
+    state.undo();
+
+    expect(state.entries.has('n1')).toBe(false);
+    expect(state.entries.has('a')).toBe(true);
+    expect(state.entries.get('a')!.read('parentId')).toBeUndefined();
+    expect(state.entries.get('a')!.read('name')).toBe('A');
+  });
 });
 
 describe('replay drops a store row whose entry is gone', () => {
