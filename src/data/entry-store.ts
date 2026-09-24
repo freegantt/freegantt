@@ -669,11 +669,7 @@ export class EntryStore implements EntryStoreContract {
     // An added entity carries the values the commit settles on, not a row (the same rule
     // `sync` and `buildCommitChangeSet` follow): every id here is new to the store, so every
     // Rollup row folds onto its entity, and the changeset holds no entries row for it.
-    const rolled = new Map(byId);
-    for (const row of rollupUpdated) {
-      const current = rolled.get(row.id);
-      if (current) rolled.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
-    }
+    const rolled = this.#foldRollup(byId, rollupUpdated);
     const added = read.map((entry) => ({ store: 'entries' as const, entity: rolled.get(entry.id)! }));
     const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
     // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
@@ -707,11 +703,7 @@ export class EntryStore implements EntryStoreContract {
   sync(inputs: readonly FlatEntryInput[]): void {
     const { runner, byId, entries: read, rollupUpdated } = this.#readBatch(inputs, 'entries.sync');
 
-    const rolled = new Map(byId);
-    for (const row of rollupUpdated) {
-      const current = rolled.get(row.id);
-      if (current) rolled.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
-    }
+    const rolled = this.#foldRollup(byId, rollupUpdated);
     const target = read.map((entry) => rolled.get(entry.id) ?? entry);
 
     const changes = changesToMatchBatch(this.#byId, target, this.#registry, this.#access);
@@ -786,6 +778,22 @@ export class EntryStore implements EntryStoreContract {
     }
 
     return { runner, byId, entries: read, rollupUpdated };
+  }
+
+  /** An added entity carries the values the commit settles on, not a row (the same rule
+   *  `buildCommitChangeSet` follows): every id in a whole-list write is new to the store, so every
+   *  Rollup row folds onto its entity here, in a fresh map — `byId` stays the placed batch, never the
+   *  folded one, for whichever caller still needs it as `#readBatch` built it. */
+  #foldRollup(
+    byId: ReadonlyMap<EntryId, StoredEntry>,
+    rollupUpdated: readonly FieldUpdated[],
+  ): Map<EntryId, StoredEntry> {
+    const rolled = new Map(byId);
+    for (const row of rollupUpdated) {
+      const current = rolled.get(row.id);
+      if (current) rolled.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
+    }
+    return rolled;
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {
