@@ -2,7 +2,7 @@
 status: accepted — ruled 2026-09-23, out of the plan for #533. PR 2 of 2 (this record; the Gantt
 half). PR 1 (the `Dataset` half, [ADR 0031](0031-a-plugin-declares-its-shape-its-code-runs-on-a-finished-object.md))
 merged first. Working material:
-[`plans/issues/open/533-gantt-view-lifecycle.md`](../../plans/issues/open/533-gantt-view-lifecycle.md).
+[`plans/issues/closed/533-gantt-view-lifecycle.md`](../../plans/issues/closed/533-gantt-view-lifecycle.md).
 decided: a finished Gantt is built and configured, but not painted, before any plugin's `view(ctx)`
 runs. The `Gantt` constructor assigns `#shell`, then installs `options.plugins` through the same
 public setter a later `gantt.plugins = [...]` call uses, then paints frame 1. `#constructed` still
