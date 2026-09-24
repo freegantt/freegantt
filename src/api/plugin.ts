@@ -80,8 +80,8 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
  *  must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset then runs `view`
  *  once, each with its own context, so I2 holds by construction. */
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
-  /** Fields, the edit hook and the store. DOM-free, and runs as the `Dataset` constructs. Optional
-   *  (D7): a plugin that only declares `fields`, `fieldTypes`, `aggregators` or `hierarchySource`
+  /** Fields, the edit hook and the store. DOM-free, and runs as the `Dataset` constructs. Optional:
+   *  a plugin that only declares `fields`, `fieldTypes`, `aggregators` or `hierarchySource`
    *  needs no `data()` to run. */
   data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
   /** The same shape `DatasetOptions.fields`/`fieldTypes`/`aggregators` take (#496 grill round 3,
@@ -105,7 +105,7 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
    *  entry.props.phaseId ?? next(entry) })` — "its hierarchy source is the entry's phase id, or the
    *  next source's answer."
    *
-   *  Composes in setup order (`resolveSetupOrder`, D-S5-31), the same order `data()` runs in. The
+   *  Composes in setup order (`resolveSetupOrder`), the same order `data()` runs in. The
    *  first plugin wraps core's own `storedParentSource`, and a later plugin wraps the one before it —
    *  the last plugin answers first. Same composing idiom `setExtender`/`setLockRule` already use. */
   hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;

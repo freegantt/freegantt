@@ -165,7 +165,7 @@ describe('new Dataset()', () => {
     );
   });
 
-  describe('checks its own batch the same way entries.load does (ADR 0031, Q3)', () => {
+  describe('checks its own batch the same way entries.load does (ADR 0031)', () => {
     it('throws DuplicateEntryIdError for two entries naming the same id', () => {
       expect(
         () =>

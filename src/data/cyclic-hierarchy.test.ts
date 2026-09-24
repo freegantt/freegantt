@@ -58,7 +58,7 @@ function writeTheLoop(state: DatasetState): void {
 }
 
 /** `replay()` applies an already-complete `ChangeSet` unchecked (`data/replay.ts`) — construction's
- *  own batch check (Q3) does not run again, so this is still the door a raw, already-looped or
+ *  own batch check does not run again, so this is still the door a raw, already-looped or
  *  already-dangling `parentId` can reach a live store through. */
 function replayRawEntries(state: DatasetState, entries: readonly Omit<StoredEntry, 'props'>[]): void {
   const changeSet: ChangeSet = {
@@ -101,7 +101,7 @@ describe('a hierarchy source that loops never hangs a walk (F1)', () => {
 });
 
 describe('an authored parentId that loops never hangs the parent check (P2-2)', () => {
-  /** Construction refuses a raw loop now (Q3), so this reaches one through `replay()` instead — the
+  /** Construction refuses a raw loop now, so this reaches one through `replay()` instead — the
    *  door `replayChangeSet` leaves open on a live store, unchecked. */
   function authoredLoop(): DatasetState {
     const state = new DatasetState({ timeZone: 'UTC', entries: [] });
@@ -137,7 +137,7 @@ describe('read("parentId") and read("hierarchyParentId") answer two different qu
 
   it('a dangling parentId: every by-key door on "parentId" agrees; "hierarchyParentId" refuses it', () => {
     const state = new DatasetState({ timeZone: 'UTC', entries: [], fields: [probeField] });
-    // Construction refuses a raw dangling parentId now (Q3), so this reaches one through `replay()`
+    // Construction refuses a raw dangling parentId now, so this reaches one through `replay()`
     // instead — the door `replayChangeSet` leaves open on a live store, unchecked.
     replayRawEntries(state, [{ id: entryId('a'), name: 'A', parentId: entryId('ghost') }]);
 
@@ -153,7 +153,7 @@ describe('read("parentId") and read("hierarchyParentId") answer two different qu
 
   it('a two-row cycle: "parentId" keeps the authored link; "hierarchyParentId" drops the closing one', () => {
     const state = new DatasetState({ timeZone: 'UTC', entries: [], fields: [probeField] });
-    // Construction refuses a raw loop now (Q3); reach one through `replay()` instead.
+    // Construction refuses a raw loop now; reach one through `replay()` instead.
     replayRawEntries(state, [
       { id: entryId('a'), name: 'A', parentId: entryId('b') },
       { id: entryId('b'), name: 'B', parentId: entryId('a') },

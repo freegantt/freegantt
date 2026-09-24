@@ -98,7 +98,7 @@ describe('a plugin source answers the tree, and every door follows it', () => {
     expect(dataset.entries.get('build')?.read('cost')).toBe(7);
   });
 
-  it('an untyped plugin reads props as a Record (D1)', () => {
+  it('an untyped plugin reads props as a Record', () => {
     // No `TProps` named, so `definePlugin` resolves the untyped `DataPlugin<unknown>` arm. `props`
     // still reads as `Record<string, unknown>`, not `unknown` — a bracket read compiles with no
     // `@ts-expect-error`, which pins the type-level fallback `PropsOf` falls back to.
@@ -317,7 +317,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
   });
 
   it('a raw dangling parentId throws at construction, with no plugin installed (`F4`)', () => {
-    // Construction checks the raw batch the same way `load` does (ADR 0031, Q3) — a dangling
+    // Construction checks the raw batch the same way `load` does (ADR 0031) — a dangling
     // parentId no longer reaches the plugin source or a construction-time warning at all.
     expect(
       () => new Dataset({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A', parentId: 'nope' }] }),

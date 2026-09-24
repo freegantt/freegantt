@@ -704,7 +704,7 @@ export class EntryStore implements EntryStoreContract {
    *  is seen.
    *
    *  `seen` is the same guard `#depthOf` carries. `new Dataset({ entries })` and `entries.load` both
-   *  check the raw batch and throw on a loop (ADR 0031, Q3), but `replay()` applies an already-built
+   *  check the raw batch and throw on a loop (ADR 0031), but `replay()` applies an already-built
    *  `ChangeSet` unchecked (`data/replay.ts`), so a raw loop can still land on a live store that way;
    *  without the guard the next edit that names a row inside that loop walks it forever. A loop the
    *  edit is not part of stops the walk and passes — the committed check reports it as one
