@@ -327,8 +327,8 @@ export class DatasetState implements Dataset {
     return this.entries.editableOf(id, field);
   }
 
-  /** `Dataset`'s constructor calls this once, right after the last plugin's `data()` returns (D6,
-   *  ADR 0031): a plugin's setup write is an ordinary commit, so it records like one, and this is
+  /** `Dataset`'s constructor calls this once, right after the last plugin's `data()` returns
+   *  (ADR 0031): a plugin's setup write is an ordinary commit, so it records like one, and this is
    *  what un-does that — the stack `undo()` reads goes back to empty, so `canUndo` reads `false`
    *  once `new Dataset()` returns (#137). */
   clearHistory(): void {

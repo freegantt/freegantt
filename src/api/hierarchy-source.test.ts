@@ -234,7 +234,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       plugins: [loop()],
     });
 
-    // The construction check is the news — nothing has read a row yet (`F5`).
+    // The construction check is the news — nothing has read a row yet.
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('the source makes "b" its own ancestor');
 

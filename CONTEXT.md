@@ -665,11 +665,12 @@ _Avoid_: non-working time (what a consumer's shading _means_, never what the lib
 
 **Plugin**, **ChromePlugin**, **DataPlugin**:
 The public extension contract (ADR 0019): an `id`, an optional `requires`, and one or both halves.
-`data(ctx)` declares Fields, claims the edit hook and reserves the store; it is DOM-free and runs as
-the `Dataset` constructs. `view(ctx)` registers variants, renderers, commands and keys, and runs as a
-`Gantt` mounts. A **ChromePlugin** has a `view` half and no `data` half, and installs on the `Gantt`.
-A **DataPlugin** has a `data` half, and installs on the `Dataset` — the install site is where the
-state lives, because a Field must exist before the first Rollup. **Plugin** is either. `definePlugin`
+`data(ctx)` declares Fields, claims the edit hook and reserves the store; it is DOM-free and runs
+once, on the finished Dataset. `view(ctx)` registers variants, renderers, commands and keys, and runs
+as a `Gantt` mounts. A **ChromePlugin** has a `view` half and no `data` half, and installs on the
+`Gantt`. A **DataPlugin** has a `data` half, and installs on the `Dataset` — the install site is
+where the state lives: a `data` half declares what shapes the Dataset's own construction, and a
+Dataset installs its plugins once. **Plugin** is either. `definePlugin`
 is the door, and it narrows to the arm the object fills. Either half may return a `Disposer`, and
 only for a resource the plugin owns itself — a timer, a socket, a subscription of its own. Every
 `register*` and every `onDomEvent` already files its removal in `ctx.disposables`, so most plugins

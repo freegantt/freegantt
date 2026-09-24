@@ -3,9 +3,9 @@
 //
 // A Dataset plugin declares Fields on its own object — `fields`/`fieldTypes`/`aggregators` (#496
 // grill round 3, R1) — the same shape `DatasetOptions` takes. `DatasetState`'s constructor merges
-// every source's declarations, core Fields first, before `entries` is read: a Field must exist
-// before the first Rollup (D-S5-4), which is also why `Dataset.plugins` is read-only where
-// `Gantt.plugins` is not.
+// every source's declarations, core Fields first, before `entries` is read. A data half declares
+// what shapes the Dataset's own construction, and a Dataset installs its plugins once — which is
+// also why `Dataset.plugins` is read-only where `Gantt.plugins` is not.
 //
 // `all` answers what this Dataset resolves against, core Fields, the consumer's own, and a plugin's,
 // in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code

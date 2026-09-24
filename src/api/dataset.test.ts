@@ -869,7 +869,7 @@ describe('Dataset plugins (S5.10)', () => {
     expect(setExtenderLate).toThrow(RegistrationClosedError);
   });
 
-  it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4, #496 R1)', () => {
+  it('has a Field a plugin declares in the registry, already settled by the construction Rollup (#496 R1)', () => {
     const declaresCost: DataPlugin = {
       id: 'demo.cost',
       fieldTypes: { money: { rollUp: 'sum' } },

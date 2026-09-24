@@ -243,8 +243,8 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `gantt.installPlugin`/`uninstallPlugin` add or drop one plugin without restating the set
    *  (D-S5-36).
    *
-   *  ADR 0019: chrome only. A plugin with a `data` half declares a Field or claims the edit hook, and
-   *  both must be in place before the Dataset's first Rollup — so it installs on the `Dataset`
+   *  ADR 0019: chrome only. A `data` half declares what shapes the Dataset's own construction, and a
+   *  Dataset installs its plugins once — so a plugin with a `data` half installs on the `Dataset`
    *  instead. `data?: never` on this arm is what stops the wrong one compiling here. */
   plugins?: readonly ChromePlugin<TProps>[];
 }

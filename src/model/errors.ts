@@ -917,8 +917,8 @@ export class PluginSetupError extends FreeGanttError {
       undefined,
       `plugins: the plugin with id "${pluginId}" declares data(), fields, fieldTypes, aggregators, ` +
         'or hierarchySource, so it installs on the Dataset, not on the Gantt. Pass it to ' +
-        'new Dataset({ entries, plugins: […] }) instead of GanttOptions.plugins. A Field must exist ' +
-        'before the first Rollup, and a Gantt mounts after that.',
+        'new Dataset({ entries, plugins: […] }) instead of GanttOptions.plugins. A data half shapes ' +
+        "the Dataset's own construction, and a Gantt mounts only after that.",
     );
   }
 }

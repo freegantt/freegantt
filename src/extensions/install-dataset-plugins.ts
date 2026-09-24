@@ -6,7 +6,8 @@
 // and passing a `readonly Plugin[]` type-checks with no cast.
 //
 // Installation is one shot, never a diff: `Dataset.plugins` is read-only, unlike `Gantt.plugins`,
-// because a plugin may declare a Field and a Field must exist before the first Rollup (D-S5-4).
+// because a data half declares what shapes the Dataset's own construction, and a Dataset installs
+// its plugins once.
 //
 // ADR 0019: a plugin on this list may carry a `view` half, a `data` half, or both. This file runs the
 // `data` half. A plugin with no `data` half is still ordered and still counted against duplicate ids —
@@ -37,7 +38,7 @@ export interface InstallablePlugin<TContext> {
 
 /** Built fresh for each plugin's own `data()` call, the same three members `PluginRuntime` builds:
  *  the context that plugin sees, the store its registrations file into, and the gate this file closes
- *  the moment `data()` returns (D-S5-4). */
+ *  the moment `data()` returns. */
 export interface BuiltDatasetPluginContext<TContext> {
   context: TContext;
   disposables: DisposableStore;
@@ -81,7 +82,7 @@ export function installDatasetPlugins<TContext>(
       if (plugin.data === undefined) continue;
       const built = buildContext(plugin.id);
       const ownDispose = plugin.data(built.context);
-      // D-S5-4: registration is legal while data() runs only.
+      // Registration is legal while data() runs only.
       built.registrationGate.close();
       installed.push({
         id: plugin.id,
