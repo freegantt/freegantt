@@ -253,7 +253,7 @@ export function buildCommitChangeSet(
     {
       added: addedEntitiesForFold.map((row) => row.entity),
       removed,
-      edits: { body: proposed, merged: mergedBodyAndExtender },
+      edits: { merged: mergedBodyAndExtender },
     },
     data.fields,
     data.fieldAccess,

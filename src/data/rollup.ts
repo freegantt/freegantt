@@ -32,12 +32,10 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
-  /** The transaction body's edits. A rolling-up Field the body proposed on an entry that still has
-   *  children at commit is overwritten, not yielded to (2026-09-24 ruling) — `body` matters here only
-   *  for an entry that loses its last child in this same transaction: the write it made while still a
-   *  parent stands, because the field is no longer the Rollup's to own (`clearDerivedValues`). */
-  readonly body: ProposedEdits;
-  /** Body plus extension-hook edits — used to read effective child values. */
+  /** Body plus extension-hook edits. A rolling-up Field either proposed on an entry that still has
+   *  children at commit is overwritten, not yielded to (2026-09-24 ruling). An entry that loses its
+   *  last child in this same transaction keeps a proposal on that Field, because the Field is no
+   *  longer the Rollup's to own (`clearDerivedValues`). Also used to read effective child values. */
   readonly merged: ProposedEdits;
 }
 
@@ -154,15 +152,16 @@ function clearDerivedValues(
   access: FieldAccess,
   parentId: EntryId,
   updated: FieldUpdated[],
-  body: ProposedEdits,
+  merged: ProposedEdits,
 ): StoredEntry {
   let effectiveParent = parent;
 
   for (const field of registry.rollingUpFields()) {
-    // The field stopped rolling up in this same transaction, so a body write to it is an ordinary
-    // cell edit now, not a rolled-up value to clear — the write already landed on `parent` and
-    // stands (2026-09-24 ruling: an entry that stops being a parent keeps the body's write).
-    if (editProposesField(body.get(parentId), field)) continue;
+    // The field stopped rolling up in this same transaction, so a write to it — the body's own, or
+    // an extension hook's cascade — is an ordinary cell edit now, not a rolled-up value to clear:
+    // the write already landed on `parent` and stands (2026-09-24 ruling). A cascade write is a
+    // caller-side write like the body's, so this reads `merged`, not `body` alone.
+    if (editProposesField(merged.get(parentId), field)) continue;
     const from = readField(effectiveParent, field, access);
     if (from === undefined) continue;
     updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
@@ -224,7 +223,6 @@ export function rollUpFields(
   const added = pending?.added ?? [];
   const removed = pending?.removed ?? [];
   const emptyEdits: ProposedEdits = new Map();
-  const body = pending?.edits.body ?? emptyEdits;
   const merged = pending?.edits.merged ?? emptyEdits;
   // Effective tree includes extender overlays, so a parent promoted on this commit (a `parentId`
   // write lands its first child) is already a parent when `parentsToRecompute` asks structure.
@@ -282,10 +280,10 @@ export function rollUpFields(
     if (!childIds || childIds.length === 0) {
       // Demoted: `parentsToRecompute` only visits this id with no children left when it had
       // children before this operation (ADR 0013 — losing the last child demotes). An entry that
-      // stops being a parent in this same transaction keeps the body's write (2026-09-24 ruling):
-      // `clearDerivedValues` leaves alone any field the body proposed, rather than wiping the value
-      // that write just landed.
-      computed.set(parentId, clearDerivedValues(parent, registry, access, parentId, updated, body));
+      // stops being a parent in this same transaction keeps the write to that Field (2026-09-24
+      // ruling): `clearDerivedValues` leaves alone any field `merged` (body or cascade) proposed,
+      // rather than wiping the value that write just landed.
+      computed.set(parentId, clearDerivedValues(parent, registry, access, parentId, updated, merged));
       continue;
     }
 
