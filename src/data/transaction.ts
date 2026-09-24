@@ -56,6 +56,8 @@ export interface TransactionalEntryStore {
   pendingSiblingChanges(): readonly SiblingChange[];
   /** `group`'s committed member ids, in sibling order — see `EntryStore.committedSiblingIds`. */
   committedSiblingIds(group: SiblingGroupKey): readonly EntryId[];
+  /** `group`'s live member count — see `EntryStore.liveSiblingGroupSize`. */
+  liveSiblingGroupSize(group: SiblingGroupKey): number;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;

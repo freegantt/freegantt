@@ -55,6 +55,10 @@ export interface CommitChangeSetEntryStore {
   /** `group`'s committed member ids, in sibling order — what the renumber pass below seeds each
    *  touched group's replay from, one call per distinct group. */
   committedSiblingIds(group: SiblingGroupKey): readonly EntryId[];
+  /** `group`'s live member count — the committed count with this transaction's own writes folded in,
+   *  the same count `add()`/`update()` range-check a body write's explicit `siblingIndex` against.
+   *  The extender cascade's own moves range-check against this too — see `EntryStore.liveSiblingGroupSize`. */
+  liveSiblingGroupSize(group: SiblingGroupKey): number;
 }
 
 /** Staged plugin-store state the commit pipeline reads — mirrors `TransactionalPluginStores` without
@@ -127,33 +131,45 @@ function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extende
 
 /** The extender cascade's own share of the sibling-order log (ADR 0034): an extender edit that names
  *  `siblingIndex`, or one that lands its entry in a different group, moves that entry the same way an
- *  `entries.update()` call does — the entry's committed group compares against the group its edit
- *  reads to next, through the same hierarchy source the body's own writes read. An edit against an
- *  entity this same transaction added is skipped: `add()` already placed it, and `addedEntitiesForFold`
- *  already folds this edit's other fields onto it directly.
+ *  `entries.update()` call does — the entry's group before this edit compares against the group its
+ *  edit reads to next, through the same hierarchy source the body's own writes read. Both groups come
+ *  from `entryAfterEdits`, the row the transaction body (and, for an added entity, `add()` itself)
+ *  leaves behind — never the stale pre-transaction row, so a body edit already staged on the same
+ *  entity is not overwritten by a preview of the row as it looked before the transaction opened. An
+ *  entity this same transaction added is not skipped: `addedEntitiesForFold` folds this edit's other
+ *  fields onto it, but only this log can place it at a rank in a group.
  *
  *  A named index outside the group throws the same error an explicit `entries.update()` write throws,
- *  labelled with the extender's own operation name rather than the caller's. */
+ *  labelled with the extender's own operation name rather than the caller's. The count it range-checks
+ *  against is the store's own live count (`EntryStore.liveSiblingGroupSize`, the same one `update()`
+ *  range-checks a body write against), adjusted for every earlier extender edit this same loop already
+ *  placed — mirroring `EntryStore.#siblingMoveFor`'s own leave-then-place bookkeeping. */
 function siblingChangesFromExtenderEdits(
-  byId: ReadonlyMap<EntryId, StoredEntry>,
+  entryAfterEdits: (id: EntryId) => StoredEntry | undefined,
   extenderEdits: ProposedEdits,
   hierarchySource: HierarchySource,
-  committedSiblingIds: (group: SiblingGroupKey) => readonly EntryId[],
+  liveSiblingGroupSize: (group: SiblingGroupKey) => number,
 ): SiblingPlacement[] {
   const changes: SiblingPlacement[] = [];
+  const ownAdjustments = new Map<SiblingGroupKey, number>();
+  const liveSize = (group: SiblingGroupKey): number =>
+    liveSiblingGroupSize(group) + (ownAdjustments.get(group) ?? 0);
+
   for (const [id, edit] of extenderEdits) {
-    const committed = byId.get(id);
-    if (committed === undefined) continue;
+    const current = entryAfterEdits(id);
+    if (current === undefined) continue;
     const explicitIndex = edit.siblingIndex !== undefined;
-    const previousGroup = parentIdFrom(hierarchySource, committed);
-    const group = parentIdFrom(hierarchySource, entryAfterEdit(committed, edit));
+    const previousGroup = parentIdFrom(hierarchySource, current);
+    const group = parentIdFrom(hierarchySource, entryAfterEdit(current, edit));
     if (!explicitIndex && group === previousGroup) continue;
-    const othersCount = committedSiblingIds(group).length - (group === previousGroup ? 1 : 0);
+    const othersCount = liveSize(group) - (group === previousGroup ? 1 : 0);
     const at = explicitIndex ? edit.siblingIndex! : othersCount;
     if (explicitIndex && (!Number.isInteger(at) || at < 0 || at > othersCount)) {
       throw new SiblingIndexOutOfRangeError(id, at, othersCount, EXTENDER_OPERATION);
     }
     changes.push({ id, group, at });
+    ownAdjustments.set(previousGroup, (ownAdjustments.get(previousGroup) ?? 0) - 1);
+    ownAdjustments.set(group, (ownAdjustments.get(group) ?? 0) + 1);
   }
   return changes;
 }
@@ -184,18 +200,17 @@ export function buildCommitChangeSet(
   // old one there. `createEditRequest` (#466) is the one place this reconciliation, `hasChildren` and
   // `writeTarget` are built — the commit path and the preview path (`gesture-pipeline.ts`) both call
   // it, so neither can answer those two questions differently.
-  const extenderReading = data.extraEditsReadingFor(
-    createEditRequest({
-      entries: byId,
-      proposed,
-      added,
-      removed,
-      hierarchySource: data.hierarchySource,
-      committedChildIds: data.entries.committedChildIds(),
-      fields: data.fields,
-      lockRule: data.lockRule,
-    }),
-  );
+  const editRequest = createEditRequest({
+    entries: byId,
+    proposed,
+    added,
+    removed,
+    hierarchySource: data.hierarchySource,
+    committedChildIds: data.entries.committedChildIds(),
+    fields: data.fields,
+    lockRule: data.lockRule,
+  });
+  const extenderReading = data.extraEditsReadingFor(editRequest);
   const extenderEdits: ProposedEdits = extenderReading.stored;
   guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
 
@@ -265,8 +280,11 @@ export function buildCommitChangeSet(
   // top of whatever the body itself placed.
   const siblingChanges: readonly SiblingChange[] = [
     ...data.entries.pendingSiblingChanges(),
-    ...siblingChangesFromExtenderEdits(byId, extenderEdits, data.hierarchySource, (group) =>
-      data.entries.committedSiblingIds(group),
+    ...siblingChangesFromExtenderEdits(
+      (id) => editRequest.entryAfterEdits(id),
+      extenderEdits,
+      data.hierarchySource,
+      (group) => data.entries.liveSiblingGroupSize(group),
     ),
   ];
   const siblingRanks =

@@ -372,6 +372,45 @@ describe('an extender edit renumbers its own group too (ADR 0034)', () => {
 
     expect(() => state.entries.update('a', { name: 'a (renamed)' })).toThrow(SiblingIndexOutOfRangeError);
   });
+
+  it('an extender edit on an entity the body already reparented in the same transaction reads the group the body left it in, not the stale committed one', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'x', parentId: 'p1', name: 'x', start: 0, end: 1 },
+        { id: 'a', parentId: 'p1', name: 'a', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('x'))) return new Map();
+        return new Map([[entryId('x'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    state.entries.update('x', { parentId: 'p2' });
+
+    expect(state.entries.get('x')!.read('parentId')).toBe(entryId('p2'));
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('a')!.read('parentId')).toBe(entryId('p1'));
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+  });
+
+  it('an extender edit on an entity added in this same transaction reparents it, and gives it the explicit index it asked for', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'p1' }, { id: 'p2' }, { id: 'a', parentId: 'p2', name: 'a', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      editExtender: ({ addedEntryIds }) => {
+        if (!addedEntryIds.has(entryId('x'))) return new Map();
+        return new Map([[entryId('x'), { parentId: 'p1', siblingIndex: 0 }]]);
+      },
+    });
+
+    state.entries.add({ id: 'x', parentId: 'p2', name: 'x', start: 0, end: 1 });
+
+    expect(state.entries.get('x')!.read('parentId')).toBe(entryId('p1'));
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+  });
 });
 
 describe('the renumber pass at 10,000 rows (ADR 0034)', () => {
