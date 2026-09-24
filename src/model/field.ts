@@ -201,7 +201,7 @@ export type Field<TValue = unknown> =
       inputType?: never;
     };
 
-/** A stored-Field bundle applied by name (`registerType`, `type: 'percent'`) or inline
+/** A stored-Field bundle applied by name (construction's `fieldTypes` option, `type: 'percent'`) or inline
  *  (`type: currency({ code: 'EUR' })`) to many Fields — `key`, `type` and the
  *  `compute`/`rollUp`/`editable` discriminants left out. Written directly rather than derived from
  *  `Field` with `Omit`: `Omit` does not distribute over a union, so it would collapse to the two
