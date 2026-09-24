@@ -83,6 +83,12 @@
               <div class="control-row">
                 <button id="phase-btn" type="button">Nest Gate review under Empty phase (plugin tree)</button>
               </div>
+              <!-- ADR 0034: an ordinary siblingIndex write, undoable like any other Field write. Gate
+                   review sits last among Phase A's children; this moves it to the front of the same
+                   group, with no parentId change at all. -->
+              <div class="control-row">
+                <button id="move-gate-top-btn" type="button">Move Gate review to the top</button>
+              </div>
               <!-- #421: one Field write opens "Framing crew" into three rows, or closes them back into
                    one segmented row, in a single undo step. Cy's day stays locked either way — a
                    double-click on it never opens the editor (`beforeEntryEdit`). -->
