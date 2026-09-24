@@ -72,10 +72,8 @@ step in the same call, so one click always lands a step when any undoable one re
   values. The step is skipped, and the server's entry is kept.
 - **The field already reads that value.** A step that changed a Field to the value the sync later
   set independently has nothing left to write for that field.
-- **The entry the sync already re-added.** An undo that would re-add an entry the sync has already
-  sent back is skipped too. The server's own copy of that entry stays.
 - **The children a sync added since.** Undoing an `add` step removes the whole entry, the same way
-  undoing a `remove` step does. Any child the sync placed under that entry since goes with it.
+  `entries.remove()` does. Any child the sync placed under it since goes with it.
 
 ## No parent loop, no dangling parent, ever
 
