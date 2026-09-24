@@ -295,6 +295,18 @@ describe('every write renumbers its group (ADR 0034)', () => {
     expect(seen).toHaveLength(0);
   });
 
+  it('an explicit move on an entry whose raw hierarchy answer is refused range-checks against the checked root group it actually joins, not an empty one of its own', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'r' }, { id: 'x', name: 'x', start: 0, end: 1, props: { phaseId: 'ghost' } }],
+      timeZone: 'UTC',
+      fields: [{ key: 'phaseId', type: 'text', editable: 'anywhere' }],
+      hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
+    });
+
+    expect(() => state.entries.update('x', { siblingIndex: 0 })).not.toThrow();
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+  });
+
   it("a Field locked to 'never' refuses an explicit move, and a reparent still appends", () => {
     const state = new DatasetState({
       entries: [

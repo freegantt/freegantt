@@ -45,9 +45,9 @@ drop index stops meaning anything.
 Field is the only source of order from here on; the store's insertion order stops mattering to a
 reader. Two equal indexes — reachable only after a fault or a hand-built replay — break their tie by
 store order, and nothing throws over it. This is a visible change for any dataset whose authored list
-was not already depth-first. A refused Hierarchy answer is one such fault: the write path counts a
-refused entry in the group its raw answer named, while the checked tree reads it as a root, so its
-index can tie with a root's. The same store-order tie-break covers it.
+was not already depth-first. A refused Hierarchy answer reads as a root, and a write against it counts
+against that same root group, not a group of its own — its index takes its place among the tree's
+other roots like any other write would.
 
 **Renumbering runs once, at commit, after the Rollup, and only on the staging path a `runTransaction`
 commit builds.** A write records an ordered log of what moved and where, and a running count per
