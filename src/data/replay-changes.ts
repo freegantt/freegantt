@@ -17,6 +17,7 @@ import type {
   StoreRowUpdated,
   UpdatedRow,
 } from '../model/index.js';
+import { mergeUpdatedRows } from './change-set.js';
 import { applyFieldRow, readFieldRow } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -24,6 +25,7 @@ import { checkHierarchyAnswers } from './hierarchy-source.js';
 import type { ParentIndex } from './hierarchy-source.js';
 import { renumberSiblingGroups } from './sibling-order.js';
 import type { SiblingChange, SiblingPlacement } from './sibling-order.js';
+import { rollUpFreshBatch } from './transaction.js';
 import type { TransactionalPluginStores, TransactionData } from './transaction.js';
 
 /** Drops `entity.parentId`, the way `applyFieldRow` drops an optional key an edit clears: no stored
@@ -376,13 +378,46 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
     });
   }
 
-  if (rankedAdded.length === 0 && removed.length === 0 && updatedWithoutCascaded.length === 0)
-    return undefined;
+  // The Rollup runs last of all, over the same finished tree, construction shape: it never demotes
+  // a parent that just lost its last child, so plain undo of "add a first child to leaf p" keeps
+  // whatever value the field-row replay above already restored on p, rather than clearing it the
+  // way a live commit's demotion would. It never runs the extension hook — replay never does.
+  const rollupRows = rollUpFreshBatch(data, working, checkedParents, data.hierarchySource);
+  const rollupOnAdded = new Map<EntryId, FieldUpdated[]>();
+  const rollupOnExisting: FieldUpdated[] = [];
+  for (const row of rollupRows) {
+    if (addedIds.has(row.id)) {
+      const onto = rollupOnAdded.get(row.id) ?? [];
+      onto.push(row);
+      rollupOnAdded.set(row.id, onto);
+    } else {
+      rollupOnExisting.push(row);
+    }
+  }
+  // A Rollup value on an id this step adds lands on the entity itself — there is no earlier row on
+  // it to merge into, the same way `buildCommitChangeSet` writes a fresh parent's rolled-up value.
+  const rolledAdded =
+    rollupOnAdded.size === 0
+      ? rankedAdded
+      : rankedAdded.map((row) => {
+          const rows = rollupOnAdded.get(row.entity.id);
+          if (!rows) return row;
+          let entity = row.entity;
+          for (const rollupRow of rows)
+            entity = applyFieldRow(entity, rollupRow.field, rollupRow.to, data.fields);
+          return { ...row, entity };
+        });
+  // A Rollup row for a key the replay already writes folds into that row through the one-row-per-key
+  // fold a commit's own body and Rollup share: the earlier row's `from` stands, and the Rollup's `to`
+  // wins. Any other Rollup row is a fresh row, and a key whose net change is nothing drops out.
+  const merged = mergeUpdatedRows([...updatedWithoutCascaded, ...rollupOnExisting], data.fields);
+
+  if (rolledAdded.length === 0 && removed.length === 0 && merged.length === 0) return undefined;
   return {
     id: data.nextChangeSetId(),
     origin: changeSet.origin,
-    added: rankedAdded,
+    added: rolledAdded,
     removed,
-    updated: updatedWithoutCascaded,
+    updated: merged,
   };
 }
