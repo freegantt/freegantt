@@ -30,8 +30,8 @@ frontmatter.
 | [0016](0016-the-library-holds-no-save-format.md) | The library holds no save format | accepted | No `toJSON`/`fromJSON`/Document; persistence is the consumer's own job |
 | [0017](0017-the-entry-answers-questions-about-itself.md) | The Entry answers questions about itself | superseded by 0024 | `Entry`/`StoredEntry` are two types; the read seam reads `entry.read(key)` |
 | [0018](0018-a-variant-is-a-rule-not-an-id-list.md) | A variant is a rule, not an id list | accepted | A Variant is a `when` rule; nothing stores which rows wear it |
-| [0019](0019-one-plugin-one-install-site.md) | One plugin, one install site | accepted | A chrome-only plugin installs on `Gantt`; a plugin with a data half installs on `Dataset` |
-| [0020](0020-a-plugin-may-own-the-hierarchy.md) | A plugin may own the hierarchy | accepted | A plugin states an Entry's parent through one hierarchy-source seam; the Rollup follows |
+| [0019](0019-one-plugin-one-install-site.md) | One plugin, one install site | amended by 0031 | A chrome-only plugin installs on `Gantt`; a plugin with a data half installs on `Dataset` |
+| [0020](0020-a-plugin-may-own-the-hierarchy.md) | A plugin may own the hierarchy | amended by 0031 | A plugin states an Entry's parent through one hierarchy-source seam; the Rollup follows |
 | [0021](0021-the-consumers-stylesheet-wins.md) | The consumer's stylesheet wins | accepted | The base stylesheet ships in one cascade layer, so an unlayered consumer rule always wins |
 | [0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) | Core ships variants and a variant answers about itself | amended by 0023 | Core exports `bar()`/`summary()`/`diamond()`; `gantt.variantFor(entry)` is the one resolve door |
 | [0023](0023-a-variant-with-no-items-follows-the-data.md) | A variant with no items follows the data | accepted | A variant with no `bars` key draws the structural default |
@@ -42,6 +42,7 @@ frontmatter.
 | [0028](0028-a-plugins-impossible-proposal-is-a-refusal.md) | A plugin's impossible proposal is a refusal | accepted | An extender proposing an impossible value is refused at `warning` with `by` naming it; an extender that throws is a `'error'` fault |
 | [0029](0029-the-app-pushes-the-theme.md) | The app pushes the theme; the library never asks | accepted | `theme` is three literals; the app writes `gantt.theme` or pins `data-fg-theme`, and the library never calls back or watches attributes it does not own |
 | [0030](0030-a-multi-hour-tick-counts-real-time-on-a-dst-day.md) | A multi-hour tick counts real time on a DST day | accepted | On a DST day a tick with increment > 1 keeps equal real spacing from its day start (00/07/13/19), not wall-clock multiples |
+| [0031](0031-a-plugin-declares-its-shape-its-code-runs-on-a-finished-object.md) | A plugin declares its shape; its code runs on a finished object | accepted | A plugin declares `fields`/`fieldTypes`/`aggregators`/`hierarchySource` on its definition; `data(ctx)` runs only after the `Dataset` is built; construction checks the batch like `load` |
 
 ## The gap at 0014
 

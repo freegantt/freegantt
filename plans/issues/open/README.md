@@ -6,6 +6,13 @@ body is just an unexplained external link, with no actionable scope.) New
 issue plans land here as they're opened.
 
 **Open:**
+- [#533](https://github.com/Pawel-IT/FreeGantt/issues/533) — plugin code ran inside the
+  `DatasetState` constructor, before `ctx.dataset.*` worked, before Rollup values existed and
+  before History existed. Direction (ADR 0031): a plugin declares everything that shapes
+  construction — `fields`, `fieldTypes`, `aggregators`, `hierarchySource` — on its own definition;
+  the Dataset builds completely before any plugin's `data(ctx)` runs, and `new Dataset({ entries })`
+  checks the batch like `load`. PR 1 of 2; PR 2 covers the Gantt `view()` half. Plan:
+  [533-plugin-lifecycle.md](./533-plugin-lifecycle.md).
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
