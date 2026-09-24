@@ -312,6 +312,9 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     dataset.entries.remove('build');
     dataset.entries.update('sketch', { phaseId: undefined });
     expect(reports.map((report) => [report.code, report.by])).toEqual([['unknown-parent', 'consumer']]);
+    expect(reports[0]?.message).toBe(
+      'hierarchy: the row\'s own parentId names "build" as the parent of "sketch", and no Entry holds that id. "sketch" reads as a root.',
+    );
   });
 
   it('a write to parentId still lands, and raises no warning, while a source ignores it', () => {
