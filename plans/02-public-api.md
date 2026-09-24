@@ -663,7 +663,7 @@ const scheduling = () =>
       /* the edit hook, the store — DOM-free, runs as the Dataset constructs */
     },
     view(ctx) {
-      /* variants, renderers, commands, keys — runs as a Gantt mounts */
+      /* variants, renderers, commands, keys — runs on a finished Gantt, before its first frame */
     },
   });
 

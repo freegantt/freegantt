@@ -83,11 +83,19 @@ function clearStyles(): void {
   document.head.querySelectorAll('style[data-freegantt-styles]').forEach((n) => n.remove());
 }
 
+// One call site for every ordinary construction in this file, so the step that moves the first
+// paint out of the constructor (ADR 0032) touches this file once, not at every call site.
+function paintedShell(options: GanttShellOptions): GanttShell {
+  const shell = new GanttShell(options);
+  shell.paintFirstFrame();
+  return shell;
+}
+
 describe('ensureBaseStyles', () => {
   it('injects exactly one <style> for two Gantt instances constructed in one document', () => {
     clearStyles();
-    const a = new GanttShell({ wiring: {}, container: makeContainer(), dataset: fakeDataset(entries) });
-    const b = new GanttShell({ wiring: {}, container: makeContainer(), dataset: fakeDataset(entries) });
+    const a = paintedShell({ wiring: {}, container: makeContainer(), dataset: fakeDataset(entries) });
+    const b = paintedShell({ wiring: {}, container: makeContainer(), dataset: fakeDataset(entries) });
     expect(document.head.querySelectorAll('style[data-freegantt-styles]')).toHaveLength(1);
     a.destroy();
     b.destroy();
@@ -172,7 +180,7 @@ describe('ensureBaseStyles', () => {
     clearStyles();
     const container = makeContainer();
     container.style.setProperty('--fg-bar-fill', 'rgb(1, 2, 3)');
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
     expect(container.style.getPropertyValue('--fg-bar-fill')).toBe('rgb(1, 2, 3)');
@@ -301,7 +309,7 @@ describe('ensureBaseStyles', () => {
   it("declares the dark theme's dark ink token, and .fg-bar reads its label colour from that token", () => {
     clearStyles();
     const container = makeContainer();
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), theme: 'dark' });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries), theme: 'dark' });
     const bar = container.querySelector('.fg-bar');
     expect(bar).not.toBeNull();
     expect(container.getAttribute('data-fg-theme')).toBe('dark');

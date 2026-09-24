@@ -59,6 +59,14 @@ function stubPointerCapture(el: HTMLElement): void {
   el.releasePointerCapture = vi.fn();
 }
 
+// One call site for the ordinary construction in this file, so the step that moves the first
+// paint out of the constructor (ADR 0032) touches this file once, not at every call site.
+function paintedShell(options: GanttShellOptions): GanttShell {
+  const shell = new GanttShell(options);
+  shell.paintFirstFrame();
+  return shell;
+}
+
 /** Builds a real `GanttShell` over a real `DatasetState` — `commitEntryEdits` writes through
  *  `state.transaction()`/`state.entries.update()`, the same shape `api/gantt.ts` wires for real
  *  Gantt usage (D-S3-16). `extraEditsFor` is a `GanttShellOptions`-only field (P1: no public install
@@ -82,7 +90,7 @@ function buildShell(options: { extender?: EditExtender; shell?: Partial<GanttShe
   // the preview could paint from a shape the commit would never see.
   if (options.extender) state.setExtender(() => options.extender!);
   const container = document.createElement('div');
-  const shell = new GanttShell({
+  const shell = paintedShell({
     container,
     dataset: state,
     wiring: {
