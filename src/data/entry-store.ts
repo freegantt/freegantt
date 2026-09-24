@@ -517,7 +517,7 @@ export class EntryStore implements EntryStoreContract {
   add(input: FlatEntryInput): Entry {
     return this.#mutate((token) => {
       const id = entryId(input.id);
-      if (this.has(id)) throw new DuplicateEntryIdError(id, 'entries.add');
+      if (this.has(id)) throw new DuplicateEntryIdError(id, 'entries.add', 'collision');
       if (input.parentId !== undefined) {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
