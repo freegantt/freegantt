@@ -257,6 +257,43 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
   });
 });
 
+describe("an 'api' Field takes no gesture", () => {
+  const apiStart: Partial<Field> = { key: 'start', editable: 'api' };
+
+  it("capabilities.edit: true does not open an 'api' cell, a move or a resize", () => {
+    const caps = capabilities({ capabilities: { edit: true } }, apiStart);
+    const e = entry();
+    expect(caps.canWrite(e, 'start').ok).toBe(false);
+    expect(caps.can('move', e)).toBe(false);
+    expect(caps.can('resize', e, 'start')).toBe(false);
+  });
+
+  it("a variant's edit: true does not open an 'api' cell either", () => {
+    const caps = capabilities({ variantCapabilitiesFor: variantAllows('buffer', { edit: true }) }, apiStart);
+    const e = entry({ props: { variant: 'buffer' } });
+    expect(caps.canWrite(e, 'start').ok).toBe(false);
+    expect(caps.can('move', e)).toBe(false);
+  });
+
+  it("edit: () => true does not open an 'api' cell either", () => {
+    const caps = capabilities({ capabilities: { edit: () => true } }, apiStart);
+    expect(caps.canWrite(entry(), 'start').ok).toBe(false);
+  });
+
+  it("a lock rule that answers 'anywhere' over an 'api' declaration opens the cell, and the gestures with it", () => {
+    const caps = capabilities({ editableOf: () => 'anywhere' }, apiStart);
+    const e = entry();
+    expect(caps.canWrite(e, 'start').ok).toBe(true);
+    expect(caps.can('move', e)).toBe(true);
+    expect(caps.can('resize', e, 'start')).toBe(true);
+  });
+
+  it("a consumer's edit: false still narrows a cell a lock rule reopened", () => {
+    const caps = capabilities({ editableOf: () => 'anywhere', capabilities: { edit: false } }, apiStart);
+    expect(caps.canWrite(entry(), 'start').ok).toBe(false);
+  });
+});
+
 describe('capabilities.edit answers the cell, not the entry (#256)', () => {
   it('answers undefined for a cell it has no opinion about, and the library rules decide it', () => {
     const caps = capabilities(
