@@ -778,3 +778,17 @@ for a consumer. The guide covers at least:
 state their own part in short and link to `docs/11`. Step 6 writes `docs/11` (the doc lands with the
 behaviour). Step 7 adds the harness page brief link to it. `check-doc-examples` must cover it (add the
 file to that script's list if it does not pick up `docs/*.md` by itself).
+
+## Closing notes (2026-09-24)
+
+- **Undo cost, measured.** Decision e's step 9 measured one `dataset.undo()` after one
+  `entries.update()`, on a fresh `seeded(10k)` Dataset: median 6.20 ms, range 2.59-9.26 ms, against
+  the 30 ms budget the same decision sets. Well under budget; no follow-up needed.
+- **The Rollup owns a parent's rolling-up cells inside a transaction too.** An ocr review fix on this
+  branch found the same-transaction case decision e's Rollup-merge rule depends on: a write to a
+  rolling-up Field used to win over the Rollup at commit when the same transaction went on to give
+  that entry a child. The owner ruled the Rollup always wins once the entry has children by commit,
+  whichever source proposed the value, and the commit drops the proposal with one warning
+  (`buildRollUpOverwroteProposalReport`, `src/data/error-reporting.ts`). An entry that stops being a
+  parent in the transaction keeps its body write instead of losing it. This closes the gap decision e's
+  Rollup-merge rule left open for a plain undo that promotes an entry to a parent in the same replay.
