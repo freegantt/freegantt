@@ -16,7 +16,13 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { SiblingIndexOutOfRangeError } from '../model/index.js';
-import { diffEdit, foldChangeSet, foldRollUpRowsOntoAdded, mergeUpdatedRows } from './change-set.js';
+import {
+  diffEdit,
+  foldChangeSet,
+  foldRollUpRowsOntoAdded,
+  foldSiblingRanks,
+  mergeUpdatedRows,
+} from './change-set.js';
 import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.js';
 import { createEditRequest } from './edit-request.js';
 import type { ErrorBus } from './error-reporting.js';
@@ -32,7 +38,6 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
 import type { ParentIndex } from './hierarchy-source.js';
-import { renumberSiblingGroups } from './sibling-order.js';
 import type { SiblingChange, SiblingGroupKey, SiblingPlacement } from './sibling-order.js';
 import { isDevMode } from './dev-mode.js';
 
@@ -303,36 +308,16 @@ export function buildCommitChangeSet(
       (group) => data.entries.liveSiblingGroupSize(group),
     ),
   ];
-  const siblingRanks =
-    siblingChanges.length === 0
-      ? new Map<EntryId, number>()
-      : renumberSiblingGroups(
-          siblingChanges,
-          (group) => data.entries.committedSiblingIds(group),
-          (id) => data.entries.committedParents().get(id),
-        );
   const removedIds = new Set(removedEntities.map((row) => row.entity.id));
-  // An added entity carries its final rank on the entity itself, not a row: nothing reads a
-  // `siblingIndex` row for an id that has no prior committed value to diff against.
-  const rankedEntitiesForFold = rolledUpEntitiesForFold.map((row) => {
-    const rank = siblingRanks.get(row.entity.id);
-    return rank === undefined || rank === row.entity.siblingIndex
-      ? row
-      : { ...row, entity: { ...row.entity, siblingIndex: rank } };
-  });
-  const siblingIndexUpdated: FieldUpdated[] = [];
-  for (const [id, rank] of siblingRanks) {
-    if (addedIds.has(id) || removedIds.has(id)) continue;
-    const committed = byId.get(id);
-    if (committed === undefined || committed.siblingIndex === rank) continue;
-    siblingIndexUpdated.push({
-      store: 'entries',
-      id,
-      field: 'siblingIndex',
-      from: committed.siblingIndex,
-      to: rank,
-    });
-  }
+  const { rankedAdded: rankedEntitiesForFold, siblingIndexUpdated } = foldSiblingRanks(
+    siblingChanges,
+    rolledUpEntitiesForFold,
+    addedIds,
+    removedIds,
+    byId,
+    (group) => data.entries.committedSiblingIds(group),
+    (id) => data.entries.committedParents().get(id),
+  );
   const updatedWithoutBodySiblingIndex = bodyAndExtenderUpdated.filter((row) => row.field !== 'siblingIndex');
 
   // The body and the Rollup can each propose a row for the same (id, field) — the body's own `end`

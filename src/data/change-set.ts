@@ -18,6 +18,8 @@ import type { ProposedEdit } from './edit-extension.js';
 import { applyFieldRow, proposedKeysOf, entryAfterEdit, readField } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
+import { renumberSiblingGroups } from './sibling-order.js';
+import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
 
 function pushRow(
   rows: FieldUpdated[],
@@ -193,6 +195,54 @@ export function foldRollUpRowsOntoAdded(
     );
     return { ...row, entity };
   });
+}
+
+/**
+ * Call: `foldSiblingRanks(siblingChanges, addedEntities, addedIds, removedIds, current,
+ * committedSiblingIds, committedParentOf)`.
+ *
+ * The renumber pass's own tail (ADR 0034), shared by the commit pipeline and a replay: run
+ * `renumberSiblingGroups` over `siblingChanges`, then place its ranks — onto the entity itself for
+ * an added id (nothing reads a `siblingIndex` row for an id with no prior committed value to diff
+ * against), onto a fresh row for a kept id whose rank differs from `current`'s value. A removed id
+ * gets neither; its rank, if any, is spent. An empty `siblingChanges` renumbers nothing and returns
+ * `added` unchanged with no rows.
+ */
+export function foldSiblingRanks(
+  siblingChanges: readonly SiblingChange[],
+  added: readonly EntityAdded[],
+  addedIds: ReadonlySet<EntryId>,
+  removedIds: ReadonlySet<EntryId>,
+  current: ReadonlyMap<EntryId, StoredEntry>,
+  committedSiblingIds: (group: SiblingGroupKey) => readonly EntryId[],
+  committedParentOf: (id: EntryId) => EntryId | undefined,
+): { readonly rankedAdded: readonly EntityAdded[]; readonly siblingIndexUpdated: readonly FieldUpdated[] } {
+  if (siblingChanges.length === 0) return { rankedAdded: added, siblingIndexUpdated: [] };
+
+  const siblingRanks = renumberSiblingGroups(siblingChanges, committedSiblingIds, committedParentOf);
+
+  const rankedAdded = added.map((row) => {
+    const rank = siblingRanks.get(row.entity.id);
+    return rank === undefined || rank === row.entity.siblingIndex
+      ? row
+      : { ...row, entity: { ...row.entity, siblingIndex: rank } };
+  });
+
+  const siblingIndexUpdated: FieldUpdated[] = [];
+  for (const [id, rank] of siblingRanks) {
+    if (addedIds.has(id) || removedIds.has(id)) continue;
+    const committed = current.get(id);
+    if (committed === undefined || committed.siblingIndex === rank) continue;
+    siblingIndexUpdated.push({
+      store: 'entries',
+      id,
+      field: 'siblingIndex',
+      from: committed.siblingIndex,
+      to: rank,
+    });
+  }
+
+  return { rankedAdded, siblingIndexUpdated };
 }
 
 /**

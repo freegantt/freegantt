@@ -17,14 +17,13 @@ import type {
   StoreRowUpdated,
   UpdatedRow,
 } from '../model/index.js';
-import { foldRollUpRowsOntoAdded, mergeUpdatedRows } from './change-set.js';
+import { foldRollUpRowsOntoAdded, foldSiblingRanks, mergeUpdatedRows } from './change-set.js';
 import { applyFieldRow, readFieldRow } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { checkHierarchyAnswers } from './hierarchy-source.js';
 import type { ParentIndex } from './hierarchy-source.js';
 import { findParentCycleMembers } from './parent-cycle.js';
-import { renumberSiblingGroups } from './sibling-order.js';
 import type { SiblingChange, SiblingPlacement } from './sibling-order.js';
 import { rollUpFreshBatch } from './transaction.js';
 import type { TransactionalPluginStores, TransactionData } from './transaction.js';
@@ -363,32 +362,16 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
     checkedParents,
     committedParents,
   );
-  const siblingRanks =
-    siblingChanges.length === 0
-      ? new Map<EntryId, number>()
-      : renumberSiblingGroups(
-          siblingChanges,
-          (group) => data.entries.committedSiblingIds(group),
-          (id) => committedParents.get(id),
-        );
-  const rankedAdded = survivingAdded.map((row) => {
-    const rank = siblingRanks.get(row.entity.id);
-    return rank === undefined || rank === row.entity.siblingIndex
-      ? row
-      : { ...row, entity: { ...row.entity, siblingIndex: rank } };
-  });
-  for (const [id, rank] of siblingRanks) {
-    if (addedIds.has(id) || removedIds.has(id)) continue;
-    const current = working.get(id);
-    if (current === undefined || current.siblingIndex === rank) continue;
-    updatedWithoutCascaded.push({
-      store: 'entries',
-      id,
-      field: 'siblingIndex',
-      from: current.siblingIndex,
-      to: rank,
-    });
-  }
+  const { rankedAdded, siblingIndexUpdated } = foldSiblingRanks(
+    siblingChanges,
+    survivingAdded,
+    addedIds,
+    removedIds,
+    working,
+    (group) => data.entries.committedSiblingIds(group),
+    (id) => committedParents.get(id),
+  );
+  updatedWithoutCascaded.push(...siblingIndexUpdated);
 
   // The Rollup runs last of all, over the same finished tree, construction shape: it never demotes
   // a parent that just lost its last child, so plain undo of "add a first child to leaf p" keeps
