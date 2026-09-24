@@ -110,8 +110,6 @@ Full rulings: [#528](https://github.com/freegantt/freegantt/issues/528).
 - **Skip undo.** That is #419.
 - **Conflict detection.** That is `apply` (D-S2-11).
 
-## Plan
-
 ## Plan (2026-09-23)
 
 **Base:** `origin/main` (d9073e67), plus #533 PR 1 and #528, which land first. Step 0 rebases onto
@@ -119,13 +117,11 @@ them and confirms the #528 facts that are listed under "Depends on".
 
 ### Decisions
 
-**D1. Sync builds its ChangeSet the way `load` does, and hands it to `commitChangeSet`.**
-- Sync reads the list into a *target batch*. It uses the same functions as `load`:
-  - `toEntries`
-  - `assertEntryBatchIsSound` (raw `parentId`)
-  - `checkHierarchyAnswers`
-  - #528's list-position `siblingIndex` writer
-  - `rollUpFreshBatch`
+**D1. Sync builds its ChangeSet the way `load` does, and hands it to `commitChangeSet`.** (Rewritten
+after #528, see Amendments R1 — #528 already folds `toEntries`, `assertEntryBatchIsSound`,
+`checkHierarchyAnswers` and the list-position `siblingIndex` write into one `readEntryBatch` call.)
+- Sync reads the list into a *target batch*, through the same shared path `load` uses (step 3's
+  `#readBatch`): one `readEntryBatch` call, then `rollUpFreshBatch`.
 - It then writes the Rollup rows onto the target.
 - The target is the state `load(list)` leaves. So the S1 contract holds by construction.
 - `changesToMatchBatch` (D12) diffs the committed rows against the target. The result is added, removed and
@@ -183,12 +179,13 @@ error names the door the caller used.
 truncates at the cursor, so Redo is erased (S11). The capacity stays at 100. Document
 `history: { capacity }` (`api/dataset.ts:93`) under S13.
 
-**D8. Where added entries go in the flat order: at the end, in list order.**
-- `#restoreAdded` (`entry-store.ts:851-874`) takes its "restore a remembered index" branch for every
-  origin except `'user'`.
-- Narrow that branch to `'undo'` and `'redo'`.
-- `#rememberRemovedIndexes` keeps recording for `'sync'`. So an undo puts a removed entry back in its
-  old slot.
+**D8 (dropped, see Amendments after #528).** ~~Where added entries go in the flat order: at the end,
+in list order.~~
+- ~~`#restoreAdded` (`entry-store.ts:851-874`) takes its "restore a remembered index" branch for every
+  origin except `'user'`.~~
+- ~~Narrow that branch to `'undo'` and `'redo'`.~~
+- ~~`#rememberRemovedIndexes` keeps recording for `'sync'`. So an undo puts a removed entry back in its
+  old slot.~~
 
 **D9. Gantt: no new code, only tests.**
 - The shell's change handler (`gantt-shell.ts:944-953`) drops selection only for ids in `removed`
@@ -314,7 +311,8 @@ the same files, so two implementers can write them in parallel. They still commi
    - Code:
      - Add `'sync'` to `ChangeOrigin` and update its doc.
      - Add the History arm (D7).
-     - Change `#restoreAdded` (D8).
+     - ~~Change `#restoreAdded` (D8).~~ (dropped, see Amendments after #528 — `#restoreAdded` needs
+       no change; test that undo restores removed entries in their old sibling order instead.)
      - Add `EntryStore.sync`.
      - Add `sync` to the contract in `model/dataset.ts`, beside `load`.
    - Docs in the same commit:
@@ -386,3 +384,39 @@ the same files, so two implementers can write them in parallel. They still commi
   through). The owner confirms them.
 - **C5 — Depends-on C is a hard stop.** If #528 renumbers inside `commitChangeSet` or replay, the
   implementer stops and the coordinator decides before step 1.
+
+### Amendments after #528 (step 0)
+
+Step 0 read the merged #528 code. Findings and coordinator rulings:
+
+- **Depends-on A.** One function, not four: `readEntryBatch` (`src/data/entry-batch.ts:114-150`)
+  already runs `toEntries`, `assertEntryBatchIsSound`, `checkHierarchyAnswers`, and the list-order
+  `siblingIndex` write, all inside itself. `load` calls it once (`src/data/entry-store.ts:685`).
+- **Depends-on B.** Confirmed. `EntryStore#byParent` sorts each sibling group by `siblingIndex`
+  (`src/data/entry-store.ts:235`); `#all` walks that map depth-first (`:242-253`).
+- **Depends-on C.** Confirmed, no hard stop. `renumberSiblingGroups` runs only inside
+  `buildCommitChangeSet` (`src/data/build-commit-change-set.ts:301`), called only from
+  `runTransaction` (`src/data/transaction.ts:312`). `commitChangeSet`
+  (`src/data/transaction.ts:218-271`) applies exactly the rows it is given, with no renumber pass.
+  Committing sync through `commitChangeSet` does not renumber twice. C5 does not fire.
+- **#533.** Confirmed. `#hierarchySource` is a plain `readonly` field, set once in the constructor
+  (`entry-store.ts:150`, `:191`). Construction checks the batch through `readEntryBatch` before the
+  `EntryStore` is built (`src/data/dataset-state.ts:212-218`).
+
+Coordinator rulings:
+
+- **R1 (D1).** Sync calls the same batch path as `load`: `readEntryBatch`, then the Rollup, then the
+  report raise. D1's function list is rewritten to name that one call, not four.
+- **R2 (D8, dropped).** `#restoreAdded` needs no change. `#restoreAdded` no longer branches on
+  origin or restores a remembered index — it is `this.#byId.set(entity.id, entity)` for every added
+  entity, unconditionally (`entry-store.ts:918-922`). `#removedAtIndex` and
+  `#rememberRemovedIndexes` do not exist in this codebase. Order rides on the `siblingIndex` rows
+  the diff (D12) writes onto the changeset. Step 4 must still test that undo of a sync restores
+  removed entries in their old sibling order.
+- **R3 (step 3, narrowed).** Step 3 adds a private `EntryStore#readBatch(inputs, operation)` that
+  wraps `readEntryBatch` + the Rollup + the report raise. `load` calls it; sync will too. The rest of
+  step 3 stands: the red test that `load` inside a `change` handler throws
+  `MutationDuringNotificationError` naming `entries.load`, and `assertNotNotifying`.
+- **R4 (ADR).** C2 stands: ADR 0015's body is never edited. Step 1 also writes a new ADR 0035,
+  "Sync writes like load, and records one undo step", amending ADR 0015. Status: accepted — verdict
+  pending (this build).
