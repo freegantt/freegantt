@@ -1090,29 +1090,21 @@ describe('a plugin Field declared at construction is there before entries are re
    *  `DatasetOptions.fields` takes (R1). This is what `harness/plugins/lock-entries.ts` moves to. */
   const locks = () => ({
     id: 'demo.locks',
-    fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+    fields: [{ key: 'locked', type: 'boolean', editable: 'api' }] as const,
     data(): void {
       /* the extension hook and the store are out of scope for this gap — see lock-entries.ts */
     },
   });
 
-  // `it.fails`: red today, because nothing yet reads a plugin's own `fields` (R1 lands next commit,
-  // which flips this to a plain `it`). `new Dataset` reads `entries` before any plugin's Field is
-  // there to see, so ingest calls `locked` an undeclared key and drops it — the gap `ctx.fields.
-  // register` cannot close either, because that call is later still (D-S5-4's own timing, not this
-  // gap's cause).
-  it.fails(
-    'keeps a flat plugin-Field value new Dataset() is given, the same as entries.load() already does',
-    () => {
-      const dataset = new Dataset<{ locked?: boolean }>({
-        timeZone: 'UTC',
-        entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
-        plugins: [locks()],
-      });
+  it('keeps a flat plugin-Field value new Dataset() is given, the same as entries.load() already does', () => {
+    const dataset = new Dataset<{ locked?: boolean }>({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
+      plugins: [locks()],
+    });
 
-      expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
-    },
-  );
+    expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
+  });
 
   it('gives new Dataset() and entries.load() the same entries for the same input (Q1 oracle)', () => {
     const rows = [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }];

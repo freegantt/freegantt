@@ -347,7 +347,10 @@ export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, D
 
 // @public
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
+    aggregators?: Readonly<Record<string, Aggregator>>;
     data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+    fields?: readonly Field[];
+    fieldTypes?: Readonly<Record<string, FieldType>>;
     view?(ctx: TViewContext): Disposer | void;
 }
 

@@ -12,20 +12,26 @@
 // `data` half. A plugin with no `data` half is still ordered and still counted against duplicate ids —
 // its `view` half runs when a Gantt binds to this Dataset.
 
-import type { Disposer, PluginId, RaiseError } from '../model/index.js';
+import type { Aggregator, Disposer, Field, FieldType, PluginId, RaiseError } from '../model/index.js';
 import { PluginSetupError } from '../model/index.js';
 import { DisposableStore } from './disposables.js';
 import { RegistrationGate } from './plugin-runtime.js';
 import { assertNoDuplicateIds, resolveSetupOrder } from './plugin-order.js';
 
 /** What `installDatasetPlugins` installs — structurally the public `Plugin`, kept generic here
- *  (see file header). */
+ *  (see file header). `fields`/`fieldTypes`/`aggregators` are read before this file runs a single
+ *  `data()` (#496 grill round 3, R1) — `api/dataset.ts` registers them, alongside the Dataset's own,
+ *  before any entry is read. This file still sees them on the shape, structurally, so the type this
+ *  file installs against is honest about what a Dataset plugin may carry. */
 export interface InstallablePlugin<TContext> {
   id: PluginId;
   /** Plugin ids that must also be installed. Does not imply an order in the array. */
   requires?: readonly PluginId[];
   /** The half the Dataset runs. Absent on a chrome-only plugin. */
   data?(ctx: TContext): Disposer | void;
+  fields?: readonly Field[];
+  fieldTypes?: Readonly<Record<string, FieldType>>;
+  aggregators?: Readonly<Record<string, Aggregator>>;
 }
 
 /** Built fresh for each plugin's own `data()` call, the same three members `PluginRuntime` builds:
