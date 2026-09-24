@@ -135,6 +135,19 @@ describe('duration — the shipped Field type', () => {
     expect(duration.inputType).toBeUndefined();
     expect(duration.rollUp).toBeUndefined();
   });
+
+  it('counts calendar days, not 24-hour days, when entry.start anchors a DST-crossing span (#518)', () => {
+    // Denver springs forward on 2026-03-08: midnight Mar 6 to midnight Mar 9 is 3 calendar days but
+    // only 71 real hours.
+    const dstEntry = { start: instant('2026-03-06T00:00:00-07:00') } as Entry;
+    const threeDaysAcrossSpringForward: Duration = { value: 71 * MS.HOUR, unit: 'millisecond' };
+    const denverCtx: FormatContext = { timeZone: 'America/Denver', locale: 'en-US' };
+    expect(duration.formatValue!(threeDaysAcrossSpringForward, denverCtx, dstEntry)).toBe('3 d');
+  });
+
+  it('falls back to a 24-hour-day count when entry.start is absent', () => {
+    expect(duration.formatValue!(twelveDays, ctx('en-US'), {} as Entry)).toBe('12 d');
+  });
 });
 
 describe('currency — the factory, not a seeded name', () => {

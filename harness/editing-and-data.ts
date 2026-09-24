@@ -4,8 +4,6 @@ import {
   Dataset,
   attemptMutation,
   now,
-  addMs,
-  MS,
   tooltips,
   contextMenu,
   inlineEditing,
@@ -89,7 +87,7 @@ const dataset = new Dataset<EditingDataProps>({
 // A hard boundary a `beforeEntryMove` veto below enforces — dropping a bar before it is refused. A
 // week out from today, so this labelled Date line and the unlabelled Today line land at two
 // different x's instead of one.
-const mobilization = addMs(now(), 7 * MS.DAY);
+const mobilization = dataset.time.addDays(now(), 7);
 
 /** The one parent this page draws with segments (ADR 0026, #421) — three child Entries on one row.
  *  Locking it and dragging a neighbour is the hard case for the cascade: three spans to translate,
@@ -232,7 +230,9 @@ let nextNewId = 1;
 addBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
   const start = now();
-  attemptMutation(() => dataset.entries.add({ id, name: 'New entry', start, end: addMs(start, MS.DAY) }));
+  attemptMutation(() =>
+    dataset.entries.add({ id, name: 'New entry', start, end: dataset.time.addDays(start, 1) }),
+  );
 });
 
 renameBtn.addEventListener('click', () => {
