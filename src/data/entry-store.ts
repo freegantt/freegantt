@@ -35,6 +35,7 @@ import {
 } from '../model/index.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
+import type { Signal } from './reactivity.js';
 import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
 import { toEditReading, toEntries, toEntry } from './entry-reader.js';
@@ -132,7 +133,7 @@ export class EntryStore implements EntryStoreContract {
   /** Which Entry the hierarchy source says is the parent of this one (ADR 0020). A `signal`, not a
    *  plain field, because a plugin claims the seam after this store is built — every index below
    *  reads it, so composing a source invalidates them all. */
-  #hierarchySource = signal<HierarchySource>(storedParentSource);
+  #hierarchySource: Signal<HierarchySource>;
   /** The per-entry lock rule's current occupant (#473). A plain field, not a `signal`: unlike
    *  `#hierarchySource`, nothing here is a `computed` derived from it — it is read imperatively, once
    *  per write, the same way `#registry` is. Silence (`identityFieldLockRule`) until a plugin composes
@@ -179,10 +180,12 @@ export class EntryStore implements EntryStoreContract {
     access: FieldAccess = createFieldAccess({ fields: registry, timeZone: context.timeZone }),
     runner?: TransactionData,
     raiseError: RaiseError = (_report, fallback) => fallback?.(),
+    hierarchySource: HierarchySource = storedParentSource,
   ) {
     this.#raiseError = raiseError;
     this.#context = context;
     this.#registry = registry;
+    this.#hierarchySource = signal<HierarchySource>(hierarchySource);
     // The store is the tree a Field read walks: a `compute` Field asking `ctx.children(row)` outside
     // a Rollup pass means the row the store holds now (#214).
     this.#access = readingParentFrom(

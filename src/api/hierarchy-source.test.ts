@@ -1,6 +1,8 @@
 // ADR 0020: a plugin states the parent of an Entry, and core owns everything below that answer —
-// the child index, `depth`, `descendants()` and the Rollup. Every case here goes through the public
-// door a plugin author writes, `ctx.hierarchy.setSource`.
+// the child index, `depth`, `descendants()` and the Rollup. ADR 0031 moved the public door: a
+// plugin author declares `hierarchySource` on the plugin definition, not a `ctx` call inside
+// `data()`. "The door is closed once the plugin has set up" below is the one case left on
+// `ctx.hierarchy.setSource` — that seam stays until ADR 0031's own removal step.
 import { describe, expect, it, vi } from 'vitest';
 import { Dataset } from './dataset.js';
 import { definePlugin } from './define-plugin.js';
@@ -23,14 +25,14 @@ const phaseRows: EntryInput<PhaseProps>[] = [
 ];
 
 /** The ADR's own example: the phase id when there is one, otherwise whatever the next source says.
- *  One plugin declares the Field it reads and claims the seam that reads it. */
+ *  One plugin declares the Field it reads and declares the source that reads it. */
 const phases = () =>
-  definePlugin({
+  definePlugin<PhaseProps>({
     id: 'demo.phases',
     fields: [{ key: 'phaseId' }],
-    data(ctx) {
-      ctx.hierarchy.setSource<PhaseProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
-    },
+    hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
+    // `data` becomes optional in the next step (D7) — a no-op keeps this arm's required half today.
+    data() {},
   });
 
 function phaseDataset(entries: EntryInput<PhaseProps>[] = phaseRows): Dataset<PhaseProps> {
@@ -71,6 +73,30 @@ describe('a plugin source answers the tree, and every door follows it', () => {
   it('the Rollup follows it, with no second registration', () => {
     const dataset = phaseDataset();
 
+    expect(dataset.entries.get('design')?.read('cost')).toBe(15);
+    expect(dataset.entries.get('build')?.read('cost')).toBe(7);
+  });
+
+  it('a declared source nests, and the construction Rollup follows it', () => {
+    // Two plugins each declare `hierarchySource` (ADR 0031) — no `ctx.hierarchy.setSource` call
+    // anywhere. `demo.passthrough` sets up after `demo.phases` (`requires`), wraps its answer, and
+    // falls through for every row here, so `phases`'s tree is untouched: `design` still totals 15.
+    const passthrough = () =>
+      definePlugin({
+        id: 'demo.passthrough',
+        requires: ['demo.phases'],
+        hierarchySource: (next) => (entry) => (entry.id === 'nobody' ? 'design' : next(entry)),
+        data() {},
+      });
+    const dataset = new Dataset<PhaseProps>({
+      timeZone: 'UTC',
+      entries: phaseRows,
+      fields: [{ key: 'cost', rollUp: 'sum' }],
+      plugins: [passthrough(), phases()],
+    });
+
+    // The construction Rollup already walked the composed tree by the time the constructor
+    // returns — both plugins are done declaring, and neither ran a `data()` call to compose it.
     expect(dataset.entries.get('design')?.read('cost')).toBe(15);
     expect(dataset.entries.get('build')?.read('cost')).toBe(7);
   });
@@ -151,9 +177,8 @@ describe('a plugin source answers the tree, and every door follows it', () => {
       definePlugin({
         id: 'demo.pin',
         requires: ['demo.phases'],
-        data(ctx) {
-          ctx.hierarchy.setSource((next) => (entry) => (entry.id === 'wire' ? 'design' : next(entry)));
-        },
+        hierarchySource: (next) => (entry) => (entry.id === 'wire' ? 'design' : next(entry)),
+        data() {},
       });
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -185,9 +210,8 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     const loop = () =>
       definePlugin({
         id: 'demo.loop',
-        data(ctx) {
-          ctx.hierarchy.setSource(() => (entry) => (entry.id === 'a' ? 'b' : 'a'));
-        },
+        hierarchySource: () => (entry) => (entry.id === 'a' ? 'b' : 'a'),
+        data() {},
       });
     const warnings = captureWarnings();
     const dataset = new Dataset({
@@ -221,9 +245,8 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     const ghost = () =>
       definePlugin({
         id: 'demo.ghost',
-        data(ctx) {
-          ctx.hierarchy.setSource(() => (entry) => (entry.id === 'a' ? 'nobody' : undefined));
-        },
+        hierarchySource: () => (entry) => (entry.id === 'a' ? 'nobody' : undefined),
+        data() {},
       });
     const warnings = captureWarnings();
     const dataset = new Dataset({
@@ -261,9 +284,8 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     const ghost = () =>
       definePlugin({
         id: 'demo.ghost',
-        data(ctx) {
-          ctx.hierarchy.setSource(() => (entry) => (entry.id === 'c' ? 'nobody' : undefined));
-        },
+        hierarchySource: () => (entry) => (entry.id === 'c' ? 'nobody' : undefined),
+        data() {},
       });
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -410,15 +432,14 @@ describe('the cost shape holds with a source installed', () => {
   it('reading children inside an open transaction asks the source O(children + edits) times', () => {
     const asked = vi.fn<(id: string) => void>();
     const counting = () =>
-      definePlugin({
+      definePlugin<PhaseProps>({
         id: 'demo.counting',
         fields: [{ key: 'phaseId' }],
-        data(ctx) {
-          ctx.hierarchy.setSource<PhaseProps>((next) => (entry) => {
-            asked(entry.id);
-            return entry.props.phaseId ?? next(entry);
-          });
+        hierarchySource: (next) => (entry) => {
+          asked(entry.id);
+          return entry.props.phaseId ?? next(entry);
         },
+        data() {},
       });
     // One small family inside a large dataset: the answer must cost the family, never the dataset.
     const rows: EntryInput<PhaseProps>[] = [{ id: 'design', name: 'Design' }];

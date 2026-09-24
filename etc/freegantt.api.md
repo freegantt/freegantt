@@ -171,6 +171,8 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
     fields?: never;
     // (undocumented)
     fieldTypes?: never;
+    // (undocumented)
+    hierarchySource?: never;
     view(ctx: TViewContext): Disposer | void;
 }
 
@@ -356,6 +358,8 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
     data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
+    // Warning: (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
+    hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;
     view?(ctx: TViewContext): Disposer | void;
 }
 

@@ -23,7 +23,7 @@ import { DatasetState } from '../data/index.js';
 import type { FieldDeclarationSource } from '../data/index.js';
 import { createEditRequest } from '../data/edit-request.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
-import { assertNoDuplicateIds } from '../extensions/plugin-order.js';
+import { assertNoDuplicateIds, resolveSetupOrder } from '../extensions/plugin-order.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
@@ -125,6 +125,25 @@ function pluginFieldDeclarationsOf(
   }));
 }
 
+/** Every installed plugin's declared `hierarchySource`, in setup order (`resolveSetupOrder`,
+ *  D-S5-31, ADR 0031) — `DatasetState`'s constructor folds these onto `storedParentSource` before
+ *  `entries` is built. Setup order, not install order: `[b, a]` with `b.requires = ['a']` folds `a`
+ *  first, the same order `data()` runs its own registrations in.
+ *
+ *  Trusted, unchecked `TProps` cast — the same trust boundary the class note above describes. Each
+ *  plugin's own `P` erases to the one shape `data/` holds; `TProps` types the plugin author's own
+ *  `entry.props` read and reaches no further. */
+function hierarchySourceWrappersOf(
+  plugins: readonly PluginOf<unknown, unknown>[],
+): readonly HierarchySourceWrapper[] {
+  const wrappers: HierarchySourceWrapper[] = [];
+  for (const plugin of resolveSetupOrder(plugins)) {
+    const hierarchySource = 'hierarchySource' in plugin ? plugin.hierarchySource : undefined;
+    if (hierarchySource !== undefined) wrappers.push(hierarchySource);
+  }
+  return wrappers;
+}
+
 // Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
 // that clause would pull the model type into the public API report as an unexported `Dataset_2`, since
 // api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
@@ -160,6 +179,7 @@ export class Dataset<TProps = unknown> {
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
       pluginFieldDeclarations: pluginFieldDeclarationsOf(this.#plugins),
+      hierarchySourceWrappers: hierarchySourceWrappersOf(this.#plugins),
       ...(this.#plugins.length > 0
         ? { installPlugins: (state: DatasetState) => this.#installPlugins(state) }
         : {}),
