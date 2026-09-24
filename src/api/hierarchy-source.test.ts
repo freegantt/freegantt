@@ -314,7 +314,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ]);
   });
 
-  it('a raw dangling parentId throws at construction, with no plugin installed (`F4`)', () => {
+  it('a raw dangling parentId throws at construction, with no plugin installed', () => {
     // Construction checks the raw batch the same way `load` does (ADR 0031) — a dangling
     // parentId no longer reaches the plugin source or a construction-time warning at all.
     expect(
