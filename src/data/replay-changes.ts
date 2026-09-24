@@ -325,7 +325,14 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   const recordedRemovedIds = new Set(recordedRemoved.map((row) => row.entity.id));
   const { removed: cascadeRemoved, cascadeIds } = cascadeIdsToReplay(working, recordedRemovedIds);
   const removed = [...recordedRemoved, ...cascadeRemoved];
-  if (cascadeIds.length > 0) soundUpdated.push(...data.pluginStores.pendingRows(cascadeIds));
+  // A cascaded id's own recorded row — a rename, a move, a plugin-store write — landed on `working`
+  // before the cascade judged it gone; that row is stale once the entity itself leaves, the same way
+  // a removed entity carries no Field row of its own. It keeps only what the cascade itself writes:
+  // its removal, above, and its store-deletion row, below.
+  const cascadeIdSet = new Set(cascadeIds);
+  const updatedWithoutCascaded =
+    cascadeIdSet.size === 0 ? soundUpdated : soundUpdated.filter((row) => !cascadeIdSet.has(row.id));
+  if (cascadeIds.length > 0) updatedWithoutCascaded.push(...data.pluginStores.pendingRows(cascadeIds));
 
   // The renumber pass runs last of all, over the same finished tree: an added row, a reparent and the
   // cascade have all settled who is where, so every group this step actually touched can be replayed
@@ -360,15 +367,22 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
     if (addedIds.has(id) || removedIds.has(id)) continue;
     const current = working.get(id);
     if (current === undefined || current.siblingIndex === rank) continue;
-    soundUpdated.push({ store: 'entries', id, field: 'siblingIndex', from: current.siblingIndex, to: rank });
+    updatedWithoutCascaded.push({
+      store: 'entries',
+      id,
+      field: 'siblingIndex',
+      from: current.siblingIndex,
+      to: rank,
+    });
   }
 
-  if (rankedAdded.length === 0 && removed.length === 0 && soundUpdated.length === 0) return undefined;
+  if (rankedAdded.length === 0 && removed.length === 0 && updatedWithoutCascaded.length === 0)
+    return undefined;
   return {
     id: data.nextChangeSetId(),
     origin: changeSet.origin,
     added: rankedAdded,
     removed,
-    updated: soundUpdated,
+    updated: updatedWithoutCascaded,
   };
 }

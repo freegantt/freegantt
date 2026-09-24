@@ -164,6 +164,38 @@ describe('replay removes the entry as it stands now, and its children the step d
     expect(state.entries.get('a')!.read('parentId')).toBeUndefined();
     expect(state.entries.get('a')!.read('name')).toBe('A');
   });
+
+  it('a cascaded id keeps only its removal and its store deletion row — no stale Field or store-write row', () => {
+    const state = dataset([{ id: 'q', name: 'Old' }]);
+    // Stands in for the original step's own commit: `p` exists, and `q` carries the name the
+    // undo step is about to revert.
+    state.entries.add({ id: 'p', name: 'P' });
+    state.entries.update('q', { name: 'New' });
+    state.pluginStores.reserve<{ locked: true }>('demo.lock').set('q', { locked: true });
+    const staleP = state.entries.storedEntry('p')!;
+    // A foreign write joins q to p before the undo step's own removal of p replays.
+    state.entries.update('q', { parentId: 'p' });
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        removed: [{ store: 'entries', entity: staleP }],
+        updated: [
+          { store: 'entries', id: entryId('q'), field: 'name', from: 'New', to: 'Old' },
+          { store: pluginStoreName('demo.lock'), id: entryId('q'), from: undefined, to: { locked: true } },
+        ],
+      }),
+    );
+
+    expect(state.entries.has('p')).toBe(false);
+    expect(state.entries.has('q')).toBe(false);
+    const removedIds = new Set(seen[0]!.removed.map((row) => row.entity.id));
+    expect(removedIds).toEqual(new Set([entryId('p'), entryId('q')]));
+    const qRows = seen[0]!.updated.filter((row) => row.id === entryId('q'));
+    expect(qRows).toEqual([
+      { store: pluginStoreName('demo.lock'), id: entryId('q'), from: { locked: true }, to: undefined },
+    ]);
+  });
 });
 
 describe('replay drops a store row whose entry is gone', () => {
