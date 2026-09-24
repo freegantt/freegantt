@@ -32,7 +32,7 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
-  /** Body plus extension-hook edits. A rolling-up Field either proposed on an entry that still has
+  /** Body plus extension-hook edits. A rolling-up Field proposed on an entry that still has
    *  children at commit is overwritten, not yielded to (2026-09-24 ruling). An entry that loses its
    *  last child in this same transaction keeps a proposal on that Field, because the Field is no
    *  longer the Rollup's to own (`clearDerivedValues`). Also used to read effective child values. */
@@ -160,7 +160,7 @@ function clearDerivedValues(
     // The field stopped rolling up in this same transaction, so a write to it — the body's own, or
     // an extension hook's cascade — is an ordinary cell edit now, not a rolled-up value to clear:
     // the write already landed on `parent` and stands (2026-09-24 ruling). A cascade write is a
-    // caller-side write like the body's, so this reads `merged`, not `body` alone.
+    // caller-side write like the body's, so this reads the merged edits, which carry both sources.
     if (editProposesField(merged.get(parentId), field)) continue;
     const from = readField(effectiveParent, field, access);
     if (from === undefined) continue;
