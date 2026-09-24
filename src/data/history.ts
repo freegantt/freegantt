@@ -62,14 +62,15 @@ export class History {
     replayChangeSet(this.#data, { ...changeSet, origin: 'redo' });
   }
 
-  /** The whole coupling to the rest of `data/`. `'user'` records a new stack entry. `'undo'`/`'redo'`
+  /** The whole coupling to the rest of `data/`. `'user'` and `'sync'` (#517) both record a new stack
+   *  entry — a server refresh is an undoable step, the same as a keyboard edit. `'undo'`/`'redo'`
    *  move the cursor (D-S2-25): this handler is the first `change` subscriber, so a later handler
    *  (the harness undo button included) already reads the post-move `canUndo`/`canRedo`. `'load'`
    *  (#496) empties the stack instead: `entries.load()` is a new baseline, not an undoable step, so
    *  `canUndo`/`canRedo` both read `false` right after it — the same posture a desktop app takes
    *  opening a file. */
   #onChange = ({ changeSet }: DatasetEventMap['change']): void => {
-    if (changeSet.origin === 'user') this.#record(changeSet);
+    if (changeSet.origin === 'user' || changeSet.origin === 'sync') this.#record(changeSet);
     else if (changeSet.origin === 'undo') this.#cursor -= 1;
     else if (changeSet.origin === 'redo') this.#cursor += 1;
     else if (changeSet.origin === 'load') this.clear();

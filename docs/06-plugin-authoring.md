@@ -368,6 +368,36 @@ depends on state a load is about to remove has to let `origin: 'load'` through, 
 load could never remove that state — `lock-entries.ts`'s "is this entry locked" refusal
 steps aside for a load for exactly this reason.
 
+### Reacting to a sync
+
+`entries.sync()` also commits its whole change in one step, `origin: 'sync'` — but unlike
+a load, a sync carries only the rows that changed, and a kept id keeps its store rows. A
+plugin reads a sync the same `change` subscription reads a load, and does not need a
+second one:
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function resetsOnLoadOnly() {
+  let cache: unknown;
+  return definePlugin({
+    id: 'demo.resetsOnLoadOnly',
+    data(ctx) {
+      ctx.events.on('change', ({ changeSet }) => {
+        if (changeSet.origin === 'load') cache = undefined; // a full fresh start: nothing survives
+        // a 'sync' commit needs no reset — its rows are the plugin's own store update, already applied
+      });
+    },
+  });
+}
+
+export { resetsOnLoadOnly };
+```
+
+A plugin must not reset a cache on `origin: 'sync'` the way it does on `'load'`: sync keeps
+per-entry state for a kept id on purpose, and clearing a cache on every poll throws that
+away for no reason.
+
 ## Why a factory, not a name-keyed table
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin
