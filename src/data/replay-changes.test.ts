@@ -320,3 +320,34 @@ describe('replay never stores a parentId loop or a dangling parentId', () => {
     expect(() => new DatasetState({ timeZone: 'UTC', entries: inputs })).not.toThrow();
   });
 });
+
+describe('replay judges a step’s parentId rows against each other, not one row at a time', () => {
+  it('undo of a subtree remove re-adds the child under its own parent, neither as a root', () => {
+    const state = dataset([{ id: 'p' }, { id: 'c', parentId: 'p' }]);
+    state.entries.remove('p');
+    expect(state.entries.has('c')).toBe(false);
+
+    state.undo();
+
+    expect(state.entries.get('p')?.read('parentId')).toBeUndefined();
+    expect(state.entries.get('c')?.read('parentId')).toBe('p');
+  });
+
+  it('undo of a parent swap restores both sides, instead of reading a mid-step loop and dropping one', () => {
+    // The store holds the swap's result: a moved under b, and b moved to root.
+    const state = dataset([{ id: 'a', parentId: 'b' }, { id: 'b' }]);
+
+    // Undo's own inverted rows, in the order the swap itself named them.
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('b'), field: 'parentId', from: undefined, to: entryId('a') },
+          { store: 'entries', id: entryId('a'), field: 'parentId', from: entryId('b'), to: undefined },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('b')?.read('parentId')).toBe('a');
+    expect(state.entries.get('a')?.read('parentId')).toBeUndefined();
+  });
+});
