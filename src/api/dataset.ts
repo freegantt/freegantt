@@ -111,9 +111,9 @@ export interface DatasetOptions<TProps = unknown> {
 
 /** One `FieldRegistryOptions`-shaped entry per plugin, `fields`/`fieldTypes`/`aggregators` read off
  *  the plugin object itself (#496 grill round 3, R1) — `DatasetState`'s constructor merges these with
- *  the Dataset's own before `entries` is read. A chrome-only plugin carries none of the three: `'…'
- *  in plugin` narrows the `PluginOf` union to the arm that declares it, so this reads `undefined` for
- *  that arm with no cast. */
+ *  the Dataset's own before `entries` is read. Both `PluginOf` arms declare the three keys now
+ *  (`ChromePluginOf`'s own `never` guard, `api/plugin.ts`), so `'…' in plugin` here is a plain
+ *  existence check, not a union narrow — a chrome-only plugin's three keys are always `undefined`. */
 function pluginFieldDeclarationsOf(
   plugins: readonly PluginOf<unknown, unknown>[],
 ): readonly FieldDeclarationSource[] {
