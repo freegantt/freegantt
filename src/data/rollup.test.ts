@@ -245,6 +245,27 @@ describe('rollUpFields (S4.2)', () => {
       expect(demoted.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
       expect(demoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
     });
+
+    it('a cascade proposal on a parent that loses its last child in the same transaction lands', () => {
+      const state = new DatasetState({
+        entries: [
+          { id: 'p1', name: 'p1', props: { cost: 10 } },
+          { id: 'c1', name: 'c1', parentId: 'p1', props: { cost: 10 } },
+        ],
+        timeZone: 'UTC',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        // The cascade proposes a value for the very Field the Rollup owned while `p1` was still a
+        // parent. Losing the last child in this same transaction hands the Field back as an
+        // ordinary cell, so the cascade's write is a caller-side write like any other, not a
+        // rolled-up value to wipe.
+        editExtender: (): EntryEdits => new Map([[entryId('p1'), { cost: 42 }]]),
+      });
+
+      state.entries.remove('c1');
+
+      expect(costOf(state, 'p1')).toBe(42);
+    });
   });
 
   it('reparenting recomputes both the old and new parent', () => {
