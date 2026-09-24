@@ -44,10 +44,10 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
    *  every `onDomEvent` files its own removal in `ctx.disposables`. */
   view(ctx: TViewContext): Disposer | void;
   data?: never;
-  /** Dataset-owned state, registered at construction (#496 grill round 3, R1) — unrepresentable
-   *  here for the same reason `data?: never` is: a chrome-only plugin has no `data()` to run them
-   *  against, so a Field it named would install silently dropped, on the wrong site, with no error
-   *  (`GanttOptions.plugins` never reads this member). */
+  /** Dataset-owned state, registered at construction (#496 grill round 3, R1). Unrepresentable here
+   *  for the same reason `data?: never` is: a chrome-only plugin has no `data()` to run them against.
+   *  So a Field it named would install silently dropped, on the wrong site, with no error —
+   *  `GanttOptions.plugins` never reads this member. */
   fields?: never;
   fieldTypes?: never;
   aggregators?: never;
