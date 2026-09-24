@@ -8,7 +8,7 @@ import type { EntryId, FlatEntryInput, StoredEntry } from '../model/index.js';
 import { entryId } from '../model/index.js';
 import { changesToMatchBatch } from './entry-batch-changes.js';
 import { readEntryBatch } from './entry-batch.js';
-import { createFieldAccess } from './fields/field-access.js';
+import { createFieldAccess, readField, writeOntoEntry } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { storedParentSource } from './hierarchy-source.js';
 
@@ -179,54 +179,93 @@ describe('changesToMatchBatch', () => {
   });
 });
 
-describe('changesToMatchBatch, any shuffle of a valid input list (#517 property)', () => {
-  const registry = new FieldRegistry();
+describe('changesToMatchBatch, an arbitrary target grown from a committed batch (#517 property)', () => {
+  const registry = new FieldRegistry({ fields: [{ key: 'note' }] });
+  const roots = ['r1', 'r2'] as const;
+  const children = ['c1', 'c2', 'c3', 'c4'] as const;
+  const newIds = ['n1', 'n2'] as const;
+
+  // Committed: two roots, two children each, one of them carrying a props Field value — so a
+  // shrunk, reparented, renamed and note-edited target still starts from a batch that exercises
+  // every kind of row `changesToMatchBatch` diffs, not only core Fields.
   const seedInputs: readonly FlatEntryInput[] = [
-    row('p1'),
-    row('c1', { parentId: 'p1' }),
-    row('c2', { parentId: 'p1', name: 'c2' }),
-    row('p2'),
+    row('r1'),
+    row('r2'),
+    row('c1', { parentId: 'r1', props: { note: 'seed-c1' } }),
+    row('c2', { parentId: 'r1' }),
+    row('c3', { parentId: 'r2' }),
+    row('c4', { parentId: 'r2' }),
   ];
 
-  it('applying the changes to committed gives target, field by field', () => {
+  /** A `note` edit `fc.property` picks per surviving id: leave it, give it a fresh value, or drop
+   *  it — the three cases `changesToMatchBatch` must tell apart for a props Field the same way it
+   *  does for a core one. */
+  const noteEdit = fc.constantFrom<'keep' | 'set' | 'clear'>('keep', 'set', 'clear');
+
+  it('applying the changes to committed gives target, id by id, field by field', () => {
     fc.assert(
       fc.property(
-        fc.shuffledSubarray([...seedInputs], { minLength: seedInputs.length, maxLength: seedInputs.length }),
-        (shuffled) => {
+        fc.subarray([...children]),
+        fc.subarray([...newIds]),
+        fc.dictionary(fc.constantFrom(...children), fc.constantFrom(...roots)),
+        fc.dictionary(fc.constantFrom('r1', 'r2', ...children), fc.boolean()),
+        fc.dictionary(fc.constantFrom('r1', 'r2', ...children), noteEdit),
+        (keptChildren, addedIds, reparentTo, renamed, noteEdits) => {
           const committed = place(seedInputs, registry);
-          const target = place(shuffled, registry);
+          const seedById = new Map(seedInputs.map((input) => [input.id, input]));
+
+          const target: FlatEntryInput[] = [];
+          for (const id of [...roots, ...keptChildren]) {
+            const seed = seedById.get(id)!;
+            const isChild = (children as readonly string[]).includes(id);
+            const note = noteEdits[id] ?? 'keep';
+            const props =
+              note === 'keep' ? seed.props : note === 'set' ? { note: `${id}-fresh` } : { note: undefined };
+            target.push({
+              id,
+              name: renamed[id] ? `${id}-renamed` : seed.name,
+              start: seed.start,
+              end: seed.end,
+              parentId: isChild ? (reparentTo[id] ?? 'r1') : undefined,
+              ...(props !== undefined ? { props } : {}),
+            });
+          }
+          for (const id of addedIds) {
+            target.push(row(id));
+          }
+
+          const targetPlaced = place(target, registry);
           const access = accessFor(registry);
 
-          const changes = changesToMatchBatch(committed.byId, target.list, registry, access);
+          const changes = changesToMatchBatch(committed.byId, targetPlaced.list, registry, access);
 
           const applied = new Map(committed.byId);
           for (const { entity } of changes.removed) applied.delete(entity.id);
           for (const { entity } of changes.added) applied.set(entity.id, entity);
-          for (const row of changes.updated) {
-            const current = applied.get(row.id);
+          for (const updatedRow of changes.updated) {
+            const current = applied.get(updatedRow.id);
             if (!current) continue;
-            applied.set(current.id, { ...current, [row.field]: row.to });
+            const field = registry.get(updatedRow.field)!;
+            applied.set(current.id, writeOntoEntry(current, field, updatedRow.to));
           }
 
-          for (const entry of target.list) {
-            const result = applied.get(entry.id);
-            expect(result).toBeDefined();
+          expect(new Set(applied.keys())).toEqual(new Set(targetPlaced.list.map((entry) => entry.id)));
+          for (const entry of targetPlaced.list) {
+            const result = applied.get(entry.id)!;
             for (const field of registry.all) {
               if ('compute' in field) continue;
-              const key = String(field.key);
               expect(
                 registry.valuesEqual(
-                  key,
-                  (result as unknown as Record<string, unknown>)[key],
-                  (entry as unknown as Record<string, unknown>)[key],
+                  String(field.key),
+                  readField(result, field, access),
+                  readField(entry, field, access),
                 ),
               ).toBe(true);
             }
           }
-          expect(applied.size).toBe(target.list.length);
         },
       ),
-      { numRuns: 40 },
+      { numRuns: 60 },
     );
   });
 });
