@@ -290,6 +290,29 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ]);
   });
 
+  it('an unknown parent warns once, even when the construction Rollup writes rows elsewhere', () => {
+    const ghost = () =>
+      definePlugin({
+        id: 'demo.ghost',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        hierarchySource: () => (entry) => (entry.id === 'a' ? 'nobody' : entry.parentId),
+        data() {},
+      });
+    const warnings = captureWarnings();
+    new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'a', name: 'A' },
+        { id: 'p', name: 'P' },
+        { id: 'c', name: 'C', parentId: 'p', props: { cost: 500 } },
+      ],
+      plugins: [ghost()],
+    });
+
+    expect(warnings).toHaveLength(1);
+  });
+
   it('a commit that nothing reads still reports (`F5`)', () => {
     const ghost = () =>
       definePlugin({
