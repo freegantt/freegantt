@@ -122,8 +122,8 @@ holdDrop.addEventListener('change', () => {
   hideToast();
 });
 
-// Locking is a real dataset write: it commits, it logs like every other change, and Ctrl+Z lifts
-// it (#156) — which is what a plugin store buys over a `Set` on the page (D-S5-24).
+// Locking writes the plugin's `locked` Field (#496 Q8) — a real dataset write, so it commits, it
+// logs like every other change, and Ctrl+Z lifts it (#156).
 lockEntryCheckbox.addEventListener('change', () => {
   attemptMutation(() =>
     LOCKED_BAR_IDS.forEach((id) => (lockEntryCheckbox.checked ? locks.lock(id) : locks.unlock(id))),

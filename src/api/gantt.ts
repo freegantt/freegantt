@@ -55,7 +55,7 @@ import type {
 import { CustomRowSourceNotFilterableOrSortableError, PluginSetupError } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
-import { extraEditsFor, fieldRegistryRevisionFor, type Dataset } from './dataset.js';
+import { extraEditsFor, type Dataset } from './dataset.js';
 import type { ChromePluginOf, DataPluginOf, PluginOf } from './plugin.js';
 import type { PluginContextOf } from './plugin-context.js';
 import type {
@@ -394,9 +394,6 @@ export class Gantt<TProps = unknown> {
       // value — it composes a second occupant after the shell exists, which no public route allows,
       // so `api/gantt.test.ts`'s "#186" suite cannot reach that case and does not claim to.
       extraEditsFor: (draft) => extraEditsFor(options.dataset, draft),
-      // #495, #414: read live off the Dataset, the same "closure over the friend function" shape
-      // `extraEditsFor` above takes — `FrameLayout`'s row-plan cache reads it every `render()`.
-      fieldRegistryRevision: () => fieldRegistryRevisionFor(options.dataset),
       wiring: {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,

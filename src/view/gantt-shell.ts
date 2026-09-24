@@ -385,20 +385,6 @@ export interface GanttShellOptions {
    *  itself. `api/dataset.ts`'s `extraEditsFor` builds it, through `data/edit-request.ts`'s
    *  `createEditRequest`, before this ever runs. */
   extraEditsFor?: (draft: ProposedEdits) => ProposedEdits;
-  /** #495, #414: this Dataset's `FieldRegistry.revision`. Read fresh on every `render()` and fed
-   *  into `FrameLayout`'s row-plan cache key. A post-mount `ctx.fields.register()` call bumps it.
-   *  A `childrenAsSegments` rule that reads the new Field through `EntryRulePorts.fieldFor`
-   *  invalidates the cached plan instead of drawing a stale one.
-   *
-   *  Takes no argument and returns the live number, the same "built once, read every frame" shape
-   *  `extraEditsFor` above takes. The reason is the same too: `GanttShell` binds to `model/`'s
-   *  narrow `Dataset`, which carries no `fields` to read a registry off. `api/gantt.ts` builds the
-   *  closure over `api/dataset.ts`'s `fieldRegistryRevisionFor`.
-   *
-   *  Omitted only by a test that constructs `GanttShell` directly with no registry to report. That
-   *  Gantt has no plugin author reaching `ctx.fields.register` either, so a constant `0` is
-   *  honest. */
-  fieldRegistryRevision?: () => number;
   /** Internal (D-S4-24, ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
    *  inject a replacement. */
   variantRegistry?: VariantRegistry;
@@ -958,6 +944,10 @@ export class GanttShell {
     this.#datasetChanges = subscribeToDatasetChanges(options.dataset, (changeSet) => {
       this.#layout.invalidateForChange(changeSet);
       this.#entrySelection.forgetEntriesTheDatasetDropped(changeSet);
+      // #496 L2: a load is a new baseline, not an edit. Collapse state returns to where this Gantt
+      // started — the same way the selection above already clears, since every old id sits in
+      // `removed`.
+      if (changeSet.origin === 'load') this.#treeCollapse.resetToStartState();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       this.#frames.request();
@@ -993,6 +983,7 @@ export class GanttShell {
           this.#layout.invalidateFrom(0);
           this.#frames.request();
         }),
+      announce: (change) => this.#emit('collapseChange', change),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
       ancestorRowIds: (id) => this.#layout.ancestorRowIds(id),
       // #424: a row hidden under a collapsed ancestor still answers its own state. A write since the
@@ -2723,7 +2714,6 @@ export class GanttShell {
       fieldContext: rowPlan.fieldContext,
       entryRulePorts: this.#entryRulePorts,
       collapsed: this.#treeCollapse.ids,
-      fieldRegistryRevision: this.#options.fieldRegistryRevision?.() ?? 0,
     };
   }
 
@@ -2751,9 +2741,6 @@ export class GanttShell {
         decorationProviders: this.#registrations.decorationProviders(),
         datasetRevision: this.#options.dataset.datasetRevision,
         entryRulePorts: this.#entryRulePorts,
-        // #495, #414: `FrameLayout`'s row-plan cache key. `undefined` (a test-built shell with no
-        // registry to report) reads as `0`, same as `LayoutInput.fieldRegistryRevision`'s own default.
-        fieldRegistryRevision: this.#options.fieldRegistryRevision?.() ?? 0,
         // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
         // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
         barLabelFor: (entry) => this.#labelFor(entry),

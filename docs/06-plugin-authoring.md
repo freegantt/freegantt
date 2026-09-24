@@ -98,8 +98,8 @@ plugin with a Token and never has to know your selector.
 
 ## The smallest working `data` half
 
-A `data` half declares a field and reads it back through the dataset's own
-field system — no new API, the same path a core field takes:
+A plugin declares a field on itself, the same shape `Dataset`'s own `fields`
+option takes — no new API, the same path a core field takes:
 
 ```ts
 import { definePlugin } from 'freegantt';
@@ -107,18 +107,19 @@ import { definePlugin } from 'freegantt';
 function ownerField() {
   return definePlugin({
     id: 'demo.ownerField',
-    data(ctx) {
-      ctx.fields.register({ key: 'owner', type: 'text', editable: true });
-    },
+    fields: [{ key: 'owner', type: 'text', editable: true }],
+    data() {},
   });
 }
 
 export { ownerField };
 ```
 
-`ctx.fields.register` runs once, while `data` is on the stack. After that,
-the field is a normal field: `dataset.entries.update(id, { owner: 'Ada' })`
-reads and writes it like any other.
+Every plugin's `fields` list is registered before any entry is read, so a
+flat `owner: 'Ada'` value on a construction entry lands the same way
+`entries.load()` already reads it. After that, the field is a normal field:
+`dataset.entries.update(id, { owner: 'Ada' })` reads and writes it like any
+other.
 
 ## Installing a plugin
 
@@ -264,6 +265,54 @@ do (D-S5-23): the wrapper receives the current occupant, so a second plugin's
 rule adds to the first's instead of evicting it. See "Every registration
 seam" below for `edits.setLockRule`'s row.
 
+## Data a consumer must keep
+
+A plugin's own store (`ctx.store.reserve<T>()`) is not export data. `entries.load()`
+(#496) does not read it, and `toInput()` does not either — a store is state the plugin
+needs while it runs, never a document (#496 Q8).
+
+Per-entry data a consumer must save and load back goes in a Field instead — the one door
+`toInput()` and `entries.load()` both read. Declare it `editable: 'api'`: an app writes
+it through `entries.update()`, and the grid's own cell editor stays dead. Give it no
+`column`, and no grid draws one either.
+
+`harness/plugins/lock-entries.ts` is the model case: `locked` is a Field, not a store
+row, so a saved document that names a locked entry loads locked again.
+
+**Where a Field does not fit:** data that is not about one entry — a link between two
+entries, or (`harness/plugins/subtree-unlock.ts`) which subtree is open right now —
+stays in the plugin's own store, and the plugin publishes its own reader and writer
+(ADR 0016).
+
+### Reacting to a load
+
+`entries.load()` replaces the whole Dataset in one commit, `origin: 'load'`. A plugin
+reads it the same way it reads any other commit — through `change`, which every `data`
+half already subscribes to:
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function resetsOnLoad() {
+  let cache: unknown;
+  return definePlugin({
+    id: 'demo.resetsOnLoad',
+    data(ctx) {
+      ctx.events.on('change', ({ changeSet }) => {
+        if (changeSet.origin === 'load') cache = undefined;
+      });
+    },
+  });
+}
+
+export { resetsOnLoad };
+```
+
+`beforeChange` carries the same `origin`, so a plugin may veto a load too. A veto that
+depends on state a load is about to remove has to let `origin: 'load'` through, or a
+load could never remove that state — `lock-entries.ts`'s "is this entry locked" refusal
+steps aside for a load for exactly this reason.
+
 ## Why a factory, not a name-keyed table
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin
@@ -288,14 +337,19 @@ plugins claim the same key.
 | `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: a second plugin claiming the whole bar point throws, naming both plugin ids" |
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
-| `fields.register(field)` | `field.key` | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
-| `fields.registerType(name, type)` | type name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
-| `fields.registerAggregator(name, fn)` | aggregator name | Exclusive — throws `DuplicateFieldKeyError` | `src/data/fields/field-registry.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
 | `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 | `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
 | `events.on(name, handler)` | none | Additive — every handler runs, in registration order; the returned `Disposer` removes only that one handler | `src/data/event-bus.test.ts` |
+
+A Field, a Field type or an Aggregator is not on this table: a plugin
+declares those on itself — `fields`, `fieldTypes`, `aggregators` — never
+through a `ctx` call (#496 grill round 3, R1/R2). `Dataset`'s constructor
+registers every plugin's declarations, alongside its own, before any entry
+is read — a key two sources both declare throws `DuplicateFieldKeyError`,
+the same error a claimed key in the table above throws. See "The smallest
+working `data` half" above.
 
 `events.on` is not gated — a plugin may call it after its own half returns,
 for example from inside another handler — but it is still tracked like every
@@ -309,9 +363,11 @@ reserved, or `undefined` if that plugin never reserved one.
 
 ## The registration gate
 
-Every `register*` and `fields.register*` call is legal only while that
-plugin's own half is running. The moment that half returns, the gate closes for
-that plugin.
+Every `register*` call in the table above is legal only while that plugin's
+own half is running. The moment that half returns, the gate closes for that
+plugin. `fields`/`fieldTypes`/`aggregators` are not on this gate at all —
+they are read before `data()` ever runs (see "Every registration seam"
+above), so there is no later call to refuse.
 
 Calling a gated method after that half has returned throws
 `RegistrationClosedError`:
@@ -359,17 +415,19 @@ A plugin may declare `requires: readonly PluginId[]` — the ids of plugins that
 must finish setting up first. One list covers both halves:
 
 ```ts
-import { definePlugin } from 'freegantt';
+import { definePlugin, fieldRowsOf } from 'freegantt';
 
 function lockAwareReport() {
   return definePlugin({
     id: 'demo.lockAwareReport',
     requires: ['demo.lockEntries'],
     data(ctx) {
-      const locks = ctx.store.read<{ isLocked: boolean }>('demo.lockEntries');
+      // `locked` is `demo.lockEntries`'s own Field (#496 Q8), read the same way any consumer reads
+      // it — not a store, so `requires` names an ordering preference here, not a read that would
+      // otherwise fail: every plugin's Field is registered before the first commit either way.
       ctx.events.on('beforeChange', ({ changeSet }) => {
-        const touchesLockedEntry = changeSet.updated.some(
-          (row) => row.store === 'entries' && locks?.get(row.id)?.isLocked,
+        const touchesLockedEntry = fieldRowsOf(changeSet).some(
+          (row) => ctx.dataset.entries.get(row.id)?.read('locked') === true,
         );
         return touchesLockedEntry ? false : undefined;
       });

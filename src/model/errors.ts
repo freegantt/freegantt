@@ -64,6 +64,7 @@ export type BuiltInThrownCode =
   | 'unknown-grid-column'
   | 'mutation-during-notification'
   | 'mutation-during-extension-hook'
+  | 'transaction-already-open'
   | 'mutation-cancelled'
   | 'unreadable-value'
   | 'invalid-replay-origin'
@@ -357,17 +358,25 @@ export class RevealTargetNotFoundError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-entry-id'` — `entries.add()` given an id already in the store (S2.3 §1.3). */
+/** `code: 'duplicate-entry-id'` — two different mistakes, two different messages. `kind: 'collision'`
+ *  is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind: 'duplicate-in-list'` is
+ *  a whole-list write (`entries.load()`, and `entries.sync()`, #517) finding one id twice inside the
+ *  list itself — `assertEntryBatchIsSound` (`data/entry-batch.ts`) throws this before anything
+ *  stages. */
 export class DuplicateEntryIdError extends FreeGanttError {
   readonly entryId: EntryId;
+  readonly operation: string;
 
-  constructor(entryId: EntryId) {
+  constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list') {
     super(
       'duplicate-entry-id' satisfies BuiltInThrownCode,
-      `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`,
+      kind === 'collision'
+        ? `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`
+        : `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`,
     );
     this.name = 'DuplicateEntryIdError';
     this.entryId = entryId;
+    this.operation = operation;
   }
 }
 
@@ -690,6 +699,24 @@ export class MutationDuringExtensionHookError extends FreeGanttError {
       `${operation}: you cannot change the Dataset while the extension hook runs. Nothing was saved. Return the edit from the hook. Do not write through the store.`,
     );
     this.name = 'MutationDuringExtensionHookError';
+    this.operation = operation;
+  }
+}
+
+/** `code: 'transaction-already-open'` — `entries.load()` (#496), or `entries.sync()` (#517), called
+ * inside an already-open `dataset.transaction()`. Both doors replace the whole Dataset's data in one
+ * step and always build and commit their own ChangeSet; unlike `add`/`update`/`remove`, neither joins
+ * a caller's open transaction (D-S2-8 does not apply here). The write set is discarded; the caller's
+ * own open transaction is not affected. */
+export class TransactionAlreadyOpenError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'transaction-already-open' satisfies BuiltInThrownCode,
+      `${operation}: you cannot call this inside dataset.transaction(). Call it on its own, outside the transaction.`,
+    );
+    this.name = 'TransactionAlreadyOpenError';
     this.operation = operation;
   }
 }

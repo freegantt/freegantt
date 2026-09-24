@@ -19,7 +19,14 @@ import { RegistrationGate } from './plugin-runtime.js';
 import { assertNoDuplicateIds, resolveSetupOrder } from './plugin-order.js';
 
 /** What `installDatasetPlugins` installs — structurally the public `Plugin`, kept generic here
- *  (see file header). */
+ *  (see file header). A plugin's own `fields`/`fieldTypes`/`aggregators` are not members here: they
+ *  are read before this file runs a single `data()` (#496 grill round 3, R1) —
+ *  `pluginFieldDeclarationsOf` (`api/dataset.ts`) reads them straight off `PluginOf`, the type
+ *  `Dataset`'s own plugin list already carries, before this file's `readonly InstallablePlugin[]`
+ *  parameter is built. Naming them again here would be a second, unchecked copy of `DataPluginOf`'s
+ *  declaration shape that could silently drift from it — a caller may pass a wider object than this
+ *  interface declares (TypeScript's usual structural rule), so this file needs no member for a
+ *  property it never reads. */
 export interface InstallablePlugin<TContext> {
   id: PluginId;
   /** Plugin ids that must also be installed. Does not imply an order in the array. */

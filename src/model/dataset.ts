@@ -35,7 +35,9 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
  *  mutator returns the entry as the store holds it after the call (branded id, resolved instants),
- *  never the input, and each auto-wraps itself in a transaction when none is already open (D-S2-8). */
+ *  never the input, and each auto-wraps itself in a transaction when none is already open (D-S2-8).
+ *  `load` is the one exception to both: it returns `void`, and it refuses an open transaction
+ *  (`TransactionAlreadyOpenError`) rather than join one — see its own comment below. */
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
   /** Declared Field keys sit flat at the top, the same shape `update()` takes (ADR 0011, Q15):
    *  `entries.add({ id, name, owner: 'Ali' })`. Nested `props` stays legal for a bag already held or
@@ -51,6 +53,28 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
   add(input: FlatEntryInput<TProps>): Entry<TProps>;
   update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
   remove(id: EntryId | string): void;
+  /** A full fresh start (#496): replaces every Entry with `inputs`, in the list's own order — a
+   *  child may list before its parent, since the whole batch is checked before any of it stages
+   *  (`DuplicateEntryIdError`, `EntryNotFoundError`, or `ParentCycleError` for a bad one, and
+   *  nothing stages when one throws). For valid input, `entries.all` after `load(inputs)` reads the
+   *  same rows, in the same order, that `new Dataset({ entries: inputs })` with this Dataset's own
+   *  Fields and plugins would build — but `load` writes onto the live Dataset a mounted Gantt already
+   *  holds, and it keeps no per-entry state (selection, collapse, a plugin's store row) for an id
+   *  both the old data and `inputs` name.
+   *
+   *  Commits one `ChangeSet` with `origin: 'load'`, even when nothing changed — an empty `load()`
+   *  into an empty Dataset still moves the baseline. History **clears** on it: `canUndo`/`canRedo`
+   *  both read `false` right after, the same posture a desktop app takes opening a file. `beforeChange`
+   *  can still veto it (`MutationCancelledError`), leaving the store and History exactly as they were.
+   *
+   *  Ignores a `'never'` Field lock and re-rolls a derived parent cell, the same as construction, and
+   *  runs no `EditExtender` cascade — construction runs none either. Refuses with
+   *  `TransactionAlreadyOpenError` when called inside `dataset.transaction()`: `load` is always its
+   *  own transaction.
+   *
+   *  The undoable, diffing counterpart that keeps per-entry state for a kept id is `entries.sync()`
+   *  (#517). */
+  load(inputs: readonly FlatEntryInput<TProps>[]): void;
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.

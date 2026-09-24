@@ -415,16 +415,6 @@ describe('FrameLayout row-plan cache (#495, #414)', () => {
     expect(layout.plannedRows()).not.toBe(before);
   });
 
-  it('re-resolves when fieldRegistryRevision changes, so a post-mount ctx.fields.register() invalidates the cache', () => {
-    const layout = new FrameLayout();
-    layout.computeFrame(input({ fieldRegistryRevision: 0 }));
-    const before = layout.plannedRows();
-
-    layout.computeFrame(input({ fieldRegistryRevision: 1 }));
-
-    expect(layout.plannedRows()).not.toBe(before);
-  });
-
   it('still runs placeFrame on a cached plan, so geometry keeps following the viewport', () => {
     const layout = new FrameLayout();
     layout.computeFrame(input());
@@ -486,7 +476,6 @@ describe('FrameLayout.ensureRowPlan keeps #memory in step with #plan (#424 revie
         fieldContext: li.fieldContext,
         entryRulePorts: li.entryRulePorts,
         collapsed: li.collapsed,
-        fieldRegistryRevision: li.fieldRegistryRevision ?? 0,
       },
       memory: { rowHeight: li.rowHeight, registry: li.variants },
     };
@@ -555,7 +544,6 @@ describe('FrameLayout.rowPlanRevision advances with the row tree, not the frame 
         fieldContext: undefined,
         entryRulePorts: undefined,
         collapsed: undefined,
-        fieldRegistryRevision: 0,
       },
       { rowHeight: 32, registry: variantRegistry },
     );
@@ -577,7 +565,6 @@ describe('FrameLayout.rowPlanRevision advances with the row tree, not the frame 
         fieldContext: undefined,
         entryRulePorts: undefined,
         collapsed: undefined,
-        fieldRegistryRevision: 0,
       },
       { rowHeight: 32, registry: variantRegistry },
     );

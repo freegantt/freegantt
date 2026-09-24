@@ -27,8 +27,7 @@ import type { EntryRulePorts } from './entry-rule.js';
  *  - `rows`, `fieldCompares`, `fieldContext` — `FrameSettings` replaces these whole, never mutates
  *    in place (#187).
  *  - `collapsed` — `TreeCollapse` replaces its frozen id array on every change (`view/tree-collapse.ts`).
- *  - `entryRulePorts` — built once per Gantt; `fieldRegistryRevision` sits beside it because its own
- *    `fieldFor` read has no cache of its own. */
+ *  - `entryRulePorts` — built once per Gantt. */
 export interface RowPlanInput {
   entries: readonly Entry[];
   datasetRevision: number;
@@ -37,7 +36,6 @@ export interface RowPlanInput {
   fieldContext: FieldContext | undefined;
   entryRulePorts: EntryRulePorts | undefined;
   collapsed: readonly string[] | undefined;
-  fieldRegistryRevision: number;
 }
 
 type RowPlanInputKey = keyof RowPlanInput;
@@ -65,7 +63,6 @@ const SAME_ROW_PLAN_INPUT: {
   fieldContext: (a, b) => a.fieldContext === b.fieldContext,
   entryRulePorts: (a, b) => a.entryRulePorts === b.entryRulePorts,
   collapsed: (a, b) => a.collapsed === b.collapsed,
-  fieldRegistryRevision: (a, b) => a.fieldRegistryRevision === b.fieldRegistryRevision,
 });
 
 function samePlanInput(a: RowPlanInput, b: RowPlanInput): boolean {
@@ -83,7 +80,6 @@ function planInputFrom(input: LayoutInput): RowPlanInput {
     fieldContext: input.fieldContext,
     entryRulePorts: input.entryRulePorts,
     collapsed: input.collapsed,
-    fieldRegistryRevision: input.fieldRegistryRevision ?? 0,
   };
 }
 

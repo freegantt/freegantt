@@ -23,6 +23,9 @@ export interface TreeCollapseContext {
   proposeSelection(ids: readonly EntryId[]): void;
   /** Call: `confirm(change)` — the shell vetoes or applies; this module then stores `change.to`. */
   confirm(change: CollapseChange): boolean;
+  /** The past-tense event alone, with no veto (#496 L2) — a load already committed, so there is no
+   *  user gesture here for `beforeCollapseChange` to refuse. */
+  announce(change: CollapseChange): void;
   rowIdForEntry(id: EntryId): RowId | undefined;
   ancestorRowIds(id: EntryId): readonly RowId[];
   /** Call: `expandableOfRow(rowId)` — the row tree's own answer, read past a collapsed ancestor
@@ -36,6 +39,9 @@ function sameIds(a: readonly string[], b: readonly string[]): boolean {
 
 export class TreeCollapse {
   #ids: readonly RowId[] = [];
+  /** The set `hydrate` last wrote — the Gantt's own starting collapse state (#496 L2). `[]` when
+   *  `hydrate` is never called: an unhydrated Gantt starts with nothing collapsed. */
+  #startIds: readonly RowId[] = [];
   #ctx: TreeCollapseContext;
 
   constructor(ctx: TreeCollapseContext) {
@@ -46,9 +52,11 @@ export class TreeCollapse {
     return this.#ids;
   }
 
-  /** Constructor-only: write the initial set with no event. */
+  /** Constructor-only: write the initial set with no event. Also remembers it as the starting
+   *  state `resetToStartState` (#496 L2) returns to. */
   hydrate(next: readonly string[]): void {
     this.#ids = Object.freeze(next.map((id) => rowId(id)));
+    this.#startIds = this.#ids;
   }
 
   /** Call: `tree.replace(gantt.collapsed)` — the live setter; vetoable through `confirm`. */
@@ -93,6 +101,18 @@ export class TreeCollapse {
   expandAll(): void {
     if (this.#ids.length === 0) return;
     this.#confirmIds([]);
+  }
+
+  /** #496 L2: on `origin: 'load'`, collapse state returns to the Gantt's own starting state — the
+   *  set `hydrate` last wrote, or `[]` when it was never called. Scroll and zoom are view settings,
+   *  not data, and stay untouched (L2). Skips `confirm`'s `beforeCollapseChange` veto, the same
+   *  posture `EntrySelection#forgetEntriesTheDatasetDropped` takes: a load already committed, so
+   *  refusing the reset would leave collapse ids naming rows this data no longer has. */
+  resetToStartState(): void {
+    if (sameIds(this.#ids, this.#startIds)) return;
+    const from = this.#ids;
+    this.#ids = this.#startIds;
+    this.#ctx.announce({ from, to: this.#startIds });
   }
 
   /** Call: `this.#treeCollapse.handleArrow('right')`. */
