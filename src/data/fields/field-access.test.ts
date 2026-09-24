@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { entryId } from '../../model/index.js';
 import type { ChangeSet, Field, StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
@@ -476,5 +476,25 @@ describe('a cross-door invariant: every door agrees on a stored Field (ADR 0024,
     expect(state.entries.storedValues.get(entry.id)!.siblingIndex).toBe(0);
     expect('siblingIndex' in entry.toInput()).toBe(false);
     expect(fieldRowsOf(seen[0]!).some((row) => row.field === 'siblingIndex')).toBe(false);
+  });
+
+  it('construction with one authored siblingIndex that differs from list position warns once, on console.warn, naming that id', () => {
+    // No plugin's `data()` can subscribe early enough to see this (ADR 0031): construction reaches
+    // no `error` handler, only the `console.warn` fallback.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'a', name: 'A', siblingIndex: 5 },
+        { id: 'b', name: 'B' },
+      ],
+    });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toContain('"a"');
+    expect(warn.mock.calls[0]?.[0]).not.toContain('"b"');
+
+    warn.mockRestore();
   });
 });
