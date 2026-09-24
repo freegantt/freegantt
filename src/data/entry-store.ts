@@ -666,7 +666,15 @@ export class EntryStore implements EntryStoreContract {
   load(inputs: readonly FlatEntryInput[]): void {
     const { runner, byId, entries: read, rollupUpdated } = this.#readBatch(inputs, 'entries.load');
 
-    const added = read.map((entry) => ({ store: 'entries' as const, entity: byId.get(entry.id)! }));
+    // An added entity carries the values the commit settles on, not a row (the same rule
+    // `sync` and `buildCommitChangeSet` follow): every id here is new to the store, so every
+    // Rollup row folds onto its entity, and the changeset holds no entries row for it.
+    const rolled = new Map(byId);
+    for (const row of rollupUpdated) {
+      const current = rolled.get(row.id);
+      if (current) rolled.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
+    }
+    const added = read.map((entry) => ({ store: 'entries' as const, entity: rolled.get(entry.id)! }));
     const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
     // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
     // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.
@@ -677,7 +685,7 @@ export class EntryStore implements EntryStoreContract {
       origin: 'load',
       added,
       removed,
-      updated: [...rollupUpdated, ...pluginRows],
+      updated: pluginRows,
     };
     commitChangeSet(runner, changeSet);
   }

@@ -390,6 +390,27 @@ describe('entries.load', () => {
     expect(state.entries.get('p1')!.read('cost')).toBe(300);
   });
 
+  it('an added parent carries its rolled-up value on the entity, and the change carries no entries row for it', () => {
+    const state = new DatasetState({
+      entries: [],
+      timeZone: 'UTC',
+      fields: [{ key: 'cost', type: 'number', rollUp: 'sum' }],
+    });
+    const rows = changeSets(state);
+
+    const inputs: FlatEntryInput<{ cost: number }>[] = [
+      { id: 'p1', name: 'Parent' },
+      { id: 'c1', name: 'Child', parentId: 'p1', cost: 100 },
+      { id: 'c2', name: 'Child', parentId: 'p1', cost: 200 },
+    ];
+    state.entries.load(inputs);
+
+    expect(rows).toHaveLength(1);
+    const parentRow = rows[0]!.added.find((row) => row.entity.id === 'p1');
+    expect((parentRow?.entity.props as { cost?: number } | undefined)?.cost).toBe(300);
+    expect(rows[0]!.updated.some((row) => row.store === 'entries' && row.id === 'p1')).toBe(false);
+  });
+
   it('a load that authors a value on a parent whose only child has none drops it and reports "derived-values-dropped", the same as construction (ADR 0013 decision 5, Q3)', () => {
     const reports: ErrorReport[] = [];
     const state = new DatasetState({

@@ -337,6 +337,43 @@ describe('rollUpFields (S4.2)', () => {
       expect(reports[0]?.message).toContain('"cost"');
     });
 
+    it("a cascade's write to a parent this same transaction adds is dropped too, and the Rollup's value folds onto the added entity, not a row", () => {
+      const reports: ErrorReport[] = [];
+      const state = new DatasetState({
+        entries: [{ id: 'x', name: 'x', start: '2026-01-01', end: '2026-01-10' }],
+        timeZone: 'UTC',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        // The cascade reaches for the same added parent's cost cell — the write lands in `merged`,
+        // never `body`, so `rollup.ts` overwrites it rather than yielding, the same as an existing
+        // parent above.
+        editExtender: (): EntryEdits => new Map([[entryId('p1'), { cost: 999 }]]),
+      });
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+      const seen: ChangeSet[] = [];
+      state.on('change', ({ changeSet }) => {
+        seen.push(changeSet);
+      });
+
+      state.transaction(() => {
+        state.entries.add({ id: 'p1', name: 'p1' });
+        state.entries.add({ id: 'c1', name: 'c1', parentId: 'p1', props: { cost: 10 } });
+      });
+
+      expect(costOf(state, 'p1')).toBe(10); // the Rollup's own answer wins, not the cascade's 999
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('derived-values-dropped');
+      expect(reports[0]?.message).toContain('cascade');
+      expect(reports[0]?.message).toContain('"cost"');
+
+      expect(seen).toHaveLength(1);
+      const addedP1 = seen[0]!.added.find((row) => row.entity.id === 'p1');
+      expect((addedP1?.entity.props as { cost?: number } | undefined)?.cost).toBe(10);
+      expect(seen[0]!.updated.some((row) => row.store === 'entries' && row.id === 'p1')).toBe(false);
+    });
+
     // Q39: `start`/`end` are ordinary rolling-up Fields now (ADR 0026 retired the Segment that used
     // to make them a derived pair), so an `EditExtender` cascade that proposes one on a rolling-up
     // parent hits this same mechanism — not a throw `gesture-pipeline.ts`'s commit path must catch,
