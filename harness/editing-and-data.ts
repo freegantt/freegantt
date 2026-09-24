@@ -455,6 +455,7 @@ importBtn.addEventListener('click', () => {
 // commits nothing, so the toolbar's Undo button holds whatever it already showed.
 const syncBtn = document.querySelector<HTMLButtonElement>('#sync-btn')!;
 syncBtn.addEventListener('click', () => {
-  attemptMutation(() => dataset.entries.sync(server.fetchRows()));
-  logLine('document · checked the server for changes');
+  const rows = server.fetchRows();
+  const landed = attemptMutation(() => dataset.entries.sync(rows));
+  logLine(landed ? 'document · synced from the server' : 'document · sync refused · server list not applied');
 });
