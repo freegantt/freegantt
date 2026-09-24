@@ -76,6 +76,28 @@ describe('History', () => {
     expect(state.entries.get('parent')?.end).toEqual(parentEndBefore);
   });
 
+  it('undoAll restores a group span two separate steps and the Rollup both wrote (#517 review)', () => {
+    const state = dataset([
+      { id: 'parent', kind: 'group' },
+      { id: 'a', parentId: 'parent', start: 0, end: 100 },
+      { id: 'b', parentId: 'parent', start: 100, end: 200 },
+    ]);
+    const parentEndBefore = state.entries.get('parent')!.end;
+
+    state.transaction(() => {
+      state.entries.remove('a');
+    });
+    state.transaction(() => {
+      state.entries.remove('b'); // parent's last child — the Rollup now owns nothing to roll up
+      state.entries.update('parent', { end: 101 });
+    });
+    state.entries.add({ id: 'n1', name: 'n1', start: 0, end: 1 });
+
+    while (state.canUndo) state.undo();
+
+    expect(state.entries.get('parent')?.end).toEqual(parentEndBefore);
+  });
+
   it('undo of a cascade from an injected extender restores both the user field and the patched one', () => {
     const cascade: EditExtender = ({ proposed }) => {
       if (proposed.has(entryId('t1'))) return new Map([[entryId('t2'), { name: 'cascaded' }]]);

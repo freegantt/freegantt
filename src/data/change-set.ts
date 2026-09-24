@@ -73,6 +73,48 @@ export function diffEdit(
 }
 
 /**
+ * Call: `mergeUpdatedRows([userRow, rollupRow], registry)` — one net row per `(store, id, field)`.
+ *
+ * A commit's own stages can each propose a row for the same key: the body writes `end` and, in the
+ * same transaction, the Rollup recomputes `end` for the same entry. One `updated` array holding both
+ * rows lets undo apply them in order and land on the middle value, not the one a reader actually saw
+ * (#517 review) — `invertChangeSet` inverts row by row and keeps their order, so two rows for one key
+ * invert to two rows too. This is the one place that collapses them: `from` is the first row's `from`,
+ * `to` is the last row's `to`, and a key whose net change is nothing (`registry.valuesEqual` for a
+ * Field, `Object.is` for a store row) drops out the way `pushRow` already drops a no-op edit.
+ */
+export function mergeUpdatedRows(
+  rows: readonly UpdatedRow[],
+  registry: FieldRegistry,
+): readonly UpdatedRow[] {
+  const keyOf = (row: UpdatedRow): string =>
+    row.store === 'entries' ? `entries:${row.id}:${String(row.field)}` : `${row.store}:${row.id}`;
+
+  const order: string[] = [];
+  const froms = new Map<string, unknown>();
+  const lastRowByKey = new Map<string, UpdatedRow>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    if (!froms.has(key)) {
+      froms.set(key, row.from);
+      order.push(key);
+    }
+    lastRowByKey.set(key, row);
+  }
+
+  const merged: UpdatedRow[] = [];
+  for (const key of order) {
+    const from = froms.get(key);
+    const last = lastRowByKey.get(key)!;
+    const to = last.to;
+    const equal = last.store === 'entries' ? registry.valuesEqual(last.field, from, to) : Object.is(from, to);
+    if (equal) continue;
+    merged.push({ ...last, from, to });
+  }
+  return merged;
+}
+
+/**
  * Folds a transaction's raw contributions into the changeset it will commit, or `undefined` when the
  * net effect is empty (D-S2-24 step 6 stops here; no store write, no event).
  *

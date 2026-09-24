@@ -40,3 +40,32 @@ describe('the extension hook may not propose a field the body already proposed o
     expect(entry.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
   });
 });
+
+describe('a commit carries one row per Field, even when the Rollup rewrites what the body just wrote', () => {
+  it('the last child leaving and the body writing that same field in one transaction merge to one row', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'parent', name: 'parent' },
+        { id: 'child', parentId: 'parent', name: 'child', start: 0, end: 100 },
+      ],
+      timeZone: 'UTC',
+    });
+
+    const committed: ChangeSet[] = [];
+    state.on('change', ({ changeSet }: DatasetEventMap['change']) => {
+      committed.push(changeSet);
+    });
+
+    // The body writes `end` on `parent`; removing its last child in the same transaction leaves
+    // `parent` with no children left to roll up, so the Rollup writes `end` on `parent` too.
+    state.transaction(() => {
+      state.entries.remove('child');
+      state.entries.update('parent', { end: 101 });
+    });
+
+    const endRows = committed[0]!.updated.filter(
+      (row) => row.store === 'entries' && row.id === entryId('parent') && row.field === 'end',
+    );
+    expect(endRows).toHaveLength(1);
+  });
+});
