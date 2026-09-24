@@ -42,7 +42,8 @@ frontmatter.
 | [0028](0028-a-plugins-impossible-proposal-is-a-refusal.md) | A plugin's impossible proposal is a refusal | accepted | An extender proposing an impossible value is refused at `warning` with `by` naming it; an extender that throws is a `'error'` fault |
 | [0029](0029-the-app-pushes-the-theme.md) | The app pushes the theme; the library never asks | accepted | `theme` is three literals; the app writes `gantt.theme` or pins `data-fg-theme`, and the library never calls back or watches attributes it does not own |
 | [0030](0030-a-multi-hour-tick-counts-real-time-on-a-dst-day.md) | A multi-hour tick counts real time on a DST day | accepted | On a DST day a tick with increment > 1 keeps equal real spacing from its day start (00/07/13/19), not wall-clock multiples |
-| [0031](0031-a-plugin-declares-its-shape-its-code-runs-on-a-finished-object.md) | A plugin declares its shape; its code runs on a finished object | accepted | A plugin declares `fields`/`fieldTypes`/`aggregators`/`hierarchySource` on its definition; `data(ctx)` runs only after the `Dataset` is built; construction checks the batch like `load` |
+| [0031](0031-a-plugin-declares-its-shape-its-code-runs-on-a-finished-object.md) | A plugin declares its shape; its code runs on a finished object | amended by 0032 | A plugin declares `fields`/`fieldTypes`/`aggregators`/`hierarchySource` on its definition; `data(ctx)` runs only after the `Dataset` is built; construction checks the batch like `load` |
+| [0032](0032-a-gantt-plugins-code-runs-before-the-first-frame.md) | A Gantt plugin's code runs before the first frame | accepted | A finished Gantt is built and configured before any plugin's `view(ctx)` runs; `Gantt` assigns `#shell`, installs plugins, then paints frame 1; `#constructed` flips last so a `view()`-time Gantt write stays silent |
 
 ## The gap at 0014
 
