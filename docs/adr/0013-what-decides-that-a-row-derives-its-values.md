@@ -1,7 +1,7 @@
 ---
 status: accepted, narrowed 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) (proposed) — *"core does not ship a diamond"* was written when the only diamond on offer was one core painted by reading `kind === 'milestone'`. Core now ships `diamond()` as a variant factory, and no row wears it until a rule claims it. **The decision below is unchanged: an Entry carries no stored classification, and core reads no stored word to decide a look.** Original verdict: `verify:full PASS — all 16 checks green, test:e2e included (70s).` (Build 3, 2026-09-11). Spike report: [reviews/2026-09-10-0013-derivation-spikes](../../plans/field-redesign/reviews/2026-09-10-0013-derivation-spikes/README.md). Split out of ADR 0011 on 2026-09-09. **The `distribute` half of the 2026-09-11 amendment is reversed 2026-09-21 by [#470](https://github.com/freegantt/freegantt/issues/470)** — see the second amendment, below the first.
 decided: nothing but the Rollup writes a rolling-up parent's cell; an Entry derives when it has children; `kind` leaves the record (26, 2026-09-10); an Entry that starts rolling up drops its authored values and the Rollup recalculates them; a rolling-up parent's cell is read-only from every direction, and grouping is not permission (amendment, 2026-09-11); a consumer who wants to own a parent's value declares `rollUp: 'none'` on the Field instead of a distribution policy (amendment, 2026-09-21, #470). *"A derived value never reaches the Document"* has no Document after [ADR 0016](0016-the-library-holds-no-save-format.md).
-open: **Q7** — a lone write to a derived cell wrapped in `dataset.transaction()` is not refused, so line 91's *"parent cells stay refused"* is opt-out for any consumer who wraps. Raised 2026-09-11, never ruled; carried in full in the appendix below. The parent bar drag ships (Build 3g). Q9 is answered: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. The `ProposedDates` api report is approved and committed. `e2e/parent-bar-drag.spec.ts` drags a real `.fg-bar-summary` on two pages and reads the children's dates back (N13). J34, J35, N12 and N13 are in the appendix below. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
+open: nothing — **Q7 is ruled, 2026-09-24.** The Rollup owns every rolling-up Field of a parent inside a transaction too: a same-transaction proposal never wins once the entry has children by commit, wrapped or not. Line 91's *"parent cells stay refused"* now holds for every door. The ruling is in the appendix, under Q7. The parent bar drag ships (Build 3g). Q9 is answered: a parent bar translates its dated descendants, and a child holding only a `start` moves that `start`. The `ProposedDates` api report is approved and committed. `e2e/parent-bar-drag.spec.ts` drags a real `.fg-bar-summary` on two pages and reads the children's dates back (N13). J34, J35, N12 and N13 are in the appendix below. The working material is in `plans/field-redesign/0013-what-decides-derivation/`.
 ---
 
 # What decides that a row derives its values
@@ -9,6 +9,8 @@ open: **Q7** — a lone write to a derived cell wrapped in `dataset.transaction(
 > **Narrowed on 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) (proposed).** Read every *"core does not ship a diamond"* below as the sentence this record produced in 2026-09-10, not as the rule today. Core ships `diamond()` among its shipped variants; no row wears it until a rule claims it; and core still reads no stored word to decide a look. This record's own decision — an Entry carries no stored classification — stands untouched.
 
 > **Vocabulary note, added 2026-09-21.** This record predates the `distribute` → `writeToChildren` rename. Read every `distribute` below as `writeToChildren`, and `FieldDistributor` as `FieldWriteToChildren`. **Do not rewrite the body.**
+
+> **Q7 ruled, 2026-09-24.** A same-transaction proposal — the transaction body's own write, or an extension-hook cascade's — never wins over the Rollup once the entry has children by commit. Decision 5 below now covers the body's own proposal too, not only a cascade's. The ruling is in the appendix, under Q7. **Do not rewrite the body.**
 
 **Lands after [0016](0016-the-library-holds-no-save-format.md), [0012](0012-dates-are-optional-on-every-kind.md) and [0011](0011-consumer-values-live-in-props.md).** The working material is [`plans/field-redesign/0013-what-decides-derivation/`](../../plans/field-redesign/0013-what-decides-derivation/README.md). **No schema number** — ADR 0016 deleted the Document.
 
@@ -348,7 +350,7 @@ lives here.
 
 ### Q7 — the moved guard is bypassable by any consumer who wraps the write in `dataset.transaction()`
 
-**Raised:** 2026-09-11, coordinator, verifying the Q6 fix. **Status:** open, needs the author.
+**Raised:** 2026-09-11, coordinator, verifying the Q6 fix. **Status:** ruled, 2026-09-24 — see below.
 
 The Q6 fix works and both acceptance tests pass unmodified. But the signal it separates on —
 transaction depth (`TransactionData.openTransactions === 1`) — is **reachable by a consumer**, because
@@ -381,3 +383,20 @@ is a design decision, so it is not an agent's to make.
 
 **Alternative:** accept the current behaviour and amend ADR 0013 line 91 to say the refusal is a
 consumer-door convenience, not an invariant. Honest, but it weakens a stated guarantee.
+
+**Ruled, 2026-09-24: the candidate rule, refined.** The Candidate rule above asked for a cause on the
+whole transaction. The ruling instead reads the cause off each write, at the moment it is made:
+
+- A write to a rolling-up Field of an entry that is a parent **at the time of the call** throws —
+  standalone or wrapped, no different either way. Permission still follows the thing written, never
+  the call that wraps it.
+- A write that is legal when it is made, on an entry the same transaction later promotes to a parent
+  (a reparent lands a first child on it before commit): the Rollup wins at commit, and the write is
+  dropped. One warning per commit, not one per row — decision 5's report now names a body write the
+  same way it already names a cascade's.
+- An entry that stops being a parent in the transaction (its last child leaves) keeps the body's
+  write: the field is an ordinary cell again by the time commit checks it, and demotion clears only
+  the Fields nothing wrote.
+
+The extension-hook path is unchanged: decision 5's cascade case still loses to the Rollup the same
+way, and still reports the same way.
