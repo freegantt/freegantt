@@ -35,7 +35,9 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
  *  mutator returns the entry as the store holds it after the call (branded id, resolved instants),
- *  never the input, and each auto-wraps itself in a transaction when none is already open (D-S2-8). */
+ *  never the input, and each auto-wraps itself in a transaction when none is already open (D-S2-8).
+ *  `load` is the one exception to both: it returns `void`, and it refuses an open transaction
+ *  (`TransactionAlreadyOpenError`) rather than join one — see its own comment below. */
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
   /** Declared Field keys sit flat at the top, the same shape `update()` takes (ADR 0011, Q15):
    *  `entries.add({ id, name, owner: 'Ali' })`. Nested `props` stays legal for a bag already held or
