@@ -268,3 +268,55 @@ describe('replay that has nothing left to write', () => {
     expect(seen).toEqual([]);
   });
 });
+
+describe('replay never stores a parentId loop or a dangling parentId', () => {
+  it('drops a parentId row that would close a loop, and raises no hierarchy fault', () => {
+    const state = dataset([{ id: 'a' }, { id: 'b' }]);
+    state.entries.update('b', { parentId: 'a' }); // b sits under a
+    const reports: unknown[] = [];
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'parentId', from: undefined, to: entryId('b') },
+          { store: 'entries', id: entryId('a'), field: 'name', from: 'stale', to: 'New A' },
+        ],
+      }),
+    );
+
+    // The loop row (a under b, while b is under a) is dropped; a keeps its current parent. The
+    // other row in the same step still lands.
+    expect(state.entries.get('a')?.read('parentId')).toBeUndefined();
+    expect(state.entries.get('a')?.name).toBe('New A');
+    expect(seen).toEqual([
+      expect.objectContaining({
+        updated: [{ store: 'entries', id: entryId('a'), field: 'name', from: 'a', to: 'New A' }],
+      }),
+    ]);
+    expect(reports).toEqual([]);
+  });
+
+  it('lands a re-added entry whose parent is gone as a root, and toInput() loads again', () => {
+    const state = dataset([{ id: 'a' }]);
+    state.entries.remove('a');
+
+    state.replay(
+      step({
+        added: [
+          {
+            store: 'entries',
+            entity: { id: entryId('orphan'), parentId: entryId('a'), siblingIndex: 0, name: 'X', props: {} },
+          },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('orphan')?.read('parentId')).toBeUndefined();
+    const inputs = state.entries.all.map((entry) => entry.toInput());
+    expect(() => new DatasetState({ timeZone: 'UTC', entries: inputs })).not.toThrow();
+  });
+});

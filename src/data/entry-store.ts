@@ -813,12 +813,12 @@ export class EntryStore implements EntryStoreContract {
    *  included (S2.3 §1.3). Read through the write set, so a reparent earlier in the same transaction
    *  is seen.
    *
-   *  `seen` is the same guard `#depthOf` carries. `new Dataset({ entries })` and `entries.load` both
-   *  check the raw batch and throw on a loop (ADR 0031), but `replay()` applies an already-built
-   *  `ChangeSet` unchecked (`data/replay.ts`), so a raw loop can still land on a live store that way;
-   *  without the guard the next edit that names a row inside that loop walks it forever. A loop the
-   *  edit is not part of stops the walk and passes — the committed check reports it as one
-   *  `hierarchy-cycle` Fault (ADR 0020). */
+   *  `seen` is the same guard `#depthOf` carries. Every door onto `parentId` checks now —
+   *  construction, `load`, `sync` and `replay()` (ADR 0031, ADR 0035) all refuse or drop a loop
+   *  before it reaches the store — so this walk should never actually meet one already there. It
+   *  stays: a chain this long is cheap to walk once, and a guard that assumes "nothing upstream can
+   *  go wrong" is the guard that hangs the one time it does. A loop the edit is not part of stops the
+   *  walk and passes — the committed check reports it as one `hierarchy-cycle` Fault (ADR 0020). */
   #assertParentValid(id: EntryId, parentId: EntryId, operation: string): void {
     if (!this.has(parentId)) throw new EntryNotFoundError(parentId, operation);
     let current: EntryId | undefined = parentId;
