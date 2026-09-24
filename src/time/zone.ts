@@ -12,7 +12,6 @@ import type { Instant, PlainParts, TimeSpan, TimeUnit } from '../model/index.js'
 import { InvalidSnapIncrementError, UnsupportedUnitError } from '../model/index.js';
 import { instant, addMs, diffMs, MS } from './instant.js';
 import * as InstantFns from 'temporal-polyfill/fns/Instant';
-import * as PlainDateFns from 'temporal-polyfill/fns/PlainDate';
 import * as ZonedDateTimeFns from 'temporal-polyfill/fns/ZonedDateTime';
 
 /** Resolves the environment's own IANA zone (#129) — the one place `Intl` is read for this purpose
@@ -109,18 +108,12 @@ export function addYears(zone: string, i: Instant, years: number): Instant {
   return fromZoned(ZonedDateTimeFns.addYears(toZoned(zone, i), years));
 }
 
-/**
- * Whole calendar days between two instants' day-starts (DST-correct: not `(b - a) / 86400000`).
- *
- * Goes through PlainDate rather than ZonedDateTime.diffDays: temporal-polyfill@1.0.4's zoned day-unit diff
- * throws ("prepareZonedEpochDiff is not a function") for every zone — a packaging bug in that build, not an
- * environment quirk (reproduces for UTC and DST-observing zones alike). PlainDate.diffDays is unaffected and
- * is exact here since both operands are already calendar day-starts.
- */
+/** Whole calendar days between two instants' day-starts (DST-correct: not `(b - a) / 86400000`). */
 export function diffDays(zone: string, a: Instant, b: Instant): number {
-  const dateA = ZonedDateTimeFns.toPlainDate(ZonedDateTimeFns.startOfDay(toZoned(zone, a)));
-  const dateB = ZonedDateTimeFns.toPlainDate(ZonedDateTimeFns.startOfDay(toZoned(zone, b)));
-  return PlainDateFns.diffDays(dateA, dateB);
+  return ZonedDateTimeFns.diffDays(
+    ZonedDateTimeFns.startOfDay(toZoned(zone, a)),
+    ZonedDateTimeFns.startOfDay(toZoned(zone, b)),
+  );
 }
 
 type Stepper = (zone: string, i: Instant, increment: number) => Instant;

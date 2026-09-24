@@ -4,8 +4,6 @@ import {
   Dataset,
   attemptMutation,
   now,
-  addMs,
-  MS,
   tooltips,
   contextMenu,
   inlineEditing,
@@ -70,7 +68,7 @@ const dataset = new Dataset<DemoEntryProps>({
 // today, not today itself — so this labelled Date line and the unlabelled Today line wrapper
 // (`todayLine`'s own default) land at two different x's instead of one, and this page shows both
 // (#319 follow-up).
-const mobilization = addMs(now(), 7 * MS.DAY);
+const mobilization = dataset.time.addDays(now(), 7);
 
 /** The one parent this page draws with segments. A predicate, not a Field match, because the page
  *  names a single id — `hierarchy.ts` shows the other half, where a written Field decides it and
@@ -334,7 +332,9 @@ let nextNewId = 1;
 addEntryBtn.addEventListener('click', () => {
   const id = `new-${nextNewId++}`;
   const start = now();
-  attemptMutation(() => dataset.entries.add({ id, name: 'New entry', start, end: addMs(start, MS.DAY) }));
+  attemptMutation(() =>
+    dataset.entries.add({ id, name: 'New entry', start, end: dataset.time.addDays(start, 1) }),
+  );
 });
 
 costBtn.addEventListener('click', () => {
