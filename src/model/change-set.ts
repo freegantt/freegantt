@@ -15,7 +15,11 @@ export type { CoreFieldKey, FieldKey } from './field.js';
  *  key off this, so a reader finds exactly the store its owner made. */
 export type PluginStoreName = `plugin:${PluginId}`;
 export type StoreName = 'entries' | PluginStoreName;
-export type ChangeOrigin = 'user' | 'undo' | 'redo'; // 'engine' and 'load' arrive with their producers (D-S2-11)
+/** `'load'` is `entries.load()` (#496): a full fresh start that clears History, never merged with
+ *  `'user'`'s undo record. `'engine'` arrives with its own producer (D-S2-11). `'load'` was first
+ *  reserved for the withdrawn `apply` sync door's skipped-write meaning — a different meaning than
+ *  the one #496 gave it; if `apply` ever returns, its origin needs its own word. */
+export type ChangeOrigin = 'user' | 'undo' | 'redo' | 'load'; // 'engine' arrives with its own producer
 
 export interface EntityAdded {
   store: 'entries';

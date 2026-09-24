@@ -14,9 +14,11 @@ import {
   MutationCancelledError,
   RegistrationClosedError,
   UnknownFieldError,
+  DuplicatePluginIdError,
 } from './index.js';
 import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput } from './index.js';
 import type { EditRequest, ProposedEdit, ProposedEdits, WriteTarget } from '../model/index.js';
+import { lockEntries } from '../../harness/plugins/lock-entries.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -799,25 +801,24 @@ describe('Dataset plugins (S5.10)', () => {
     expect(appCalls).toBe(1);
   });
 
-  it('throws RegistrationClosedError when a plugin registers a Field after setup returned', () => {
-    let registerLate = (): void => undefined;
+  it('throws RegistrationClosedError when a plugin claims the extension hook after setup returned', () => {
+    let setExtenderLate = (): void => undefined;
     const late: DataPlugin = {
       id: 'demo.late',
       data(ctx) {
-        registerLate = () => ctx.fields.register({ key: 'cost' });
+        setExtenderLate = () => ctx.edits.setExtender((next) => next);
       },
     };
     new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [late] });
-    expect(registerLate).toThrow(RegistrationClosedError);
+    expect(setExtenderLate).toThrow(RegistrationClosedError);
   });
 
-  it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4)', () => {
+  it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4, #496 R1)', () => {
     const declaresCost: DataPlugin = {
       id: 'demo.cost',
-      data(ctx) {
-        ctx.fields.registerType('money', { rollUp: 'sum' });
-        ctx.fields.register({ key: 'cost', type: 'money' });
-      },
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      data() {},
     };
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -1039,9 +1040,8 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
   /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `props`. */
   const declaresRisk: DataPlugin = {
     id: 'demo.risk',
-    data(ctx) {
-      ctx.fields.register({ key: 'risk', rollUp: 'none' });
-    },
+    fields: [{ key: 'risk', rollUp: 'none' }],
+    data() {},
   };
 
   const withRisk = (): Dataset =>
@@ -1082,6 +1082,79 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
 
     expect(reloaded.field('risk')).toBeDefined();
     expect(reloaded.entries.get('t1')?.read('risk')).toBe('high');
+  });
+});
+
+describe('a plugin Field declared at construction is there before entries are read (#496 grill round 3)', () => {
+  /** No `ctx.fields.register` call: the plugin declares `locked` on itself, the same shape
+   *  `DatasetOptions.fields` takes (R1). This is what `harness/plugins/lock-entries.ts` moves to. */
+  const locks = () => ({
+    id: 'demo.locks',
+    fields: [{ key: 'locked', type: 'boolean', editable: 'api' }] as const,
+    data(): void {
+      /* the extension hook and the store are out of scope for this gap — see lock-entries.ts */
+    },
+  });
+
+  it('keeps a flat plugin-Field value new Dataset() is given, the same as entries.load() already does', () => {
+    const dataset = new Dataset<{ locked?: boolean }>({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
+      plugins: [locks()],
+    });
+
+    expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
+  });
+
+  it('gives new Dataset() and entries.load() the same entries for the same input (Q1 oracle)', () => {
+    const rows = [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }];
+    const fresh = new Dataset<{ locked?: boolean }>({ timeZone: 'UTC', entries: rows, plugins: [locks()] });
+    const loaded = new Dataset<{ locked?: boolean }>({ timeZone: 'UTC', entries: [], plugins: [locks()] });
+    loaded.entries.load(rows);
+
+    expect(loaded.entries.all.map((entry) => entry.toInput())).toEqual(
+      fresh.entries.all.map((entry) => entry.toInput()),
+    );
+  });
+
+  it('reports a duplicate plugin id, not a shared Field key it also declares (ocr review of #532)', () => {
+    // Two installs of the same factory: same id, same declared Field key. Duplicate-id must win —
+    // that is the error docs/06-plugin-authoring.md documents for two plugins sharing an id — and it
+    // has to win *before* the Field merge below ever sees the shared key, or a factory called twice
+    // throws the wrong error naming a key instead of the plugin id it actually got wrong.
+    expect(() => new Dataset({ timeZone: 'UTC', entries: [], plugins: [locks(), locks()] })).toThrow(
+      DuplicatePluginIdError,
+    );
+  });
+
+  it("harness's lockEntries() ghosts a construction-time lock on the drag preview it never itself committed", () => {
+    // The real plugin, not the `locks()` double above: this pins `lockedIds`' own seed walk
+    // (`harness/plugins/lock-entries.ts`), which the local double does not have.
+    const locks = lockEntries();
+    const dataset = new Dataset<{ locked?: boolean }>({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'mover', name: 'Mover', start: '2026-09-01', end: '2026-09-03' },
+        // Locked from construction alone — never its own commit, so `lockedIds` cannot have
+        // learned about it from a `change` this entry raised.
+        { id: 'anchor', name: 'Anchor', start: '2026-09-01', end: '2026-09-03', locked: true },
+      ],
+      plugins: [locks],
+    });
+
+    // The preview path, not a commit: `beforeChange` refuses a real write that moves `anchor`'s
+    // dates too (that refusal is the plugin's whole point, pinned by `e2e/plugins.spec.ts`), so the
+    // fact under test — does the extender's cascade reach `anchor` on the very first call? — is read
+    // off `extraEditsFor`, the same door a drag preview frame calls.
+    const draft = proposedDraft('mover', {
+      start: instant('2026-09-05T00:00:00Z'),
+      end: instant('2026-09-07T00:00:00Z'),
+    });
+    const preview = extraEditsFor(dataset, draft);
+
+    // `anchor` ghosts alongside `mover` on this very first preview — the cascade the extender adds
+    // for every entry in `lockedIds` (#496 grill round 3 follow-up).
+    expect(preview.get(entryId('anchor'))?.start).toEqual(instant('2026-09-05T00:00:00Z'));
   });
 });
 

@@ -10,7 +10,7 @@
 //
 // A plugin author writes `definePlugin` (`api/define-plugin.ts`) and meets the bound names.
 
-import type { Disposer, PluginId } from '../model/index.js';
+import type { Aggregator, Disposer, Field, FieldType, PluginId } from '../model/index.js';
 import type { DatasetPluginContextOf } from './dataset-plugin.js';
 
 /** The two members every plugin declares, whichever halves it fills.
@@ -44,6 +44,13 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
    *  every `onDomEvent` files its own removal in `ctx.disposables`. */
   view(ctx: TViewContext): Disposer | void;
   data?: never;
+  /** Dataset-owned state, registered at construction (#496 grill round 3, R1). Unrepresentable here
+   *  for the same reason `data?: never` is: a chrome-only plugin has no `data()` to run them against.
+   *  So a Field it named would install silently dropped, on the wrong site, with no error —
+   *  `GanttOptions.plugins` never reads this member. */
+  fields?: never;
+  fieldTypes?: never;
+  aggregators?: never;
 }
 
 /** A plugin that owns state — Fields, the edit hook, a store — and may paint it too.
@@ -54,6 +61,20 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
   /** Fields, the edit hook and the store. DOM-free, and runs as the `Dataset` constructs. */
   data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+  /** The same shape `DatasetOptions.fields`/`fieldTypes`/`aggregators` take (#496 grill round 3,
+   *  R1). Registered before any entry is read — alongside the Dataset's own, and before `data()`
+   *  runs. So a flat value an entry carries for one of these keys survives `new Dataset(...)`, the
+   *  same way `entries.load()` already does. A duplicate key across the Dataset and every plugin
+   *  throws `DuplicateFieldKeyError`, the same error two ordinary declarations sharing a key throw.
+   *
+   *  This is the one way a plugin declares: there is no `ctx.fields.register` door. A Field whose
+   *  shape depends on this plugin's own options is built in the factory that returns this object —
+   *  `const costing = (opts) => ({ id: 'acme.costing', fields: [{ key: 'cost', ...opts }], data() {} })`. */
+  fields?: readonly Field[];
+  /** Named Field type bundles this plugin adds, resolved before any Field naming one (D-S4-3). */
+  fieldTypes?: Readonly<Record<string, FieldType>>;
+  /** Aggregators this plugin adds, resolved before any Field naming one in `rollUp`. */
+  aggregators?: Readonly<Record<string, Aggregator>>;
   /** The same half a chrome-only plugin fills. Optional: a headless plugin paints nothing. */
   view?(ctx: TViewContext): Disposer | void;
 }

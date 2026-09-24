@@ -8,8 +8,29 @@ issue plans land here as they're opened.
 **Open:**
 - [#130](https://github.com/Pawel-IT/FreeGantt/issues/130) — WBS. Settled as a
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
+- [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
+  refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
+  Field (#528). Blocked by #496 and #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
+- [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
+  cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`.
+  Blocked by #496 and #529; blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
+- [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
+  delta. Wishlist; blocked by #496 and #517. No plan yet.
+- [#529](https://github.com/freegantt/freegantt/issues/529) — `capabilities.edit` can reopen an
+  `'api'` Field for drag. Direction: `'api'` means code only. Blocks #528. No plan file; the issue
+  holds the work.
+- [#530](https://github.com/freegantt/freegantt/issues/530) — a plugin cannot write its own Field
+  without an `as EntryEdit` cast. Direction: the plugin's generic names only its own keys, and a
+  typed Dataset accepts it. Blocked by #496. No plan file; the issue holds the rulings.
 
 **Closed:**
+
+- [#496](https://github.com/freegantt/freegantt/issues/496) — no order-tolerant bulk write, so a
+  restore button sorted entries parent-first itself. Shipped `dataset.entries.load(inputs)`: it
+  reads the whole list, refuses a dangling parent, a cycle or a duplicate id before anything
+  stages, and commits one `ChangeSet` (`origin: 'load'`) that clears undo history. The undoable
+  diffing door is #517. See
+  [../closed/496-order-tolerant-bulk-write.md](../closed/496-order-tolerant-bulk-write.md).
 
 - [#281](https://github.com/Pawel-IT/FreeGantt/issues/281) — a declared Field key written flat did
   not typecheck at `entries.add()` or the constructor, though it worked at runtime. Closed by the

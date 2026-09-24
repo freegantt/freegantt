@@ -28,7 +28,7 @@ import type {
   HierarchySource,
   HierarchySourceWrapper,
 } from '../model/index.js';
-import { changeSetId } from '../model/index.js';
+import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
 import { toEditsReading, toEntries } from './entry-reader.js';
@@ -45,6 +45,7 @@ import type { HistoryOptions } from './history.js';
 import { createFieldAccess } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
+import type { FieldRegistryOptions } from './fields/field-registry.js';
 import { ComputedFieldCache } from './computed-cache.js';
 
 export type { HistoryOptions };
@@ -85,6 +86,52 @@ export interface DatasetStateOptions {
    *  lives and `data/` may not import `extensions/` (plans/01 §1). `api/dataset.ts` is the composition
    *  root that ties the two together, the same way it already wires view/ and interaction/. */
   installPlugins?: (state: DatasetState) => Disposer;
+  /** Every installed plugin's own `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) — one
+   *  entry per plugin, in `DatasetOptions.plugins` order. `api/dataset.ts` builds this from
+   *  `Dataset<TProps>`'s own plugin list; `data/` never imports `api/`, so it takes the plain shape
+   *  rather than the plugin objects themselves. Merged with this Dataset's own `fields`/`fieldTypes`/
+   *  `aggregators` and registered before `entries` is read (`mergedFieldRegistryOptions` below) —
+   *  the one moment early enough that a flat value an entry carries for a plugin's Field is not yet
+   *  an undeclared key, and late enough that `installPlugins` (called after, once `entries` exists)
+   *  still runs every plugin's `data()` before the construction Rollup, same as before. */
+  pluginFieldDeclarations?: readonly FieldDeclarationSource[];
+}
+
+/** One plugin's own `fields`/`fieldTypes`/`aggregators`, or the Dataset's own (#496 grill round 3,
+ *  R1) — the same shape `FieldRegistryOptions` takes, `undefined` allowed on every key so a caller
+ *  that reads an absent option off a plugin object need not omit the key to satisfy
+ *  `exactOptionalPropertyTypes`. `mergedFieldRegistryOptions` below folds a list of these into one
+ *  `FieldRegistryOptions`, which never carries an explicit `undefined`. */
+export interface FieldDeclarationSource {
+  fields?: readonly Field[] | undefined;
+  fieldTypes?: Readonly<Record<string, FieldType>> | undefined;
+  aggregators?: Readonly<Record<string, Aggregator>> | undefined;
+}
+
+/** Merges the Dataset's own Field declarations with every plugin's own, in that order (#496 grill
+ *  round 3, R1): every fieldType across every source, then every Aggregator, then every Field — so a
+ *  Field naming either resolves against the whole merged set, never just its own source's. A name
+ *  two sources both declare throws `DuplicateFieldKeyError`, the same error two ordinary Field
+ *  declarations sharing a key already throw; a Field key collision is still caught by `FieldRegistry`
+ *  itself, which is built from the merged, concatenated list this returns. */
+function mergedFieldRegistryOptions(sources: readonly FieldDeclarationSource[]): FieldRegistryOptions {
+  const fieldTypes: Record<string, FieldType> = {};
+  for (const source of sources) {
+    for (const [name, type] of Object.entries(source.fieldTypes ?? {})) {
+      if (fieldTypes[name] !== undefined) throw new DuplicateFieldKeyError(name);
+      fieldTypes[name] = type;
+    }
+  }
+  const aggregators: Record<string, Aggregator> = {};
+  for (const source of sources) {
+    for (const [name, fn] of Object.entries(source.aggregators ?? {})) {
+      if (aggregators[name] !== undefined) throw new DuplicateFieldKeyError(name);
+      aggregators[name] = fn;
+    }
+  }
+  const fields: Field[] = [];
+  for (const source of sources) fields.push(...(source.fields ?? []));
+  return { fields, fieldTypes, aggregators };
 }
 
 export class DatasetState implements Dataset {
@@ -132,11 +179,15 @@ export class DatasetState implements Dataset {
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = options.referenceDate ?? now();
     this.#editExtender = options.editExtender ?? identityExtender;
-    this.fields = new FieldRegistry({
-      fields: options.fields ?? [],
-      fieldTypes: options.fieldTypes ?? {},
-      aggregators: options.aggregators ?? {},
-    });
+    // Registered before `entries` below is read (#496 grill round 3, R1): the Dataset's own
+    // declarations, then every plugin's, so a flat value an entry carries for a plugin's Field is
+    // never an undeclared key at ingest, the same as `entries.load()` already reads it.
+    this.fields = new FieldRegistry(
+      mergedFieldRegistryOptions([
+        { fields: options.fields, fieldTypes: options.fieldTypes, aggregators: options.aggregators },
+        ...(options.pluginFieldDeclarations ?? []),
+      ]),
+    );
     this.fieldAccess = createFieldAccess({
       fields: this.fields,
       timeZone: this.timeZone,

@@ -64,13 +64,23 @@ export class History {
 
   /** The whole coupling to the rest of `data/`. `'user'` records a new stack entry. `'undo'`/`'redo'`
    *  move the cursor (D-S2-25): this handler is the first `change` subscriber, so a later handler
-   *  (the harness undo button included) already reads the post-move `canUndo`/`canRedo`. A future
-   *  `'load'` origin (D-S2-11) needs no edit here. */
+   *  (the harness undo button included) already reads the post-move `canUndo`/`canRedo`. `'load'`
+   *  (#496) empties the stack instead: `entries.load()` is a new baseline, not an undoable step, so
+   *  `canUndo`/`canRedo` both read `false` right after it — the same posture a desktop app takes
+   *  opening a file. */
   #onChange = ({ changeSet }: DatasetEventMap['change']): void => {
     if (changeSet.origin === 'user') this.#record(changeSet);
     else if (changeSet.origin === 'undo') this.#cursor -= 1;
     else if (changeSet.origin === 'redo') this.#cursor += 1;
+    else if (changeSet.origin === 'load') this.#clear();
   };
+
+  /** `entries.load()`'s own arm (#496): a full fresh start owes no undo step, and nothing above the
+   *  new baseline is redoable either. */
+  #clear(): void {
+    this.#stack.length = 0;
+    this.#cursor = 0;
+  }
 
   /** A new user edit while the cursor sits below the top clears everything above it (§2.2) — that is
    *  what truncating to the cursor before pushing does. At capacity the oldest entry drops; the cursor

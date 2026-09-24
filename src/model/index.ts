@@ -107,6 +107,7 @@ export {
   AggregatorFailedError,
   MutationDuringNotificationError,
   MutationDuringExtensionHookError,
+  TransactionAlreadyOpenError,
   MutationCancelledError,
   UnreadableCellValueError,
   InvalidReplayOriginError,

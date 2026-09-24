@@ -20,8 +20,10 @@ import type {
   PluginStoreView,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
+import type { FieldDeclarationSource } from '../data/index.js';
 import { createEditRequest } from '../data/edit-request.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
+import { assertNoDuplicateIds } from '../extensions/plugin-order.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
@@ -108,6 +110,21 @@ export interface DatasetOptions<TProps = unknown> {
   plugins?: readonly PluginOf<unknown, Dataset<TProps>>[];
 }
 
+/** One `FieldRegistryOptions`-shaped entry per plugin, `fields`/`fieldTypes`/`aggregators` read off
+ *  the plugin object itself (#496 grill round 3, R1) — `DatasetState`'s constructor merges these with
+ *  the Dataset's own before `entries` is read. Both `PluginOf` arms declare the three keys now
+ *  (`ChromePluginOf`'s own `never` guard, `api/plugin.ts`), so `'…' in plugin` here is a plain
+ *  existence check, not a union narrow — a chrome-only plugin's three keys are always `undefined`. */
+function pluginFieldDeclarationsOf(
+  plugins: readonly PluginOf<unknown, unknown>[],
+): readonly FieldDeclarationSource[] {
+  return plugins.map((plugin) => ({
+    fields: 'fields' in plugin ? plugin.fields : undefined,
+    fieldTypes: 'fieldTypes' in plugin ? plugin.fieldTypes : undefined,
+    aggregators: 'aggregators' in plugin ? plugin.aggregators : undefined,
+  }));
+}
+
 // Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
 // that clause would pull the model type into the public API report as an unexported `Dataset_2`, since
 // api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
@@ -132,9 +149,17 @@ export class Dataset<TProps = unknown> {
 
   constructor(options: DatasetOptions<TProps>) {
     this.#plugins = options.plugins ?? [];
+    // Checked before a plugin's Field declarations are merged (#496 grill round 3, R1): that merge
+    // throws `DuplicateFieldKeyError` on a repeated Field key, and two plugins sharing an id often
+    // share their Field keys too (the same factory, called twice) — so a duplicate id has to be
+    // caught here, first, to keep its own documented error (`docs/06-plugin-authoring.md`).
+    // `installDatasetPlugins` below asserts this again at its own install site (D-S5-3); this earlier
+    // check exists only to win that race.
+    assertNoDuplicateIds(this.#plugins);
     this.#state = new DatasetState({
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
+      pluginFieldDeclarations: pluginFieldDeclarationsOf(this.#plugins),
       ...(this.#plugins.length > 0
         ? { installPlugins: (state: DatasetState) => this.#installPlugins(state) }
         : {}),
@@ -159,20 +184,6 @@ export class Dataset<TProps = unknown> {
             return dispose;
           },
           off: (name, handler) => state.off(name, handler),
-        },
-        fields: {
-          register: (field) => {
-            gate.assertOpen();
-            state.fields.register(field);
-          },
-          registerType: (name, type) => {
-            gate.assertOpen();
-            state.fields.registerType(name, type);
-          },
-          registerAggregator: (name, fn) => {
-            gate.assertOpen();
-            state.fields.registerAggregator(name, fn);
-          },
         },
         edits: {
           setExtender: (wrap) => {
@@ -379,18 +390,4 @@ export function extraEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedE
       lockRule: state.lockRule,
     }),
   );
-}
-
-/** This Dataset's `FieldRegistry.revision` (#495, #414) — how many `register()` calls it has
- *  answered. Not a `Dataset` method, for the same reason `extraEditsFor` above is not one: `layout/`'s
- *  row-plan cache is the one honest caller, and `GanttShell` binds to `model/`'s narrow `Dataset`,
- *  which carries no `fields` to read a registry off. `api/gantt.ts` passes a closure over this into
- *  `GanttShellOptions.fieldRegistryRevision`, the same shape `extraEditsFor` already takes. Exported
- *  from `api/` only, never from `api/index.ts`. */
-export function fieldRegistryRevisionFor<TProps>(dataset: Dataset<TProps>): number {
-  const state = datasetState.get(dataset);
-  if (!state) {
-    throw new Error('fieldRegistryRevisionFor: dataset was not constructed through the Dataset constructor');
-  }
-  return state.fields.revision;
 }

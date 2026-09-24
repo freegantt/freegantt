@@ -10,15 +10,10 @@
 // runs. `api/plugin.ts` holds the plugin shapes that carry both halves.
 
 import type {
-  Aggregator,
-  AggregatorName,
   DatasetEventMap,
   Disposer,
   ExtenderWrapper,
-  Field,
   FieldLockRuleWrapper,
-  FieldType,
-  FieldTypeName,
   HierarchySourceWrapper,
   PluginId,
   PluginStore,
@@ -64,14 +59,6 @@ export interface DatasetEvents {
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }
 
-/** Field declarations a plugin adds to the Dataset it installs into (D-S5-21). Legal while `data()`
- *  runs and not after — a later call throws `RegistrationClosedError` (D-S5-4). */
-export interface DatasetFieldRegistrations {
-  register(field: Field): void;
-  registerType(name: FieldTypeName, type: FieldType): void;
-  registerAggregator(name: AggregatorName, fn: Aggregator): void;
-}
-
 /** The extension hook, as a plugin claims it (D-S5-23). Installing composes: the wrapper receives the
  *  current occupant, so a second plugin adds to the first's cascade instead of evicting it. Merge the
  *  two results with `mergeEntryEdits`, never with a spread (#197).
@@ -115,11 +102,13 @@ export interface DatasetStoreAccess {
   read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
 }
 
-/** What a plugin's `data()` half receives, once, while the Dataset constructs. */
+/** What a plugin's `data()` half receives, once, while the Dataset constructs. A Field declares on
+ *  the plugin object itself — `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) — so there
+ *  is no `ctx.fields` door here: one way to declare, so the pre-#496-R2 gap (a flat value dropped
+ *  because the plugin declared its Field too late for ingest to see) cannot come back. */
 export interface DatasetPluginContextOf<TDataset> {
   dataset: TDataset;
   events: DatasetEvents;
-  fields: DatasetFieldRegistrations;
   edits: DatasetEditHook;
   hierarchy: DatasetHierarchy;
   store: DatasetStoreAccess;
