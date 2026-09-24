@@ -829,6 +829,15 @@ export class EntryStore implements EntryStoreContract {
     return (this.#byParent().get(group as EntryId | undefined) ?? []).map((entry) => entry.id);
   }
 
+  /** `group`'s live member count — `committedSiblingIds(group).length` with this transaction's own
+   *  writes folded in, the same count `add()` and `update()` range-check an explicit `siblingIndex`
+   *  against. The commit path reads this for the extender cascade's own moves too
+   *  (`build-commit-change-set.ts`), so an extender edit range-checks against the same live picture a
+   *  body write already left, rather than the committed count alone. */
+  liveSiblingGroupSize(group: SiblingGroupKey): number {
+    return this.#liveSiblingGroupSize(group);
+  }
+
   /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It raises no
    *  refusal of its own: `DatasetState` calls `reportRefusedHierarchyAnswers` once, right after this
    *  write lands, so every answer construction can produce is covered there instead. */
