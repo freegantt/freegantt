@@ -30,7 +30,7 @@ Name functions and classes in friendly easy to understand for humans and agents 
 
 Comment a seam with the question it answers, not the mechanism it uses. A reader of four registrations must see one story, not four API calls. Comments tells what shape it draws, how it looks, what you can do to it, and what actions it offers. Each question sits above the one call that answers it. Use this shape wherever a module fills more than one seam. Be concise, dont overcomplicate or be overly verbose.
 
-Never cite a spec label such as `D-S5-31`, `J54` or `Q3` in a code comment, a doc or `harness/`. State the rule itself.
+Never cite a spec label such as `D-S5-31`, `J54` or `Q3` in a code comment, a test name, a doc outside `plans/`, or `harness/`. State the rule itself. Labels stay in `plans/` and in commit messages.
 
 **Vocabulary**:
 
