@@ -65,6 +65,17 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     editable: 'api',
   },
   {
+    // An ordinary Field, stored on every Entry (ADR 0034) — no `column` of its own, so the grid never
+    // shows a "siblingIndex" header unless a consumer lists it in `gridColumns`; `type: 'number'`
+    // still gives it a column then, the same default every number Field falls back to. `editable:
+    // 'anywhere'`: an explicit write moves the entry, and the write's own group renumbers around it
+    // in the same transaction (`entry-store.ts`).
+    key: 'siblingIndex',
+    type: 'number',
+    equals: byReference,
+    editable: 'anywhere',
+  },
+  {
     key: 'duration',
     type: 'duration',
     compute: (_entry, ctx) => ctx.duration(),

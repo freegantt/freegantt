@@ -456,6 +456,32 @@ describe('FrameLayout row-plan cache (#495, #414)', () => {
   });
 });
 
+describe('FrameLayout.rowIndexForEntry (#528)', () => {
+  it('finds the lowest row index over a 10k-row plan', () => {
+    const flat = Array.from({ length: 10_000 }, (_unused, index) => ({ id: `e${index}` }));
+    const entries = entryDoubles(flat);
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries }));
+
+    expect(layout.rowIndexForEntry(entryId('e0'))).toBe(0);
+    expect(layout.rowIndexForEntry(entryId('e4999'))).toBe(4999);
+    expect(layout.rowIndexForEntry(entryId('e9999'))).toBe(9999);
+    expect(layout.rowIndexForEntry(entryId('not-a-row'))).toBe(-1);
+  });
+
+  it('answers the first row when one entry sits on two planned rows', () => {
+    const shared = String(sampleEntries[0]!.id);
+    const layout = new FrameLayout();
+    const resolve = () => [
+      { id: 'row-a', entryIds: [shared] },
+      { id: 'row-b', entryIds: [shared] },
+    ];
+    layout.computeFrame(input({ entries: [sampleEntries[0]!], rows: { source: 'custom', resolve } }));
+
+    expect(layout.rowIndexForEntry(entryId(shared))).toBe(0);
+  });
+});
+
 // #424 review, point 1: an earlier cut of `ensureRowPlan` replanned `#plan` and the row-id maps but
 // left `#memory` — the height index, `rowById` — behind. A read between two `computeFrame` calls
 // then answered from two different row trees at once: `rowIndexForEntry` saw the replanned rows,

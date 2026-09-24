@@ -14,6 +14,7 @@ import type {
   HierarchySource,
   StoreRowUpdated,
 } from '../model/index.js';
+import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
 import {
   MutationCancelledError,
   MutationDuringExtensionHookError,
@@ -51,6 +52,14 @@ export interface TransactionalEntryStore {
   pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingRemoved(): readonly { store: 'entries'; entity: StoredEntry }[];
   pendingEdits(): ProposedEdits;
+  /** This write set's own sibling-order log, in call order — see `EntryStore.pendingSiblingChanges`. */
+  pendingSiblingChanges(): readonly SiblingChange[];
+  /** `group`'s committed member ids, in sibling order — see `EntryStore.committedSiblingIds`. */
+  committedSiblingIds(group: SiblingGroupKey): readonly EntryId[];
+  /** `group`'s live member count — see `EntryStore.liveSiblingGroupSize`. */
+  liveSiblingGroupSize(group: SiblingGroupKey): number;
+  /** `entry`'s checked group — see `EntryStore.checkedSiblingGroupOf`. */
+  checkedSiblingGroupOf(id: EntryId, entry: StoredEntry): EntryId | undefined;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;

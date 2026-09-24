@@ -6,5 +6,7 @@ when its recorded delta is at least the actual growth for that pull request and 
 
 Decision record: issue #342.
 
-| Pull request | Entry | Delta (bytes) | Reason |
-| ------------ | ----- | ------------- | ------ |
+| Pull request | Entry                                         | Delta (bytes) | Reason                                                                                                                                                                                         |
+| ------------ | --------------------------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #540         | core + tooltips + contextMenu + inlineEditing | 1300          | The sibling-order renumber pass (ADR 0034): a write-set log in `EntryStore`, the `buildCommitChangeSet` replay after the Rollup, and each call site's own range check.                         |
+| #540         | core (Dataset + Gantt)                        | 1100          | The same sibling-order renumber pass (ADR 0034) — `Dataset` and `Gantt` alone already carry `EntryStore` and `buildCommitChangeSet`, so this entry grows for the same reason as the row above. |

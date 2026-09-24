@@ -21,6 +21,28 @@ test('switching row source to grouped replaces the tree with team rows', async (
   await expect.poll(async () => page.locator('#gantt .fg-row-label').allTextContents()).toContain('alpha');
 });
 
+test('moving Gate review to the top reorders it within its own group, and Undo puts it back', async ({
+  page,
+}) => {
+  await gotoHierarchyAndTimeline(page);
+
+  const labelsBefore = await page.locator('#gantt .fg-row-label').allTextContents();
+  expect(labelsBefore.indexOf('Gate review')).toBeGreaterThan(labelsBefore.indexOf('Plain parent'));
+
+  await page.click('#move-gate-top-btn');
+
+  await expect
+    .poll(async () => {
+      const labels = await page.locator('#gantt .fg-row-label').allTextContents();
+      return labels.indexOf('Gate review') < labels.indexOf('Plain parent');
+    })
+    .toBe(true);
+
+  await page.locator('[aria-label="Undo"]').click();
+
+  await expect.poll(async () => page.locator('#gantt .fg-row-label').allTextContents()).toEqual(labelsBefore);
+});
+
 test('a fixed range hides entries that start or end outside it, fit-to-data shows them again', async ({
   page,
 }) => {

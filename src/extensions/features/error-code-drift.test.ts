@@ -35,6 +35,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'unknown-bar-label-field': true,
   'derived-value': true,
   'derived-values-dropped': true,
+  'sibling-index-dropped': true,
   'no-parse-value': true,
   'no-date-value': true,
   'time-of-day': true,

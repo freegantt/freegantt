@@ -95,6 +95,7 @@ const sortFieldSelect = document.querySelector<HTMLSelectElement>('#sort-field')
 const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 const phaseBtn = document.querySelector<HTMLButtonElement>('#phase-btn')!;
+const moveGateTopBtn = document.querySelector<HTMLButtonElement>('#move-gate-top-btn')!;
 const crewDaysBtn = document.querySelector<HTMLButtonElement>('#crew-days-btn')!;
 const localeSelect = document.querySelector<HTMLSelectElement>('#locale-select')!;
 const rangeModeSelect = document.querySelector<HTMLSelectElement>('#range-mode')!;
@@ -241,6 +242,12 @@ phaseBtn.addEventListener('click', () => {
   phaseBtn.textContent = nested
     ? 'Nest Gate review under Empty phase (plugin tree)'
     : 'Hand Gate review back to Phase A';
+});
+
+// ADR 0034: siblingIndex is an ordinary Field, so a move is one undo step like any other write —
+// no parentId edit, no phase write, just a new rank in the group Gate review already sits in.
+moveGateTopBtn.addEventListener('click', () => {
+  attemptMutation(() => dataset.entries.update('gate', { siblingIndex: 0 }));
 });
 
 crewDaysBtn.addEventListener('click', () => {

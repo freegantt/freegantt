@@ -11,6 +11,7 @@ function createContext(): EntryReadContext {
 function entry(id: string, parentId?: string): StoredEntry {
   const base: StoredEntry = {
     id: entryId(id),
+    siblingIndex: 0,
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,

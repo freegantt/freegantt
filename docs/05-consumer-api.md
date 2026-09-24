@@ -85,6 +85,30 @@ the built-in undo/redo use, published so a consumer can write their own History 
 
 ## Hierarchy and rows
 
+### Sibling order
+
+`siblingIndex` is a core Field: an entry's rank among the entries that share its group (its parent,
+or its group under a plugin `hierarchySource`). `entries.add()` and `entries.update()` write it —
+name a target index, or name none and the entry goes to the end of its group. Every sibling the move
+passes renumbers around it in the same commit.
+
+```ts
+import { Dataset } from 'freegantt';
+
+const dataset = new Dataset({
+  timeZone: 'Europe/Warsaw',
+  entries: [
+    { id: 'foundation', parentId: 'house' },
+    { id: 'framing', parentId: 'house' },
+    { id: 'roofing', parentId: 'house' },
+    { id: 'house' },
+  ],
+});
+
+// moves "roofing" to the front of its group — "foundation" and "framing" shift down by one
+dataset.entries.update('roofing', { siblingIndex: 0 });
+```
+
 ### Dataset
 
 - `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. Field key `start` cannot be redeclared (`IllegalCoreFieldOverrideError` except `editable`); type name `date` is replaceable at construction via `fieldTypes` — that door is construction-only.

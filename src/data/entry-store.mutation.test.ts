@@ -10,6 +10,7 @@ import type { EditExtender } from './edit-extension.js';
 import * as writeRule from './write-rule.js';
 import {
   ComputedFieldCannotBeWrittenError,
+  SiblingIndexOutOfRangeError,
   DerivedFieldNotWritableError,
   DuplicateEntryIdError,
   EntryNotFoundError,
@@ -20,6 +21,7 @@ import {
 } from '../model/index.js';
 import type { ChangeSet, EntryEdit, EntryId, EntryInput } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
+import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 
 interface Seed extends Partial<Omit<EntryInput, 'id'>> {
   id: string;
@@ -170,6 +172,292 @@ describe('entries.remove', () => {
   it('an unknown id throws EntryNotFoundError', () => {
     const state = dataset();
     expect(() => state.entries.remove('missing')).toThrow(EntryNotFoundError);
+  });
+});
+
+describe('every write renumbers its group (ADR 0034)', () => {
+  function ranksOf(state: DatasetState, ids: readonly string[]): number[] {
+    return ids.map((id) => state.entries.get(id)!.read('siblingIndex') as number);
+  }
+
+  it('two add() calls into one group in one transaction get distinct indexes, not both 0', () => {
+    const state = dataset([{ id: 'p' }]);
+
+    state.transaction(() => {
+      state.entries.add({ id: 'a', parentId: 'p' });
+      state.entries.add({ id: 'b', parentId: 'p' });
+    });
+
+    expect(ranksOf(state, ['a', 'b'])).toEqual([0, 1]);
+  });
+
+  it('add at index 0 shifts every existing sibling up by one', () => {
+    const state = dataset([{ id: 'p' }, { id: 'a', parentId: 'p' }, { id: 'b', parentId: 'p' }]);
+
+    state.entries.add({ id: 'c', parentId: 'p', siblingIndex: 0 });
+
+    expect(ranksOf(state, ['c', 'a', 'b'])).toEqual([0, 1, 2]);
+  });
+
+  it('remove closes the gap it leaves behind', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p' },
+      { id: 'b', parentId: 'p' },
+      { id: 'c', parentId: 'p' },
+    ]);
+
+    state.entries.remove('b');
+
+    expect(ranksOf(state, ['a', 'c'])).toEqual([0, 1]);
+  });
+
+  it('a reparent with an explicit siblingIndex renumbers both groups, and one undo restores both', () => {
+    const state = dataset([
+      { id: 'p1' },
+      { id: 'p2' },
+      { id: 't1', parentId: 'p1' },
+      { id: 't7', parentId: 'p1' },
+      { id: 't8', parentId: 'p2' },
+    ]);
+
+    state.entries.update('t7', { parentId: 'p2', siblingIndex: 0 });
+
+    expect(ranksOf(state, ['t1'])).toEqual([0]);
+    expect(ranksOf(state, ['t7', 't8'])).toEqual([0, 1]);
+
+    state.undo();
+
+    expect(ranksOf(state, ['t1', 't7'])).toEqual([0, 1]);
+    expect(ranksOf(state, ['t8'])).toEqual([0]);
+  });
+
+  it('an out-of-range, negative, or non-integer siblingIndex throws and stages nothing', () => {
+    const state = dataset([{ id: 'p' }, { id: 'a', parentId: 'p' }]);
+    const seen = changeSets(state);
+
+    expect(() => state.entries.add({ id: 'b', parentId: 'p', siblingIndex: 5 })).toThrow(
+      SiblingIndexOutOfRangeError,
+    );
+    expect(() => state.entries.add({ id: 'b', parentId: 'p', siblingIndex: -1 })).toThrow(
+      SiblingIndexOutOfRangeError,
+    );
+    expect(() => state.entries.add({ id: 'b', parentId: 'p', siblingIndex: 0.5 })).toThrow(
+      SiblingIndexOutOfRangeError,
+    );
+    expect(() => state.entries.update('a', { siblingIndex: 5 })).toThrow(SiblingIndexOutOfRangeError);
+
+    expect(seen).toHaveLength(0);
+    expect(state.entries.has('b')).toBe(false);
+  });
+
+  it('several moves in one transaction apply in call order', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'a', parentId: 'p' },
+      { id: 'b', parentId: 'p' },
+      { id: 'c', parentId: 'p' },
+    ]);
+
+    state.transaction(() => {
+      state.entries.update('c', { siblingIndex: 0 });
+      state.entries.update('a', { siblingIndex: 2 });
+    });
+
+    expect(ranksOf(state, ['c', 'b', 'a'])).toEqual([0, 1, 2]);
+  });
+
+  it('a phaseId-sourced move with no explicit index goes to the end of the new group', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'design' },
+        { id: 'build' },
+        { id: 'a', name: 'a', start: 0, end: 1, props: { phaseId: 'design' } },
+        { id: 'b', name: 'b', start: 0, end: 1, props: { phaseId: 'build' } },
+        { id: 'c', name: 'c', start: 0, end: 1, props: { phaseId: 'build' } },
+      ],
+      timeZone: 'UTC',
+      fields: [{ key: 'phaseId', type: 'text', editable: 'anywhere' }],
+      hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
+    });
+
+    state.entries.update('a', { phaseId: 'build' });
+
+    expect(ranksOf(state, ['b', 'c', 'a'])).toEqual([0, 1, 2]);
+  });
+
+  it('a move to the same place commits nothing', () => {
+    const state = dataset([{ id: 'p' }, { id: 'a', parentId: 'p' }, { id: 'b', parentId: 'p' }]);
+    const seen = changeSets(state);
+
+    state.entries.update('a', { siblingIndex: 0 });
+
+    expect(seen).toHaveLength(0);
+  });
+
+  it('an explicit move on an entry whose raw hierarchy answer is refused range-checks against the checked root group it actually joins, not an empty one of its own', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'r' }, { id: 'x', name: 'x', start: 0, end: 1, props: { phaseId: 'ghost' } }],
+      timeZone: 'UTC',
+      fields: [{ key: 'phaseId', type: 'text', editable: 'anywhere' }],
+      hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
+    });
+
+    expect(() => state.entries.update('x', { siblingIndex: 0 })).not.toThrow();
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+  });
+
+  it("a Field locked to 'never' refuses an explicit move, and a reparent still appends", () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 't1', parentId: 'p1', name: 't1', start: 0, end: 1 },
+        { id: 't2', parentId: 'p2', name: 't2', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      fields: [{ key: 'siblingIndex', editable: 'never' }],
+    });
+
+    expect(() => state.entries.update('t1', { siblingIndex: 0 })).toThrow(FieldNotEditableError);
+
+    state.entries.update('t1', { parentId: 'p2' });
+
+    expect(state.entries.get('t1')!.read('siblingIndex')).toBe(1);
+    expect(state.entries.get('t2')!.read('siblingIndex')).toBe(0);
+  });
+});
+
+describe('an extender edit renumbers its own group too (ADR 0034)', () => {
+  it('an extender edit naming siblingIndex moves the entry, on top of the body write it rides in on', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p' },
+        { id: 'a', parentId: 'p', name: 'a', start: 0, end: 1 },
+        { id: 'b', parentId: 'p', name: 'b', start: 0, end: 1 },
+        { id: 'c', parentId: 'p', name: 'c', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('a'))) return new Map();
+        return new Map([[entryId('c'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    state.entries.update('a', { name: 'a (renamed)' });
+
+    expect(state.entries.get('c')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(1);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(2);
+  });
+
+  it('an extender edit that reparents an entry appends it at the end of its new group', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'a', parentId: 'p1', name: 'a', start: 0, end: 1 },
+        { id: 'x', parentId: 'p2', name: 'x', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('a'))) return new Map();
+        return new Map([[entryId('x'), { parentId: 'p1' }]]);
+      },
+    });
+
+    state.entries.update('a', { name: 'a (renamed)' });
+
+    expect(state.entries.get('x')!.read('parentId')).toBe(entryId('p1'));
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(1);
+  });
+
+  it('an out-of-range siblingIndex from the extender throws, labelled with the extender operation', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'p' }, { id: 'a', parentId: 'p', name: 'a', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('a'))) return new Map();
+        return new Map([[entryId('a'), { siblingIndex: 9 }]]);
+      },
+    });
+
+    expect(() => state.entries.update('a', { name: 'a (renamed)' })).toThrow(SiblingIndexOutOfRangeError);
+  });
+
+  it('an extender edit on an entity the body already reparented in the same transaction reads the group the body left it in, not the stale committed one', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'x', parentId: 'p1', name: 'x', start: 0, end: 1 },
+        { id: 'a', parentId: 'p1', name: 'a', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('x'))) return new Map();
+        return new Map([[entryId('x'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    state.entries.update('x', { parentId: 'p2' });
+
+    expect(state.entries.get('x')!.read('parentId')).toBe(entryId('p2'));
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('a')!.read('parentId')).toBe(entryId('p1'));
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+  });
+
+  it('an extender edit on an entity added in this same transaction reparents it, and gives it the explicit index it asked for', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'p1' }, { id: 'p2' }, { id: 'a', parentId: 'p2', name: 'a', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      editExtender: ({ addedEntryIds }) => {
+        if (!addedEntryIds.has(entryId('x'))) return new Map();
+        return new Map([[entryId('x'), { parentId: 'p1', siblingIndex: 0 }]]);
+      },
+    });
+
+    state.entries.add({ id: 'x', parentId: 'p2', name: 'x', start: 0, end: 1 });
+
+    expect(state.entries.get('x')!.read('parentId')).toBe(entryId('p1'));
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+  });
+
+  it('an extender edit on an entity whose raw hierarchy answer is refused range-checks against the checked root group it actually joins, not an empty one of its own', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'r' }, { id: 'x', name: 'x', start: 0, end: 1, props: { phaseId: 'ghost' } }],
+      timeZone: 'UTC',
+      fields: [{ key: 'phaseId', type: 'text', editable: 'anywhere' }],
+      hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('x'))) return new Map();
+        return new Map([[entryId('x'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    expect(() => state.entries.update('x', { name: 'x (renamed)' })).not.toThrow();
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
+  });
+});
+
+describe('the renumber pass at 10,000 rows (ADR 0034)', () => {
+  it('moving the first root to the end writes exactly 10,000 rows, and reads the committed group once, not once per row', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: seededEntryInputs({ count: 10_000 }) });
+    const rows: unknown[] = [];
+    state.on('change', ({ changeSet }) => {
+      rows.push(...fieldRowsOf(changeSet).filter((row) => row.field === 'siblingIndex'));
+    });
+    // The renumber pass reads a touched group through this one door (`sibling-order.ts`'s own
+    // `committedSiblingsOf`) — once per distinct group the write's changes touch, never once per
+    // sibling in it. A single move stays cheap against a 10,000-row group the same way it stays
+    // cheap against a 3-row one.
+    const committedSiblingIdsSpy = vi.spyOn(state.entries, 'committedSiblingIds');
+
+    state.entries.update('seeded-0', { siblingIndex: 9_999 });
+
+    expect(rows).toHaveLength(10_000);
+    expect(committedSiblingIdsSpy.mock.calls.length).toBeLessThanOrEqual(2);
   });
 });
 
@@ -646,7 +934,7 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
     expect(state.entries.get('t1')!.read('touched')).toBe(true);
   });
 
-  it('a remove then a re-add of the same id, in one transaction, folds to a plain in-place replace — the changeset carries no removed row for that id, and the id keeps its old position in entries.all', () => {
+  it('a remove then a re-add of the same id, in one transaction, folds to a plain in-place replace — the changeset carries no removed row for that id, and add() places the re-added row at the end of its group', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
     const seen = changeSets(state);
 
@@ -663,10 +951,12 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
     expect(changeSet.added.map((row) => row.entity.id)).toEqual([entryId('b')]);
     expect(changeSet.added[0]!.entity.name).toBe('New B');
 
-    // The id keeps its original slot — the fold is an in-place value replace, not a move to the
-    // end of insertion order. `load` must build its own ChangeSet rather than lean on this fold,
-    // or a kept id would keep its old list position instead of the input list's position (Q1).
-    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('b'), entryId('c')]);
+    // `add()` without an index takes the group's own count at add time — still the committed
+    // count of three, mid-transaction (ADR 0034's documented stale read) — so the re-added row
+    // lands after 'c', not back in its old slot. `load` must build its own ChangeSet rather than
+    // lean on this fold, or a kept id would keep its old list position instead of the input list's
+    // position (Q1).
+    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
     expect(state.entries.get('b')!.name).toBe('New B');
   });
 });

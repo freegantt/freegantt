@@ -8,6 +8,7 @@ import { FieldRegistry } from './field-registry.js';
 function child(id: string, values: Record<string, unknown>, duration = 1): StoredEntry {
   return {
     id: entryId(id),
+    siblingIndex: 0,
     name: id,
     start: 0 as Instant,
     end: duration as Instant,
@@ -33,6 +34,7 @@ function ctx(field: FieldKey, children: readonly StoredEntry[]): RollUpContext {
 
 const parent: StoredEntry = {
   id: entryId('p'),
+  siblingIndex: 0,
   name: 'p',
   start: 0 as Instant,
   end: 0 as Instant,

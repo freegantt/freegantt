@@ -99,7 +99,7 @@ describe('toProposedEdit (S4.10)', () => {
       context,
       registry,
     );
-    return entry!;
+    return { ...entry!, siblingIndex: 0 };
   }
 
   it('writes start and end as ordinary Fields, independent of one another (ADR 0026)', () => {
@@ -137,7 +137,13 @@ describe('toProposedEdit (S4.10)', () => {
       context,
       registry,
     );
-    const edit = toProposedEdit({ end: '2026-09-01T09:00:00Z' }, context, entry!, registry, 'entries.update');
+    const edit = toProposedEdit(
+      { end: '2026-09-01T09:00:00Z' },
+      context,
+      { ...entry!, siblingIndex: 0 },
+      registry,
+      'entries.update',
+    );
     // `end` alone is written now (ADR 0026 retired the pairing that used to derive `start` too), so
     // the check is against the entry's own, untouched `start`, not against `edit.start`.
     expect(edit.end).toBe(entry!.start);
@@ -159,7 +165,7 @@ describe('moveEntryTo writes a rigid start/end translate (D-S5-50, #239, ADR 002
       context,
       registry,
     );
-    return entry!;
+    return { ...entry!, siblingIndex: 0 };
   }
 
   it('names start and end and nothing else', () => {
@@ -193,7 +199,7 @@ describe('moveEntryTo writes a rigid start/end translate (D-S5-50, #239, ADR 002
     const context = createContext();
     const [startOnly] = toEntries([{ id: 'o1', name: 'Open', start: '2026-01-01' }], context, registry);
 
-    const edit = moveEntryTo(startOnly!, instant(utc('2026-01-03T00:00:00Z')));
+    const edit = moveEntryTo({ ...startOnly!, siblingIndex: 0 }, instant(utc('2026-01-03T00:00:00Z')));
 
     expect(startOnly!.end).toBeUndefined();
     expect(edit).toEqual({});
@@ -250,40 +256,42 @@ describe('InvertedSpanError names the caller, the entry id, and both instants', 
 
   it('an unreadable date names the caller too, not toInstant (#237)', () => {
     const context = createContext();
-    const [entry] = toEntries(
+    const [unplaced] = toEntries(
       [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
       context,
       registry,
     );
+    const entry: StoredEntry = { ...unplaced!, siblingIndex: 0 };
 
     expect(() =>
       toEntries([{ id: 't2', name: 'Build', start: 'next tuesday', end: '2026-01-05' }], context, registry),
     ).toThrow('construction: "next tuesday" is not a date this library reads.');
     expect(() =>
-      toProposedEdit({ start: 'next tuesday' }, context, entry!, registry, 'entries.update'),
+      toProposedEdit({ start: 'next tuesday' }, context, entry, registry, 'entries.update'),
     ).toThrow('entries.update: "next tuesday" is not a date this library reads.');
   });
 
   it('names entries.update for an update, and the edit extender for a cascade', () => {
     const context = createContext();
-    const [entry] = toEntries(
+    const [unplaced] = toEntries(
       [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
       context,
       registry,
     );
+    const entry: StoredEntry = { ...unplaced!, siblingIndex: 0 };
     const inverting = { start: instant(utc('2026-06-01T00:00:00Z')) };
 
     const fromUpdate = invertedSpanErrorFrom(() =>
-      toProposedEdit(inverting, context, entry!, registry, 'entries.update'),
+      toProposedEdit(inverting, context, entry, registry, 'entries.update'),
     );
     expect(fromUpdate.operation).toBe('entries.update');
 
-    const cascade: EntryEdits = new Map([[entry!.id, inverting]]);
+    const cascade: EntryEdits = new Map([[entry.id, inverting]]);
     const fromCascade = invertedSpanErrorFrom(() =>
       toEditsReading(
         cascade,
         context,
-        (id) => (id === entry!.id ? entry : undefined),
+        (id) => (id === entry.id ? entry : undefined),
         registry,
         identityFieldLockRule,
         storedParentSource,
@@ -298,15 +306,16 @@ describe('InvertedSpanError names the caller, the entry id, and both instants', 
   // as its own way of refusing an inversion (ADR 0012 does not touch this rule).
   it('leaves a zero-length span legal', () => {
     const context = createContext();
-    const [entry] = toEntries(
+    const [unplaced] = toEntries(
       [{ id: 't1', name: 'Design', start: '2026-01-01', end: '2026-01-05' }],
       context,
       registry,
     );
-    const zeroLength = instant(entry!.start!);
+    const entry: StoredEntry = { ...unplaced!, siblingIndex: 0 };
+    const zeroLength = instant(entry.start!);
 
-    const stored = toProposedEdit({ end: zeroLength }, context, entry!, registry, 'entries.update');
-    expect(stored.end).toBe(entry!.start);
+    const stored = toProposedEdit({ end: zeroLength }, context, entry, registry, 'entries.update');
+    expect(stored.end).toBe(entry.start);
   });
 });
 
@@ -317,7 +326,7 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
       context,
       registry,
     );
-    return entry!;
+    return { ...entry!, siblingIndex: 0 };
   }
 
   it('reads every edit in the map through the extension hook operation name', () => {
@@ -398,7 +407,7 @@ describe('toEditsReading honours the editable lock (#473, ADR 0015)', () => {
       context,
       lockedRegistry,
     );
-    return entry!;
+    return { ...entry!, siblingIndex: 0 };
   }
 
   it("refuses a cascade onto a 'never' Field, and commits nothing", () => {
