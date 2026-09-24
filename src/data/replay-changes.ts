@@ -288,7 +288,10 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
         : storeRowToReplay(row, working, data.pluginStores);
     if (!replayed) continue;
     updated.push(replayed);
-    if (replayed.store === 'entries' && replayed.field === 'parentId')
+    // Keeps the first `parentId` row per id: a reverted id's kept value is the value it held before
+    // the step (`soundUpdated`'s own filter drops every `parentId` row for a reverted id), which is
+    // this row's `from` — the same first-row rule `mergeUpdatedRows` keeps for every other Field.
+    if (replayed.store === 'entries' && replayed.field === 'parentId' && !parentIdRows.has(replayed.id))
       parentIdRows.set(replayed.id, replayed);
   }
   const reverted = revertLoopingParentRows(working, data.fields, parentIdRows);

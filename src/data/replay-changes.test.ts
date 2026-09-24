@@ -460,6 +460,29 @@ describe('replay judges a step’s parentId rows against each other, not one row
     expect(state.entries.get('b')?.read('parentId')).toBe('a');
     expect(state.entries.get('a')?.read('parentId')).toBeUndefined();
   });
+
+  it('a reverted loop restores the value the step first recorded, not an intermediate one', () => {
+    // a starts a root; b is another root with its own child d; c is a's own child, so a chain that
+    // ends at c loops straight back to a.
+    const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'd', parentId: 'b' }, { id: 'c', parentId: 'a' }]);
+
+    // A hand-built step carrying two parentId rows for 'a' — the second one closes a loop with c,
+    // which is a's own committed child.
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'parentId', from: undefined, to: entryId('b') },
+          { store: 'entries', id: entryId('a'), field: 'parentId', from: entryId('b'), to: entryId('c') },
+        ],
+      }),
+    );
+
+    // The loop is dropped, so a keeps its committed parent: root. b's real child, untouched by this
+    // step, keeps its own committed rank instead of being renumbered around a's rejected detour
+    // through b.
+    expect(state.entries.get('a')?.read('parentId')).toBeUndefined();
+    expect(state.entries.get('d')?.read('siblingIndex')).toBe(0);
+  });
 });
 
 describe('replay renumbers the sibling groups it touches, dense from 0', () => {
