@@ -358,15 +358,19 @@ export class RevealTargetNotFoundError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-entry-id'` — `entries.add()` given an id already in the store (S2.3 §1.3). */
+/** `code: 'duplicate-entry-id'` — two different mistakes, two different messages. `kind: 'collision'`
+ *  is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind: 'duplicate-in-list'` is
+ *  a whole-list write (`entries.load()`, and `entries.sync()`, #517) finding one id twice inside the
+ *  list itself — `assertEntryBatchIsSound` (`data/entry-batch.ts`) throws this before anything
+ *  stages. */
 export class DuplicateEntryIdError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly operation: string;
 
-  constructor(entryId: EntryId, operation: string) {
+  constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list') {
     super(
       'duplicate-entry-id' satisfies BuiltInThrownCode,
-      operation === 'entries.add'
+      kind === 'collision'
         ? `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`
         : `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`,
     );

@@ -64,7 +64,7 @@ function cycleMemberIds(
 export function assertEntryBatchIsSound(entries: readonly StoredEntry[], operation: string): void {
   const byId = new Map<EntryId, StoredEntry>();
   for (const entry of entries) {
-    if (byId.has(entry.id)) throw new DuplicateEntryIdError(entry.id, operation);
+    if (byId.has(entry.id)) throw new DuplicateEntryIdError(entry.id, operation, 'duplicate-in-list');
     byId.set(entry.id, entry);
   }
   for (const entry of entries) {
