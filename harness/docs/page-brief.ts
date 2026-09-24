@@ -67,7 +67,8 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'A Dataset plugin locks an entry and refuses every edit to it',
       "A per-entry lock rule opens a locked Field for one subtree, sharper than Field.editable (#473)",
       'Plugins over the public contract: a custom bar kind, an over-budget row, a chord command, and a popup',
-      'JSON export and import round-trip the whole Dataset',
+      'JSON export and import round-trip the whole Dataset, and Import is a full fresh start that clears undo',
+      'Sync from server diffs a fetched list against the live data, keeps a kept row selected, and records one undo step',
       'A custom tickIncrement > 1 preset and snap, anchored on the calendar so gridlines hold still on a pan',
     ],
     config: [
@@ -78,6 +79,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       "ctx.edits.setLockRule((next) => (entry, field) => …)",
       'gantt.installPlugin(bufferKind())',
       "gantt.snap = { unit: 'hour', increment: 6 }",
+      'dataset.entries.sync(server.fetchRows())',
     ],
     specLinks: [
       { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },

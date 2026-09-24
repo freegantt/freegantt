@@ -140,11 +140,13 @@
               <h3>Document</h3>
               <p>
                 Round-trips the whole Dataset through the public <code>toInput()</code>/<code>add()</code>
-                pair.
+                pair. Import replaces every entry and clears undo. Sync diffs a fetched list against the live
+                data instead, keeps a kept row's selection and collapse state, and records one undo step.
               </p>
               <div class="control-row">
                 <button id="export-btn" type="button">Export</button>
                 <button id="import-btn" type="button">Import</button>
+                <button id="sync-btn" type="button">Sync from server</button>
               </div>
               <textarea
                 id="document-json"
