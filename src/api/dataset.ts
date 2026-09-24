@@ -91,7 +91,8 @@ export interface DatasetOptions<TProps = unknown> {
    *  is. */
   measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
-   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
+   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). `entries.sync()` records no step of its own
+   * (`docs/11-server-data.md`), so a frequent poll never eats into this headroom. */
   history?: { capacity?: number };
   /** The plugins this Dataset installs (D-S5-24, ADR 0019). An unordered set: installation resolves
    *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
@@ -306,7 +307,8 @@ export class Dataset<TProps = unknown> {
   }
 
   /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
-   *  `'user'` is the only origin a public caller can produce in S2. */
+   *  `'user'` is the only origin a call to `transaction()` can produce — `entries.load()` and
+   *  `entries.sync()` refuse to run inside one, since each is always its own transaction. */
   transaction<T>(body: () => T): T {
     return this.#state.transaction(body);
   }
@@ -339,23 +341,32 @@ export class Dataset<TProps = unknown> {
 
   /** Reverts the most recent undoable changeset (`plans/s2-data-core/s2.5-undo-redo.md` §1). A no-op
    *  when `canUndo` is `false`. What it did arrives on `on('change')`, like every other commit — a
-   *  refused undo throws `MutationCancelledError` and leaves the history exactly where it was. */
+   *  refused undo throws `MutationCancelledError` and leaves the history exactly where it was.
+   *
+   *  Writes onto the store's current values, not blind: a sync since this step was recorded is
+   *  overwritten, and a step left with nothing to write is skipped in favor of the one before it, in
+   *  this same call (`docs/11-server-data.md`). */
   undo(): void {
     this.#state.undo();
   }
 
-  /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. */
+  /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. Undoing this
+   *  redo writes back exactly what this call wrote — undo then redo is neutral, even across a sync
+   *  in between. */
   redo(): void {
     this.#state.redo();
   }
 
-  /** Applies an already-complete `ChangeSet` exactly as given — no extension hook, no rollup
-   *  (`plans/s2-data-core/s2b-undo-replay-seam.md`). `changeSet.origin` must be `'undo'` or `'redo'`;
-   *  `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (D-S2-11). An empty
-   *  changeset is a no-op: no event, no throw. `beforeChange` then `change` still fire, and a veto
-   *  throws `MutationCancelledError` and writes nothing. This is the write path `undo()`/`redo()` use;
-   *  a consumer History can now be written against this method alone, plus `invertChangeSet` and
-   *  `on('change')`. */
+  /** Writes `changeSet` onto the store's current values, not blind — the same rule a sync overwrites a
+   *  local edit with (`plans/s2-data-core/s2b-undo-replay-seam.md`, amended for local-only undo across
+   *  a sync). A row for an id or a Field a sync has already settled writes nothing for it; the rest of
+   *  the changeset still lands. No extension hook. It re-rolls every parent it touches, construction
+   *  shape; with no foreign write in between, the Rollup writes nothing. `changeSet.origin` must be `'undo'` or
+   *  `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, not open yet. When
+   *  nothing is left to write, this is a no-op: no `beforeChange`, no `change`. Otherwise `beforeChange`
+   *  then `change` fire, and a veto throws `MutationCancelledError` and writes nothing. This is the
+   *  write path `undo()`/`redo()` use; a consumer History can now be written against this method alone,
+   *  plus `invertChangeSet` and `on('change')`. */
   replay(changeSet: ChangeSet): void {
     this.#state.replay(changeSet);
   }

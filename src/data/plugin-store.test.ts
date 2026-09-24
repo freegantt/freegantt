@@ -175,6 +175,52 @@ describe('a plugin-store write on the commit path (D-S5-24)', () => {
     expect(lock.get(entryId('t1'))).toBeUndefined();
   });
 
+  it('a replace in one transaction removes the old plugin rows too — the fresh entity starts with none', () => {
+    // `remove('t1'); add({ id: 't1' })` in one transaction is a replace, not an update: the entry
+    // that owned the plugin row is gone, so the row goes with it, the same as an ordinary remove.
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    lock.set(entryId('t1'), { locked: true });
+    const committed = recordChangeSets(state);
+
+    state.transaction(() => {
+      state.entries.remove('t1');
+      state.entries.add({ id: 't1', name: 'Design (reborn)', start: '2026-09-01', end: '2026-09-08' });
+    });
+
+    expect(committed).toHaveLength(1);
+    expect(storeRowsOf(committed[0]!)).toEqual([
+      { store: LOCK_STORE, id: entryId('t1'), from: { locked: true }, to: undefined },
+    ]);
+    expect(lock.get(entryId('t1'))).toBeUndefined();
+  });
+
+  it('a plugin row written for the replaced id after the add lands as one net row, not a second one', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const original: LockRow = { locked: true };
+    lock.set(entryId('t1'), original);
+    const committed = recordChangeSets(state);
+    // A fresh object, same shape as `original` — `PluginStore` diffs by identity (`Object.is`), not
+    // by value, so this still counts as a change even though `locked` reads `true` on both.
+    const freshValue: LockRow = { locked: true };
+
+    state.transaction(() => {
+      state.entries.remove('t1');
+      state.entries.add({ id: 't1', name: 'Design (reborn)', start: '2026-09-01', end: '2026-09-08' });
+      lock.set(entryId('t1'), freshValue);
+    });
+
+    // A write this same transaction stages for the row wins over the synthetic removal row `remove()`
+    // would otherwise add: one net row, the store's own pre-transaction value to the value this
+    // transaction set — not a delete row and a write row both landing for the same (store, id).
+    expect(committed).toHaveLength(1);
+    expect(storeRowsOf(committed[0]!)).toEqual([
+      { store: LOCK_STORE, id: entryId('t1'), from: original, to: freshValue },
+    ]);
+    expect(lock.get(entryId('t1'))).toEqual(freshValue);
+  });
+
   it('removes an entry row from a second store, even when a staged row in another store spells the same characters', () => {
     // `plugin:` + `tt1` and `plugin:t` + `t1` join to the same string. `pendingRows` must tell these
     // two stores apart by structure, not by a concatenated key (R4).

@@ -9,6 +9,7 @@ import {
   EntryNotFoundError,
   MutationCancelledError,
   MutationDuringExtensionHookError,
+  MutationDuringNotificationError,
   ParentCycleError,
   TransactionAlreadyOpenError,
   entryId,
@@ -18,6 +19,7 @@ import {
   assertEntryBatchIsSound,
   assertNoOpenTransaction,
   assertNoRunningExtensionHook,
+  assertNotNotifying,
   readEntryBatch,
 } from './entry-batch.js';
 import { toEntries } from './entry-reader.js';
@@ -122,6 +124,11 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
   it('assertNoRunningExtensionHook is silent when false and throws when true', () => {
     expect(() => assertNoRunningExtensionHook(false, 'test')).not.toThrow();
     expect(() => assertNoRunningExtensionHook(true, 'test')).toThrow(MutationDuringExtensionHookError);
+  });
+
+  it('assertNotNotifying is silent when false and throws when true', () => {
+    expect(() => assertNotNotifying(false, 'test')).not.toThrow();
+    expect(() => assertNotNotifying(true, 'test')).toThrow(MutationDuringNotificationError);
   });
 });
 
@@ -329,6 +336,17 @@ describe('entries.load', () => {
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('t1')]);
   });
 
+  it('load called inside a change handler throws MutationDuringNotificationError, naming entries.load', () => {
+    const state = dataset([{ id: 'old' }]);
+    state.on('change', () => {
+      state.entries.load([{ id: 'second', name: 'Second', start: 0, end: 1 }]);
+    });
+
+    expect(() => state.entries.load([{ id: 'first', name: 'First', start: 0, end: 1 }])).toThrow(
+      'entries.load: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
+    );
+  });
+
   it('an id in both lists keeps no old plugin-store row, selection or other per-entry state (L1)', () => {
     const state = dataset([{ id: 'kept' }]);
     state.pluginStores.reserve<{ locked: true }>('demo.lock').set('kept', { locked: true });
@@ -370,6 +388,27 @@ describe('entries.load', () => {
     state.entries.load(inputs);
 
     expect(state.entries.get('p1')!.read('cost')).toBe(300);
+  });
+
+  it('an added parent carries its rolled-up value on the entity, and the change carries no entries row for it', () => {
+    const state = new DatasetState({
+      entries: [],
+      timeZone: 'UTC',
+      fields: [{ key: 'cost', type: 'number', rollUp: 'sum' }],
+    });
+    const rows = changeSets(state);
+
+    const inputs: FlatEntryInput<{ cost: number }>[] = [
+      { id: 'p1', name: 'Parent' },
+      { id: 'c1', name: 'Child', parentId: 'p1', cost: 100 },
+      { id: 'c2', name: 'Child', parentId: 'p1', cost: 200 },
+    ];
+    state.entries.load(inputs);
+
+    expect(rows).toHaveLength(1);
+    const parentRow = rows[0]!.added.find((row) => row.entity.id === 'p1');
+    expect((parentRow?.entity.props as { cost?: number } | undefined)?.cost).toBe(300);
+    expect(rows[0]!.updated.some((row) => row.store === 'entries' && row.id === 'p1')).toBe(false);
   });
 
   it('a load that authors a value on a parent whose only child has none drops it and reports "derived-values-dropped", the same as construction (ADR 0013 decision 5, Q3)', () => {

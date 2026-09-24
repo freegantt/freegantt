@@ -200,6 +200,14 @@ export class PluginStores {
     return rows;
   }
 
+  /** `id`'s committed row in `store`, with no write set overlaid — the seam `data/replay-changes.ts`
+   *  reads a store row's current value through (#517). Not `#read`: a replay computes its own rows
+   *  before any transaction opens, so it must never see a write set that belongs to some other,
+   *  unrelated call. */
+  committedRow(store: PluginStoreName, id: EntryId): object | undefined {
+    return this.#committed.get(store)?.get(id);
+  }
+
   /** Applies the committed `ChangeSet`'s store rows and closes the write set. `undefined` — an empty
    *  net effect or a vetoed commit — discards the write set and writes nothing. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {

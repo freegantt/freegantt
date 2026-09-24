@@ -36,8 +36,8 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
  *  mutator returns the entry as the store holds it after the call (branded id, resolved instants),
  *  never the input, and each auto-wraps itself in a transaction when none is already open (D-S2-8).
- *  `load` is the one exception to both: it returns `void`, and it refuses an open transaction
- *  (`TransactionAlreadyOpenError`) rather than join one — see its own comment below. */
+ *  `load` and `sync` are the two exceptions to both: each returns `void`, and each refuses an open
+ *  transaction (`TransactionAlreadyOpenError`) rather than join one — see their own comments below. */
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
   /** Declared Field keys sit flat at the top, the same shape `update()` takes (ADR 0011, Q15):
    *  `entries.add({ id, name, owner: 'Ali' })`. Nested `props` stays legal for a bag already held or
@@ -75,6 +75,28 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  The undoable, diffing counterpart that keeps per-entry state for a kept id is `entries.sync()`
    *  (#517). */
   load(inputs: readonly FlatEntryInput<TProps>[]): void;
+  /** Matches a live Dataset to `inputs` by diffing instead of replacing (#517): an id the list omits
+   *  is removed, a key a kept entry's input omits is cleared, and a Field whose value did not change
+   *  writes no row. After `sync(inputs)`, the entry ids, every declared Field value (`siblingIndex`
+   *  included) and the tree are the same as `load(inputs)` would leave — only History and per-entry
+   *  state differ. A kept id keeps its selection, its collapse state and its plugin store rows; a
+   *  removed id loses them, and an undo brings a removed id's store rows back with it. An undeclared
+   *  `props` key on a kept id is not written: declare the Field to sync it.
+   *
+   *  Writes through the same door `load` uses: it ignores a `'never'` Field lock, a derived parent
+   *  cell re-rolls instead of taking an authored value, and no `EditExtender` cascade runs.
+   *  `beforeChange` can veto the whole call. Refuses with `TransactionAlreadyOpenError` inside
+   *  `dataset.transaction()`, `MutationDuringExtensionHookError` from the extension hook, and
+   *  `MutationDuringNotificationError` from inside a `beforeChange` or `change` handler.
+   *
+   *  Commits one `ChangeSet` with `origin: 'sync'`. Unlike a user edit, it records **no** undo step
+   *  and erases no Redo — the user's own earlier steps stay undoable across a poll. A sync that
+   *  changes nothing commits nothing: no `beforeChange`, no `change`, and no undo step — the common
+   *  case for a server poll that finds nothing new. A local edit the server has not seen is
+   *  overwritten, last write wins; undoing that edit later writes the value it had before the edit,
+   *  even though a sync changed it since, and redoing gives the server's value back (see
+   *  `docs/11-server-data.md`). */
+  sync(inputs: readonly FlatEntryInput<TProps>[]): void;
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.

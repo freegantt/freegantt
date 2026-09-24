@@ -8,6 +8,7 @@ import {
   entryId,
   EntryNotFoundError,
   MutationDuringExtensionHookError,
+  MutationDuringNotificationError,
   ParentCycleError,
   TransactionAlreadyOpenError,
 } from '../model/index.js';
@@ -17,52 +18,13 @@ import type { ParentIndex, UnplacedEntry } from './hierarchy-source.js';
 import { toEntries } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import type { FieldRegistry } from './fields/field-registry.js';
+import { findParentCycleMembers } from './parent-cycle.js';
+import type { ParentCycleRow } from './parent-cycle.js';
 
-/** Every id whose `parentId` chain loops back onto itself, self-parenting included — one colouring
- *  walk over the whole batch (O(n), the same shape `hierarchy-source.ts`'s `breakCycles` walks),
- *  not one walk per entry: a chain shared by a deep batch is walked once, not once per descendant.
- *  Walks `byId` — the batch, never the live store — so this answers the same question
- *  `EntryStore.#assertParentValid`'s walk does, over a list nothing has staged yet.
- *
- *  `settled` holds every id a finished walk already cleared, so a later start skips it outright.
- *  `visiting` holds only the current walk's own chain, so revisiting one of its own ids is the loop
- *  signal; revisiting a `settled` id just means this chain runs into ground a prior walk already
- *  charted, cycle or not. */
 /** The two fields every check in this file reads — `id` and `parentId` — nothing more, so a check
  *  runs over an `UnplacedEntry` before `readEntryBatch` has placed it, or over a placed
  *  `StoredEntry` just as well. */
-type EntryRow = Pick<StoredEntry, 'id' | 'parentId'>;
-
-function cycleMemberIds(
-  entries: readonly EntryRow[],
-  byId: ReadonlyMap<EntryId, EntryRow>,
-): ReadonlySet<EntryId> {
-  const settled = new Set<EntryId>();
-  const visiting = new Set<EntryId>();
-  const members = new Set<EntryId>();
-
-  for (const start of entries) {
-    if (settled.has(start.id)) continue;
-    const chain: EntryId[] = [];
-    let current: EntryId | undefined = start.id;
-    while (current !== undefined && !settled.has(current) && !visiting.has(current)) {
-      visiting.add(current);
-      chain.push(current);
-      current = byId.get(current)?.parentId;
-    }
-    // `current` is still in this walk's own `visiting` set, so the chain arrived back at an id it
-    // already passed — everything from that id to the end of the chain is one loop.
-    if (current !== undefined && visiting.has(current)) {
-      const loopStart = chain.indexOf(current);
-      for (const id of chain.slice(loopStart)) members.add(id);
-    }
-    for (const id of chain) {
-      visiting.delete(id);
-      settled.add(id);
-    }
-  }
-  return members;
-}
+type EntryRow = ParentCycleRow;
 
 /**
  * Every reason a whole-list write refuses the batch, checked before any of it stages (#496 Q2):
@@ -84,7 +46,10 @@ export function assertEntryBatchIsSound(entries: readonly EntryRow[], operation:
       throw new EntryNotFoundError(entry.parentId, operation);
     }
   }
-  const cycleMembers = cycleMemberIds(entries, byId);
+  const cycleMembers = findParentCycleMembers(
+    entries.map((entry) => entry.id),
+    byId,
+  );
   for (const entry of entries) {
     if (cycleMembers.has(entry.id)) throw new ParentCycleError(entry.id);
   }
@@ -151,7 +116,7 @@ export function readEntryBatch(
 
 /**
  * Refuses a whole-list write called from inside an already-open `dataset.transaction()` (#496 Q4,
- * #517 S9). `load` and sync are always their own transaction — unlike `add`/`update`/`remove`, which
+ * #517). `load` and sync are always their own transaction — unlike `add`/`update`/`remove`, which
  * join one already open (D-S2-8), a whole-list write replaces every entry in one step and must not
  * become a nested step inside a caller's own batch.
  */
@@ -169,4 +134,14 @@ export function assertNoOpenTransaction(openTransactions: number, operation: str
  */
 export function assertNoRunningExtensionHook(runningExtensionHook: boolean, operation: string): void {
   if (runningExtensionHook) throw new MutationDuringExtensionHookError(operation);
+}
+
+/**
+ * Refuses a whole-list write called from inside a `beforeChange` or `change` handler (#517), the
+ * same refusal `commitChangeSet` already raises for a nested `add`/`update`/`remove`. `load` and sync
+ * name themselves here instead of surfacing as `commitChangeSet` — the door the caller actually
+ * knocked on, not the one underneath it.
+ */
+export function assertNotNotifying(notifying: boolean, operation: string): void {
+  if (notifying) throw new MutationDuringNotificationError(operation);
 }

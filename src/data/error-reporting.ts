@@ -219,7 +219,7 @@ export function buildCommitFaultReport(init: CommitFaultReportInit): ErrorReport
 }
 
 /** Up to three of `dropped`'s distinct Entry ids, quoted, plus a count of the rest — the one shared
- *  shape `buildDerivedValuesDroppedReport` and `buildCascadeDroppedReport` both name their Entries
+ *  shape `buildDerivedValuesDroppedReport` and `buildRollUpOverwroteProposalReport` both name their Entries
  *  with, so a 500-row drop still reads as one line (ADR 0013, decision 5/6). */
 function shownEntryIds(dropped: readonly FieldUpdated[]): string {
   const ids = [...new Set(dropped.map((row) => String(row.id)))];
@@ -269,19 +269,20 @@ export function buildSiblingIndexDroppedReport(dropped: readonly FieldUpdated[])
   };
 }
 
-/** ADR 0013, decision 5: an extension-hook cascade proposed a rolling-up Field on a parent, and the
- *  Rollup overwrote it in silence — `rollup.ts`'s `body`/`merged` split means only the transaction
- *  body's own proposal makes the Rollup yield (D-S2-22); a cascade's proposal never does. One report
- *  per commit, never one per row, naming the count, the distinct Field keys, and up to three of the
- *  affected Entry ids. Always raised at `severity: 'warning'` — no `isDevMode()` gate (D-S5-41). */
-export function buildCascadeDroppedReport(dropped: readonly FieldUpdated[]): ErrorReportInput {
+/** ADR 0013, decision 5, and its 2026-09-24 ruling: a same-transaction proposal — the transaction
+ *  body's own write, or an extension-hook cascade's — named a rolling-up Field on a parent, and the
+ *  Rollup overwrote it in silence. The Rollup owns every rolling-up Field of an entry that has
+ *  children by the end of the operation, whichever source proposed the value. One report per commit,
+ *  never one per row, naming the count, the distinct Field keys, and up to three of the affected
+ *  Entry ids. Always raised at `severity: 'warning'` — no `isDevMode()` gate (D-S5-41). */
+export function buildRollUpOverwroteProposalReport(dropped: readonly FieldUpdated[]): ErrorReportInput {
   const keys = [...new Set(dropped.map((row) => String(row.field)))];
   return {
     code: 'derived-values-dropped',
     severity: 'warning',
     by: 'core',
     message:
-      `A plugin cascade's write to ${keys.length === 1 ? 'field' : 'fields'} ` +
+      `A write to ${keys.length === 1 ? 'field' : 'fields'} ` +
       `${keys.map((key) => `"${key}"`).join(', ')} on ${dropped.length === 1 ? 'entry' : 'entries'} ` +
       `${shownEntryIds(dropped)} was dropped: that cell rolls up from children, and the Rollup owns it.`,
   };

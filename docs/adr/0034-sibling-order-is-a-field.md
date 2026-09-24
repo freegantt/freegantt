@@ -1,6 +1,10 @@
 ---
 status: accepted — ruled 2026-09-23. Working material:
   [`plans/issues/closed/528-sibling-index.md`](../../plans/issues/closed/528-sibling-index.md).
+  Amended by [0035](0035-sync-writes-like-load-and-undo-stays-local.md) — undo, redo and
+  `dataset.replay` now renumber the sibling groups they touch, so the body's "write `siblingIndex`
+  rows exactly as given, with no renumber pass of their own" no longer holds for those three doors;
+  it still holds for a direct `commitChangeSet` and for `load`.
 decided: `siblingIndex` is an ordinary core Field: an integer, `editable: 'anywhere'`, storing each
   entry's place among its siblings. A sibling group is the Hierarchy source's checked tree, not the
   raw `parentId`. A write that changes a sibling group renumbers that group once, in the same

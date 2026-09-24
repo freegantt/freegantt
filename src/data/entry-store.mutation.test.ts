@@ -19,7 +19,7 @@ import {
   UnknownFieldError,
   entryId,
 } from '../model/index.js';
-import type { ChangeSet, EntryEdit, EntryId, EntryInput } from '../model/index.js';
+import type { ChangeSet, EntryEdit, EntryId, EntryInput, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 
@@ -424,6 +424,32 @@ describe('an extender edit renumbers its own group too (ADR 0034)', () => {
     expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
   });
 
+  it('an extender edit on an id this same transaction removes then re-adds still lands its siblingIndex', () => {
+    // `remove('a'); add({ id: 'a' })` in one transaction replaces the row — the re-added 'a' is what
+    // this transaction leaves behind, so a cascade move on it must land, not be skipped as if the id
+    // were gone.
+    const state = new DatasetState({
+      entries: [
+        { id: 'p' },
+        { id: 'a', parentId: 'p', name: 'a', start: 0, end: 1 },
+        { id: 'b', parentId: 'p', name: 'b', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ addedEntryIds }) => {
+        if (!addedEntryIds.has(entryId('a'))) return new Map();
+        return new Map([[entryId('a'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    state.transaction(() => {
+      state.entries.remove('a');
+      state.entries.add({ id: 'a', parentId: 'p', name: 'a reborn', start: 0, end: 1, siblingIndex: 1 });
+    });
+
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(1);
+  });
+
   it('an extender edit on an entity whose raw hierarchy answer is refused range-checks against the checked root group it actually joins, not an empty one of its own', () => {
     const state = new DatasetState({
       entries: [{ id: 'r' }, { id: 'x', name: 'x', start: 0, end: 1, props: { phaseId: 'ghost' } }],
@@ -595,14 +621,16 @@ describe('rollup (§1.5)', () => {
     expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
   });
 
-  it('an Entry written as a leaf keeps the proposed span when the same transaction gives it a child', () => {
-    // Decision 5: the Rollup yields to a field the caller proposed in the same transaction. This
-    // test used to seed `p1` with a child already in place and write `p1`'s span through the
-    // consumer door. The ADR 0013 amendment (2026-09-11) refuses that write from every direction,
-    // so the case moved to the structure that makes it honest: `x` is a **leaf** when the write is
-    // proposed, so the write is legal, and it gains a child in the same transaction. The claim is
-    // unchanged — the proposal wins over the cascade — and the write is one the door still allows.
+  it('an Entry written as a leaf drops its proposed span when the same transaction gives it a child — the Rollup owns it, with one warning', () => {
+    // The write is legal when it is made: `x` is a leaf then. The same transaction goes on to give
+    // `x` a child, so by commit `x` is a parent — the Rollup owns every rolling-up Field of a parent,
+    // whether the same-transaction proposal came first or not (2026-09-24 ruling). One report for the
+    // whole commit names the dropped span, not one per field.
+    const reports: ErrorReport[] = [];
     const state = dataset([{ id: 'x', start: '2026-01-01', end: '2026-01-05' }]);
+    state.on('error', (report) => {
+      reports.push(report);
+    });
 
     state.transaction(() => {
       state.entries.update('x', { start: '2026-09-01', end: '2026-09-02' });
@@ -610,8 +638,11 @@ describe('rollup (§1.5)', () => {
     });
 
     const x = state.entries.get('x')!;
-    expect(x.start).toBe(toInstant('UTC', '2026-09-01', 'test'));
-    expect(x.end).toBe(toEndInstant('UTC', '2026-09-02', 'inclusive', 'test'));
+    expect(x.start).toBe(toInstant('UTC', '2026-12-01', 'test'));
+    expect(x.end).toBe(toEndInstant('UTC', '2026-12-02', 'inclusive', 'test'));
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('derived-values-dropped');
+    expect(reports[0]?.severity).toBe('warning');
   });
 });
 
@@ -934,7 +965,7 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
     expect(state.entries.get('t1')!.read('touched')).toBe(true);
   });
 
-  it('a remove then a re-add of the same id, in one transaction, folds to a plain in-place replace — the changeset carries no removed row for that id, and add() places the re-added row at the end of its group', () => {
+  it('a remove then a re-add of the same id, in one transaction, records both rows — the id was committed before the transaction, so its old values do not vanish from the changeset', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
     const seen = changeSets(state);
 
@@ -945,17 +976,25 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
 
     expect(seen).toHaveLength(1);
     const changeSet = seen[0]!;
-    // L1's worry, pinned: a fold like this must not be how `load` removes-and-re-adds a kept id,
-    // because the id never appears in `removed` here — it is not a clean remove-then-add pair.
-    expect(changeSet.removed.map((row) => row.entity.id)).not.toContain(entryId('b'));
+    // L1's worry stays true of `load`, which builds its own ChangeSet rather than lean on this
+    // fold (Q1) — but an ordinary transaction is not `load`: the id existed before this transaction
+    // opened, so both its old row and its new one belong in the changeset undo needs to invert.
+    expect(changeSet.removed.map((row) => row.entity.id)).toEqual([entryId('b')]);
+    expect(changeSet.removed[0]!.entity.name).toBe('b');
     expect(changeSet.added.map((row) => row.entity.id)).toEqual([entryId('b')]);
     expect(changeSet.added[0]!.entity.name).toBe('New B');
 
     // `add()` without an index takes the group's own count at add time — still the committed
     // count of three, mid-transaction (ADR 0034's documented stale read) — so the re-added row
-    // lands after 'c', not back in its old slot. `load` must build its own ChangeSet rather than
-    // lean on this fold, or a kept id would keep its old list position instead of the input list's
-    // position (Q1).
+    // lands after 'c', not back in its old slot.
+    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
+    expect(state.entries.get('b')!.name).toBe('New B');
+
+    state.undo();
+    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('b'), entryId('c')]);
+    expect(state.entries.get('b')!.name).toBe('b');
+
+    state.redo();
     expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
     expect(state.entries.get('b')!.name).toBe('New B');
   });

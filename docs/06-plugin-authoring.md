@@ -368,6 +368,55 @@ depends on state a load is about to remove has to let `origin: 'load'` through, 
 load could never remove that state — `lock-entries.ts`'s "is this entry locked" refusal
 steps aside for a load for exactly this reason.
 
+### Reacting to a sync
+
+`entries.sync()` also commits its whole change in one step, `origin: 'sync'` — but unlike
+a load, a sync carries only the rows that changed: entry Field rows for an added, removed
+or edited entry, and a plugin-store row only for a removed id. A plugin reads a sync the
+same `change` subscription reads a load, and does not need a second one. It reads every
+other origin — `'user'`, `'undo'`, `'redo'` — the same way: only `'load'` is a fresh start,
+so a plugin folds `added`/`removed`/`updated` into its cache on every other origin, sync
+included, rather than singling sync out:
+
+```ts
+import { definePlugin } from 'freegantt';
+import type { EntryId } from 'freegantt';
+
+function resetsOnLoadOnly() {
+  const cache = new Map<EntryId, string>();
+  return definePlugin({
+    id: 'demo.resetsOnLoadOnly',
+    data(ctx) {
+      ctx.events.on('change', ({ changeSet }) => {
+        if (changeSet.origin === 'load') {
+          cache.clear(); // a full fresh start: nothing survives
+          return;
+        }
+        // Every other origin — a user edit, an undo, a redo, a sync — carries only the rows
+        // that changed: fold them into the cache instead of resetting it.
+        for (const { entity } of changeSet.removed) cache.delete(entity.id);
+        for (const { entity } of changeSet.added) cache.set(entity.id, entity.name ?? '');
+        for (const row of changeSet.updated) {
+          if (row.store === 'entries' && row.field === 'name') cache.set(row.id, String(row.to ?? ''));
+        }
+      });
+    },
+  });
+}
+
+export { resetsOnLoadOnly };
+```
+
+A plugin must not reset a cache on `origin: 'sync'` the way it does on `'load'`: sync keeps
+per-entry state for a kept id on purpose, and clearing a cache on every poll throws that
+away for no reason. It must instead fold the changed rows into the cache it already holds —
+on every origin but `'load'`, not sync alone, or a rename or an undo leaves the cache stale.
+
+A sync is not an undo step: it records nothing on the History stack. An undo after a sync
+can carry rows the recorded step never had — it writes onto the entry's current value, not
+the value the step recorded, so a plugin's `change` handler must read `row.to`, never assume
+it matches what the plugin remembers recording earlier (`docs/11-server-data.md`).
+
 ## Why a factory, not a name-keyed table
 
 `overBudgetRows()` and `ownerField()` are functions that return a plugin

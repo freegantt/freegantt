@@ -44,13 +44,20 @@ import type { EntryReadContext } from './entry-reader.js';
 import type { UnplacedEntry } from './hierarchy-source.js';
 import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
-import { assertNoOpenTransaction, assertNoRunningExtensionHook, readEntryBatch } from './entry-batch.js';
+import {
+  assertNoOpenTransaction,
+  assertNoRunningExtensionHook,
+  assertNotNotifying,
+  readEntryBatch,
+} from './entry-batch.js';
+import { changesToMatchBatch } from './entry-batch-changes.js';
 import {
   buildDerivedValuesDroppedReport,
   buildSiblingIndexDroppedReport,
   raiseErrorOn,
 } from './error-reporting.js';
 import {
+  applyFieldRow,
   createFieldAccess,
   measureEntryDuration,
   mergeProposedEdits,
@@ -58,7 +65,6 @@ import {
   readField,
   readingChildrenFrom,
   readingParentFrom,
-  writeOntoEntry,
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import { LiveEntries, unknownFieldError } from './live-entry.js';
@@ -75,24 +81,6 @@ import {
   resolveWriteTarget,
 } from './write-rule.js';
 import type { FieldLockQuery } from '../model/index.js';
-
-/** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
- *  an undo of an optional field's first edit must return the Entry to not having the key at all
- *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
- *  having the key with value `undefined`. Declared Fields write through `writeOntoEntry`. */
-function applyFieldRow(
-  current: StoredEntry,
-  field: FieldKey,
-  value: unknown,
-  registry: FieldRegistry,
-): StoredEntry {
-  const declared = registry.get(field);
-  if (declared) return writeOntoEntry(current, declared, value);
-  const next: Record<string, unknown> = { ...current };
-  if (value === undefined) delete next[field];
-  else next[field] = value;
-  return next as unknown as StoredEntry;
-}
 
 /** One field an edit names, and the Field `#assertFieldTakesThisWrite` resolved it to — carried
  *  forward so `#assertNoDerivedWrite` reads the same declaration instead of resolving it again. */
@@ -134,6 +122,12 @@ interface WriteSet {
    *  `renumberSiblingGroups` keeps, so a second departure for one id (a remove replayed, or a move
    *  logged twice) does not double-decrement a group's live count. */
   departedSiblingIds: Set<EntryId>;
+  /** The committed row `stageRemove` captured, for an id this store already held before the
+   *  transaction opened — never for an id this same transaction added itself. `pendingRemoved`
+   *  reads this to tell a replace (a re-add of a pre-existing id) from a within-transaction churn
+   *  (an id added and removed with no committed row ever behind it): a replace's old row belongs in
+   *  the changeset beside its new one; a churn's does not, because the id never persisted. */
+  replacedCommitted: Map<EntryId, StoredEntry>;
 }
 
 export class EntryStore implements EntryStoreContract {
@@ -654,10 +648,12 @@ export class EntryStore implements EntryStoreContract {
    *
    * This does not go through `#mutate`/`runTransaction`'s own diff-and-fold pipeline. Step 1 pinned
    * why: staging a remove and a re-add of the same id through the ordinary `stageAdd`/`stageRemove`
-   * pair folds to an in-place value replace, keeping the id's old position in `entries.all` — exactly
-   * the per-entry state L1 says a kept id must not keep. `load` instead reads and checks the whole
-   * batch, runs the Rollup once the same way construction does (`applyConstructionRollUp`, no
-   * `EditExtender` cascade — step 1 pinned construction runs none either), and hands `commitChangeSet`
+   * pair records a replace, not an update in place — the fold keeps both the old row and the new one
+   * — and `add()` places the re-added row at the end of its group, not at the input list's own
+   * position, which is exactly the per-entry state L1 says a kept id must not lose. `load` instead
+   * reads and checks the whole batch, runs the Rollup once the same way construction does
+   * (`applyConstructionRollUp`, no `EditExtender` cascade — step 1 pinned construction runs none
+   * either), and hands `commitChangeSet`
    * an already-complete `ChangeSet`: every old entry in `removed`, every input in `added`, in list
    * order. `commitChangeSet` applies exactly what it is given — unlike `runTransaction`, it never
    * folds an empty net effect away, which is how an empty `load` into an empty Dataset still commits
@@ -668,25 +664,119 @@ export class EntryStore implements EntryStoreContract {
    * time the hook runs.
    */
   load(inputs: readonly FlatEntryInput[]): void {
+    const {
+      runner,
+      byId,
+      entries: read,
+      rollupUpdated,
+      siblingIndexDropped,
+      derivedValuesDropped,
+    } = this.#readBatch(inputs, 'entries.load');
+    // A whole-list write always commits, so its reports always fire.
+    this.#raiseReadBatchReports(runner, siblingIndexDropped, derivedValuesDropped);
+
+    // An added entity carries the values the commit settles on, not a row (the same rule
+    // `sync` and `buildCommitChangeSet` follow): every id here is new to the store, so every
+    // Rollup row folds onto its entity, and the changeset holds no entries row for it.
+    const rolled = this.#foldRollup(byId, rollupUpdated);
+    const added = read.map((entry) => ({ store: 'entries' as const, entity: rolled.get(entry.id)! }));
+    const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
+    // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
+    // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.
+    const pluginRows = runner.pluginStores.pendingRows(removed.map((row) => row.entity.id));
+
+    const changeSet: ChangeSet = {
+      id: runner.nextChangeSetId(),
+      origin: 'load',
+      added,
+      removed,
+      updated: pluginRows,
+    };
+    commitChangeSet(runner, changeSet);
+  }
+
+  /**
+   * Diffs the live Dataset against `inputs` and commits only what changed (#517): an id the list
+   * omits is removed, a kept id's changed Field writes one row, and an unchanged kept id writes
+   * nothing. A kept id keeps its Map slot, so its selection, collapse state and plugin store rows
+   * survive the call; a removed id's plugin store rows go with it, and an undo brings them back.
+   *
+   * Reads and checks the whole list the same way `load` does (`#readBatch`), rolls the Rollup's
+   * corrections onto the placed batch to get the state `load(inputs)` would leave, then hands that
+   * target and the store's own committed rows to `changesToMatchBatch` — "the changes to match the
+   * batch." A sync that changes nothing stops there: it commits no `ChangeSet`, so `entries.all`
+   * keeps its identity and History is untouched, and it raises neither of `#readBatch`'s reports —
+   * the common poll that finds nothing new costs nothing and warns of nothing. Otherwise it raises
+   * them and commits one `ChangeSet` with `origin: 'sync'` — History records no undo step for it and
+   * erases no Redo (`docs/11-server-data.md`).
+   */
+  sync(inputs: readonly FlatEntryInput[]): void {
+    const {
+      runner,
+      byId,
+      entries: read,
+      rollupUpdated,
+      siblingIndexDropped,
+      derivedValuesDropped,
+    } = this.#readBatch(inputs, 'entries.sync');
+
+    const rolled = this.#foldRollup(byId, rollupUpdated);
+    const target = read.map((entry) => rolled.get(entry.id) ?? entry);
+
+    const changes = changesToMatchBatch(this.#byId, target, this.#registry, this.#access);
+    if (changes.added.length === 0 && changes.removed.length === 0 && changes.updated.length === 0) {
+      return;
+    }
+    this.#raiseReadBatchReports(runner, siblingIndexDropped, derivedValuesDropped);
+
+    const pluginRows = runner.pluginStores.pendingRows(changes.removed.map((row) => row.entity.id));
+
+    const changeSet: ChangeSet = {
+      id: runner.nextChangeSetId(),
+      origin: 'sync',
+      added: changes.added,
+      removed: changes.removed,
+      updated: [...changes.updated, ...pluginRows],
+    };
+    commitChangeSet(runner, changeSet);
+  }
+
+  /**
+   * The read-and-roll step `load` and sync (#517) both run before either builds its own `ChangeSet`:
+   * checks a whole-list write may run right now (no open transaction, no running extension hook, no
+   * `beforeChange`/`change` handler on the stack), reads and places the batch (`readEntryBatch`), and
+   * runs construction's own Rollup once. Returns the bound runner alongside the placed entries, the
+   * Rollup's updates, and a dropped `siblingIndex` row and a dropped derived value if the batch
+   * carried one — raised through `#raiseReadBatchReports`, not here, so `sync` can hold them back
+   * until it knows the call is not a no-op (`#raiseReadBatchReports`'s own doc says why).
+   */
+  #readBatch(
+    inputs: readonly FlatEntryInput[],
+    operation: string,
+  ): {
+    readonly runner: TransactionData;
+    readonly byId: Map<EntryId, StoredEntry>;
+    readonly entries: readonly StoredEntry[];
+    readonly rollupUpdated: readonly FieldUpdated[];
+    readonly siblingIndexDropped: readonly FieldUpdated[];
+    readonly derivedValuesDropped: readonly FieldUpdated[];
+  } {
     const runner = this.#runner;
     if (!runner) {
       throw new Error(
         'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
       );
     }
-    assertNoOpenTransaction(runner.openTransactions, 'entries.load');
-    assertNoRunningExtensionHook(runner.runningExtensionHook, 'entries.load');
+    assertNoOpenTransaction(runner.openTransactions, operation);
+    assertNoRunningExtensionHook(runner.runningExtensionHook, operation);
+    assertNotNotifying(runner.notifying, operation);
 
     const source = this.#hierarchySource;
     const {
       entries: read,
       parents,
       siblingIndexDropped,
-    } = readEntryBatch(inputs, this.#context, this.#registry, source, 'entries.load');
-    if (siblingIndexDropped.length > 0) {
-      const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
-      raiseErrorOn(runner.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
-    }
+    } = readEntryBatch(inputs, this.#context, this.#registry, source, operation);
 
     const byId = new Map(read.map((entry) => [entry.id, entry]));
     // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
@@ -698,25 +788,44 @@ export class EntryStore implements EntryStoreContract {
     // A batch that authors a rolling-up Field on a row that also has children in the same batch gets
     // it dropped here — one aggregate `derived-values-dropped` report for the whole load, the same
     // rule and the same report construction raises (ADR 0013, decision 5; #496 Q3).
-    const dropped = rollupUpdated.filter((row) => row.to === undefined);
-    if (dropped.length > 0) {
-      raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(dropped));
+    const derivedValuesDropped = rollupUpdated.filter((row) => row.to === undefined);
+
+    return { runner, byId, entries: read, rollupUpdated, siblingIndexDropped, derivedValuesDropped };
+  }
+
+  /** Raises `#readBatch`'s two reports — a dropped `siblingIndex` row and a dropped derived value —
+   *  through the bus. `load` calls this right after `#readBatch`, since a whole-list write always
+   *  commits. `sync` (#517 review) holds off until it knows the call is not a no-op: a server poll
+   *  that round-trips an authored `siblingIndex` the derived rank already agrees with must not warn
+   *  on every poll just because `#readBatch` alone cannot yet tell the call writes nothing. */
+  #raiseReadBatchReports(
+    runner: TransactionData,
+    siblingIndexDropped: readonly FieldUpdated[],
+    derivedValuesDropped: readonly FieldUpdated[],
+  ): void {
+    if (siblingIndexDropped.length > 0) {
+      const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
+      raiseErrorOn(runner.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
     }
+    if (derivedValuesDropped.length > 0) {
+      raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(derivedValuesDropped));
+    }
+  }
 
-    const added = read.map((entry) => ({ store: 'entries' as const, entity: byId.get(entry.id)! }));
-    const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
-    // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
-    // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.
-    const pluginRows = runner.pluginStores.pendingRows(removed.map((row) => row.entity.id));
-
-    const changeSet: ChangeSet = {
-      id: runner.nextChangeSetId(),
-      origin: 'load',
-      added,
-      removed,
-      updated: [...rollupUpdated, ...pluginRows],
-    };
-    commitChangeSet(runner, changeSet);
+  /** An added entity carries the values the commit settles on, not a row (the same rule
+   *  `buildCommitChangeSet` follows): every id in a whole-list write is new to the store, so every
+   *  Rollup row folds onto its entity here, in a fresh map — `byId` stays the placed batch, never the
+   *  folded one, for whichever caller still needs it as `#readBatch` built it. */
+  #foldRollup(
+    byId: ReadonlyMap<EntryId, StoredEntry>,
+    rollupUpdated: readonly FieldUpdated[],
+  ): Map<EntryId, StoredEntry> {
+    const rolled = new Map(byId);
+    for (const row of rollupUpdated) {
+      const current = rolled.get(row.id);
+      if (current) rolled.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
+    }
+    return rolled;
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {
@@ -753,12 +862,12 @@ export class EntryStore implements EntryStoreContract {
    *  included (S2.3 §1.3). Read through the write set, so a reparent earlier in the same transaction
    *  is seen.
    *
-   *  `seen` is the same guard `#depthOf` carries. `new Dataset({ entries })` and `entries.load` both
-   *  check the raw batch and throw on a loop (ADR 0031), but `replay()` applies an already-built
-   *  `ChangeSet` unchecked (`data/replay.ts`), so a raw loop can still land on a live store that way;
-   *  without the guard the next edit that names a row inside that loop walks it forever. A loop the
-   *  edit is not part of stops the walk and passes — the committed check reports it as one
-   *  `hierarchy-cycle` Fault (ADR 0020). */
+   *  `seen` is the same guard `#depthOf` carries. Every door onto `parentId` checks now —
+   *  construction, `load`, `sync` and `replay()` (ADR 0031, ADR 0035) all refuse or drop a loop
+   *  before it reaches the store — so this walk should never actually meet one already there. It
+   *  stays: a chain this long is cheap to walk once, and a guard that assumes "nothing upstream can
+   *  go wrong" is the guard that hangs the one time it does. A loop the edit is not part of stops the
+   *  walk and passes — the committed check reports it as one `hierarchy-cycle` Fault (ADR 0020). */
   #assertParentValid(id: EntryId, parentId: EntryId, operation: string): void {
     if (!this.has(parentId)) throw new EntryNotFoundError(parentId, operation);
     let current: EntryId | undefined = parentId;
@@ -781,6 +890,7 @@ export class EntryStore implements EntryStoreContract {
       siblingChanges: [],
       siblingGroupCounts: new Map(),
       departedSiblingIds: new Set(),
+      replacedCommitted: new Map(),
     };
   }
 
@@ -792,9 +902,12 @@ export class EntryStore implements EntryStoreContract {
     if (parentId !== undefined) writeSet.stagedParents.add(parentId);
   }
 
-  /** A re-add of an id this same transaction already staged for removal replaces it outright — the
-   *  reverse of `stageRemove`'s own clearing below — so the net effect is one clean entity, not a
-   *  cancelled add/remove pair the fold treats as neither happening. */
+  /** A re-add of an id this same transaction already staged for removal takes over — the row this
+   *  transaction leaves at `entry.id` is `entry`, so mid-transaction reads (`get`/`has`) must stop
+   *  answering "removed". This clears `removed` for that reason alone; it does not erase the
+   *  committed row `stageRemove` captured in `replacedCommitted`, which is what lets `pendingRemoved`
+   *  still report the old row this add replaced, alongside the new one, when this id was committed
+   *  before the transaction opened. */
   stageAdd(_token: TxToken, entry: StoredEntry): void {
     const writeSet = this.#openWriteSet();
     writeSet.added.set(entry.id, entry);
@@ -822,6 +935,12 @@ export class EntryStore implements EntryStoreContract {
     writeSet.removed.add(id);
     writeSet.added.delete(id);
     writeSet.edits.delete(id);
+    // Captured once, off the store's own committed map, which a transaction never mutates until it
+    // closes — so it stays this id's true pre-transaction row no matter how many more times
+    // this id is removed and re-added before the transaction ends. An id with no row here never
+    // existed before this transaction; `pendingRemoved` reads that absence as "nothing to restore".
+    const committed = this.#byId.get(id);
+    if (committed) writeSet.replacedCommitted.set(id, committed);
   }
 
   pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[] {
@@ -835,6 +954,13 @@ export class EntryStore implements EntryStoreContract {
     for (const id of this.#writeSet.removed) {
       const entity = this.#byId.get(id);
       if (entity) result.push({ store: 'entries', entity });
+    }
+    // A replace: `stageAdd` cleared `removed` for this id so a mid-transaction read sees the new
+    // row, but the committed row it removed still belongs in this changeset — the reader needs both
+    // the departure and the arrival, not just the arrival (undo has nothing to restore otherwise).
+    for (const id of this.#writeSet.added.keys()) {
+      const replaced = this.#writeSet.replacedCommitted.get(id);
+      if (replaced) result.push({ store: 'entries', entity: replaced });
     }
     return result;
   }

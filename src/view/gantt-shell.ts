@@ -942,7 +942,8 @@ export class GanttShell {
       this.#entrySelection.forgetEntriesTheDatasetDropped(changeSet);
       // #496 L2: a load is a new baseline, not an edit. Collapse state returns to where this Gantt
       // started — the same way the selection above already clears, since every old id sits in
-      // `removed`.
+      // `removed`. A sync (#517) is not a baseline: it keeps a kept id's collapse state and
+      // selection, so only a load resets here.
       if (changeSet.origin === 'load') this.#treeCollapse.resetToStartState();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);

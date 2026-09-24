@@ -7,6 +7,7 @@ import type { HarnessPageId } from '../harness-nav.js';
 
 const PUBLIC_API = '../plans/02-public-api.md';
 const PLUGIN_GUIDE = '../docs/06-plugin-authoring.md';
+const SERVER_DATA_GUIDE = '../docs/11-server-data.md';
 const STYLING_GUIDE = '../docs/10-styling-and-theming.md';
 const BAR_IS_AN_ENTRY = '../docs/08-a-bar-is-an-entry.md';
 
@@ -67,7 +68,8 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'A Dataset plugin locks an entry and refuses every edit to it',
       "A per-entry lock rule opens a locked Field for one subtree, sharper than Field.editable (#473)",
       'Plugins over the public contract: a custom bar kind, an over-budget row, a chord command, and a popup',
-      'JSON export and import round-trip the whole Dataset',
+      'JSON export and import round-trip the whole Dataset, and Import is a full fresh start that clears undo',
+      'Sync from server diffs a fetched list against the live data, keeps a kept row selected, and records no undo step',
       'A custom tickIncrement > 1 preset and snap, anchored on the calendar so gridlines hold still on a pan',
     ],
     config: [
@@ -78,11 +80,13 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       "ctx.edits.setLockRule((next) => (entry, field) => …)",
       'gantt.installPlugin(bufferKind())',
       "gantt.snap = { unit: 'hour', increment: 6 }",
+      'dataset.entries.sync(server.fetchRows())',
     ],
     specLinks: [
       { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },
       { label: 'plans/02 §3 — Events', href: `${PUBLIC_API}#3-events-one-bus-one-vocabulary` },
       { label: 'docs/06 — Plugin authoring guide', href: PLUGIN_GUIDE },
+      { label: 'docs/11 — Server data guide', href: SERVER_DATA_GUIDE },
     ],
   },
   'hierarchy-and-timeline': {

@@ -1,7 +1,7 @@
 # #528 — `siblingIndex`: the order Field
 
 **Status:** planned 2026-09-23. No code yet. Issue: #528. Blocked by #529 and #533 PR 1. Blocks #517.
-Rulings: `plans/issues/open/517-sync.md` (S12, O1–O5, Q1–Q5).
+Rulings: `plans/issues/closed/517-sync.md` (S12, O1–O5, Q1–Q5).
 
 ## Problem
 

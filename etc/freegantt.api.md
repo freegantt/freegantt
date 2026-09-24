@@ -135,7 +135,7 @@ export interface Capabilities {
 export type CapabilityRule = boolean | ((entry: Entry) => boolean | undefined);
 
 // @public
-export type ChangeOrigin = 'user' | 'undo' | 'redo' | 'load';
+export type ChangeOrigin = 'user' | 'undo' | 'redo' | 'load' | 'sync';
 
 // @public (undocumented)
 export interface ChangeSet {
@@ -832,6 +832,7 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
     load(inputs: readonly FlatEntryInput<TProps>[]): void;
     // (undocumented)
     remove(id: EntryId | string): void;
+    sync(inputs: readonly FlatEntryInput<TProps>[]): void;
     // (undocumented)
     update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
 }
@@ -1920,9 +1921,11 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
     readonly __brand: 'ProposedEdit';
     readonly props: Readonly<Partial<TProps>>;
     readonly proposedKeys: ReadonlySet<string>;
-} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'props'>> & {
+} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'parentId' | 'name' | 'props'>> & {
     start?: Instant | undefined;
     end?: Instant | undefined;
+    parentId?: EntryId | undefined;
+    name?: string | undefined;
 };
 
 // @public
