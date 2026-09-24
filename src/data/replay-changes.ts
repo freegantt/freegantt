@@ -226,8 +226,33 @@ function revertLoopingParentRows(
   }
 }
 
-function storeRowKey(store: StoreRowUpdated['store'], id: EntryId): string {
-  return `${store}\u0000${id}`;
+/** What `storeRowToReplay` chains its `from` off across the whole replay — nested by store, then id,
+ *  the same shape `written` must take (below). */
+type WrittenStoreRows = Map<StoreRowUpdated['store'], Map<EntryId, unknown>>;
+
+/** Reads and writes `written` by nested lookup — store, then id — never by a joined string
+ *  (`change-set.ts`'s rule for exactly this key space). An id or a store name can itself hold the
+ *  separator a joined string would need, so only nesting can tell `(store 'a', id 'b:c')` apart from
+ *  `(store 'a:b', id 'c')`; `PluginId` carries no format check, so that is not a theoretical case. */
+function writtenRowFor(
+  written: WrittenStoreRows,
+  store: StoreRowUpdated['store'],
+  id: EntryId,
+): { has: boolean; value: unknown } {
+  const byId = written.get(store);
+  if (!byId || !byId.has(id)) return { has: false, value: undefined };
+  return { has: true, value: byId.get(id) };
+}
+
+function setWrittenRow(
+  written: WrittenStoreRows,
+  store: StoreRowUpdated['store'],
+  id: EntryId,
+  value: unknown,
+): void {
+  const byId = written.get(store) ?? new Map<EntryId, unknown>();
+  written.set(store, byId);
+  byId.set(id, value);
 }
 
 /** A store row that writes a value (`to` is not `undefined`) for an entity gone after the replay is
@@ -242,18 +267,18 @@ function storeRowToReplay(
   row: StoreRowUpdated,
   working: ReadonlyMap<EntryId, StoredEntry>,
   pluginStores: TransactionalPluginStores,
-  written: Map<string, unknown>,
+  written: WrittenStoreRows,
 ): StoreRowUpdated | undefined {
-  const key = storeRowKey(row.store, row.id);
-  const from = written.has(key) ? written.get(key) : pluginStores.committedRow(row.store, row.id);
+  const already = writtenRowFor(written, row.store, row.id);
+  const from = already.has ? already.value : pluginStores.committedRow(row.store, row.id);
   if (row.to === undefined) {
     if (from === undefined) return undefined;
-    written.set(key, undefined);
+    setWrittenRow(written, row.store, row.id, undefined);
     return { store: row.store, id: row.id, from, to: undefined };
   }
   if (!working.has(row.id)) return undefined;
   if (Object.is(from, row.to)) return undefined;
-  written.set(key, row.to);
+  setWrittenRow(written, row.store, row.id, row.to);
   return { store: row.store, id: row.id, from, to: row.to };
 }
 
@@ -330,7 +355,7 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   // Every other row — a plain Field or a plugin store row — lands now, onto the tree the cascade just
   // settled: a row for an id the cascade just carried away reads as gone here, the same skip a row
   // for a sync-removed id already gets.
-  const writtenStoreRows = new Map<string, unknown>();
+  const writtenStoreRows: WrittenStoreRows = new Map();
   // A `siblingIndex` row is the renumber pass's own to write, below, never the plain diff's — the
   // same split `buildCommitChangeSet` makes between a body-authored row and the renumber pass's rank.
   const keptSiblingIndexRows = new Map<EntryId, number>();
@@ -338,7 +363,11 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   for (const row of changeSet.updated) {
     if (row.store === 'entries' && row.field === 'parentId') continue; // already landed, above
     if (row.store === 'entries' && row.field === 'siblingIndex') {
-      if (working.has(row.id)) keptSiblingIndexRows.set(row.id, row.to as number);
+      // `to` is `unknown` on a hand-built `ChangeSet` (`dataset.replay()` takes one from a caller,
+      // unchecked) — a non-number `to` (an authored clear, say) names no rank to keep, so it is
+      // skipped here the same way an id the cascade carried away already is: the renumber pass below
+      // falls back to `entity.siblingIndex`, its own committed rank.
+      if (working.has(row.id) && typeof row.to === 'number') keptSiblingIndexRows.set(row.id, row.to);
       continue;
     }
     const replayed =
