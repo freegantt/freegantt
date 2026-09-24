@@ -351,13 +351,15 @@ export class Dataset<TProps = unknown> {
     this.#state.redo();
   }
 
-  /** Applies an already-complete `ChangeSet` exactly as given — no extension hook, no rollup
-   *  (`plans/s2-data-core/s2b-undo-replay-seam.md`). `changeSet.origin` must be `'undo'` or `'redo'`;
-   *  `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (D-S2-11). An empty
-   *  changeset is a no-op: no event, no throw. `beforeChange` then `change` still fire, and a veto
-   *  throws `MutationCancelledError` and writes nothing. This is the write path `undo()`/`redo()` use;
-   *  a consumer History can now be written against this method alone, plus `invertChangeSet` and
-   *  `on('change')`. */
+  /** Writes `changeSet` onto the store's current values, not blind — the same rule a sync overwrites a
+   *  local edit with (`plans/s2-data-core/s2b-undo-replay-seam.md`, amended for local-only undo across
+   *  a sync). A row for an id or a Field a sync has already settled writes nothing for it; the rest of
+   *  the changeset still lands. No extension hook, no rollup. `changeSet.origin` must be `'undo'` or
+   *  `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (D-S2-11). When
+   *  nothing is left to write, this is a no-op: no `beforeChange`, no `change`. Otherwise `beforeChange`
+   *  then `change` fire, and a veto throws `MutationCancelledError` and writes nothing. This is the
+   *  write path `undo()`/`redo()` use; a consumer History can now be written against this method alone,
+   *  plus `invertChangeSet` and `on('change')`. */
   replay(changeSet: ChangeSet): void {
     this.#state.replay(changeSet);
   }

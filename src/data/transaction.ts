@@ -12,6 +12,7 @@ import type {
   FieldLockRule,
   FieldUpdated,
   HierarchySource,
+  PluginStoreName,
   StoreRowUpdated,
 } from '../model/index.js';
 import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
@@ -72,6 +73,9 @@ export interface TransactionalPluginStores {
   beginTransaction(token: TxToken): void;
   pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[];
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
+  /** `id`'s committed row in `store`, with no write set overlaid — what replay reads as a store row's
+   *  current value before it decides whether to overwrite it (`data/replay-changes.ts`). */
+  committedRow(store: PluginStoreName, id: EntryId): object | undefined;
 }
 
 /** What `runTransaction` needs from a Dataset's live state. Structural, not `DatasetState` itself, for
