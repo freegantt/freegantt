@@ -9,7 +9,7 @@ The single table a reviewer (human or agent) checks against. Every rule in `CLAU
 | `AUTO` | A machine check fails the build on violation. No judgment involved. |
 | `AUTO-PARTIAL` | A machine check covers the common/mechanical violations; a named residue needs review. The residue is spelled out. |
 | `REVIEW-ONLY` | No honest mechanical check exists. The reason is stated. Reviewers own it. |
-| `PLANNED (Sn)` | The guard is designed here but lands with slice *n*, because its subject doesn't exist yet. |
+| `PLANNED (Sn)` / `PLANNED (#issue)` | The guard is designed here but lands with slice *n*, or with that issue's PR, because its subject doesn't exist yet. |
 
 ---
 
