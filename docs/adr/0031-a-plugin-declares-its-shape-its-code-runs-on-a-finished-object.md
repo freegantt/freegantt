@@ -1,5 +1,8 @@
 ---
-status: accepted — ruled 2026-09-23, out of the plan for #533. PR 1 of 2 (this record; the `Dataset`
+status: amended by [0032](0032-a-gantt-plugins-code-runs-before-the-first-frame.md) — the Gantt
+`view()` half this record left open is decided: a finished Gantt is built and configured, but not
+painted, before any plugin's `view(ctx)` runs. Ruled 2026-09-23, out of the plan for
+#533. PR 1 of 2 (this record; the `Dataset`
 half) is planned; the Gantt `view()` half is PR 2, planned separately. Working material:
 [`plans/issues/open/533-plugin-lifecycle.md`](../../plans/issues/open/533-plugin-lifecycle.md).
 decided: a plugin declares on its definition everything that shapes construction — `fields`,
