@@ -788,7 +788,9 @@ interface PluginIdentity {
   requires?: readonly PluginId[];
 }
 
-/** Chrome and nothing else. It installs on the `Gantt`, and `gantt.plugins` reconfigures it live. */
+/** Chrome and nothing else. It installs on the `Gantt`, and `gantt.plugins` reconfigures it live.
+ *  `view` runs on a finished Gantt, before its first frame (ADR 0032): every `ctx.gantt` getter
+ *  already answers real state, and every registration seam it can reach already exists. */
 interface ChromePlugin extends PluginIdentity {
   view(ctx: PluginContext): Disposer | void;
   /** `never`, so the wrong install site is a red squiggle rather than a runtime discovery. */

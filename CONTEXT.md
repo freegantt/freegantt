@@ -671,7 +671,8 @@ _Avoid_: non-working time (what a consumer's shading _means_, never what the lib
 The public extension contract (ADR 0019): an `id`, an optional `requires`, and one or both halves.
 `data(ctx)` declares Fields, claims the edit hook and reserves the store; it is DOM-free and runs
 once, on the finished Dataset. `view(ctx)` registers variants, renderers, commands and keys, and runs
-as a `Gantt` mounts. A **ChromePlugin** has a `view` half and no `data` half, and installs on the
+once the Gantt is built, before its first frame (ADR 0032) — `ctx.gantt` already answers real state,
+but the DOM has not painted yet. A **ChromePlugin** has a `view` half and no `data` half, and installs on the
 `Gantt`. A **DataPlugin** has a `data` half, and installs on the `Dataset` — the install site is
 where the state lives: a `data` half declares what shapes the Dataset's own construction, and a
 Dataset installs its plugins once. **Plugin** is either. `definePlugin`
