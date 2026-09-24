@@ -140,6 +140,12 @@ interface WriteSet {
    *  `renumberSiblingGroups` keeps, so a second departure for one id (a remove replayed, or a move
    *  logged twice) does not double-decrement a group's live count. */
   departedSiblingIds: Set<EntryId>;
+  /** The committed row `stageRemove` captured, for an id this store already held before the
+   *  transaction opened — never for an id this same transaction added itself. `pendingRemoved`
+   *  reads this to tell a replace (a re-add of a pre-existing id) from a within-transaction churn
+   *  (an id added and removed with no committed row ever behind it): a replace's old row belongs in
+   *  the changeset beside its new one; a churn's does not, because the id never persisted. */
+  replacedCommitted: Map<EntryId, StoredEntry>;
 }
 
 export class EntryStore implements EntryStoreContract {
@@ -660,10 +666,12 @@ export class EntryStore implements EntryStoreContract {
    *
    * This does not go through `#mutate`/`runTransaction`'s own diff-and-fold pipeline. Step 1 pinned
    * why: staging a remove and a re-add of the same id through the ordinary `stageAdd`/`stageRemove`
-   * pair folds to an in-place value replace, keeping the id's old position in `entries.all` — exactly
-   * the per-entry state L1 says a kept id must not keep. `load` instead reads and checks the whole
-   * batch, runs the Rollup once the same way construction does (`applyConstructionRollUp`, no
-   * `EditExtender` cascade — step 1 pinned construction runs none either), and hands `commitChangeSet`
+   * pair records a replace, not an update in place — the fold keeps both the old row and the new one
+   * — and `add()` places the re-added row at the end of its group, not at the input list's own
+   * position, which is exactly the per-entry state L1 says a kept id must not lose. `load` instead
+   * reads and checks the whole batch, runs the Rollup once the same way construction does
+   * (`applyConstructionRollUp`, no `EditExtender` cascade — step 1 pinned construction runs none
+   * either), and hands `commitChangeSet`
    * an already-complete `ChangeSet`: every old entry in `removed`, every input in `added`, in list
    * order. `commitChangeSet` applies exactly what it is given — unlike `runTransaction`, it never
    * folds an empty net effect away, which is how an empty `load` into an empty Dataset still commits
@@ -851,6 +859,7 @@ export class EntryStore implements EntryStoreContract {
       siblingChanges: [],
       siblingGroupCounts: new Map(),
       departedSiblingIds: new Set(),
+      replacedCommitted: new Map(),
     };
   }
 
@@ -862,9 +871,12 @@ export class EntryStore implements EntryStoreContract {
     if (parentId !== undefined) writeSet.stagedParents.add(parentId);
   }
 
-  /** A re-add of an id this same transaction already staged for removal replaces it outright — the
-   *  reverse of `stageRemove`'s own clearing below — so the net effect is one clean entity, not a
-   *  cancelled add/remove pair the fold treats as neither happening. */
+  /** A re-add of an id this same transaction already staged for removal takes over — the row this
+   *  transaction leaves at `entry.id` is `entry`, so mid-transaction reads (`get`/`has`) must stop
+   *  answering "removed". This clears `removed` for that reason alone; it does not erase the
+   *  committed row `stageRemove` captured in `replacedCommitted`, which is what lets `pendingRemoved`
+   *  still report the old row this add replaced, alongside the new one, when this id was committed
+   *  before the transaction opened. */
   stageAdd(_token: TxToken, entry: StoredEntry): void {
     const writeSet = this.#openWriteSet();
     writeSet.added.set(entry.id, entry);
@@ -892,6 +904,12 @@ export class EntryStore implements EntryStoreContract {
     writeSet.removed.add(id);
     writeSet.added.delete(id);
     writeSet.edits.delete(id);
+    // Captured once, off the store's own committed map, which a transaction never mutates until it
+    // closes — so it stays this id's true pre-transaction row no matter how many more times
+    // this id is removed and re-added before the transaction ends. An id with no row here never
+    // existed before this transaction; `pendingRemoved` reads that absence as "nothing to restore".
+    const committed = this.#byId.get(id);
+    if (committed) writeSet.replacedCommitted.set(id, committed);
   }
 
   pendingAdded(): readonly { store: 'entries'; entity: StoredEntry }[] {
@@ -905,6 +923,13 @@ export class EntryStore implements EntryStoreContract {
     for (const id of this.#writeSet.removed) {
       const entity = this.#byId.get(id);
       if (entity) result.push({ store: 'entries', entity });
+    }
+    // A replace: `stageAdd` cleared `removed` for this id so a mid-transaction read sees the new
+    // row, but the committed row it removed still belongs in this changeset — the reader needs both
+    // the departure and the arrival, not just the arrival (undo has nothing to restore otherwise).
+    for (const id of this.#writeSet.added.keys()) {
+      const replaced = this.#writeSet.replacedCommitted.get(id);
+      if (replaced) result.push({ store: 'entries', entity: replaced });
     }
     return result;
   }

@@ -124,7 +124,7 @@ describe('foldChangeSet', () => {
     expect(result?.added).toEqual([{ store: 'entries', entity: t1 }]);
   });
 
-  it('cancels an add followed by a remove of the same id, and records neither', () => {
+  it('keeps both rows when an id names both an add and a remove — the write set already resolved a within-transaction churn before this runs, so an id reaching here in both lists is a replace, not a cancel', () => {
     const t1 = entry('t1');
     const result = foldChangeSet(
       changeSetId(1),
@@ -133,10 +133,11 @@ describe('foldChangeSet', () => {
       [{ store: 'entries', entity: t1 }],
       [],
     );
-    expect(result).toBeUndefined();
+    expect(result?.added).toEqual([{ store: 'entries', entity: t1 }]);
+    expect(result?.removed).toEqual([{ store: 'entries', entity: t1 }]);
   });
 
-  it('drops field updates belonging to a cancelled id, but keeps updates for other ids', () => {
+  it('keeps every update row, including one for an id that also names a replace', () => {
     const t1 = entry('t1');
     const t2 = entry('t2');
     const result = foldChangeSet(
@@ -149,9 +150,10 @@ describe('foldChangeSet', () => {
         { store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' },
       ],
     );
-    expect(result?.added).toEqual([]);
-    expect(result?.removed).toEqual([]);
-    expect(result?.updated).toEqual([{ store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' }]);
+    expect(result?.updated).toEqual([
+      { store: 'entries', id: t1.id, field: 'name', from: 'a', to: 'b' },
+      { store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' },
+    ]);
   });
 });
 
