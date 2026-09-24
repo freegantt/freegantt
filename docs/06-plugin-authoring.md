@@ -121,6 +121,41 @@ flat `owner: 'Ada'` value on a construction entry lands the same way
 `dataset.entries.update(id, { owner: 'Ada' })` reads and writes it like any
 other.
 
+## Hierarchy source
+
+A plugin that owns the tree declares `hierarchySource` on itself, the same
+way it declares `fields` (ADR 0031):
+
+```ts
+import { definePlugin } from 'freegantt';
+
+interface PhaseProps {
+  phaseId?: string;
+}
+
+function phases() {
+  return definePlugin<PhaseProps>({
+    id: 'demo.phases',
+    fields: [{ key: 'phaseId' }],
+    hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
+    data() {},
+  });
+}
+
+export { phases };
+```
+
+Read aloud: "its hierarchy source is the entry's phase id, or the next
+source's answer." `next` is the source composed so far — core's own
+`(entry) => entry.parentId` for the first plugin to declare one, or the
+plugin declared just before it in setup order. `Dataset` folds every
+declared source before the construction Rollup runs, so the Rollup always
+walks the finished tree.
+
+`entry` is a `StoredEntry`, not the live `Entry` — `parent()`, `children()`,
+`depth` and `descendants()` are all built from this function, so a source
+that read one of those would ask the question it exists to answer.
+
 ## Installing a plugin
 
 ### At construction

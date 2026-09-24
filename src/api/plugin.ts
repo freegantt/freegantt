@@ -10,8 +10,25 @@
 //
 // A plugin author writes `definePlugin` (`api/define-plugin.ts`) and meets the bound names.
 
-import type { Aggregator, Disposer, Field, FieldType, PluginId } from '../model/index.js';
+import type {
+  Aggregator,
+  Disposer,
+  EntryStoreView,
+  Field,
+  FieldType,
+  HierarchySource,
+  PluginId,
+} from '../model/index.js';
 import type { DatasetPluginContextOf } from './dataset-plugin.js';
+
+/** The props a `TDataset` type argument carries, read off its own `entries` collection — the same
+ *  trust boundary `api/dataset.ts`'s class note describes. Falls back to a plain record when
+ *  `TDataset` names no Dataset type (the default, `unknown`), so `hierarchySource` still type-checks
+ *  with no `props` shape declared. Not exported: `ae-forgotten-export` records it, same as
+ *  `EntryEnvelope` today. */
+type PropsOf<TDataset> = TDataset extends { entries: EntryStoreView<infer TProps> }
+  ? TProps
+  : Record<string, unknown>;
 
 /** The two members every plugin declares, whichever halves it fills.
  *
@@ -51,6 +68,7 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
   fields?: never;
   fieldTypes?: never;
   aggregators?: never;
+  hierarchySource?: never;
 }
 
 /** A plugin that owns state — Fields, the edit hook, a store — and may paint it too.
@@ -77,6 +95,15 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
   aggregators?: Readonly<Record<string, Aggregator>>;
   /** The same half a chrome-only plugin fills. Optional: a headless plugin paints nothing. */
   view?(ctx: TViewContext): Disposer | void;
+  /** Declares the tree, instead of composing it from inside `data()` (ADR 0031). Call:
+   *  `definePlugin<PhaseProps>({ id, fields: [{ key: 'phaseId' }], hierarchySource: (next) => (entry) =>
+   *  entry.props.phaseId ?? next(entry) })` — "its hierarchy source is the entry's phase id, or the
+   *  next source's answer."
+   *
+   *  Composes in setup order (`resolveSetupOrder`, D-S5-31), the same order `data()` runs in. The
+   *  first plugin wraps core's own `storedParentSource`, and a later plugin wraps the one before it —
+   *  the last plugin answers first. Same composing idiom `setExtender`/`setLockRule` already use. */
+  hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;
 }
 
 /** One installed plugin, either arm. `DatasetOptions.plugins` takes this; `GanttOptions.plugins`
