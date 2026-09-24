@@ -227,22 +227,34 @@ function revertLoopingParentRows(
   }
 }
 
+function storeRowKey(store: StoreRowUpdated['store'], id: EntryId): string {
+  return `${store}\u0000${id}`;
+}
+
 /** A store row that writes a value (`to` is not `undefined`) for an entity gone after the replay is
  *  dropped — no orphan rows. A deletion row (`to` is `undefined`) is judged by the store alone: it
  *  applies whenever the store still holds something to delete, entity gone or not — the step recorded
  *  that deletion row beside the entry's `removed` row, applied the same way whether that entity is
- *  still there to carry it. Otherwise both kinds read the store's own committed value fresh
- *  (`committedRow`) and overwrite the same way a Field row does; an identical value writes nothing. */
+ *  still there to carry it. Otherwise both kinds read the store's own committed value fresh, unless a
+ *  row earlier in this same replay already wrote this `(store, id)` — then `written` chains off that
+ *  row's `to`, the same way `fieldRowToReplay` chains through `working` — and overwrite the same way a
+ *  Field row does; an identical value writes nothing. */
 function storeRowToReplay(
   row: StoreRowUpdated,
   working: ReadonlyMap<EntryId, StoredEntry>,
   pluginStores: TransactionalPluginStores,
+  written: Map<string, unknown>,
 ): StoreRowUpdated | undefined {
-  const from = pluginStores.committedRow(row.store, row.id);
-  if (row.to === undefined)
-    return from === undefined ? undefined : { store: row.store, id: row.id, from, to: undefined };
+  const key = storeRowKey(row.store, row.id);
+  const from = written.has(key) ? written.get(key) : pluginStores.committedRow(row.store, row.id);
+  if (row.to === undefined) {
+    if (from === undefined) return undefined;
+    written.set(key, undefined);
+    return { store: row.store, id: row.id, from, to: undefined };
+  }
   if (!working.has(row.id)) return undefined;
   if (Object.is(from, row.to)) return undefined;
+  written.set(key, row.to);
   return { store: row.store, id: row.id, from, to: row.to };
 }
 
@@ -273,6 +285,7 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   const added = addedRowsToReplay(changeSet.added, working);
 
   const updated: UpdatedRow[] = [];
+  const writtenStoreRows = new Map<string, unknown>();
   const parentIdRows = new Map<EntryId, FieldUpdated>();
   // A `siblingIndex` row is the renumber pass's own to write, below, never the plain diff's — the
   // same split `buildCommitChangeSet` makes between a body-authored row and the renumber pass's rank.
@@ -285,7 +298,7 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
     const replayed =
       row.store === 'entries'
         ? fieldRowToReplay(row, working, data.fields, data.fieldAccess)
-        : storeRowToReplay(row, working, data.pluginStores);
+        : storeRowToReplay(row, working, data.pluginStores, writtenStoreRows);
     if (!replayed) continue;
     updated.push(replayed);
     // Keeps the first `parentId` row per id: a reverted id's kept value is the value it held before

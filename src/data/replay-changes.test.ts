@@ -259,6 +259,28 @@ describe('replay drops a store row whose entry is gone', () => {
 
     expect(seen).toEqual([]);
   });
+
+  it('two rows for the same store row chain, so a net no-op writes nothing', () => {
+    const state = dataset([{ id: 'a', name: 'A' }]);
+    const settled = { locked: true as const };
+    state.pluginStores.reserve<{ locked: true }>('demo.lock').set('a', settled);
+    const seen = changeSets(state);
+
+    // A hand-built step can carry two rows for one `(store, id)`. The first names a value the store
+    // never held; the second names the value the store holds right now. The two together undo to
+    // nothing, so the replay must write nothing.
+    state.replay(
+      step({
+        updated: [
+          { store: pluginStoreName('demo.lock'), id: entryId('a'), from: undefined, to: { locked: false } },
+          { store: pluginStoreName('demo.lock'), id: entryId('a'), from: undefined, to: settled },
+        ],
+      }),
+    );
+
+    expect(seen).toEqual([]);
+    expect(state.pluginStores.read<{ locked: true }>('demo.lock')?.get('a')).toEqual(settled);
+  });
 });
 
 describe('a store deletion row applies even when its entry is gone', () => {
