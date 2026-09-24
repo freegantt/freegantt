@@ -265,11 +265,12 @@ describe('rollUpFields (S4.2)', () => {
   });
 
   describe('ADR 0013, decision 5/6: one report when the Rollup drops a value nobody may keep', () => {
-    it('construction drops an authored value on a parent whose only child has none, and raises one report', () => {
-      const reports: ErrorReport[] = [];
-      // `installPlugins` runs before `applyConstructionRollUp` (dataset-state.ts), so it is the one
-      // door onto the Dataset that exists early enough to observe a construction-time report — the
-      // constructor itself has not returned yet when a consumer could otherwise call `state.on(...)`.
+    it('construction drops an authored value on a parent whose only child has none, and reaches console.warn', () => {
+      // No plugin's `data()` can subscribe early enough to see this (ADR 0031): every plugin's own
+      // code now runs after the whole Dataset, this Rollup included, is built. `console.warn` is the
+      // only channel a construction-time report can reach.
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
       const state = new DatasetState({
         entries: [
           { id: 't1', name: 'p1', props: { cost: 500 } },
@@ -278,37 +279,12 @@ describe('rollUpFields (S4.2)', () => {
         timeZone: 'UTC',
         fieldTypes: { money: { rollUp: 'sum' } },
         fields: [{ key: 'cost', type: 'money' }],
-        installPlugins: (installing) => {
-          installing.on('error', (report) => {
-            reports.push(report);
-          });
-          return () => {};
-        },
       });
 
       expect(costOf(state, 't1')).toBeUndefined();
-      expect(reports).toHaveLength(1);
-      expect(reports[0]?.code).toBe('derived-values-dropped');
-      expect(reports[0]?.severity).toBe('warning');
-      expect(reports[0]?.message).toContain('"cost"');
-      expect(reports[0]?.message).toContain('"t1"');
-    });
-
-    it('construction with no subscriber reaches console.warn instead', () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      new DatasetState({
-        entries: [
-          { id: 't1', name: 'p1', props: { cost: 500 } },
-          { id: 't2', name: 'c1', parentId: 't1' },
-        ],
-        timeZone: 'UTC',
-        fieldTypes: { money: { rollUp: 'sum' } },
-        fields: [{ key: 'cost', type: 'money' }],
-      });
-
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]?.[0]).toContain('"cost"');
+      expect(warn.mock.calls[0]?.[0]).toContain('"t1"');
 
       warn.mockRestore();
     });
