@@ -112,16 +112,22 @@ function fieldRowToReplay(
   return { store: 'entries', id: row.id, field: row.field, from, to: row.to };
 }
 
-/** A store row for an entity gone after the replay is dropped — no orphan rows. Otherwise it reads
- *  the store's own committed value fresh (`committedRow`) and overwrites the same way a Field row
- *  does; an identical value writes nothing. */
+/** A store row that writes a value (`to` is not `undefined`) for an entity gone after the replay is
+ *  dropped — no orphan rows. A deletion row (`to` is `undefined`) is judged by the store alone: it
+ *  applies whenever the store still holds something to delete, entity gone or not — the entry's own
+ *  `removed` row already cascades the deletion row `pluginStores.pendingRows` recorded for it,
+ *  applied the same way whether that entity is still there to carry it. Otherwise both kinds read the
+ *  store's own committed value fresh (`committedRow`) and overwrite the same way a Field row does; an
+ *  identical value writes nothing. */
 function storeRowToReplay(
   row: StoreRowUpdated,
   working: ReadonlyMap<EntryId, StoredEntry>,
   pluginStores: TransactionalPluginStores,
 ): StoreRowUpdated | undefined {
-  if (!working.has(row.id)) return undefined;
   const from = pluginStores.committedRow(row.store, row.id);
+  if (row.to === undefined)
+    return from === undefined ? undefined : { store: row.store, id: row.id, from, to: undefined };
+  if (!working.has(row.id)) return undefined;
   if (Object.is(from, row.to)) return undefined;
   return { store: row.store, id: row.id, from, to: row.to };
 }

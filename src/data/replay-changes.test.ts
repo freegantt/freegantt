@@ -179,6 +179,34 @@ describe('replay drops a store row whose entry is gone', () => {
   });
 });
 
+describe('a store deletion row applies even when its entry is gone', () => {
+  it('redo of a remove deletes the store row that came back on undo', () => {
+    const state = dataset([{ id: 'x', name: 'X' }]);
+    state.pluginStores.reserve<{ locked: true }>('demo.lock').set('x', { locked: true });
+    state.entries.remove('x');
+
+    state.undo();
+    expect(state.pluginStores.read<{ locked: true }>('demo.lock')?.get('x')).toEqual({ locked: true });
+
+    state.redo();
+    expect(state.entries.has('x')).toBe(false);
+    expect(state.pluginStores.read<{ locked: true }>('demo.lock')?.get('x')).toBeUndefined();
+  });
+
+  it('undo of an add-with-a-store-row leaves no orphan row', () => {
+    const state = dataset([]);
+    state.transaction(() => {
+      state.entries.add({ id: 'x', name: 'X', start: 0, end: 1 });
+      state.pluginStores.reserve<{ locked: true }>('demo.lock').set('x', { locked: true });
+    });
+
+    state.undo();
+
+    expect(state.entries.has('x')).toBe(false);
+    expect(state.pluginStores.read<{ locked: true }>('demo.lock')?.get('x')).toBeUndefined();
+  });
+});
+
 describe('replay judges a same-id replace in the store’s own apply order — removed, then added', () => {
   it('undo restores the old row with its old values and its old position; redo brings back the new row', () => {
     const state = dataset([{ id: 'a' }, { id: 'b', name: 'B' }, { id: 'c' }]);
