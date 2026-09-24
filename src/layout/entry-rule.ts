@@ -20,7 +20,7 @@ export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TPr
  *
  *  **A key no Field declares matches no row.** The match reads through the Field registry, so a
  *  typo matches nothing rather than taking the layout pass down. A plugin that matches on its own
- *  key declares that key from its `data` half (`ctx.fields.register`).
+ *  key declares that key on itself (`fields`).
  *
  *  Each key reads through `entry.read(key)` and compares with that Field's own `equals`
  *  (`model/field.ts`), so `{ start: someInstant }` and `{ status: 'blocked' }` compare the way a
