@@ -19,6 +19,7 @@ import {
   findingTitle,
   isStalled,
   newComments,
+  resumeCommandFor,
   verdictForSession,
 } from '../../scripts/ocr-review.mjs';
 
@@ -223,6 +224,12 @@ describe('ocr-review explains why the ocr child stopped', () => {
 
   it('reports the exit code when the child just ran and quit', () => {
     expect(describeChildOutcome({ code: 1, signal: null })).toBe('exit code 1');
+  });
+});
+
+describe('ocr-review builds one resume command format', () => {
+  it('names the session id in a copy-pasteable command', () => {
+    expect(resumeCommandFor('a1')).toBe('pnpm ocr-review --resume a1');
   });
 });
 

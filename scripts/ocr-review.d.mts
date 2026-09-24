@@ -77,3 +77,6 @@ export interface ChildOutcome {
 
 /** A short, human phrase for why the `ocr` child stopped, for a FAILED line. */
 export function describeChildOutcome(outcome: ChildOutcome): string;
+
+/** The command an agent types to retry a session, so the format lives in one place. */
+export function resumeCommandFor(sessionId: string): string;

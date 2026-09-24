@@ -24,15 +24,20 @@
 //   3 FAILED    `ocr` itself exited with an error, or setup (fetch, session lookup) failed.
 
 import { spawn, spawnSync } from 'node:child_process';
-import { openSync } from 'node:fs';
+import { openSync, realpathSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+// Realpath'd, so a symlinked checkout still matches the `repo_dir` `ocr` reports back (same pattern
+// as `scripts/e2e-worktree-port-guard.mjs`'s `thisWorktreeRoot`).
+const root = realpathSync(path.dirname(path.dirname(fileURLToPath(import.meta.url))));
 
 const POLL_MILLISECONDS = 60_000;
-const STALL_MINUTES = 15;
+// A single large file, or an `ocr` phase that emits no per-file progress, can legitimately run
+// longer than the default — override for a run known to need more room (`FG_MEASURE_PORT` in
+// `scripts/measure-scale.mjs` is the same pattern).
+const STALL_MINUTES = Number(process.env['FG_OCR_REVIEW_STALL_MINUTES'] ?? 15);
 const OWN_SESSION_TIMEOUT_MILLISECONDS = 60_000;
 // `ocr session comments` returns the full text of every finding, which a branch-wide review can
 // push past Node's 1 MiB `spawnSync` default. 64 MiB is generous headroom for a JSON reply that is
@@ -174,6 +179,11 @@ function killActiveChild() {
   }
 }
 
+/** The command an agent types to retry a session, so the format lives in one place. */
+export function resumeCommandFor(sessionId) {
+  return `pnpm ocr-review --resume ${sessionId}`;
+}
+
 function stop(message) {
   killActiveChild();
   console.log(`ocr-review FAILED — ${message}`);
@@ -200,15 +210,19 @@ async function main() {
     stop('usage: pnpm ocr-review [--resume <session-id>]');
   }
 
+  // Throws rather than calling `stop()` directly: the initial session lookup lets that throw reach
+  // `main()`'s own top-level catch, which kills the child and reports FAILED exactly as `stop()`
+  // would; the polling loop below catches it itself, to tolerate a read failing once the run is
+  // already healthy (a hard kill there is reserved for `ocr` itself exiting badly).
   function ocrJson(argv) {
     const result = spawnSync('ocr', argv, { cwd: root, encoding: 'utf8', maxBuffer: OCR_JSON_MAX_BUFFER });
-    if (result.error) stop(`\`ocr ${argv.join(' ')}\` could not run: ${result.error.message}`);
+    if (result.error) throw new Error(`\`ocr ${argv.join(' ')}\` could not run: ${result.error.message}`);
     if (result.status !== 0)
-      stop(`\`ocr ${argv.join(' ')}\` failed. ${(result.stderr || result.stdout || '').trim()}`);
+      throw new Error(`\`ocr ${argv.join(' ')}\` failed. ${(result.stderr || result.stdout || '').trim()}`);
     try {
       return JSON.parse(result.stdout);
     } catch {
-      stop(`\`ocr ${argv.join(' ')}\` did not return JSON.`);
+      throw new Error(`\`ocr ${argv.join(' ')}\` did not return JSON.`);
     }
   }
 
@@ -216,6 +230,30 @@ async function main() {
     ocrJson(['session', 'list', '--json', '--repo', root, '--limit', '50']).map(normalizeSession);
   const readComments = (sessionId) =>
     ocrJson(['session', 'comments', sessionId, '--json', '--repo', root]).map(normalizeComment);
+
+  /** One poll of the running session: fresh session and comment rows, or `undefined` when the read
+   *  itself failed or the session is momentarily missing from the listing. Both are transient —
+   *  reading `ocr session comments` concurrently, which `docs/agents/review.md` encourages, can
+   *  cause either — so this logs and lets the next poll retry rather than killing a healthy run. */
+  function pollSession(sessionId) {
+    let sessions;
+    let comments;
+    try {
+      sessions = readSessions();
+      comments = readComments(sessionId);
+    } catch (error) {
+      console.log(
+        `ocr-review: poll failed, retrying in ${POLL_MILLISECONDS / 60_000} minute(s). ${error.message}`,
+      );
+      return undefined;
+    }
+    const current = sessions.find((row) => row.sessionId === sessionId);
+    if (current === undefined) {
+      console.log(`ocr-review: session ${sessionId} missing from this poll, retrying next minute.`);
+      return undefined;
+    }
+    return { current, comments };
+  }
 
   console.log('ocr-review: fetching origin so origin/main is fresh.');
   const fetch = spawnSync('git', ['fetch', 'origin'], { cwd: root, stdio: 'inherit' });
@@ -270,31 +308,33 @@ async function main() {
   let previousComments = [];
   let lastProgressAt = new Date();
 
+  let sessionEnded = false;
   for (;;) {
     await Promise.race([sleep(POLL_MILLISECONDS), childExited]);
 
-    const sessions = readSessions();
-    const current = sessions.find((row) => row.sessionId === session.sessionId) ?? latest;
-    const comments = readComments(session.sessionId);
-    const fresh = newComments(previousComments, comments);
-    for (const comment of fresh) console.log(formatFinding(comment));
-    previousComments = comments;
+    const polled = pollSession(session.sessionId);
+    if (polled !== undefined) {
+      const { current, comments } = polled;
+      const fresh = newComments(previousComments, comments);
+      for (const comment of fresh) console.log(formatFinding(comment));
+      previousComments = comments;
 
-    const progressed =
-      current.completedFiles !== latest.completedFiles ||
-      current.failedFiles !== latest.failedFiles ||
-      fresh.length > 0;
-    if (progressed) lastProgressAt = new Date();
-    latest = current;
+      const progressed =
+        current.completedFiles !== latest.completedFiles ||
+        current.failedFiles !== latest.failedFiles ||
+        fresh.length > 0;
+      if (progressed) lastProgressAt = new Date();
+      latest = current;
 
-    const ended = current.endTime !== UNSET_END_TIME;
-    if (ended || childOutcome !== undefined) break;
+      sessionEnded = current.endTime !== UNSET_END_TIME;
+    }
+
+    if (sessionEnded || childOutcome !== undefined) break;
 
     if (isStalled(lastProgressAt, new Date(), STALL_MINUTES)) {
       killActiveChild();
-      const resumeCommand = `pnpm ocr-review --resume ${session.sessionId}`;
       console.log(
-        `\nocr-review STALLED — no new file and no new finding for ${STALL_MINUTES} minutes. Resume with: ${resumeCommand}`,
+        `\nocr-review STALLED — no new file and no new finding for ${STALL_MINUTES} minutes. Resume with: ${resumeCommandFor(session.sessionId)}`,
       );
       process.exit(EXIT_CODE.stalled);
     }
@@ -313,11 +353,13 @@ async function main() {
     );
   }
 
-  const resumeCommand = `pnpm ocr-review --resume ${latest.sessionId}`;
-  const verdict = verdictForSession(latest, { resumeCommand });
+  const verdict = verdictForSession(latest, { resumeCommand: resumeCommandFor(latest.sessionId) });
   if (!verdict.ok) {
     for (const failedPath of verdict.failedFilePaths) console.log(`  - ${failedPath}`);
   }
+  // The session reporting an `end_time` does not mean the `ocr` process has exited yet — kill it
+  // before returning the verdict, the same as `stop()` and the STALLED branch do.
+  killActiveChild();
   console.log(`\n${verdict.line}`);
   process.exit(verdict.ok ? EXIT_CODE.pass : EXIT_CODE.partial);
 }
