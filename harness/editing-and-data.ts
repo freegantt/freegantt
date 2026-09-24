@@ -22,6 +22,7 @@ import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { zoomPresetsWithSixHour } from './six-hour-preset.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
+import { fakeServer } from './fake-server.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
@@ -83,6 +84,10 @@ const dataset = new Dataset<EditingDataProps>({
   ],
   plugins: [locks, notes],
 });
+
+// #517: stands in for a server this page polls. It carries the page's own list from page load, so
+// its scripted revisions build on what the page actually shows.
+const server = fakeServer(dataset.entries.all.map((entry) => entry.toInput()));
 
 // A hard boundary a `beforeEntryMove` veto below enforces — dropping a bar before it is refused. A
 // week out from today, so this labelled Date line and the unlabelled Today line land at two
@@ -442,4 +447,13 @@ importBtn.addEventListener('click', () => {
   }
   attemptMutation(() => dataset.entries.load(parsed));
   logLine(`document · imported ${parsed.length} entries`);
+});
+
+// #517: sync is a poll, not a fresh start — it diffs the server's list against the live data. A kept
+// row keeps its selection and collapse state, and a change records one undo step; a poll that finds
+// nothing new commits nothing, so the toolbar's Undo button holds whatever it already showed.
+const syncBtn = document.querySelector<HTMLButtonElement>('#sync-btn')!;
+syncBtn.addEventListener('click', () => {
+  attemptMutation(() => dataset.entries.sync(server.fetchRows()));
+  logLine('document · checked the server for changes');
 });

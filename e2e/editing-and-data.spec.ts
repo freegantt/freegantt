@@ -183,6 +183,35 @@ test('import tolerates a child before its parent, clears undo, and a lock holds'
   expect(lockRefused).toBe(true);
 });
 
+// #517: `entries.sync()` diffs a fetched list against the live data — unlike Import (`load`), it
+// keeps a kept row's selection and records one undo step. `harness/fake-server.ts` scripts the
+// first "Sync from server" click as a rename and a date shift on 'entry-3'.
+test('syncing from the server renames a bar, keeps the selection, and undo brings the old name back', async ({
+  page,
+}) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.evaluate(() => window.__gantt.reveal('entry-3'));
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-3:"]').first();
+  await expect(bar).toBeVisible();
+  await bar.click();
+  await expect(page.locator('#lock-checkbox')).toBeEnabled();
+
+  const nameBefore = await bar.textContent();
+  await expect(page.getByLabel('Undo')).toBeDisabled();
+
+  await page.locator('#sync-btn').click();
+
+  await expect(bar).toHaveText('Renamed by the server');
+  const selectionAfter = await page.evaluate(() => window.__gantt.selectedEntryIds);
+  expect(selectionAfter).toEqual(['entry-3']);
+  await expect(page.getByLabel('Undo')).toBeEnabled();
+
+  await page.getByLabel('Undo').click();
+  await expect(bar).toHaveText(nameBefore ?? '');
+});
+
 // #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`,
 // not only the shipped table — the picker's one line (`harness/gantt-toolbar.ts`,
 // `gantt.preset = presetSelect.value`) needs no special case for the custom "sixHour" rung

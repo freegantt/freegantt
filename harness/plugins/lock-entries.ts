@@ -45,7 +45,9 @@ export interface LockEntriesPlugin extends DataPlugin {
  *   `false` throws `MutationCancelledError` — the ordinary veto every gesture already handles: no
  *   write, no undo entry, no new error type. A `'load'` changeset steps around this refusal (#496
  *   L1): `load` is a full fresh start that removes every old entry regardless of its lock, and the
- *   `locked` Field on the rows it loads is what the lock reads back once the load lands.
+ *   `locked` Field on the rows it loads is what the lock reads back once the load lands. A `'sync'`
+ *   changeset steps around it too (#517): the list it diffs against carries `locked` the same way a
+ *   `load` list does, so the server's own list is what the lock reads back once the sync lands.
  *
  * The lock flag is a Field, so locking is a real dataset write: it commits, it raises `change`, and
  * one undo unlocks (#156).
@@ -115,12 +117,12 @@ export function lockEntries(): LockEntriesPlugin {
       });
 
       // What refuses the drop? The finished changeset, once, at commit — never the extender above. A
-      // load replaces the whole dataset (#496 L1): it removes every old entry regardless of a lock,
-      // so this refusal steps aside for it. Why does the refusal say the entry id? `refuse(reason)`
-      // puts the plugin's own words on the report core raises (#210), so the page needs no callback
-      // of its own to tell a user why.
+      // load replaces the whole dataset (#496 L1), and a sync's list carries `locked` the way a
+      // load's does (#517), so this refusal steps aside for both. Why does the refusal say the entry
+      // id? `refuse(reason)` puts the plugin's own words on the report core raises (#210), so the
+      // page needs no callback of its own to tell a user why.
       ctx.events.on('beforeChange', ({ changeSet, refuse }) => {
-        if (changeSet.origin === 'load') return undefined;
+        if (changeSet.origin === 'load' || changeSet.origin === 'sync') return undefined;
         const refused = fieldRowsOf(changeSet).find(
           (row) => row.field !== LOCKED_FIELD_KEY && isLockedEntry(String(row.id)),
         );
