@@ -44,7 +44,12 @@ import type { EntryReadContext } from './entry-reader.js';
 import type { UnplacedEntry } from './hierarchy-source.js';
 import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
-import { assertNoOpenTransaction, assertNoRunningExtensionHook, readEntryBatch } from './entry-batch.js';
+import {
+  assertNoOpenTransaction,
+  assertNoRunningExtensionHook,
+  assertNotNotifying,
+  readEntryBatch,
+} from './entry-batch.js';
 import {
   buildDerivedValuesDroppedReport,
   buildSiblingIndexDroppedReport,
@@ -668,21 +673,58 @@ export class EntryStore implements EntryStoreContract {
    * time the hook runs.
    */
   load(inputs: readonly FlatEntryInput[]): void {
+    const { runner, byId, entries: read, rollupUpdated } = this.#readBatch(inputs, 'entries.load');
+
+    const added = read.map((entry) => ({ store: 'entries' as const, entity: byId.get(entry.id)! }));
+    const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
+    // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
+    // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.
+    const pluginRows = runner.pluginStores.pendingRows(removed.map((row) => row.entity.id));
+
+    const changeSet: ChangeSet = {
+      id: runner.nextChangeSetId(),
+      origin: 'load',
+      added,
+      removed,
+      updated: [...rollupUpdated, ...pluginRows],
+    };
+    commitChangeSet(runner, changeSet);
+  }
+
+  /**
+   * The read-and-roll step `load` and sync (#517) both run before either builds its own `ChangeSet`:
+   * checks a whole-list write may run right now (no open transaction, no running extension hook, no
+   * `beforeChange`/`change` handler on the stack), reads and places the batch (`readEntryBatch`),
+   * warns or reports a dropped `siblingIndex`, runs construction's own Rollup once, and reports a
+   * dropped derived value. Returns the bound runner alongside the placed entries and the Rollup's
+   * updates, so the caller builds its own `added`/`removed` and commits without resolving `#runner`
+   * a second time.
+   */
+  #readBatch(
+    inputs: readonly FlatEntryInput[],
+    operation: string,
+  ): {
+    readonly runner: TransactionData;
+    readonly byId: Map<EntryId, StoredEntry>;
+    readonly entries: readonly StoredEntry[];
+    readonly rollupUpdated: readonly FieldUpdated[];
+  } {
     const runner = this.#runner;
     if (!runner) {
       throw new Error(
         'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
       );
     }
-    assertNoOpenTransaction(runner.openTransactions, 'entries.load');
-    assertNoRunningExtensionHook(runner.runningExtensionHook, 'entries.load');
+    assertNoOpenTransaction(runner.openTransactions, operation);
+    assertNoRunningExtensionHook(runner.runningExtensionHook, operation);
+    assertNotNotifying(runner.notifying, operation);
 
     const source = this.#hierarchySource;
     const {
       entries: read,
       parents,
       siblingIndexDropped,
-    } = readEntryBatch(inputs, this.#context, this.#registry, source, 'entries.load');
+    } = readEntryBatch(inputs, this.#context, this.#registry, source, operation);
     if (siblingIndexDropped.length > 0) {
       const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
       raiseErrorOn(runner.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
@@ -703,20 +745,7 @@ export class EntryStore implements EntryStoreContract {
       raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(dropped));
     }
 
-    const added = read.map((entry) => ({ store: 'entries' as const, entity: byId.get(entry.id)! }));
-    const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
-    // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
-    // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.
-    const pluginRows = runner.pluginStores.pendingRows(removed.map((row) => row.entity.id));
-
-    const changeSet: ChangeSet = {
-      id: runner.nextChangeSetId(),
-      origin: 'load',
-      added,
-      removed,
-      updated: [...rollupUpdated, ...pluginRows],
-    };
-    commitChangeSet(runner, changeSet);
+    return { runner, byId, entries: read, rollupUpdated };
   }
 
   #mutate<T>(body: (token: TxToken) => T): T {

@@ -8,6 +8,7 @@ import {
   entryId,
   EntryNotFoundError,
   MutationDuringExtensionHookError,
+  MutationDuringNotificationError,
   ParentCycleError,
   TransactionAlreadyOpenError,
 } from '../model/index.js';
@@ -169,4 +170,14 @@ export function assertNoOpenTransaction(openTransactions: number, operation: str
  */
 export function assertNoRunningExtensionHook(runningExtensionHook: boolean, operation: string): void {
   if (runningExtensionHook) throw new MutationDuringExtensionHookError(operation);
+}
+
+/**
+ * Refuses a whole-list write called from inside a `beforeChange` or `change` handler (#517 S9), the
+ * same refusal `commitChangeSet` already raises for a nested `add`/`update`/`remove`. `load` and sync
+ * name themselves here instead of surfacing as `commitChangeSet` — the door the caller actually
+ * knocked on, not the one underneath it.
+ */
+export function assertNotNotifying(notifying: boolean, operation: string): void {
+  if (notifying) throw new MutationDuringNotificationError(operation);
 }

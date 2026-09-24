@@ -9,6 +9,7 @@ import {
   EntryNotFoundError,
   MutationCancelledError,
   MutationDuringExtensionHookError,
+  MutationDuringNotificationError,
   ParentCycleError,
   TransactionAlreadyOpenError,
   entryId,
@@ -18,6 +19,7 @@ import {
   assertEntryBatchIsSound,
   assertNoOpenTransaction,
   assertNoRunningExtensionHook,
+  assertNotNotifying,
   readEntryBatch,
 } from './entry-batch.js';
 import { toEntries } from './entry-reader.js';
@@ -122,6 +124,11 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
   it('assertNoRunningExtensionHook is silent when false and throws when true', () => {
     expect(() => assertNoRunningExtensionHook(false, 'test')).not.toThrow();
     expect(() => assertNoRunningExtensionHook(true, 'test')).toThrow(MutationDuringExtensionHookError);
+  });
+
+  it('assertNotNotifying is silent when false and throws when true', () => {
+    expect(() => assertNotNotifying(false, 'test')).not.toThrow();
+    expect(() => assertNotNotifying(true, 'test')).toThrow(MutationDuringNotificationError);
   });
 });
 
@@ -327,6 +334,17 @@ describe('entries.load', () => {
     );
     expect(changeCount).toBe(0);
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('t1')]);
+  });
+
+  it('load called inside a change handler throws MutationDuringNotificationError, naming entries.load', () => {
+    const state = dataset([{ id: 'old' }]);
+    state.on('change', () => {
+      state.entries.load([{ id: 'second', name: 'Second', start: 0, end: 1 }]);
+    });
+
+    expect(() => state.entries.load([{ id: 'first', name: 'First', start: 0, end: 1 }])).toThrow(
+      'entries.load: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
+    );
   });
 
   it('an id in both lists keeps no old plugin-store row, selection or other per-entry state (L1)', () => {
