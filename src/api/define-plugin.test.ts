@@ -189,6 +189,33 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
     const clash = definePlugin({ id: 'demo.costing', view() {} });
     expect(() => mount(dataset, [clash])).toThrow(DuplicatePluginIdError);
   });
+
+  it('a fields-only plugin compiles with no data() (D7), and installs on the Dataset alone', () => {
+    const fieldsOnly = () => definePlugin({ id: 'demo.fieldsOnly', fields: [{ key: 'owner' }] });
+    const dataset = newDataset([fieldsOnly()]);
+    expect(dataset.field('owner')).toBeDefined();
+
+    const container = document.createElement('div');
+    expect(
+      () =>
+        new Gantt({
+          dataset: newDataset(),
+          container,
+          // @ts-expect-error D7: `data` is optional, but `fields` alone still refuses this install
+          // site — a Field must exist before the first Rollup, and a Gantt mounts after that.
+          plugins: [fieldsOnly()],
+        }),
+    ).toThrow(PluginSetupError);
+  });
+
+  it('refuses a widened plugin that declares hierarchySource alone, with no data() half', () => {
+    const treeOnly = definePlugin({
+      id: 'demo.treeOnly',
+      hierarchySource: (next) => next,
+    });
+    const widened = treeOnly as unknown as ChromePlugin;
+    expect(() => mount(newDataset(), [widened])).toThrow(PluginSetupError);
+  });
 });
 
 describe('requires covers both halves (D-S5-31)', () => {

@@ -77,8 +77,10 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
  *  must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset then runs `view`
  *  once, each with its own context, so I2 holds by construction. */
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
-  /** Fields, the edit hook and the store. DOM-free, and runs as the `Dataset` constructs. */
-  data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+  /** Fields, the edit hook and the store. DOM-free, and runs as the `Dataset` constructs. Optional
+   *  (D7): a plugin that only declares `fields`, `fieldTypes`, `aggregators` or `hierarchySource`
+   *  needs no `data()` to run. */
+  data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
   /** The same shape `DatasetOptions.fields`/`fieldTypes`/`aggregators` take (#496 grill round 3,
    *  R1). Registered before any entry is read — alongside the Dataset's own, and before `data()`
    *  runs. So a flat value an entry carries for one of these keys survives `new Dataset(...)`, the

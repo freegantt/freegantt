@@ -108,7 +108,6 @@ function ownerField() {
   return definePlugin({
     id: 'demo.ownerField',
     fields: [{ key: 'owner', type: 'text', editable: true }],
-    data() {},
   });
 }
 
@@ -138,7 +137,6 @@ function phases() {
     id: 'demo.phases',
     fields: [{ key: 'phaseId' }],
     hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
-    data() {},
   });
 }
 
