@@ -21,10 +21,15 @@ interface Props {
   readonly note?: string | undefined;
 }
 
+// m1 and c1 seed a real `note`, so the "keep" case below has an existing props value to carry
+// forward — with every seed row starting at no `note`, "clear" and "keep" would read identically
+// and the property would never exercise a cleared key.
+const seedNoteOf: Readonly<Record<string, string>> = { m1: 'seed-m1', c1: 'seed-c1' };
+
 const seedInputs: readonly FlatEntryInput<Props>[] = [
-  { id: 'm1', name: 'm1', start: 0, end: 1, cost: 10 },
+  { id: 'm1', name: 'm1', start: 0, end: 1, cost: 10, props: { note: seedNoteOf['m1'] } },
   { id: 'm2', name: 'm2', start: 0, end: 1, cost: 10 },
-  { id: 'c1', name: 'c1', parentId: 'm1', start: 0, end: 1, cost: 10 },
+  { id: 'c1', name: 'c1', parentId: 'm1', start: 0, end: 1, cost: 10, props: { note: seedNoteOf['c1'] } },
   { id: 'c2', name: 'c2', parentId: 'm1', start: 0, end: 1, cost: 10 },
   { id: 'c3', name: 'c3', parentId: 'm2', start: 0, end: 1, cost: 10 },
   { id: 'c4', name: 'c4', parentId: 'm2', start: 0, end: 1, cost: 10 },
@@ -74,6 +79,7 @@ function buildTarget(params: TargetParams): FlatEntryInput<Props>[] {
 
   const inputFor = (id: string, parentId: string | undefined): FlatEntryInput<Props> => {
     const note = params.noteEdits[id] ?? 'keep';
+    const seedNote = seedNoteOf[id];
     return {
       id,
       name: params.renamed[id] ? `${id}-renamed` : id,
@@ -85,7 +91,10 @@ function buildTarget(params: TargetParams): FlatEntryInput<Props>[] {
         ? { props: { note: `${id}-fresh` } }
         : note === 'clear'
           ? { props: { note: undefined } }
-          : {}),
+          : // "keep" carries a seeded note forward — omitting `props` here would itself clear it.
+            seedNote !== undefined
+            ? { props: { note: seedNote } }
+            : {}),
     };
   };
 
