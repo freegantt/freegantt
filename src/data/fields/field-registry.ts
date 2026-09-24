@@ -94,7 +94,7 @@ function mergeField(field: Field, bundle: FieldType | undefined): ResolvedField 
 }
 
 /** Does this Field take part in the Rollup? `'none'` is a declared opt-out, not an absent key
- *  (`register({ key: 'locked', rollUp: 'none' })`), so an absent key and an opted-out one both
+ *  (a Field declared `{ key: 'locked', rollUp: 'none' }`), so an absent key and an opted-out one both
  *  answer `false`. One predicate, because two readers ask: the Rollup pass itself, and #256's
  *  `canWrite`, which refuses a roll-up parent's rolling-up cell and must refuse exactly the set the
  *  pass would overwrite. Two spellings of this test disagreed on `'none'`, and the cell then said
