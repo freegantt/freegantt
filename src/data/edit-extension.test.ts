@@ -17,6 +17,7 @@ const noFields = { get: () => undefined };
 function entry(id: string): StoredEntry {
   return {
     id: entryId(id),
+    siblingIndex: 0,
     name: id,
     start: 0 as Instant,
     end: 1 as Instant,
@@ -234,7 +235,7 @@ describe('composing three extenders that write one Entry (#238)', () => {
       .filter((row) => row.id === target)
       .map((row) => row.field)
       .sort();
-    expect(onTarget).toEqual(['name', 'parentId', 'tag']);
+    expect(onTarget).toEqual(['name', 'parentId', 'siblingIndex', 'tag']);
   });
 });
 

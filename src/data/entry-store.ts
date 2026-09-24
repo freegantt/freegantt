@@ -31,22 +31,25 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   ParentCycleError,
+  SiblingIndexOutOfRangeError,
 } from '../model/index.js';
+import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
 import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
-import { toEditReading, toEntries, toEntry } from './entry-reader.js';
+import { toEditReading, toEntry } from './entry-reader.js';
+import type { EditReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
+import type { UnplacedEntry } from './hierarchy-source.js';
 import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
+import { assertNoOpenTransaction, assertNoRunningExtensionHook, readEntryBatch } from './entry-batch.js';
 import {
-  assertEntryBatchIsSound,
-  assertNoOpenTransaction,
-  assertNoRunningExtensionHook,
-  listOrderOf,
-} from './entry-batch.js';
-import { buildDerivedValuesDroppedReport, raiseErrorOn } from './error-reporting.js';
+  buildDerivedValuesDroppedReport,
+  buildSiblingIndexDroppedReport,
+  raiseErrorOn,
+} from './error-reporting.js';
 import {
   createFieldAccess,
   measureEntryDuration,
@@ -118,6 +121,19 @@ interface WriteSet {
    *  5,000 of them in one commit. It stays off the hot path — one transaction per gesture, at
    *  commit, never once per frame (I5). */
   stagedParents: Set<EntryId>;
+  /** This write set's own sibling-order log, in call order (ADR 0034) — `pendingSiblingChanges` hands
+   *  this straight to the renumber pass at commit. Every entry below keeps this transaction's own
+   *  view of "how many siblings does this group have right now" current one write at a time, so two
+   *  `add()` calls into the same group in one transaction see each other rather than both reading the
+   *  same committed count. */
+  siblingChanges: SiblingChange[];
+  /** Each touched group's live member count, seeded lazily from the committed count the first time a
+   *  write asks about that group. */
+  siblingGroupCounts: Map<SiblingGroupKey, number>;
+  /** Every id this transaction has logged a departure for and not yet re-placed — the same guard
+   *  `renumberSiblingGroups` keeps, so a second departure for one id (a remove replayed, or a move
+   *  logged twice) does not double-decrement a group's live count. */
+  departedSiblingIds: Set<EntryId>;
 }
 
 export class EntryStore implements EntryStoreContract {
@@ -153,13 +169,6 @@ export class EntryStore implements EntryStoreContract {
   #live: LiveEntries;
   #access: FieldAccess;
   #writeSet: WriteSet | null = null;
-  /** Insertion index of an Entry object at the moment it was removed, so an undo/redo that adds it
-   *  back can put it in the same place in `all` (D-S2-3). Keyed by object identity, not `EntryId`:
-   *  `history.ts#invert` reuses the exact `Entry` reference between a removal and its paired
-   *  restoration, so this survives an unrelated `'user'` re-add of the same id in between — an
-   *  id-keyed map would let that second object's index clobber the first's (undo-all then restores
-   *  the wrong insertion order). A `'user'` add is always a fresh object, so it never collides here. */
-  #removedAtIndex = new Map<StoredEntry, number>();
   #context: EntryReadContext;
   readonly #runner: TransactionData | undefined;
   readonly #registry: FieldRegistry;
@@ -206,30 +215,43 @@ export class EntryStore implements EntryStoreContract {
     });
     this.#runner = runner;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
-    // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
-    // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
-    this.#all = computed(() => {
-      this.#revision.get();
-      return Array.from(this.#byId.values());
-    });
-    this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
     this.#hierarchy = computed(() => {
       this.#revision.get();
       return checkHierarchyAnswers(this.#byId, this.#hierarchySource);
     });
     this.#byParent = computed(() => {
       // Core inverts the source's answer (ADR 0020). One parent per Entry goes in, so nothing can
-      // produce two parents for one row, and sibling order stays the order the rows are in.
+      // produce two parents for one row. Each group sorts by the Field (ADR 0034) — list position at
+      // ingest, an explicit write's own place after that — so this is sibling order, not insertion
+      // order.
       const parentById = this.committedParents();
       const byParent = new Map<EntryId | undefined, StoredEntry[]>();
-      for (const entry of this.#all()) {
+      for (const entry of this.#byId.values()) {
         const parentId = parentById.get(entry.id);
         const siblings = byParent.get(parentId);
         if (siblings) siblings.push(entry);
         else byParent.set(parentId, [entry]);
       }
+      for (const siblings of byParent.values()) siblings.sort((a, b) => a.siblingIndex - b.siblingIndex);
       return byParent;
     });
+    // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
+    // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
+    // Depth-first over `#byParent` (ADR 0034): a parent sits right before its own children, each
+    // sibling group already in Field order, the shape the grid's tree mode draws unchanged.
+    this.#all = computed(() => {
+      const byParent = this.#byParent();
+      const ordered: StoredEntry[] = [];
+      const walk = (parentId: EntryId | undefined): void => {
+        for (const child of byParent.get(parentId) ?? []) {
+          ordered.push(child);
+          walk(child.id);
+        }
+      };
+      walk(undefined);
+      return ordered;
+    });
+    this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
     this.#childIds = computed(() => {
       const childIds = new Map<EntryId, readonly EntryId[]>();
       for (const [parentId, children] of this.#byParent()) {
@@ -316,14 +338,43 @@ export class EntryStore implements EntryStoreContract {
 
   /** One call to whichever source is current, branded. Every tree read inside an open transaction
    *  goes through this — the committed index goes through `checkHierarchyAnswers` instead. */
-  #askSource(entry: StoredEntry): EntryId | undefined {
+  #askSource(entry: UnplacedEntry): EntryId | undefined {
     return parentIdFrom(this.#hierarchySource, entry);
+  }
+
+  /** `#askSource`'s answer, downgraded to a root: an id no Entry holds, or a chain that loops back
+   *  to `id` itself, both read as `undefined`. This is not `checkHierarchyAnswers`'s own cycle break
+   *  — that pass walks every chain once and refuses only the one link that closes a loop, so the
+   *  other members of the same cycle keep pointing into it. This is a live, per-id check: it asks
+   *  only whether `id`'s own chain loops back to `id`, a rougher rule than the committed pass. Two
+   *  entries in one cycle can each read as a root this way, where the committed index would have
+   *  named only one of them a root and left the rest chained. A tie this produces — two entries
+   *  sharing one group with no order between them — breaks by store order, the same fault-only tie
+   *  ADR 0034 already names for the committed pass.
+   *
+   *  The sibling order log reads a group through this, never through `#askSource` alone —
+   *  `committedSiblingIds` is keyed by the checked answer (ADR 0020), so a write against an
+   *  already-refused entry must count against the same group that index already holds it under, not
+   *  an empty one of its own. The commit path's own extender cascade reads a group through this too
+   *  (`build-commit-change-set.ts`), for the same reason. */
+  checkedSiblingGroupOf(id: EntryId, entry: UnplacedEntry): EntryId | undefined {
+    const raw = this.#askSource(entry);
+    if (raw === undefined || !this.has(raw)) return undefined;
+    let current: EntryId | undefined = raw;
+    const seen = new Set<EntryId>();
+    while (current !== undefined && !seen.has(current)) {
+      if (current === id) return undefined;
+      seen.add(current);
+      current = this.#parentIdInWriteSet(current);
+    }
+    return raw;
   }
 
   /** Which Entry is the parent of this row, as the rest of the library must read it (ADR 0020).
    *  Committed, it is the checked answer the index holds. Inside an open transaction, it is what the
-   *  source says about the row this transaction leaves. */
-  parentIdOf(entry: StoredEntry): EntryId | undefined {
+   *  source says about the row this transaction leaves. Takes the source's own shape, never a placed
+   *  row's, so a caller with either satisfies it (ADR 0034). */
+  parentIdOf(entry: UnplacedEntry): EntryId | undefined {
     if (!this.#writeSet) return this.committedParents().get(entry.id);
     return this.#askSource(entry);
   }
@@ -502,8 +553,19 @@ export class EntryStore implements EntryStoreContract {
       if (input.parentId !== undefined) {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
-      const entry = toEntry(input, this.#context, this.#registry, 'entries.add');
+      const unplaced = toEntry(input, this.#context, this.#registry, 'entries.add');
+      // Placed at `input.siblingIndex`, or at the end of its group with no index named (ADR 0034). The
+      // group's own live count — this transaction's own writes included, not only the committed count
+      // — so a second `add()` into the same group in the same transaction lands after the first.
+      const group = this.checkedSiblingGroupOf(id, unplaced);
+      const othersCount = this.#liveSiblingGroupSize(group);
+      const siblingIndex = input.siblingIndex ?? othersCount;
+      if (input.siblingIndex !== undefined) {
+        this.#assertSiblingIndexInRange(id, siblingIndex, othersCount, 'entries.add');
+      }
+      const entry: StoredEntry = { ...unplaced, siblingIndex };
       this.stageAdd(token, entry);
+      this.#logSiblingPlacement({ id, group, at: siblingIndex });
       return this.get(id)!;
     });
   }
@@ -528,7 +590,9 @@ export class EntryStore implements EntryStoreContract {
       }
       const current = this.storedEntry(key)!;
       const reading = toEditReading(edit, this.#context, current, this.#registry, operation);
+      const move = this.#siblingMoveFor(key, current, reading, edit, operation);
       this.stageUpdate(token, key, reading.stored);
+      if (move) this.#logSiblingPlacement(move);
       return this.get(key)!;
     });
   }
@@ -574,6 +638,9 @@ export class EntryStore implements EntryStoreContract {
     this.#mutate((token) => {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.remove');
+      // Only the top id leaves its group (ADR 0034) — its subtree goes with it, so a descendant logs
+      // no departure of its own: it was never a member of a group `renumberSiblingGroups` renumbers.
+      this.#logSiblingDeparture(key);
       for (const descendantId of this.#subtreeOf(key)) this.stageRemove(token, descendantId);
       this.stageRemove(token, key);
     });
@@ -610,12 +677,18 @@ export class EntryStore implements EntryStoreContract {
     assertNoOpenTransaction(runner.openTransactions, 'entries.load');
     assertNoRunningExtensionHook(runner.runningExtensionHook, 'entries.load');
 
-    const read = toEntries(inputs, this.#context, this.#registry, 'entries.load');
-    assertEntryBatchIsSound(read, 'entries.load');
+    const source = this.#hierarchySource;
+    const {
+      entries: read,
+      parents,
+      siblingIndexDropped,
+    } = readEntryBatch(inputs, this.#context, this.#registry, source, 'entries.load');
+    if (siblingIndexDropped.length > 0) {
+      const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
+      raiseErrorOn(runner.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
+    }
 
     const byId = new Map(read.map((entry) => [entry.id, entry]));
-    const source = this.#hierarchySource;
-    const { parents } = checkHierarchyAnswers(byId, source);
     // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
     // itself stays a leaf only that file and the commit path may import, `rollup-is-removable`):
     // no `pending`, so the pass walks `byId` as the whole tree. Refusals over this batch's hierarchy
@@ -630,8 +703,7 @@ export class EntryStore implements EntryStoreContract {
       raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(dropped));
     }
 
-    const order = listOrderOf(read);
-    const added = order.map((id) => ({ store: 'entries' as const, entity: byId.get(id)! }));
+    const added = read.map((entry) => ({ store: 'entries' as const, entity: byId.get(entry.id)! }));
     const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
     // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
     // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.
@@ -706,6 +778,9 @@ export class EntryStore implements EntryStoreContract {
       removed: new Set(),
       edits: new Map(),
       stagedParents: new Set(),
+      siblingChanges: [],
+      siblingGroupCounts: new Map(),
+      departedSiblingIds: new Set(),
     };
   }
 
@@ -768,6 +843,30 @@ export class EntryStore implements EntryStoreContract {
     return this.#writeSet?.edits ?? new Map();
   }
 
+  /** This write set's own sibling-order log, in call order — the renumber pass in
+   *  `buildCommitChangeSet` is this log's one reader. */
+  pendingSiblingChanges(): readonly SiblingChange[] {
+    return this.#writeSet?.siblingChanges ?? [];
+  }
+
+  /** `group`'s committed member ids, in sibling order — what the renumber pass seeds a touched
+   *  group's replay from. `group` is `checkedSiblingGroupOf`'s answer, `EntryId | undefined`, never
+   *  `#askSource`'s raw one: a refused entry's raw answer names no Entry this index groups by. The
+   *  wider `SiblingGroupKey` the interface names is a plugin-source door the committed index, keyed by
+   *  the checked hierarchy answer, already narrows to that same shape. */
+  committedSiblingIds(group: SiblingGroupKey): readonly EntryId[] {
+    return (this.#byParent().get(group as EntryId | undefined) ?? []).map((entry) => entry.id);
+  }
+
+  /** `group`'s live member count — `committedSiblingIds(group).length` with this transaction's own
+   *  writes folded in, the same count `add()` and `update()` range-check an explicit `siblingIndex`
+   *  against. The commit path reads this for the extender cascade's own moves too
+   *  (`build-commit-change-set.ts`), so an extender edit range-checks against the same live picture a
+   *  body write already left, rather than the committed count alone. */
+  liveSiblingGroupSize(group: SiblingGroupKey): number {
+    return this.#liveSiblingGroupSize(group);
+  }
+
   /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It raises no
    *  refusal of its own: `DatasetState` calls `reportRefusedHierarchyAnswers` once, right after this
    *  write lands, so every answer construction can produce is covered there instead. */
@@ -788,7 +887,6 @@ export class EntryStore implements EntryStoreContract {
    *  set's raw one. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
     if (changeSet) {
-      this.#rememberRemovedIndexes(changeSet);
       for (const { entity } of changeSet.removed) {
         this.#byId.delete(entity.id);
       }
@@ -812,60 +910,101 @@ export class EntryStore implements EntryStoreContract {
     }
   }
 
-  /** Records where each removed object sat, keyed by that exact object (D-S2-3). A `'user'` add of
-   *  the same id later is a new object and never reads this back — it just appends. */
-  #rememberRemovedIndexes(changeSet: ChangeSet): void {
-    if (changeSet.removed.length === 0) return;
-    // A `'load'` changeset removes every old entry, and `load`'s own added rows are freshly built
-    // objects (`toEntries` in `entries.load()`) that never match one of them by identity — and a
-    // `'load'` changeset clears History (`entries.load`'s own doc), so no undo/redo can hand one
-    // back either. Nothing would ever read these indexes back, so remembering them here would only
-    // pin every pre-load entry in this map for the store's whole lifetime (a repeated reload-from-
-    // server flow grows it unbounded).
-    if (changeSet.origin === 'load') return;
-    const indexById = new Map<EntryId, number>();
-    let index = 0;
-    for (const id of this.#byId.keys()) {
-      indexById.set(id, index);
-      index += 1;
-    }
-    for (const { entity } of changeSet.removed) {
-      const removedAt = indexById.get(entity.id);
-      if (removedAt !== undefined) this.#removedAtIndex.set(entity, removedAt);
-    }
-  }
-
   /** Adding `entity` back — a `'user'` re-add of an id the same transaction also removed, or an
    *  undo/redo restoring a removed one — replaces whatever object currently sits at `entity.id` in
-   *  `#byId`, if any. */
+   *  `#byId`, if any. `#byId`'s own key order no longer decides `all`'s order (ADR 0034): `#byParent`
+   *  groups and sorts by the sibling-order Field, so this needs no restored position, only the row
+   *  itself — the renumber pass already wrote every affected Field back onto this changeset. */
   #restoreAdded(changeSet: ChangeSet): void {
-    if (changeSet.added.length === 0) return;
-    if (changeSet.origin === 'user') {
-      for (const { entity } of changeSet.added) {
-        this.#byId.set(entity.id, entity);
-      }
-      return;
+    for (const { entity } of changeSet.added) {
+      this.#byId.set(entity.id, entity);
     }
-    const entries = Array.from(this.#byId.values());
-    const restored = [...changeSet.added].sort((a, b) => {
-      const aIndex = this.#removedAtIndex.get(a.entity) ?? Number.POSITIVE_INFINITY;
-      const bIndex = this.#removedAtIndex.get(b.entity) ?? Number.POSITIVE_INFINITY;
-      return aIndex - bIndex;
-    });
-    for (const { entity } of restored) {
-      const index = this.#removedAtIndex.get(entity);
-      if (index === undefined) entries.push(entity);
-      else {
-        entries.splice(Math.min(Math.max(index, 0), entries.length), 0, entity);
-        this.#removedAtIndex.delete(entity);
-      }
-    }
-    this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
   }
 
   #openWriteSet(): WriteSet {
     if (!this.#writeSet)
       throw new Error('EntryStore: no open transaction — data/transaction.ts always opens one first');
     return this.#writeSet;
+  }
+
+  // ---- Sibling order (ADR 0034): every write's own place in its group, decided at the call site and
+  // logged for the renumber pass in `buildCommitChangeSet` to replay at commit ----
+
+  /** `group`'s live member count — this transaction's own writes folded in, not only the committed
+   *  count (`committedSiblingIds`), seeded lazily the first time a write asks about this group. */
+  #liveSiblingGroupSize(group: SiblingGroupKey): number {
+    const writeSet = this.#openWriteSet();
+    const known = writeSet.siblingGroupCounts.get(group);
+    if (known !== undefined) return known;
+    const seeded = this.committedSiblingIds(group).length;
+    writeSet.siblingGroupCounts.set(group, seeded);
+    return seeded;
+  }
+
+  #adjustLiveSiblingGroupSize(group: SiblingGroupKey, delta: number): void {
+    const size = this.#liveSiblingGroupSize(group);
+    this.#openWriteSet().siblingGroupCounts.set(group, size + delta);
+  }
+
+  /** 0 to the group's own live count is legal — an `add` counts the whole existing group, since the
+   *  new entry is not yet a member; an `update` that stays in its group counts every other member,
+   *  already excluded by the caller before this runs. */
+  #assertSiblingIndexInRange(id: EntryId, at: number, othersCount: number, operation: string): void {
+    if (!Number.isInteger(at) || at < 0 || at > othersCount) {
+      throw new SiblingIndexOutOfRangeError(id, at, othersCount, operation);
+    }
+  }
+
+  /** Logs a placement and keeps the live group counts current: the target group gains a member, and
+   *  — mirroring `renumberSiblingGroups`'s own unconditional leave-then-place — an id this
+   *  transaction already logged a departure for stops counting as departed. An `add`'s id was never a
+   *  member of any group, so it never reaches `departedSiblingIds` in the first place; this is a
+   *  no-op for it. */
+  #logSiblingPlacement(
+    change: SiblingChange & { readonly group: SiblingGroupKey; readonly at: number },
+  ): void {
+    const writeSet = this.#openWriteSet();
+    writeSet.siblingChanges.push(change);
+    writeSet.departedSiblingIds.delete(change.id);
+    this.#adjustLiveSiblingGroupSize(change.group, 1);
+  }
+
+  /** Logs a departure — a `remove`, or the first half of a move this call site already decided —
+   *  guarded by `departedSiblingIds` the same way `renumberSiblingGroups` guards its own replay: a
+   *  second departure for one id decrements nothing a second time. */
+  #logSiblingDeparture(id: EntryId): void {
+    const writeSet = this.#openWriteSet();
+    if (writeSet.departedSiblingIds.has(id)) return;
+    const group = this.checkedSiblingGroupOf(id, this.storedEntry(id)!);
+    writeSet.departedSiblingIds.add(id);
+    this.#adjustLiveSiblingGroupSize(group, -1);
+    writeSet.siblingChanges.push({ id });
+  }
+
+  /** What `update`'s own edit does to `id`'s sibling order, or `undefined` when it does nothing (no
+   *  group change, no named `siblingIndex`): computed and range-checked against a *preview* of the
+   *  post-edit row (`entryAfterEdit`, not yet staged), so an out-of-range index throws before anything
+   *  stages — the same "nothing stages when one write in the request fails" rule every write door
+   *  already keeps. */
+  #siblingMoveFor(
+    id: EntryId,
+    current: StoredEntry,
+    reading: EditReading,
+    edit: EntryEdit,
+    operation: string,
+  ): (SiblingChange & { readonly group: SiblingGroupKey; readonly at: number }) | undefined {
+    const previousGroup = this.checkedSiblingGroupOf(id, current);
+    const prospective = entryAfterEdit(current, reading.stored);
+    const group = this.checkedSiblingGroupOf(id, prospective);
+    const explicitIndex = edit.siblingIndex !== undefined;
+    if (!explicitIndex && group === previousGroup) return undefined;
+    // Leaving its own group first (mirroring `renumberSiblingGroups`) means an entry that stays in its
+    // group is not counted among its own "others" — moving across groups needs no such adjustment,
+    // since the live count there never included this id.
+    const othersCount = this.#liveSiblingGroupSize(group) - (group === previousGroup ? 1 : 0);
+    const at = explicitIndex ? edit.siblingIndex! : othersCount;
+    if (explicitIndex) this.#assertSiblingIndexInRange(id, at, othersCount, operation);
+    this.#logSiblingDeparture(id);
+    return { id, group, at };
   }
 }

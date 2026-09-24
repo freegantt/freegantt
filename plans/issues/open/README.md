@@ -10,10 +10,7 @@ issue plans land here as they're opened.
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
-  Field (#528). Blocked by #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
-- [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
-  cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`.
-  Blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
+  Field (#528). Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
 - [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
   delta. Wishlist; blocked by #517. No plan yet.
 - [#530](https://github.com/freegantt/freegantt/issues/530) — a plugin cannot write its own Field
@@ -21,6 +18,12 @@ issue plans land here as they're opened.
   typed Dataset accepts it. No plan file; the issue holds the rulings.
 
 **Closed:**
+
+- [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
+  could not be undone. Shipped: `siblingIndex`, a core Field, `editable: 'anywhere'`; a write that
+  moves an entry renumbers its sibling group once, at commit, after the Rollup, so one move is one
+  undo step. A sibling group is the Hierarchy source's checked tree, not the raw `parentId` (ADR
+  0034). See [../closed/528-sibling-index.md](../closed/528-sibling-index.md).
 
 - [#533](https://github.com/Pawel-IT/FreeGantt/issues/533) — plugin code ran inside the
   `DatasetState` constructor, before `ctx.dataset.*` worked, and inside an unfinished `Gantt`,

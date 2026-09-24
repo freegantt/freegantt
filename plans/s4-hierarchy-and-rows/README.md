@@ -337,7 +337,7 @@ Read these before you touch `src/`.
 | Full grid a11y (roving tabindex, axe in CI) | S5 | `plans/03` §S5 a11y block |
 | Subtree-revision cache key for computed Fields | S6 | The measured spike (D-S4-10) |
 | Log-time height index | S6 | The measured spike (D2) |
-| Row reorder and reparent **by drag** | when an authored order Field exists | That Field, plus a drop-target vocabulary (D-S4-31). S4 ships the data half: `update(id, { parentId })` |
+| Row reorder and reparent **by drag** | when a drop-target vocabulary exists | The order Field shipped (#528, `siblingIndex`); the drag gesture waits on the vocabulary (D-S4-31). A reparent drag also waits on the owner's `parentId` ruling: #529 ships `parentId` as `'api'`, so no gesture may reparent yet. S4 ships the data half: `update(id, { parentId })`, and #528 ships `update(id, { siblingIndex })` |
 | Moving a `'group'` moves its subtree | S7 | The extension hook writes children |
 | Link endpoints on a multi-item row (`links.endpoints`) | S7 | Link emission — design open at #136 (supersedes #16) |
 | Rest of the `GanttShell` split (GLM C4 minus today-landing) | landed | [`c4-split-gantt-shell.md`](./c4-split-gantt-shell.md) — `TreeCollapse`, `collapseAll` / `expandAll`; `layoutInputFromShell` and `#phase` left in the shell |

@@ -27,7 +27,7 @@ import {
 } from '../model/index.js';
 import { editableOf, rollsUp } from './fields/field-registry.js';
 import { isDescendantOf } from './hierarchy-source.js';
-import type { StoredEntry } from '../model/index.js';
+import type { UnplacedEntry } from './hierarchy-source.js';
 
 /** `model/write-verdict.ts` declares the verdict pair (and, since #466, `WriteTarget`) under its
  *  public names, so a consumer can import what `view/capability.ts` republishes and what
@@ -85,8 +85,8 @@ export const IGNORED_FIELD_LOCK_QUERY: FieldLockQuery = Object.freeze({
  *  `hierarchy-source.ts`'s `isDescendantOf`; this just gives a `FieldLockRule` the shape it asks for. */
 export function fieldLockQueryFor(
   id: EntryId,
-  entryFor: (id: EntryId) => StoredEntry | undefined,
-  parentIdOf: (entry: StoredEntry) => EntryId | undefined,
+  entryFor: (id: EntryId) => UnplacedEntry | undefined,
+  parentIdOf: (entry: UnplacedEntry) => EntryId | undefined,
 ): FieldLockQuery {
   return {
     id,

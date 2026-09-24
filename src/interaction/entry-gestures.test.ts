@@ -29,11 +29,11 @@ function storeOf(rows: readonly StoredEntry[]): EntryStore {
   return new EntryStore(rows, { timeZone: 'UTC', dateOnlyEnd: 'inclusive' });
 }
 
-function storedFor(id: EntryId): StoredEntry {
-  return { id, name: id, start: toInstant(0), end: toInstant(1), props: {} };
+function storedFor(id: EntryId, siblingIndex: number): StoredEntry {
+  return { id, name: id, start: toInstant(0), end: toInstant(1), props: {}, siblingIndex };
 }
 
-const rows = storeOf(ORDER.map((id) => storedFor(id)));
+const rows = storeOf(ORDER.map((id, index) => storedFor(id, index)));
 
 function entryFor(id: EntryId): Entry {
   return rows.get(id)!;

@@ -398,7 +398,7 @@ Read these before you touch `src/`.
 | Performance budget on plugin-heavy frames | S6 | The measured spike (D2) |
 | Named multi-preset theme picker (`registerThemePreset`) | after S5 if asked | This slice's plugin runtime is the seam it needs (D-S1.10-9) |
 | Framework wrappers | out of the slices | `plans/02` §8 |
-| Row reorder and reparent by drag | when an authored order Field exists | D-S4-31 |
+| Row reorder by drag | when a drop-target vocabulary exists | The order Field shipped (#528, `siblingIndex`); the drag gesture still waits (D-S4-31) |
 | Column groups (a header spanning two columns) | not scheduled | A real ask; no consumer yet |
 | Async command results and a progress affordance | not scheduled | A real ask; commands stay sync in S5 |
 

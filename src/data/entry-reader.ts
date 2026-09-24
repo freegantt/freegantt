@@ -28,6 +28,7 @@ import { isCoreFieldKey } from './fields/core-fields.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { assertFieldTakesWrite, fieldLockQueryFor } from './write-rule.js';
 import { parentIdFrom } from './hierarchy-source.js';
+import type { UnplacedEntry } from './hierarchy-source.js';
 
 /** The Dataset context every entry is read against: one zone, one end rule, for the whole list. */
 export interface EntryReadContext {
@@ -73,7 +74,7 @@ function toEntryDates(
 /** Every key `EntryInput` itself declares — the envelope this walk never treats as a `props`
  *  candidate, flat or nested. Frozen, not a `Set`: one array literal, read-only for the module's
  *  whole life, so it carries no state a second Gantt instance could share (I2). */
-const ENTRY_INPUT_KEYS = Object.freeze(['id', 'parentId', 'name', 'start', 'end', 'props']);
+const ENTRY_INPUT_KEYS = Object.freeze(['id', 'parentId', 'siblingIndex', 'name', 'start', 'end', 'props']);
 
 function warnIngest(message: string): void {
   console.warn(`FreeGantt: ${message}`);
@@ -126,11 +127,11 @@ export function toEntry(
   context: EntryReadContext,
   registry: FieldRegistry,
   operation: string,
-): StoredEntry {
+): UnplacedEntry {
   const id = entryId(input.id);
   const owner: EditOrigin = { entryId: id, operation };
   const dates = toEntryDates(input, context, owner);
-  const entry: StoredEntry = {
+  const entry: UnplacedEntry = {
     id,
     props: propsFromInput(input, registry, id),
   };
@@ -146,7 +147,7 @@ export function toEntries(
   context: EntryReadContext,
   registry: FieldRegistry,
   operation = 'construction',
-): readonly StoredEntry[] {
+): readonly UnplacedEntry[] {
   return inputs.map((input) => toEntry(input, context, registry, operation));
 }
 
@@ -205,6 +206,7 @@ export function toEditReading(
   // Which Fields this edit writes. A key nobody states never reaches the changeset (#212).
   const proposed = new Set<string>(Object.keys(edit));
   if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
+  if (edit.siblingIndex !== undefined) stored.siblingIndex = edit.siblingIndex;
   if (edit.name !== undefined) stored.name = edit.name;
   // `'start' in edit` — not `edit.start !== undefined` — so `update(id, { start: undefined })` (the
   // un-date verb, ADR 0012) reaches `stored.start = undefined` rather than being read as "untouched".

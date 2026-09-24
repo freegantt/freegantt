@@ -139,6 +139,7 @@ const entries: StoredEntry[] = [
     start: rangeStart,
     end: instant('2026-09-03T00:00:00Z'),
     props: {},
+    siblingIndex: 0,
   },
 ];
 
@@ -152,6 +153,7 @@ function tallEntries(count: number): StoredEntry[] {
       start,
       end,
       props: {},
+      siblingIndex: i,
     };
   });
 }
@@ -213,6 +215,7 @@ describe('GanttShell header band', () => {
         start: rangeStart,
         end: instant('2026-09-20T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       },
     ];
     const shellB = paintedShell({
@@ -548,6 +551,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
           start,
           end,
           props: {},
+          siblingIndex: i,
         };
       });
       const shell = paintedShell({
@@ -697,6 +701,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       };
       const child: StoredEntry = {
         id: entryId('c'),
@@ -705,6 +710,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       };
       const shell = paintedShell({
         wiring: {},
@@ -739,6 +745,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         props: { team: 'red' },
+        siblingIndex: 0,
       };
       const shell = paintedShell({
         wiring: {},
@@ -782,6 +789,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: at,
         end: at,
         props: {},
+        siblingIndex: 0,
       };
       const shell = paintedShell({
         wiring: {},
@@ -834,6 +842,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       };
       const child: StoredEntry = {
         id: entryId('c'),
@@ -842,6 +851,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: at,
         end: at,
         props: {},
+        siblingIndex: 0,
       };
       const shell = paintedShell({
         wiring: {},
@@ -888,6 +898,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: at,
         end: at,
         props: {},
+        siblingIndex: 0,
       };
       const shell = paintedShell({
         wiring: {},
@@ -933,6 +944,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: instant('2026-09-20T00:00:00Z'),
         end: instant('2026-09-21T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       };
       const shell = paintedShell({
         wiring: {},
@@ -974,6 +986,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: instant('2026-09-02T00:00:00Z'),
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       };
       const inRangeStart = entry.start as Instant;
       const inRangeEnd = entry.end as Instant;
@@ -1049,6 +1062,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       };
       const first: StoredEntry = {
         id: entryId('c1'),
@@ -1057,6 +1071,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
+        siblingIndex: 0,
       };
       const second: StoredEntry = {
         id: entryId('c2'),
@@ -1065,6 +1080,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         start: rangeStart,
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
+        siblingIndex: 1,
       };
       const shell = paintedShell({
         wiring: {},
@@ -1626,6 +1642,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         start: rangeStart,
         end: rangeEnd,
         props: {},
+        siblingIndex: 0,
       },
       {
         id: entryId('two'),
@@ -1633,6 +1650,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         start: rangeStart,
         end: rangeEnd,
         props: {},
+        siblingIndex: 1,
       },
       {
         id: entryId('three'),
@@ -1640,6 +1658,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
         start: rangeStart,
         end: rangeEnd,
         props: {},
+        siblingIndex: 2,
       },
     ];
     const container = document.createElement('div');

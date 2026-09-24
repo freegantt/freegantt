@@ -13,6 +13,13 @@
 import type { EntryId, ReportCode, ErrorReportInput, HierarchySource, StoredEntry } from '../model/index.js';
 import { entryId } from '../model/index.js';
 
+/** The row shape a `HierarchySource` reads (ADR 0034): every stored field except `siblingIndex`,
+ *  which does not exist yet at the two moments a source is asked before order does — construction
+ *  and `load` place an entry by asking the source first (`data/entry-batch.ts`'s `readEntryBatch`).
+ *  A placed `StoredEntry` satisfies this type too (it only has one field more), so every function
+ *  here reads either shape unchanged. Internal — never a public export. */
+export type UnplacedEntry<TProps = Record<string, unknown>> = Omit<StoredEntry<TProps>, 'siblingIndex'>;
+
 /** Core's own source, registered like any other with no special claim on the seam (D-S5-23). A
  *  Dataset with no plugin installed reads this and nothing else, so `parentId` stays the tree. */
 export const storedParentSource: HierarchySource = (entry) => entry.parentId;
@@ -20,7 +27,7 @@ export const storedParentSource: HierarchySource = (entry) => entry.parentId;
 /** What the source says about one row, branded — core's one `string → EntryId` boundary for this
  *  seam. A source may answer with a plain `string`, the way every other way into the library takes
  *  a loose id, and every reader downstream holds an `EntryId`. */
-export function parentIdFrom(source: HierarchySource, entry: StoredEntry): EntryId | undefined {
+export function parentIdFrom(source: HierarchySource, entry: UnplacedEntry): EntryId | undefined {
   const answer = source(entry);
   return answer === undefined ? undefined : entryId(answer);
 }
@@ -44,8 +51,8 @@ export type ParentIndex = ReadonlyMap<EntryId, EntryId>;
 export function isDescendantOf(
   id: EntryId,
   ancestorId: EntryId,
-  entryFor: (id: EntryId) => StoredEntry | undefined,
-  parentIdOf: (entry: StoredEntry) => EntryId | undefined,
+  entryFor: (id: EntryId) => UnplacedEntry | undefined,
+  parentIdOf: (entry: UnplacedEntry) => EntryId | undefined,
 ): boolean {
   const seen = new Set<EntryId>([id]);
   let current = entryFor(id);
@@ -81,7 +88,7 @@ export interface CheckedHierarchy {
  * not committed yet, and the store reports the same tree once the commit lands.
  */
 export function checkHierarchyAnswers(
-  entries: ReadonlyMap<EntryId, StoredEntry>,
+  entries: ReadonlyMap<EntryId, UnplacedEntry>,
   parentIdOf: HierarchySource,
 ): CheckedHierarchy {
   const parentOf = new Map<EntryId, EntryId>();
@@ -116,7 +123,7 @@ export function checkHierarchyAnswers(
  *  calls an expert door.
  *
  *  `says` completes the sentence after whoever answered. */
-function refuse(entry: StoredEntry, answer: EntryId, code: ReportCode, says: string): ErrorReportInput {
+function refuse(entry: UnplacedEntry, answer: EntryId, code: ReportCode, says: string): ErrorReportInput {
   const authored = entry.parentId === answer;
   return {
     code,
@@ -131,7 +138,7 @@ function refuse(entry: StoredEntry, answer: EntryId, code: ReportCode, says: str
  *  A worklist over the parent chain, never recursion: how deep a tree goes is the consumer's to
  *  author, and a stack overflow answers no question. */
 function breakCycles(
-  entries: ReadonlyMap<EntryId, StoredEntry>,
+  entries: ReadonlyMap<EntryId, UnplacedEntry>,
   parentOf: Map<EntryId, EntryId>,
   refused: ErrorReportInput[],
 ): void {
