@@ -7,8 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import type { EntryStore } from './entry-store.js';
-import { ParentCycleError } from '../model/index.js';
-import type { Field } from '../model/index.js';
+import { changeSetId, entryId, ParentCycleError } from '../model/index.js';
+import type { ChangeSet, Field, StoredEntry } from '../model/index.js';
 
 const STEP_BUDGET = 500;
 
@@ -57,6 +57,20 @@ function writeTheLoop(state: DatasetState): void {
   state.entries.update('b', { phaseId: 'a' });
 }
 
+/** `replay()` applies an already-complete `ChangeSet` unchecked (`data/replay.ts`) — construction's
+ *  own batch check (Q3) does not run again, so this is still the door a raw, already-looped or
+ *  already-dangling `parentId` can reach a live store through. */
+function replayRawEntries(state: DatasetState, entries: readonly Omit<StoredEntry, 'props'>[]): void {
+  const changeSet: ChangeSet = {
+    id: changeSetId(1),
+    origin: 'redo',
+    added: entries.map((entity) => ({ store: 'entries' as const, entity: { ...entity, props: {} } })),
+    removed: [],
+    updated: [],
+  };
+  state.replay(changeSet);
+}
+
 describe('a hierarchy source that loops never hangs a walk (F1)', () => {
   it('descendants() answers each row once inside an open transaction', () => {
     const state = phaseSourced();
@@ -87,16 +101,16 @@ describe('a hierarchy source that loops never hangs a walk (F1)', () => {
 });
 
 describe('an authored parentId that loops never hangs the parent check (P2-2)', () => {
-  /** Ingest validates no authored `parentId`, so a consumer can construct this with no plugin. */
+  /** Construction refuses a raw loop now (Q3), so this reaches one through `replay()` instead — the
+   *  door `replayChangeSet` leaves open on a live store, unchecked. */
   function authoredLoop(): DatasetState {
-    return new DatasetState({
-      timeZone: 'UTC',
-      entries: [
-        { id: 'a', name: 'A', parentId: 'b' },
-        { id: 'b', name: 'B', parentId: 'a' },
-        { id: 'c', name: 'C' },
-      ],
-    });
+    const state = new DatasetState({ timeZone: 'UTC', entries: [] });
+    replayRawEntries(state, [
+      { id: entryId('a'), name: 'A', parentId: entryId('b') },
+      { id: entryId('b'), name: 'B', parentId: entryId('a') },
+      { id: entryId('c'), name: 'C' },
+    ]);
+    return state;
   }
 
   it('update(id, { parentId }) into the loop returns instead of walking forever', () => {
@@ -122,11 +136,10 @@ describe('read("parentId") and read("hierarchyParentId") answer two different qu
   const probeField: Field = { key: 'probeParentId', compute: (_entry, ctx) => ctx.read('parentId') };
 
   it('a dangling parentId: every by-key door on "parentId" agrees; "hierarchyParentId" refuses it', () => {
-    const state = new DatasetState({
-      timeZone: 'UTC',
-      entries: [{ id: 'a', name: 'A', parentId: 'ghost' }],
-      fields: [probeField],
-    });
+    const state = new DatasetState({ timeZone: 'UTC', entries: [], fields: [probeField] });
+    // Construction refuses a raw dangling parentId now (Q3), so this reaches one through `replay()`
+    // instead — the door `replayChangeSet` leaves open on a live store, unchecked.
+    replayRawEntries(state, [{ id: entryId('a'), name: 'A', parentId: entryId('ghost') }]);
 
     // "parentId" answers what was authored, on every door — the stored value never disagrees with
     // itself (ADR 0024).
@@ -139,14 +152,12 @@ describe('read("parentId") and read("hierarchyParentId") answer two different qu
   });
 
   it('a two-row cycle: "parentId" keeps the authored link; "hierarchyParentId" drops the closing one', () => {
-    const state = new DatasetState({
-      timeZone: 'UTC',
-      entries: [
-        { id: 'a', name: 'A', parentId: 'b' },
-        { id: 'b', name: 'B', parentId: 'a' },
-      ],
-      fields: [probeField],
-    });
+    const state = new DatasetState({ timeZone: 'UTC', entries: [], fields: [probeField] });
+    // Construction refuses a raw loop now (Q3); reach one through `replay()` instead.
+    replayRawEntries(state, [
+      { id: entryId('a'), name: 'A', parentId: entryId('b') },
+      { id: entryId('b'), name: 'B', parentId: entryId('a') },
+    ]);
 
     // The stored field never moved, on either door.
     expect(state.entries.get('b')?.read('parentId')).toBe('a');
