@@ -606,7 +606,7 @@ What the user may do to a given Entry, resolved once and gating both the act its
 _Avoid_: Permission, ability
 
 **Writability**:
-Whether one Entry's one Field may change. That pair is the unit a write names, and the changeset's own shape. `Field.editable` is `'never' | 'api' | 'anywhere'` (default `'api'`; `true`/`false` alias `'anywhere'`/`'never'`, ADR 0015). Gestures ask `canWrite` — writable iff `'anywhere'`. `entries.update()` refuses only `'never'`. `capabilities.edit` states which of them are writable on which Entry (#256). That is the per-entry axis a Field declaration has no room for. A Field with no stored home is writable by nobody, whatever the rules say.
+Whether one Entry's one Field may change. That pair is the unit a write names, and the changeset's own shape. `Field.editable` is `'never' | 'api' | 'anywhere'` (default `'anywhere'`; `true`/`false` alias `'anywhere'`/`'never'`, ADR 0015). Gestures ask `canWrite` — writable iff `'anywhere'`. `entries.update()` refuses only `'never'`. `capabilities.edit` states which Entries an `'anywhere'` Field is writable on (#256, amended by ADR 0033): it narrows that Field's own answer, and it never reopens `'api'` or `'never'`. A Field with no stored home is writable by nobody, whatever the rules say.
 _Avoid_: Editability (reads as "the cell editor only", and drag-resize asks the same answer), permission, read-only
 
 **KindDefaults**:

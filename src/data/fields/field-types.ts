@@ -175,9 +175,8 @@ export function currency(options: { code: string }): FieldType<number> {
 
 /** Every Field type the library ships, keyed by name. `FieldRegistry` seeds itself from this table
  *  before `options.fieldTypes` — a consumer name of the same key silently wins (`{ ...spread }`
- *  order), while `registerType` on an already-seeded name still throws (`DuplicateFieldKeyError`).
- *  `currency` is a factory, not a row in this table: a consumer names the bundle, or registers the
- *  returned bundle under a name of their own. */
+ *  order). `currency` is a factory, not a row in this table: a consumer names the returned bundle
+ *  under a name of their own. */
 export const SHIPPED_FIELD_TYPES: Readonly<Record<string, FieldType>> = Object.freeze({
   text,
   number,

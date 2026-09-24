@@ -10,18 +10,15 @@ issue plans land here as they're opened.
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
-  Field (#528). Blocked by #496 and #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
+  Field (#528). Blocked by #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
 - [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
   cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`.
-  Blocked by #496 and #529; blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
+  Blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
 - [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
-  delta. Wishlist; blocked by #496 and #517. No plan yet.
-- [#529](https://github.com/freegantt/freegantt/issues/529) — `capabilities.edit` can reopen an
-  `'api'` Field for drag. Direction: `'api'` means code only. Blocks #528. No plan file; the issue
-  holds the work.
+  delta. Wishlist; blocked by #517. No plan yet.
 - [#530](https://github.com/freegantt/freegantt/issues/530) — a plugin cannot write its own Field
   without an `as EntryEdit` cast. Direction: the plugin's generic names only its own keys, and a
-  typed Dataset accepts it. Blocked by #496. No plan file; the issue holds the rulings.
+  typed Dataset accepts it. No plan file; the issue holds the rulings.
 
 **Closed:**
 
@@ -36,6 +33,14 @@ issue plans land here as they're opened.
   throwing `view()` tears the half-built shell down through `destroy()`. See
   [../closed/533-plugin-lifecycle.md](../closed/533-plugin-lifecycle.md) (PR 1),
   [../closed/533-gantt-view-lifecycle.md](../closed/533-gantt-view-lifecycle.md) (PR 2).
+
+- [#529](https://github.com/freegantt/freegantt/issues/529) — `capabilities.edit` could reopen an
+  `'api'` Field for a drag. Shipped: `canWrite` now refuses a cell the effective `editable` or the
+  library's own rule already closed — an `'api'` cell, a `'never'` cell, or a rolling-up parent's
+  own cell — before the consumer's rule or a variant's rule gets a say. Neither may widen a refusal;
+  only a per-entry lock rule still reopens a cell. ADR 0033 records the decision. See
+  [../closed/529-api-means-code-only.md](../closed/529-api-means-code-only.md).
+
 - [#496](https://github.com/freegantt/freegantt/issues/496) — no order-tolerant bulk write, so a
   restore button sorted entries parent-first itself. Shipped `dataset.entries.load(inputs)`: it
   reads the whole list, refuses a dangling parent, a cycle or a duplicate id before anything

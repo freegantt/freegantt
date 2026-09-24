@@ -247,13 +247,50 @@ describe('a locked Field closes every gesture that writes it (#256)', () => {
     expect(caps.can('move', entry())).toBe(false);
   });
 
-  it('capabilities.edit opens a roll-up parent cell it would otherwise refuse', () => {
+  it('capabilities.edit does not open a roll-up parent cell — the derived refusal answers first', () => {
     const caps = capabilities({ capabilities: { edit: true } });
     const parent = family({})[0]!;
-    expect(caps.canWrite(parent, 'start').ok).toBe(true);
-    // ADR 0013: the parent's own cell is open, and its move still does not write it. What a parent
-    // bar's move writes is the subtree below it, and nothing below this one holds a date.
+    expect(caps.canWrite(parent, 'start')).toEqual({ ok: false, reason: 'derived-value' });
+    // ADR 0013: the parent's move still does not write its own cell either way. What a parent bar's
+    // move writes is the subtree below it, and nothing below this one holds a date.
     expect(caps.can('move', parent)).toBe(false);
+  });
+});
+
+describe("an 'api' Field takes no gesture", () => {
+  const apiStart: Partial<Field> = { key: 'start', editable: 'api' };
+
+  it("capabilities.edit: true does not open an 'api' cell, a move or a resize", () => {
+    const caps = capabilities({ capabilities: { edit: true } }, apiStart);
+    const e = entry();
+    expect(caps.canWrite(e, 'start').ok).toBe(false);
+    expect(caps.can('move', e)).toBe(false);
+    expect(caps.can('resize', e, 'start')).toBe(false);
+  });
+
+  it("a variant's edit: true does not open an 'api' cell either", () => {
+    const caps = capabilities({ variantCapabilitiesFor: variantAllows('buffer', { edit: true }) }, apiStart);
+    const e = entry({ props: { variant: 'buffer' } });
+    expect(caps.canWrite(e, 'start').ok).toBe(false);
+    expect(caps.can('move', e)).toBe(false);
+  });
+
+  it("edit: () => true does not open an 'api' cell either", () => {
+    const caps = capabilities({ capabilities: { edit: () => true } }, apiStart);
+    expect(caps.canWrite(entry(), 'start').ok).toBe(false);
+  });
+
+  it("a lock rule that answers 'anywhere' over an 'api' declaration opens the cell, and the gestures with it", () => {
+    const caps = capabilities({ editableOf: () => 'anywhere' }, apiStart);
+    const e = entry();
+    expect(caps.canWrite(e, 'start').ok).toBe(true);
+    expect(caps.can('move', e)).toBe(true);
+    expect(caps.can('resize', e, 'start')).toBe(true);
+  });
+
+  it("a consumer's edit: false still narrows a cell a lock rule reopened", () => {
+    const caps = capabilities({ editableOf: () => 'anywhere', capabilities: { edit: false } }, apiStart);
+    expect(caps.canWrite(entry(), 'start').ok).toBe(false);
   });
 });
 
@@ -430,8 +467,32 @@ describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar t
     const caps = capabilities({ capabilities: { edit: true } });
     const parent = rollUpParent();
     expect(caps.entriesMovedBy(parent)).toEqual(parent.descendants());
-    expect(caps.canWrite(parent, 'start').ok).toBe(true); // the cell looks open (#256's known trade-off) …
-    expect(caps.can('move', parent)).toBe(true); // … but the move still writes the subtree, never the parent.
+    expect(caps.canWrite(parent, 'start')).toEqual({ ok: false, reason: 'derived-value' });
+    expect(caps.can('move', parent)).toBe(true); // the move still writes the subtree, never the parent.
+  });
+
+  it("edit: true paints no resize handle on a deriving parent's own edge", () => {
+    const caps = capabilities({ capabilities: { edit: true } });
+    const parent = rollUpParent();
+    expect(caps.can('resize', parent, 'start')).toBe(false);
+    expect(caps.can('resize', parent, 'end')).toBe(false);
+  });
+
+  // A summary-bar move never reads the parent's own canWrite: it moves the dated descendants below
+  // it (ADR 0013, #470), never the parent's own cell. This pins that the gesture keeps working
+  // whether or not the parent's own cell answer changes.
+  it('a summary bar’s move keeps translating its dated descendants, with no rule in play', () => {
+    const caps = capabilities();
+    const parent = rollUpParent();
+    expect(caps.can('move', parent)).toBe(true);
+    expect(caps.entriesMovedBy(parent)).toEqual(parent.descendants());
+  });
+
+  it('a summary bar’s move keeps translating its dated descendants, with capabilities.edit: true too', () => {
+    const caps = capabilities({ capabilities: { edit: true } });
+    const parent = rollUpParent();
+    expect(caps.can('move', parent)).toBe(true);
+    expect(caps.entriesMovedBy(parent)).toEqual(parent.descendants());
   });
 
   it('an owning parent moves both itself and the dated descendants below it, an intermediate one included', () => {

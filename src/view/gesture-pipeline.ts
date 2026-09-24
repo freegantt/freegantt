@@ -315,9 +315,8 @@ export class GesturePipeline {
    *  live, so it travels in the draft and drops out of the map that commits.
    *
    *  A resize reaches none of this: it drags one grabbed bar's own edge, never a subtree, so there is
-   *  no descendant to translate alongside it. `can('resize', …)` does not actually refuse a deriving
-   *  parent here — that is the pre-existing #256 trade-off (`capability.ts`'s
-   *  `mayWriteTheDatesItSets`), not fixed here (T6/#481 review). */
+   *  no descendant to translate alongside it. `can('resize', …)` refuses a deriving parent's edge
+   *  outright (`capability.ts`'s `canWrite`), so no handle paints there to begin with. */
   #draftedEntries(
     bars: readonly Entry[],
     capability: GestureCapability,

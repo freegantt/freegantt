@@ -803,7 +803,13 @@ interface ChromePlugin extends PluginIdentity {
  *  those declarations before any plugin code runs. Every `Gantt` bound to that Dataset then runs
  *  `view` once, each with its own context, so I2 holds by construction. */
 interface DataPlugin extends PluginIdentity {
-  data(ctx: DatasetPluginContext): Disposer | void;
+  /** Fields, the edit hook and the store. Optional: a plugin that only declares `fields`,
+   *  `fieldTypes`, `aggregators` or `hierarchySource` needs no `data()` to run. */
+  data?(ctx: DatasetPluginContext): Disposer | void;
+  fields?: readonly Field[];
+  fieldTypes?: Readonly<Record<string, FieldType>>;
+  aggregators?: Readonly<Record<string, Aggregator>>;
+  hierarchySource?: (next: HierarchySource) => HierarchySource;
   view?(ctx: PluginContext): Disposer | void;
 }
 
@@ -854,7 +860,8 @@ interface PluginContext {
 ```
 
 The `view` half declares no Field. `registerField` moved off this context during S5 — it shows a
-Field through `view.registerGridColumn` alone, and the `data` half declares the Field itself (§10.2).
+Field through `view.registerGridColumn` alone, and the plugin's own definition declares the Field
+itself, before `data()` runs (§10.2).
 `PluginContextParts` (`view/plugin-ports.ts`) declares every member above in the group a plugin reads
 it in; `api/gantt.ts` adds only `dataset` and `gantt`, which `view/` may not name (D-S5-5).
 
@@ -867,13 +874,9 @@ never meets a pane, the overlay, or a gesture.
 interface DatasetPluginContext {
   dataset: Dataset;
   events: DatasetEvents;              // on/off over beforeChange/change; a false return vetoes the ChangeSet
-  fields: {
-    register(field: Field): void;              // §2.6 — rolls up exactly like a core Field
-    registerType(name: FieldTypeName, type: FieldType): void;
-    registerAggregator(name: AggregatorName, fn: Aggregator): void;
-  };
   edits: {
-    setExtender(wrap: ExtenderWrapper): void;  // D-S5-23: wraps the current occupant; installs compose
+    setExtender(wrap: ExtenderWrapper): void;   // wraps the current occupant; installs compose
+    setLockRule(wrap: FieldLockRuleWrapper): void; // opens one locked Field on one Entry or a subtree; installs compose too
   };
   store: {
     reserve<T extends object>(): PluginStore<T>;                              // this plugin's own reserved store
@@ -883,11 +886,18 @@ interface DatasetPluginContext {
 }
 ```
 
+There is no `ctx.fields` door: a plugin declares its Fields, its Field types, its Aggregators and its
+hierarchy source on its own definition instead — `fields`, `fieldTypes`, `aggregators`,
+`hierarchySource` (ADR 0031), the same shape `DatasetOptions` takes. The Dataset reads every plugin's
+declaration, alongside its own, before `entries` is read or any plugin's `data()` runs — one way to
+declare, so no consumer-reachable Field can arrive after ingest has already run.
+
 `Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin declares its Fields and its
 hierarchy source on its own definition (ADR 0031), before the Dataset builds, so a consumer who wants
-a different plugin set builds a new Dataset instead of reconfiguring one live. Every register* call
+a different plugin set builds a new Dataset instead of reconfiguring one live. Every `edits` call
 above is legal only while the half that owns it runs (ADR 0031); a later call throws
-`RegistrationClosedError`. Every plugin's
+`RegistrationClosedError`. `store.reserve`/`store.read` carry no such gate: a plugin's store outlives
+its own `data()` call, the same way its rows do. Every plugin's
 `ctx.disposables` retracts its own registrations on uninstall, so a plugin returns a Disposer only
 for a resource it owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
 "a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Dataset
@@ -976,5 +986,5 @@ Rules:
 | I11 | Public `.d.ts` contains nothing unimplemented | type-surface snapshot test |
 | I12 | All pixels-from-time via `TimeScale`; all scroll via a bound `ScrollAxis` | lint + review rule |
 | I13 | Renderer output is text-safe by default | reconciler unit test |
-| I14 | One key answers *may this value change*. Every write path reads `Field.editable`, and no other source. The grid writes at `'anywhere'` only. `entries.update()` writes at anything but `'never'`. Gesture arming and visual affordances come from one resolution. A plugin's per-entry lock rule (#473) is not a second source — it is that one resolution's other input, folded in by `resolveFieldEditable` before any door reads the answer. | shared resolver + interaction test + `e2e/write-refusal.spec.ts` (must call `entries.update()`, local gate only) + `src/data/entry-reader.test.ts`'s `'refuses a cascade onto a compute Field the same way entries.update() does'` (the cascade door and `entries.update()` run one shared check, not two copies) |
+| I14 | One key answers *may this value change*. Every write path reads `Field.editable`, and no other source. Every gesture writes at `'anywhere'` only, and `capabilities.edit`/a variant's own `edit` only narrow that (ADR 0033). `entries.update()` writes at anything but `'never'`. Gesture arming and visual affordances come from one resolution. A plugin's per-entry lock rule (#473) is not a second source — it is that one resolution's other input, folded in by `resolveFieldEditable` before any door reads the answer. | shared resolver + interaction test + `e2e/write-refusal.spec.ts` (must call `entries.update()`, local gate only) + `src/data/entry-reader.test.ts`'s `'refuses a cascade onto a compute Field the same way entries.update() does'` (the cascade door and `entries.update()` run one shared check, not two copies) |
 | I15 | For every declared Field, every reading door — `entry.read`, `ctx.read`, `toInput()`, the stored value, the `ChangeSet` — agrees on a committed row (ADR 0024) | `src/data/fields/field-access.test.ts` |
