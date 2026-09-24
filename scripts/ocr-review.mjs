@@ -88,10 +88,8 @@ export function findingTitle(content) {
 
 /** One report line for a finding: `path:line [severity] title`. */
 export function formatFinding(comment) {
-  const location =
-    comment.startLine > 0
-      ? `${comment.path}:${comment.startLine}${comment.endLine > comment.startLine ? `-${comment.endLine}` : ''}`
-      : comment.path;
+  const range = comment.endLine > comment.startLine ? `-${comment.endLine}` : '';
+  const location = comment.startLine > 0 ? `${comment.path}:${comment.startLine}${range}` : comment.path;
   return `${location} [${comment.severity}] ${findingTitle(comment.content)}`;
 }
 
