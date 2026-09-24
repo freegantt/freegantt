@@ -15,6 +15,7 @@ import type {
   HierarchySource,
   StoreRowUpdated,
 } from '../model/index.js';
+import { SiblingIndexOutOfRangeError } from '../model/index.js';
 import { diffEdit, foldChangeSet } from './change-set.js';
 import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.js';
 import { createEditRequest } from './edit-request.js';
@@ -25,13 +26,15 @@ import {
   raiseErrorOn,
 } from './error-reporting.js';
 import type { EditsReading } from './entry-reader.js';
+import { EXTENDER_OPERATION } from './entry-reader.js';
 import { mergeProposedEditsByEntry, entryAfterEdit, proposedKeysOf } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
 import type { ParentIndex } from './hierarchy-source.js';
+import { parentIdFrom } from './hierarchy-source.js';
 import { renumberSiblingGroups } from './sibling-order.js';
-import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
+import type { SiblingChange, SiblingGroupKey, SiblingPlacement } from './sibling-order.js';
 import { isDevMode } from './dev-mode.js';
 
 /** Staged entry-store state the commit pipeline reads — mirrors `TransactionalEntryStore` without
@@ -120,6 +123,39 @@ function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extende
       }
     }
   }
+}
+
+/** The extender cascade's own share of the sibling-order log (ADR 0034): an extender edit that names
+ *  `siblingIndex`, or one that lands its entry in a different group, moves that entry the same way an
+ *  `entries.update()` call does — the entry's committed group compares against the group its edit
+ *  reads to next, through the same hierarchy source the body's own writes read. An edit against an
+ *  entity this same transaction added is skipped: `add()` already placed it, and `addedEntitiesForFold`
+ *  already folds this edit's other fields onto it directly.
+ *
+ *  A named index outside the group throws the same error an explicit `entries.update()` write throws,
+ *  labelled with the extender's own operation name rather than the caller's. */
+function siblingChangesFromExtenderEdits(
+  byId: ReadonlyMap<EntryId, StoredEntry>,
+  extenderEdits: ProposedEdits,
+  hierarchySource: HierarchySource,
+  committedSiblingIds: (group: SiblingGroupKey) => readonly EntryId[],
+): SiblingPlacement[] {
+  const changes: SiblingPlacement[] = [];
+  for (const [id, edit] of extenderEdits) {
+    const committed = byId.get(id);
+    if (committed === undefined) continue;
+    const explicitIndex = edit.siblingIndex !== undefined;
+    const previousGroup = parentIdFrom(hierarchySource, committed);
+    const group = parentIdFrom(hierarchySource, entryAfterEdit(committed, edit));
+    if (!explicitIndex && group === previousGroup) continue;
+    const othersCount = committedSiblingIds(group).length - (group === previousGroup ? 1 : 0);
+    const at = explicitIndex ? edit.siblingIndex! : othersCount;
+    if (explicitIndex && (!Number.isInteger(at) || at < 0 || at > othersCount)) {
+      throw new SiblingIndexOutOfRangeError(id, at, othersCount, EXTENDER_OPERATION);
+    }
+    changes.push({ id, group, at });
+  }
+  return changes;
 }
 
 /**
@@ -219,13 +255,20 @@ export function buildCommitChangeSet(
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
-  // The renumber pass (ADR 0034 D4): every write this transaction staged replays here, once, over
-  // the committed groups it touched — after the Rollup, so a reparent's own group change is already
-  // settled before order is decided for it. This pass owns every `siblingIndex` row: a body write
-  // that named the Field (`entries.update(id, { siblingIndex })`) already reached `bodyAndExtenderUpdated`
-  // through the ordinary diff, and that row is dropped here rather than folded beside this pass's
-  // own — two rows for one (id, field) is not a shape `foldChangeSet` resolves.
-  const siblingChanges = data.entries.pendingSiblingChanges();
+  // The renumber pass (ADR 0034 D4): every write this transaction staged replays here, once, over the
+  // committed groups it touched — after the Rollup, so a reparent's own group change is already
+  // settled before order is decided for it. This pass owns every `siblingIndex` row: a write that
+  // named the Field (`entries.update(id, { siblingIndex })`, or an extender edit that does the same)
+  // already reached `bodyAndExtenderUpdated` through the ordinary diff, and that row is dropped here
+  // rather than folded beside this pass's own — two rows for one (id, field) is not a shape
+  // `foldChangeSet` resolves. The extender's own moves land after the body's, so a cascade lands on
+  // top of whatever the body itself placed.
+  const siblingChanges: readonly SiblingChange[] = [
+    ...data.entries.pendingSiblingChanges(),
+    ...siblingChangesFromExtenderEdits(byId, extenderEdits, data.hierarchySource, (group) =>
+      data.entries.committedSiblingIds(group),
+    ),
+  ];
   const siblingRanks =
     siblingChanges.length === 0
       ? new Map<EntryId, number>()

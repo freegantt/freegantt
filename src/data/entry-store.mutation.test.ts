@@ -21,6 +21,7 @@ import {
 } from '../model/index.js';
 import type { ChangeSet, EntryEdit, EntryId, EntryInput } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
+import { seededEntryInputs } from '../../fixtures/seeded-dataset.js';
 
 interface Seed extends Partial<Omit<EntryInput, 'id'>> {
   id: string;
@@ -292,6 +293,84 @@ describe('every write renumbers its group (ADR 0034)', () => {
     state.entries.update('a', { siblingIndex: 0 });
 
     expect(seen).toHaveLength(0);
+  });
+});
+
+describe('an extender edit renumbers its own group too (ADR 0034)', () => {
+  it('an extender edit naming siblingIndex moves the entry, on top of the body write it rides in on', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p' },
+        { id: 'a', parentId: 'p', name: 'a', start: 0, end: 1 },
+        { id: 'b', parentId: 'p', name: 'b', start: 0, end: 1 },
+        { id: 'c', parentId: 'p', name: 'c', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('a'))) return new Map();
+        return new Map([[entryId('c'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    state.entries.update('a', { name: 'a (renamed)' });
+
+    expect(state.entries.get('c')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(1);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(2);
+  });
+
+  it('an extender edit that reparents an entry appends it at the end of its new group', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'a', parentId: 'p1', name: 'a', start: 0, end: 1 },
+        { id: 'x', parentId: 'p2', name: 'x', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('a'))) return new Map();
+        return new Map([[entryId('x'), { parentId: 'p1' }]]);
+      },
+    });
+
+    state.entries.update('a', { name: 'a (renamed)' });
+
+    expect(state.entries.get('x')!.read('parentId')).toBe(entryId('p1'));
+    expect(state.entries.get('x')!.read('siblingIndex')).toBe(1);
+  });
+
+  it('an out-of-range siblingIndex from the extender throws, labelled with the extender operation', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'p' }, { id: 'a', parentId: 'p', name: 'a', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      editExtender: ({ proposed }) => {
+        if (!proposed.has(entryId('a'))) return new Map();
+        return new Map([[entryId('a'), { siblingIndex: 9 }]]);
+      },
+    });
+
+    expect(() => state.entries.update('a', { name: 'a (renamed)' })).toThrow(SiblingIndexOutOfRangeError);
+  });
+});
+
+describe('the renumber pass at 10,000 rows (ADR 0034)', () => {
+  it('moving the first root to the end writes exactly 10,000 rows, and reads the committed group once, not once per row', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: seededEntryInputs({ count: 10_000 }) });
+    const rows: unknown[] = [];
+    state.on('change', ({ changeSet }) => {
+      rows.push(...fieldRowsOf(changeSet).filter((row) => row.field === 'siblingIndex'));
+    });
+    // The renumber pass reads a touched group through this one door (`sibling-order.ts`'s own
+    // `committedSiblingsOf`) — once per distinct group the write's changes touch, never once per
+    // sibling in it. A single move stays cheap against a 10,000-row group the same way it stays
+    // cheap against a 3-row one.
+    const committedSiblingIdsSpy = vi.spyOn(state.entries, 'committedSiblingIds');
+
+    state.entries.update('seeded-0', { siblingIndex: 9_999 });
+
+    expect(rows).toHaveLength(10_000);
+    expect(committedSiblingIdsSpy.mock.calls.length).toBeLessThanOrEqual(2);
   });
 });
 
