@@ -2,7 +2,9 @@
 // recorded `ChangeSet` no longer applies blind. It applies onto the store's current values, the same
 // way `entries.sync()` overwrites a local edit the server has not seen. A sync between the step's
 // recording and its replay leaves rows that no longer match what they last wrote; this file decides,
-// row by row, what still has something to write and what a sync has already settled.
+// row by row, what still has something to write and what a sync has already settled. It also keeps
+// the tree sound: a row that would land a raw `parentId` loop or a dangling one is dropped instead,
+// never stored and never raised.
 
 import type {
   ChangeSet,
@@ -40,11 +42,25 @@ function committedDescendantsOf(
   return found;
 }
 
+/** Drops `entity.parentId`, the way `applyFieldRow` drops an optional key an edit clears: no stored
+ *  key at all, never a key holding `undefined` (`exactOptionalPropertyTypes`). */
+function asRoot(entity: StoredEntry): StoredEntry {
+  const next: Record<string, unknown> = { ...entity };
+  delete next['parentId'];
+  return next as unknown as StoredEntry;
+}
+
 /** An `added` row whose id already exists is skipped — the server's re-sent copy stays. Runs after
  *  `removedRowsToReplay`, the same order `EntryStore.endTransaction` applies a changeset in: a
  *  replace's own `removed` row clears the slot first, so its `added` row lands instead of being read
  *  as "still there, must be a sync." A kept row lands on `working`, so a later row in the same step
- *  sees it. */
+ *  sees it.
+ *
+ *  A kept entity whose `parentId` names an id absent from `working` lands as a root instead: the
+ *  server removed that parent since the step was recorded, and a re-added entity has no place of its
+ *  own to fall back to, unlike an existing entry a dropped `parentId` row simply leaves where it was
+ *  (`parentIdRowIsSound`). This never throws — `#assertParentValid`'s door onto a live store is
+ *  `EntryStore.add`/`update`, neither of which replay calls. */
 function addedRowsToReplay(
   rows: readonly EntityAdded[],
   working: Map<EntryId, StoredEntry>,
@@ -52,8 +68,12 @@ function addedRowsToReplay(
   const kept: EntityAdded[] = [];
   for (const row of rows) {
     if (working.has(row.entity.id)) continue;
-    kept.push(row);
-    working.set(row.entity.id, row.entity);
+    const entity =
+      row.entity.parentId !== undefined && !working.has(row.entity.parentId)
+        ? asRoot(row.entity)
+        : row.entity;
+    kept.push(entity === row.entity ? row : { ...row, entity });
+    working.set(entity.id, entity);
   }
   return kept;
 }
@@ -94,10 +114,35 @@ function removedRowsToReplay(
   return { removed, cascadeIds };
 }
 
+/** A `parentId` row is sound when its target is a root write (`undefined`), or names an id `working`
+ *  still holds whose own raw `parentId` chain never reaches `id` back — the same walk
+ *  `EntryStore.#assertParentValid` runs over the live store, run here over the batch this replay is
+ *  building. Read through `working`'s raw `parentId` only, never a plugin hierarchy source's checked
+ *  answer, the same rule the construction batch check applies (`entry-batch.ts`'s `cycleMemberIds`). */
+function parentIdRowIsSound(
+  id: EntryId,
+  targetId: EntryId | undefined,
+  working: ReadonlyMap<EntryId, StoredEntry>,
+): boolean {
+  if (targetId === undefined) return true;
+  if (!working.has(targetId)) return false;
+  const seen = new Set<EntryId>();
+  let current: EntryId | undefined = targetId;
+  while (current !== undefined && !seen.has(current)) {
+    if (current === id) return false;
+    seen.add(current);
+    current = working.get(current)?.parentId;
+  }
+  return true;
+}
+
 /** A Field row for an id gone after the replay, or whose current value already equals `to`
- *  (`registry.valuesEqual`), is skipped. Otherwise it overwrites: `from` is the value `working` holds
- *  now, never the recorded `from`. A kept row lands back on `working`, so a duplicate row for the
- *  same id and Field diffs against what this step already wrote. */
+ *  (`registry.valuesEqual`), is skipped. A `parentId` row that fails `parentIdRowIsSound` is skipped
+ *  too — the entry stays under its current parent, the nearest sound place available, and this never
+ *  raises: `change` carries exactly what still applies (§2b's skip rule extended to hierarchy). Every
+ *  other row overwrites: `from` is the value `working` holds now, never the recorded `from`. A kept
+ *  row lands back on `working`, so a duplicate row for the same id and Field diffs against what this
+ *  step already wrote. */
 function fieldRowToReplay(
   row: FieldUpdated,
   working: Map<EntryId, StoredEntry>,
@@ -106,6 +151,9 @@ function fieldRowToReplay(
 ): FieldUpdated | undefined {
   const current = working.get(row.id);
   if (!current) return undefined;
+  if (row.field === 'parentId' && !parentIdRowIsSound(row.id, row.to as EntryId | undefined, working)) {
+    return undefined;
+  }
   const from = readFieldRow(current, row.field, registry, access);
   if (registry.valuesEqual(row.field, from, row.to)) return undefined;
   working.set(row.id, applyFieldRow(current, row.field, row.to, registry));
@@ -114,11 +162,10 @@ function fieldRowToReplay(
 
 /** A store row that writes a value (`to` is not `undefined`) for an entity gone after the replay is
  *  dropped — no orphan rows. A deletion row (`to` is `undefined`) is judged by the store alone: it
- *  applies whenever the store still holds something to delete, entity gone or not — the entry's own
- *  `removed` row already cascades the deletion row `pluginStores.pendingRows` recorded for it,
- *  applied the same way whether that entity is still there to carry it. Otherwise both kinds read the
- *  store's own committed value fresh (`committedRow`) and overwrite the same way a Field row does; an
- *  identical value writes nothing. */
+ *  applies whenever the store still holds something to delete, entity gone or not — the step recorded
+ *  that deletion row beside the entry's `removed` row, applied the same way whether that entity is
+ *  still there to carry it. Otherwise both kinds read the store's own committed value fresh
+ *  (`committedRow`) and overwrite the same way a Field row does; an identical value writes nothing. */
 function storeRowToReplay(
   row: StoreRowUpdated,
   working: ReadonlyMap<EntryId, StoredEntry>,
