@@ -21,6 +21,7 @@ import {
   diamond,
   fixedWidthBar,
   CustomRowSourceNotFilterableOrSortableError,
+  PluginSetupError,
 } from './index.js';
 import type {
   ChangeSet,
@@ -1720,6 +1721,42 @@ describe("a constructor-supplied plugin's view() runs on a finished Gantt", () =
     expect(gantt.selectedEntryIds).toEqual([sampleEntries[1]!.id]);
 
     gantt.destroy();
+  });
+});
+
+describe('a throwing view() tears the shell down (ADR 0032)', () => {
+  it('rethrows PluginSetupError, empties the container, and detaches the dataset and document listeners', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
+    const datasetOff = vi.spyOn(dataset, 'off');
+    const documentRemoveListener = vi.spyOn(document, 'removeEventListener');
+
+    let thrown: unknown;
+    try {
+      new Gantt({
+        container,
+        dataset,
+        plugins: [
+          {
+            id: 'demo.throwsInView',
+            view() {
+              throw new Error('boom');
+            },
+          },
+        ],
+      });
+      expect.unreachable();
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(PluginSetupError);
+    expect(container.children.length).toBe(0);
+    expect(datasetOff).toHaveBeenCalledWith('change', expect.any(Function));
+    expect(documentRemoveListener).toHaveBeenCalledWith('keydown', expect.any(Function), true);
+
+    container.remove();
   });
 });
 
