@@ -826,6 +826,13 @@ export class EntryStore implements EntryStoreContract {
    *  the same id later is a new object and never reads this back — it just appends. */
   #rememberRemovedIndexes(changeSet: ChangeSet): void {
     if (changeSet.removed.length === 0) return;
+    // A `'load'` changeset removes every old entry, and `load`'s own added rows are freshly built
+    // objects (`toEntries` in `entries.load()`) that never match one of them by identity — and a
+    // `'load'` changeset clears History (`entries.load`'s own doc), so no undo/redo can hand one
+    // back either. Nothing would ever read these indexes back, so remembering them here would only
+    // pin every pre-load entry in this map for the store's whole lifetime (a repeated reload-from-
+    // server flow grows it unbounded).
+    if (changeSet.origin === 'load') return;
     const indexById = new Map<EntryId, number>();
     let index = 0;
     for (const id of this.#byId.keys()) {
