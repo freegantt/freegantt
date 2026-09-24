@@ -235,11 +235,14 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
   /** Never optional here: every `ProposedEdit` is built through `toEditReading`, which always seeds
    *  this set (`withProposedKeys`). */
   readonly proposedKeys: ReadonlySet<string>;
-} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'props'>> & {
+} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'parentId' | 'name' | 'props'>> & {
     // Same widening as `EntryEdit`, for the same reason: `stored.start = undefined` has to be legal
-    // once `toEditReading` reads an explicit clear off the wire (ADR 0012).
+    // once `toEditReading` reads an explicit clear off the wire (ADR 0012) — and `stored.parentId`/
+    // `stored.name` need the same room to root an entry or clear its name (#542).
     start?: Instant | undefined;
     end?: Instant | undefined;
+    parentId?: EntryId | undefined;
+    name?: string | undefined;
   };
 
 /** A map of `ProposedEdit`s, keyed by the `EntryId` each one targets — what `EditRequest.proposed`

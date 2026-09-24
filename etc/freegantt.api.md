@@ -1921,9 +1921,11 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
     readonly __brand: 'ProposedEdit';
     readonly props: Readonly<Partial<TProps>>;
     readonly proposedKeys: ReadonlySet<string>;
-} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'props'>> & {
+} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'parentId' | 'name' | 'props'>> & {
     start?: Instant | undefined;
     end?: Instant | undefined;
+    parentId?: EntryId | undefined;
+    name?: string | undefined;
 };
 
 // @public
