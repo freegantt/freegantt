@@ -249,6 +249,36 @@ describe('History', () => {
     expect(JSON.stringify(state.entries.all.map((entry) => entry.id))).toBe(before);
   });
 
+  it('undo-all survives an added id the same step later cascades away (#517 property test)', () => {
+    const state = dataset([
+      { id: 'a', start: 0, end: 100 },
+      { id: 'b', start: 100, end: 200 },
+      { id: 'c', start: 200, end: 300 },
+      { id: 'x', start: 0, end: 10 },
+    ]);
+    const before = JSON.stringify(state.entries.all);
+
+    // Step 1: a fresh entry `n3` joins the root sibling group alongside `a`.
+    state.entries.add({ id: 'n3', name: 'n3', start: 0, end: 1 });
+    // Step 2: `a` moves under `n3`, so undoing step 3 below must place `a` back into a sibling
+    // group headed by the very `n3` that step 3 also removes.
+    state.entries.update('a', { parentId: 'n3' });
+    // Step 3: `n3` is removed — carrying `a` away with it, live, as its last child — and
+    // immediately re-added under the same id, a fresh entity with no children. Undo re-adds `a`
+    // via this step's recorded row, but the cascade this same undo step runs then carries `a`
+    // back out of `working`, because the entity undo restored under `n3`'s id is the fresh one
+    // from this step's `added` row, not the one `a` was parented to. `siblingChangesToReplay`
+    // must not place an id the cascade has already carried out of `working`.
+    state.transaction(() => {
+      state.entries.remove('n3');
+      state.entries.add({ id: 'n3', name: 'n3', start: 0, end: 1 });
+    });
+
+    while (state.canUndo) state.undo();
+
+    expect(JSON.stringify(state.entries.all)).toBe(before);
+  });
+
   it('undo of a declared props key removes the key instead of writing undefined onto props', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],

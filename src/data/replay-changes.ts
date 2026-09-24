@@ -4,7 +4,8 @@
 // recording and its replay leaves rows that no longer match what they last wrote; this file decides,
 // row by row, what still has something to write and what a sync has already settled. It also keeps
 // the tree sound: a row that would land a raw `parentId` loop or a dangling one is dropped instead,
-// never stored and never raised.
+// never stored and never raised. Every sibling group the step touches replays dense, 0..n-1, the same
+// math `buildCommitChangeSet` runs on a live write.
 
 import type {
   ChangeSet,
@@ -19,6 +20,10 @@ import type {
 import { applyFieldRow, readFieldRow } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
+import { checkHierarchyAnswers } from './hierarchy-source.js';
+import type { ParentIndex } from './hierarchy-source.js';
+import { renumberSiblingGroups } from './sibling-order.js';
+import type { SiblingChange, SiblingPlacement } from './sibling-order.js';
 import type { TransactionalPluginStores, TransactionData } from './transaction.js';
 
 /** Drops `entity.parentId`, the way `applyFieldRow` drops an optional key an edit clears: no stored
@@ -110,6 +115,50 @@ function cascadeIdsToReplay(
     }
   }
   return { removed, cascadeIds };
+}
+
+/** Every id this step relocates within or across a sibling group, paired for `renumberSiblingGroups`:
+ *  an added entity (`at` is its snapshot rank), a kept `siblingIndex` row (`at` is the row's `to`), or
+ *  an id whose checked parent — read post-cascade, off `working`'s own settled `parentId` — no longer
+ *  matches the group it was committed under (`at` is its unchanged rank, the nearest sound slot in the
+ *  new group). Read after the cascade, so a removed id neither departs from nor places into a group
+ *  this step is still deciding: `removedIds` already names it, and a departure is all it gets. No
+ *  departure for an added id — it has no committed group to leave. An added id the cascade then
+ *  carries away in the same step never places either: `working` no longer holds it, `removedIds`
+ *  already does, and that departure is all it gets. */
+function siblingChangesToReplay(
+  working: ReadonlyMap<EntryId, StoredEntry>,
+  addedIds: ReadonlySet<EntryId>,
+  removedIds: ReadonlySet<EntryId>,
+  keptSiblingIndexRows: ReadonlyMap<EntryId, number>,
+  checkedParents: ParentIndex,
+  committedParents: ParentIndex,
+): readonly SiblingChange[] {
+  const placedIds: EntryId[] = [];
+  const placed = new Set<EntryId>();
+  const place = (id: EntryId): void => {
+    if (placed.has(id)) return;
+    placed.add(id);
+    placedIds.push(id);
+  };
+  for (const id of addedIds) if (working.has(id)) place(id);
+  for (const id of keptSiblingIndexRows.keys()) if (working.has(id)) place(id);
+  for (const id of working.keys()) {
+    if (addedIds.has(id) || checkedParents.get(id) === committedParents.get(id)) continue;
+    place(id);
+  }
+
+  const departures: SiblingChange[] = [];
+  for (const id of removedIds) departures.push({ id });
+  for (const id of placedIds) if (!addedIds.has(id)) departures.push({ id });
+
+  const placements: SiblingPlacement[] = placedIds.map((id) => {
+    const entity = working.get(id)!;
+    return { id, group: checkedParents.get(id), at: keptSiblingIndexRows.get(id) ?? entity.siblingIndex };
+  });
+  placements.sort((a, b) => a.at - b.at);
+
+  return [...departures, ...placements];
 }
 
 /** A Field row for an id gone after the replay, or whose current value already equals `to`
@@ -232,7 +281,8 @@ function storeRowToReplay(
  * `added` asks whether the id is already there, so a replace's own pair never reads as "the server got
  * here first." The cascade itself judges last, once `added`, `updated` and the loop check have all
  * landed on `working` — only then does the step's own tree say which surviving id still hangs off a
- * removed one.
+ * removed one. The renumber pass judges last of all, once the cascade has settled who is even still
+ * in the tree.
  *
  * Call: `changesToReplay(data, invertChangeSet(step))` (undo), `changesToReplay(data, { ...step,
  * origin: 'redo' })` (redo), or `changesToReplay(data, changeSet)` (`dataset.replay`).
@@ -245,7 +295,14 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
 
   const updated: UpdatedRow[] = [];
   const parentIdRows = new Map<EntryId, FieldUpdated>();
+  // A `siblingIndex` row is the renumber pass's own to write, below, never the plain diff's — the
+  // same split `buildCommitChangeSet` makes between a body-authored row and the renumber pass's rank.
+  const keptSiblingIndexRows = new Map<EntryId, number>();
   for (const row of changeSet.updated) {
+    if (row.store === 'entries' && row.field === 'siblingIndex') {
+      if (working.has(row.id)) keptSiblingIndexRows.set(row.id, row.to as number);
+      continue;
+    }
     const replayed =
       row.store === 'entries'
         ? fieldRowToReplay(row, working, data.fields, data.fieldAccess)
@@ -270,6 +327,48 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   const removed = [...recordedRemoved, ...cascadeRemoved];
   if (cascadeIds.length > 0) soundUpdated.push(...data.pluginStores.pendingRows(cascadeIds));
 
-  if (added.length === 0 && removed.length === 0 && soundUpdated.length === 0) return undefined;
-  return { id: data.nextChangeSetId(), origin: changeSet.origin, added, removed, updated: soundUpdated };
+  // The renumber pass runs last of all, over the same finished tree: an added row, a reparent and the
+  // cascade have all settled who is where, so every group this step actually touched can be replayed
+  // dense in one pass, the same math `buildCommitChangeSet` runs on a live write.
+  const addedIds = new Set(added.map((row) => row.entity.id));
+  const removedIds = new Set(removed.map((row) => row.entity.id));
+  const checkedParents = checkHierarchyAnswers(working, data.hierarchySource).parents;
+  const committedParents = data.entries.committedParents();
+  const siblingChanges = siblingChangesToReplay(
+    working,
+    addedIds,
+    removedIds,
+    keptSiblingIndexRows,
+    checkedParents,
+    committedParents,
+  );
+  const siblingRanks =
+    siblingChanges.length === 0
+      ? new Map<EntryId, number>()
+      : renumberSiblingGroups(
+          siblingChanges,
+          (group) => data.entries.committedSiblingIds(group),
+          (id) => committedParents.get(id),
+        );
+  const rankedAdded = added.map((row) => {
+    const rank = siblingRanks.get(row.entity.id);
+    return rank === undefined || rank === row.entity.siblingIndex
+      ? row
+      : { ...row, entity: { ...row.entity, siblingIndex: rank } };
+  });
+  for (const [id, rank] of siblingRanks) {
+    if (addedIds.has(id) || removedIds.has(id)) continue;
+    const current = working.get(id);
+    if (current === undefined || current.siblingIndex === rank) continue;
+    soundUpdated.push({ store: 'entries', id, field: 'siblingIndex', from: current.siblingIndex, to: rank });
+  }
+
+  if (rankedAdded.length === 0 && removed.length === 0 && soundUpdated.length === 0) return undefined;
+  return {
+    id: data.nextChangeSetId(),
+    origin: changeSet.origin,
+    added: rankedAdded,
+    removed,
+    updated: soundUpdated,
+  };
 }
