@@ -196,6 +196,32 @@ describe('replay removes the entry as it stands now, and its children the step d
       { store: pluginStoreName('demo.lock'), id: entryId('q'), from: { locked: true }, to: undefined },
     ]);
   });
+
+  it('an added entity the cascade carries away in the same step is never added', () => {
+    const state = dataset([
+      { id: 'p', name: 'P' },
+      { id: 'r', name: 'R', parentId: 'p' },
+    ]);
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        added: [
+          {
+            store: 'entries',
+            entity: { ...state.entries.storedEntry('r')!, id: entryId('q'), parentId: entryId('r') },
+          },
+        ],
+        removed: [{ store: 'entries', entity: state.entries.storedEntry('p')! }],
+      }),
+    );
+
+    expect(state.entries.has('q')).toBe(false);
+    const qAddedRows = seen[0]!.added.filter((row) => row.entity.id === entryId('q'));
+    expect(qAddedRows).toEqual([]);
+    const qUpdatedRows = seen[0]!.updated.filter((row) => row.id === entryId('q'));
+    expect(qUpdatedRows).toEqual([]);
+  });
 });
 
 describe('replay drops a store row whose entry is gone', () => {

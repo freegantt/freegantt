@@ -323,10 +323,26 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
         );
 
   // The cascade runs last, over the step's finished tree: an id this same step reparented away from
-  // a removed ancestor already has its new, sound parent by now, and never cascades with it.
-  const recordedRemovedIds = new Set(recordedRemoved.map((row) => row.entity.id));
+  // a removed ancestor already has its new, sound parent by now, and never cascades with it. Nor does
+  // an id this same step re-adds: a recorded `removed` row and an `added` row can name the same id — a
+  // remove-then-re-add of one id, replayed as one step — and by the time the cascade runs, `working`
+  // holds the fresh entity that row added, not the one the removed row named. That id keeps its
+  // children.
+  const addedIdsBeforeCascade = new Set(added.map((row) => row.entity.id));
+  const recordedRemovedIds = new Set(
+    recordedRemoved.map((row) => row.entity.id).filter((id) => !addedIdsBeforeCascade.has(id)),
+  );
   const { removed: cascadeRemoved, cascadeIds } = cascadeIdsToReplay(working, recordedRemovedIds);
-  const removed = [...recordedRemoved, ...cascadeRemoved];
+  // An id this same step adds and the cascade then carries away was never committed: the store never
+  // held it, so it is not a removal either. It is dropped from `added` instead, below, and carries no
+  // Field or store row of its own, the same as any other cascaded id.
+  const cascadedAddedIds = new Set(cascadeIds.filter((id) => addedIdsBeforeCascade.has(id)));
+  const survivingAdded =
+    cascadedAddedIds.size === 0 ? added : added.filter((row) => !cascadedAddedIds.has(row.entity.id));
+  const removed = [
+    ...recordedRemoved,
+    ...cascadeRemoved.filter((row) => !cascadedAddedIds.has(row.entity.id)),
+  ];
   // A cascaded id's own recorded row — a rename, a move, a plugin-store write — landed on `working`
   // before the cascade judged it gone; that row is stale once the entity itself leaves, the same way
   // a removed entity carries no Field row of its own. It keeps only what the cascade itself writes:
@@ -334,12 +350,15 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   const cascadeIdSet = new Set(cascadeIds);
   const updatedWithoutCascaded =
     cascadeIdSet.size === 0 ? soundUpdated : soundUpdated.filter((row) => !cascadeIdSet.has(row.id));
-  if (cascadeIds.length > 0) updatedWithoutCascaded.push(...data.pluginStores.pendingRows(cascadeIds));
+  const cascadeStoreDeletionIds =
+    cascadedAddedIds.size === 0 ? cascadeIds : cascadeIds.filter((id) => !cascadedAddedIds.has(id));
+  if (cascadeStoreDeletionIds.length > 0)
+    updatedWithoutCascaded.push(...data.pluginStores.pendingRows(cascadeStoreDeletionIds));
 
   // The renumber pass runs last of all, over the same finished tree: an added row, a reparent and the
   // cascade have all settled who is where, so every group this step actually touched can be replayed
   // dense in one pass, the same math `buildCommitChangeSet` runs on a live write.
-  const addedIds = new Set(added.map((row) => row.entity.id));
+  const addedIds = new Set(survivingAdded.map((row) => row.entity.id));
   const removedIds = new Set(removed.map((row) => row.entity.id));
   const checkedParents = checkHierarchyAnswers(working, data.hierarchySource).parents;
   const committedParents = data.entries.committedParents();
@@ -359,7 +378,7 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
           (group) => data.entries.committedSiblingIds(group),
           (id) => committedParents.get(id),
         );
-  const rankedAdded = added.map((row) => {
+  const rankedAdded = survivingAdded.map((row) => {
     const rank = siblingRanks.get(row.entity.id);
     return rank === undefined || rank === row.entity.siblingIndex
       ? row
