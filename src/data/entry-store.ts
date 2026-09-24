@@ -664,7 +664,16 @@ export class EntryStore implements EntryStoreContract {
    * time the hook runs.
    */
   load(inputs: readonly FlatEntryInput[]): void {
-    const { runner, byId, entries: read, rollupUpdated } = this.#readBatch(inputs, 'entries.load');
+    const {
+      runner,
+      byId,
+      entries: read,
+      rollupUpdated,
+      siblingIndexDropped,
+      derivedValuesDropped,
+    } = this.#readBatch(inputs, 'entries.load');
+    // A whole-list write always commits, so its reports always fire.
+    this.#raiseReadBatchReports(runner, siblingIndexDropped, derivedValuesDropped);
 
     // An added entity carries the values the commit settles on, not a row (the same rule
     // `sync` and `buildCommitChangeSet` follow): every id here is new to the store, so every
@@ -696,12 +705,20 @@ export class EntryStore implements EntryStoreContract {
    * corrections onto the placed batch to get the state `load(inputs)` would leave, then hands that
    * target and the store's own committed rows to `changesToMatchBatch` — "the changes to match the
    * batch." A sync that changes nothing stops there: it commits no `ChangeSet`, so `entries.all`
-   * keeps its identity and History is untouched (the common poll costs nothing). Otherwise it commits
-   * one `ChangeSet` with `origin: 'sync'` — History records no undo step for it and erases no Redo
-   * (`docs/11-server-data.md`).
+   * keeps its identity and History is untouched, and it raises neither of `#readBatch`'s reports —
+   * the common poll that finds nothing new costs nothing and warns of nothing. Otherwise it raises
+   * them and commits one `ChangeSet` with `origin: 'sync'` — History records no undo step for it and
+   * erases no Redo (`docs/11-server-data.md`).
    */
   sync(inputs: readonly FlatEntryInput[]): void {
-    const { runner, byId, entries: read, rollupUpdated } = this.#readBatch(inputs, 'entries.sync');
+    const {
+      runner,
+      byId,
+      entries: read,
+      rollupUpdated,
+      siblingIndexDropped,
+      derivedValuesDropped,
+    } = this.#readBatch(inputs, 'entries.sync');
 
     const rolled = this.#foldRollup(byId, rollupUpdated);
     const target = read.map((entry) => rolled.get(entry.id) ?? entry);
@@ -710,6 +727,7 @@ export class EntryStore implements EntryStoreContract {
     if (changes.added.length === 0 && changes.removed.length === 0 && changes.updated.length === 0) {
       return;
     }
+    this.#raiseReadBatchReports(runner, siblingIndexDropped, derivedValuesDropped);
 
     const pluginRows = runner.pluginStores.pendingRows(changes.removed.map((row) => row.entity.id));
 
@@ -726,11 +744,11 @@ export class EntryStore implements EntryStoreContract {
   /**
    * The read-and-roll step `load` and sync (#517) both run before either builds its own `ChangeSet`:
    * checks a whole-list write may run right now (no open transaction, no running extension hook, no
-   * `beforeChange`/`change` handler on the stack), reads and places the batch (`readEntryBatch`),
-   * warns or reports a dropped `siblingIndex`, runs construction's own Rollup once, and reports a
-   * dropped derived value. Returns the bound runner alongside the placed entries and the Rollup's
-   * updates, so the caller builds its own `added`/`removed` and commits without resolving `#runner`
-   * a second time.
+   * `beforeChange`/`change` handler on the stack), reads and places the batch (`readEntryBatch`), and
+   * runs construction's own Rollup once. Returns the bound runner alongside the placed entries, the
+   * Rollup's updates, and a dropped `siblingIndex` row and a dropped derived value if the batch
+   * carried one — raised through `#raiseReadBatchReports`, not here, so `sync` can hold them back
+   * until it knows the call is not a no-op (`#raiseReadBatchReports`'s own doc says why).
    */
   #readBatch(
     inputs: readonly FlatEntryInput[],
@@ -740,6 +758,8 @@ export class EntryStore implements EntryStoreContract {
     readonly byId: Map<EntryId, StoredEntry>;
     readonly entries: readonly StoredEntry[];
     readonly rollupUpdated: readonly FieldUpdated[];
+    readonly siblingIndexDropped: readonly FieldUpdated[];
+    readonly derivedValuesDropped: readonly FieldUpdated[];
   } {
     const runner = this.#runner;
     if (!runner) {
@@ -757,10 +777,6 @@ export class EntryStore implements EntryStoreContract {
       parents,
       siblingIndexDropped,
     } = readEntryBatch(inputs, this.#context, this.#registry, source, operation);
-    if (siblingIndexDropped.length > 0) {
-      const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
-      raiseErrorOn(runner.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
-    }
 
     const byId = new Map(read.map((entry) => [entry.id, entry]));
     // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
@@ -772,12 +788,28 @@ export class EntryStore implements EntryStoreContract {
     // A batch that authors a rolling-up Field on a row that also has children in the same batch gets
     // it dropped here — one aggregate `derived-values-dropped` report for the whole load, the same
     // rule and the same report construction raises (ADR 0013, decision 5; #496 Q3).
-    const dropped = rollupUpdated.filter((row) => row.to === undefined);
-    if (dropped.length > 0) {
-      raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(dropped));
-    }
+    const derivedValuesDropped = rollupUpdated.filter((row) => row.to === undefined);
 
-    return { runner, byId, entries: read, rollupUpdated };
+    return { runner, byId, entries: read, rollupUpdated, siblingIndexDropped, derivedValuesDropped };
+  }
+
+  /** Raises `#readBatch`'s two reports — a dropped `siblingIndex` row and a dropped derived value —
+   *  through the bus. `load` calls this right after `#readBatch`, since a whole-list write always
+   *  commits. `sync` (#517 review) holds off until it knows the call is not a no-op: a server poll
+   *  that round-trips an authored `siblingIndex` the derived rank already agrees with must not warn
+   *  on every poll just because `#readBatch` alone cannot yet tell the call writes nothing. */
+  #raiseReadBatchReports(
+    runner: TransactionData,
+    siblingIndexDropped: readonly FieldUpdated[],
+    derivedValuesDropped: readonly FieldUpdated[],
+  ): void {
+    if (siblingIndexDropped.length > 0) {
+      const report = buildSiblingIndexDroppedReport(siblingIndexDropped);
+      raiseErrorOn(runner.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
+    }
+    if (derivedValuesDropped.length > 0) {
+      raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(derivedValuesDropped));
+    }
   }
 
   /** An added entity carries the values the commit settles on, not a row (the same rule

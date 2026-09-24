@@ -115,6 +115,24 @@ describe('entries.sync', () => {
     expect(state.canUndo).toBe(canUndoBefore);
   });
 
+  it('a server that round-trips a disagreeing siblingIndex on an otherwise unchanged batch raises no report, since the sync writes nothing', () => {
+    const state = dataset([{ id: 'a' }, { id: 'b' }]);
+    const reports: unknown[] = [];
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+
+    // 'b' keeps list position 1, so the derived rank the sync would write already matches the
+    // store's own — but the authored siblingIndex here disagrees with it, the same as a server that
+    // round-trips a rank of its own that a client-side reorder has since moved past.
+    state.entries.sync([
+      { id: 'a', name: 'a', start: 0, end: 1 },
+      { id: 'b', name: 'b', start: 0, end: 1, siblingIndex: 5 },
+    ]);
+
+    expect(reports).toEqual([]);
+  });
+
   it('a beforeChange veto throws MutationCancelledError, and leaves the store and History as they were', () => {
     const state = dataset([{ id: 'old' }]);
     state.entries.update('old', { name: 'Edited' });
