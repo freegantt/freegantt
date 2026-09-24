@@ -440,14 +440,23 @@ export class Gantt<TProps = unknown> {
         now,
       },
     });
-    // ADR 0032: the public setter — the same one a later `gantt.plugins = [...]` uses — installs
-    // this Gantt's own chrome only now, once `#shell` above is assigned and every other option is
-    // already applied. So a plugin's `view()` runs against a finished Gantt, never a half-built one.
-    this.plugins = options.plugins ?? [];
-    // The shell's own first paint. A plugin's registrations (a variant, a grid column, a
-    // decoration) shape this frame instead of forcing a second render behind it — see that
-    // method's own comment for why the order runs this way.
-    this.#shell.paintFirstFrame();
+    // ADR 0032: a plugin's view() throwing here leaves the shell built but unpainted, holding a
+    // container listener, a dataset subscription and a document listener with no owner left to
+    // release them. `destroy()` releases every one, in reverse, before the original error carries
+    // on — a caller who catches it is left with nothing to clean up.
+    try {
+      // The public setter — the same one a later `gantt.plugins = [...]` uses — installs this
+      // Gantt's own chrome only now, once `#shell` above is assigned and every other option is
+      // already applied. So a plugin's `view()` runs against a finished Gantt, never a half-built one.
+      this.plugins = options.plugins ?? [];
+      // The shell's own first paint. A plugin's registrations (a variant, a grid column, a
+      // decoration) shape this frame instead of forcing a second render behind it — see that
+      // method's own comment for why the order runs this way.
+      this.#shell.paintFirstFrame();
+    } catch (error) {
+      this.destroy();
+      throw error;
+    }
   }
 
   /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`
