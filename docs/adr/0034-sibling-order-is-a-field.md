@@ -30,9 +30,11 @@ only order there is, and it is an accident of how entries arrived, not a value a
 ## Decision
 
 **`siblingIndex` joins `parentId` as a core key on `StoredEntry`, always present.** It is an integer
-rank among an entry's siblings, `editable: 'anywhere'`. It carries no grid column and no `rollUp`, the
-same as `parentId`. A caller reads it with `entry.read('siblingIndex')`; there is no dedicated member
-on `Entry`, the same as `parentId`.
+rank among an entry's siblings, `editable: 'anywhere'`, and carries no `rollUp`. It has no `column` of
+its own, so the grid shows it only when a consumer lists it in `gridColumns` — its `type: 'number'`
+still gives it the number type's default column then, unlike `parentId`, which carries no `type` at
+all. A caller reads it with `entry.read('siblingIndex')`; there is no dedicated member on `Entry`, the
+same as `parentId`.
 
 **A sibling group is the Hierarchy source's checked tree, not the raw `parentId`.** Under core's own
 source the two are the same thing. Under a plugin's declared source (fixed at construction, so it
