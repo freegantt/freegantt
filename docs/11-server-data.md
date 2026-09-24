@@ -18,6 +18,10 @@ the same posture a desktop app takes opening a file. Use it once, at startup.
 is removed, a key a kept entry's input omits is cleared, and a Field whose value did not change
 writes no row. Call it every time your poll returns a fresh list.
 
+A sync compares declared Fields only. An undeclared `props` key on a kept entry is not written, even
+when the server changed it. A new entry still gets it, because a sync adds a new entry the same way
+`load` does. Declare a Field for every server value that a poll must keep up to date.
+
 ## A sync records no undo step
 
 Unlike a user edit, `sync` commits its one `ChangeSet` with `origin: 'sync'`, and the undo History

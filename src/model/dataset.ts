@@ -80,7 +80,8 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  writes no row. After `sync(inputs)`, the entry ids, every declared Field value (`siblingIndex`
    *  included) and the tree are the same as `load(inputs)` would leave — only History and per-entry
    *  state differ. A kept id keeps its selection, its collapse state and its plugin store rows; a
-   *  removed id loses them, and an undo brings a removed id's store rows back with it.
+   *  removed id loses them, and an undo brings a removed id's store rows back with it. An undeclared
+   *  `props` key on a kept id is not written: declare the Field to sync it.
    *
    *  Writes through the same door `load` uses: it ignores a `'never'` Field lock, a derived parent
    *  cell re-rolls instead of taking an authored value, and no `EditExtender` cascade runs.
