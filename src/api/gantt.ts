@@ -243,8 +243,8 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `gantt.installPlugin`/`uninstallPlugin` add or drop one plugin without restating the set
    *  (D-S5-36).
    *
-   *  ADR 0019: chrome only. A plugin with a `data` half declares a Field or claims the edit hook, and
-   *  both must be in place before the Dataset's first Rollup — so it installs on the `Dataset`
+   *  ADR 0019: chrome only. A `data` half declares what shapes the Dataset's own construction, and a
+   *  Dataset installs its plugins once — so a plugin with a `data` half installs on the `Dataset`
    *  instead. `data?: never` on this arm is what stops the wrong one compiling here. */
   plugins?: readonly ChromePlugin<TProps>[];
 }
@@ -274,15 +274,32 @@ export type GanttScaleOptions =
 export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
 
 /** ADR 0019, `Q4`: the second line of defence. `GanttOptions.plugins` takes `ChromePlugin` alone, so
- *  a plugin with a `data` half is already a red squiggle in an editor. This catches the caller the
- *  compiler never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A
- *  library refuses in both languages it is read in.
+ *  a plugin with a `data` half, or any Dataset-only member (`fields`, `fieldTypes`, `aggregators`,
+ *  `hierarchySource`), is already a red squiggle in an editor. This catches the caller the compiler
+ *  never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A library
+ *  refuses in both languages it is read in.
+ *
+ *  `data` is optional now, so a fields-only plugin has no `data` to catch. Each Dataset-only member
+ *  gets its own check.
  *
  *  It raises `PluginSetupError`, the error a failed install already raises. No new type ships, and
  *  the message says where the plugin goes instead. */
 function assertChromeOnly<TProps>(plugins: readonly ChromePlugin<TProps>[]): readonly ChromePlugin<TProps>[] {
   for (const plugin of plugins) {
-    if (typeof (plugin as { data?: unknown }).data === 'function') {
+    const candidate = plugin as {
+      data?: unknown;
+      fields?: unknown;
+      fieldTypes?: unknown;
+      aggregators?: unknown;
+      hierarchySource?: unknown;
+    };
+    const declaresDatasetOnlyMember =
+      typeof candidate.data === 'function' ||
+      candidate.fields !== undefined ||
+      candidate.fieldTypes !== undefined ||
+      candidate.aggregators !== undefined ||
+      candidate.hierarchySource !== undefined;
+    if (declaresDatasetOnlyMember) {
       throw PluginSetupError.wrongInstallSite(plugin.id);
     }
   }

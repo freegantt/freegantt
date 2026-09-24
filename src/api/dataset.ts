@@ -23,7 +23,7 @@ import { DatasetState } from '../data/index.js';
 import type { FieldDeclarationSource } from '../data/index.js';
 import { createEditRequest } from '../data/edit-request.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
-import { assertNoDuplicateIds } from '../extensions/plugin-order.js';
+import { assertNoDuplicateIds, resolveSetupOrder } from '../extensions/plugin-order.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
@@ -97,9 +97,10 @@ export interface DatasetOptions<TProps = unknown> {
    *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
    *  reverse install the same way (D-S5-31).
    *
-   *  Every plugin's `data` half runs during this constructor, so a Field one declares is in the
-   *  registry before the first Rollup walks — which is why `Dataset.plugins` is read-only. A plugin
-   *  that also fills a `view` half has that half run once per `Gantt` bound to this Dataset, each
+   *  A plugin's `fields`/`fieldTypes`/`hierarchySource` declare this Dataset's shape; `data()` itself
+   *  runs only once that whole Dataset — the construction Rollup included — is built (ADR 0031). This
+   *  declared shape cannot change after construction, which is why `Dataset.plugins` is read-only. A
+   *  plugin that also fills a `view` half has that half run once per `Gantt` bound to this Dataset, each
    *  with its own context (I2). A chrome-only plugin is legal here too, and then every Gantt on this
    *  Dataset gets it; install it on one `Gantt` instead to give it to that Gantt alone.
    *
@@ -125,6 +126,25 @@ function pluginFieldDeclarationsOf(
   }));
 }
 
+/** Every installed plugin's declared `hierarchySource`, in setup order (`resolveSetupOrder`,
+ *  ADR 0031) — `DatasetState`'s constructor folds these onto `storedParentSource` before
+ *  `entries` is built. Setup order, not install order: `[b, a]` with `b.requires = ['a']` folds `a`
+ *  first, the same order `data()` runs its own registrations in.
+ *
+ *  Trusted, unchecked `TProps` cast — the same trust boundary the class note above describes. Each
+ *  plugin's own `P` erases to the one shape `data/` holds; `TProps` types the plugin author's own
+ *  `entry.props` read and reaches no further. */
+function hierarchySourceWrappersOf(
+  plugins: readonly PluginOf<unknown, unknown>[],
+): readonly HierarchySourceWrapper[] {
+  const wrappers: HierarchySourceWrapper[] = [];
+  for (const plugin of resolveSetupOrder(plugins)) {
+    const hierarchySource = 'hierarchySource' in plugin ? plugin.hierarchySource : undefined;
+    if (hierarchySource !== undefined) wrappers.push(hierarchySource);
+  }
+  return wrappers;
+}
+
 // Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
 // that clause would pull the model type into the public API report as an unexported `Dataset_2`, since
 // api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
@@ -146,6 +166,7 @@ export class Dataset<TProps = unknown> {
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
   #time: ZonedTime;
   readonly #plugins: readonly PluginOf<unknown, Dataset<TProps>>[];
+  readonly #disposePlugins: () => void;
 
   constructor(options: DatasetOptions<TProps>) {
     this.#plugins = options.plugins ?? [];
@@ -156,57 +177,54 @@ export class Dataset<TProps = unknown> {
     // `installDatasetPlugins` below asserts this again at its own install site (D-S5-3); this earlier
     // check exists only to win that race.
     assertNoDuplicateIds(this.#plugins);
+    // Declares this Dataset's whole shape — every Field, fieldType, Aggregator and hierarchy source
+    // any plugin brings — so the Dataset below builds completely, Rollup included, before a single
+    // plugin's `data()` runs (ADR 0031). `data/` never runs plugin code itself.
     this.#state = new DatasetState({
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
       pluginFieldDeclarations: pluginFieldDeclarationsOf(this.#plugins),
-      ...(this.#plugins.length > 0
-        ? { installPlugins: (state: DatasetState) => this.#installPlugins(state) }
-        : {}),
+      hierarchySourceWrappers: hierarchySourceWrappersOf(this.#plugins),
     });
     this.#time = createZonedTime(this.#state.timeZone);
     datasetState.set(this, this.#state);
+    // Every plugin's `data()` runs here, on the finished Dataset above — `ctx.dataset.*` all read
+    // (ADR 0031). A setup write is an ordinary commit, so History records it like any other;
+    // `clearHistory()` right after empties that stack, so `canUndo` still reads `false` once this
+    // constructor returns (#137).
+    this.#disposePlugins = this.#installPlugins();
+    this.#state.clearHistory();
   }
 
-  /** Runs inside `DatasetState`'s constructor, at the one moment a plugin's `data` half may set up:
-   *  the entry store exists and the construction Rollup has not run (D-S5-4). `this.#state` is not assigned yet, so
-   *  every context member below reads `state` — the same instance, one line earlier. */
-  #installPlugins(state: DatasetState): () => void {
-    return installDatasetPlugins(this.#plugins, createErrorRaiser(state.bus), (pluginId: PluginId) => {
+  /** Runs after `this.#state` is assigned, so every context member below reads `this.#state`
+   *  straight — no closed-over `state` parameter left from before the Dataset existed. */
+  #installPlugins(): () => void {
+    return installDatasetPlugins(this.#plugins, createErrorRaiser(this.#state.bus), (pluginId: PluginId) => {
       const disposables = new DisposableStore();
       const gate = new RegistrationGate(pluginId);
       const context: DatasetPluginContextOf<Dataset<TProps>> = {
         dataset: this,
         events: {
           on: (name, handler) => {
-            const dispose = state.on(name, handler);
+            const dispose = this.#state.on(name, handler);
             disposables.add(dispose);
             return dispose;
           },
-          off: (name, handler) => state.off(name, handler),
+          off: (name, handler) => this.#state.off(name, handler),
         },
         edits: {
           setExtender: (wrap) => {
             gate.assertOpen();
-            state.setExtender(wrap);
+            this.#state.setExtender(wrap);
           },
           setLockRule: (wrap) => {
             gate.assertOpen();
-            state.setLockRule(wrap);
-          },
-        },
-        hierarchy: {
-          // Trusted, unchecked TProps cast — the same trust boundary the class note above describes.
-          // `data/` holds one erased tree for every Dataset; `TProps` types the plugin author's own
-          // read of `entry.props` and reaches no further.
-          setSource: (wrap) => {
-            gate.assertOpen();
-            state.setHierarchySource(wrap as HierarchySourceWrapper);
+            this.#state.setLockRule(wrap);
           },
         },
         store: {
-          reserve: <T extends object>() => state.pluginStores.reserve<T>(pluginId),
-          read: <T extends object>(otherId: PluginId) => state.pluginStores.read<T>(otherId),
+          reserve: <T extends object>() => this.#state.pluginStores.reserve<T>(pluginId),
+          read: <T extends object>(otherId: PluginId) => this.#state.pluginStores.read<T>(otherId),
         },
         disposables,
       };
@@ -223,7 +241,7 @@ export class Dataset<TProps = unknown> {
   /** Releases every installed `data` half, in reverse setup order. A Dataset with no plugins needs no
    *  `destroy()` call — nothing holds a resource. */
   destroy(): void {
-    this.#state.destroy();
+    this.#disposePlugins();
   }
 
   // Trusted, unchecked TProps cast — see the class-level note above.

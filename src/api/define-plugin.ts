@@ -11,11 +11,12 @@ import type { ChromePlugin, DataPlugin } from './gantt.js';
  * reaches `GanttOptions.plugins` — in the editor, not at mount.
  *
  * **One plugin, two halves, one install site.** `data(ctx)` declares Fields, claims the edit hook and
- * reserves the store; it is DOM-free and runs as the `Dataset` constructs. `view(ctx)` registers
+ * reserves the store; it is DOM-free and runs once this whole Dataset — the construction Rollup
+ * included — is built (ADR 0031). `view(ctx)` registers
  * variants, renderers, commands and keys, and runs as a `Gantt` mounts. A plugin with a `data` half
- * installs on the `Dataset`, because a Field must exist before the first Rollup (D-S5-4). Every Gantt
- * bound to that Dataset then runs `view` once, each with its own context, so I2 holds by
- * construction. A chrome-only plugin installs on the `Gantt`.
+ * installs on the `Dataset`: a `data` half declares what shapes the Dataset's own construction, and
+ * a Dataset installs its plugins once. Every Gantt bound to that Dataset then runs `view` once, each
+ * with its own context, so I2 holds by construction. A chrome-only plugin installs on the `Gantt`.
  *
  * ```ts
  * const scheduling = () =>
@@ -46,10 +47,10 @@ export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TPro
  * The arm a plugin with a `data` half resolves to — see the first signature above for the whole
  * contract, the example and `TProps`.
  *
- * This arm installs on the **Dataset**: `new Dataset({ entries, plugins: [acmeLocks()] })`. A Field
- * must exist before the first Rollup walks (D-S5-4), so `GanttOptions.plugins` refuses it, in the
- * editor rather than at mount. It may fill `view` as well, and every Gantt bound to that Dataset
- * then runs `view` once with its own context.
+ * This arm installs on the **Dataset**: `new Dataset({ entries, plugins: [acmeLocks()] })`. A `data`
+ * half declares what shapes the Dataset's own construction, and a Dataset installs its plugins once,
+ * so `GanttOptions.plugins` refuses it, in the editor rather than at mount. It may fill `view` as
+ * well, and every Gantt bound to that Dataset then runs `view` once with its own context.
  */
 export function definePlugin<TProps = unknown, TPlugin extends DataPlugin<TProps> = DataPlugin<TProps>>(
   plugin: TPlugin,

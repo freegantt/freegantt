@@ -31,6 +31,8 @@ import type {
 import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
 import { now } from '../time/index.js';
 import { EntryStore } from './entry-store.js';
+import { assertEntryBatchIsSound } from './entry-batch.js';
+import { storedParentSource } from './hierarchy-source.js';
 import { toEditsReading, toEntries } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
@@ -77,24 +79,21 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
-  /** Installs this Dataset's plugin list and returns the disposer for the whole set. Called
-   *  at the one legal moment: after the entry store exists, so a `setup`-time store write can wrap
-   *  itself in a transaction, and before the construction Rollup, because a Field a plugin declares
-   *  must exist before the Rollup first walks (D-S5-4).
-   *
-   *  A callback, not a plugin array, because `extensions/install-dataset-plugins.ts` is where installation
-   *  lives and `data/` may not import `extensions/` (plans/01 §1). `api/dataset.ts` is the composition
-   *  root that ties the two together, the same way it already wires view/ and interaction/. */
-  installPlugins?: (state: DatasetState) => Disposer;
   /** Every installed plugin's own `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) — one
    *  entry per plugin, in `DatasetOptions.plugins` order. `api/dataset.ts` builds this from
    *  `Dataset<TProps>`'s own plugin list; `data/` never imports `api/`, so it takes the plain shape
    *  rather than the plugin objects themselves. Merged with this Dataset's own `fields`/`fieldTypes`/
-   *  `aggregators` and registered before `entries` is read (`mergedFieldRegistryOptions` below) —
-   *  the one moment early enough that a flat value an entry carries for a plugin's Field is not yet
-   *  an undeclared key, and late enough that `installPlugins` (called after, once `entries` exists)
-   *  still runs every plugin's `data()` before the construction Rollup, same as before. */
+   *  `aggregators` and registered before `entries` is read (`mergedFieldRegistryOptions` below) — the
+   *  one moment early enough that a flat value an entry carries for a plugin's Field is not yet an
+   *  undeclared key. `api/dataset.ts` runs every plugin's `data()` only after this whole Dataset —
+   *  the construction Rollup included — is built (ADR 0031). */
   pluginFieldDeclarations?: readonly FieldDeclarationSource[];
+  /** Every installed plugin's declared `hierarchySource`, in setup order (ADR 0031) —
+   *  `api/dataset.ts` builds this with `resolveSetupOrder`. Folded onto `storedParentSource` right
+   *  here, before `entries` is built: the first wrapper wraps core's own source, a later one wraps the
+   *  one before it, and the last one answers first — the order `data()` runs its own registrations
+   *  in. */
+  hierarchySourceWrappers?: readonly HierarchySourceWrapper[];
 }
 
 /** One plugin's own `fields`/`fieldTypes`/`aggregators`, or the Dataset's own (#496 grill round 3,
@@ -172,7 +171,6 @@ export class DatasetState implements Dataset {
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
   readonly #history: History;
-  readonly #disposePlugins: Disposer | undefined;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
@@ -204,27 +202,37 @@ export class DatasetState implements Dataset {
       timeZone: this.timeZone,
       dateOnlyEnd: this.dateOnlyEnd,
     };
+    const read = toEntries(options.entries, this.#entryContext, this.fields, 'new Dataset');
+    assertEntryBatchIsSound(read, 'new Dataset');
+    // Folded onto core's own source, in setup order (ADR 0031): the first wrapper wraps
+    // `storedParentSource`, a later one wraps the one before it, and the last one answers first.
+    const hierarchySource = (options.hierarchySourceWrappers ?? []).reduce<HierarchySource>(
+      (source, wrap) => wrap(source),
+      storedParentSource,
+    );
     this.entries = new EntryStore(
-      toEntries(options.entries, this.#entryContext, this.fields),
+      read,
       this.#entryContext,
       this.fields,
       this.fieldAccess,
       this,
       createErrorRaiser(this.bus),
+      hierarchySource,
     );
     this.pluginStores = new PluginStores(this);
-    // Plugins set up here and nowhere else: the entry store exists, so a `setup`-time store write
-    // wraps itself in a transaction, and the construction Rollup below has not run, so a Field a
-    // plugin declares is in the registry before the Rollup first walks (D-S5-4). History subscribes
-    // after, so installing a plugin is not itself an undoable step.
-    this.#disposePlugins = options.installPlugins?.(this);
     // `01` §2.6 / README.md D-S2-22: a parent given children only through the initial array gets
     // real rolled-up values before anyone reads it, not just after the first later transaction
-    // touches one of those children.
+    // touches one of those children. No plugin has run yet (ADR 0031): a Dataset builds completely
+    // — Field, hierarchy source and this Rollup all settle — before the first `data()` call.
     applyConstructionRollUp(this);
-    // Subscribes to `change` right here, before the constructor returns and so before any consumer
-    // handler exists (`s2.5-undo-redo.md` §2.1) — `canUndo` reads true inside the very `change` a
-    // later-registered handler first sees.
+    // The authored rows are answers too, and so is whatever the Rollup above just wrote — a
+    // hierarchy source may read a Field the Rollup rolls up, so this is the first point where every
+    // answer construction can produce is settled and ready to report (ADR 0020).
+    this.entries.reportRefusedHierarchyAnswers();
+    // Subscribes to `change` right here, so it is the first subscriber ahead of every plugin's own
+    // `data()` handler (ADR 0031) — a plugin's setup write records like any other commit, and
+    // `Dataset`'s constructor clears the stack after the last `data()` returns (`clearHistory`
+    // below), so `canUndo` still reads `false` once `new Dataset()` returns.
     this.#history = new History(this, options.history);
   }
 
@@ -294,13 +302,6 @@ export class DatasetState implements Dataset {
     return this.entries.hierarchySource;
   }
 
-  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))`.
-   *  Installing composes onto the current occupant rather than evicting it, exactly the way
-   *  `setExtender` below does (D-S5-23, ADR 0020). */
-  setHierarchySource(wrap: HierarchySourceWrapper): void {
-    this.entries.setHierarchySource(wrap);
-  }
-
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.
    *  Installing composes onto the current occupant rather than evicting it, so a second plugin needs
    *  no priority machinery and `EditExtenderConflictError` never gets written (D-S5-23). */
@@ -330,9 +331,12 @@ export class DatasetState implements Dataset {
     return this.entries.editableOf(id, field);
   }
 
-  /** Releases every installed plugin, in reverse setup order. */
-  destroy(): void {
-    this.#disposePlugins?.();
+  /** `Dataset`'s constructor calls this once, right after the last plugin's `data()` returns
+   *  (ADR 0031): a plugin's setup write is an ordinary commit, so it records like one, and this is
+   *  what un-does that — the stack `undo()` reads goes back to empty, so `canUndo` reads `false`
+   *  once `new Dataset()` returns (#137). */
+  clearHistory(): void {
+    this.#history.clear();
   }
 
   nextChangeSetId(): ChangeSetId {

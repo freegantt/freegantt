@@ -62,7 +62,7 @@ function costing(seen: string[], ganttsSeen: unknown[] = []) {
 }
 
 describe('one plugin, two halves, one install site (ADR 0019)', () => {
-  it('runs the data half as the Dataset constructs, so its Field is there for the first Rollup', () => {
+  it('runs the data half once, on the finished Dataset — its Field and the Rollup are already there', () => {
     const seen: string[] = [];
     const dataset = newDataset([costing(seen)]);
 
@@ -189,6 +189,45 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
     const clash = definePlugin({ id: 'demo.costing', view() {} });
     expect(() => mount(dataset, [clash])).toThrow(DuplicatePluginIdError);
   });
+
+  it('a fields-only plugin compiles with no data(), and installs on the Dataset alone', () => {
+    const fieldsOnly = () => definePlugin({ id: 'demo.fieldsOnly', fields: [{ key: 'owner' }] });
+    const dataset = newDataset([fieldsOnly()]);
+    expect(dataset.field('owner')).toBeDefined();
+
+    const container = document.createElement('div');
+    expect(
+      () =>
+        new Gantt({
+          dataset: newDataset(),
+          container,
+          // @ts-expect-error `data` is optional, but `fields` alone still refuses this install
+          // site — a data half shapes the Dataset's own construction, and a Gantt mounts after that.
+          plugins: [fieldsOnly()],
+        }),
+    ).toThrow(PluginSetupError);
+  });
+
+  it.each([
+    ['fields', () => definePlugin({ id: 'demo.fieldsOnly', fields: [{ key: 'owner' }] })],
+    [
+      'fieldTypes',
+      () => definePlugin({ id: 'demo.fieldTypesOnly', fieldTypes: { money: { rollUp: 'sum' } } }),
+    ],
+    [
+      'aggregators',
+      () => definePlugin({ id: 'demo.aggregatorsOnly', aggregators: { total: () => undefined } }),
+    ],
+    ['hierarchySource', () => definePlugin({ id: 'demo.treeOnly', hierarchySource: (next) => next })],
+  ] as const)(
+    'refuses a widened plugin that declares %s alone, with no data() half',
+    (_member, makePlugin) => {
+      // No `data` half runs, but each of these still names the Dataset as home — a Gantt must
+      // refuse it the same way `costed`'s `data` half does above.
+      const widened = makePlugin() as unknown as ChromePlugin;
+      expect(() => mount(newDataset(), [widened])).toThrow(PluginSetupError);
+    },
+  );
 });
 
 describe('requires covers both halves (D-S5-31)', () => {

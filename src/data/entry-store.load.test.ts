@@ -174,13 +174,12 @@ describe('entries.load', () => {
   // `#assertParentValid` does — a plugin source's own key goes through the Fault path instead.
   describe('load() under a plugin hierarchy source (ADR 0020 J54)', () => {
     function phaseSourced(entries: { id: string; parentId?: string }[] = []): DatasetState {
-      const state = new DatasetState({
+      return new DatasetState({
         timeZone: 'UTC',
         entries: entries.map((e) => ({ ...e, name: e.id, start: 0, end: 1 })),
         fields: [{ key: 'phaseId' }],
+        hierarchySourceWrappers: [() => (entry) => (entry.props as { phaseId?: string }).phaseId],
       });
-      state.setHierarchySource(() => (entry) => (entry.props as { phaseId?: string }).phaseId);
-      return state;
     }
 
     it('a cycle only in the plugin key does not throw — it commits, and the commit reports a "hierarchy-cycle" Fault', () => {

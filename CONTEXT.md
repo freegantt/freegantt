@@ -53,7 +53,7 @@ The tree of Entries, as the Hierarchy source answers it (ADR 0020). Core's own s
 _Avoid_: `autoGroup`; a stored Kind or Variant derived from "has children"; "the tree is `parentId`" (it is what the source answers); "`read('parentId')` answers the tree" (ADR 0024 reversed this — it answers the stored field, like any other key)
 
 **Hierarchy source**:
-The function that answers which Entry is the parent of another — `(entry: StoredEntry) => EntryId | string | undefined` (ADR 0020). Core's own is `(entry) => entry.parentId`, registered like any other with no special claim on the seam. A data plugin composes onto it through `ctx.hierarchy.setSource`, so a second plugin answers over the first's tree. It reads a `StoredEntry`, never the live `Entry`: the live row's `parent()`, `children()`, `depth` and `descendants()` are all built from this answer. One Entry in, one parent id out — never the whole dataset, which is what keeps a child query O(children + edits). An id no Entry holds reads as a root, and a chain that loops is broken at the link that closes it; both raise a Fault once per revision and neither throws. The Rollup follows the same source, so a plugin that changes the tree has changed the Rollup and the two can never disagree. This source's checked answer is what `hierarchyParentId` reads by key (ADR 0024). "Child," "descendant" and "leaf" carry one meaning across this source, `Entry` and a pass's `ComputeContext` — see **Child / Descendant / Leaf**.
+The function that answers which Entry is the parent of another — `(entry: StoredEntry) => EntryId | string | undefined` (ADR 0020). Core's own is `(entry) => entry.parentId`, registered like any other with no special claim on the seam. A data plugin declares `hierarchySource` on itself (ADR 0031) — the one door onto the seam. Declared sources compose in setup order: the first plugin wraps core's own source, each later one wraps the one before it, and the last one answers first. It reads a `StoredEntry`, never the live `Entry`: the live row's `parent()`, `children()`, `depth` and `descendants()` are all built from this answer. One Entry in, one parent id out — never the whole dataset, which is what keeps a child query O(children + edits). An id no Entry holds reads as a root, and a chain that loops is broken at the link that closes it; both raise a Fault once per revision and neither throws. The Rollup follows the same source, so a plugin that changes the tree has changed the Rollup and the two can never disagree. This source's checked answer is what `hierarchyParentId` reads by key (ADR 0024). "Child," "descendant" and "leaf" carry one meaning across this source, `Entry` and a pass's `ComputeContext` — see **Child / Descendant / Leaf**. `new Dataset({ entries })` checks the raw `parentId` first, before any source runs (ADR 0031): a duplicate id, an unknown parent, or a loop throws — the same check `load` runs.
 _Avoid_: a second seam for the Rollup; a source that takes the dataset; grouping (`{ source: 'group' }` is a Row source and stays one)
 
 **`hierarchyParentId`**:
@@ -144,7 +144,7 @@ The undo/redo stack (`data/history.ts`) — a subscriber to `change`, not a step
 _Avoid_: Undo stack (names the data structure, not the subscriber that owns it), journal, log — Changeset log is the harness panel that renders a `ChangeSet`, a different thing entirely
 
 **Load**:
-`dataset.entries.load(rows)` (#496): a full fresh start for a live Dataset. It replaces every Entry — removes every one the Store holds and adds every input, in the list's own order, with no diff and no merge. A child may list before its parent; `load` checks the whole batch first (duplicate id, unknown parent, a loop), so order never throws. It commits one ChangeSet with `origin: 'load'`, even when nothing changed, and History clears on it — the same posture a desktop app takes opening a file. It keeps no per-entry state (Selection, collapse, a plugin's Store row) for an id both the old data and the new list name. Its diffing, undoable counterpart, which keeps per-entry state for a kept id and records one undo step, is `sync` (#517) — see that issue's plan.
+`dataset.entries.load(rows)` (#496): a full fresh start for a live Dataset. It replaces every Entry — removes every one the Store holds and adds every input, in the list's own order, with no diff and no merge. A child may list before its parent; `load` checks the whole batch first (duplicate id, unknown parent, a loop), so order never throws. It commits one ChangeSet with `origin: 'load'`, even when nothing changed, and History clears on it — the same posture a desktop app takes opening a file. It keeps no per-entry state (Selection, collapse, a plugin's Store row) for an id both the old data and the new list name. Its diffing, undoable counterpart, which keeps per-entry state for a kept id and records one undo step, is `sync` (#517) — see that issue's plan. `new Dataset({ entries })` checks its own batch the same way, before any plugin runs (ADR 0031).
 _Avoid_: Replace, Import (the harness's own verb for the button that calls `load`, not a library concept), Restore (a save-format word; ADR 0016 stands — `load` takes `FlatEntryInput[]`, the same shape the constructor takes)
 
 **Replay**:
@@ -665,11 +665,12 @@ _Avoid_: non-working time (what a consumer's shading _means_, never what the lib
 
 **Plugin**, **ChromePlugin**, **DataPlugin**:
 The public extension contract (ADR 0019): an `id`, an optional `requires`, and one or both halves.
-`data(ctx)` declares Fields, claims the edit hook and reserves the store; it is DOM-free and runs as
-the `Dataset` constructs. `view(ctx)` registers variants, renderers, commands and keys, and runs as a
-`Gantt` mounts. A **ChromePlugin** has a `view` half and no `data` half, and installs on the `Gantt`.
-A **DataPlugin** has a `data` half, and installs on the `Dataset` — the install site is where the
-state lives, because a Field must exist before the first Rollup. **Plugin** is either. `definePlugin`
+`data(ctx)` declares Fields, claims the edit hook and reserves the store; it is DOM-free and runs
+once, on the finished Dataset. `view(ctx)` registers variants, renderers, commands and keys, and runs
+as a `Gantt` mounts. A **ChromePlugin** has a `view` half and no `data` half, and installs on the
+`Gantt`. A **DataPlugin** has a `data` half, and installs on the `Dataset` — the install site is
+where the state lives: a `data` half declares what shapes the Dataset's own construction, and a
+Dataset installs its plugins once. **Plugin** is either. `definePlugin`
 is the door, and it narrows to the arm the object fills. Either half may return a `Disposer`, and
 only for a resource the plugin owns itself — a timer, a socket, a subscription of its own. Every
 `register*` and every `onDomEvent` already files its removal in `ctx.disposables`, so most plugins

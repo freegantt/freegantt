@@ -7,7 +7,6 @@ export type {
   DatasetPluginContextOf,
   DatasetEvents,
   DatasetEditHook,
-  DatasetHierarchy,
   DatasetStoreAccess,
   PluginStore,
   PluginStoreView,
