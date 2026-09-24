@@ -99,6 +99,12 @@ export type BuiltInReportCode =
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
   // raise this code once per operation (decision 5) — never per value.
   | 'derived-values-dropped'
+  // #528: construction and `load` set `siblingIndex` from list position, and an authored value that
+  // differs from it is dropped rather than stored. Raised once per operation, naming every dropped
+  // value, never once per value — the same aggregation `derived-values-dropped` uses, and a
+  // different code because this Field's value is dropped for a different reason: list position wins,
+  // not a rolling-up parent that owns the cell.
+  | 'sibling-index-dropped'
   // The built-in cell editor's own refusals — one spelling, shared by `data-reason` and this code
   // (D-S5-40). `by` is that plugin's id, not `'core'`.
   | 'derived-value'

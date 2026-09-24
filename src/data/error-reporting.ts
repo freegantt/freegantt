@@ -252,6 +252,23 @@ export function buildDerivedValuesDroppedReport(dropped: readonly FieldUpdated[]
   };
 }
 
+/** #528: construction and `load` set `siblingIndex` from list position; `dropped` is every entry
+ *  whose authored value differed from the list-position value that won instead (`from` the authored
+ *  value, `to` the value stored). One report per operation, naming the count and up to three of the
+ *  affected Entry ids, never one report per value. Always raised at `severity: 'warning'`, in every
+ *  build, not only a development one. */
+export function buildSiblingIndexDroppedReport(dropped: readonly FieldUpdated[]): ErrorReportInput {
+  return {
+    code: 'sibling-index-dropped',
+    severity: 'warning',
+    by: 'core',
+    message:
+      `${dropped.length} authored siblingIndex value${dropped.length === 1 ? '' : 's'} ` +
+      `${dropped.length === 1 ? 'was' : 'were'} dropped: ${shownEntryIds(dropped)} named a value that ` +
+      `differs from list position, and list position wins.`,
+  };
+}
+
 /** ADR 0013, decision 5: an extension-hook cascade proposed a rolling-up Field on a parent, and the
  *  Rollup overwrote it in silence — `rollup.ts`'s `body`/`merged` split means only the transaction
  *  body's own proposal makes the Rollup yield (D-S2-22); a cascade's proposal never does. One report

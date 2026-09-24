@@ -78,7 +78,8 @@ export type BuiltInThrownCode =
   | 'renderer-already-registered'
   | 'unknown-command'
   | 'empty-covers'
-  | 'custom-row-source-not-filterable-or-sortable';
+  | 'custom-row-source-not-filterable-or-sortable'
+  | 'sibling-index-out-of-range';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -418,6 +419,31 @@ export class InvertedSpanError extends FreeGanttError {
     this.name = 'InvertedSpanError';
     this.entryId = entryId;
     this.span = span;
+    this.operation = operation;
+  }
+}
+
+/** `code: 'sibling-index-out-of-range'` — an explicit `siblingIndex` write outside the legal range
+ *  for its group: negative, not a whole number, or past `lastIndex` (the highest legal index once the
+ *  write lands — the group's own count for an `add`, one less than it for an `update`). The renumber
+ *  pass that runs at commit never raises this: it clamps an extender-driven move instead, so only a
+ *  consumer's own out-of-range write can reach it. */
+export class SiblingIndexOutOfRangeError extends FreeGanttError {
+  readonly entryId: EntryId;
+  readonly siblingIndex: number;
+  readonly lastIndex: number;
+  readonly operation: string;
+
+  constructor(entryId: EntryId, siblingIndex: number, lastIndex: number, operation: string) {
+    super(
+      'sibling-index-out-of-range' satisfies BuiltInThrownCode,
+      `${operation}: sibling index out of range for "${entryId}": ${siblingIndex}, last is ${lastIndex}. ` +
+        `Give a whole number from 0 to ${lastIndex}.`,
+    );
+    this.name = 'SiblingIndexOutOfRangeError';
+    this.entryId = entryId;
+    this.siblingIndex = siblingIndex;
+    this.lastIndex = lastIndex;
     this.operation = operation;
   }
 }
