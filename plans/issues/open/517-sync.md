@@ -624,7 +624,8 @@ checkedParents, source)`: it visits every current parent, and it never demotes.
 
 - **f1.** When no sync ran, every row of the step still applies, and its `from` already equals the current
   value. The parent rule drops nothing, the sibling pass adds nothing, and the Rollup adds nothing. So the
-  ChangeSet has the same rows in the same order. The replaced stack entry has the same content as the
+  ChangeSet has the same rows. Order can differ, because the renumber pass walks each sibling group in
+  index order, cross-key order carries no meaning. The replaced stack entry has the same content as the
   recorded one.
 - **f2. A step with nothing left to write.** `undo()` loops. It replays the step at the cursor. If the
   cursor did not move, `change` did not fire, so History drops that step (`#forgetStep(index)`: splice it,
@@ -639,7 +640,8 @@ checkedParents, source)`: it visits every current parent, and it never demotes.
   2. A new property (step 8, test "undo and redo with no sync write exactly the inverted and the recorded
      rows"): random user op sequences, reusing `history.property.test.ts`'s op arbitraries. It records each
      `'user'` ChangeSet. Then undo-all, then redo-all. Each committed `'undo'` ChangeSet must equal
-     `invertChangeSet(recorded)` row for row (id, field, `valuesEqual` on from/to, order included). Each
+     `invertChangeSet(recorded)` row for row (id, field, `valuesEqual` on from/to, order free, one row per
+     key). Each
      `'redo'` must equal the recorded step.
   3. The same property with a rolling-up `cost` Field and a two-level tree, so that the Rollup and sibling
      paths run.
@@ -714,7 +716,13 @@ New tests. Write each one first and see it fail. Test names state the rule, with
   - (P3) after any sequence, the Dataset stays loadable and consistent: a fresh Dataset built from
     `toInput()` in `entries.all` order does not throw, and it has the same ids, tree, declared Field values
     and `siblingIndex`. This covers loops, dangling parents, dense groups and a stale Rollup in one check.
-  - (P4) a sync never changes the number of steps History holds.
+  - (P4a) a sync never changes `canUndo` or `canRedo` — read both right before and right after the sync.
+  - (P4b) a sync that writes only a Field no user op in this run touches, and moves or adds or removes no
+    entry, leaves every user step undoable and redoable: the count of `undo()` calls that land a `change`
+    equals the count of recorded user steps, and the same holds for `redo()`. This is narrower than P4a on
+    purpose — a sync that reparents an entry can make an unrelated `start`/`end` step moot (the rollup a
+    reparent creates overrides it), and `undo()` then silently skips that step (`f2`) within the same call,
+    so counting `undo()` calls no longer counts stack entries once that happens.
 
 #### i. Coordination with #419 (a write door that records no undo)
 
