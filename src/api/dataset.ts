@@ -20,6 +20,7 @@ import type {
   PluginStoreView,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
+import type { FieldDeclarationSource } from '../data/index.js';
 import { createEditRequest } from '../data/edit-request.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
@@ -108,6 +109,21 @@ export interface DatasetOptions<TProps = unknown> {
   plugins?: readonly PluginOf<unknown, Dataset<TProps>>[];
 }
 
+/** One `FieldRegistryOptions`-shaped entry per plugin, `fields`/`fieldTypes`/`aggregators` read off
+ *  the plugin object itself (#496 grill round 3, R1) — `DatasetState`'s constructor merges these with
+ *  the Dataset's own before `entries` is read. A chrome-only plugin carries none of the three: `'…'
+ *  in plugin` narrows the `PluginOf` union to the arm that declares it, so this reads `undefined` for
+ *  that arm with no cast. */
+function pluginFieldDeclarationsOf(
+  plugins: readonly PluginOf<unknown, unknown>[],
+): readonly FieldDeclarationSource[] {
+  return plugins.map((plugin) => ({
+    fields: 'fields' in plugin ? plugin.fields : undefined,
+    fieldTypes: 'fieldTypes' in plugin ? plugin.fieldTypes : undefined,
+    aggregators: 'aggregators' in plugin ? plugin.aggregators : undefined,
+  }));
+}
+
 // Structurally satisfies model/'s `Dataset` (entries/timeZone/on/off) without an `implements` clause —
 // that clause would pull the model type into the public API report as an unexported `Dataset_2`, since
 // api-extractor inlines whatever an exported class's `implements`/`extends` names. Assignability where
@@ -135,6 +151,7 @@ export class Dataset<TProps = unknown> {
     this.#state = new DatasetState({
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
+      pluginFieldDeclarations: pluginFieldDeclarationsOf(this.#plugins),
       ...(this.#plugins.length > 0
         ? { installPlugins: (state: DatasetState) => this.#installPlugins(state) }
         : {}),
