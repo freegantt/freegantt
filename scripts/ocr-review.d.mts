@@ -65,3 +65,13 @@ export function findingTitle(content: string): string;
 
 /** PASS when every file finished; PARTIAL, with the failed paths, when any file did not. */
 export function verdictForSession(session: SessionRecord, context: { resumeCommand: string }): SessionVerdict;
+
+/** How a spawned `child_process` ended: normal exit, a signal, or a failure to run at all. */
+export interface ChildOutcome {
+  code: number | null;
+  signal: string | null;
+  error?: Error;
+}
+
+/** A short, human phrase for why the `ocr` child stopped, for a FAILED line. */
+export function describeChildOutcome(outcome: ChildOutcome): string;

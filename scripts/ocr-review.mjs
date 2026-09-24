@@ -34,6 +34,10 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const POLL_MILLISECONDS = 60_000;
 const STALL_MINUTES = 15;
 const OWN_SESSION_TIMEOUT_MILLISECONDS = 60_000;
+// `ocr session comments` returns the full text of every finding, which a branch-wide review can
+// push past Node's 1 MiB `spawnSync` default. 64 MiB is generous headroom for a JSON reply that is
+// plain text, not a binary payload.
+const OCR_JSON_MAX_BUFFER = 64 * 1024 * 1024;
 // `ocr` writes this as `end_time` on a session it has not finished yet (Go's zero `time.Time`).
 const UNSET_END_TIME = '0001-01-01T00:00:00Z';
 
@@ -127,18 +131,48 @@ function normalizeComment(raw) {
   };
 }
 
+/** A short, human phrase for why the `ocr` child stopped, for a FAILED line. */
+export function describeChildOutcome(outcome) {
+  if (outcome.error) return outcome.error.message;
+  if (outcome.signal) return `signal ${outcome.signal}`;
+  return `exit code ${outcome.code}`;
+}
+
 function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+// The `ocr review` child this run launched, tracked here (not only inside `main()`) so every exit
+// path — `stop()`, a STALLED kill, an uncaught throw — can reach it. Left running, it is an orphan
+// process still writing to a temp log nobody is reading.
+let activeChild;
+
+/** Kills the run's `ocr` child, its whole process group so a shell wrapper cannot outlive it
+ *  (`scripts/measure-scale.mjs` uses the same pattern). A no-op once nothing is running. */
+function killActiveChild() {
+  if (activeChild === undefined) return;
+  try {
+    process.kill(-activeChild.pid, 'SIGTERM');
+  } catch {
+    activeChild.kill('SIGTERM');
+  }
+}
+
 function stop(message) {
+  killActiveChild();
   console.log(`ocr-review FAILED — ${message}`);
   process.exit(EXIT_CODE.failed);
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isMain) {
-  await main();
+  try {
+    await main();
+  } catch (error) {
+    killActiveChild();
+    console.log(`ocr-review FAILED — ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(EXIT_CODE.failed);
+  }
 }
 
 async function main() {
@@ -151,9 +185,10 @@ async function main() {
   }
 
   function ocrJson(argv) {
-    const result = spawnSync('ocr', argv, { cwd: root, encoding: 'utf8' });
+    const result = spawnSync('ocr', argv, { cwd: root, encoding: 'utf8', maxBuffer: OCR_JSON_MAX_BUFFER });
+    if (result.error) stop(`\`ocr ${argv.join(' ')}\` could not run: ${result.error.message}`);
     if (result.status !== 0)
-      stop(`\`ocr ${argv.join(' ')}\` failed. ${(result.stderr || result.stdout).trim()}`);
+      stop(`\`ocr ${argv.join(' ')}\` failed. ${(result.stderr || result.stdout || '').trim()}`);
     try {
       return JSON.parse(result.stdout);
     } catch {
@@ -178,7 +213,10 @@ async function main() {
   console.log(`ocr-review: running \`ocr ${reviewArgs.join(' ')}\` in ${root}`);
   console.log(`ocr-review: ocr's own output goes to ${logPath}`);
   const spawnedAt = new Date().toISOString();
-  const child = spawn('ocr', reviewArgs, { cwd: root, stdio: ['ignore', logFd, logFd] });
+  // Detached, so `killActiveChild()` can kill the whole process group `ocr` may spawn under, the
+  // same pattern `scripts/measure-scale.mjs` uses for its dev-server child.
+  const child = spawn('ocr', reviewArgs, { cwd: root, stdio: ['ignore', logFd, logFd], detached: true });
+  activeChild = child;
 
   let childOutcome;
   const childExited = new Promise((resolve) => {
@@ -194,12 +232,16 @@ async function main() {
 
   let session;
   const findSessionDeadline = Date.now() + OWN_SESSION_TIMEOUT_MILLISECONDS;
-  while (session === undefined && Date.now() < findSessionDeadline) {
+  while (session === undefined && childOutcome === undefined && Date.now() < findSessionDeadline) {
     session = findOwnSession(readSessions(), { repoDir: root, notBefore: spawnedAt });
-    if (session === undefined) await sleep(3_000);
+    if (session === undefined) await Promise.race([sleep(3_000), childExited]);
   }
   if (session === undefined) {
-    child.kill('SIGTERM');
+    if (childOutcome !== undefined) {
+      stop(
+        `\`ocr ${reviewArgs.join(' ')}\` stopped with ${describeChildOutcome(childOutcome)} before a session appeared. Raw ocr output: ${logPath}`,
+      );
+    }
     stop(
       `no session for this repo appeared within ${OWN_SESSION_TIMEOUT_MILLISECONDS / 1000}s of launch. Raw ocr output: ${logPath}`,
     );
@@ -233,7 +275,7 @@ async function main() {
     if (ended || childOutcome !== undefined) break;
 
     if (isStalled(lastProgressAt, new Date(), STALL_MINUTES)) {
-      child.kill('SIGTERM');
+      killActiveChild();
       const resumeCommand = `pnpm ocr-review --resume ${session.sessionId}`;
       console.log(
         `\nocr-review STALLED — no new file and no new finding for ${STALL_MINUTES} minutes. Resume with: ${resumeCommand}`,
@@ -243,12 +285,9 @@ async function main() {
   }
 
   if (childOutcome !== undefined && childOutcome.code !== 0) {
-    const detail = childOutcome.error
-      ? childOutcome.error.message
-      : childOutcome.signal
-        ? `signal ${childOutcome.signal}`
-        : `exit code ${childOutcome.code}`;
-    console.log(`\nocr-review FAILED — ocr exited with ${detail}. Raw ocr output: ${logPath}`);
+    console.log(
+      `\nocr-review FAILED — ocr exited with ${describeChildOutcome(childOutcome)}. Raw ocr output: ${logPath}`,
+    );
     process.exit(EXIT_CODE.failed);
   }
 
