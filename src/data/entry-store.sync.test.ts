@@ -284,4 +284,15 @@ describe('entries.sync', () => {
       'entries.sync: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
     );
   });
+
+  it('sync called inside a beforeChange handler throws MutationDuringNotificationError, naming entries.sync', () => {
+    const state = dataset([{ id: 'old' }]);
+    state.on('beforeChange', () => {
+      state.entries.sync([{ id: 'second', name: 'Second', start: 0, end: 1 }]);
+    });
+
+    expect(() => state.entries.sync([{ id: 'first', name: 'First', start: 0, end: 1 }])).toThrow(
+      'entries.sync: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
+    );
+  });
 });

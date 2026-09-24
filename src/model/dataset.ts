@@ -85,8 +85,8 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  Writes through the same door `load` uses: it ignores a `'never'` Field lock, a derived parent
    *  cell re-rolls instead of taking an authored value, and no `EditExtender` cascade runs.
    *  `beforeChange` can veto the whole call. Refuses with `TransactionAlreadyOpenError` inside
-   *  `dataset.transaction()`, from the extension hook, and — unlike `load` — from inside a
-   *  `beforeChange` or `change` handler.
+   *  `dataset.transaction()`, `MutationDuringExtensionHookError` from the extension hook, and
+   *  `MutationDuringNotificationError` from inside a `beforeChange` or `change` handler.
    *
    *  Commits one `ChangeSet` with `origin: 'sync'`, recorded on the undo stack like a user edit and
    *  erasing Redo. A sync that changes nothing commits nothing: no `beforeChange`, no `change`, and
