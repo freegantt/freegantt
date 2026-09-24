@@ -97,8 +97,10 @@ export class EntrySelection {
   }
 
   /** Drops the Entries `changeSet.removed` names (#212, finding 8) — left uncorrected, a dead id
-   *  reaches a mutation and throws. Announces `selectionChange` alone; there is no user gesture here
-   *  for a veto to refuse. */
+   *  reaches a mutation and throws. A replace names one id in both `removed` and `added`. Its row is
+   *  a different entity now, so its old selection drops too. A plugin row does the same: it does not
+   *  carry over either. Announces `selectionChange` alone; there is no user gesture here for a veto
+   *  to refuse. */
   forgetEntriesTheDatasetDropped(changeSet: ChangeSet): void {
     if (this.#entries.length === 0) return;
     const dropped = new Set(changeSet.removed.map(({ entity }) => entity.id));

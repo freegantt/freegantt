@@ -76,10 +76,13 @@ export function diffEdit(
  * Folds a transaction's raw contributions into the changeset it will commit, or `undefined` when the
  * net effect is empty (D-S2-24 step 6 stops here; no store write, no event).
  *
- * An `add` and a `remove` of the same id inside one transaction cancel — the changeset describes the
- * transaction's net effect, not its intermediate steps, which is what makes undo exact and a sync
- * adapter idempotent. A cancelled id's field updates are dropped too, a plugin row's included:
- * nothing about an entity that never persisted belongs in the changeset.
+ * `added` and `removed` already carry the write set's own net effect (`EntryStore.stageAdd`,
+ * `stageRemove`), not its intermediate steps: an id added and removed inside one transaction, with no
+ * row this store held before it opened, is absent from both by the time it reaches here — nothing
+ * about an entity that never persisted belongs in the changeset. An id this store held before the
+ * transaction, removed and then re-added, is a replace, and shows up in both lists on purpose — undo
+ * needs the old row back, not its absence, so this function does not treat that overlap as a cancel.
+ * It only asks whether anything survived the write set's own fold.
  *
  * `updated` holds both row kinds (D-S5-24), so a transaction whose only write is a plugin-store row
  * is not empty and does commit (#156).
@@ -91,18 +94,8 @@ export function foldChangeSet(
   removed: readonly EntityRemoved[],
   updated: readonly UpdatedRow[],
 ): ChangeSet | undefined {
-  const addedIds = new Set(added.map((entry) => entry.entity.id));
-  const removedIds = new Set(removed.map((entry) => entry.entity.id));
-  const cancelled = new Set([...addedIds].filter((entryId) => removedIds.has(entryId)));
-
-  const foldedAdded = cancelled.size === 0 ? added : added.filter((entry) => !cancelled.has(entry.entity.id));
-  const foldedRemoved =
-    cancelled.size === 0 ? removed : removed.filter((entry) => !cancelled.has(entry.entity.id));
-  const foldedUpdated = cancelled.size === 0 ? updated : updated.filter((entry) => !cancelled.has(entry.id));
-
-  if (foldedAdded.length === 0 && foldedRemoved.length === 0 && foldedUpdated.length === 0) return undefined;
-
-  return { id, origin, added: foldedAdded, removed: foldedRemoved, updated: foldedUpdated };
+  if (added.length === 0 && removed.length === 0 && updated.length === 0) return undefined;
+  return { id, origin, added, removed, updated };
 }
 
 /**

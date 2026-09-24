@@ -934,7 +934,7 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
     expect(state.entries.get('t1')!.read('touched')).toBe(true);
   });
 
-  it('a remove then a re-add of the same id, in one transaction, folds to a plain in-place replace — the changeset carries no removed row for that id, and add() places the re-added row at the end of its group', () => {
+  it('a remove then a re-add of the same id, in one transaction, records both rows — the id was committed before the transaction, so its old values do not vanish from the changeset', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
     const seen = changeSets(state);
 
@@ -945,17 +945,25 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
 
     expect(seen).toHaveLength(1);
     const changeSet = seen[0]!;
-    // L1's worry, pinned: a fold like this must not be how `load` removes-and-re-adds a kept id,
-    // because the id never appears in `removed` here — it is not a clean remove-then-add pair.
-    expect(changeSet.removed.map((row) => row.entity.id)).not.toContain(entryId('b'));
+    // L1's worry stays true of `load`, which builds its own ChangeSet rather than lean on this
+    // fold (Q1) — but an ordinary transaction is not `load`: the id existed before this transaction
+    // opened, so both its old row and its new one belong in the changeset undo needs to invert.
+    expect(changeSet.removed.map((row) => row.entity.id)).toEqual([entryId('b')]);
+    expect(changeSet.removed[0]!.entity.name).toBe('b');
     expect(changeSet.added.map((row) => row.entity.id)).toEqual([entryId('b')]);
     expect(changeSet.added[0]!.entity.name).toBe('New B');
 
     // `add()` without an index takes the group's own count at add time — still the committed
     // count of three, mid-transaction (ADR 0034's documented stale read) — so the re-added row
-    // lands after 'c', not back in its old slot. `load` must build its own ChangeSet rather than
-    // lean on this fold, or a kept id would keep its old list position instead of the input list's
-    // position (Q1).
+    // lands after 'c', not back in its old slot.
+    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
+    expect(state.entries.get('b')!.name).toBe('New B');
+
+    state.undo();
+    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('b'), entryId('c')]);
+    expect(state.entries.get('b')!.name).toBe('b');
+
+    state.redo();
     expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
     expect(state.entries.get('b')!.name).toBe('New B');
   });
