@@ -903,7 +903,7 @@ export class PluginSetupError extends FreeGanttError {
     this.pluginId = pluginId;
   }
 
-  /** ADR 0019, `Q4`: a plugin with a `data` half, or a Dataset-only member (`fields`, `fieldTypes`,
+  /** ADR 0019: a plugin with a `data` half, or a Dataset-only member (`fields`, `fieldTypes`,
    *  `aggregators`, `hierarchySource`), was handed to a `Gantt`. It arrived too late to declare a
    *  Field, so it fails loudly and says where it goes instead. Same error, same `code` — a misplaced
    *  plugin is a setup that did not happen, and it needs no type of its own.

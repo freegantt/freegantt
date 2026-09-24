@@ -62,7 +62,7 @@ Construction never threw on a broken batch. `load` does: a duplicate id (`Duplic
 
 `DatasetState` still builds `History` last, in its own constructor — ahead of every `change` handler a plugin's `data()` adds, so it is always the first subscriber, the same rule an ordinary consumer handler already keeps. A write inside `data()` is an ordinary write on a finished `Dataset`: its own transaction, `change` fired to the handlers that exist, recorded by `History` like any other write.
 
-**After the last plugin's `data()` returns, `Dataset` clears History.** `canUndo` reads `false` right after `new Dataset()` — a plugin's setup seed is not an undo step (#137 F17), the same rule `load` already keeps. The alternative — leaving setup writes undoable — was rejected: `Ctrl+Z` at app start would undo a plugin's own seed, which reads as the app breaking on the first keystroke.
+**After the last plugin's `data()` returns, `Dataset` clears History.** `canUndo` reads `false` right after `new Dataset()` — a plugin's setup seed is not an undo step (#137: a setup seed is not an undo step), the same rule `load` already keeps. The alternative — leaving setup writes undoable — was rejected: `Ctrl+Z` at app start would undo a plugin's own seed, which reads as the app breaking on the first keystroke.
 
 A setup write inside one plugin's `data()` sees only the plugins that ran `data()` before it, in setup order — the same order everything else in this record follows.
 
