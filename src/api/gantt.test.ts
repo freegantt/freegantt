@@ -1760,6 +1760,90 @@ describe('a throwing view() tears the shell down (ADR 0032)', () => {
   });
 });
 
+describe('the ⚠️ consequences ADR 0032 records', () => {
+  it("theme: 'auto' resolves against the OS inside view(), not against the light default", () => {
+    const matchesDark = {
+      matches: true,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+    vi.stubGlobal('matchMedia', () => matchesDark);
+    try {
+      const container = document.createElement('div');
+      let seenInView: string | undefined;
+      const gantt = new Gantt({
+        container,
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        theme: 'auto',
+        plugins: [
+          {
+            id: 'demo.readsAutoTheme',
+            view(ctx) {
+              seenInView = ctx.gantt.resolvedTheme;
+            },
+          },
+        ],
+      });
+
+      // Before ADR 0032, view() ran ahead of the shell's own option application, so this answered
+      // the class default ('light') instead of the OS's own dark-scheme match.
+      expect(seenInView).toBe('dark');
+
+      gantt.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('ctx.gantt.plugins reads [] during view(), even for the plugin whose own view() is running', () => {
+    const container = document.createElement('div');
+    let seenInView: readonly unknown[] | undefined;
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      plugins: [
+        {
+          id: 'demo.readsPluginsDuringView',
+          view(ctx) {
+            seenInView = ctx.gantt.plugins;
+          },
+        },
+      ],
+    });
+
+    expect(seenInView).toEqual([]);
+    expect(gantt.plugins.map((plugin) => plugin.id)).toEqual(['demo.readsPluginsDuringView']);
+
+    gantt.destroy();
+  });
+
+  it('a Dataset write inside view() becomes an undo step, not a silent seed', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries.slice(0, 1), timeZone: 'UTC' });
+    const entryId = sampleEntries[0]!.id;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      plugins: [
+        {
+          id: 'demo.writesDatasetInView',
+          view() {
+            dataset.entries.update(entryId, { name: 'written in view()' });
+          },
+        },
+      ],
+    });
+
+    expect(dataset.entries.get(entryId)?.name).toBe('written in view()');
+    expect(dataset.canUndo).toBe(true);
+
+    dataset.undo();
+    expect(dataset.entries.get(entryId)?.name).toBe(sampleEntries[0]!.name);
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   it('beforeGridWidthChange returning false vetoes the change: gridWidth stays put', () => {
     const container = document.createElement('div');

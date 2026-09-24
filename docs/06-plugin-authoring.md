@@ -50,6 +50,9 @@ plugin with a `data` half does not typecheck into `GanttOptions.plugins`.
   not a Gantt event — it fires the Dataset's own `change` and becomes an
   undo step, and the Gantt must never clear a shared Dataset's History on its
   own construction.
+- `ctx.gantt.plugins` reads `[]` during `view()`, at construction and on a
+  later `installPlugin` alike — the install commits only once every plugin's
+  `view()` has returned.
 
 ## The smallest working chrome plugin
 
