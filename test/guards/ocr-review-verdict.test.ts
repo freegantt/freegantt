@@ -13,6 +13,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   describeChildOutcome,
+  endedWithoutCoverage,
   findOwnSession,
   formatFinding,
   findingTitle,
@@ -33,7 +34,6 @@ const session = (
     selectedFiles: number;
     completedFiles: number;
     failedFiles: number;
-    totalComments: number;
     terminalState: string;
     failedFilePaths: readonly string[];
   }> = {},
@@ -45,7 +45,6 @@ const session = (
   selectedFiles: parts.selectedFiles ?? 5,
   completedFiles: parts.completedFiles ?? 5,
   failedFiles: parts.failedFiles ?? 0,
-  totalComments: parts.totalComments ?? 0,
   terminalState: parts.terminalState ?? 'complete',
   failedFilePaths: parts.failedFilePaths ?? [],
 });
@@ -57,7 +56,6 @@ const comment = (
     startLine: number;
     endLine: number;
     severity: string;
-    category: string;
   }> = {},
 ) => ({
   path: parts.path ?? 'src/data/entry-store.ts',
@@ -65,7 +63,6 @@ const comment = (
   startLine: parts.startLine ?? 42,
   endLine: parts.endLine ?? 42,
   severity: parts.severity ?? 'medium',
-  category: parts.category ?? 'bug',
 });
 
 describe('ocr-review picks the session this run just opened', () => {
@@ -99,6 +96,16 @@ describe('ocr-review picks the session this run just opened', () => {
     expect(
       findOwnSession([newer, older], { repoDir: REPO, notBefore: '2026-09-24T20:00:00Z' })?.sessionId,
     ).toBe('newer');
+  });
+
+  it('picks the newest by real time even when ocr trims trailing zeros unevenly', () => {
+    // Go's RFC3339Nano marshalling trims trailing zeros: 120ms becomes ".12Z", 100ms becomes ".1Z".
+    // A raw string compare puts ".1Z" after ".12Z" (its 'Z' outsorts '2'), the wrong way round.
+    const earlier = session({ sessionId: 'earlier', startTime: '2026-09-24T20:00:00.1Z' });
+    const later = session({ sessionId: 'later', startTime: '2026-09-24T20:00:00.12Z' });
+    expect(
+      findOwnSession([earlier, later], { repoDir: REPO, notBefore: '2026-09-24T20:00:00Z' })?.sessionId,
+    ).toBe('later');
   });
 });
 
@@ -153,6 +160,21 @@ describe('ocr-review formats one line per finding', () => {
     const title = findingTitle(long);
     expect(title.length).toBeLessThanOrEqual(120);
     expect(title.endsWith('…')).toBe(true);
+  });
+});
+
+describe('ocr-review tells a real PASS apart from a session with no coverage report', () => {
+  it('is false for a session that finished normally', () => {
+    expect(endedWithoutCoverage(session({ terminalState: 'complete' }))).toBe(false);
+  });
+
+  it('is false for a session that wrote a manifest naming failed files', () => {
+    expect(endedWithoutCoverage(session({ terminalState: 'partial' }))).toBe(false);
+  });
+
+  it('is true when ocr never wrote a run manifest at all — a crash or a kill, not a PASS', () => {
+    const { terminalState: _terminalState, ...crashed } = session();
+    expect(endedWithoutCoverage(crashed)).toBe(true);
   });
 });
 

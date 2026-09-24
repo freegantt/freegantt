@@ -14,7 +14,6 @@ export interface SessionRecord {
   selectedFiles: number;
   completedFiles: number;
   failedFiles: number;
-  totalComments: number;
   terminalState?: string;
   failedFilePaths: readonly string[];
 }
@@ -26,7 +25,6 @@ export interface ReviewComment {
   startLine: number;
   endLine: number;
   severity: string;
-  category: string;
 }
 
 /** Which repo's session to claim, and how far back it may have started. */
@@ -62,6 +60,10 @@ export function formatFinding(comment: ReviewComment): string;
 
 /** The first sentence of a finding's body, short enough to stand in for a title. */
 export function findingTitle(content: string): string;
+
+/** True when a session ended without `ocr` ever writing a run manifest for it — the process crashed
+ *  or was killed before it produced a coverage report. */
+export function endedWithoutCoverage(session: SessionRecord): boolean;
 
 /** PASS when every file finished; PARTIAL, with the failed paths, when any file did not. */
 export function verdictForSession(session: SessionRecord, context: { resumeCommand: string }): SessionVerdict;

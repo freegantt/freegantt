@@ -43,13 +43,19 @@ const UNSET_END_TIME = '0001-01-01T00:00:00Z';
 
 export const EXIT_CODE = { pass: 0, partial: 1, stalled: 2, failed: 3 };
 
-/** The newest session for `repoDir` that started at or after `notBefore` — the run this script just launched. */
+/** The newest session for `repoDir` that started at or after `notBefore` — the run this script just
+ *  launched. Compares parsed instants, not the raw strings: `notBefore` always carries millisecond
+ *  digits (`toISOString()`), but `ocr`'s Go backend marshals RFC3339Nano and trims trailing zeros
+ *  from the fraction, so e.g. `.1Z` and `.120Z` sort the wrong way as strings even though `.120Z` is
+ *  later. */
 export function findOwnSession(sessions, { repoDir, notBefore }) {
+  const notBeforeMs = Date.parse(notBefore);
   let newest;
   for (const session of sessions) {
     if (session.repoDir !== repoDir) continue;
-    if (session.startTime < notBefore) continue;
-    if (newest === undefined || session.startTime > newest.startTime) newest = session;
+    if (Date.parse(session.startTime) < notBeforeMs) continue;
+    if (newest === undefined || Date.parse(session.startTime) > Date.parse(newest.startTime))
+      newest = session;
   }
   return newest;
 }
@@ -89,6 +95,14 @@ export function formatFinding(comment) {
   return `${location} [${comment.severity}] ${findingTitle(comment.content)}`;
 }
 
+/** True when a session ended without `ocr` ever writing a run manifest for it — the process crashed
+ *  or was killed before it produced a coverage report. Without this check that case reads exactly
+ *  like a clean PASS: `failedFilePaths` defaults to `[]` because there is no manifest to read it
+ *  from. */
+export function endedWithoutCoverage(session) {
+  return session.terminalState === undefined;
+}
+
 /** PASS when every file finished; PARTIAL, with the failed paths, when any file did not. */
 export function verdictForSession(session, context) {
   if (session.failedFilePaths.length === 0) {
@@ -114,7 +128,6 @@ function normalizeSession(raw) {
     selectedFiles: raw.selected_files ?? 0,
     completedFiles: raw.completed_files ?? 0,
     failedFiles: raw.failed_files ?? 0,
-    totalComments: raw.total_comments ?? 0,
     terminalState: raw.run_manifest?.terminal_state,
     failedFilePaths: (raw.run_manifest?.coverage?.failed ?? []).map((item) => item.path),
   };
@@ -127,7 +140,6 @@ function normalizeComment(raw) {
     startLine: raw.start_line,
     endLine: raw.end_line,
     severity: raw.severity,
-    category: raw.category,
   };
 }
 
@@ -289,6 +301,12 @@ async function main() {
       `\nocr-review FAILED — ocr exited with ${describeChildOutcome(childOutcome)}. Raw ocr output: ${logPath}`,
     );
     process.exit(EXIT_CODE.failed);
+  }
+
+  if (endedWithoutCoverage(latest)) {
+    stop(
+      `session ${latest.sessionId} ended with no coverage report — ocr likely crashed or was killed before it wrote one. Raw ocr output: ${logPath}`,
+    );
   }
 
   const resumeCommand = `pnpm ocr-review --resume ${latest.sessionId}`;
