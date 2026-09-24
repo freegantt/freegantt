@@ -46,7 +46,7 @@ frontmatter.
 | [0032](0032-a-gantt-plugins-code-runs-before-the-first-frame.md) | A Gantt plugin's code runs before the first frame | accepted | A finished Gantt is built and configured before any plugin's `view(ctx)` runs; `Gantt` assigns `#shell`, installs plugins, then paints frame 1; `#constructed` flips last so a `view()`-time Gantt write stays silent |
 | [0033](0033-an-api-field-takes-no-gesture.md) | An `'api'` Field takes no gesture | accepted | `canWrite` refuses `'api'`/`'never'`/a derived cell before the consumer or the variant rule; neither can widen it, only a per-entry lock rule can |
 | [0034](0034-sibling-order-is-a-field.md) | Sibling order is a Field | accepted | `siblingIndex` is an ordinary core Field; a write that moves an entry renumbers its sibling group once, at commit, so one move is one undo step, and `entries.all` reads depth-first tree order by it |
-| [0035](0035-sync-writes-like-load-and-records-one-undo-step.md) | Sync writes like load, and records one undo step | accepted — verdict pending (this build) | `entries.sync()` writes through `load`'s door, not `entries.update()`'s: a `'never'` lock does not refuse it, a derived parent cell re-rolls, no `EditExtender` runs, and unlike `load` it records one undo step and erases Redo |
+| [0035](0035-sync-writes-like-load-and-records-one-undo-step.md) | Sync writes like load, and records one undo step | accepted | `entries.sync()` writes through `load`'s door, not `entries.update()`'s: a `'never'` lock does not refuse it, a derived parent cell re-rolls, no `EditExtender` runs, and unlike `load` it records one undo step and erases Redo |
 
 ## The gap at 0014
 
