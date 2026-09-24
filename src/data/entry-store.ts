@@ -57,6 +57,7 @@ import {
   raiseErrorOn,
 } from './error-reporting.js';
 import {
+  applyFieldRow,
   createFieldAccess,
   measureEntryDuration,
   mergeProposedEdits,
@@ -64,7 +65,6 @@ import {
   readField,
   readingChildrenFrom,
   readingParentFrom,
-  writeOntoEntry,
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import { LiveEntries, unknownFieldError } from './live-entry.js';
@@ -81,24 +81,6 @@ import {
   resolveWriteTarget,
 } from './write-rule.js';
 import type { FieldLockQuery } from '../model/index.js';
-
-/** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
- *  an undo of an optional field's first edit must return the Entry to not having the key at all
- *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
- *  having the key with value `undefined`. Declared Fields write through `writeOntoEntry`. */
-function applyFieldRow(
-  current: StoredEntry,
-  field: FieldKey,
-  value: unknown,
-  registry: FieldRegistry,
-): StoredEntry {
-  const declared = registry.get(field);
-  if (declared) return writeOntoEntry(current, declared, value);
-  const next: Record<string, unknown> = { ...current };
-  if (value === undefined) delete next[field];
-  else next[field] = value;
-  return next as unknown as StoredEntry;
-}
 
 /** One field an edit names, and the Field `#assertFieldTakesThisWrite` resolved it to — carried
  *  forward so `#assertNoDerivedWrite` reads the same declaration instead of resolving it again. */

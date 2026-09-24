@@ -81,7 +81,9 @@ dataset.on('change', () => {
 `updated` also carries plugin-store rows (`store: 'plugin:…'`, whole-value, no `field` key).
 `fieldRowsOf(changeSet)` filters to Field rows. `dataset.replay(changeSet)` is the write path
 the built-in undo/redo use, published so a consumer can write their own History against
-`on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` alone.
+`on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` alone. `replay` writes each row
+onto the store's current value, not the recorded one — a row a sync has already settled since
+the step was recorded writes nothing for it, and the rest of the changeset still lands.
 
 ## Hierarchy and rows
 

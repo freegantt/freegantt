@@ -59,7 +59,7 @@ Sync writes through the door `load` uses, not through `entries.update()`. So:
    - An added row whose id already exists (the server re-sent it since) is skipped: the server's
      copy stays, and raises no report.
    - Undo of an add also removes the children the server put under that entry since, the same as
-     `remove()` — a re-added entity never keeps a child it never had while it was gone.
+     `remove()` — so no entry is left with a parentId that names a removed id.
    - The tree stays sound: a replayed `parentId` that would close a loop, or that names an id
      absent after the replay, is dropped rather than stored; a re-added entry whose old parent is
      gone lands as a root instead.
