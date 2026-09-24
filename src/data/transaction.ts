@@ -179,11 +179,14 @@ export function applyConstructionRollUp(data: TransactionData): void {
 /**
  * The Rollup, run once against a batch of entries that is not (yet) the store's own committed rows
  * — construction's own shape (no `pending`, `committedChildIds` unread whenever `pending` is
- * `undefined`), open to a second caller. `entries.load()` (#496) is that caller: it replaces every
+ * `undefined`), open to more than one caller. `entries.load()` (#496) is one: it replaces every
  * entry, so it must roll up the input batch's own checked parents, never the store's.
+ * `changesToReplay` (`replay-changes.ts`, #517) is the other: undo and redo re-roll the working batch
+ * they are about to commit, the same construction shape, so a plain undo never demotes a parent that
+ * just lost its last child.
  *
  * `rollUpFields` itself stays a leaf only this file and the commit path may import
- * (`rollup-is-removable`, D-S4-7) — this is `entry-store.ts`'s one door onto it for `load`.
+ * (`rollup-is-removable`, D-S4-7) — this is `entry-store.ts`'s one door onto it for `load` and replay.
  */
 export function rollUpFreshBatch(
   data: Pick<TransactionData, 'fields' | 'fieldAccess'>,
