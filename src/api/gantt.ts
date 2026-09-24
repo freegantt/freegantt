@@ -279,7 +279,7 @@ export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttSca
  *  never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A library
  *  refuses in both languages it is read in.
  *
- *  `data` is optional (D7), so a fields-only plugin has no `data` to catch. Each Dataset-only member
+ *  `data` is optional now, so a fields-only plugin has no `data` to catch. Each Dataset-only member
  *  gets its own check.
  *
  *  It raises `PluginSetupError`, the error a failed install already raises. No new type ships, and

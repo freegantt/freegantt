@@ -97,7 +97,7 @@ export interface DatasetStateOptions {
    *  an undeclared key, and late enough that `installPlugins` (called after, once `entries` exists)
    *  still runs every plugin's `data()` before the construction Rollup, same as before. */
   pluginFieldDeclarations?: readonly FieldDeclarationSource[];
-  /** Every installed plugin's declared `hierarchySource`, in setup order (D-S5-31, ADR 0031) —
+  /** Every installed plugin's declared `hierarchySource`, in setup order (ADR 0031) —
    *  `api/dataset.ts` builds this with `resolveSetupOrder`, same as `pluginFieldDeclarations`. Folded
    *  onto `storedParentSource` right here, before `entries` is built: the first wrapper wraps core's
    *  own source, a later one wraps the one before it, and the last one answers first — the same order
@@ -214,7 +214,7 @@ export class DatasetState implements Dataset {
     };
     const read = toEntries(options.entries, this.#entryContext, this.fields, 'new Dataset');
     assertEntryBatchIsSound(read, 'new Dataset');
-    // Folded onto core's own source, in setup order (D-S5-31, ADR 0031): the first wrapper wraps
+    // Folded onto core's own source, in setup order (ADR 0031): the first wrapper wraps
     // `storedParentSource`, a later one wraps the one before it, and the last one answers first.
     const hierarchySource = (options.hierarchySourceWrappers ?? []).reduce<HierarchySource>(
       (source, wrap) => wrap(source),

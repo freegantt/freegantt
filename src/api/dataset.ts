@@ -126,7 +126,7 @@ function pluginFieldDeclarationsOf(
 }
 
 /** Every installed plugin's declared `hierarchySource`, in setup order (`resolveSetupOrder`,
- *  D-S5-31, ADR 0031) — `DatasetState`'s constructor folds these onto `storedParentSource` before
+ *  ADR 0031) — `DatasetState`'s constructor folds these onto `storedParentSource` before
  *  `entries` is built. Setup order, not install order: `[b, a]` with `b.requires = ['a']` folds `a`
  *  first, the same order `data()` runs its own registrations in.
  *

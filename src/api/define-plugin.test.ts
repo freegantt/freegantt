@@ -190,7 +190,7 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
     expect(() => mount(dataset, [clash])).toThrow(DuplicatePluginIdError);
   });
 
-  it('a fields-only plugin compiles with no data() (D7), and installs on the Dataset alone', () => {
+  it('a fields-only plugin compiles with no data(), and installs on the Dataset alone', () => {
     const fieldsOnly = () => definePlugin({ id: 'demo.fieldsOnly', fields: [{ key: 'owner' }] });
     const dataset = newDataset([fieldsOnly()]);
     expect(dataset.field('owner')).toBeDefined();
@@ -201,7 +201,7 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
         new Gantt({
           dataset: newDataset(),
           container,
-          // @ts-expect-error D7: `data` is optional, but `fields` alone still refuses this install
+          // @ts-expect-error `data` is optional, but `fields` alone still refuses this install
           // site — a Field must exist before the first Rollup, and a Gantt mounts after that.
           plugins: [fieldsOnly()],
         }),
