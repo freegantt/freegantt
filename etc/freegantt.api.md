@@ -165,7 +165,12 @@ export type ChromePlugin<TProps = unknown> = ChromePluginOf<PluginContext<TProps
 // @public
 export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
     // (undocumented)
+    aggregators?: never;
+    // (undocumented)
     data?: never;
+    fields?: never;
+    // (undocumented)
+    fieldTypes?: never;
     view(ctx: TViewContext): Disposer | void;
 }
 
@@ -598,7 +603,7 @@ export interface DomTarget {
 
 // @public
 export class DuplicateEntryIdError extends FreeGanttError {
-    constructor(entryId: EntryId, operation: string);
+    constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list');
     // (undocumented)
     readonly entryId: EntryId;
     // (undocumented)
