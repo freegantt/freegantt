@@ -14,15 +14,20 @@ type SimpleOp =
   | { kind: 'remove'; id: string }
   // S3.3, [S3-A6]: a gesture commit writes {start, end} together in one `update()` call per row —
   // distinct from 'update-start'/'update-end' above, which each touch one field alone.
-  | { kind: 'move'; id: string; deltaMs: number };
+  | { kind: 'move'; id: string; deltaMs: number }
+  // A parentId write, root included (`parentId: undefined`). One that would close a raw loop is
+  // refused (ParentCycleError) and caught below like any other op the store rejects — a no-op, not
+  // a crash. 'p' sits in IDS so this op, and 'remove', can both reach a parent with children.
+  | { kind: 'reparent'; id: string; parentId: string | undefined };
 
 type Op = SimpleOp | { kind: 'transaction'; ops: SimpleOp[] };
 
-const IDS = ['a', 'b', 'c', 'd', 'e', 'n1', 'n2', 'n3'] as const;
+const IDS = ['a', 'b', 'c', 'd', 'e', 'n1', 'n2', 'n3', 'p'] as const;
 const NEW_IDS = ['n1', 'n2', 'n3'] as const;
 
 const idArb = fc.constantFrom(...IDS);
 const newIdArb = fc.constantFrom(...NEW_IDS);
+const parentIdArb = fc.oneof(idArb, fc.constant(undefined));
 const nameArb = fc.string({ maxLength: 24 });
 const msArb = fc.integer({ min: 0, max: 8_000_000 });
 const spanArb = msArb.chain((start) =>
@@ -48,6 +53,7 @@ const simpleOpArb: fc.Arbitrary<SimpleOp> = fc.oneof(
     id: idArb,
     deltaMs: fc.integer({ min: -2_000_000, max: 2_000_000 }),
   }),
+  fc.record({ kind: fc.constant('reparent' as const), id: idArb, parentId: parentIdArb }),
 );
 
 const opArb: fc.Arbitrary<Op> = fc.oneof(
@@ -99,6 +105,9 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
         });
         return;
       }
+      case 'reparent':
+        state.entries.update(op.id, { parentId: op.parentId });
+        return;
     }
   } catch {
     // Duplicate ids, missing ids, and invalid field combinations are not the property — skip them.
