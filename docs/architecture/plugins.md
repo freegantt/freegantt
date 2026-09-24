@@ -23,8 +23,8 @@ Dataset then runs its `view` half once, each with its own context.
 | Question | `view` half | `data` half |
 | --- | --- | --- |
 | Installed through | `DatasetOptions.plugins`, or — chrome-only — `GanttOptions.plugins`, `gantt.installPlugin`, `gantt.plugins =` | `DatasetOptions.plugins` — read-only after construction |
-| When it runs | Once, after the Gantt mounts | Once, while the Dataset constructs |
-| Can it be added or removed later? | A chrome-only plugin, yes — `installPlugin`/`uninstallPlugin`, live, no remount | No — a Field a plugin declares must exist before the first Rollup, so a different plugin set means a new `Dataset` |
+| When it runs | Once, after the Gantt mounts | Once, on the finished Dataset |
+| Can it be added or removed later? | A chrome-only plugin, yes — `installPlugin`/`uninstallPlugin`, live, no remount | No — a data half declares what shapes the Dataset's own construction, and a Dataset installs its plugins once, so a different plugin set means a new `Dataset` |
 | What it registers into | Renderers, decorations, variants, grid columns, commands, keybindings (§3 table) | Fields, field types, aggregators, the mutation extension hook, its own store |
 | Runtime that installs it | `PluginRuntime<TContext>` | `installDatasetPlugins()` |
 
@@ -353,8 +353,9 @@ still tears down cleanly on `uninstallPlugin`.
 ## A Dataset plugin installs once
 
 `installDatasetPlugins` runs while the `Dataset` constructs, never again. There is no diff to
-compute, because `Dataset.plugins` is read-only — a plugin may declare a Field, and a Field must
-exist before the first Rollup, so a different plugin set is a different Dataset. What it does
+compute, because `Dataset.plugins` is read-only — a data half declares what shapes the Dataset's own
+construction, and a Dataset installs its plugins once, so a different plugin set is a different
+Dataset. What it does
 compute is *order*: `requires` resolves into a setup sequence through a depth-first visit, the same
 shape a topological sort always takes.
 
