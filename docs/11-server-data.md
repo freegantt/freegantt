@@ -75,6 +75,11 @@ step in the same call, so one click always lands a step when any undoable one re
 - **The children a sync added since.** Undoing an `add` step removes the whole entry, the same way
   `entries.remove()` does. Any child the sync placed under it since goes with it.
 
+When every remaining step is skipped this way, the `undo()` or `redo()` call writes nothing and
+fires no `change`. `canUndo`/`canRedo` still flip, but with no event to announce it. Read
+`canUndo`/`canRedo` again after your own `undo()`/`redo()` call returns, rather than waiting on
+`change`, if a toolbar must stay correct through that case.
+
 ## No parent loop, no dangling parent, ever
 
 An undo or a redo never leaves a parent cycle or a reference to a removed id. This holds even when a

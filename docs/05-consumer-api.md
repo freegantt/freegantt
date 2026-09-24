@@ -79,6 +79,12 @@ dataset.on('change', () => {
 });
 ```
 
+After a sync, one `undo()` or `redo()` click can find that every remaining step has nothing left
+to write. It then forgets those steps, writes nothing, and fires no `change`. `canUndo` and
+`canRedo` still change, but with no event to catch it. Read `canUndo`/`canRedo` again after your
+own `undo()`/`redo()` call returns, rather than waiting for `change`, if the toolbar must stay
+correct through that case.
+
 `updated` also carries plugin-store rows (`store: 'plugin:…'`, whole-value, no `field` key).
 `fieldRowsOf(changeSet)` filters to Field rows.
 
