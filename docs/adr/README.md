@@ -44,6 +44,7 @@ frontmatter.
 | [0030](0030-a-multi-hour-tick-counts-real-time-on-a-dst-day.md) | A multi-hour tick counts real time on a DST day | accepted | On a DST day a tick with increment > 1 keeps equal real spacing from its day start (00/07/13/19), not wall-clock multiples |
 | [0031](0031-a-plugin-declares-its-shape-its-code-runs-on-a-finished-object.md) | A plugin declares its shape; its code runs on a finished object | accepted | A plugin declares `fields`/`fieldTypes`/`aggregators`/`hierarchySource` on its definition; `data(ctx)` runs only after the `Dataset` is built; construction checks the batch like `load` |
 | [0033](0033-an-api-field-takes-no-gesture.md) | An `'api'` Field takes no gesture | accepted | `canWrite` refuses `'api'`/`'never'`/a derived cell before the consumer or the variant rule; neither can widen it, only a per-entry lock rule can |
+| [0034](0034-sibling-order-is-a-field.md) | Sibling order is a Field | accepted | `siblingIndex` is an ordinary core Field; a write that moves an entry renumbers its sibling group once, at commit, so one move is one undo step, and `entries.all` reads depth-first tree order by it |
 
 ## The gap at 0014
 
