@@ -235,7 +235,7 @@ describe('composing three extenders that write one Entry (#238)', () => {
       .filter((row) => row.id === target)
       .map((row) => row.field)
       .sort();
-    expect(onTarget).toEqual(['name', 'parentId', 'tag']);
+    expect(onTarget).toEqual(['name', 'parentId', 'siblingIndex', 'tag']);
   });
 });
 

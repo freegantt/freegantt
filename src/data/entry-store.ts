@@ -169,13 +169,6 @@ export class EntryStore implements EntryStoreContract {
   #live: LiveEntries;
   #access: FieldAccess;
   #writeSet: WriteSet | null = null;
-  /** Insertion index of an Entry object at the moment it was removed, so an undo/redo that adds it
-   *  back can put it in the same place in `all` (D-S2-3). Keyed by object identity, not `EntryId`:
-   *  `history.ts#invert` reuses the exact `Entry` reference between a removal and its paired
-   *  restoration, so this survives an unrelated `'user'` re-add of the same id in between — an
-   *  id-keyed map would let that second object's index clobber the first's (undo-all then restores
-   *  the wrong insertion order). A `'user'` add is always a fresh object, so it never collides here. */
-  #removedAtIndex = new Map<StoredEntry, number>();
   #context: EntryReadContext;
   readonly #runner: TransactionData | undefined;
   readonly #registry: FieldRegistry;
@@ -856,7 +849,6 @@ export class EntryStore implements EntryStoreContract {
    *  set's raw one. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
     if (changeSet) {
-      this.#rememberRemovedIndexes(changeSet);
       for (const { entity } of changeSet.removed) {
         this.#byId.delete(entity.id);
       }
@@ -880,55 +872,15 @@ export class EntryStore implements EntryStoreContract {
     }
   }
 
-  /** Records where each removed object sat, keyed by that exact object (D-S2-3). A `'user'` add of
-   *  the same id later is a new object and never reads this back — it just appends. */
-  #rememberRemovedIndexes(changeSet: ChangeSet): void {
-    if (changeSet.removed.length === 0) return;
-    // A `'load'` changeset removes every old entry, and `load`'s own added rows are freshly built
-    // objects (`toEntries` in `entries.load()`) that never match one of them by identity — and a
-    // `'load'` changeset clears History (`entries.load`'s own doc), so no undo/redo can hand one
-    // back either. Nothing would ever read these indexes back, so remembering them here would only
-    // pin every pre-load entry in this map for the store's whole lifetime (a repeated reload-from-
-    // server flow grows it unbounded).
-    if (changeSet.origin === 'load') return;
-    const indexById = new Map<EntryId, number>();
-    let index = 0;
-    for (const id of this.#byId.keys()) {
-      indexById.set(id, index);
-      index += 1;
-    }
-    for (const { entity } of changeSet.removed) {
-      const removedAt = indexById.get(entity.id);
-      if (removedAt !== undefined) this.#removedAtIndex.set(entity, removedAt);
-    }
-  }
-
   /** Adding `entity` back — a `'user'` re-add of an id the same transaction also removed, or an
    *  undo/redo restoring a removed one — replaces whatever object currently sits at `entity.id` in
-   *  `#byId`, if any. */
+   *  `#byId`, if any. `#byId`'s own key order no longer decides `all`'s order (ADR 0034): `#byParent`
+   *  groups and sorts by the sibling-order Field, so this needs no restored position, only the row
+   *  itself — the renumber pass already wrote every affected Field back onto this changeset. */
   #restoreAdded(changeSet: ChangeSet): void {
-    if (changeSet.added.length === 0) return;
-    if (changeSet.origin === 'user') {
-      for (const { entity } of changeSet.added) {
-        this.#byId.set(entity.id, entity);
-      }
-      return;
+    for (const { entity } of changeSet.added) {
+      this.#byId.set(entity.id, entity);
     }
-    const entries = Array.from(this.#byId.values());
-    const restored = [...changeSet.added].sort((a, b) => {
-      const aIndex = this.#removedAtIndex.get(a.entity) ?? Number.POSITIVE_INFINITY;
-      const bIndex = this.#removedAtIndex.get(b.entity) ?? Number.POSITIVE_INFINITY;
-      return aIndex - bIndex;
-    });
-    for (const { entity } of restored) {
-      const index = this.#removedAtIndex.get(entity);
-      if (index === undefined) entries.push(entity);
-      else {
-        entries.splice(Math.min(Math.max(index, 0), entries.length), 0, entity);
-        this.#removedAtIndex.delete(entity);
-      }
-    }
-    this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
   }
 
   #openWriteSet(): WriteSet {
