@@ -693,7 +693,8 @@ export class EntryStore implements EntryStoreContract {
    * target and the store's own committed rows to `changesToMatchBatch` — "the changes to match the
    * batch." A sync that changes nothing stops there: it commits no `ChangeSet`, so `entries.all`
    * keeps its identity and History is untouched (the common poll costs nothing). Otherwise it commits
-   * one `ChangeSet` with `origin: 'sync'`, recorded on the undo stack like a user edit.
+   * one `ChangeSet` with `origin: 'sync'` — History records no undo step for it and erases no Redo
+   * (`docs/11-server-data.md`).
    */
   sync(inputs: readonly FlatEntryInput[]): void {
     const { runner, byId, entries: read, rollupUpdated } = this.#readBatch(inputs, 'entries.sync');

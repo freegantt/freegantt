@@ -186,7 +186,8 @@ export function applyConstructionRollUp(data: TransactionData): void {
  * just lost its last child.
  *
  * `rollUpFields` itself stays a leaf only this file and the commit path may import
- * (`rollup-is-removable`, D-S4-7) — this is `entry-store.ts`'s one door onto it for `load` and replay.
+ * (`rollup-is-removable`, D-S4-7) — this is the one door onto it for `load` (`entry-store.ts`) and
+ * for replay (`replay-changes.ts`).
  */
 export function rollUpFreshBatch(
   data: Pick<TransactionData, 'fields' | 'fieldAccess'>,

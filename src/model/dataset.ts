@@ -88,11 +88,13 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  `dataset.transaction()`, `MutationDuringExtensionHookError` from the extension hook, and
    *  `MutationDuringNotificationError` from inside a `beforeChange` or `change` handler.
    *
-   *  Commits one `ChangeSet` with `origin: 'sync'`, recorded on the undo stack like a user edit and
-   *  erasing Redo. A sync that changes nothing commits nothing: no `beforeChange`, no `change`, and
-   *  no undo step — the common case for a server poll that finds nothing new. A local edit the
-   *  server has not seen is overwritten, last write wins; undoing the sync brings the local edit
-   *  back. */
+   *  Commits one `ChangeSet` with `origin: 'sync'`. Unlike a user edit, it records **no** undo step
+   *  and erases no Redo — the user's own earlier steps stay undoable across a poll. A sync that
+   *  changes nothing commits nothing: no `beforeChange`, no `change`, and no undo step — the common
+   *  case for a server poll that finds nothing new. A local edit the server has not seen is
+   *  overwritten, last write wins; undoing that edit later writes the value it had before the edit,
+   *  even though a sync changed it since, and redoing gives the server's value back (see
+   *  `docs/11-server-data.md`). */
   sync(inputs: readonly FlatEntryInput<TProps>[]): void;
 }
 

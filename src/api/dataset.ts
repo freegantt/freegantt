@@ -91,8 +91,8 @@ export interface DatasetOptions<TProps = unknown> {
    *  is. */
   measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
-   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). A frequent `entries.sync()` poll records a step the
-   * same as a user edit, so a consumer who polls often and wants more undo headroom raises this. */
+   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). `entries.sync()` records no step of its own
+   * (`docs/11-server-data.md`), so a frequent poll never eats into this headroom. */
   history?: { capacity?: number };
   /** The plugins this Dataset installs (D-S5-24, ADR 0019). An unordered set: installation resolves
    *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
@@ -341,12 +341,18 @@ export class Dataset<TProps = unknown> {
 
   /** Reverts the most recent undoable changeset (`plans/s2-data-core/s2.5-undo-redo.md` §1). A no-op
    *  when `canUndo` is `false`. What it did arrives on `on('change')`, like every other commit — a
-   *  refused undo throws `MutationCancelledError` and leaves the history exactly where it was. */
+   *  refused undo throws `MutationCancelledError` and leaves the history exactly where it was.
+   *
+   *  Writes onto the store's current values, not blind: a sync since this step was recorded is
+   *  overwritten, and a step left with nothing to write is skipped in favor of the one before it, in
+   *  this same call (`docs/11-server-data.md`). */
   undo(): void {
     this.#state.undo();
   }
 
-  /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. */
+  /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. Undoing this
+   *  redo writes back exactly what this call wrote — undo then redo is neutral, even across a sync
+   *  in between. */
   redo(): void {
     this.#state.redo();
   }
