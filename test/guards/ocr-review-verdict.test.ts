@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  describeChildOutcome,
   findOwnSession,
   formatFinding,
   findingTitle,
@@ -175,6 +176,20 @@ describe('ocr-review verdicts', () => {
     expect(verdict.line).toContain('ocr-review PARTIAL');
     expect(verdict.line).toContain('2 file(s) failed');
     expect(verdict.line).toContain('pnpm ocr-review --resume a1');
+  });
+});
+
+describe('ocr-review explains why the ocr child stopped', () => {
+  it('reports a spawn failure by its error message', () => {
+    expect(describeChildOutcome({ code: null, signal: null, error: new Error('ENOENT') })).toBe('ENOENT');
+  });
+
+  it('reports a signal when the child was killed', () => {
+    expect(describeChildOutcome({ code: null, signal: 'SIGTERM' })).toBe('signal SIGTERM');
+  });
+
+  it('reports the exit code when the child just ran and quit', () => {
+    expect(describeChildOutcome({ code: 1, signal: null })).toBe('exit code 1');
   });
 });
 
