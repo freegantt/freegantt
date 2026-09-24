@@ -7,7 +7,7 @@ import type { Instant } from './time.js';
 const instant = (value: number): Instant => value as Instant;
 
 function entry(dates: { start?: Instant; end?: Instant }): StoredEntry {
-  return { id: entryId('e1'), name: 'Design', props: {}, ...dates };
+  return { id: entryId('e1'), name: 'Design', props: {}, siblingIndex: 0, ...dates };
 }
 
 /** ADR 0012's span invariant, and the one place it is written (Q5). Before this, the rule was guard
@@ -58,6 +58,7 @@ describe('spansTime', () => {
       start: instant(1),
       end: instant(2),
       props: { team: 'A' },
+      siblingIndex: 0,
     };
     if (!spansTime(subject)) throw new Error('unreachable');
     expect(subject.props).toEqual({ team: 'A' });

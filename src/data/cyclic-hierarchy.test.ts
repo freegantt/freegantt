@@ -59,11 +59,17 @@ function writeTheLoop(state: DatasetState): void {
 /** `replay()` applies an already-complete `ChangeSet` unchecked (`data/replay.ts`) — construction's
  *  own batch check does not run again, so this is still the door a raw, already-looped or
  *  already-dangling `parentId` can reach a live store through. */
-function replayRawEntries(state: DatasetState, entries: readonly Omit<StoredEntry, 'props'>[]): void {
+function replayRawEntries(
+  state: DatasetState,
+  entries: readonly Omit<StoredEntry, 'props' | 'siblingIndex'>[],
+): void {
   const changeSet: ChangeSet = {
     id: changeSetId(1),
     origin: 'redo',
-    added: entries.map((entity) => ({ store: 'entries' as const, entity: { ...entity, props: {} } })),
+    added: entries.map((entity, index) => ({
+      store: 'entries' as const,
+      entity: { ...entity, props: {}, siblingIndex: index },
+    })),
     removed: [],
     updated: [],
   };

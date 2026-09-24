@@ -166,7 +166,7 @@ describe('EntrySelection.step (#212)', () => {
 
 describe('EntrySelection.forgetEntriesTheDatasetDropped (#212, finding 8)', () => {
   function storedEntry(id: EntryId): StoredEntry {
-    return { id, props: {} };
+    return { id, props: {}, siblingIndex: 0 };
   }
 
   function changeSetDropping(entryIds: readonly EntryId[]): ChangeSet {

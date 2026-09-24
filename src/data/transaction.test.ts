@@ -115,6 +115,7 @@ describe('runTransaction', () => {
       (token) => {
         state.entries.stageAdd(token, {
           id: entryId('t9'),
+          siblingIndex: 0,
           name: 't9',
           start: 0 as never,
           end: 1 as never,
@@ -142,6 +143,7 @@ describe('runTransaction', () => {
         state.entries.stageRemove(token, entryId('t1'));
         state.entries.stageAdd(token, {
           id: entryId('t1'),
+          siblingIndex: 0,
           name: 'reborn',
           start: 0 as never,
           end: 1 as never,
@@ -213,6 +215,7 @@ describe('runTransaction', () => {
         state.entries.stageAdd(token, {
           id: entryId('child'),
           parentId: entryId('root'),
+          siblingIndex: 0,
           name: 'child',
           start: 0 as never,
           end: 1 as never,
@@ -843,6 +846,7 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
         (token) =>
           state.entries.stageAdd(token, {
             id: entryId('t1'),
+            siblingIndex: 0,
             name: 't1',
             // The cascade below moves start to 2026-02-01, so the added entity's own end sits after
             // that or the move itself would be an inverted span the #143 ruling now refuses — not the

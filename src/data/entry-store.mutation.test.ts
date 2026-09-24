@@ -646,7 +646,7 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
     expect(state.entries.get('t1')!.read('touched')).toBe(true);
   });
 
-  it('a remove then a re-add of the same id, in one transaction, folds to a plain in-place replace — the changeset carries no removed row for that id, and the id keeps its old position in entries.all', () => {
+  it('a remove then a re-add of the same id, in one transaction, folds to a plain in-place replace — the changeset carries no removed row for that id, and add() places the re-added row at the end of its group', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
     const seen = changeSets(state);
 
@@ -663,10 +663,12 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
     expect(changeSet.added.map((row) => row.entity.id)).toEqual([entryId('b')]);
     expect(changeSet.added[0]!.entity.name).toBe('New B');
 
-    // The id keeps its original slot — the fold is an in-place value replace, not a move to the
-    // end of insertion order. `load` must build its own ChangeSet rather than lean on this fold,
-    // or a kept id would keep its old list position instead of the input list's position (Q1).
-    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('b'), entryId('c')]);
+    // `add()` without an index takes the group's own count at add time — still the committed
+    // count of three, mid-transaction (ADR 0034's documented stale read) — so the re-added row
+    // lands after 'c', not back in its old slot. `load` must build its own ChangeSet rather than
+    // lean on this fold, or a kept id would keep its old list position instead of the input list's
+    // position (Q1).
+    expect(state.entries.all.map((entry) => entry.id)).toEqual([entryId('a'), entryId('c'), entryId('b')]);
     expect(state.entries.get('b')!.name).toBe('New B');
   });
 });

@@ -56,6 +56,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
     });
     const entry = {
       id: 't1' as never,
+      siblingIndex: 0,
       name: 't1',
       start: 0 as never,
       end: 1 as never,
@@ -109,6 +110,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
     const context = ctx(registry);
     const entry = {
       id: 't1' as never,
+      siblingIndex: 0,
       name: 't1',
       start: 0 as never,
       end: 1 as never,

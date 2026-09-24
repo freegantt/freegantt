@@ -36,17 +36,17 @@ import type { EntryStore as EntryStoreContract } from '../model/index.js';
 import { computed, signal } from './reactivity.js';
 import type { ProposedEdit, ProposedEdits } from './edit-extension.js';
 import type { ChangeSet, FieldUpdated, UpdatedRow } from '../model/index.js';
-import { toEditReading, toEntries, toEntry } from './entry-reader.js';
+import { toEditReading, toEntry } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
+import type { UnplacedEntry } from './hierarchy-source.js';
 import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
+import { assertNoOpenTransaction, assertNoRunningExtensionHook, readEntryBatch } from './entry-batch.js';
 import {
-  assertEntryBatchIsSound,
-  assertNoOpenTransaction,
-  assertNoRunningExtensionHook,
-  listOrderOf,
-} from './entry-batch.js';
-import { buildDerivedValuesDroppedReport, raiseErrorOn } from './error-reporting.js';
+  buildDerivedValuesDroppedReport,
+  buildSiblingIndexDroppedReport,
+  raiseErrorOn,
+} from './error-reporting.js';
 import {
   createFieldAccess,
   measureEntryDuration,
@@ -206,30 +206,43 @@ export class EntryStore implements EntryStoreContract {
     });
     this.#runner = runner;
     this.#byId = new Map(entries.map((entry) => [entry.id, entry]));
-    // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
-    // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
-    this.#all = computed(() => {
-      this.#revision.get();
-      return Array.from(this.#byId.values());
-    });
-    this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
     this.#hierarchy = computed(() => {
       this.#revision.get();
       return checkHierarchyAnswers(this.#byId, this.#hierarchySource);
     });
     this.#byParent = computed(() => {
       // Core inverts the source's answer (ADR 0020). One parent per Entry goes in, so nothing can
-      // produce two parents for one row, and sibling order stays the order the rows are in.
+      // produce two parents for one row. Each group sorts by the Field (ADR 0034) — list position at
+      // ingest, an explicit write's own place after that — so this is sibling order, not insertion
+      // order.
       const parentById = this.committedParents();
       const byParent = new Map<EntryId | undefined, StoredEntry[]>();
-      for (const entry of this.#all()) {
+      for (const entry of this.#byId.values()) {
         const parentId = parentById.get(entry.id);
         const siblings = byParent.get(parentId);
         if (siblings) siblings.push(entry);
         else byParent.set(parentId, [entry]);
       }
+      for (const siblings of byParent.values()) siblings.sort((a, b) => a.siblingIndex - b.siblingIndex);
       return byParent;
     });
+    // D-S2-3: rebuilt on commit, not on every read — one array identity per revision, so
+    // `ScaleBinding`'s reference comparison and `BoundValue`'s equality half (D-S1.5-4) hold.
+    // Depth-first over `#byParent` (ADR 0034): a parent sits right before its own children, each
+    // sibling group already in Field order, the shape the grid's tree mode draws unchanged.
+    this.#all = computed(() => {
+      const byParent = this.#byParent();
+      const ordered: StoredEntry[] = [];
+      const walk = (parentId: EntryId | undefined): void => {
+        for (const child of byParent.get(parentId) ?? []) {
+          ordered.push(child);
+          walk(child.id);
+        }
+      };
+      walk(undefined);
+      return ordered;
+    });
+    this.#allLive = computed(() => this.#all().map((entry) => this.#live.for(entry.id)));
     this.#childIds = computed(() => {
       const childIds = new Map<EntryId, readonly EntryId[]>();
       for (const [parentId, children] of this.#byParent()) {
@@ -316,14 +329,15 @@ export class EntryStore implements EntryStoreContract {
 
   /** One call to whichever source is current, branded. Every tree read inside an open transaction
    *  goes through this — the committed index goes through `checkHierarchyAnswers` instead. */
-  #askSource(entry: StoredEntry): EntryId | undefined {
+  #askSource(entry: UnplacedEntry): EntryId | undefined {
     return parentIdFrom(this.#hierarchySource, entry);
   }
 
   /** Which Entry is the parent of this row, as the rest of the library must read it (ADR 0020).
    *  Committed, it is the checked answer the index holds. Inside an open transaction, it is what the
-   *  source says about the row this transaction leaves. */
-  parentIdOf(entry: StoredEntry): EntryId | undefined {
+   *  source says about the row this transaction leaves. Takes the source's own shape, never a placed
+   *  row's, so a caller with either satisfies it (ADR 0034). */
+  parentIdOf(entry: UnplacedEntry): EntryId | undefined {
     if (!this.#writeSet) return this.committedParents().get(entry.id);
     return this.#askSource(entry);
   }
@@ -502,7 +516,12 @@ export class EntryStore implements EntryStoreContract {
       if (input.parentId !== undefined) {
         this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
       }
-      const entry = toEntry(input, this.#context, this.#registry, 'entries.add');
+      const unplaced = toEntry(input, this.#context, this.#registry, 'entries.add');
+      // Placed at the end of its group, from the committed group's own count (ADR 0034): an explicit
+      // `siblingIndex` write door opens in a later step; for now every new Entry appends.
+      const group = this.#askSource(unplaced);
+      const siblingIndex = (this.#byParent().get(group) ?? []).length;
+      const entry: StoredEntry = { ...unplaced, siblingIndex };
       this.stageAdd(token, entry);
       return this.get(id)!;
     });
@@ -610,12 +629,17 @@ export class EntryStore implements EntryStoreContract {
     assertNoOpenTransaction(runner.openTransactions, 'entries.load');
     assertNoRunningExtensionHook(runner.runningExtensionHook, 'entries.load');
 
-    const read = toEntries(inputs, this.#context, this.#registry, 'entries.load');
-    assertEntryBatchIsSound(read, 'entries.load');
+    const source = this.#hierarchySource;
+    const {
+      entries: read,
+      parents,
+      siblingIndexDropped,
+    } = readEntryBatch(inputs, this.#context, this.#registry, source, 'entries.load');
+    if (siblingIndexDropped.length > 0) {
+      raiseErrorOn(runner.bus, buildSiblingIndexDroppedReport(siblingIndexDropped));
+    }
 
     const byId = new Map(read.map((entry) => [entry.id, entry]));
-    const source = this.#hierarchySource;
-    const { parents } = checkHierarchyAnswers(byId, source);
     // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
     // itself stays a leaf only that file and the commit path may import, `rollup-is-removable`):
     // no `pending`, so the pass walks `byId` as the whole tree. Refusals over this batch's hierarchy
@@ -630,8 +654,7 @@ export class EntryStore implements EntryStoreContract {
       raiseErrorOn(runner.bus, buildDerivedValuesDroppedReport(dropped));
     }
 
-    const order = listOrderOf(read);
-    const added = order.map((id) => ({ store: 'entries' as const, entity: byId.get(id)! }));
+    const added = read.map((entry) => ({ store: 'entries' as const, entity: byId.get(entry.id)! }));
     const removed = this.allStored.map((entity) => ({ store: 'entries' as const, entity }));
     // Every plugin-store row an entry this call removes owned — D-S5-24's rule reaches `load` the
     // same way it reaches `entries.remove()` (Q8): the row goes because the entry that owned it did.

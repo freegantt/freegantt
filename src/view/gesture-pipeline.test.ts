@@ -57,6 +57,7 @@ function storedRow(id: string, start: number, end: number): StoredEntry {
     start: start as Instant,
     end: end as Instant,
     props: {},
+    siblingIndex: 0,
   };
 }
 

@@ -122,7 +122,7 @@ describe('new Dataset()', () => {
     const entry = dataset.entries.storedValues.get(first(dataset).id)!;
     expect(entry.props).toEqual({ team: 'A' });
     // exactOptionalPropertyTypes: an absent key must not become a key holding undefined.
-    expect(Object.keys(entry).sort()).toEqual(['end', 'id', 'props', 'start', 'name'].sort());
+    expect(Object.keys(entry).sort()).toEqual(['end', 'id', 'props', 'start', 'name', 'siblingIndex'].sort());
   });
 
   it('does not mutate the entries the consumer handed it', () => {

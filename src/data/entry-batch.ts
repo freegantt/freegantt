@@ -2,14 +2,21 @@
 // `entries.load()` is the one caller today; `entries.sync()` (#517) shares every function here, so
 // none of them read the store or a transaction — each is pure over the list a caller handed in.
 
-import type { EntryId, StoredEntry } from '../model/index.js';
+import type { EntryId, FieldUpdated, FlatEntryInput, HierarchySource, StoredEntry } from '../model/index.js';
 import {
   DuplicateEntryIdError,
+  entryId,
   EntryNotFoundError,
   MutationDuringExtensionHookError,
   ParentCycleError,
   TransactionAlreadyOpenError,
 } from '../model/index.js';
+import { siblingIndexesInListOrder } from './sibling-order.js';
+import { checkHierarchyAnswers } from './hierarchy-source.js';
+import type { ParentIndex, UnplacedEntry } from './hierarchy-source.js';
+import { toEntries } from './entry-reader.js';
+import type { EntryReadContext } from './entry-reader.js';
+import type { FieldRegistry } from './fields/field-registry.js';
 
 /** Every id whose `parentId` chain loops back onto itself, self-parenting included — one colouring
  *  walk over the whole batch (O(n), the same shape `hierarchy-source.ts`'s `breakCycles` walks),
@@ -21,9 +28,14 @@ import {
  *  `visiting` holds only the current walk's own chain, so revisiting one of its own ids is the loop
  *  signal; revisiting a `settled` id just means this chain runs into ground a prior walk already
  *  charted, cycle or not. */
+/** The two fields every check in this file reads — `id` and `parentId` — nothing more, so a check
+ *  runs over an `UnplacedEntry` before `readEntryBatch` has placed it, or over a placed
+ *  `StoredEntry` just as well. */
+type EntryRow = Pick<StoredEntry, 'id' | 'parentId'>;
+
 function cycleMemberIds(
-  entries: readonly StoredEntry[],
-  byId: ReadonlyMap<EntryId, StoredEntry>,
+  entries: readonly EntryRow[],
+  byId: ReadonlyMap<EntryId, EntryRow>,
 ): ReadonlySet<EntryId> {
   const settled = new Set<EntryId>();
   const visiting = new Set<EntryId>();
@@ -61,8 +73,8 @@ function cycleMemberIds(
  *
  * Throws on the first violation it finds; nothing about this list has staged when it does.
  */
-export function assertEntryBatchIsSound(entries: readonly StoredEntry[], operation: string): void {
-  const byId = new Map<EntryId, StoredEntry>();
+export function assertEntryBatchIsSound(entries: readonly EntryRow[], operation: string): void {
+  const byId = new Map<EntryId, EntryRow>();
   for (const entry of entries) {
     if (byId.has(entry.id)) throw new DuplicateEntryIdError(entry.id, operation, 'duplicate-in-list');
     byId.set(entry.id, entry);
@@ -78,12 +90,63 @@ export function assertEntryBatchIsSound(entries: readonly StoredEntry[], operati
   }
 }
 
-/** The order `entries.all` takes after a whole-list write: each id in the position the caller listed
- *  it, first to last (#496 Q1). `load` stages its adds in this order. Sync's future order Field
- *  (#528) writes each id's position here as that id's `siblingIndex`, so a caller with no sort
- *  column of their own reads the list's own order back unchanged. */
-export function listOrderOf(entries: readonly StoredEntry[]): readonly EntryId[] {
-  return entries.map((entry) => entry.id);
+/** What a whole-list ingest hands its caller: the placed rows, in the order the caller listed them
+ *  (#496 Q1), and the checked tree those rows now agree with — `load` and construction both stage
+ *  their adds in this order and roll up against these same `parents`. */
+export interface PlacedEntryBatch {
+  readonly entries: readonly StoredEntry[];
+  readonly parents: ParentIndex;
+  /** Every entry whose authored `siblingIndex` disagreed with its list position — one aggregate
+   *  `'sibling-index-dropped'` report per operation is the caller's to raise (`data/error-reporting.ts`).
+   *  Empty when nobody authored the key, or every authored value already agreed. */
+  readonly siblingIndexDropped: readonly FieldUpdated[];
+}
+
+/**
+ * The one door construction and `load` both ingest a whole list of `FlatEntryInput` through (ADR
+ * 0034): reads each input, checks the batch is sound, asks the hierarchy source, and gives every
+ * entry its rank among its siblings from list position — the group a sibling belongs to is the
+ * source's own checked answer (`checkHierarchyAnswers`), never a raw, unchecked `parentId`.
+ *
+ * An authored `siblingIndex` that disagrees with list position is dropped: list position always
+ * wins, because it is the only answer that can hold for every row in the same batch at once.
+ */
+export function readEntryBatch(
+  inputs: readonly FlatEntryInput[],
+  context: EntryReadContext,
+  registry: FieldRegistry,
+  hierarchySource: HierarchySource,
+  operation: string,
+): PlacedEntryBatch {
+  const unplaced = toEntries(inputs, context, registry, operation);
+  assertEntryBatchIsSound(unplaced, operation);
+  const byId = new Map<EntryId, UnplacedEntry>(unplaced.map((entry) => [entry.id, entry]));
+  const { parents } = checkHierarchyAnswers(byId, hierarchySource);
+  const ranks = siblingIndexesInListOrder(
+    unplaced,
+    (entry) => entry.id,
+    (entry) => parents.get(entry.id),
+  );
+  const authoredSiblingIndex = new Map<EntryId, number>();
+  for (const input of inputs) {
+    if (input.siblingIndex !== undefined) authoredSiblingIndex.set(entryId(input.id), input.siblingIndex);
+  }
+  const siblingIndexDropped: FieldUpdated[] = [];
+  const entries = unplaced.map((entry) => {
+    const siblingIndex = ranks.get(entry.id) ?? 0;
+    const authored = authoredSiblingIndex.get(entry.id);
+    if (authored !== undefined && authored !== siblingIndex) {
+      siblingIndexDropped.push({
+        store: 'entries',
+        id: entry.id,
+        field: 'siblingIndex',
+        from: authored,
+        to: siblingIndex,
+      });
+    }
+    return { ...entry, siblingIndex };
+  });
+  return { entries, parents, siblingIndexDropped };
 }
 
 /**
