@@ -72,19 +72,47 @@ step in the same call, so one click always lands a step when any undoable one re
   values. The step is skipped, and the server's entry is kept.
 - **The field already reads that value.** A step that changed a Field to the value the sync later
   set independently has nothing left to write for that field.
+- **The entry the sync already re-added.** An undo that would re-add an entry the sync has already
+  sent back is skipped too. The server's own copy of that entry stays.
+- **The children a sync added since.** Undoing an `add` step removes the whole entry, the same way
+  undoing a `remove` step does. Any child the sync placed under that entry since goes with it.
 
 ## No parent loop, no dangling parent, ever
 
-An undo or a redo never leaves a parent cycle or a reference to a removed id, even when a sync moved
-entries around since the step was recorded. When a step's recorded parent would create a loop, or
-names an id the sync removed, the write lands the entry as a root instead of raising an error.
+An undo or a redo never leaves a parent cycle or a reference to a removed id. This holds even when a
+sync moved entries around since the step was recorded. What happens next depends on the kind of step:
+
+- **An entry already there.** A step can change an *existing* entry's parent to one that loops back
+  on itself, or to an id the sync removed. That one change is dropped, and the entry stays under
+  its current parent — the nearest sound place it already has.
+- **An entry the step re-adds.** A step that re-adds a removed entry, and recorded a parent the sync
+  has since removed, lands that entry as a root instead. A fresh add has no current parent to fall
+  back to, unlike an entry that was already there.
+
+Either way, the write never raises an error and never leaves a loop or a dangling reference.
 
 ## Sibling order and rollup after a sync-crossed undo
 
 An undo or a redo renumbers every sibling group it touches, dense from zero, the same rule every
 other write follows. A parent's rolled-up cell (a Field with `rollUp` declared) re-rolls from its
-current children whenever a write touches that parent, construction shape — so a rolled-up total
-stays correct even when a sibling the recorded step never mentioned changed since, through the sync.
+current children whenever a write touches that parent. A parent that loses its last child keeps its
+own value. This keeps a rolled-up total correct even when a sibling the recorded step never
+mentioned changed since, through the sync.
+
+## What an undo or redo change carries after a sync
+
+`change` on an `'undo'`/`'redo'`-origin write can carry more, and less, than the step first recorded:
+
+- **`from` can be the server's value.** A row's `from` reads the value the field held right before
+  this write. That can be the server's value, not the value the original step recorded.
+- **Rows the step never recorded can appear.** A sibling group's renumber rows, and a rolled-up
+  parent's own row, land whenever the write touches that group or that parent. The original step
+  can have never mentioned either one.
+- **Rows the step recorded can be missing.** A row can be skipped under the rules above: a gone id,
+  a settled field, a re-added entry, a dropped parent. A skipped row is left out of the changeset.
+
+An app that saves its own changes to a server should treat an `'undo'`/`'redo'`-origin commit the
+same way it treats a `'user'`-origin one. Either one can carry a real, novel write.
 
 ## Per-entry state
 
@@ -94,9 +122,12 @@ brings its plugin store rows back with it.
 
 ## A note on locks
 
-A `'never'`-locked Field is written anyway by `load` and `sync` — construction-time and poll writes
-both ignore a lock the same way, since neither runs the edit pipeline a locked cell guards. Tracked
-further at [#541](https://github.com/freegantt/freegantt/issues/541).
+- A `'never'`-locked Field is written anyway by `load` and `sync` — construction-time and poll
+  writes both ignore a lock the same way, since neither runs the edit pipeline a locked cell guards.
+- A sync can set a `locked` Field itself. A consumer's own `beforeChange` handler can veto an edit
+  to a locked entry. Once a sync locks an entry, that same handler vetoes an undo of an older edit
+  on it too. It does this on every click, not just the first one. Tracked at
+  [#541](https://github.com/freegantt/freegantt/issues/541).
 
 ## A poll loop
 
