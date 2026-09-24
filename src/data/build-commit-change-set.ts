@@ -30,6 +30,8 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
 import type { ParentIndex } from './hierarchy-source.js';
+import { renumberSiblingGroups } from './sibling-order.js';
+import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
 import { isDevMode } from './dev-mode.js';
 
 /** Staged entry-store state the commit pipeline reads — mirrors `TransactionalEntryStore` without
@@ -43,6 +45,13 @@ export interface CommitChangeSetEntryStore {
   pendingAdded(): readonly EntityAdded[];
   pendingRemoved(): readonly EntityRemoved[];
   pendingEdits(): ProposedEdits;
+  /** This write set's own sibling-order log, in call order (ADR 0034) — every `add`, `update` and
+   *  `remove` that moved an entry within or across a group logged one entry here. The renumber pass
+   *  below is this log's one reader. */
+  pendingSiblingChanges(): readonly SiblingChange[];
+  /** `group`'s committed member ids, in sibling order — what the renumber pass below seeds each
+   *  touched group's replay from, one call per distinct group. */
+  committedSiblingIds(group: SiblingGroupKey): readonly EntryId[];
 }
 
 /** Staged plugin-store state the commit pipeline reads — mirrors `TransactionalPluginStores` without
@@ -210,9 +219,49 @@ export function buildCommitChangeSet(
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
-  return foldChangeSet(data.nextChangeSetId(), origin, addedEntitiesForFold, removedEntities, [
-    ...bodyAndExtenderUpdated,
+  // The renumber pass (ADR 0034 D4): every write this transaction staged replays here, once, over
+  // the committed groups it touched — after the Rollup, so a reparent's own group change is already
+  // settled before order is decided for it. This pass owns every `siblingIndex` row: a body write
+  // that named the Field (`entries.update(id, { siblingIndex })`) already reached `bodyAndExtenderUpdated`
+  // through the ordinary diff, and that row is dropped here rather than folded beside this pass's
+  // own — two rows for one (id, field) is not a shape `foldChangeSet` resolves.
+  const siblingChanges = data.entries.pendingSiblingChanges();
+  const siblingRanks =
+    siblingChanges.length === 0
+      ? new Map<EntryId, number>()
+      : renumberSiblingGroups(
+          siblingChanges,
+          (group) => data.entries.committedSiblingIds(group),
+          (id) => data.entries.committedParents().get(id),
+        );
+  const removedIds = new Set(removedEntities.map((row) => row.entity.id));
+  // An added entity carries its final rank on the entity itself, not a row (D4): nothing reads a
+  // `siblingIndex` row for an id that has no prior committed value to diff against.
+  const rankedEntitiesForFold = addedEntitiesForFold.map((row) => {
+    const rank = siblingRanks.get(row.entity.id);
+    return rank === undefined || rank === row.entity.siblingIndex
+      ? row
+      : { ...row, entity: { ...row.entity, siblingIndex: rank } };
+  });
+  const siblingIndexUpdated: FieldUpdated[] = [];
+  for (const [id, rank] of siblingRanks) {
+    if (addedIds.has(id) || removedIds.has(id)) continue;
+    const committed = byId.get(id);
+    if (committed === undefined || committed.siblingIndex === rank) continue;
+    siblingIndexUpdated.push({
+      store: 'entries',
+      id,
+      field: 'siblingIndex',
+      from: committed.siblingIndex,
+      to: rank,
+    });
+  }
+  const updatedWithoutBodySiblingIndex = bodyAndExtenderUpdated.filter((row) => row.field !== 'siblingIndex');
+
+  return foldChangeSet(data.nextChangeSetId(), origin, rankedEntitiesForFold, removedEntities, [
+    ...updatedWithoutBodySiblingIndex,
     ...rollupUpdated,
     ...pluginRows,
+    ...siblingIndexUpdated,
   ]);
 }

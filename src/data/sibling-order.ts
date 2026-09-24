@@ -49,8 +49,10 @@ export function siblingIndexesInListOrder<T>(
 }
 
 /** A `SiblingPlacement` is the only variant that carries a target group — telling the two apart this
- *  way reads a shape, never a discriminant literal. */
-function isPlacement(change: SiblingChange): change is SiblingPlacement {
+ *  way reads a shape, never a discriminant literal. Exported: `EntryStore`'s own call-site bookkeeping
+ *  (a live group count per open transaction, kept current one write at a time) tells the two apart the
+ *  same way, so the two never drift onto separate rules for what counts as a placement. */
+export function isSiblingPlacement(change: SiblingChange): change is SiblingPlacement {
   return 'group' in change;
 }
 
@@ -103,7 +105,7 @@ export function renumberSiblingGroups(
 
   for (const change of changes) {
     leave(change.id);
-    if (!isPlacement(change)) continue;
+    if (!isSiblingPlacement(change)) continue;
     departed.delete(change.id);
     const siblings = groupArray(change.group);
     const at = Math.min(Math.max(change.at, 0), siblings.length);
