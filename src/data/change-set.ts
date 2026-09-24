@@ -11,6 +11,7 @@ import type {
   EntryId,
   FieldKey,
   FieldUpdated,
+  StoreName,
   UpdatedRow,
 } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
@@ -82,30 +83,51 @@ export function diffEdit(
  * invert to two rows too. This is the one place that collapses them: `from` is the first row's `from`,
  * `to` is the last row's `to`, and a key whose net change is nothing (`registry.valuesEqual` for a
  * Field, `Object.is` for a store row) drops out the way `pushRow` already drops a no-op edit.
+ *
+ * Keys by nested lookup — store, then id, then Field for an entries row — never by a joined string.
+ * An id or a Field key can itself hold a colon, so a joined string like `entries:a:b:c` cannot tell
+ * `(id 'a:b', field 'c')` apart from `(id 'a', field 'b:c')`; nesting never has to tell them apart.
  */
 export function mergeUpdatedRows(
   rows: readonly UpdatedRow[],
   registry: FieldRegistry,
 ): readonly UpdatedRow[] {
-  const keyOf = (row: UpdatedRow): string =>
-    row.store === 'entries' ? `entries:${row.id}:${String(row.field)}` : `${row.store}:${row.id}`;
+  interface Bucket {
+    from: unknown;
+    last: UpdatedRow;
+  }
 
-  const order: string[] = [];
-  const froms = new Map<string, unknown>();
-  const lastRowByKey = new Map<string, UpdatedRow>();
-  for (const row of rows) {
-    const key = keyOf(row);
-    if (!froms.has(key)) {
-      froms.set(key, row.from);
-      order.push(key);
+  const entriesBuckets = new Map<EntryId, Map<FieldKey, Bucket>>();
+  const storeBuckets = new Map<StoreName, Map<EntryId, Bucket>>();
+  const order: Bucket[] = [];
+
+  const bucketFor = (row: UpdatedRow): Bucket => {
+    if (row.store === 'entries') {
+      const byField = entriesBuckets.get(row.id) ?? new Map<FieldKey, Bucket>();
+      entriesBuckets.set(row.id, byField);
+      const existing = byField.get(row.field);
+      if (existing) return existing;
+      const created: Bucket = { from: row.from, last: row };
+      byField.set(row.field, created);
+      order.push(created);
+      return created;
     }
-    lastRowByKey.set(key, row);
+    const byId = storeBuckets.get(row.store) ?? new Map<EntryId, Bucket>();
+    storeBuckets.set(row.store, byId);
+    const existing = byId.get(row.id);
+    if (existing) return existing;
+    const created: Bucket = { from: row.from, last: row };
+    byId.set(row.id, created);
+    order.push(created);
+    return created;
+  };
+
+  for (const row of rows) {
+    bucketFor(row).last = row;
   }
 
   const merged: UpdatedRow[] = [];
-  for (const key of order) {
-    const from = froms.get(key);
-    const last = lastRowByKey.get(key)!;
+  for (const { from, last } of order) {
     const to = last.to;
     const equal = last.store === 'entries' ? registry.valuesEqual(last.field, from, to) : Object.is(from, to);
     if (equal) continue;
