@@ -98,10 +98,9 @@ function hasSomewhereToWrite(field: Field | undefined): field is Field {
  *
  *  A parent is *not* named here, and needs no name. Whether a *move* owns the dates it translates is
  *  `canWrite`'s question, gated by `ownsField` (#470). A *resize* asks `canWrite` alone, with no
- *  `ownsField` gate: it can paint a handle on a deriving parent's edge, and the commit then throws
- *  `DerivedFieldNotWritableError`. That is the pre-existing #256 trade-off, not fixed here — changing
- *  it is its own slice (T6/#481 review). This function stays one answer for every Entry, deriving or
- *  owning alike. */
+ *  `ownsField` gate. A deriving parent's edge refuses there too, so no handle paints on a cell the
+ *  data layer already refuses. This function stays one answer for every Entry, deriving or owning
+ *  alike. */
 function gestureIsOffered(): boolean {
   return true;
 }
@@ -177,18 +176,17 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
     if (!hasSomewhereToWrite(declared)) return NOT_WRITABLE;
-    // The data layer refuses first. The consumer and variant rules only narrow an `'anywhere'` cell.
-    // Only a per-entry lock rule reopens one — its answer is what `effectiveEditable` already holds.
+    // The data layer refuses first, for a locked cell and a derived one alike. The consumer and
+    // variant rules only narrow a cell the data layer already left open. Only a per-entry lock rule
+    // reopens one — its answer is what `effectiveEditable` already holds.
     const effectiveEditable = inputs.editableOf?.(entry.id, field) ?? editableOf(declared);
-    if (effectiveEditable !== 'anywhere')
-      return libraryWriteRule(entry.hasChildren, declared, effectiveEditable);
+    const libraryVerdict = libraryWriteRule(entry.hasChildren, declared, effectiveEditable);
+    if (!libraryVerdict.ok) return libraryVerdict;
     const consumerAnswer = askWriteRule(capabilities?.edit, entry, field);
     if (consumerAnswer !== undefined) return consumerAnswer ? WRITABLE : NOT_WRITABLE;
     const variantAnswer = askWriteRule(variantCapabilitiesFor?.(entry)?.edit, entry, field);
     if (variantAnswer !== undefined) return variantAnswer ? WRITABLE : NOT_WRITABLE;
-    // The library's own last word (#473's ocr finding). One home for "derived, or the effective
-    // editable" replaces a second copy of `libraryWriteRule`'s own two arms.
-    return libraryWriteRule(entry.hasChildren, declared, effectiveEditable);
+    return WRITABLE;
   };
 
   /** #470: does this row own the Field at all? `resolveWriteTarget` answers from the Field and
