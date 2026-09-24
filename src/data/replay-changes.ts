@@ -326,7 +326,14 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
     // this row's `from` — the same first-row rule `mergeUpdatedRows` keeps for every other Field.
     if (!parentIdRows.has(replayed.id)) parentIdRows.set(replayed.id, replayed);
   }
-  const reverted = revertLoopingParentRows(working, data.fields, parentIdRows);
+  // `revertLoopingParentRows`'s first act is a walk of every entry in `working` — skip it outright
+  // when this step recorded no `parentId` row at all, the common undo/redo path (a rename, a date
+  // drag, a plugin-store write): with no row to close a loop, the walk could only ever find a loop
+  // none of this step's rows created.
+  const reverted: ReadonlySet<EntryId> =
+    parentIdRows.size === 0
+      ? new Set<EntryId>()
+      : revertLoopingParentRows(working, data.fields, parentIdRows);
   const soundParentUpdated =
     reverted.size === 0 ? parentUpdated : parentUpdated.filter((row) => !reverted.has(row.id));
 
