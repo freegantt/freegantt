@@ -148,7 +148,9 @@ export function mergeUpdatedRows(
  * about an entity that never persisted belongs in the changeset. An id this store held before the
  * transaction, removed and then re-added, is a replace, and shows up in both lists on purpose — undo
  * needs the old row back, not its absence, so this function does not treat that overlap as a cancel.
- * It only asks whether anything survived the write set's own fold.
+ * It only asks whether anything survived the write set's own fold. A replace's committed plugin-store
+ * rows go with the old row they were keyed to — the fresh entity starts with none, the same as any
+ * other `remove()` then `add()` pair.
  *
  * `updated` holds both row kinds (D-S5-24), so a transaction whose only write is a plugin-store row
  * is not empty and does commit (#156).
