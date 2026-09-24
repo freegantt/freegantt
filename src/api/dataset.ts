@@ -23,6 +23,7 @@ import { DatasetState } from '../data/index.js';
 import type { FieldDeclarationSource } from '../data/index.js';
 import { createEditRequest } from '../data/edit-request.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
+import { assertNoDuplicateIds } from '../extensions/plugin-order.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
@@ -148,6 +149,13 @@ export class Dataset<TProps = unknown> {
 
   constructor(options: DatasetOptions<TProps>) {
     this.#plugins = options.plugins ?? [];
+    // Checked before a plugin's Field declarations are merged (#496 grill round 3, R1): that merge
+    // throws `DuplicateFieldKeyError` on a repeated Field key, and two plugins sharing an id often
+    // share their Field keys too (the same factory, called twice) — so a duplicate id has to be
+    // caught here, first, to keep its own documented error (`docs/06-plugin-authoring.md`).
+    // `installDatasetPlugins` below asserts this again at its own install site (D-S5-3); this earlier
+    // check exists only to win that race.
+    assertNoDuplicateIds(this.#plugins);
     this.#state = new DatasetState({
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
