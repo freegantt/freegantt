@@ -98,6 +98,24 @@ describe('a plugin source answers the tree, and every door follows it', () => {
     expect(dataset.entries.get('build')?.read('cost')).toBe(7);
   });
 
+  it('an untyped plugin reads props as a Record (D1)', () => {
+    // No `TProps` named, so `definePlugin` resolves the untyped `DataPlugin<unknown>` arm. `props`
+    // still reads as `Record<string, unknown>`, not `unknown` — a bracket read compiles with no
+    // `@ts-expect-error`, which pins the type-level fallback `PropsOf` falls back to.
+    const untyped = () =>
+      definePlugin({
+        id: 'demo.untyped',
+        hierarchySource: (next) => (entry) => (entry.props['group'] as string | undefined) ?? next(entry),
+      });
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'A' }],
+      plugins: [untyped()],
+    });
+
+    expect(dataset.entries.get('a')?.parent()).toBeUndefined();
+  });
+
   it('a source overrides a stored parentId that says something else', () => {
     const dataset = phaseDataset([
       { id: 'design', name: 'Design' },
