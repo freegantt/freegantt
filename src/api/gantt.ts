@@ -387,19 +387,19 @@ export class Gantt<TProps = unknown> {
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
-      // N7: a constructor-supplied plugin/selection reaches frame 1 only if `GanttShell` installs
-      // it before its own first paint — see that constructor's own comment just ahead of
-      // `#frames.flush()`. `this` is captured, not read, so `ctx.gantt` is real by the time any
-      // plugin's `setup()` runs even though `#shell` below is not yet assigned (same ordering note
-      // `buildPluginContext` already carries).
+      // Applied inside the shell's own constructor, ahead of `paintFirstFrame()` below, so a
+      // plugin's `view()` reads the real starting selection back through `ctx.gantt` (ADR 0032).
       ...(options.selectedEntryIds !== undefined ? { selectedEntryIds: options.selectedEntryIds } : {}),
       // ADR 0018: one cast at the façade — see `set variants` below for why it is the only one.
       ...(options.variants !== undefined ? { variants: options.variants as readonly EntryVariant[] } : {}),
       // ADR 0019: the Dataset's own plugins ride along. Their `view` halves belong to every Gantt
       // bound to that Dataset, and one `requires` graph orders them together with this Gantt's own
-      // chrome. A plugin with no `view` half joins the graph and runs nothing here.
+      // chrome, once `this.plugins =` below installs both. A plugin with no `view` half joins the
+      // graph and runs nothing here.
       datasetPlugins: options.dataset.plugins,
-      ...(options.plugins !== undefined ? { plugins: assertChromeOnly(options.plugins) } : {}),
+      // ADR 0032: this Gantt's own chrome plugins install through `this.plugins =` below, never
+      // here — that runs only once `#shell` is assigned, so a plugin's `view()` never sees an
+      // unfinished Gantt.
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
       // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
       // (D-S5-5), so this file supplies all seven.
@@ -428,20 +428,35 @@ export class Gantt<TProps = unknown> {
               for (const [id, edit] of edits) store.entries.update(id, entryEditFromProposedEdit(edit));
             });
           }),
-        // S5.1, D-S5-1: this file binds the two members it alone has. `dataset` is the full
-        // `api/Dataset` and `gantt` is `this`. See `api/plugin-context.ts`'s file header for why `view/` may
-        // name neither. `this` is captured, not read (N7): a plugin's `setup()` runs *inside* the
-        // `new GanttShell(...)` call above, before this constructor reaches its own closing brace,
-        // so `#shell` is not yet assigned — but `ctx.gantt` only needs `this` to exist, not `#shell`
-        // to be set, and nothing a plugin's `setup()` runs synchronously reads `#shell` (only
-        // event handlers registered for later do). Every other member arrives already grouped from
-        // `view/plugin-ports.ts`, which owns the group a plugin reads it in. So a new seam is one
-        // edit there, and a member in the wrong group no longer compiles.
+        // This file binds the two members it alone has. `dataset` is the full `api/Dataset` and
+        // `gantt` is `this`. See `api/plugin-context.ts`'s file header for why `view/` may name
+        // neither. `this` is real by the time any plugin's `view()` runs (ADR 0032): `this.plugins
+        // =` below runs only after `#shell` is assigned, so every `ctx.gantt` getter answers real
+        // state. Every other member arrives already grouped from `view/plugin-ports.ts`, which owns
+        // the group a plugin reads it in. So a new seam is one edit there, and a member in the wrong
+        // group no longer compiles.
         buildPluginContext: (parts): PluginContext<TProps> => withDatasetAndGantt(parts),
         buildCommandContext: (parts): CommandContext<TProps> => withDatasetAndGantt(parts),
         now,
       },
     });
+    // ADR 0032: a plugin's view() throwing here leaves the shell built but unpainted, holding a
+    // container listener, a dataset subscription and a document listener with no owner left to
+    // release them. `destroy()` releases every one, in reverse, before the original error carries
+    // on — a caller who catches it is left with nothing to clean up.
+    try {
+      // The public setter — the same one a later `gantt.plugins = [...]` uses — installs this
+      // Gantt's own chrome only now, once `#shell` above is assigned and every other option is
+      // already applied. So a plugin's `view()` runs against a finished Gantt, never a half-built one.
+      this.plugins = options.plugins ?? [];
+      // The shell's own first paint. A plugin's registrations (a variant, a grid column, a
+      // decoration) shape this frame instead of forcing a second render behind it — see that
+      // method's own comment for why the order runs this way.
+      this.#shell.paintFirstFrame();
+    } catch (error) {
+      this.destroy();
+      throw error;
+    }
   }
 
   /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`

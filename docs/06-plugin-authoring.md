@@ -18,7 +18,7 @@ A plugin is one object. It names an `id`, and it fills one or both halves.
 | Half | What it sees | Context type | DOM access | Runs |
 | --- | --- | --- | --- | --- |
 | `data(ctx)` | fields, edits, events, its own store | `DatasetPluginContextOf` | No | once, on the finished Dataset |
-| `view(ctx)` | rendering, interaction, commands | `PluginContextOf` | Yes | once per `Gantt`, as that Gantt mounts |
+| `view(ctx)` | rendering, interaction, commands | `PluginContextOf` | Yes | once per `Gantt`, once that Gantt is built, before its first frame |
 
 **The install site is where the state lives.** A `data` half declares what
 shapes the Dataset's own construction, and a Dataset installs its plugins
@@ -32,6 +32,27 @@ A `data` half never touches `document` or `window` — the same DOM-free rule
 
 `definePlugin` reads which halves an object fills and narrows to that arm. So a
 plugin with a `data` half does not typecheck into `GanttOptions.plugins`.
+
+### Reading the Gantt from `view()`
+
+`view(ctx)` runs once its Gantt is built, before that Gantt's first frame — so
+`ctx.gantt` is readable straight away: every option the constructor applied
+(selection, zoom presets, theme, `a11yLabel`) already answers real state.
+
+- A DOM or painted-bar question has no answer yet — `ctx.view.dom.barFor(id)`
+  answers `undefined` inside `view()`. Read the DOM from a handler, never from
+  the body of `view()`.
+- A `view()`-time write to `ctx.gantt` (for example, `ctx.gantt.selectedEntryIds
+  = [...]`) is silent: it fires no event, and no other plugin's handler hears
+  it, because construction has not finished. The same write from a later
+  `installPlugin` call fires normally.
+- Seed data in `data()`, not in `view()`. A Dataset write inside `view()` is
+  not a Gantt event — it fires the Dataset's own `change` and becomes an
+  undo step, and the Gantt must never clear a shared Dataset's History on its
+  own construction.
+- `ctx.gantt.plugins` reads `[]` during `view()`, at construction and on a
+  later `installPlugin` alike — the install commits only once every plugin's
+  `view()` has returned.
 
 ## The smallest working chrome plugin
 

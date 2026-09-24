@@ -15,6 +15,14 @@ function el(): HTMLElement {
   return node;
 }
 
+// One call site for every ordinary construction in this file, so the step that moves the first
+// paint out of the constructor (ADR 0032) touches this file once, not at every call site.
+function paintedShell(options: GanttShellOptions): GanttShell {
+  const shell = new GanttShell(options);
+  shell.paintFirstFrame();
+  return shell;
+}
+
 function makeCtx(overrides: Partial<KeyboardNavigationContext> = {}): {
   ctx: KeyboardNavigationContext;
   pans: [number, number][];
@@ -211,7 +219,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
   it('grid pane row: ArrowDown/ArrowUp move focus one row at a time, and only there', () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: parityDataset([spanEntry('a'), spanEntry('b'), spanEntry('c')]),
@@ -241,7 +249,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
   it('grid pane row: ArrowRight expands a collapsed parent; ArrowLeft collapses it back', () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: parityDataset([spanEntry('p'), spanEntry('c', { parentId: 'p' })]),
@@ -275,7 +283,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
   it('grid pane row: Home/End jump to the first/last row', () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: parityDataset([spanEntry('a'), spanEntry('b'), spanEntry('c')]),
@@ -298,7 +306,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
   it('grid pane row: Mod+A selects all, and Escape clears the Selection — whole-Gantt chords, not row-scoped', () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: parityDataset([spanEntry('a'), spanEntry('b')]),
@@ -319,7 +327,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
   it("timeline pane bar: ArrowDown/ArrowUp move focus to the nearest bar one row down/up — the grid pane's own meaning does not carry over", () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: parityDataset([spanEntry('a'), spanEntry('b'), spanEntry('c')]),
@@ -343,7 +351,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
   it('timeline pane bar: Home/End focus the first/last bar of the focused row', () => {
     const container = document.createElement('div');
     document.body.append(container);
-    const shell = new GanttShell({ wiring: {}, container, dataset: parityDataset([spanEntry('a')]) });
+    const shell = paintedShell({ wiring: {}, container, dataset: parityDataset([spanEntry('a')]) });
     shell.render();
 
     const bar0 = bars(container)[0]!;
@@ -364,7 +372,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     document.body.append(container);
     const undo = vi.fn();
     const redo = vi.fn();
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {
         buildCommandContext: (parts) => ({
           ...parts,
@@ -391,7 +399,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const captured: { target: { kind: string } | undefined } = { target: undefined };
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {
         // Mod+Z is registered unconditionally (`core-commands.ts`), so this runs on every chord
         // below regardless of `dataset.canUndo` — it exists only to capture `parts.target`, the

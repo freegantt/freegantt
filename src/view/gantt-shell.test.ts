@@ -68,6 +68,14 @@ function fakeDataset(
   };
 }
 
+// One call site for every ordinary construction in this file, so the step that moves the first
+// paint out of the constructor (ADR 0032) touches this file once, not at every call site.
+function paintedShell(options: GanttShellOptions): GanttShell {
+  const shell = new GanttShell(options);
+  shell.paintFirstFrame();
+  return shell;
+}
+
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
 // attachment.test.ts's own fake) — this is the same test seam, stubbed globally because GanttShell
 // constructs `attachPaneSize` itself and takes no `ResizeObserverCtor` option of its own (#8: the
@@ -148,11 +156,32 @@ function tallEntries(count: number): StoredEntry[] {
   });
 }
 
+describe('paintFirstFrame (ADR 0032)', () => {
+  it('paints no bar and emits nothing until paintFirstFrame() runs', () => {
+    const container = document.createElement('div');
+    const events: string[] = [];
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    shell.on('navigationChange', () => {
+      events.push('navigationChange');
+    });
+
+    expect(container.querySelectorAll('.fg-bar')).toHaveLength(0);
+    expect(events).toEqual([]);
+
+    shell.paintFirstFrame();
+
+    expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
+    expect(events).toEqual([]);
+
+    shell.destroy();
+  });
+});
+
 describe('GanttShell header band', () => {
   it('renders one tick per day for the day preset', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), scale });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries), scale });
 
     const ticks = container.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(5);
@@ -167,7 +196,7 @@ describe('GanttShell header band', () => {
     // No pinned range: the scale fits every bound dataset, so binding B widens the span A reads from.
     const scale = new TimeScaleModel();
     const containerA = document.createElement('div');
-    const shellA = new GanttShell({
+    const shellA = paintedShell({
       wiring: {},
       container: containerA,
       dataset: fakeDataset(entries),
@@ -186,7 +215,7 @@ describe('GanttShell header band', () => {
         props: {},
       },
     ];
-    const shellB = new GanttShell({
+    const shellB = paintedShell({
       wiring: {},
       container: containerB,
       dataset: fakeDataset(widerEntries),
@@ -209,7 +238,7 @@ describe('row height (#39)', () => {
     document.body.append(container);
     container.style.setProperty('--fg-row-height', '48px');
 
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const row = container.querySelector<HTMLElement>('.fg-row')!;
     expect(row.style.height).toBe('48px');
 
@@ -219,7 +248,7 @@ describe('row height (#39)', () => {
 
   it('falls back to a default when --fg-row-height is unset', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const row = container.querySelector<HTMLElement>('.fg-row')!;
     expect(row.style.height).toBe(`${DEFAULT_ROW_HEIGHT}px`);
     shell.destroy();
@@ -235,7 +264,7 @@ describe('bar height', () => {
     container.style.setProperty('--fg-row-height', '48px');
     container.style.setProperty('--fg-bar-height', '22px');
 
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.style.height).toBe('22px');
 
@@ -245,7 +274,7 @@ describe('bar height', () => {
 
   it('falls back to the shipped default (18px) when --fg-bar-height is unset', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.style.height).toBe('18px');
     shell.destroy();
@@ -255,7 +284,7 @@ describe('bar height', () => {
 describe('GanttShell.destroy()', () => {
   it('is idempotent — a second call does not throw or double-unbind (#34)', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
     expect(() => {
       shell.destroy();
@@ -267,7 +296,7 @@ describe('GanttShell.destroy()', () => {
 describe('scroll (D9, #9)', () => {
   it('constructs a private default ScrollAxis pair when scroll is omitted', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
     // No shared model was passed; the shell still renders and destroys cleanly, proving a
     // default was constructed rather than left unset.
     expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
@@ -292,14 +321,14 @@ describe('scroll (D9, #9)', () => {
       const containerA = document.createElement('div');
       const containerB = document.createElement('div');
 
-      const shellA = new GanttShell({
+      const shellA = paintedShell({
         wiring: {},
         container: containerA,
         dataset: fakeDataset(tallEntries(50)),
         scroll: { y: scrollY },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
-      const shellB = new GanttShell({
+      const shellB = paintedShell({
         wiring: {},
         container: containerB,
         dataset: fakeDataset(tallEntries(50)),
@@ -325,7 +354,7 @@ describe('scroll (D9, #9)', () => {
       const scrollY = new ScrollAxis();
       const container = document.createElement('div');
 
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset(tallEntries(50)),
@@ -366,14 +395,14 @@ describe('scroll (D9, #9)', () => {
       const shortContainer = document.createElement('div');
       const tallContainer = document.createElement('div');
 
-      const shortShell = new GanttShell({
+      const shortShell = paintedShell({
         wiring: {},
         container: shortContainer,
         dataset: fakeDataset(tallEntries(5)),
         scroll: { y: scrollY },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
-      const tallShell = new GanttShell({
+      const tallShell = paintedShell({
         wiring: {},
         container: tallContainer,
         dataset: fakeDataset(tallEntries(500)),
@@ -399,7 +428,7 @@ describe('GanttShell container resolution (#38)', () => {
     container.id = 'target';
     document.body.append(container);
 
-    const shell = new GanttShell({ wiring: {}, container: '#target', dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container: '#target', dataset: fakeDataset(entries) });
     expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
 
     shell.destroy();
@@ -433,7 +462,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
     // is the case that would expose the two panes reading their `top` from different places.
     container.style.setProperty('--fg-row-height', '31.5px');
     const rowEntries = tallEntries(3);
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(rowEntries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(rowEntries) });
 
     const rows = Array.from(container.querySelectorAll<HTMLElement>('.fg-grid-pane .fg-row'));
     const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-timeline-pane .fg-bar'));
@@ -475,7 +504,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
     try {
       const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
       const container = document.createElement('div');
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset(entries),
@@ -521,7 +550,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
           props: {},
         };
       });
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset(tall),
@@ -565,7 +594,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
 describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () => {
   it('preset/range/fit/overscan accessors delegate straight to the bound Viewport', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
     expect(shell.fit).toBe('pane');
     shell.fit = 2;
@@ -593,7 +622,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     // Small enough that 2x still clears the S1.12 density floor and stays under MAX_CONTENT_PX
     // for this fixture's 5-day span — a range that only exercises zoomTo/zoomBy delegation.
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.00001 });
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries), scale });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries), scale });
 
     shell.zoomBy(2);
     expect(scale.scale.pxPerMs).toBe(0.00002);
@@ -612,7 +641,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const scale = new TimeScaleModel({ preset: 'week' });
     const container = document.createElement('div');
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: fakeDataset(entries),
@@ -635,7 +664,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       const container = document.createElement('div');
       const scrollY = new ScrollAxis();
       const rowEntries = tallEntries(50);
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset(rowEntries),
@@ -677,7 +706,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
       };
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([parent, child]),
@@ -711,7 +740,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         end: instant('2026-09-03T00:00:00Z'),
         props: { team: 'red' },
       };
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([alpha], [{ key: 'team' }]),
@@ -754,7 +783,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         end: at,
         props: {},
       };
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([marker]),
@@ -814,7 +843,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         end: at,
         props: {},
       };
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([parent, child]),
@@ -860,7 +889,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         end: at,
         props: {},
       };
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([marker]),
@@ -905,7 +934,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         end: instant('2026-09-21T00:00:00Z'),
         props: {},
       };
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([farPast]),
@@ -950,7 +979,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
       const inRangeEnd = entry.end as Instant;
       const outOfRangeStart = instant('2026-09-20T00:00:00Z');
       const outOfRangeEnd = instant('2026-09-21T00:00:00Z');
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([entry]),
@@ -1037,7 +1066,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
         end: instant('2026-09-03T00:00:00Z'),
         props: {},
       };
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset([parent, first, second]),
@@ -1064,7 +1093,7 @@ describe('a11y roles and the two panes (S1.10 D-S1.10-4, S5.11 D-S5-25)', () => 
   it('names the whole Gantt on the container and the timeline region, live, and claims no tab stop of its own', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: fakeDataset(entries),
@@ -1091,7 +1120,7 @@ describe('a11y roles and the two panes (S1.10 D-S1.10-4, S5.11 D-S5-25)', () => 
   it('makes the grid pane a grid for a flat row source and a treegrid for a tree one, sized by the whole row set', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset: fakeDataset(entries),
@@ -1139,7 +1168,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
     try {
       const container = document.createElement('div');
       const events: string[] = [];
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       shell.on('themeChange', () => {
         events.push('fired');
       });
@@ -1158,7 +1187,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
     vi.stubGlobal('matchMedia', () => query);
     try {
       const container = document.createElement('div');
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       const events: Array<{ from: string; to: string }> = [];
       shell.on('themeChange', (change) => {
         events.push(change);
@@ -1187,7 +1216,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
     vi.stubGlobal('matchMedia', () => query);
     try {
       const container = document.createElement('div');
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       const events: Array<{ from: string; to: string }> = [];
       shell.on('themeChange', (change) => {
         events.push(change);
@@ -1211,7 +1240,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
       ancestor.setAttribute('data-fg-theme', 'light');
       const container = document.createElement('div');
       ancestor.append(container);
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       const events: unknown[] = [];
       shell.on('themeChange', (change) => {
         events.push(change);
@@ -1233,7 +1262,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
     vi.stubGlobal('matchMedia', () => query);
     try {
       const container = document.createElement('div');
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       const events: unknown[] = [];
       shell.on('themeChange', (change) => {
         events.push(change);
@@ -1261,7 +1290,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
       const ancestor = document.createElement('div');
       const container = document.createElement('div');
       ancestor.append(container);
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
       expect(shell.resolvedTheme).toBe('light');
 
@@ -1285,7 +1314,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
       // A `MutationObserver` needs an attached tree in happy-dom to deliver records — attach and
       // detach around the assertion, same as a real container always sits inside `document`.
       document.body.append(ancestor);
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       const events: Array<{ from: string; to: string }> = [];
       shell.on('themeChange', (change) => {
         events.push(change);
@@ -1311,7 +1340,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
       const container = document.createElement('div');
       ancestor.append(container);
       document.body.append(ancestor);
-      const shell = new GanttShell({
+      const shell = paintedShell({
         wiring: {},
         container,
         dataset: fakeDataset(entries),
@@ -1349,7 +1378,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
       ancestor.append(container);
       wrapper.append(ancestor);
       // container/ancestor/wrapper built fully detached — no document.body.append yet.
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       // Mounted only now, after construction.
       document.body.append(wrapper);
       const events: Array<{ from: string; to: string }> = [];
@@ -1377,7 +1406,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
       const container = document.createElement('div');
       ancestor.append(container);
       document.body.append(ancestor);
-      const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
       const events: unknown[] = [];
       shell.on('themeChange', (change) => {
         events.push(change);
@@ -1404,7 +1433,7 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
     const backendSyncCalls = { count: 0 };
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset,
@@ -1451,7 +1480,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     try {
       const container = document.createElement('div');
       let hover: ((barId: BarId | undefined) => void) | undefined;
-      const shell = new GanttShell({
+      const shell = paintedShell({
         container,
         dataset: fakeDataset(tallEntries(1000)),
         overscan: { verticalRows: 200 },
@@ -1513,7 +1542,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     try {
       const container = document.createElement('div');
       let hover: ((barId: BarId | undefined) => void) | undefined;
-      const shell = new GanttShell({
+      const shell = paintedShell({
         container,
         dataset: fakeDataset(tallEntries(1000)),
         overscan: { verticalRows: 200 },
@@ -1553,7 +1582,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     const container = document.createElement('div');
     const dataset = fakeDataset(entries);
     let hover: ((barId: BarId | undefined) => void) | undefined;
-    const shell = new GanttShell({
+    const shell = paintedShell({
       container,
       dataset,
       capabilities: { resize: false },
@@ -1580,7 +1609,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
   it('resizableEntryId falls back to the sole selected entry when nothing is hovered (D-S3-6)', () => {
     const container = document.createElement('div');
-    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
     shell.selection = [entryId('t1')];
     const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
@@ -1615,7 +1644,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     ];
     const container = document.createElement('div');
     let ctx: EntryGestureContext | undefined;
-    const shell = new GanttShell({
+    const shell = paintedShell({
       container,
       dataset: fakeDataset(owned),
       rowSource: {
@@ -1662,7 +1691,7 @@ describe("GanttShell's committed stored rows (I5, #246 S2-3)", () => {
     const container = document.createElement('div');
     let ctx: EntryGestureContext | undefined;
     const seenMaps: ReadonlyMap<EntryId, StoredEntry>[] = [];
-    const shell = new GanttShell({
+    const shell = paintedShell({
       container,
       dataset,
       extraEditsFor: () => {
@@ -1713,7 +1742,7 @@ describe('a load resets the view (#496 L2)', () => {
       timeZone: 'UTC',
     });
     const container = document.createElement('div');
-    const shell = new GanttShell({
+    const shell = paintedShell({
       wiring: {},
       container,
       dataset,
@@ -1755,7 +1784,7 @@ describe('a load resets the view (#496 L2)', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd }, fit: 0.00001 });
     const scrollX = new ScrollAxis();
-    const shell = new GanttShell({ wiring: {}, container, dataset, scale, scroll: { x: scrollX } });
+    const shell = paintedShell({ wiring: {}, container, dataset, scale, scroll: { x: scrollX } });
     shell.zoomBy(2);
     scrollX.panTo(scrollX.state.max);
     const pxPerMsBefore = scale.scale.pxPerMs;
@@ -1778,7 +1807,7 @@ describe('a load resets the view (#496 L2)', () => {
     });
     const container = document.createElement('div');
     // No `collapsed` option: this Gantt starts with nothing collapsed.
-    const shell = new GanttShell({ wiring: {}, container, dataset, selectedEntryIds: ['p'] });
+    const shell = paintedShell({ wiring: {}, container, dataset, selectedEntryIds: ['p'] });
     shell.collapse('p');
     expect(shell.selectedEntryIds).toEqual([entryId('p')]);
     expect(shell.collapsed).toEqual([rowId('p')]);
