@@ -425,9 +425,9 @@ export class InvertedSpanError extends FreeGanttError {
 
 /** `code: 'sibling-index-out-of-range'` — an explicit `siblingIndex` write outside the legal range
  *  for its group: negative, not a whole number, or past `lastIndex` (the highest legal index once the
- *  write lands — the group's own count for an `add`, one less than it for an `update`). The renumber
- *  pass that runs at commit never raises this: it clamps an extender-driven move instead, so only a
- *  consumer's own out-of-range write can reach it. */
+ *  write lands — the group's own count for an `add`, one less than it for an `update`). An explicit
+ *  write from `entries.update()`/`entries.add()`, or from an extender edit, raises this error; the
+ *  renumber pass that runs at commit never does. */
 export class SiblingIndexOutOfRangeError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly siblingIndex: number;

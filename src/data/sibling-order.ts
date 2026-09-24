@@ -65,9 +65,9 @@ export function isSiblingPlacement(change: SiblingChange): change is SiblingPlac
  * not only the ids `changes` named: a `SiblingPlacement` in the middle of a group shifts every
  * sibling after it.
  *
- * A placement whose `at` lands past the end of the group it targets — an `EditExtender` may ask for
- * one — lands at the end instead of throwing. The typed range check at the call site guards an
- * explicit write; this function only has to stay correct, never round-trip that error.
+ * A placement whose `at` lands past the end of the group it targets lands at the end instead of
+ * throwing. This clamp is only a safety net here: every caller checks the range before it logs a
+ * placement, so this function never actually sees one out of range.
  */
 export function renumberSiblingGroups(
   changes: readonly SiblingChange[],
