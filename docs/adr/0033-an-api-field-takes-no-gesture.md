@@ -23,6 +23,18 @@ A rolling-up cell has the same shape of gap. `libraryWriteRule` refuses a derive
 parent, but `capabilities.edit: true` opens the resize handle first. The drag paints, and the commit
 throws `DerivedFieldNotWritableError`.
 
+ADR 0015 left this derived case out of scope on purpose: its own `capabilities.edit` ruling "touches
+only the editable-lock (`'never'`) case", and names the derived trade-off as a different question for
+[#470](https://github.com/freegantt/freegantt/issues/470) to answer. This record closes it, alongside
+`'api'`, because both are the same question — does the data layer's refusal outrank the consumer's
+rule — and #470 already answered the part that could have made a rolling-up parent's cell writable at
+all: it deleted `writeToChildren` from the Field surface, so no Field can turn a derived cell into one
+a consumer's write splits onto the children. What survives #470 is the summary-bar move, and it never
+asked the parent's own `canWrite` — `entriesMovedBy` moves the dated descendants below a rolling-up
+parent directly (ADR 0013), gated by `ownsField`'s structural answer, not by the parent cell's own
+verdict. So this decision closes the resize handle and the parent's own cell, and the summary-bar move
+keeps moving the descendants exactly as before.
+
 ## Decision
 
 **The data layer's answer comes first. The consumer's rule and the variant's rule only narrow an
@@ -45,8 +57,9 @@ circuits at step 2 and never reaches the derived question, while an `'api'` cell
 both fall through to the consumer and the variant.
 
 A gesture is any interaction write: a grid cell, a drag, a resize, a keyboard nudge, or Delete on a
-bar. Every one of them asks `canWrite` through the one resolver `src/view/capability.ts` owns
-(I14), so this decision closes the gap at every gesture, not only the grid cell.
+bar. Every one of them asks `canWrite` through the one resolver `src/view/capability.ts` owns, and no
+gesture has a write path around it, so this decision closes the gap at every gesture, not only the
+grid cell.
 
 **`'never'`: no write, from any door. `'api'`: `entries.update()` only, never a gesture. `'anywhere'`:
 code and gestures both.**
