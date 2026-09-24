@@ -62,7 +62,7 @@ function costing(seen: string[], ganttsSeen: unknown[] = []) {
 }
 
 describe('one plugin, two halves, one install site (ADR 0019)', () => {
-  it('runs the data half as the Dataset constructs, so its Field is there for the first Rollup', () => {
+  it('runs the data half once, on the finished Dataset — its Field and the Rollup are already there', () => {
     const seen: string[] = [];
     const dataset = newDataset([costing(seen)]);
 
@@ -202,7 +202,7 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
           dataset: newDataset(),
           container,
           // @ts-expect-error `data` is optional, but `fields` alone still refuses this install
-          // site — a Field must exist before the first Rollup, and a Gantt mounts after that.
+          // site — a data half shapes the Dataset's own construction, and a Gantt mounts after that.
           plugins: [fieldsOnly()],
         }),
     ).toThrow(PluginSetupError);

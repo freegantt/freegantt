@@ -76,11 +76,12 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
 
 /** A plugin that owns state — Fields, the edit hook, a store — and may paint it too.
  *
- *  **The install site is where the state lives.** This arm installs on the `Dataset`, because a Field
- *  must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset then runs `view`
- *  once, each with its own context, so I2 holds by construction. */
+ *  **The install site is where the state lives.** A `data` half declares what shapes the Dataset's
+ *  own construction, and a Dataset installs its plugins once. This arm installs on the `Dataset` for
+ *  that reason. Every `Gantt` bound to that Dataset then runs `view` once, each with its own context,
+ *  so I2 holds by construction. */
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
-  /** Fields, the edit hook and the store. DOM-free, and runs as the `Dataset` constructs. Optional:
+  /** Fields, the edit hook and the store. DOM-free, and runs once, on the finished Dataset. Optional:
    *  a plugin that only declares `fields`, `fieldTypes`, `aggregators` or `hierarchySource`
    *  needs no `data()` to run. */
   data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;

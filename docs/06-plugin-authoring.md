@@ -20,8 +20,9 @@ A plugin is one object. It names an `id`, and it fills one or both halves.
 | `data(ctx)` | fields, edits, events, its own store | `DatasetPluginContextOf` | No | once, on the finished Dataset |
 | `view(ctx)` | rendering, interaction, commands | `PluginContextOf` | Yes | once per `Gantt`, as that Gantt mounts |
 
-**The install site is where the state lives.** A plugin with a `data` half
-installs on the `Dataset`, because a field must exist before the first rollup.
+**The install site is where the state lives.** A `data` half declares what
+shapes the Dataset's own construction, and a Dataset installs its plugins
+once, so a plugin with a `data` half installs on the `Dataset`.
 Every `Gantt` bound to that Dataset then runs the `view` half once, each with
 its own context. A chrome-only plugin — no `data` half — installs on the
 `Gantt`, and `gantt.plugins` reconfigures it live.

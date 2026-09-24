@@ -29,7 +29,7 @@ const scheduling = () =>
     id: 'freegantt.scheduling',
     requires: ['freegantt.calendar'],
     data(ctx) {
-      /* fields, the edit hook, the store — DOM-free, runs as the Dataset constructs */
+      /* fields, the edit hook, the store — DOM-free, runs once on the finished Dataset */
     },
     view(ctx) {
       /* variants, renderers, commands, keys — runs as a Gantt mounts */
@@ -40,7 +40,7 @@ const dataset = new Dataset({ entries, plugins: [scheduling()] });
 const gantt = new Gantt({ dataset }); // its Fields, variants, bars and menu are already there
 ```
 
-**The install site is where the state lives.** A plugin with a `data` half installs on the `Dataset`, because a Field must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset then runs the `view` half once, each with its own context. Two Gantts on one page still share nothing, so I2 holds: one `view(ctx)` call is one Gantt's worth of state, the same way one factory call is today.
+**The install site is where the state lives.** A `data` half declares what shapes the Dataset's own construction, and a Dataset installs its plugins once, so a plugin with a `data` half installs on the `Dataset`. Every `Gantt` bound to that Dataset then runs the `view` half once, each with its own context. Two Gantts on one page still share nothing, so I2 holds: one `view(ctx)` call is one Gantt's worth of state, the same way one factory call is today.
 
 A chrome-only plugin — `weekendShading()` — has no `data` half and keeps installing on the `Gantt`. `gantt.plugins` stays live-reconfigurable. `dataset.plugins` stays read-only, for the reason it already is.
 

@@ -97,9 +97,8 @@ export interface DatasetOptions<TProps = unknown> {
    *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
    *  reverse install the same way (D-S5-31).
    *
-   *  A plugin's `fields`/`fieldTypes`/`hierarchySource` declare this Dataset's shape before
-   *  construction, so a Field one declares is in the registry before the first Rollup walks; `data()`
-   *  itself runs only once that whole Dataset — the Rollup included — is built (ADR 0031). This
+   *  A plugin's `fields`/`fieldTypes`/`hierarchySource` declare this Dataset's shape; `data()` itself
+   *  runs only once that whole Dataset — the construction Rollup included — is built (ADR 0031). This
    *  declared shape cannot change after construction, which is why `Dataset.plugins` is read-only. A
    *  plugin that also fills a `view` half has that half run once per `Gantt` bound to this Dataset, each
    *  with its own context (I2). A chrome-only plugin is legal here too, and then every Gantt on this
@@ -180,7 +179,7 @@ export class Dataset<TProps = unknown> {
     assertNoDuplicateIds(this.#plugins);
     // Declares this Dataset's whole shape — every Field, fieldType, Aggregator and hierarchy source
     // any plugin brings — so the Dataset below builds completely, Rollup included, before a single
-    // plugin's `data()` runs (ADR 0031, Q1). `data/` never runs plugin code itself.
+    // plugin's `data()` runs (ADR 0031). `data/` never runs plugin code itself.
     this.#state = new DatasetState({
       ...options,
       timeZone: options.timeZone ?? resolveDefaultTimeZone(),
@@ -190,15 +189,15 @@ export class Dataset<TProps = unknown> {
     this.#time = createZonedTime(this.#state.timeZone);
     datasetState.set(this, this.#state);
     // Every plugin's `data()` runs here, on the finished Dataset above — `ctx.dataset.*` all read
-    // (ADR 0031, Q1). A setup write is an ordinary commit, so History records it like any other;
+    // (ADR 0031). A setup write is an ordinary commit, so History records it like any other;
     // `clearHistory()` right after empties that stack, so `canUndo` still reads `false` once this
-    // constructor returns (D3, #137).
+    // constructor returns (#137).
     this.#disposePlugins = this.#installPlugins();
     this.#state.clearHistory();
   }
 
   /** Runs after `this.#state` is assigned, so every context member below reads `this.#state`
-   *  straight — no closed-over `state` parameter left from before the Dataset existed (D6). */
+   *  straight — no closed-over `state` parameter left from before the Dataset existed. */
   #installPlugins(): () => void {
     return installDatasetPlugins(this.#plugins, createErrorRaiser(this.#state.bus), (pluginId: PluginId) => {
       const disposables = new DisposableStore();
