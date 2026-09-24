@@ -69,3 +69,52 @@ describe('a commit carries one row per Field, even when the Rollup rewrites what
     expect(endRows).toHaveLength(1);
   });
 });
+
+describe('an explicit undefined clears parentId and name (#542)', () => {
+  it('update(id, { parentId: undefined }) makes the entry a root with one change row', () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p', name: 'p' },
+        { id: 'c', parentId: 'p', name: 'c', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+    });
+
+    const committed: ChangeSet[] = [];
+    state.on('change', ({ changeSet }: DatasetEventMap['change']) => {
+      committed.push(changeSet);
+    });
+
+    state.entries.update('c', { parentId: undefined });
+
+    expect(state.entries.get('c')!.read('parentId')).toBeUndefined();
+    const parentIdRows = committed[0]!.updated.filter(
+      (row) => row.store === 'entries' && row.id === entryId('c') && row.field === 'parentId',
+    );
+    expect(parentIdRows).toEqual([
+      { store: 'entries', id: entryId('c'), field: 'parentId', from: entryId('p'), to: undefined },
+    ]);
+  });
+
+  it('update(id, { name: undefined }) clears the name', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 'Design', start: 0, end: 1 }],
+      timeZone: 'UTC',
+    });
+
+    const committed: ChangeSet[] = [];
+    state.on('change', ({ changeSet }: DatasetEventMap['change']) => {
+      committed.push(changeSet);
+    });
+
+    state.entries.update('t1', { name: undefined });
+
+    expect(state.entries.get('t1')!.read('name')).toBeUndefined();
+    const nameRows = committed[0]!.updated.filter(
+      (row) => row.store === 'entries' && row.id === entryId('t1') && row.field === 'name',
+    );
+    expect(nameRows).toEqual([
+      { store: 'entries', id: entryId('t1'), field: 'name', from: 'Design', to: undefined },
+    ]);
+  });
+});

@@ -205,9 +205,12 @@ export function toEditReading(
   let stored: ProposedEdit = emptyProposedEdit();
   // Which Fields this edit writes. A key nobody states never reaches the changeset (#212).
   const proposed = new Set<string>(Object.keys(edit));
-  if (edit.parentId !== undefined) stored.parentId = entryId(edit.parentId);
+  // `'parentId' in edit` and `'name' in edit` — not `edit.parentId !== undefined` / `edit.name !==
+  // undefined` — so `update(id, { parentId: undefined })` (root the entry) and `update(id, { name:
+  // undefined })` (clear the name) both reach `stored`, the same `'start' in edit` pattern below.
+  if ('parentId' in edit) stored.parentId = edit.parentId === undefined ? undefined : entryId(edit.parentId);
   if (edit.siblingIndex !== undefined) stored.siblingIndex = edit.siblingIndex;
-  if (edit.name !== undefined) stored.name = edit.name;
+  if ('name' in edit) stored.name = edit.name;
   // `'start' in edit` — not `edit.start !== undefined` — so `update(id, { start: undefined })` (the
   // un-date verb, ADR 0012) reaches `stored.start = undefined` rather than being read as "untouched".
   if ('start' in edit)
