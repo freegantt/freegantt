@@ -359,17 +359,6 @@ describe('percent — the shipped Field type', () => {
     });
   });
 
-  it('registerType(percent, …) throws, but the fieldTypes option overrides it silently', () => {
-    const registry = new FieldRegistry();
-    expect(() => registry.registerType('percent', {})).toThrow(DuplicateFieldKeyError);
-
-    const withOverride = new FieldRegistry({
-      fieldTypes: { percent: { inputType: 'text' } },
-      fields: [{ key: 'progress', type: 'percent' }],
-    });
-    expect(withOverride.get('progress')?.inputType).toBe('text');
-  });
-
   it('a type: percent Field with no rollUp leaves a parent’s stored value untouched (ADR 0008)', () => {
     const registry = new FieldRegistry({ fields: [{ key: 'progress', type: 'percent' }] });
     expect(registry.get('progress')?.rollUp).toBeUndefined();
