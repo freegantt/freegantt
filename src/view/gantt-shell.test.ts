@@ -71,7 +71,9 @@ function fakeDataset(
 // One call site for every ordinary construction in this file, so the step that moves the first
 // paint out of the constructor (ADR 0032) touches this file once, not at every call site.
 function paintedShell(options: GanttShellOptions): GanttShell {
-  return new GanttShell(options);
+  const shell = new GanttShell(options);
+  shell.paintFirstFrame();
+  return shell;
 }
 
 // happy-dom does no layout, so a real ResizeObserver never fires (verified against pane-size-
@@ -153,6 +155,27 @@ function tallEntries(count: number): StoredEntry[] {
     };
   });
 }
+
+describe('paintFirstFrame (ADR 0032)', () => {
+  it('paints no bar and emits nothing until paintFirstFrame() runs', () => {
+    const container = document.createElement('div');
+    const events: string[] = [];
+    const shell = new GanttShell({ wiring: {}, container, dataset: fakeDataset(entries) });
+    shell.on('navigationChange', () => {
+      events.push('navigationChange');
+    });
+
+    expect(container.querySelectorAll('.fg-bar')).toHaveLength(0);
+    expect(events).toEqual([]);
+
+    shell.paintFirstFrame();
+
+    expect(container.querySelectorAll('.fg-bar').length).toBeGreaterThan(0);
+    expect(events).toEqual([]);
+
+    shell.destroy();
+  });
+});
 
 describe('GanttShell header band', () => {
   it('renders one tick per day for the day preset', () => {

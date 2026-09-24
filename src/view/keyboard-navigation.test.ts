@@ -18,7 +18,9 @@ function el(): HTMLElement {
 // One call site for every ordinary construction in this file, so the step that moves the first
 // paint out of the constructor (ADR 0032) touches this file once, not at every call site.
 function paintedShell(options: GanttShellOptions): GanttShell {
-  return new GanttShell(options);
+  const shell = new GanttShell(options);
+  shell.paintFirstFrame();
+  return shell;
 }
 
 function makeCtx(overrides: Partial<KeyboardNavigationContext> = {}): {

@@ -1612,6 +1612,117 @@ describe('Gantt theme and a11yLabel (S1.10)', () => {
   });
 });
 
+describe("a constructor-supplied plugin's view() runs on a finished Gantt", () => {
+  it('reads every applied option back off ctx.gantt, and the DOM its own registrations shaped, with no await', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { risk: { rollUp: 'max', column: { header: 'Risk' } } },
+      fields: [{ key: 'risk', type: 'risk' }],
+      entries: [{ ...sampleEntries[0]!.toInput(), props: { risk: 'high' } }],
+    });
+    let seen:
+      | {
+          selectedEntryIds: readonly unknown[];
+          zoomPresetIds: readonly string[];
+          resolvedTheme: unknown;
+          a11yLabel: string;
+          gridWidth: number;
+        }
+      | undefined;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      theme: 'dark',
+      a11yLabel: 'Room bookings',
+      gridWidth: 220,
+      gridColumns: ['name'],
+      selectedEntryIds: [sampleEntries[0]!.id],
+      zoomPresets: ['day', 'week'],
+      plugins: [
+        {
+          id: 'demo.readsFinishedGantt',
+          view(ctx) {
+            seen = {
+              selectedEntryIds: ctx.gantt.selectedEntryIds,
+              zoomPresetIds: ctx.gantt.zoomPresets.map((preset) => preset.id),
+              resolvedTheme: ctx.gantt.resolvedTheme,
+              a11yLabel: ctx.gantt.a11yLabel,
+              gridWidth: ctx.gantt.gridWidth,
+            };
+            // A plugin variant, a plugin grid column and a decoration all shape frame 1 — the DOM
+            // they draw is already there when `new Gantt()` below returns, with no `await`.
+            ctx.variants.add({
+              name: 'buffer',
+              when: (entry) => entry.id === sampleEntries[0]!.id,
+              bars: (entry) => [
+                {
+                  id: barId(entry.id, 0),
+                  entryId: entry.id,
+                  variant: 'buffer',
+                  label: 'buffer',
+                  start: entry.start!,
+                  end: entry.end!,
+                },
+              ],
+            });
+            ctx.view.registerGridColumn({ field: 'risk' });
+            ctx.view.registerDecoration('underBars', () => [
+              {
+                kind: 'rangeBand',
+                start: sampleEntries[0]!.start!,
+                end: sampleEntries[0]!.end!,
+                class: 'demo-band',
+              },
+            ]);
+            return () => {};
+          },
+        },
+      ],
+    });
+
+    expect(seen).toEqual({
+      selectedEntryIds: [sampleEntries[0]!.id],
+      zoomPresetIds: ['day', 'week'],
+      resolvedTheme: 'dark',
+      a11yLabel: 'Room bookings',
+      gridWidth: 220,
+    });
+    expect(container.querySelector('.fg-bar[data-variant="buffer"]')).not.toBeNull();
+    expect(container.querySelector('[data-field="risk"]')).not.toBeNull();
+    expect(container.querySelector('.demo-band')).not.toBeNull();
+
+    gantt.destroy();
+  });
+
+  it("[#376] a view()-time write to ctx.gantt is silent: an earlier plugin's handler hears nothing, but the write stands", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const heardByA: unknown[] = [];
+    const pluginA: ChromePlugin = {
+      id: 'demo.a',
+      view(ctx) {
+        ctx.events.on('selectionChange', (change) => {
+          heardByA.push(change);
+        });
+      },
+    };
+    const pluginB: ChromePlugin = {
+      id: 'demo.b',
+      view(ctx) {
+        ctx.gantt.selectedEntryIds = [sampleEntries[1]!.id];
+      },
+    };
+
+    const gantt = new Gantt({ container, dataset, plugins: [pluginA, pluginB] });
+
+    expect(heardByA).toEqual([]);
+    expect(gantt.selectedEntryIds).toEqual([sampleEntries[1]!.id]);
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt gridWidth and events (S1.8, plans/02 §6)', () => {
   it('beforeGridWidthChange returning false vetoes the change: gridWidth stays put', () => {
     const container = document.createElement('div');
@@ -3365,11 +3476,9 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
         },
       ],
     });
-    // The plugin's own registration runs after GanttShell's first render (`Gantt.plugins`'s
-    // constructor-time assignment lands after `new GanttShell(...)` returns) — its own
-    // `#frames.request()` schedules the repaint, one rAF away.
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-
+    // The plugin's variant already shaped frame 1 (ADR 0032): the bar reads its buffer label with
+    // no `await`. Dropping the plugin below still needs a real rAF, because `gantt.plugins = []`
+    // runs a live reconfiguration, not a construction-time install.
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
     expect(bar.textContent).toBe(`buffer: ${sampleEntries[0]!.name}`);
 
