@@ -713,7 +713,7 @@ export class EntryStore implements EntryStoreContract {
       const current = rolled.get(row.id);
       if (current) rolled.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
     }
-    const target = read.map((entry) => rolled.get(entry.id)!);
+    const target = read.map((entry) => rolled.get(entry.id) ?? entry);
 
     const changes = changesToMatchBatch(this.#byId, target, this.#registry, this.#access);
     if (changes.added.length === 0 && changes.removed.length === 0 && changes.updated.length === 0) {

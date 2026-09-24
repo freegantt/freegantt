@@ -371,21 +371,32 @@ steps aside for a load for exactly this reason.
 ### Reacting to a sync
 
 `entries.sync()` also commits its whole change in one step, `origin: 'sync'` — but unlike
-a load, a sync carries only the rows that changed, and a kept id keeps its store rows. A
-plugin reads a sync the same `change` subscription reads a load, and does not need a
-second one:
+a load, a sync carries only the rows that changed: entry Field rows for an added, removed
+or edited entry, and a plugin-store row only for a removed id. A plugin reads a sync the
+same `change` subscription reads a load, and does not need a second one:
 
 ```ts
 import { definePlugin } from 'freegantt';
+import type { EntryId } from 'freegantt';
 
 function resetsOnLoadOnly() {
-  let cache: unknown;
+  const cache = new Map<EntryId, string>();
   return definePlugin({
     id: 'demo.resetsOnLoadOnly',
     data(ctx) {
       ctx.events.on('change', ({ changeSet }) => {
-        if (changeSet.origin === 'load') cache = undefined; // a full fresh start: nothing survives
-        // a 'sync' commit needs no reset — its rows are the plugin's own store update, already applied
+        if (changeSet.origin === 'load') {
+          cache.clear(); // a full fresh start: nothing survives
+          return;
+        }
+        if (changeSet.origin !== 'sync') return;
+        // a 'sync' commit carries only the rows that changed: update the cache from
+        // added, removed and updated instead of resetting it
+        for (const { entity } of changeSet.removed) cache.delete(entity.id);
+        for (const { entity } of changeSet.added) cache.set(entity.id, entity.name ?? '');
+        for (const row of changeSet.updated) {
+          if (row.store === 'entries' && row.field === 'name') cache.set(row.id, String(row.to ?? ''));
+        }
       });
     },
   });
@@ -396,7 +407,8 @@ export { resetsOnLoadOnly };
 
 A plugin must not reset a cache on `origin: 'sync'` the way it does on `'load'`: sync keeps
 per-entry state for a kept id on purpose, and clearing a cache on every poll throws that
-away for no reason.
+away for no reason. It must instead fold the sync's own `added`, `removed` and `updated`
+rows into the cache it already holds.
 
 ## Why a factory, not a name-keyed table
 
