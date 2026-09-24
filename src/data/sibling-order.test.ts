@@ -40,8 +40,8 @@ describe('renumberSiblingGroups', () => {
   it('applies two moves in one call in call order', () => {
     const { committedSiblingsOf, committedGroupOf } = committedGroupsFrom({ p: ['a', 'b', 'c'] });
     const changes: SiblingChange[] = [
-      { kind: 'place', id: entryId('c'), group: 'p', at: 0 },
-      { kind: 'place', id: entryId('a'), group: 'p', at: 2 },
+      { id: entryId('c'), group: 'p', at: 0 },
+      { id: entryId('a'), group: 'p', at: 2 },
     ];
 
     const ranks = renumberSiblingGroups(changes, committedSiblingsOf, committedGroupOf);
@@ -54,10 +54,7 @@ describe('renumberSiblingGroups', () => {
 
   it('leaves, then places into the vacated spot — the gap does not linger', () => {
     const { committedSiblingsOf, committedGroupOf } = committedGroupsFrom({ p: ['a', 'b', 'c'] });
-    const changes: SiblingChange[] = [
-      { kind: 'leave', id: entryId('b') },
-      { kind: 'place', id: entryId('c'), group: 'p', at: 0 },
-    ];
+    const changes: SiblingChange[] = [{ id: entryId('b') }, { id: entryId('c'), group: 'p', at: 0 }];
 
     const ranks = renumberSiblingGroups(changes, committedSiblingsOf, committedGroupOf);
 
@@ -69,10 +66,7 @@ describe('renumberSiblingGroups', () => {
 
   it('re-adds an id that left the group earlier in the same replay', () => {
     const { committedSiblingsOf, committedGroupOf } = committedGroupsFrom({ p: ['a', 'b'] });
-    const changes: SiblingChange[] = [
-      { kind: 'leave', id: entryId('a') },
-      { kind: 'place', id: entryId('a'), group: 'p', at: 1 },
-    ];
+    const changes: SiblingChange[] = [{ id: entryId('a') }, { id: entryId('a'), group: 'p', at: 1 }];
 
     const ranks = renumberSiblingGroups(changes, committedSiblingsOf, committedGroupOf);
 
@@ -83,7 +77,7 @@ describe('renumberSiblingGroups', () => {
 
   it('filters a left id out of every group the answer reports', () => {
     const { committedSiblingsOf, committedGroupOf } = committedGroupsFrom({ p: ['a', 'b', 'c'] });
-    const changes: SiblingChange[] = [{ kind: 'leave', id: entryId('b') }];
+    const changes: SiblingChange[] = [{ id: entryId('b') }];
 
     const ranks = renumberSiblingGroups(changes, committedSiblingsOf, committedGroupOf);
 
@@ -94,7 +88,7 @@ describe('renumberSiblingGroups', () => {
 
   it('clamps an at that lands past the end of its group, instead of throwing', () => {
     const { committedSiblingsOf, committedGroupOf } = committedGroupsFrom({ p: ['a', 'b'] });
-    const changes: SiblingChange[] = [{ kind: 'place', id: entryId('c'), group: 'p', at: 99 }];
+    const changes: SiblingChange[] = [{ id: entryId('c'), group: 'p', at: 99 }];
 
     const ranks = renumberSiblingGroups(changes, committedSiblingsOf, committedGroupOf);
 
@@ -108,7 +102,7 @@ describe('renumberSiblingGroups', () => {
       p1: ['a', 'b'],
       p2: ['c'],
     });
-    const changes: SiblingChange[] = [{ kind: 'place', id: entryId('a'), group: 'p2', at: 0 }];
+    const changes: SiblingChange[] = [{ id: entryId('a'), group: 'p2', at: 0 }];
 
     const ranks = renumberSiblingGroups(changes, committedSiblingsOf, committedGroupOf);
 
