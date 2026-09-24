@@ -170,7 +170,7 @@ small scroll from showing a bare frame before the next paint catches up. A test 
 renders outside the visible window should not guess the buffer's size. It reads `gantt.overscan`, or
 sets it to `{ verticalRows: 0, horizontalPx: 0 }` for the tightest possible bound (#435).
 
-**Two keys are exceptions, and both belong to the `Dataset`: `fields` and `plugins`.** A Field declaration and a Dataset plugin are fixed at construction. `dataset.fields` is a read-only getter, `Dataset.plugins` is read-only, and `ctx.fields.register` is legal only while that plugin's own `setup()` runs — a later call throws `RegistrationClosedError`.
+**Two keys are exceptions, and both belong to the `Dataset`: `fields` and `plugins`.** A Field declaration and a Dataset plugin are fixed at construction. `dataset.fields` is a read-only getter, `Dataset.plugins` is read-only, and a plugin's own `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) register before any entry is read — there is no later door to close, because there is no `ctx.fields` seam to call after setup (R2).
 
 **What is fixed is the Field *set*, not every attribute on it (ADR 0015).** `dataset.setFieldEditable(key, editable)` changes one declared Field's `editable` after setup, and it is the only attribute that may change. It adds no key and removes none, so the Rollup reason below does not apply to it: `editable` is a write-door threshold, and no aggregate depends on it. An unknown key is refused.
 
@@ -651,8 +651,9 @@ const scheduling = () =>
   definePlugin({
     id: 'freegantt.scheduling',
     requires: ['freegantt.calendar'],
+    fields: [], // declared before any entry is read (#496 grill round 3, R1)
     data(ctx) {
-      /* fields, the edit hook, the store — DOM-free, runs as the Dataset constructs */
+      /* the edit hook, the store — DOM-free, runs as the Dataset constructs */
     },
     view(ctx) {
       /* variants, renderers, commands, keys — runs as a Gantt mounts */
@@ -678,13 +679,19 @@ the compiler never met: plain JavaScript, or a list a helper widened. No new err
 together with its own chrome under that one graph (D-S5-31), so a chrome plugin may require a plugin
 whose only half is `data`. There is no ordering knob.
 
-**The `data` half's own doors are namespaced, and every one is expert.** `ctx.fields.register` declares
-a Field, `ctx.store.reserve` takes this plugin's store, `ctx.edits.setExtender` claims the extension
-hook, `ctx.hierarchy.setSource` claims the hierarchy source (ADR 0020), and `ctx.edits.setLockRule`
-claims the per-entry lock rule (ADR 0015, #473). An app author never meets one: they write `parentId`
-on an Entry, and core's own source answers it. Each door takes one occupant that composes — a plugin
-receives the current occupant and may call it — so a second plugin adds to the first rather than
-evicting it (D-S5-23). All five are legal while `data()` runs and not after (D-S5-4).
+**The `data` half's own doors are namespaced, and every one is expert.** `ctx.store.reserve` takes
+this plugin's store, `ctx.edits.setExtender` claims the extension hook, `ctx.hierarchy.setSource`
+claims the hierarchy source (ADR 0020), and `ctx.edits.setLockRule` claims the per-entry lock rule
+(ADR 0015, #473). An app author never meets one: they write `parentId` on an Entry, and core's own
+source answers it. Each door takes one occupant that composes — a plugin receives the current
+occupant and may call it — so a second plugin adds to the first rather than evicting it (D-S5-23).
+All four are legal while `data()` runs and not after (D-S5-4).
+
+**A Field, a Field type and an Aggregator are not a `ctx` door at all** — a plugin declares them on
+itself, `fields`/`fieldTypes`/`aggregators`, the same shape `DatasetOptions` takes (#496 grill round
+3, R1). `Dataset`'s constructor registers every plugin's declarations, alongside its own, before any
+entry is read; `data()` then runs after, so it still sees every entry. One way to declare, so there
+is no `ctx.fields.register` a later call could reach (R2).
 
 ```ts
 ctx.edits.setLockRule((next) => (entry, field) =>
