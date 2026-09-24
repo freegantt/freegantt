@@ -322,7 +322,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ).toThrow('new Dataset: there is no entry with id "nope". Check the id, or add the entry first.');
   });
 
-  it("a plugin that falls through still names the consumer's own parentId (`F4`)", () => {
+  it("a plugin that falls through still names the consumer's own parentId", () => {
     // A sound batch at construction: `sketch`'s raw parentId and its `phaseId` both name a real
     // entry, so nothing refuses yet. Removing `build` and then clearing `phaseId` makes the plugin
     // source fall through to the now-dangling raw value, at runtime — the door this case is about.
