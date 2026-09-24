@@ -17,15 +17,15 @@ issue plans land here as they're opened.
   first-party Dataset plugin; no code written yet. Plan: [130-wbs.md](./130-wbs.md).
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
-  Field (#528). Blocked by #496 and #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
+  Field (#528). Blocked by #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
 - [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
   cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`.
-  Blocked by #496; blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
+  Blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
 - [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
-  delta. Wishlist; blocked by #496 and #517. No plan yet.
+  delta. Wishlist; blocked by #517. No plan yet.
 - [#530](https://github.com/freegantt/freegantt/issues/530) — a plugin cannot write its own Field
   without an `as EntryEdit` cast. Direction: the plugin's generic names only its own keys, and a
-  typed Dataset accepts it. Blocked by #496. No plan file; the issue holds the rulings.
+  typed Dataset accepts it. No plan file; the issue holds the rulings.
 
 **Closed:**
 
