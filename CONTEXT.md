@@ -691,8 +691,8 @@ made `api/gantt.ts` re-group every member by hand, so a seam cost three edits in
 
 **Declarer** (and **authored**):
 Who made a declaration: the library, the consumer, or one named plugin (D-S5-33, issues #162/#181).
-Every `register*` that declares a Field (`ctx.fields.register`) or a Grid column
-(`ctx.view.registerGridColumn`) records the calling plugin's id. **Authored** is the consumer's half
+A plugin's own `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) or its
+`ctx.view.registerGridColumn` call records the calling plugin's id. **Authored** is the consumer's half
 of that answer, and it is what the consumer's own surfaces report: `gantt.gridColumns` and both halves
 of a `gridColumnsChange` payload carry the columns the consumer wrote, before and after a resize or a
 reorder. **For a Field the answer is recorded and not published**: its one reader was
