@@ -630,10 +630,10 @@ export class EntryStore implements EntryStoreContract {
     assertNoRunningExtensionHook(runner.runningExtensionHook, 'entries.load');
 
     const read = toEntries(inputs, this.#context, this.#registry, 'entries.load');
-    const source = this.#hierarchySource.get();
-    assertEntryBatchIsSound(read, 'entries.load', (entry) => parentIdFrom(source, entry));
+    assertEntryBatchIsSound(read, 'entries.load');
 
     const byId = new Map(read.map((entry) => [entry.id, entry]));
+    const source = this.#hierarchySource.get();
     const { parents } = checkHierarchyAnswers(byId, source);
     // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
     // itself stays a leaf only that file and the commit path may import, `rollup-is-removable`):
