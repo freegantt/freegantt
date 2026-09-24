@@ -294,6 +294,25 @@ describe('rollUpFields (S4.2)', () => {
       expect(reports[0]?.message).toContain('"t1"');
     });
 
+    it('construction with no subscriber reaches console.warn instead', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      new DatasetState({
+        entries: [
+          { id: 't1', name: 'p1', props: { cost: 500 } },
+          { id: 't2', name: 'c1', parentId: 't1' },
+        ],
+        timeZone: 'UTC',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+      });
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain('"cost"');
+
+      warn.mockRestore();
+    });
+
     it("a batch of add() calls in one transaction drops the new parent's authored value, one report", () => {
       const reports: ErrorReport[] = [];
       const state = treeDataset([{ id: 'x' }]);
