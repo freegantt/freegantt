@@ -7,7 +7,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { entryId } from '../model/index.js';
-import type { ChangeSet, FlatEntryInput } from '../model/index.js';
+import type { FlatEntryInput } from '../model/index.js';
 
 // Two mid-level parents, two children each, so a shrink can remove a whole parent and force its
 // surviving children to move under the other parent or up to root — the "a removed parent's
@@ -150,7 +150,7 @@ describe('entries.sync, the contract properties (#517)', () => {
     );
   });
 
-  it('undo after a sync gives back the state before the sync, plugin store rows included', () => {
+  it('a sync records no undo step and leaves canUndo and canRedo as they were', () => {
     fc.assert(
       fc.property(targetArbitrary, (params) => {
         const target = buildTarget(params);
@@ -158,45 +158,20 @@ describe('entries.sync, the contract properties (#517)', () => {
         const store = state.pluginStores.reserve<{ tag: string }>('demo.store');
         for (const seed of seedInputs) store.set(seed.id, { tag: `${seed.id}-row` });
 
-        const seen: ChangeSet[] = [];
-        state.on('change', ({ changeSet }) => {
-          seen.push(changeSet);
-        });
-
-        const fields = declaredNonComputeFields(state);
-        const idsBefore = state.entries.all.map((entry) => entry.id);
-        const valuesBefore = new Map(
-          state.entries.all.map((entry) => [entry.id, fields.map((field) => entry.read(field.key))]),
-        );
-        const parentsBefore = new Map(state.entries.all.map((entry) => [entry.id, entry.parent()?.id]));
-        const storeBefore = seedInputs.map((seed) => [seed.id, store.get(seed.id)] as const);
+        const canUndoBefore = state.canUndo;
+        const canRedoBefore = state.canRedo;
 
         state.entries.sync(target);
-        // `target` sometimes lands exactly on the seed (every generator pick a no-op): sync then
-        // commits nothing and records no undo step, so there is nothing for `undo()` to revert —
-        // that run asserts nothing, rather than undoing a step sync never took.
-        if (!seen.some((changeSet) => changeSet.origin === 'sync')) return;
 
-        // A removed id's store row goes right away, before undo brings it back — checked here so a
-        // broken removal (the row silently kept) cannot pass by never having moved at all.
+        // A removed id's store row goes right away, checked here so a broken removal (the row
+        // silently kept) cannot pass by never having moved at all.
         const keptAfterSync = new Set(state.entries.all.map((entry) => entry.id));
         for (const seed of seedInputs) {
           if (!keptAfterSync.has(entryId(seed.id))) expect(store.get(seed.id)).toBeUndefined();
         }
 
-        state.undo();
-
-        expect(state.entries.all.map((entry) => entry.id)).toEqual(idsBefore);
-        for (const entry of state.entries.all) {
-          expect(entry.parent()?.id).toEqual(parentsBefore.get(entry.id));
-          const expected = valuesBefore.get(entry.id)!;
-          fields.forEach((field, index) => {
-            expect(state.fields.valuesEqual(String(field.key), entry.read(field.key), expected[index])).toBe(
-              true,
-            );
-          });
-        }
-        for (const [id, row] of storeBefore) expect(store.get(id)).toEqual(row);
+        expect(state.canUndo).toBe(canUndoBefore);
+        expect(state.canRedo).toBe(canRedoBefore);
       }),
       { numRuns: 50 },
     );
