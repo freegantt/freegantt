@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { entryId } from '../model/index.js';
-import type { ChangeSet, DatasetEventMap } from '../model/index.js';
+import type { ChangeSet, DatasetEventMap, ErrorReport } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdit, EntryEdits } from './edit-extension.js';
 
@@ -67,6 +67,63 @@ describe('a commit carries one row per Field, even when the Rollup rewrites what
       (row) => row.store === 'entries' && row.id === entryId('parent') && row.field === 'end',
     );
     expect(endRows).toHaveLength(1);
+  });
+});
+
+describe('an added entity carries its rolled-up values, not a row (#517)', () => {
+  it('adding an entry and reparenting a child onto it in one transaction rolls up the entity, not a row', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'a', name: 'a', start: 0, end: 100 }],
+      timeZone: 'UTC',
+    });
+
+    const committed: ChangeSet[] = [];
+    state.on('change', ({ changeSet }: DatasetEventMap['change']) => {
+      committed.push(changeSet);
+    });
+
+    // n1 starts life with its own span. Reparenting `a` onto it, in the same transaction, gives n1 a
+    // child, so the Rollup overwrites the span n1 was just given.
+    state.transaction(() => {
+      state.entries.add({ id: 'n1', name: 'n1', start: 500, end: 900 });
+      state.entries.update('a', { parentId: 'n1' });
+    });
+
+    const n1 = committed[0]!.added.find((row) => row.entity.id === entryId('n1'))!.entity;
+    expect(n1.start).toBe(0);
+    expect(n1.end).toBe(100);
+
+    const n1UpdatedRows = committed[0]!.updated.filter((row) => row.id === entryId('n1'));
+    expect(n1UpdatedRows).toEqual([]);
+  });
+
+  it('a rolled-up value an added entry has nothing to roll up to is dropped from the entity, and reports once', () => {
+    const state = new DatasetState({ entries: [], timeZone: 'UTC' });
+
+    const reports: ErrorReport[] = [];
+    state.on('error', (report) => {
+      reports.push(report);
+    });
+    const committed: ChangeSet[] = [];
+    state.on('change', ({ changeSet }: DatasetEventMap['change']) => {
+      committed.push(changeSet);
+    });
+
+    // `parent` is added as a parent from the start (`add` with a `parentId` an already-added row
+    // carries), so it never gets a span of its own to roll up from its (nonexistent) children.
+    state.transaction(() => {
+      state.entries.add({ id: 'parent', name: 'parent', start: 0, end: 1 });
+      state.entries.add({ id: 'child', parentId: 'parent', name: 'child' });
+    });
+
+    const parent = committed[0]!.added.find((row) => row.entity.id === entryId('parent'))!.entity;
+    expect(parent.start).toBeUndefined();
+    expect(parent.end).toBeUndefined();
+    expect('start' in parent).toBe(false);
+    expect('end' in parent).toBe(false);
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.code).toBe('derived-values-dropped');
   });
 });
 

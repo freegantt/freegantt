@@ -27,7 +27,12 @@ import {
 } from './error-reporting.js';
 import type { EditsReading } from './entry-reader.js';
 import { EXTENDER_OPERATION } from './entry-reader.js';
-import { mergeProposedEditsByEntry, entryAfterEdit, proposedKeysOf } from './fields/field-access.js';
+import {
+  applyFieldRow,
+  mergeProposedEditsByEntry,
+  entryAfterEdit,
+  proposedKeysOf,
+} from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
@@ -275,6 +280,33 @@ export function buildCommitChangeSet(
     raiseErrorOn(data.bus, buildDerivedValuesDroppedReport(addDropped));
   }
 
+  // An added entity carries the values the commit settles on, not a row: nothing reads an Entries row
+  // for an id that has no prior committed value to diff against. A Rollup row for an added id folds
+  // onto that entity instead, the same reason the sibling rank below folds onto the entity too.
+  const rollupUpdatedForAdded = new Map<EntryId, FieldUpdated[]>();
+  const rollupUpdatedForOthers: FieldUpdated[] = [];
+  for (const row of rollupUpdated) {
+    if (!addedIds.has(row.id)) {
+      rollupUpdatedForOthers.push(row);
+      continue;
+    }
+    const rows = rollupUpdatedForAdded.get(row.id) ?? [];
+    rows.push(row);
+    rollupUpdatedForAdded.set(row.id, rows);
+  }
+  const rolledUpEntitiesForFold =
+    rollupUpdatedForAdded.size === 0
+      ? addedEntitiesForFold
+      : addedEntitiesForFold.map((row) => {
+          const rows = rollupUpdatedForAdded.get(row.entity.id);
+          if (rows === undefined) return row;
+          const entity = rows.reduce(
+            (acc, fieldRow) => applyFieldRow(acc, fieldRow.field, fieldRow.to, data.fields),
+            row.entity,
+          );
+          return { ...row, entity };
+        });
+
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
@@ -307,7 +339,7 @@ export function buildCommitChangeSet(
   const removedIds = new Set(removedEntities.map((row) => row.entity.id));
   // An added entity carries its final rank on the entity itself, not a row: nothing reads a
   // `siblingIndex` row for an id that has no prior committed value to diff against.
-  const rankedEntitiesForFold = addedEntitiesForFold.map((row) => {
+  const rankedEntitiesForFold = rolledUpEntitiesForFold.map((row) => {
     const rank = siblingRanks.get(row.entity.id);
     return rank === undefined || rank === row.entity.siblingIndex
       ? row
@@ -338,7 +370,7 @@ export function buildCommitChangeSet(
     rankedEntitiesForFold,
     removedEntities,
     mergeUpdatedRows(
-      [...updatedWithoutBodySiblingIndex, ...rollupUpdated, ...pluginRows, ...siblingIndexUpdated],
+      [...updatedWithoutBodySiblingIndex, ...rollupUpdatedForOthers, ...pluginRows, ...siblingIndexUpdated],
       data.fields,
     ),
   );
