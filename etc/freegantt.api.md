@@ -355,7 +355,7 @@ export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, D
 // @public
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
     aggregators?: Readonly<Record<string, Aggregator>>;
-    data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+    data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     // Warning: (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts

@@ -274,15 +274,32 @@ export type GanttScaleOptions =
 export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
 
 /** ADR 0019, `Q4`: the second line of defence. `GanttOptions.plugins` takes `ChromePlugin` alone, so
- *  a plugin with a `data` half is already a red squiggle in an editor. This catches the caller the
- *  compiler never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A
- *  library refuses in both languages it is read in.
+ *  a plugin with a `data` half, or any Dataset-only member (`fields`, `fieldTypes`, `aggregators`,
+ *  `hierarchySource`), is already a red squiggle in an editor. This catches the caller the compiler
+ *  never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A library
+ *  refuses in both languages it is read in.
+ *
+ *  `data` is optional (D7), so a fields-only plugin has no `data` to catch. Each Dataset-only member
+ *  gets its own check.
  *
  *  It raises `PluginSetupError`, the error a failed install already raises. No new type ships, and
  *  the message says where the plugin goes instead. */
 function assertChromeOnly<TProps>(plugins: readonly ChromePlugin<TProps>[]): readonly ChromePlugin<TProps>[] {
   for (const plugin of plugins) {
-    if (typeof (plugin as { data?: unknown }).data === 'function') {
+    const candidate = plugin as {
+      data?: unknown;
+      fields?: unknown;
+      fieldTypes?: unknown;
+      aggregators?: unknown;
+      hierarchySource?: unknown;
+    };
+    const declaresDatasetOnlyMember =
+      typeof candidate.data === 'function' ||
+      candidate.fields !== undefined ||
+      candidate.fieldTypes !== undefined ||
+      candidate.aggregators !== undefined ||
+      candidate.hierarchySource !== undefined;
+    if (declaresDatasetOnlyMember) {
       throw PluginSetupError.wrongInstallSite(plugin.id);
     }
   }

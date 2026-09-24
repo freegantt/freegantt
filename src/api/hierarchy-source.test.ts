@@ -31,8 +31,6 @@ const phases = () =>
     id: 'demo.phases',
     fields: [{ key: 'phaseId' }],
     hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
-    // `data` becomes optional in the next step (D7) — a no-op keeps this arm's required half today.
-    data() {},
   });
 
 function phaseDataset(entries: EntryInput<PhaseProps>[] = phaseRows): Dataset<PhaseProps> {
@@ -86,7 +84,6 @@ describe('a plugin source answers the tree, and every door follows it', () => {
         id: 'demo.passthrough',
         requires: ['demo.phases'],
         hierarchySource: (next) => (entry) => (entry.id === 'nobody' ? 'design' : next(entry)),
-        data() {},
       });
     const dataset = new Dataset<PhaseProps>({
       timeZone: 'UTC',
@@ -178,7 +175,6 @@ describe('a plugin source answers the tree, and every door follows it', () => {
         id: 'demo.pin',
         requires: ['demo.phases'],
         hierarchySource: (next) => (entry) => (entry.id === 'wire' ? 'design' : next(entry)),
-        data() {},
       });
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -211,7 +207,6 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       definePlugin({
         id: 'demo.loop',
         hierarchySource: () => (entry) => (entry.id === 'a' ? 'b' : 'a'),
-        data() {},
       });
     const warnings = captureWarnings();
     const dataset = new Dataset({
@@ -246,7 +241,6 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       definePlugin({
         id: 'demo.ghost',
         hierarchySource: () => (entry) => (entry.id === 'a' ? 'nobody' : undefined),
-        data() {},
       });
     const warnings = captureWarnings();
     const dataset = new Dataset({
@@ -285,7 +279,6 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       definePlugin({
         id: 'demo.ghost',
         hierarchySource: () => (entry) => (entry.id === 'c' ? 'nobody' : undefined),
-        data() {},
       });
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -439,7 +432,6 @@ describe('the cost shape holds with a source installed', () => {
           asked(entry.id);
           return entry.props.phaseId ?? next(entry);
         },
-        data() {},
       });
     // One small family inside a large dataset: the answer must cost the family, never the dataset.
     const rows: EntryInput<PhaseProps>[] = [{ id: 'design', name: 'Design' }];

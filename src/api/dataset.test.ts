@@ -1022,7 +1022,9 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
     },
   };
 
-  function twoLockedEntries(cascadeTo: (id: string, owner: string) => DataPlugin['data']): Dataset {
+  function twoLockedEntries(
+    cascadeTo: (id: string, owner: string) => NonNullable<DataPlugin['data']>,
+  ): Dataset {
     return new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'owner', editable: false }],
@@ -1039,7 +1041,7 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
 
   it('lets a cascade write the Entry the lock rule names, unchanged from a locked sibling', () => {
     const cascadesOwner =
-      (id: string, owner: string): DataPlugin['data'] =>
+      (id: string, owner: string): NonNullable<DataPlugin['data']> =>
       (ctx) => {
         ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
       };
@@ -1053,7 +1055,7 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
 
   it('still refuses a cascade onto a cell the lock rule has no opinion on', () => {
     const cascadesOwner =
-      (id: string, owner: string): DataPlugin['data'] =>
+      (id: string, owner: string): NonNullable<DataPlugin['data']> =>
       (ctx) => {
         ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
       };
