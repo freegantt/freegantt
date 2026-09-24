@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
+import { diffEdit, foldChangeSet, invertChangeSet, mergeUpdatedRows } from './change-set.js';
 import { changeSetId, entryId } from '../model/index.js';
-import type { StoredEntry, EntryId, Instant } from '../model/index.js';
+import type { StoredEntry, EntryId, FieldKey, Instant } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
 import { createFieldAccess, withProposedKeys, writeField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
@@ -154,6 +154,23 @@ describe('foldChangeSet', () => {
       { store: 'entries', id: t1.id, field: 'name', from: 'a', to: 'b' },
       { store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' },
     ]);
+  });
+});
+
+describe('mergeUpdatedRows', () => {
+  it('keeps two rows apart when their id and field, joined by a colon, spell the same string', () => {
+    // id 'a:b' field 'c' and id 'a' field 'b:c' both stringify to 'entries:a:b:c' under a joined-string
+    // key — a merge that keys that way collapses two unrelated rows into one and drops the other.
+    const rowOne = { store: 'entries' as const, id: entryId('a:b'), field: 'c' as FieldKey, from: 1, to: 2 };
+    const rowTwo = {
+      store: 'entries' as const,
+      id: entryId('a'),
+      field: 'b:c' as FieldKey,
+      from: 10,
+      to: 20,
+    };
+    const merged = mergeUpdatedRows([rowOne, rowTwo], registry);
+    expect(merged).toEqual([rowOne, rowTwo]);
   });
 });
 
