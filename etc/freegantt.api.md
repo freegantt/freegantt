@@ -424,11 +424,6 @@ export interface DatasetEvents {
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
 }
 
-// @public
-export interface DatasetHierarchy {
-    setSource<TProps = Record<string, unknown>>(wrap: HierarchySourceWrapper<TProps>): void;
-}
-
 // @public (undocumented)
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
@@ -457,8 +452,6 @@ export interface DatasetPluginContextOf<TDataset> {
     edits: DatasetEditHook;
     // (undocumented)
     events: DatasetEvents;
-    // (undocumented)
-    hierarchy: DatasetHierarchy;
     // (undocumented)
     store: DatasetStoreAccess;
 }

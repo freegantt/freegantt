@@ -215,15 +215,6 @@ export class Dataset<TProps = unknown> {
             state.setLockRule(wrap);
           },
         },
-        hierarchy: {
-          // Trusted, unchecked TProps cast — the same trust boundary the class note above describes.
-          // `data/` holds one erased tree for every Dataset; `TProps` types the plugin author's own
-          // read of `entry.props` and reaches no further.
-          setSource: (wrap) => {
-            gate.assertOpen();
-            state.setHierarchySource(wrap as HierarchySourceWrapper);
-          },
-        },
         store: {
           reserve: <T extends object>() => state.pluginStores.reserve<T>(pluginId),
           read: <T extends object>(otherId: PluginId) => state.pluginStores.read<T>(otherId),

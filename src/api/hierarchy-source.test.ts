@@ -1,12 +1,10 @@
 // ADR 0020: a plugin states the parent of an Entry, and core owns everything below that answer —
-// the child index, `depth`, `descendants()` and the Rollup. ADR 0031 moved the public door: a
-// plugin author declares `hierarchySource` on the plugin definition, not a `ctx` call inside
-// `data()`. "The door is closed once the plugin has set up" below is the one case left on
-// `ctx.hierarchy.setSource` — that seam stays until ADR 0031's own removal step.
+// the child index, `depth`, `descendants()` and the Rollup. ADR 0031 gives a plugin author one door
+// onto the seam: declare `hierarchySource` on the plugin definition.
 import { describe, expect, it, vi } from 'vitest';
 import { Dataset } from './dataset.js';
 import { definePlugin } from './define-plugin.js';
-import { entryId, fieldRowsOf, RegistrationClosedError } from './index.js';
+import { entryId, fieldRowsOf } from './index.js';
 import type { ErrorReport } from './index.js';
 import type { EntryInput } from './index.js';
 
@@ -76,9 +74,9 @@ describe('a plugin source answers the tree, and every door follows it', () => {
   });
 
   it('a declared source nests, and the construction Rollup follows it', () => {
-    // Two plugins each declare `hierarchySource` (ADR 0031) — no `ctx.hierarchy.setSource` call
-    // anywhere. `demo.passthrough` sets up after `demo.phases` (`requires`), wraps its answer, and
-    // falls through for every row here, so `phases`'s tree is untouched: `design` still totals 15.
+    // Two plugins each declare `hierarchySource` (ADR 0031). `demo.passthrough` sets up after
+    // `demo.phases` (`requires`), wraps its answer, and falls through for every row here, so
+    // `phases`'s tree is untouched: `design` still totals 15.
     const passthrough = () =>
       definePlugin({
         id: 'demo.passthrough',
@@ -418,24 +416,6 @@ describe('the Rollup follows the source when a row moves', () => {
     });
 
     expect(dataset.entries.get('build')?.read('cost')).toBe(17);
-  });
-});
-
-describe('the door is closed once the plugin has set up', () => {
-  it('a setSource call after data() returns throws RegistrationClosedError', () => {
-    let callLate: (() => void) | undefined;
-    const late = () =>
-      definePlugin({
-        id: 'demo.late',
-        data(ctx) {
-          callLate = () => {
-            ctx.hierarchy.setSource((next) => next);
-          };
-        },
-      });
-    new Dataset({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A' }], plugins: [late()] });
-
-    expect(() => callLate?.()).toThrow(RegistrationClosedError);
   });
 });
 

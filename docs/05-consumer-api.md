@@ -123,7 +123,7 @@ of resolved rows.
 `Field`, `FieldType`, `FieldTypeName`, `FieldKey`, `FieldContext`, `Aggregator`, `GridColumn`, `GridColumnInput`,
 `RowSource`, `EntriesRowSource`, `GroupRowSource`, `CustomRowSource`, `CustomRow`,
 `RowSourceCommon`, `CustomRowInput`,
-`CollapseChange`, `DatasetHierarchy`, and the hierarchy error classes re-exported from `freegantt`.
+`CollapseChange`, and the hierarchy error classes re-exported from `freegantt`.
 `FieldSource` retired (a Field key is the whole address) and `SerializedField` retired (the
 library holds no save format) — neither is in `etc/freegantt.api.md`.
 

@@ -14,7 +14,6 @@ import type {
   Disposer,
   ExtenderWrapper,
   FieldLockRuleWrapper,
-  HierarchySourceWrapper,
   PluginId,
   PluginStore,
   PluginStoreView,
@@ -24,9 +23,9 @@ import type { DisposableStore } from '../extensions/disposables.js';
 // Re-exported so a plugin author names the store types from the same module as the contract that
 // hands them over, rather than hunting for the module they are declared in.
 export type { PluginStore, PluginStoreView, ExtenderWrapper };
-// A plugin author writing a hierarchy source names both: the wrapper `setSource` takes, and the
-// source it composes onto. Here for the same reason the store types are — beside the contract that
-// hands them over.
+// A plugin author writing a hierarchy source names both: the wrapper its plugin's own
+// `hierarchySource` member takes, and the source it composes onto (`api/plugin.ts`). Here for the
+// same reason the store types are — beside the contract that hands them over.
 export type { HierarchySource, HierarchySourceWrapper } from '../model/index.js';
 // A plugin author writing a lock rule names both: the wrapper `setLockRule` takes, and the query the
 // rule reads. Here for the same reason the hierarchy source types are.
@@ -72,27 +71,6 @@ export interface DatasetEditHook {
   setLockRule(wrap: FieldLockRuleWrapper): void;
 }
 
-/** The tree, as a plugin claims it (ADR 0020). Installing composes: the wrapper receives the current
- *  occupant, so a second plugin answers over the first's tree instead of evicting it. Core's own
- *  occupant is `(entry) => entry.parentId` and has no special claim on the seam (D-S5-23).
- *
- *  **This is an expert door.** An app author never meets it: they write `parentId` on the Entry, and
- *  core's own source answers it. */
-export interface DatasetHierarchy {
-  /** Call: `ctx.hierarchy.setSource((next) => (entry) => entry.props.phaseId ?? next(entry))` —
-   *  "set the hierarchy source: the phase id when there is one, otherwise whatever the next source
-   *  says."
-   *
-   *  Core owns everything downstream of the answer — the child index, `depth`, `descendants()` and
-   *  the Rollup all follow it, so a plugin that changes the tree has changed the Rollup and the two
-   *  can never disagree. Name the `props` shape to read a consumer key with no cast:
-   *  `ctx.hierarchy.setSource<PlannerProps>(…)`.
-   *
-   *  Legal while `data()` runs and not after — a later call throws `RegistrationClosedError`, because
-   *  the construction Rollup has already walked the tree by then (D-S5-4). */
-  setSource<TProps = Record<string, unknown>>(wrap: HierarchySourceWrapper<TProps>): void;
-}
-
 /** This plugin's own store, plus a read-only view of anybody else's (D-S5-24, D-S5-30). */
 export interface DatasetStoreAccess {
   /** This plugin's own reserved store, namespaced by its id. Idempotent: a second call returns the
@@ -110,7 +88,6 @@ export interface DatasetPluginContextOf<TDataset> {
   dataset: TDataset;
   events: DatasetEvents;
   edits: DatasetEditHook;
-  hierarchy: DatasetHierarchy;
   store: DatasetStoreAccess;
   disposables: DisposableStore;
 }
