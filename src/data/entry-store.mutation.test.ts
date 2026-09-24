@@ -294,6 +294,26 @@ describe('every write renumbers its group (ADR 0034)', () => {
 
     expect(seen).toHaveLength(0);
   });
+
+  it("a Field locked to 'never' refuses an explicit move, and a reparent still appends", () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 't1', parentId: 'p1', name: 't1', start: 0, end: 1 },
+        { id: 't2', parentId: 'p2', name: 't2', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      fields: [{ key: 'siblingIndex', editable: 'never' }],
+    });
+
+    expect(() => state.entries.update('t1', { siblingIndex: 0 })).toThrow(FieldNotEditableError);
+
+    state.entries.update('t1', { parentId: 'p2' });
+
+    expect(state.entries.get('t1')!.read('siblingIndex')).toBe(1);
+    expect(state.entries.get('t2')!.read('siblingIndex')).toBe(0);
+  });
 });
 
 describe('an extender edit renumbers its own group too (ADR 0034)', () => {
