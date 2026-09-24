@@ -109,3 +109,280 @@ Full rulings: [#528](https://github.com/freegantt/freegantt/issues/528).
   write should not do.
 - **Skip undo.** That is #419.
 - **Conflict detection.** That is `apply` (D-S2-11).
+
+## Plan
+
+## Plan (2026-09-23)
+
+**Base:** `origin/main` (d9073e67), plus #533 PR 1 and #528, which land first. Step 0 rebases onto
+them and confirms the #528 facts that are listed under "Depends on".
+
+### Decisions
+
+**D1. Sync builds its ChangeSet the way `load` does, and hands it to `commitChangeSet`.**
+- Sync reads the list into a *target batch*. It uses the same functions as `load`:
+  - `toEntries`
+  - `assertEntryBatchIsSound` (raw `parentId`)
+  - `checkHierarchyAnswers`
+  - #528's list-position `siblingIndex` writer
+  - `rollUpFreshBatch`
+- It then writes the Rollup rows onto the target.
+- The target is the state `load(list)` leaves. So the S1 contract holds by construction.
+- `changesToMatchBatch` (D12) diffs the committed rows against the target. The result is added, removed and
+  updated rows. `pluginStores.pendingRows(removedIds)` adds the store rows. `commitChangeSet(runner, cs)`
+  commits them with `origin: 'sync'`.
+- Why: `commitChangeSet` runs no extension hook, no lock rule and no Rollup (`transaction.ts:200-207`).
+  That behaviour is S3 already. Undo, redo and `replay` already apply and invert its rows. Nothing
+  widens `update()`, and `buildCommitChangeSet` does not change.
+- Rejected: stage through `runTransaction`. `buildCommitChangeSet` always calls the hook
+  (`build-commit-change-set.ts:142`). Skipping the hook needs an origin branch in the commit path. Also, its
+  Rollup reads pending edits, so the result could differ from `load`'s Rollup over the full batch.
+- Rejected: remove and re-add each changed id. That loses selection, collapse and store rows (S6).
+
+**D2. "A Field changed" means `registry.valuesEqual(key, from, to)` is false.** This is the D-S2-7 rule
+that every commit uses (`change-set.ts:32`).
+- Dates: `Instant` is a number (`model/time.ts:4`), and `start`/`end` compare by reference
+  (`core-fields.ts:8`). Ingest turns an input into epoch ms in the Dataset's zone. So the same input
+  gives the same number, and a zone never makes a false row.
+- `compute` Fields (`duration`, `hierarchyParentId`, a consumer's own) are skipped. They hold no
+  stored value.
+- A rolled-up parent cell compares the *target* value, after the Rollup. So a server value on a
+  parent never makes a row by itself.
+- ⚠️ A Field whose value is an object or an array needs its own `equals`. `Object.is` sees a fresh
+  server object as changed on every poll. Document this. Rejected: a deep-equal rule for sync only,
+  because one Field would then have two equality rules.
+- ⚠️ Passenger keys (undeclared keys in a nested `props`, `entry-reader.ts:98-104`) have no Field, so
+  they get no row (ADR 0011). Sync does not rewrite them, and `update()` does not either. The contract
+  covers declared Fields and the tree.
+
+**D3. A cleared key** gives the row `{ from, to: undefined }`. `applyFieldRow` → `writeOntoEntry` →
+`entryAfterEdit` deletes the key (`field-access.ts:473-475`, `entry-store.ts:81-93`). Undo writes the old
+value back. This needs no new code. A cleared `parentId` makes the entry a root.
+
+**D4. ⚠️ What the contract compares.** "After `sync(list)`, the data equals `load(list)`" means these
+things are the same: the ids, every declared Field value (`siblingIndex` included), the tree, and the
+sibling order. The flat `entries.all` index is not data. A kept entry keeps its Map slot. Only a
+`siblingIndex` row records order in a way undo can revert (S12). If #528 makes `entries.all` a tree walk
+by `siblingIndex`, the flat order matches as well.
+
+**D5. Plugin store rows.** A kept id gets no row, so its store rows stay. For a removed id,
+`pendingRows` (`plugin-store.ts:177-201`) gives `{ from, to: undefined }`. Undo's invert
+(`change-set.ts:123-131`) puts it back. This is the same path `remove()` uses, and it needs no new code.
+
+**D6. Refusals.** Sync refuses these calls:
+- a call inside an open transaction (`entry-batch.ts:95-97`)
+- a call from the extension hook (`:107-109`)
+- a call while `beforeChange`/`change` handlers run. This check is new: `assertNotNotifying`.
+
+Why the new check: `load` reaches only `commitChangeSet`'s own check (`transaction.ts:209`), and that
+check names `'commitChangeSet'`. A sync with no changes never gets that far. So a sync from a `change`
+handler would throw only when the server changed something. `load` gets the same check, and every
+error names the door the caller used.
+
+**D7. History.** A `'sync'` commit is recorded like a `'user'` one (`history.ts:72`). `#record`
+truncates at the cursor, so Redo is erased (S11). The capacity stays at 100. Document
+`history: { capacity }` (`api/dataset.ts:93`) under S13.
+
+**D8. Where added entries go in the flat order: at the end, in list order.**
+- `#restoreAdded` (`entry-store.ts:851-874`) takes its "restore a remembered index" branch for every
+  origin except `'user'`.
+- Narrow that branch to `'undo'` and `'redo'`.
+- `#rememberRemovedIndexes` keeps recording for `'sync'`. So an undo puts a removed entry back in its
+  old slot.
+
+**D9. Gantt: no new code, only tests.**
+- The shell's change handler (`gantt-shell.ts:944-953`) drops selection only for ids in `removed`
+  (`entry-selection.ts:102-113`).
+- It resets collapse only on `'load'` (`:950`). So a kept id keeps both. Scroll and zoom stay.
+- Redraw: an add or a remove replans from row 0. A change with only Field rows replans from the lowest
+  changed row (`frame-layout.ts:271-278`).
+- ⚠️ A removed row's id stays in `gantt.collapsed`, the same as after `remove()` today. It has no
+  effect, and an undo brings the row back collapsed. If S6's "loses" must cover collapse, fix
+  `remove()` and sync together in a follow-up.
+
+**D10. ⚠️ Reports raise on every call, as with `load`.** This covers the undeclared-key warning,
+`derived-values-dropped` and #528's dropped-`siblingIndex` warning. A server that keeps sending a bad
+cell gets one report per poll.
+
+**D11. Performance.**
+- Sync is not a hot path. I5 covers frames and pointer moves (`plans/01:968`).
+- One call costs O(n × Fields): read, check, tree, Rollup and diff.
+- The no-change path allocates no row, mints no `ChangeSetId` and commits nothing. It bumps no
+  revision, so `entries.all` keeps its identity and the Gantt does no work (S10).
+- Step 6 measures `seeded(10k)`.
+
+**D12. The diff function.** It is `changesToMatchBatch(committed, target, fields, access)` in the new
+file `src/data/entry-batch-changes.ts`. It is pure, and it returns `{ added, removed, updated }`. Read
+the call aloud: `changesToMatchBatch(this.#byId, target, …)` reads as "the changes to match the batch".
+
+**D13. The harness demo.**
+- Add a "Sync from server" button beside Import on the Editing & data page. Its handler is
+  `attemptMutation(() => dataset.entries.sync(server.fetchRows()))`.
+- `harness/fake-server.ts` stands in for `fetch`. Each call returns the next scripted revision:
+  1. a rename and a date shift
+  2. an added row
+  3. a reorder and a remove
+  4. no change
+- The fake server only returns rows. It does no diff and no ordering. If the page needs more than
+  that, stop and report an API gap.
+- ⚠️ `lock-entries.ts:130` lets `'sync'` through the same as `'load'`. The list carries `locked`, so
+  the server owns the lock. Alternative: keep the veto. Then any server change to a locked row blocks
+  the whole sync.
+
+**D14. One word, one meaning.** `CONTEXT.md` uses "sync" for two other meanings:
+- "Sync-only" (synchronous) at `:159`
+- "the sync adapter's own job" at `:152`
+
+Rewrite both in step 4. The `render/dom` method `sync()` is in another scope, and `api.md` allows it.
+
+### Facts found (origin/main)
+
+- `load` builds its ChangeSet itself and calls `commitChangeSet` (`entry-store.ts:622-667`). The rows
+  it adds are the raw input. The Rollup corrections go in `updated`.
+- `commitChangeSet` fires `beforeChange`, applies the rows and emits `change`. It runs no hook and no
+  Rollup (`transaction.ts:208-261`).
+- `replayChangeSet` allows only `'undo'`/`'redo'` (`replay.ts:18`). Sync does not use it.
+- `pendingRows` works with no open write set (`plugin-store.ts:180`, `?? []`).
+- `#rememberRemovedIndexes` skips only `'load'` (`entry-store.ts:835`).
+- `valuesEqual` falls back to `Object.is` (`field-registry.ts:345-349`).
+- `readField` runs `compute` Fields (`field-access.ts:395-403`), so the diff must skip them.
+- The harness Import calls `load` (`harness/editing-and-data.ts:437-444`). The lock veto skips
+  `'load'` (`harness/plugins/lock-entries.ts:130`).
+- `api/dataset.ts:291` says `'user'` is the only public origin. That is stale, and step 4 fixes it.
+
+### Depends on (not true on main yet: confirm in step 0)
+
+- **#528-A:** the name of the function that writes `siblingIndex` from list position in `load`. Sync
+  calls the same function.
+- **#528-B:** tree reads (`children`, the row plan) follow `siblingIndex`.
+- **#528-C:** `commitChangeSet` applies `siblingIndex` rows exactly as given. Renumbering runs only on
+  the `add`/`update`/`remove` staging path. If it also runs in `commitChangeSet`, undo of a sync
+  renumbers twice. Then stop and report to the owner.
+- **#533:** `EntryStore.#hierarchySource` is a plain field, and construction checks the batch.
+
+### Steps
+
+Each step is one commit and is green on `pnpm verify:full`. Each step writes its failing test first.
+Regenerate `etc/freegantt.api.md` in every commit that changes a public type. Steps 2 and 3 do not touch
+the same files, so two implementers can write them in parallel. They still commit in the order below.
+
+0. **Rebase and confirm** (about 15 min). Rebase onto main with #533 and #528. Read #528's code for
+   Depends-on A to C. If one differs, update D1 and step 4 first.
+1. **Specs (plans only)** (small, about 45 min).
+   - `plans/02` §2: add a `sync` subsection after `load` (`:122-131`). Include the call site, the S1
+     contract (D4), S3, S6 and S10.
+   - `plans/02` "Undo and redo" (`:142`): sync records one step, erases Redo, and 100 is the default capacity.
+   - `plans/02` §6 (`:930`): the poll uses `sync`.
+   - `plans/01:570`: add `'sync'` to the origin line.
+   - ADR 0015 `:73`: add a sync row (it ignores `'never'`, and derived cells re-roll).
+2. **The pure diff** (medium, about 2 h).
+   - Write the failing tests first, in `src/data/entry-batch-changes.test.ts`:
+     - one test each for an add, a remove and a changed Field
+     - a cleared key (`to: undefined`)
+     - a `compute` Field that makes no row
+     - a Field `equals` that suppresses a row
+     - equal Instants that make no row
+     - a changed `parentId`
+     - identical batches, which give three empty lists
+   - Add one fast-check property: applying the changes to `committed` gives `target`.
+   - Code: `src/data/entry-batch-changes.ts` (D12).
+   - Add a row to `docs/architecture/files.md` for the new file.
+3. **Share `load`'s batch preparation, and refuse notification** (small, about 1 h).
+   - Write the failing test first: `load` inside a `change` handler throws
+     `MutationDuringNotificationError` that names `entries.load`.
+   - Move `load`'s read, check, tree, `siblingIndex` and Rollup into `#readBatch(inputs, operation)`.
+   - Add `assertNotNotifying` to `entry-batch.ts`.
+   - Every existing `load` test stays green.
+4. **`dataset.entries.sync(list)`** (large, about 4 h).
+   - Write the failing tests first, in the new file `src/data/entry-store.sync.test.ts`:
+     - A child listed before its parent lands.
+     - A duplicate id, an unknown parent or a loop throws, and the store and History do not change.
+     - One `change` fires with `origin: 'sync'`, and `canUndo` reads `true`.
+     - Undo restores the rows, the removed entries' slots and their plugin store rows.
+     - Redo re-applies the sync.
+     - A sync erases Redo.
+     - A sync with no changes fires no `beforeChange` and no `change`. The `entries.all` identity and
+       History stay the same.
+     - A `beforeChange` veto throws `MutationCancelledError`.
+     - A `'never'` lock does not refuse the sync.
+     - A derived parent cell re-rolls.
+     - An `EditExtender` is not called.
+     - A kept id's store row stays, and a removed id's store row goes.
+     - A local edit is overwritten, and undo brings it back (S5).
+     - A reorder writes `siblingIndex` rows only.
+     - Sync throws inside `transaction()`, in the hook and during `change`.
+   - Code:
+     - Add `'sync'` to `ChangeOrigin` and update its doc.
+     - Add the History arm (D7).
+     - Change `#restoreAdded` (D8).
+     - Add `EntryStore.sync`.
+     - Add `sync` to the contract in `model/dataset.ts`, beside `load`.
+   - Docs in the same commit:
+     - `CONTEXT.md`: a new **Sync** entry. Avoid: Refresh, Merge, Reconcile, Apply.
+     - `CONTEXT.md`: update ChangeSet `:135`, Origin `:139` and Load `:147`, and make the D14 rewrites.
+     - `docs/06` `:289-312`: a plugin sees sync as an ordinary change with exact rows. It must not
+       reset caches on it.
+     - Fix the comment at `api/dataset.ts:291`.
+5. **The contract property** (medium, about 1.5 h). Write `src/data/entry-store.sync.property.test.ts`
+   with fast-check:
+   - (a) `sync(list)` equals `load(list)` under D4.
+   - (b) Undo after sync gives back the state before the sync, store rows included.
+   - (c) `sync` of the current `toInput()` list commits nothing.
+6. **Gantt pins and measurement** (medium, about 1.5 h).
+   - Tests in the happy-dom Gantt suite:
+     - A selected kept id stays selected.
+     - A selected removed id drops.
+     - A collapsed kept parent stays collapsed.
+     - `scrollTop` does not change.
+     - A sync with no changes requests no frame.
+   - Update the comment at `gantt-shell.ts:947-950` to name sync.
+   - Measure a scratch script on `seeded(10k)`: a sync with no changes, and a sync with 1% changes.
+     Record the numbers in this plan. Add no timing gate.
+7. **Harness and e2e** (medium, about 2 h).
+   - Build D13.
+   - Page brief: sync records one undo step, and Import (`load`) clears undo.
+   - Review `harness/main.ts` under the stop rule.
+   - Extend `e2e/editing-and-data.spec.ts`: select a row, then click Sync from server. Assert that the
+     renamed bar shows, the selection stays and Undo is enabled. Then click Undo and assert the old name.
+   - Run the e2e on all three engines.
+8. **Close out** (small, about 30 min).
+   - Run `ocr review --from origin/main --to HEAD`.
+   - Move this file to `plans/issues/closed/` and update the README.
+   - The PR body says `Closes #517`.
+
+### Risks
+
+- #528 lands in a different shape than Depends-on A to C. Step 0 catches this before any code.
+- An object-valued Field with no `equals` makes a row on every poll. S10 then fails in silence
+  (D2 ⚠️). Docs mitigate this, and no code check catches it.
+- A common poll that removes rows grows `#removedAtIndex`. A removed object stays pinned after its
+  History step drops off. `'user'` already has this leak, and sync makes it common. A follow-up could
+  prune it; History must stay removable.
+- Frequent syncs push user edits off the stack (S13). This is accepted and documented.
+- The no-change cost at 10k is O(n) with the Rollup. If step 6 measures more than about 30 ms in Node,
+  open a follow-up. Do not optimise before that measurement.
+- A consumer's exhaustive `switch` over `ChangeOrigin` breaks at compile time. This is pre-release,
+  and the API report shows the change.
+
+### Out of scope
+
+- A partial update (#527), a skip-undo rule (#419) and conflict detection (`apply`, D-S2-11).
+- Writes to passenger `props` keys (D2), and a deep-equal default.
+- Dropping a removed id's collapse state, for `remove()` and sync together (D9).
+- `toInput()` carrying `siblingIndex` (O4 stands).
+
+### Coordinator review (2026-09-23, approved with amendments)
+
+- **C1 — No rebase.** Step 0 becomes: branch off `main` after #528 merges, then read #528's code for
+  Depends-on A to C. The repo never rebases.
+- **C2 — No ADR body edit.** Step 1 does not edit ADR 0015 line 73. An accepted record is never
+  rewritten (`docs/adr/README.md`). The sync row goes in `plans/02` and `CONTEXT.md`. If an ADR is
+  needed, write a new one that amends 0015, after the #529 work (it may also amend 0015).
+- **C3 — Spec labels.** Labels such as D2 or S6 stay in this plan. Code comments, test names, docs
+  and the harness state the rule itself (`CLAUDE.md`).
+- **C4 — The ⚠️ calls stand for tonight:** D2 (an object Field needs its own `equals`; passenger keys are
+  not synced), D4 (the contract compares the tree and `siblingIndex`, not the flat index), D9 (a removed
+  row's collapse state stays), D10 (ingest reports repeat on every poll), D13 (the lock plugin lets sync
+  through). The owner confirms them.
+- **C5 — Depends-on C is a hard stop.** If #528 renumbers inside `commitChangeSet` or replay, the
+  implementer stops and the coordinator decides before step 1.
