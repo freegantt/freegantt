@@ -4,7 +4,7 @@ status: amended by [0032](0032-a-gantt-plugins-code-runs-before-the-first-frame.
 painted, before any plugin's `view(ctx)` runs. Ruled 2026-09-23, out of the plan for
 #533. PR 1 of 2 (this record; the `Dataset`
 half) is planned; the Gantt `view()` half is PR 2, planned separately. Working material:
-[`plans/issues/open/533-plugin-lifecycle.md`](../../plans/issues/open/533-plugin-lifecycle.md).
+[`plans/issues/closed/533-plugin-lifecycle.md`](../../plans/issues/closed/533-plugin-lifecycle.md).
 decided: a plugin declares on its definition everything that shapes construction — `fields`,
 `fieldTypes`, `aggregators` and `hierarchySource`. The `Dataset` builds completely from those
 declarations before any plugin's `data(ctx)` runs. `new Dataset({ entries })` checks the batch the
