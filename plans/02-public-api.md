@@ -131,7 +131,7 @@ dataset.entries.load(rows);   // rows in any order: a child may come before its 
 
 `transaction()` returns the body's own return value, not a `ChangeSet` — `dataset.on('change')` is the only channel a committed changeset travels on (§3). A nested `transaction()` call runs its body against the already-open transaction and returns that body's value without committing a second time; only the outermost call commits. A veto (`beforeChange` returning `false`, §3) makes `transaction()` throw `MutationCancelledError` carrying the refused changeset, rather than returning at all.
 
-`dataset.plugins` is **read-only**, unlike `gantt.plugins`. A Dataset plugin may declare a Field, and a Field must exist before the first Rollup walks (D-S5-4) — adding one later would mean re-rolling the whole dataset under a Field the first Rollup never walked. So a Dataset installs its plugins once, in its constructor, and a consumer who wants a different plugin set builds a Dataset with it (ADR 0016). A Gantt has no such moment — its plugins register paint and gesture seams that are re-resolved on the next frame — so `gantt.plugins = [...]` stays assignable. Uninstalling a Dataset plugin is `dataset.destroy()`, which releases every installed plugin in reverse setup order.
+`dataset.plugins` is **read-only**, unlike `gantt.plugins`. A Dataset plugin declares everything that shapes construction — `fields`, `fieldTypes`, `aggregators` and `hierarchySource` — on its own definition (ADR 0031), and the Dataset builds completely from those declarations before any plugin's `data(ctx)` runs. Installing a plugin after construction would mean redoing the store, the child index and the Rollup that already ran under the plugins that came first. So a Dataset installs its plugins once, in its constructor, and a consumer who wants a different plugin set builds a Dataset with it (ADR 0016). A Gantt has no such moment — its plugins register paint and gesture seams that are re-resolved on the next frame — so `gantt.plugins = [...]` stays assignable. Uninstalling a Dataset plugin is `dataset.destroy()`, which releases every installed plugin in reverse setup order.
 
 A child arriving is the derivation door (`01` §2.5). An Entry that gains its first child starts deriving in the same transaction. Losing the last child leaves a normal Entry with no dates. There is no `autoGroup` key and no promotion of a stored classification.
 
@@ -665,8 +665,10 @@ const gantt = new Gantt({ dataset }); // its Fields, variants, bars and menu are
 ```
 
 **The install site is where the state lives.** A plugin with a `data` half installs on the
-`Dataset`, because a Field must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that
-Dataset then runs the `view` half once, each with its own context, so I2 holds by construction. A
+`Dataset`, because it declares everything that shapes construction — `fields`, `fieldTypes`,
+`aggregators` and `hierarchySource` (ADR 0031) — on the definition itself, before any plugin code
+runs. Every `Gantt` bound to that Dataset then runs the `view` half once, each with its own context,
+so I2 holds by construction. A
 chrome-only plugin — `weekendShading()` — has no `data` half and keeps installing on the `Gantt`.
 `gantt.plugins` stays live-reconfigurable, and `dataset.plugins` stays read-only.
 
@@ -680,18 +682,18 @@ together with its own chrome under that one graph (D-S5-31), so a chrome plugin 
 whose only half is `data`. There is no ordering knob.
 
 **The `data` half's own doors are namespaced, and every one is expert.** `ctx.store.reserve` takes
-this plugin's store, `ctx.edits.setExtender` claims the extension hook, `ctx.hierarchy.setSource`
-claims the hierarchy source (ADR 0020), and `ctx.edits.setLockRule` claims the per-entry lock rule
-(ADR 0015, #473). An app author never meets one: they write `parentId` on an Entry, and core's own
-source answers it. Each door takes one occupant that composes — a plugin receives the current
-occupant and may call it — so a second plugin adds to the first rather than evicting it (D-S5-23).
-All four are legal while `data()` runs and not after (D-S5-4).
+this plugin's store, `ctx.edits.setExtender` claims the extension hook, and `ctx.edits.setLockRule`
+claims the per-entry lock rule (ADR 0015, #473). Each door takes one occupant that composes — a
+plugin receives the current occupant and may call it — so a second plugin adds to the first rather
+than evicting it (D-S5-23). Both are legal while `data()` runs and not after (D5, `plans/s5.1`).
 
-**A Field, a Field type and an Aggregator are not a `ctx` door at all** — a plugin declares them on
-itself, `fields`/`fieldTypes`/`aggregators`, the same shape `DatasetOptions` takes (#496 grill round
-3, R1). `Dataset`'s constructor registers every plugin's declarations, alongside its own, before any
-entry is read; `data()` then runs after, so it still sees every entry. One way to declare, so there
-is no `ctx.fields.register` a later call could reach (R2).
+**A Field, a Field type, an Aggregator and the hierarchy source are not a `ctx` door at all** — a
+plugin declares them on itself, `fields`/`fieldTypes`/`aggregators`/`hierarchySource`, the same shape
+`DatasetOptions` takes (#496 grill round 3, R1; ADR 0031). An app author never meets the hierarchy
+source: they write `parentId` on an Entry, and core's own source answers it. `Dataset`'s constructor
+builds every plugin's declarations, alongside its own, completely before `data()` runs; `data()` then
+runs after, so it still sees every entry. One way to declare, so there is no `ctx.fields.register` or
+`ctx.hierarchy.setSource` a later call could reach (R2, D2).
 
 ```ts
 ctx.edits.setLockRule((next) => (entry, field) =>
@@ -708,13 +710,19 @@ an `EditExtender` cascade — reads the same resolved answer, and `Dataset.edita
 (I14).
 
 ```ts
-ctx.hierarchy.setSource<PlannerProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
+definePlugin<PlannerProps>({
+  id: 'demo.planner',
+  fields: [{ key: 'phaseId' }],
+  hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
+});
 ```
 
-That reads: the phase id when there is one, otherwise whatever the next source says. A source reads a
-`StoredEntry` and answers one parent id — never the live `Entry`, whose `parent()`, `children()`,
+That reads: its hierarchy source is the entry's phase id, or the next source's answer. A source reads
+a `StoredEntry` and answers one parent id — never the live `Entry`, whose `parent()`, `children()`,
 `depth` and `descendants()` are all built from this answer, and never the whole dataset, which would
-make a child query O(dataset). Core owns everything downstream: the child index, the walks, and the
+make a child query O(dataset). Composition follows setup order (D-S5-31): the first plugin wraps
+core's own source, each later plugin wraps the one before it, and the last plugin answers first —
+the same order `data()` runs in. Core owns everything downstream: the child index, the walks, and the
 Rollup. `parentId` is still stored and `update()` still writes it; a source that ignores the field is
 a plugin taking the tree over on purpose, and core does not warn about it. **`entry.read('parentId')`
 answers what was authored, never this source's checked answer** ([ADR 0024](../docs/adr/0024-parentid-answers-the-stored-value-on-every-door.md)) —
@@ -722,9 +730,9 @@ a plugin-owned hierarchy is exactly a case where the two can disagree on purpose
 or `entry.parent()` is how a caller reads this source's own answer instead.
 
 Published types: `ChromePlugin`, `DataPlugin`, `Plugin`, `PluginContext`, `DatasetPluginContext`,
-`DatasetHierarchy`, `HierarchySource`, `HierarchySourceWrapper`, `FieldLockQuery`, `FieldLockRule`,
+`HierarchySource`, `HierarchySourceWrapper`, `FieldLockQuery`, `FieldLockRule`,
 `FieldLockRuleWrapper`, and the generic `*Of` shapes behind each. The retired pair is
-`GanttPlugin` / `DatasetPlugin`.
+`GanttPlugin` / `DatasetPlugin`. `DatasetHierarchy` retires with `ctx.hierarchy.setSource` (ADR 0031, D2).
 
 ### 4.5 Plugin registrations: one collision policy, one lifetime (#155)
 
