@@ -152,7 +152,7 @@ export function readEntryBatch(
 
 /**
  * Refuses a whole-list write called from inside an already-open `dataset.transaction()` (#496 Q4,
- * #517 S9). `load` and sync are always their own transaction — unlike `add`/`update`/`remove`, which
+ * #517). `load` and sync are always their own transaction — unlike `add`/`update`/`remove`, which
  * join one already open (D-S2-8), a whole-list write replaces every entry in one step and must not
  * become a nested step inside a caller's own batch.
  */
@@ -173,7 +173,7 @@ export function assertNoRunningExtensionHook(runningExtensionHook: boolean, oper
 }
 
 /**
- * Refuses a whole-list write called from inside a `beforeChange` or `change` handler (#517 S9), the
+ * Refuses a whole-list write called from inside a `beforeChange` or `change` handler (#517), the
  * same refusal `commitChangeSet` already raises for a nested `add`/`update`/`remove`. `load` and sync
  * name themselves here instead of surfacing as `commitChangeSet` — the door the caller actually
  * knocked on, not the one underneath it.
