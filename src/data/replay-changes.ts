@@ -17,7 +17,7 @@ import type {
   StoreRowUpdated,
   UpdatedRow,
 } from '../model/index.js';
-import { mergeUpdatedRows } from './change-set.js';
+import { foldRollUpRowsOntoAdded, mergeUpdatedRows } from './change-set.js';
 import { applyFieldRow, readFieldRow } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -379,30 +379,10 @@ export function changesToReplay(data: TransactionData, changeSet: ChangeSet): Ch
   // whatever value the field-row replay above already restored on p, rather than clearing it the
   // way a live commit's demotion would. It never runs the extension hook — replay never does.
   const rollupRows = rollUpFreshBatch(data, working, checkedParents, data.hierarchySource);
-  const rollupOnAdded = new Map<EntryId, FieldUpdated[]>();
-  const rollupOnExisting: FieldUpdated[] = [];
-  for (const row of rollupRows) {
-    if (addedIds.has(row.id)) {
-      const onto = rollupOnAdded.get(row.id) ?? [];
-      onto.push(row);
-      rollupOnAdded.set(row.id, onto);
-    } else {
-      rollupOnExisting.push(row);
-    }
-  }
+  const rollupOnExisting = rollupRows.filter((row) => !addedIds.has(row.id));
   // A Rollup value on an id this step adds lands on the entity itself — there is no earlier row on
   // it to merge into, the same way `buildCommitChangeSet` writes a fresh parent's rolled-up value.
-  const rolledAdded =
-    rollupOnAdded.size === 0
-      ? rankedAdded
-      : rankedAdded.map((row) => {
-          const rows = rollupOnAdded.get(row.entity.id);
-          if (!rows) return row;
-          let entity = row.entity;
-          for (const rollupRow of rows)
-            entity = applyFieldRow(entity, rollupRow.field, rollupRow.to, data.fields);
-          return { ...row, entity };
-        });
+  const rolledAdded = foldRollUpRowsOntoAdded(rankedAdded, rollupRows, data.fields);
   // A Rollup row for a key the replay already writes folds into that row through the one-row-per-key
   // fold a commit's own body and Rollup share: the earlier row's `from` stands, and the Rollup's `to`
   // wins. Any other Rollup row is a fresh row, and a key whose net change is nothing drops out.

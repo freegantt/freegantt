@@ -15,7 +15,7 @@ import type {
   UpdatedRow,
 } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
-import { proposedKeysOf, entryAfterEdit, readField } from './fields/field-access.js';
+import { applyFieldRow, proposedKeysOf, entryAfterEdit, readField } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 
@@ -160,6 +160,39 @@ export function foldChangeSet(
 ): ChangeSet | undefined {
   if (added.length === 0 && removed.length === 0 && updated.length === 0) return undefined;
   return { id, origin, added, removed, updated };
+}
+
+/**
+ * Call: `foldRollUpRowsOntoAdded(addedEntities, rollupUpdated, fields)`.
+ *
+ * An added entity carries the value a Rollup row settles on, not a row of its own: nothing reads an
+ * Entries row for an id that has no prior committed value to diff against (the commit pipeline and a
+ * replay both apply this, and a whole-list write folds the same way onto its own placed batch). Every
+ * `rollupUpdated` row keyed to an id in `added` folds onto that entity in the order it arrives; every
+ * other row is the caller's own to place. An empty `rollupUpdated`, or one naming no added id, returns
+ * `added` unchanged.
+ */
+export function foldRollUpRowsOntoAdded(
+  added: readonly EntityAdded[],
+  rollupUpdated: readonly FieldUpdated[],
+  fields: FieldRegistry,
+): readonly EntityAdded[] {
+  const rowsById = new Map<EntryId, FieldUpdated[]>();
+  for (const row of rollupUpdated) {
+    const rows = rowsById.get(row.id) ?? [];
+    rows.push(row);
+    rowsById.set(row.id, rows);
+  }
+  if (rowsById.size === 0) return added;
+  return added.map((row) => {
+    const rows = rowsById.get(row.entity.id);
+    if (rows === undefined) return row;
+    const entity = rows.reduce(
+      (acc, fieldRow) => applyFieldRow(acc, fieldRow.field, fieldRow.to, fields),
+      row.entity,
+    );
+    return { ...row, entity };
+  });
 }
 
 /**
