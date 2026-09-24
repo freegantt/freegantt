@@ -19,8 +19,9 @@ issue plans land here as they're opened.
   refresh. Direction: `entries.sync()`, one undo step, origin `'sync'`, list order kept in an order
   Field (#528). Blocked by #528. Grill closed; no code. Plan: [517-sync.md](./517-sync.md).
 - [#528](https://github.com/freegantt/freegantt/issues/528) — no order Field, so a sibling reorder
-  cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`.
-  Blocks #517. Rulings in [517-sync.md](./517-sync.md), round 3.
+  cannot be undone. Direction: `siblingIndex`, a core Field, `editable: 'anywhere'`; a write that
+  moves an entry renumbers its sibling group once, at commit, so one move is one undo step
+  (ADR 0034). Planned; no code yet. Blocks #517. Plan: [528-sibling-index.md](./528-sibling-index.md).
 - [#527](https://github.com/freegantt/freegantt/issues/527) — no partial-update write for a server
   delta. Wishlist; blocked by #517. No plan yet.
 - [#530](https://github.com/freegantt/freegantt/issues/530) — a plugin cannot write its own Field
