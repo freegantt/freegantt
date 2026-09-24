@@ -252,6 +252,40 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ]);
   });
 
+  it('an error handler reading the tree during the raise sees the committed answer', () => {
+    // The source stays acyclic through construction, then a commit turns it cyclic — the raise this
+    // test checks only fires on that commit, never on construction.
+    let cyclic = false;
+    const loop = () =>
+      definePlugin({
+        id: 'demo.loop',
+        hierarchySource: () => (entry) => {
+          if (!cyclic) return entry.id === 'a' ? 'b' : undefined;
+          return entry.id === 'a' ? 'b' : 'a';
+        },
+      });
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'a', name: 'A' },
+        { id: 'b', name: 'B' },
+      ],
+      plugins: [loop()],
+    });
+
+    cyclic = true;
+    const seenDuringRaise: (string | undefined)[] = [];
+    dataset.on('error', () => {
+      seenDuringRaise.push(dataset.entries.get('b')?.parent()?.id);
+    });
+    dataset.entries.update('a', { name: 'A2' });
+
+    // The chain walks from `a`, so `b`'s cyclic answer is the one refused, and `b` reads as a root —
+    // the checked tree the raise itself reports. The write set's own raw answer would read `b` as a
+    // child of `a` instead: this handler must see the checked answer, not that one, during the raise.
+    expect(seenDuringRaise).toEqual([undefined]);
+  });
+
   it('an unknown parent id reads as a root, and reports once per revision', () => {
     const ghost = () =>
       definePlugin({

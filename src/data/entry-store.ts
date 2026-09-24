@@ -768,15 +768,13 @@ export class EntryStore implements EntryStoreContract {
     return this.#writeSet?.edits ?? new Map();
   }
 
-  /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It reads the
-   *  checked tree now, so the first user commit finds it memoized instead of re-deriving it — but it
-   *  raises no refusal of its own: `DatasetState` calls `reportRefusedHierarchyAnswers` once, right
-   *  after this write lands, so every answer construction can produce is covered there instead. */
+  /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It raises no
+   *  refusal of its own: `DatasetState` calls `reportRefusedHierarchyAnswers` once, right after this
+   *  write lands, so every answer construction can produce is covered there instead. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void {
     if (updated.length === 0) return;
     this.#applyUpdatedRows(updated);
     this.#revision.set(this.#revision.get() + 1);
-    this.#hierarchy();
   }
 
   /** Applies the committed `ChangeSet` (`undefined` for an empty net effect or a vetoed commit — the
@@ -785,7 +783,9 @@ export class EntryStore implements EntryStoreContract {
    *  Did the call apply a change? `runTransaction` also calls this once with `undefined` to discard
    *  the body's own write-set overlay, ahead of a second, real call through `commitChangeSet`
    *  (`data/transaction.ts`). A discard applies nothing, so it reports no refusal — only the call
-   *  that lands a revision does. */
+   *  that lands a revision does. The report itself waits for the write set to close: an `error`
+   *  handler that reads the tree during the raise must see the checked answer, not the open write
+   *  set's raw one. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
     if (changeSet) {
       this.#rememberRemovedIndexes(changeSet);
@@ -795,9 +795,9 @@ export class EntryStore implements EntryStoreContract {
       this.#restoreAdded(changeSet);
       this.#applyUpdatedRows(changeSet.updated);
       this.#revision.set(this.#revision.get() + 1);
-      this.reportRefusedHierarchyAnswers();
     }
     this.#writeSet = null;
+    if (changeSet) this.reportRefusedHierarchyAnswers();
   }
 
   /** Entry rows only. A changeset also carries plugin-store rows (D-S5-24); `data/plugin-store.ts`

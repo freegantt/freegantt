@@ -352,7 +352,7 @@ still tears down cleanly on `uninstallPlugin`.
 
 ## A Dataset plugin installs once
 
-`installDatasetPlugins` runs while the `Dataset` constructs, never again. There is no diff to
+`installDatasetPlugins` runs once the `Dataset` is built, never again. There is no diff to
 compute, because `Dataset.plugins` is read-only — a data half declares what shapes the Dataset's own
 construction, and a Dataset installs its plugins once, so a different plugin set is a different
 Dataset. What it does
