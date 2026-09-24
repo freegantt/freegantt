@@ -6,9 +6,10 @@ merged first. Working material:
 decided: a finished Gantt is built and configured, but not painted, before any plugin's `view(ctx)`
 runs. The `Gantt` constructor assigns `#shell`, then installs `options.plugins` through the same
 public setter a later `gantt.plugins = [...]` call uses, then paints frame 1. `#constructed` still
-flips last, at the end of that paint, so a `view()`-time write to `ctx.gantt` stays silent — the
-same rule ADR 0031 already gives a `data()`-time write to `ctx.dataset`. A throwing `view()` tears
-the half-built shell down through `destroy()` and rethrows the original error.
+flips last, at the end of that paint, so a `view()`-time write to `ctx.gantt` fires nothing until
+`new Gantt()` returns — unlike the Dataset half, where a `data()`-time write reaches every handler
+already registered. A throwing `view()` tears the half-built shell down through `destroy()` and
+rethrows the original error.
 open: a declared shape for a Gantt plugin, the way `hierarchySource` is declared for a Dataset
 plugin — no construction step reads one today, so nothing asks for it yet.
 ---
@@ -97,9 +98,9 @@ until `new Gantt()` returns.
 `selectionChange` handler hears nothing from it. The same write made later, inside
 `installPlugin`, fires normally. The alternative — opening events before `view()` runs — was
 rejected: it would need a second gate just to keep frame 1's own construction-time
-`navigationChange` quiet, for no gain a caller can observe. This is the same rule ADR 0031 already
-gives the Dataset half: a `data()`-time write to `ctx.dataset` is an ordinary write with no
-handler yet standing to hear it.
+`navigationChange` quiet, for no gain a caller can observe. Unlike the Dataset half, where a
+`data()`-time write reaches every handler already registered, a `view()`-time Gantt write fires
+nothing until `new Gantt()` returns.
 
 **A Dataset write inside `view()` is not a Gantt event at all.** It fires the Dataset's own
 `change` and becomes an ordinary undo step, because the Dataset the Gantt mounts may be shared with
