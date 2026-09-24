@@ -471,6 +471,23 @@ describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar t
     expect(caps.can('move', parent)).toBe(true); // … but the move still writes the subtree, never the parent.
   });
 
+  // A summary-bar move never reads the parent's own canWrite: it moves the dated descendants below
+  // it (ADR 0013, #470), never the parent's own cell. This pins that the gesture keeps working
+  // whether or not the parent's own cell answer changes.
+  it('a summary bar’s move keeps translating its dated descendants, with no rule in play', () => {
+    const caps = capabilities();
+    const parent = rollUpParent();
+    expect(caps.can('move', parent)).toBe(true);
+    expect(caps.entriesMovedBy(parent)).toEqual(parent.descendants());
+  });
+
+  it('a summary bar’s move keeps translating its dated descendants, with capabilities.edit: true too', () => {
+    const caps = capabilities({ capabilities: { edit: true } });
+    const parent = rollUpParent();
+    expect(caps.can('move', parent)).toBe(true);
+    expect(caps.entriesMovedBy(parent)).toEqual(parent.descendants());
+  });
+
   it('an owning parent moves both itself and the dated descendants below it, an intermediate one included', () => {
     const [parent, child, middle, grandchild] = entryDoubles([
       { id: 'e1', start: 0, end: 1 },
