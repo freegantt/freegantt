@@ -27,6 +27,17 @@ export class History {
   readonly #capacity: number;
   #stack: ChangeSet[] = [];
   #cursor = 0;
+  // Set for the span of this History's own `replayChangeSet` call, so `#onChange` can tell its own
+  // `undo()`/`redo()` apart from an outside `dataset.replay()` landing on the same 'undo'/'redo'
+  // origin — the public door docs/05-consumer-api.md's "Advanced" section invites a consumer to call
+  // directly. An outside replay moves no cursor and touches no stack slot; only this History's own
+  // call does.
+  #replayingOwnStep = false;
+  // Set for the span of `#unwindOnThrow`'s `attempt`, so `#forgetStep` can record what it removed and
+  // `#unwindOnThrow` can put it back if `attempt` throws. `undefined` outside that span. `satBelowCursor`
+  // is whether the cursor moved down for this forget, so the restore moves it back up in step.
+  #forgottenThisAttempt: Array<{ index: number; step: ChangeSet; satBelowCursor: boolean }> | undefined =
+    undefined;
 
   constructor(data: TransactionData, options: HistoryOptions = {}) {
     this.#data = data;
@@ -49,27 +60,66 @@ export class History {
    *  write is forgotten, and the loop tries the one below it, so one click always lands a step when
    *  any undoable one remains. A refused undo (a `beforeChange` handler returning `false`) throws
    *  `MutationCancelledError` and leaves the stack exactly where it was — the cursor moves on the
-   *  `change` that commit emits (D-S2-25), so a veto never reaches `#onChange`. */
+   *  `change` that commit emits (D-S2-25), so a veto never reaches `#onChange`; and a step the loop
+   *  forgot on the way there un-forgets, so a veto really does leave history untouched, not just the
+   *  cursor (`#unwindOnThrow`). */
   undo(): void {
-    while (this.canUndo) {
-      const index = this.#cursor - 1;
-      const cursorBefore = this.#cursor;
-      replayChangeSet(this.#data, invertChangeSet(this.#stack[index]!));
-      if (this.#cursor !== cursorBefore) return; // the write landed; #onChange already moved the cursor
-      this.#forgetStep(index); // nothing was left to write — try the step below it
-    }
+    this.#unwindOnThrow(() => {
+      while (this.canUndo) {
+        const index = this.#cursor - 1;
+        const cursorBefore = this.#cursor;
+        this.#replayOwnStep(invertChangeSet(this.#stack[index]!));
+        if (this.#cursor !== cursorBefore) return; // the write landed; #onChange already moved the cursor
+        this.#forgetStep(index); // nothing was left to write — try the step below it
+      }
+    });
   }
 
   /** Re-applies the step just above the cursor exactly as recorded, with `origin: 'redo'`. A no-op
    *  when `canRedo` is `false`. Forgets a step with nothing left to write and tries the one above it,
-   *  the same way `undo` does. */
+   *  the same way `undo` does, and un-forgets on a throw the same way too. */
   redo(): void {
-    while (this.canRedo) {
-      const index = this.#cursor;
-      const cursorBefore = this.#cursor;
-      replayChangeSet(this.#data, { ...this.#stack[index]!, origin: 'redo' });
-      if (this.#cursor !== cursorBefore) return;
-      this.#forgetStep(index);
+    this.#unwindOnThrow(() => {
+      while (this.canRedo) {
+        const index = this.#cursor;
+        const cursorBefore = this.#cursor;
+        this.#replayOwnStep({ ...this.#stack[index]!, origin: 'redo' });
+        if (this.#cursor !== cursorBefore) return;
+        this.#forgetStep(index);
+      }
+    });
+  }
+
+  /** Runs `attempt`, which may call `#forgetStep` one or more times before either landing a write or
+   *  throwing (a vetoed `beforeChange`, or an aggregator failure). A landed write keeps every forgotten
+   *  step forgotten — they really had nothing left to write. A throw restores them in the order they
+   *  were removed, so the documented "a refused undo/redo leaves history exactly where it was" holds
+   *  even when the loop had already forgotten a moot step or two on the way to the one that threw. */
+  #unwindOnThrow(attempt: () => void): void {
+    const outer = this.#forgottenThisAttempt;
+    const forgotten: Array<{ index: number; step: ChangeSet; satBelowCursor: boolean }> = [];
+    this.#forgottenThisAttempt = forgotten;
+    try {
+      attempt();
+    } catch (error) {
+      for (const { index, step, satBelowCursor } of forgotten.reverse()) {
+        this.#stack.splice(index, 0, step);
+        if (satBelowCursor) this.#cursor += 1;
+      }
+      throw error;
+    } finally {
+      this.#forgottenThisAttempt = outer;
+    }
+  }
+
+  /** Marks the coming `replayChangeSet` call as this History's own, so `#onChange` moves the cursor
+   *  and rewrites the stack slot for it — and only for it. */
+  #replayOwnStep(changeSet: ChangeSet): void {
+    this.#replayingOwnStep = true;
+    try {
+      replayChangeSet(this.#data, changeSet);
+    } finally {
+      this.#replayingOwnStep = false;
     }
   }
 
@@ -79,11 +129,12 @@ export class History {
    *  write door reuses. `'undo'` and `'redo'` move the cursor (D-S2-25) and replace the stack entry
    *  with what they actually wrote — `invertChangeSet` of it for `'undo'`, as recorded for `'redo'` —
    *  so a later undo or redo inverts what really landed, not the step as first recorded; undo then
-   *  redo is neutral even across a sync in between (§2g). An `'undo'`-origin write that reaches an
-   *  empty stack is ignored — it did not come from this History's own `undo()`, since that call
-   *  only ever replays a step `canUndo` already found. This handler is the first `change`
-   *  subscriber, so a later handler (the harness undo button included) already reads the post-move
-   *  `canUndo`/`canRedo`. `'load'` (#496) empties the stack instead: `entries.load()` is a new
+   *  redo is neutral even across a sync in between (§2g). An `'undo'`- or `'redo'`-origin write this
+   *  History did not itself call `replayChangeSet` for — an outside `dataset.replay()` — moves no
+   *  cursor and writes no stack slot (`#replayingOwnStep`); otherwise it would move the cursor off a
+   *  step that is not this History's, or past either end of the stack. This handler is the first
+   *  `change` subscriber, so a later handler (the harness undo button included) already reads the
+   *  post-move `canUndo`/`canRedo`. `'load'` (#496) empties the stack instead: `entries.load()` is a new
    *  baseline, not an undoable step, so `canUndo`/`canRedo` both read `false` right after it — the
    *  same posture a desktop app takes opening a file. */
   #onChange = ({ changeSet }: DatasetEventMap['change']): void => {
@@ -94,14 +145,17 @@ export class History {
       case 'sync':
         break;
       case 'undo':
-        // An outside `dataset.replay({ origin: 'undo' })` can land here with an empty stack (no
-        // step of this History's own to move the cursor off of) — ignore it rather than moving
-        // the cursor negative and writing a stack slot that does not exist.
-        if (this.#cursor === 0) break;
+        // An outside `dataset.replay({ origin: 'undo' })` did not come from this History's own
+        // `undo()` — ignore it rather than moving the cursor off a step that is not this History's,
+        // or off the bottom of an empty stack.
+        if (!this.#replayingOwnStep) break;
         this.#cursor -= 1;
         this.#stack[this.#cursor] = invertChangeSet(changeSet);
         break;
       case 'redo':
+        // Same rule as 'undo': an outside `dataset.replay({ origin: 'redo' })` is ignored, so it
+        // can never append a phantom stack entry past the real top.
+        if (!this.#replayingOwnStep) break;
         this.#stack[this.#cursor] = changeSet;
         this.#cursor += 1;
         break;
@@ -117,10 +171,13 @@ export class History {
 
   /** A step whose replay wrote nothing (`undo`/`redo`'s own loop, #517): splice it out of the stack,
    *  and move the cursor down when the forgotten step sat below it. `undo`/`redo` then try the next
-   *  step in the same click — the stack always shrinks by one here, so the loop always ends. */
+   *  step in the same click — the stack always shrinks by one here, so the loop always ends. Recorded
+   *  on `#forgottenThisAttempt` first, when set, so `#unwindOnThrow` can put it back. */
   #forgetStep(index: number): void {
+    const satBelowCursor = index < this.#cursor;
+    this.#forgottenThisAttempt?.push({ index, step: this.#stack[index]!, satBelowCursor });
     this.#stack.splice(index, 1);
-    if (index < this.#cursor) this.#cursor -= 1;
+    if (satBelowCursor) this.#cursor -= 1;
   }
 
   /** Empties the stack and moves the cursor back to it — `entries.load()`'s own arm (#496): a full
