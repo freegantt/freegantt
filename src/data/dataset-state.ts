@@ -225,6 +225,10 @@ export class DatasetState implements Dataset {
     // touches one of those children. No plugin has run yet (ADR 0031): a Dataset builds completely
     // — Field, hierarchy source and this Rollup all settle — before the first `data()` call.
     applyConstructionRollUp(this);
+    // The authored rows are answers too, and so is whatever the Rollup above just wrote — a
+    // hierarchy source may read a Field the Rollup rolls up, so this is the first point where every
+    // answer construction can produce is settled and ready to report (ADR 0020).
+    this.entries.reportRefusedHierarchyAnswers();
     // Subscribes to `change` right here, so it is the first subscriber ahead of every plugin's own
     // `data()` handler (ADR 0031) — a plugin's setup write records like any other commit, and
     // `Dataset`'s constructor clears the stack after the last `data()` returns (`clearHistory`
