@@ -391,20 +391,16 @@ export interface GanttShellOptions {
   /** The consumer's own variants — `GanttOptions.variants`, already erased to the untyped shape
    *  (ADR 0018). They outrank every plugin's, whatever order the plugins install in. */
   variants?: readonly EntryVariant[];
-  /** Installed before this shell's first paint (N7). A plugin-defined variant, keybinding or command
-   *  reaches frame 1, the same as every other constructor option. Before N7, `Gantt.plugins`'s live
-   *  setter ran after this constructor returned, so frame 1 missed them.
-   *
-   *  ADR 0019: this Gantt's own chrome plugins, the live-reconfigurable set. */
-  plugins?: readonly ShellPlugin<unknown>[];
-  /** ADR 0019: the Dataset's own plugins. Their `view` halves install here too, ahead of this
-   *  shell's chrome. They stay installed for this shell's whole life, because this Gantt did not
-   *  install them and cannot drop them. A plugin with no `view` half joins the `requires` graph and
-   *  runs nothing. */
+  /** ADR 0019, ADR 0032: the Dataset's own plugins. Held here, not installed: `set plugins` reads
+   *  this field and combines it with this shell's own chrome once a caller assigns one. So this
+   *  shell installs no plugin of its own, and nothing runs yet. They stay installed for this
+   *  shell's whole life, because this Gantt did not install them and cannot drop them. A plugin
+   *  with no `view` half joins the `requires` graph and runs nothing. */
   datasetPlugins?: readonly ShellPlugin<unknown>[];
-  /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. */
+  /** Applied before `paintFirstFrame()`, so a plugin's `view()` reads the real starting preset off
+   *  `ctx.gantt` (ADR 0032). */
   zoomPresets?: readonly PresetRef[];
-  /** Applied before this shell's first paint (N7), same reasoning as `plugins` above. Loose
+  /** Applied before `paintFirstFrame()`, same reasoning as `zoomPresets` above (ADR 0032). Loose
    *  (`EntryId | string`), same asymmetry the live `selection` setter already has. */
   selectedEntryIds?: readonly (EntryId | string)[];
   /** The layer boundary, as one member (review P5). `api/gantt.ts` supplies every seam in it. */
@@ -612,11 +608,11 @@ export class GanttShell {
    *  exactly once, so a second `destroy()` costs nothing (#272). */
   readonly #teardown = new DisposableStore();
   #destroyed = false;
-  /** #376: flipped true on this constructor's last line. A constructor-supplied plugin has already
-   *  subscribed by the time the rest of the constructor runs. `#emit` reads this flag. Construction
+  /** #376, ADR 0032: flipped true on `paintFirstFrame()`'s last line, after every constructor-
+   *  supplied plugin has already installed and subscribed. `#emit` reads this flag. Construction
    *  itself — an initial `theme`/`selection` write, the first frame's own preset settling — never
    *  reaches a subscriber as a reported change. A plugin that wants the starting state reads it
-   *  straight off `ctx.gantt` in `setup()` instead. */
+   *  straight off `ctx.gantt` in `view()` instead. */
   #constructed = false;
   /** This Gantt's layout pass. It keeps the row-height index alive across renders (#47) — the shell
    * states what to draw and holds no layout bookkeeping of its own. */
@@ -895,12 +891,12 @@ export class GanttShell {
     this.#commandRegistry = new CommandRegistry<unknown>(() => this.#buildCommandContext());
     this.#keymap = new Keymap<unknown>(this.#commandRegistry, () => this.#buildCommandContext());
 
-    // S5.1, D-S5-1: constructed once panes exist. A plugin's disposer may still need its overlay
-    // node (a later step's `ctx.view.overlay`), so this must outlive them either way. `destroy()`
-    // disposes it first, before any pane teardown, for the same reason. No plugin is actually set up
-    // yet. `Gantt.plugins`'s live setter runs `#pluginRuntime.install(...)` only once `api/gantt.ts`
-    // has finished assigning its own `#shell` field. So `buildPluginContext`'s `gantt` value is real
-    // by the time any `setup()` reads it.
+    // Constructed once panes exist. A plugin's disposer may still need its overlay node (a later
+    // step's `ctx.view.overlay`), so this must outlive them either way. `destroy()` disposes it
+    // first, before any pane teardown, for the same reason. No plugin runs yet: this constructor
+    // takes no `plugins` option of its own (ADR 0032). `Gantt`'s own constructor calls the public
+    // `plugins` setter only after it assigns its `#shell` field. So `buildPluginContext`'s `gantt`
+    // value is a finished Gantt by the time any `view()` reads it.
     // #179: one ports object for this Gantt's whole life, which is what `GanttShellPorts`' own doc
     // has always said. Every member is either a field already assigned above, or a closure that
     // reads live state at call time. So nothing in it goes stale between two installs, and a page
@@ -1175,23 +1171,17 @@ export class GanttShell {
     if (options.collapsed !== undefined) {
       this.#treeCollapse.hydrate(options.collapsed);
     }
-    // N7: applied through the same live setters `api/gantt.ts` used to call *after* this
-    // constructor returned. They moved here, ahead of the first flush below. A constructor-supplied
-    // plugin's variant, keybinding or command now reaches frame 1, and so does a zoom or a selection.
-    // Every collaborator these setters touch (`#registrations`, `#commandRegistry`, `#keymap`,
-    // `#entrySelection`, `#viewport`) is already built above. So `setup()` sees the same shell a
-    // post-construction assignment would have. `variantFor`/`Capabilities` read these registries
-    // live at render time, never a cached snapshot. So applying them a few lines earlier changes
-    // only which frame the result first appears in.
-    // ADR 0019: the Dataset's plugins are held first, so the one assignment below installs both
-    // sets under one `requires` order. It runs even for an empty chrome list, because the Dataset's
-    // own `view` halves still have to reach frame 1.
+    // ADR 0032: every option a plugin's `view()` could read back through `ctx.gantt` — selection,
+    // zoom presets, theme, `a11yLabel` — is applied before this constructor returns. No plugin
+    // installs yet. `paintFirstFrame()`, called once `api/gantt.ts` has installed this Gantt's
+    // plugins, is what turns this finished-but-unpainted shell into the first live frame.
+    //
+    // The Dataset's own plugins are held here, not installed. `set plugins` reads this field and
+    // combines it with this shell's own chrome the first time a caller assigns one. So both sets
+    // resolve under one `requires` order together.
     this.#datasetPlugins = options.datasetPlugins ?? [];
-    this.plugins = options.plugins ?? [];
     if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
     if (options.selectedEntryIds !== undefined) this.selection = options.selectedEntryIds;
-    this.#phase = 'live';
-    this.#frames.flush();
 
     this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
@@ -1227,8 +1217,17 @@ export class GanttShell {
     });
     this.#teardown.add(() => this.#themePinObserver.disconnect());
     this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
-    // #376: last line, on purpose — a constructor-supplied plugin's own subscription, installed by
-    // `plugins=` above, starts hearing real changes only from here. Everything above it was wiring.
+  }
+
+  /** ADR 0032: the shell's own first paint, run once `api/gantt.ts` has installed this Gantt's
+   *  plugins. It runs through the public `plugins` setter — the same one a later
+   *  `gantt.plugins = [...]` uses. So a plugin's registrations (a variant, a grid column, a decoration) shape frame 1
+   *  instead of forcing a second render behind it. #376: `#constructed` flips last, on purpose — a
+   *  constructor-supplied plugin's own subscription starts hearing real changes only once this
+   *  returns. Everything before it, in the constructor and in this method, was wiring. */
+  paintFirstFrame(): void {
+    this.#phase = 'live';
+    this.#frames.flush();
     this.#constructed = true;
   }
 
