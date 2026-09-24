@@ -50,6 +50,7 @@ import {
   assertNotNotifying,
   readEntryBatch,
 } from './entry-batch.js';
+import { changesToMatchBatch } from './entry-batch-changes.js';
 import {
   buildDerivedValuesDroppedReport,
   buildSiblingIndexDroppedReport,
@@ -687,6 +688,46 @@ export class EntryStore implements EntryStoreContract {
       added,
       removed,
       updated: [...rollupUpdated, ...pluginRows],
+    };
+    commitChangeSet(runner, changeSet);
+  }
+
+  /**
+   * Diffs the live Dataset against `inputs` and commits only what changed (#517): an id the list
+   * omits is removed, a kept id's changed Field writes one row, and an unchanged kept id writes
+   * nothing. A kept id keeps its Map slot, so its selection, collapse state and plugin store rows
+   * survive the call; a removed id's plugin store rows go with it, and an undo brings them back.
+   *
+   * Reads and checks the whole list the same way `load` does (`#readBatch`), rolls the Rollup's
+   * corrections onto the placed batch to get the state `load(inputs)` would leave, then hands that
+   * target and the store's own committed rows to `changesToMatchBatch` — "the changes to match the
+   * batch." A sync that changes nothing stops there: it commits no `ChangeSet`, so `entries.all`
+   * keeps its identity and History is untouched (the common poll costs nothing). Otherwise it commits
+   * one `ChangeSet` with `origin: 'sync'`, recorded on the undo stack like a user edit.
+   */
+  sync(inputs: readonly FlatEntryInput[]): void {
+    const { runner, byId, entries: read, rollupUpdated } = this.#readBatch(inputs, 'entries.sync');
+
+    const rolled = new Map(byId);
+    for (const row of rollupUpdated) {
+      const current = rolled.get(row.id);
+      if (current) rolled.set(row.id, applyFieldRow(current, row.field, row.to, this.#registry));
+    }
+    const target = read.map((entry) => rolled.get(entry.id)!);
+
+    const changes = changesToMatchBatch(this.#byId, target, this.#registry, this.#access);
+    if (changes.added.length === 0 && changes.removed.length === 0 && changes.updated.length === 0) {
+      return;
+    }
+
+    const pluginRows = runner.pluginStores.pendingRows(changes.removed.map((row) => row.entity.id));
+
+    const changeSet: ChangeSet = {
+      id: runner.nextChangeSetId(),
+      origin: 'sync',
+      added: changes.added,
+      removed: changes.removed,
+      updated: [...changes.updated, ...pluginRows],
     };
     commitChangeSet(runner, changeSet);
   }

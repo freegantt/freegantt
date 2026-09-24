@@ -91,7 +91,8 @@ export interface DatasetOptions<TProps = unknown> {
    *  is. */
   measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
-   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). */
+   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). A frequent `entries.sync()` poll records a step the
+   * same as a user edit, so a consumer who polls often and wants more undo headroom raises this. */
   history?: { capacity?: number };
   /** The plugins this Dataset installs (D-S5-24, ADR 0019). An unordered set: installation resolves
    *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
@@ -306,7 +307,8 @@ export class Dataset<TProps = unknown> {
   }
 
   /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
-   *  `'user'` is the only origin a public caller can produce in S2. */
+   *  `'user'` is the only origin a call to `transaction()` can produce — `entries.load()` and
+   *  `entries.sync()` refuse to run inside one, since each is always its own transaction. */
   transaction<T>(body: () => T): T {
     return this.#state.transaction(body);
   }
