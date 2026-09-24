@@ -44,10 +44,10 @@ function variantsOn(container: HTMLElement): Record<string, string> {
 function costing(seen: string[], ganttsSeen: unknown[] = []) {
   return definePlugin({
     id: 'demo.costing',
-    data(ctx) {
+    fieldTypes: { money: { rollUp: 'sum' } },
+    fields: [{ key: 'cost', type: 'money' }],
+    data() {
       seen.push('data');
-      ctx.fields.registerType('money', { rollUp: 'sum' });
-      ctx.fields.register({ key: 'cost', type: 'money' });
     },
     view(ctx) {
       seen.push('view');

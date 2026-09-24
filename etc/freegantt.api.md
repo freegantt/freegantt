@@ -416,16 +416,6 @@ export interface DatasetEvents {
 }
 
 // @public
-export interface DatasetFieldRegistrations {
-    // (undocumented)
-    register(field: Field): void;
-    // (undocumented)
-    registerAggregator(name: AggregatorName, fn: Aggregator): void;
-    // (undocumented)
-    registerType(name: FieldTypeName, type: FieldType): void;
-}
-
-// @public
 export interface DatasetHierarchy {
     setSource<TProps = Record<string, unknown>>(wrap: HierarchySourceWrapper<TProps>): void;
 }
@@ -458,8 +448,6 @@ export interface DatasetPluginContextOf<TDataset> {
     edits: DatasetEditHook;
     // (undocumented)
     events: DatasetEvents;
-    // (undocumented)
-    fields: DatasetFieldRegistrations;
     // (undocumented)
     hierarchy: DatasetHierarchy;
     // (undocumented)

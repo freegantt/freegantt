@@ -1,11 +1,11 @@
 // data/ — one FieldRegistry per DatasetState (D-S4-1). Resolves Field types, stores the whole
 // declaration (`column` included), and never formats or paints.
 //
-// A Dataset plugin declares Fields through `register`/`registerType`/`registerAggregator` (D-S5-21,
-// D-S5-24). Those run while that plugin's `setup()` runs, which is before the construction Rollup —
-// a Field must exist before the first Rollup (D-S5-4), which is also why `Dataset.plugins` is
-// read-only where `Gantt.plugins` is not. `extensions/install-dataset-plugins.ts` closes each plugin's
-// registration gate the moment its `setup()` returns, so a later call is `RegistrationClosedError`.
+// A Dataset plugin declares Fields on its own object — `fields`/`fieldTypes`/`aggregators` (#496
+// grill round 3, R1) — the same shape `DatasetOptions` takes. `DatasetState`'s constructor merges
+// every source's declarations, core Fields first, before `entries` is read: a Field must exist
+// before the first Rollup (D-S5-4), which is also why `Dataset.plugins` is read-only where
+// `Gantt.plugins` is not.
 //
 // `all` answers what this Dataset resolves against, core Fields, the consumer's own, and a plugin's,
 // in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
@@ -188,14 +188,6 @@ export class FieldRegistry {
   readonly #consumerOverriddenCoreKeys = new Set<string>();
   readonly #aggregators: Record<string, Aggregator>;
   readonly #fieldTypes: Record<string, FieldType>;
-  /** Bumped once per `register()` call (#495, #414): a plugin that calls `ctx.fields.register` after
-   *  mount can add a Field a `childrenAsSegments` rule already reads through `EntryRulePorts.fieldFor`
-   *  (`layout/entry-rule.ts`) — that read stays live, with no cache of its own, so nothing else marks
-   *  the moment it could start answering differently. `layout/`'s row-plan cache (`FrameLayout`) reads
-   *  this number into its own cache key, so a post-mount `register()` still invalidates a cached plan.
-   *  Construction seeds `#resolved` through the same `#add` path but does not bump this — a Gantt's
-   *  first frame has no cached plan yet to invalidate. */
-  #revision = 0;
 
   constructor(options: FieldRegistryOptions = {}) {
     this.#aggregators = { ...SHIPPED_AGGREGATORS, ...options.aggregators };
@@ -223,33 +215,26 @@ export class FieldRegistry {
     return this.#aggregators;
   }
 
-  /** How many `register()` calls this registry has answered since construction (#495, #414). A
-   *  cache keyed on a Field read taken through this registry — `layout/`'s row-plan cache is the one
-   *  today — reads this number beside its other inputs, so a post-mount `register()` still counts as
-   *  a change even though nothing else about the cache's own inputs moved. */
-  get revision(): number {
-    return this.#revision;
-  }
-
-  /** Call: `ctx.fields.register({ key: 'locked', rollUp: 'none' })`. Same rules a constructor-time
-   *  declaration obeys — a duplicate key, an unknown Field type, an unknown Aggregator and a
-   *  `compute` Field naming `rollUp`/`editable` each throw the error they already throw at
-   *  construction. */
+  /** Adds one Field after construction, obeying the same rules a constructor-time declaration does
+   *  — a duplicate key, an unknown Field type, an unknown Aggregator and a `compute` Field naming
+   *  `rollUp`/`editable` each throw the error they already throw at construction. Internal only: a
+   *  Dataset plugin declares through its own `fields` setting instead (#496 grill round 3, R1), so
+   *  every consumer-reachable Field is in the registry before construction returns. */
   register(field: Field): void {
     this.#add(field, true);
-    this.#revision++;
   }
 
-  /** Call: `ctx.fields.registerType('money', { rollUp: 'sum' })`. Register a type before the Field
-   *  that names it — `register` resolves the name at the moment it runs. */
+  /** Adds one named Field type bundle after construction. Register a type before the Field that
+   *  names it — `register` resolves the name at the moment it runs. Internal only, same reason
+   *  `register` above is. */
   registerType(name: string, type: FieldType): void {
     if (this.#fieldTypes[name] !== undefined) throw new DuplicateFieldKeyError(name);
     this.#fieldTypes[name] = type;
   }
 
-  /** Call: `ctx.fields.registerAggregator('busiestDay', pickBusiestDay)`. An Aggregator is always
-   *  referenced by a registered name, never passed inline — a name serializes into a Document and a
-   *  function does not (CLAUDE.md, Vocabulary). */
+  /** Adds one named Aggregator after construction. An Aggregator is always referenced by a
+   *  registered name, never passed inline — a name serializes into a Document and a function does
+   *  not (CLAUDE.md, Vocabulary). Internal only, same reason `register` above is. */
   registerAggregator(name: string, fn: Aggregator): void {
     if (this.#aggregators[name] !== undefined) throw new DuplicateFieldKeyError(name);
     this.#aggregators[name] = fn;
