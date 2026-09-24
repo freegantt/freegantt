@@ -13,7 +13,14 @@ import {
   TransactionAlreadyOpenError,
   entryId,
 } from '../model/index.js';
-import type { ChangeSet, EntryEdits, EntryInput, ErrorReport, FlatEntryInput } from '../model/index.js';
+import type {
+  ChangeSet,
+  EntryEdits,
+  EntryInput,
+  ErrorReport,
+  FlatEntryInput,
+  StoredEntry,
+} from '../model/index.js';
 import {
   assertEntryBatchIsSound,
   assertNoOpenTransaction,
@@ -52,14 +59,17 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
       registry,
       'test',
     );
+  // Core's own hierarchy source (`storedParentSource`) — these tests exercise the pure function, not
+  // a plugin source, so they resolve a parent the same way `parentId` always has.
+  const rawParentId = (entry: StoredEntry) => entry.parentId;
 
   it('assertEntryBatchIsSound throws for a duplicate id, an unknown parent, or a loop — and passes a sound batch', () => {
-    expect(() => assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'a' }]), 'test')).toThrow(
+    expect(() => assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'a' }]), 'test', rawParentId)).toThrow(
       DuplicateEntryIdError,
     );
-    expect(() => assertEntryBatchIsSound(read([{ id: 'a', parentId: 'ghost' }]), 'test')).toThrow(
-      EntryNotFoundError,
-    );
+    expect(() =>
+      assertEntryBatchIsSound(read([{ id: 'a', parentId: 'ghost' }]), 'test', rawParentId),
+    ).toThrow(EntryNotFoundError);
     expect(() =>
       assertEntryBatchIsSound(
         read([
@@ -67,10 +77,11 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
           { id: 'b', parentId: 'a' },
         ]),
         'test',
+        rawParentId,
       ),
     ).toThrow(ParentCycleError);
     expect(() =>
-      assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'b', parentId: 'a' }]), 'test'),
+      assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'b', parentId: 'a' }]), 'test', rawParentId),
     ).not.toThrow();
   });
 
@@ -81,18 +92,18 @@ describe('entry-batch.ts — the shared functions load and sync (#517) both reus
       parentId: i === 0 ? `n${depth - 1}` : `n${i - 1}`,
     }));
 
-    expect(() => assertEntryBatchIsSound(read(chain), 'test')).toThrow(ParentCycleError);
+    expect(() => assertEntryBatchIsSound(read(chain), 'test', rawParentId)).toThrow(ParentCycleError);
     try {
-      assertEntryBatchIsSound(read(chain), 'test');
+      assertEntryBatchIsSound(read(chain), 'test', rawParentId);
     } catch (error) {
       expect((error as ParentCycleError).entryId).toBe(entryId('n0'));
     }
   });
 
   it("a load batch's duplicate id names the door the caller used, not entries.add's advice", () => {
-    expect(() => assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'a' }]), 'entries.load')).toThrow(
-      'entries.load: the list names id "a" twice. Give each entry its own id.',
-    );
+    expect(() =>
+      assertEntryBatchIsSound(read([{ id: 'a' }, { id: 'a' }]), 'entries.load', rawParentId),
+    ).toThrow('entries.load: the list names id "a" twice. Give each entry its own id.');
   });
 
   it('listOrderOf reads back the ids in the list order it was given', () => {
@@ -167,6 +178,39 @@ describe('entries.load', () => {
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('old')]);
     expect(state.entries.get('old')!.name).toBe('Edited');
     expect(state.canUndo).toBe(true);
+  });
+
+  it("a plugin hierarchy source's own key throws the same errors, not just raw parentId (ADR 0020)", () => {
+    const state = dataset([{ id: 'old' }]);
+    state.setHierarchySource(() => (entry) => (entry.props as { phaseId?: string }).phaseId);
+
+    expect(() =>
+      state.entries.load([{ id: 'a', name: 'A', start: 0, end: 1, props: { phaseId: 'ghost' } }]),
+    ).toThrow(EntryNotFoundError);
+    expect(() =>
+      state.entries.load([
+        { id: 'a', name: 'A', start: 0, end: 1, props: { phaseId: 'b' } },
+        { id: 'b', name: 'B', start: 0, end: 1, props: { phaseId: 'a' } },
+      ]),
+    ).toThrow(ParentCycleError);
+
+    // Nothing staged: the store and History still hold what they did before either call.
+    expect(state.entries.all.map((e) => e.id)).toEqual([entryId('old')]);
+    expect(state.canUndo).toBe(false);
+  });
+
+  it("a plugin re-parenting a kept row is checked against the plugin's parent, not the row's stored parentId", () => {
+    const state = dataset([{ id: 'old' }]);
+    state.setHierarchySource(() => (entry) => (entry.props as { phaseId?: string }).phaseId);
+
+    // `a`'s stored `parentId` names a cycle with `b`, but the plugin key does not — the plugin's
+    // answer is the one that must decide, so this batch is sound.
+    expect(() =>
+      state.entries.load([
+        { id: 'a', name: 'A', start: 0, end: 1, parentId: 'b', props: { phaseId: undefined } },
+        { id: 'b', name: 'B', start: 0, end: 1, parentId: 'a', props: { phaseId: undefined } },
+      ]),
+    ).not.toThrow();
   });
 
   it('commits one change with origin "load", and canUndo/canRedo both read false after it', () => {

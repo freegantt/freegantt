@@ -11,7 +11,12 @@ import {
   TransactionAlreadyOpenError,
 } from '../model/index.js';
 
-/** Every id whose `parentId` chain loops back onto itself, self-parenting included — one colouring
+/** One row's parent, as whichever hierarchy source is current names it (ADR 0020) — never the raw
+ *  `parentId` field. A plugin source may answer out of a `props` key instead, so a batch check that
+ *  read `parentId` would check a field the tree does not use. */
+export type BatchParentResolver = (entry: StoredEntry) => EntryId | undefined;
+
+/** Every id whose parent chain loops back onto itself, self-parenting included — one colouring
  *  walk over the whole batch (O(n), the same shape `hierarchy-source.ts`'s `breakCycles` walks),
  *  not one walk per entry: a chain shared by a deep batch is walked once, not once per descendant.
  *  Walks `byId` — the batch, never the live store — so this answers the same question
@@ -24,6 +29,7 @@ import {
 function cycleMemberIds(
   entries: readonly StoredEntry[],
   byId: ReadonlyMap<EntryId, StoredEntry>,
+  parentOf: BatchParentResolver,
 ): ReadonlySet<EntryId> {
   const settled = new Set<EntryId>();
   const visiting = new Set<EntryId>();
@@ -36,7 +42,8 @@ function cycleMemberIds(
     while (current !== undefined && !settled.has(current) && !visiting.has(current)) {
       visiting.add(current);
       chain.push(current);
-      current = byId.get(current)?.parentId;
+      const entry = byId.get(current);
+      current = entry === undefined ? undefined : parentOf(entry);
     }
     // `current` is still in this walk's own `visiting` set, so the chain arrived back at an id it
     // already passed — everything from that id to the end of the chain is one loop.
@@ -54,25 +61,33 @@ function cycleMemberIds(
 
 /**
  * Every reason a whole-list write refuses the batch, checked before any of it stages (#496 Q2):
- * two entries name the same id (`DuplicateEntryIdError`), an entry's `parentId` names an id outside
- * the batch (`EntryNotFoundError`), or a chain of `parentId`s loops (`ParentCycleError`). `load`
- * replaces every entry, so "outside the batch" means exactly that — there is no existing store to
- * fall back on for a `parentId` the list itself does not name.
+ * two entries name the same id (`DuplicateEntryIdError`), an entry's parent names an id outside
+ * the batch (`EntryNotFoundError`), or a chain of parents loops (`ParentCycleError`). `parentOf`
+ * asks whichever hierarchy source is current (ADR 0020), so a plugin source's own key is checked
+ * the same as core's `parentId` — the tree `load` then builds reads that source too, and a row a
+ * plugin re-parents must be checked against the parent it will actually get. `load` replaces every
+ * entry, so "outside the batch" means exactly that — there is no existing store to fall back on for
+ * a parent the list itself does not name.
  *
  * Throws on the first violation it finds; nothing about this list has staged when it does.
  */
-export function assertEntryBatchIsSound(entries: readonly StoredEntry[], operation: string): void {
+export function assertEntryBatchIsSound(
+  entries: readonly StoredEntry[],
+  operation: string,
+  parentOf: BatchParentResolver,
+): void {
   const byId = new Map<EntryId, StoredEntry>();
   for (const entry of entries) {
     if (byId.has(entry.id)) throw new DuplicateEntryIdError(entry.id, operation, 'duplicate-in-list');
     byId.set(entry.id, entry);
   }
   for (const entry of entries) {
-    if (entry.parentId !== undefined && !byId.has(entry.parentId)) {
-      throw new EntryNotFoundError(entry.parentId, operation);
+    const parentId = parentOf(entry);
+    if (parentId !== undefined && !byId.has(parentId)) {
+      throw new EntryNotFoundError(parentId, operation);
     }
   }
-  const cycleMembers = cycleMemberIds(entries, byId);
+  const cycleMembers = cycleMemberIds(entries, byId, parentOf);
   for (const entry of entries) {
     if (cycleMembers.has(entry.id)) throw new ParentCycleError(entry.id);
   }
