@@ -158,7 +158,8 @@ export function applyConstructionRollUp(data: TransactionData): void {
 
   const dropped = updated.filter((row) => row.to === undefined);
   if (dropped.length > 0) {
-    raiseErrorOn(data.bus, buildDerivedValuesDroppedReport(dropped));
+    const report = buildDerivedValuesDroppedReport(dropped);
+    raiseErrorOn(data.bus, report, () => console.warn(`FreeGantt: ${report.message}`));
   }
 }
 
