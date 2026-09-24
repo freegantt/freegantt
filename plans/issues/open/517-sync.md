@@ -606,6 +606,10 @@ checkedParents, source)`: it visits every current parent, and it never demotes.
   performance invariant does not apply. Step 9 measures `seeded(10k)`.
   - Threshold: 30 ms, the same number the #517 plan used for `sync`. Above it, open a follow-up that limits
     the pass to the ancestors of the touched ids.
+  - Measured (scratch script, not committed; Node 24.18.0, AMD Ryzen 9 9950X, WSL2 Linux): 10 runs, a
+    fresh 10,000-entry `seeded()` Dataset per run, one `entries.update()` (a rename) followed by one
+    `dataset.undo()`, only the `undo()` call timed. Median 6.20 ms (range 2.59-9.26 ms), well under the
+    30 ms threshold above.
   - Allowed shortcut, following `committedTreeStillAnswers` in `rollup.ts`: when the replay has no
     `parentId` row, no add and no remove, and the source is `storedParentSource`, reuse
     `data.entries.committedParents()`.
