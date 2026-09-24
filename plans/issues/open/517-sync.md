@@ -425,3 +425,58 @@ Coordinator rulings:
 - **R4 (ADR).** C2 stands: ADR 0015's body is never edited. Step 1 also writes a new ADR 0035,
   "Sync writes like load, and records one undo step", amending ADR 0015. Status: accepted — verdict
   pending (this build).
+
+## Amendments: local undo (owner, 2026-09-24)
+
+- **U1.** A sync records no undo step, clears nothing, and erases no Redo. This strikes D7, S11 and S13
+  (history no longer fills), the "Undo: record" ruling and S8's reason. S5 changes: a local edit the server
+  has not seen is still overwritten. Undo of that edit now writes the value before the edit, and redo gives
+  the server's value back.
+- **U2.** Replay writes each row onto the current values, the same for undo, redo and `dataset.replay`
+  (decisions a, b, g).
+- **U3.** Replay never stores a raw loop or a dangling `parentId` (decision c).
+- **U4.** Replay renumbers the sibling groups it touches (decision d). This amends ADR 0034.
+- **U5.** Replay re-rolls parents, construction shape (decision e). This amends D-S2-14's "no Rollup". The
+  extension hook still never runs.
+- **U6.** History keeps what each undo and redo wrote (neutrality). It forgets a step that has nothing left
+  to write (f2).
+- **U7.** #419 reuses History's `'sync'` arm (decision i).
+
+### Owner rulings on the open questions (2026-09-24, "agree")
+
+All open questions go as recommended:
+
+1. An `added` row whose id exists: skip it. The server's copy stays.
+2. Undo of an add whose entry now has server children: cascade, the same as `remove()`.
+3. Skips raise no report. `change` carries exactly what the undo wrote.
+4. A step with nothing left to write: History forgets it and undoes the next step in the same click.
+5. The ADR 0034 amendment (undo and redo renumber the groups they touch) and the Rollup amendment
+   (undo and redo re-roll parents) are accepted. ADR 0035 records both.
+6. A new consumer guide, `docs/11-server-data.md`, "Server data: `load` and `sync`".
+7. A lock the server sets can make a consumer veto refuse an undo step every time. Document it, and
+   open a follow-up issue.
+
+**Owner instruction:** every quirk and decision above goes in `docs/11-server-data.md`, in plain words
+for a consumer. The guide covers at least:
+
+- `load` versus `sync`: when to use each; `load` clears undo, `sync` keeps it.
+- A sync records no undo step and does not erase Redo. The user's own earlier steps stay undoable.
+- Undo overwrites: undoing an edit writes the old value even if a sync changed that Field since.
+  Undo then redo gives the server's value back.
+- A sync overwrites a local edit the server has not seen (last write wins).
+- The skip rules (re-added id, removed id, rows for missing entries) and the cascade on undo of an add.
+- A step with nothing left to write is skipped within the same click.
+- An undo never stores a parent loop or a missing parent: it drops that parent change, and a
+  re-added entry whose parent is gone lands at the root.
+- Undo and redo renumber the sibling groups they touch and re-roll parents, so an undo can carry
+  `siblingIndex` and parent rows the recorded step did not have.
+- What `change` carries on an undo after a sync (`from` can be the server's value), and that the app
+  saves `'undo'`/`'redo'` commits back to the server like `'user'` ones.
+- Per-entry state: a kept id keeps its selection, collapse state and plugin store rows.
+- The lock veto quirk, with a link to the follow-up issue (https://github.com/freegantt/freegantt/issues/541).
+- A sync with no changes fires nothing; the poll pattern in a short, typechecked example.
+
+`docs/11` is the one place for these rules. The `sync` API doc, `docs/05`, `docs/06` and `CONTEXT.md`
+state their own part in short and link to `docs/11`. Step 6 writes `docs/11` (the doc lands with the
+behaviour). Step 7 adds the harness page brief link to it. `check-doc-examples` must cover it (add the
+file to that script's list if it does not pick up `docs/*.md` by itself).
