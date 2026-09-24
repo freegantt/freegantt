@@ -26,7 +26,7 @@ frontmatter.
 | [0012](0012-dates-are-optional-on-every-kind.md) | Dates are optional on every kind | superseded by 0027 | An Entry spans iff both `start` and `end` are present; one date without the other is legal |
 | [0013](0013-what-decides-that-a-row-derives-its-values.md) | What decides that a row derives its values | amended by 0022 | Structure (has children, or not) decides derivation and the default look — no stored classification |
 | — | *(0014 — withdrawn before build; the number is not reused, see below)* | — | — |
-| [0015](0015-what-the-write-door-refuses.md) | What the write door refuses | amended by 0033 | `editable` governs `entries.update()` and the grid through one rule, one refusal |
+| [0015](0015-what-the-write-door-refuses.md) | What the write door refuses | amended by 0033, 0035 | `editable` governs `entries.update()` and the grid through one rule, one refusal |
 | [0016](0016-the-library-holds-no-save-format.md) | The library holds no save format | accepted | No `toJSON`/`fromJSON`/Document; persistence is the consumer's own job |
 | [0017](0017-the-entry-answers-questions-about-itself.md) | The Entry answers questions about itself | superseded by 0024 | `Entry`/`StoredEntry` are two types; the read seam reads `entry.read(key)` |
 | [0018](0018-a-variant-is-a-rule-not-an-id-list.md) | A variant is a rule, not an id list | accepted | A Variant is a `when` rule; nothing stores which rows wear it |
@@ -46,6 +46,7 @@ frontmatter.
 | [0032](0032-a-gantt-plugins-code-runs-before-the-first-frame.md) | A Gantt plugin's code runs before the first frame | accepted | A finished Gantt is built and configured before any plugin's `view(ctx)` runs; `Gantt` assigns `#shell`, installs plugins, then paints frame 1; `#constructed` flips last so a `view()`-time Gantt write stays silent |
 | [0033](0033-an-api-field-takes-no-gesture.md) | An `'api'` Field takes no gesture | accepted | `canWrite` refuses `'api'`/`'never'`/a derived cell before the consumer or the variant rule; neither can widen it, only a per-entry lock rule can |
 | [0034](0034-sibling-order-is-a-field.md) | Sibling order is a Field | accepted | `siblingIndex` is an ordinary core Field; a write that moves an entry renumbers its sibling group once, at commit, so one move is one undo step, and `entries.all` reads depth-first tree order by it |
+| [0035](0035-sync-writes-like-load-and-records-one-undo-step.md) | Sync writes like load, and records one undo step | accepted — verdict pending (this build) | `entries.sync()` writes through `load`'s door, not `entries.update()`'s: a `'never'` lock does not refuse it, a derived parent cell re-rolls, no `EditExtender` runs, and unlike `load` it records one undo step and erases Redo |
 
 ## The gap at 0014
 

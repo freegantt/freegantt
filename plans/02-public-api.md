@@ -142,11 +142,23 @@ dataset.entries.load(rows);   // rows in any order: a child may come before its 
 
 A child arriving is the derivation door (`01` §2.5). An Entry that gains its first child starts deriving in the same transaction. Losing the last child leaves a normal Entry with no dates. There is no `autoGroup` key and no promotion of a stored classification.
 
+### `sync` — match a live Dataset to a full list, and keep one undo step (#517)
+
+```ts
+dataset.entries.sync(serverRows);   // rows in any order — the same shape `load` and the constructor take
+```
+
+`sync` also makes the Dataset match a list, but it diffs instead of replacing: an id missing from the list is removed, a key a kept entry's input omits is cleared, and a Field whose value did not change writes no row. After `sync(list)`, the entry ids, every declared Field value (`siblingIndex` included) and the tree are the same as `load(list)` would leave — only undo and per-entry state differ. A kept id keeps its selection, its collapse state and its plugin store rows; a removed id loses them, and an undo brings a removed id's store rows back with it.
+
+`sync` writes through the door `load` uses: it ignores a `'never'` Field lock, a derived parent cell re-rolls instead of taking an authored value, and no `EditExtender` cascade runs. `beforeChange` can veto the whole call, the same as `load`. It refuses the same way `load` does inside `dataset.transaction()` and from the extension hook, and — new to `sync` — from inside a `beforeChange` or `change` handler, since a sync reaching the store from there would apply or notify in the middle of a notification already running.
+
+Unlike `load`, `sync` commits nothing when the list already matches the store: no `ChangeSet`, no `change` event, no undo step — the common case for a server poll that finds nothing new. When it does commit, the `ChangeSet` carries `origin: 'sync'` and is recorded on the undo stack exactly like a user edit (see "Undo and redo" below). A local edit the server has not seen is overwritten, last write wins; undoing the sync brings the local edit back.
+
 ### Undo and redo
 
 `undo()`/`redo()` return nothing — like every other commit, what they did arrives on `dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`; a caller that needs to know what an undo did reads the event, not a return value. `canUndo`/`canRedo` answer "is there anything to undo/redo" without a caller needing to try and catch. `history: { capacity: 200 }` at construction keeps 200 undoable transactions; the default is 100. An undo replays a cascade exactly as it committed — it never re-runs the extension hook, so an engine whose behaviour changed between library versions cannot rewrite history (`01` §6, `plans/s2-data-core/s2.5-undo-redo.md`).
 
-**`load` (#496) clears History instead of recording it.** After `dataset.entries.load(rows)`, `canUndo` and `canRedo` both read `false` — the stack is emptied and the cursor set to 0, the same posture a desktop app takes opening a file. `load` is a new baseline, not an undoable step: an app's first `load` must not let `Ctrl+Z` empty the chart. `sync` (#517) is the counterpart that records one undo step instead.
+**`load` (#496) clears History instead of recording it.** After `dataset.entries.load(rows)`, `canUndo` and `canRedo` both read `false` — the stack is emptied and the cursor set to 0, the same posture a desktop app takes opening a file. `load` is a new baseline, not an undoable step: an app's first `load` must not let `Ctrl+Z` empty the chart. `sync` (#517) is the counterpart that records one undo step instead: a sync that changes anything pushes one step onto the stack, covering only the rows that changed, and erases Redo — the same posture a user edit takes. The 100-step default capacity governs a sync step the same way it governs any other; a consumer who polls often and wants more headroom raises `history: { capacity }`.
 
 `dataset.replay(changeSet)` is the write path `undo()`/`redo()` are built on, published so a consumer can write their own History against the public surface alone: `on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` — no `data/` import needed. `replay` writes the rows exactly as given, through the same `beforeChange`/`change` channel, with no extension hook and no rollup. `changeSet.origin` must be `'undo'` or `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (§6). An empty changeset is a no-op (`plans/s2-data-core/s2b-undo-replay-seam.md`). A History panel lists what a step changed with `fieldRowsOf(changeSet).map((row) => row.field)`, dropping the plugin-store rows `updated` also carries.
 
@@ -944,6 +956,8 @@ const risk    = dataset.pluginStore('risk');            // one plugin's store, o
 `entries.all` and `fields.all` already ship. `pluginStore(id)` ships with ADR 0016. An application maps these into its own shape and saves that shape. It writes the same mapping in the inbound direction to build the `Dataset`, so this is the outbound half of work it does anyway, against a shape it chose.
 
 **The inbound half is one call.** `dataset.entries.load(rows)` (#496) writes a saved list back onto a live Dataset, in any order — a child may list before its parent. Before #496 the only inbound door was `new Dataset({ entries })`, which a mounted Gantt cannot take (`gantt.dataset` is read-only) and which gives every subscriber a new identity to rebind. `load` is not a save format: it takes `FlatEntryInput[]`, the shape the constructor already takes, and adds no document type, no schema and no version — ADR 0016 stands.
+
+**A periodic server poll calls `dataset.entries.sync(rows)` (#517), not `load`.** `load` clears History and resets every kept entry's selection, collapse state and plugin store rows on every call — the right posture for opening a saved file, the wrong one for a refresh a user is looking at. `sync` takes the same `FlatEntryInput[]` shape and keeps a kept entry's state, so it fits a poll loop that runs while the app stays open.
 
 **A plugin that owns data a consumer must keep publishes its own reader.** It gets no hook into a library format. A consumer saves that data by reading it from the plugin, in the plugin's own vocabulary.
 
