@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { entryId, MutationCancelledError } from '../model/index.js';
+import { changeSetId, entryId, MutationCancelledError } from '../model/index.js';
 import type { EditExtender } from './edit-extension.js';
 
 function dataset(
@@ -277,6 +277,28 @@ describe('History', () => {
     while (state.canUndo) state.undo();
 
     expect(JSON.stringify(state.entries.all)).toBe(before);
+  });
+
+  it('ignores an outside undo replay with an empty stack instead of moving the cursor negative', () => {
+    const state = dataset([{ id: 't1' }]);
+    expect(state.canUndo).toBe(false);
+
+    // A hand-built `origin: 'undo'` changeset, replayed straight through the public door
+    // (`Dataset.replay`), not through `state.undo()` — the app's own stack never held this step.
+    state.replay({
+      id: changeSetId(1),
+      origin: 'undo',
+      added: [],
+      removed: [],
+      updated: [{ store: 'entries', id: entryId('t1'), field: 'name', from: 't1', to: 'outside-write' }],
+    });
+
+    expect(state.entries.get('t1')?.name).toBe('outside-write');
+    expect(state.canUndo).toBe(false);
+    expect(state.canRedo).toBe(false);
+
+    state.redo();
+    expect(state.entries.get('t1')?.name).toBe('outside-write');
   });
 
   it('undo of a declared props key removes the key instead of writing undefined onto props', () => {

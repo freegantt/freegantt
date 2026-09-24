@@ -79,7 +79,9 @@ export class History {
    *  write door reuses. `'undo'` and `'redo'` move the cursor (D-S2-25) and replace the stack entry
    *  with what they actually wrote — `invertChangeSet` of it for `'undo'`, as recorded for `'redo'` —
    *  so a later undo or redo inverts what really landed, not the step as first recorded; undo then
-   *  redo is neutral even across a sync in between (§2g). This handler is the first `change`
+   *  redo is neutral even across a sync in between (§2g). An `'undo'`-origin write that reaches an
+   *  empty stack is ignored — it did not come from this History's own `undo()`, since that call
+   *  only ever replays a step `canUndo` already found. This handler is the first `change`
    *  subscriber, so a later handler (the harness undo button included) already reads the post-move
    *  `canUndo`/`canRedo`. `'load'` (#496) empties the stack instead: `entries.load()` is a new
    *  baseline, not an undoable step, so `canUndo`/`canRedo` both read `false` right after it — the
@@ -92,6 +94,10 @@ export class History {
       case 'sync':
         break;
       case 'undo':
+        // An outside `dataset.replay({ origin: 'undo' })` can land here with an empty stack (no
+        // step of this History's own to move the cursor off of) — ignore it rather than moving
+        // the cursor negative and writing a stack slot that does not exist.
+        if (this.#cursor === 0) break;
         this.#cursor -= 1;
         this.#stack[this.#cursor] = invertChangeSet(changeSet);
         break;
