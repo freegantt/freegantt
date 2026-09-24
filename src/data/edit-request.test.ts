@@ -241,4 +241,27 @@ describe('createEditRequest editableOf (#473)', () => {
 
     expect(request.editableOf('van-1', 'derived')).toBe('never');
   });
+
+  it('keeps a row this same transaction removes then re-adds under its subtree lock', () => {
+    // A `remove(id); add({ id })` in one transaction reports the id through both `added` and
+    // `removed` — the re-added row is what a mid-transaction read sees. A subtree lock walks
+    // `entryAfterEdits` to find the row's parent, so the lock must still find `van-1` under the
+    // locked `depot`, not answer "gone" and let the cascade through.
+    const entries = depotTree();
+    const oldVan1 = entries.get(entryId('van-1'))!;
+    const newVan1 = entry('van-1', 0, 100, 'depot');
+    const subtreeLocked: FieldLockRule = (query) => (query.isDescendantOf('depot') ? 'never' : undefined);
+    const request = createEditRequest({
+      entries,
+      proposed: new Map() as ProposedEdits,
+      added: [newVan1],
+      removed: [oldVan1],
+      hierarchySource: storedParentSource,
+      committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
+      fields: lookupOf(cost),
+      lockRule: subtreeLocked,
+    });
+
+    expect(request.editableOf('van-1', 'cost')).toBe('never');
+  });
 });

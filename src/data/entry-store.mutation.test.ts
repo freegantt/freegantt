@@ -424,6 +424,32 @@ describe('an extender edit renumbers its own group too (ADR 0034)', () => {
     expect(state.entries.get('x')!.read('siblingIndex')).toBe(0);
   });
 
+  it('an extender edit on an id this same transaction removes then re-adds still lands its siblingIndex', () => {
+    // `remove('a'); add({ id: 'a' })` in one transaction replaces the row — the re-added 'a' is what
+    // this transaction leaves behind, so a cascade move on it must land, not be skipped as if the id
+    // were gone.
+    const state = new DatasetState({
+      entries: [
+        { id: 'p' },
+        { id: 'a', parentId: 'p', name: 'a', start: 0, end: 1 },
+        { id: 'b', parentId: 'p', name: 'b', start: 0, end: 1 },
+      ],
+      timeZone: 'UTC',
+      editExtender: ({ addedEntryIds }) => {
+        if (!addedEntryIds.has(entryId('a'))) return new Map();
+        return new Map([[entryId('a'), { siblingIndex: 0 }]]);
+      },
+    });
+
+    state.transaction(() => {
+      state.entries.remove('a');
+      state.entries.add({ id: 'a', parentId: 'p', name: 'a reborn', start: 0, end: 1, siblingIndex: 1 });
+    });
+
+    expect(state.entries.get('a')!.read('siblingIndex')).toBe(0);
+    expect(state.entries.get('b')!.read('siblingIndex')).toBe(1);
+  });
+
   it('an extender edit on an entity whose raw hierarchy answer is refused range-checks against the checked root group it actually joins, not an empty one of its own', () => {
     const state = new DatasetState({
       entries: [{ id: 'r' }, { id: 'x', name: 'x', start: 0, end: 1, props: { phaseId: 'ghost' } }],
