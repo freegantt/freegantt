@@ -19,6 +19,9 @@ issue plans land here as they're opened.
 - [#529](https://github.com/freegantt/freegantt/issues/529) — `capabilities.edit` can reopen an
   `'api'` Field for drag. Direction: `'api'` means code only. Blocks #528. No plan file; the issue
   holds the work.
+- [#530](https://github.com/freegantt/freegantt/issues/530) — a plugin cannot write its own Field
+  without an `as EntryEdit` cast. Direction: the plugin's generic names only its own keys, and a
+  typed Dataset accepts it. Blocked by #496. No plan file; the issue holds the rulings.
 
 **Closed:**
 
