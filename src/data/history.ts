@@ -72,12 +72,16 @@ export class History {
     if (changeSet.origin === 'user') this.#record(changeSet);
     else if (changeSet.origin === 'undo') this.#cursor -= 1;
     else if (changeSet.origin === 'redo') this.#cursor += 1;
-    else if (changeSet.origin === 'load') this.#clear();
+    else if (changeSet.origin === 'load') this.clear();
   };
 
-  /** `entries.load()`'s own arm (#496): a full fresh start owes no undo step, and nothing above the
-   *  new baseline is redoable either. */
-  #clear(): void {
+  /** Empties the stack and moves the cursor back to it — `entries.load()`'s own arm (#496): a full
+   *  fresh start owes no undo step, and nothing above the new baseline is redoable either.
+   *
+   *  Public so `DatasetState.clearHistory()` can call it once every plugin's `data()` has run (ADR
+   *  0031): a plugin's setup writes record here like any other commit, and this is what makes
+   *  `canUndo` read `false` right after `new Dataset()` — a setup seed is not an undo step (#137). */
+  clear(): void {
     this.#stack.length = 0;
     this.#cursor = 0;
   }

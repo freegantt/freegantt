@@ -10,8 +10,28 @@
 //
 // A plugin author writes `definePlugin` (`api/define-plugin.ts`) and meets the bound names.
 
-import type { Aggregator, Disposer, Field, FieldType, PluginId } from '../model/index.js';
+import type {
+  Aggregator,
+  Disposer,
+  EntryStoreView,
+  Field,
+  FieldType,
+  HierarchySource,
+  PluginId,
+} from '../model/index.js';
 import type { DatasetPluginContextOf } from './dataset-plugin.js';
+
+/** The props a `TDataset` type argument carries, read off its own `entries` collection — the same
+ *  trust boundary `api/dataset.ts`'s class note describes. Falls back to a plain record when
+ *  `TDataset` names no Dataset type (the default, `unknown`), so `hierarchySource` still type-checks
+ *  with no `props` shape declared. The untyped `DataPlugin<unknown>` arm infers `TProps` as `unknown`
+ *  too. The `unknown extends TProps` arm catches that case the same way. Not exported:
+ *  `ae-forgotten-export` records it, same as `EntryEnvelope` today. */
+type PropsOf<TDataset> = TDataset extends { entries: EntryStoreView<infer TProps> }
+  ? unknown extends TProps
+    ? Record<string, unknown>
+    : TProps
+  : Record<string, unknown>;
 
 /** The two members every plugin declares, whichever halves it fills.
  *
@@ -51,16 +71,20 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
   fields?: never;
   fieldTypes?: never;
   aggregators?: never;
+  hierarchySource?: never;
 }
 
 /** A plugin that owns state — Fields, the edit hook, a store — and may paint it too.
  *
- *  **The install site is where the state lives.** This arm installs on the `Dataset`, because a Field
- *  must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset then runs `view`
- *  once, each with its own context, so I2 holds by construction. */
+ *  **The install site is where the state lives.** A `data` half declares what shapes the Dataset's
+ *  own construction, and a Dataset installs its plugins once. This arm installs on the `Dataset` for
+ *  that reason. Every `Gantt` bound to that Dataset then runs `view` once, each with its own context,
+ *  so I2 holds by construction. */
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
-  /** Fields, the edit hook and the store. DOM-free, and runs as the `Dataset` constructs. */
-  data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+  /** Fields, the edit hook and the store. DOM-free, and runs once, on the finished Dataset. Optional:
+   *  a plugin that only declares `fields`, `fieldTypes`, `aggregators` or `hierarchySource`
+   *  needs no `data()` to run. */
+  data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
   /** The same shape `DatasetOptions.fields`/`fieldTypes`/`aggregators` take (#496 grill round 3,
    *  R1). Registered before any entry is read — alongside the Dataset's own, and before `data()`
    *  runs. So a flat value an entry carries for one of these keys survives `new Dataset(...)`, the
@@ -77,6 +101,15 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
   aggregators?: Readonly<Record<string, Aggregator>>;
   /** The same half a chrome-only plugin fills. Optional: a headless plugin paints nothing. */
   view?(ctx: TViewContext): Disposer | void;
+  /** Declares the tree, instead of composing it from inside `data()` (ADR 0031). Call:
+   *  `definePlugin<PhaseProps>({ id, fields: [{ key: 'phaseId' }], hierarchySource: (next) => (entry) =>
+   *  entry.props.phaseId ?? next(entry) })` — "its hierarchy source is the entry's phase id, or the
+   *  next source's answer."
+   *
+   *  Composes in setup order (`resolveSetupOrder`), the same order `data()` runs in. The
+   *  first plugin wraps core's own `storedParentSource`, and a later plugin wraps the one before it —
+   *  the last plugin answers first. Same composing idiom `setExtender`/`setLockRule` already use. */
+  hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;
 }
 
 /** One installed plugin, either arm. `DatasetOptions.plugins` takes this; `GanttOptions.plugins`

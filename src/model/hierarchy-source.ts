@@ -22,18 +22,18 @@ import type { StoredEntry } from './stored-entry.js';
  *
  * A plain `string` is a legal answer, the way it is on every other way into the library: core brands
  * it. `TProps` types `entry.props`, so a source that reads a consumer key names that key's own type
- * — `ctx.hierarchy.setSource<PlannerProps>(…)`.
+ * — `definePlugin<PlannerProps>({ hierarchySource })`.
  */
 export type HierarchySource<TProps = Record<string, unknown>> = (
   entry: StoredEntry<TProps>,
 ) => EntryId | string | undefined;
 
 /**
- * How a plugin claims the seam. It receives the current occupant and may call it, the same way an
- * `ExtenderWrapper` composes:
+ * How a plugin claims the seam. Declared on the plugin's own `hierarchySource` member (ADR 0031); it
+ * receives the current occupant and may call it, the same way an `ExtenderWrapper` composes:
  *
  * ```ts
- * ctx.hierarchy.setSource<PlannerProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
+ * hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
  * ```
  *
  * That reads: the phase id when there is one, otherwise whatever the next source says.

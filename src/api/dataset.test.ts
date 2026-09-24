@@ -9,9 +9,13 @@ import {
   mergeEntryEdits,
   InvalidReplayOriginError,
   ComputedFieldCannotBeWrittenError,
+  DuplicateEntryIdError,
+  EntryNotFoundError,
   FieldNotEditableError,
   MissingPluginError,
   MutationCancelledError,
+  ParentCycleError,
+  PluginSetupError,
   RegistrationClosedError,
   UnknownFieldError,
   DuplicatePluginIdError,
@@ -160,6 +164,58 @@ describe('new Dataset()', () => {
     ).toThrow(
       'null names no instant. An absent date is a value left out, not a null one. Write a date, or leave it out.',
     );
+  });
+
+  describe('checks its own batch the same way entries.load does (ADR 0031)', () => {
+    it('throws DuplicateEntryIdError for two entries naming the same id', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a' }), oneEntry({ id: 'a' })],
+          }),
+      ).toThrow(DuplicateEntryIdError);
+    });
+
+    it('throws EntryNotFoundError for a parentId naming no id in the batch', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a', parentId: 'ghost' })],
+          }),
+      ).toThrow(EntryNotFoundError);
+    });
+
+    it('throws ParentCycleError for a parentId loop', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a', parentId: 'b' }), oneEntry({ id: 'b', parentId: 'a' })],
+          }),
+      ).toThrow(ParentCycleError);
+    });
+
+    it('does not throw when a child is listed before its parent', () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'b', parentId: 'a' }), oneEntry({ id: 'a' })],
+          }),
+      ).not.toThrow();
+    });
+
+    it("names 'new Dataset' as the door, not entries.load", () => {
+      expect(
+        () =>
+          new Dataset({
+            timeZone: 'UTC',
+            entries: [oneEntry({ id: 'a' }), oneEntry({ id: 'a' })],
+          }),
+      ).toThrow('new Dataset');
+    });
   });
 });
 
@@ -710,7 +766,7 @@ describe('Dataset plugins (S5.10)', () => {
     expect(dataset.plugins).toEqual([plugin]);
   });
 
-  it('seeds a store during setup, before any consumer handler or history exists', () => {
+  it('seeds a store during setup, before any consumer handler exists, leaving canUndo false', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
     expect(dataset.canUndo).toBe(false);
     expect(dataset.pluginStore('demo.lock')?.get('t1')).toEqual({ locked: true });
@@ -813,7 +869,7 @@ describe('Dataset plugins (S5.10)', () => {
     expect(setExtenderLate).toThrow(RegistrationClosedError);
   });
 
-  it('has a Field a plugin declares in the registry before the first Rollup walks (D-S5-4, #496 R1)', () => {
+  it('has a Field a plugin declares in the registry, already settled by the construction Rollup (#496)', () => {
     const declaresCost: DataPlugin = {
       id: 'demo.cost',
       fieldTypes: { money: { rollUp: 'sum' } },
@@ -952,6 +1008,95 @@ describe('Dataset plugins (S5.10)', () => {
     dataset.destroy();
     expect(released).toEqual(['demo.noisy']);
   });
+
+  // ADR 0031: a Dataset builds completely — Field, hierarchy source, construction Rollup all settle —
+  // before the first plugin's data() runs. The five tests below read that finished Dataset back.
+
+  it('reads every entry through ctx.dataset.entries.all inside data()', () => {
+    let seenIds: string[] = [];
+    const reads: DataPlugin = {
+      id: 'demo.reads',
+      data(ctx) {
+        seenIds = [...ctx.dataset.entries.all].map((entry) => entry.id);
+      },
+    };
+    new Dataset({ timeZone: 'UTC', entries: [oneEntry(), oneEntry({ id: 't2' })], plugins: [reads] });
+    expect(seenIds).toEqual(['t1', 't2']);
+  });
+
+  it('reads a rolled-up parent value inside data(), already settled by the construction Rollup', () => {
+    let parentCost: number | undefined;
+    const reads: DataPlugin = {
+      id: 'demo.reads-rollup',
+      data(ctx) {
+        parentCost = ctx.dataset.entries.get('p1')?.read('cost') as number | undefined;
+      },
+    };
+    new Dataset({
+      timeZone: 'UTC',
+      fieldTypes: { money: { rollUp: 'sum' } },
+      fields: [{ key: 'cost', type: 'money' }],
+      entries: [{ id: 'p1', name: 'Sitework' }, oneEntry({ id: 't1', parentId: 'p1', props: { cost: 500 } })],
+      plugins: [reads],
+    });
+    expect(parentCost).toBe(500);
+  });
+
+  it('fires change to an earlier plugin’s handler when a later plugin seeds its store, and leaves canUndo false', () => {
+    const seenByFirst: unknown[] = [];
+    const first: DataPlugin = {
+      id: 'demo.first',
+      data(ctx) {
+        ctx.events.on('change', ({ changeSet }) => {
+          seenByFirst.push(changeSet.origin);
+        });
+      },
+    };
+    const second: DataPlugin = {
+      id: 'demo.second',
+      requires: ['demo.first'],
+      data(ctx) {
+        ctx.store.reserve<LockRow>().set(entryId('t1'), { locked: true });
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [first, second] });
+    expect(seenByFirst).toEqual(['user']);
+    expect(dataset.canUndo).toBe(false);
+  });
+
+  it('reads canUndo true inside a plugin’s change handler, for a user edit after construction', () => {
+    let canUndoDuringHandler: boolean | undefined;
+    const watches: DataPlugin = {
+      id: 'demo.watches',
+      data(ctx) {
+        ctx.events.on('change', () => {
+          canUndoDuringHandler = ctx.dataset.canUndo;
+        });
+      },
+    };
+    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [watches] });
+    dataset.entries.update('t1', { name: 'Renamed' });
+    expect(canUndoDuringHandler).toBe(true);
+  });
+
+  it('disposes the earlier plugins and throws PluginSetupError when a later data() throws', () => {
+    const released: string[] = [];
+    const ok: DataPlugin = {
+      id: 'demo.ok',
+      data: () => () => released.push('demo.ok'),
+    };
+    const throws: DataPlugin = {
+      id: 'demo.throws',
+      requires: ['demo.ok'],
+      data() {
+        throw new Error('setup failed');
+      },
+    };
+    expect(() => new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [ok, throws] })).toThrow(
+      PluginSetupError,
+    );
+    expect(released).toEqual(['demo.ok']);
+  });
 });
 
 describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () => {
@@ -967,7 +1112,9 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
     },
   };
 
-  function twoLockedEntries(cascadeTo: (id: string, owner: string) => DataPlugin['data']): Dataset {
+  function twoLockedEntries(
+    cascadeTo: (id: string, owner: string) => NonNullable<DataPlugin['data']>,
+  ): Dataset {
     return new Dataset({
       timeZone: 'UTC',
       fields: [{ key: 'owner', editable: false }],
@@ -984,7 +1131,7 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
 
   it('lets a cascade write the Entry the lock rule names, unchanged from a locked sibling', () => {
     const cascadesOwner =
-      (id: string, owner: string): DataPlugin['data'] =>
+      (id: string, owner: string): NonNullable<DataPlugin['data']> =>
       (ctx) => {
         ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
       };
@@ -998,7 +1145,7 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
 
   it('still refuses a cascade onto a cell the lock rule has no opinion on', () => {
     const cascadesOwner =
-      (id: string, owner: string): DataPlugin['data'] =>
+      (id: string, owner: string): NonNullable<DataPlugin['data']> =>
       (ctx) => {
         ctx.edits.setExtender(() => () => new Map([[entryId(id), { owner }]]));
       };

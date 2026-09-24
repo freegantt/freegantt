@@ -31,8 +31,8 @@ export interface LockEntriesPlugin extends DataPlugin {
  *
  * A consumer seeds a starting lock the same way any other Field starts populated: by writing
  * `locked: true` on the entry it hands the constructor, or `entries.load()`. The plugin takes no
- * `initiallyLocked` list of its own — `data()` runs before the Dataset it installs into can take a
- * write (D-S5-4), so there is no earlier moment for the plugin to stage one.
+ * `initiallyLocked` list of its own — `data()` runs on the finished Dataset (ADR 0031), so it reads
+ * every entry's `locked` Field straight off `ctx.dataset.entries` instead of staging one.
  *
  * Two seams, two jobs (D-S5-24's refusal note):
  * - the **extension hook** adds a cascade edit for every locked entry, on every call — a preview call
@@ -55,24 +55,10 @@ export function lockEntries(): LockEntriesPlugin {
 
   const isLockedEntry = (id: string): boolean => dataset?.entries.get(id)?.read(LOCKED_FIELD_KEY) === true;
 
-  // Which ids are locked right now — seeded once, below, then kept current by the `change` listener,
-  // so the extender (run on every drag-preview frame) walks only the locked entries, never the whole
-  // request.
+  // Which ids are locked right now — seeded in `data()` below, then kept current by the `change`
+  // listener, so the extender (run on every drag-preview frame) walks only the locked entries, never
+  // the whole request.
   const lockedIds = new Set<EntryId>();
-  let lockedIdsSeeded = false;
-
-  // Walks every entry once, so a row locked purely by construction-time `locked: true` — never
-  // touched by a commit of its own — still joins `lockedIds` before the first drag preview reads it.
-  // Deferred to the extender's first call rather than run in `data()`: `ctx.dataset` is still under
-  // construction while `data()` runs (D-S5-4), so `ctx.dataset.entries` is not yet readable there;
-  // by the time any edit reaches the extender, construction has finished.
-  const seedLockedIdsOnce = (): void => {
-    if (lockedIdsSeeded) return;
-    lockedIdsSeeded = true;
-    for (const entry of dataset?.entries.all ?? []) {
-      if (isLockedEntry(String(entry.id))) lockedIds.add(entry.id);
-    }
-  };
 
   return {
     id: 'demo.lockEntries',
@@ -81,6 +67,14 @@ export function lockEntries(): LockEntriesPlugin {
 
     data(ctx) {
       dataset = ctx.dataset;
+
+      // Walks every entry once, so a row locked purely by construction-time `locked: true` — never
+      // touched by a commit of its own — joins `lockedIds` before the first drag preview reads it.
+      // The Dataset is finished by the time `data()` runs (ADR 0031), so `ctx.dataset.entries` is
+      // readable here.
+      for (const entry of ctx.dataset.entries.all) {
+        if (isLockedEntry(String(entry.id))) lockedIds.add(entry.id);
+      }
 
       // Every id a commit touched — added, removed, or field-written — re-read once, after the
       // commit lands, so `lockedIds` never drifts from the Field it mirrors.
@@ -98,7 +92,6 @@ export function lockEntries(): LockEntriesPlugin {
       // What does a locked entry do while a neighbour moves? It moves too, so the drag preview shows
       // the cost of the lock before the drop lands.
       ctx.edits.setExtender((next) => (request) => {
-        seedLockedIdsOnce();
         const moved = movedBy(request);
         if (moved === undefined) return next(request);
         // `EntryEdit` is the write shape — the same object `dataset.entries.update(id, edit)` takes

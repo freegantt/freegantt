@@ -17,11 +17,12 @@ A plugin is one object. It names an `id`, and it fills one or both halves.
 
 | Half | What it sees | Context type | DOM access | Runs |
 | --- | --- | --- | --- | --- |
-| `data(ctx)` | fields, edits, events, its own store | `DatasetPluginContextOf` | No | once, as the `Dataset` constructs |
+| `data(ctx)` | fields, edits, events, its own store | `DatasetPluginContextOf` | No | once, on the finished Dataset |
 | `view(ctx)` | rendering, interaction, commands | `PluginContextOf` | Yes | once per `Gantt`, as that Gantt mounts |
 
-**The install site is where the state lives.** A plugin with a `data` half
-installs on the `Dataset`, because a field must exist before the first rollup.
+**The install site is where the state lives.** A `data` half declares what
+shapes the Dataset's own construction, and a Dataset installs its plugins
+once, so a plugin with a `data` half installs on the `Dataset`.
 Every `Gantt` bound to that Dataset then runs the `view` half once, each with
 its own context. A chrome-only plugin — no `data` half — installs on the
 `Gantt`, and `gantt.plugins` reconfigures it live.
@@ -108,7 +109,6 @@ function ownerField() {
   return definePlugin({
     id: 'demo.ownerField',
     fields: [{ key: 'owner', type: 'text', editable: true }],
-    data() {},
   });
 }
 
@@ -120,6 +120,40 @@ flat `owner: 'Ada'` value on a construction entry lands the same way
 `entries.load()` already reads it. After that, the field is a normal field:
 `dataset.entries.update(id, { owner: 'Ada' })` reads and writes it like any
 other.
+
+## Hierarchy source
+
+A plugin that owns the tree declares `hierarchySource` on itself, the same
+way it declares `fields` (ADR 0031):
+
+```ts
+import { definePlugin } from 'freegantt';
+
+interface PhaseProps {
+  phaseId?: string;
+}
+
+function phases() {
+  return definePlugin<PhaseProps>({
+    id: 'demo.phases',
+    fields: [{ key: 'phaseId' }],
+    hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
+  });
+}
+
+export { phases };
+```
+
+Read aloud: "its hierarchy source is the entry's phase id, or the next
+source's answer." `next` is the source composed so far — core's own
+`(entry) => entry.parentId` for the first plugin to declare one, or the
+plugin declared just before it in setup order. `Dataset` folds every
+declared source before the construction Rollup runs, so the Rollup always
+walks the finished tree.
+
+`entry` is a `StoredEntry`, not the live `Entry` — `parent()`, `children()`,
+`depth` and `descendants()` are all built from this function, so a source
+that read one of those would ask the question it exists to answer.
 
 ## Installing a plugin
 
@@ -260,10 +294,10 @@ can check `request.editableOf(id, field)` before it writes, and a consumer
 can check the same answer through `dataset.editableOf(id, field)` — one
 resolved answer, published on both doors (I14, `plans/01` §11).
 
-**Installing composes**, the same way `setExtender` and `hierarchy.setSource`
-do (D-S5-23): the wrapper receives the current occupant, so a second plugin's
-rule adds to the first's instead of evicting it. See "Every registration
-seam" below for `edits.setLockRule`'s row.
+**Installing composes**, the same way `setExtender` and a declared
+`hierarchySource` do (D-S5-23): the wrapper receives the current occupant, so
+a second plugin's rule adds to the first's instead of evicting it. See
+"Every registration seam" below for `edits.setLockRule`'s row.
 
 ## Data a consumer must keep
 
@@ -338,7 +372,6 @@ plugins claim the same key.
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
-| `hierarchy.setSource(wrap)` | the one hierarchy seam | Composes — the second source receives the first and may call it | `src/api/hierarchy-source.test.ts`, "two sources compose: the second receives the first and may call it" |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 | `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
 | `events.on(name, handler)` | none | Additive — every handler runs, in registration order; the returned `Disposer` removes only that one handler | `src/data/event-bus.test.ts` |

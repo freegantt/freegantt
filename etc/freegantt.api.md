@@ -171,6 +171,8 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
     fields?: never;
     // (undocumented)
     fieldTypes?: never;
+    // (undocumented)
+    hierarchySource?: never;
     view(ctx: TViewContext): Disposer | void;
 }
 
@@ -353,9 +355,11 @@ export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, D
 // @public
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
     aggregators?: Readonly<Record<string, Aggregator>>;
-    data(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
+    data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
+    // Warning: (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
+    hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;
     view?(ctx: TViewContext): Disposer | void;
 }
 
@@ -420,11 +424,6 @@ export interface DatasetEvents {
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
 }
 
-// @public
-export interface DatasetHierarchy {
-    setSource<TProps = Record<string, unknown>>(wrap: HierarchySourceWrapper<TProps>): void;
-}
-
 // @public (undocumented)
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
@@ -453,8 +452,6 @@ export interface DatasetPluginContextOf<TDataset> {
     edits: DatasetEditHook;
     // (undocumented)
     events: DatasetEvents;
-    // (undocumented)
-    hierarchy: DatasetHierarchy;
     // (undocumented)
     store: DatasetStoreAccess;
 }

@@ -3,14 +3,7 @@ import { DatasetState } from './dataset-state.js';
 import { PluginStores, pluginStoreName } from './plugin-store.js';
 import { fieldRowsOf } from './change-set.js';
 import { MutationDuringExtensionHookError, entryId } from '../model/index.js';
-import type {
-  ChangeSet,
-  DatasetEventMap,
-  EntryId,
-  PluginId,
-  PluginStore,
-  PluginStoreName,
-} from '../model/index.js';
+import type { ChangeSet, DatasetEventMap, EntryId, PluginId, PluginStoreName } from '../model/index.js';
 
 const LOCK: PluginId = 'demo.lock';
 const LOCK_STORE = pluginStoreName(LOCK);
@@ -24,8 +17,8 @@ const twoEntries = [
   { id: 't2', name: 'Build', start: '2026-09-08', end: '2026-09-15' },
 ];
 
-function newState(options: { installPlugins?: (state: DatasetState) => () => void } = {}): DatasetState {
-  return new DatasetState({ entries: twoEntries, timeZone: 'UTC', ...options });
+function newState(): DatasetState {
+  return new DatasetState({ entries: twoEntries, timeZone: 'UTC' });
 }
 
 /** Every changeset this Dataset commits, in order — what the "one changeset" claims below read. */
@@ -224,23 +217,6 @@ describe('a plugin-store write on the commit path (D-S5-24)', () => {
 
     expect(() => lock.set(entryId('t1'), { locked: true })).toThrow();
     expect(lock.get(entryId('t1'))).toBeUndefined();
-  });
-});
-
-describe('a plugin-store write while a plugin sets up (issue #137 F17)', () => {
-  it('wraps itself in its own transaction, before history exists', () => {
-    let lock: PluginStore<LockRow> | undefined;
-    const state = newState({
-      installPlugins: (installing) => {
-        lock = installing.pluginStores.reserve<LockRow>(LOCK);
-        lock.set(entryId('t2'), { locked: true });
-        return () => undefined;
-      },
-    });
-
-    expect(lock?.get(entryId('t2'))).toEqual({ locked: true });
-    // History subscribes after installation, so seeding a store is not itself an undoable step.
-    expect(state.canUndo).toBe(false);
   });
 });
 

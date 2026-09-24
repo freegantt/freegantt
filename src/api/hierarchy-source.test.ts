@@ -1,10 +1,10 @@
 // ADR 0020: a plugin states the parent of an Entry, and core owns everything below that answer —
-// the child index, `depth`, `descendants()` and the Rollup. Every case here goes through the public
-// door a plugin author writes, `ctx.hierarchy.setSource`.
+// the child index, `depth`, `descendants()` and the Rollup. ADR 0031 gives a plugin author one door
+// onto the seam: declare `hierarchySource` on the plugin definition.
 import { describe, expect, it, vi } from 'vitest';
 import { Dataset } from './dataset.js';
 import { definePlugin } from './define-plugin.js';
-import { entryId, fieldRowsOf, RegistrationClosedError } from './index.js';
+import { entryId, fieldRowsOf } from './index.js';
 import type { ErrorReport } from './index.js';
 import type { EntryInput } from './index.js';
 
@@ -23,14 +23,12 @@ const phaseRows: EntryInput<PhaseProps>[] = [
 ];
 
 /** The ADR's own example: the phase id when there is one, otherwise whatever the next source says.
- *  One plugin declares the Field it reads and claims the seam that reads it. */
+ *  One plugin declares the Field it reads and declares the source that reads it. */
 const phases = () =>
-  definePlugin({
+  definePlugin<PhaseProps>({
     id: 'demo.phases',
     fields: [{ key: 'phaseId' }],
-    data(ctx) {
-      ctx.hierarchy.setSource<PhaseProps>((next) => (entry) => entry.props.phaseId ?? next(entry));
-    },
+    hierarchySource: (next) => (entry) => entry.props.phaseId ?? next(entry),
   });
 
 function phaseDataset(entries: EntryInput<PhaseProps>[] = phaseRows): Dataset<PhaseProps> {
@@ -73,6 +71,47 @@ describe('a plugin source answers the tree, and every door follows it', () => {
 
     expect(dataset.entries.get('design')?.read('cost')).toBe(15);
     expect(dataset.entries.get('build')?.read('cost')).toBe(7);
+  });
+
+  it('a declared source nests, and the construction Rollup follows it', () => {
+    // Two plugins each declare `hierarchySource` (ADR 0031). `demo.passthrough` sets up after
+    // `demo.phases` (`requires`), wraps its answer, and falls through for every row here, so
+    // `phases`'s tree is untouched: `design` still totals 15.
+    const passthrough = () =>
+      definePlugin({
+        id: 'demo.passthrough',
+        requires: ['demo.phases'],
+        hierarchySource: (next) => (entry) => (entry.id === 'nobody' ? 'design' : next(entry)),
+      });
+    const dataset = new Dataset<PhaseProps>({
+      timeZone: 'UTC',
+      entries: phaseRows,
+      fields: [{ key: 'cost', rollUp: 'sum' }],
+      plugins: [passthrough(), phases()],
+    });
+
+    // The construction Rollup already walked the composed tree by the time the constructor
+    // returns — both plugins are done declaring, and neither ran a `data()` call to compose it.
+    expect(dataset.entries.get('design')?.read('cost')).toBe(15);
+    expect(dataset.entries.get('build')?.read('cost')).toBe(7);
+  });
+
+  it('an untyped plugin reads props as a Record', () => {
+    // No `TProps` named, so `definePlugin` resolves the untyped `DataPlugin<unknown>` arm. `props`
+    // still reads as `Record<string, unknown>`, not `unknown` — a bracket read compiles with no
+    // `@ts-expect-error`, which pins the type-level fallback `PropsOf` falls back to.
+    const untyped = () =>
+      definePlugin({
+        id: 'demo.untyped',
+        hierarchySource: (next) => (entry) => (entry.props['group'] as string | undefined) ?? next(entry),
+      });
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'A' }],
+      plugins: [untyped()],
+    });
+
+    expect(dataset.entries.get('a')?.parent()).toBeUndefined();
   });
 
   it('a source overrides a stored parentId that says something else', () => {
@@ -151,9 +190,7 @@ describe('a plugin source answers the tree, and every door follows it', () => {
       definePlugin({
         id: 'demo.pin',
         requires: ['demo.phases'],
-        data(ctx) {
-          ctx.hierarchy.setSource((next) => (entry) => (entry.id === 'wire' ? 'design' : next(entry)));
-        },
+        hierarchySource: (next) => (entry) => (entry.id === 'wire' ? 'design' : next(entry)),
       });
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -185,9 +222,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     const loop = () =>
       definePlugin({
         id: 'demo.loop',
-        data(ctx) {
-          ctx.hierarchy.setSource(() => (entry) => (entry.id === 'a' ? 'b' : 'a'));
-        },
+        hierarchySource: () => (entry) => (entry.id === 'a' ? 'b' : 'a'),
       });
     const warnings = captureWarnings();
     const dataset = new Dataset({
@@ -199,7 +234,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
       plugins: [loop()],
     });
 
-    // The plugin composed the seam, and that alone is the news — nothing has read a row yet (`F5`).
+    // The construction check is the news — nothing has read a row yet.
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('the source makes "b" its own ancestor');
 
@@ -217,13 +252,45 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ]);
   });
 
+  it('an error handler reading the tree during the raise sees the committed answer', () => {
+    // The source stays acyclic through construction, then a commit turns it cyclic — the raise this
+    // test checks only fires on that commit, never on construction.
+    let cyclic = false;
+    const loop = () =>
+      definePlugin({
+        id: 'demo.loop',
+        hierarchySource: () => (entry) => {
+          if (!cyclic) return entry.id === 'a' ? 'b' : undefined;
+          return entry.id === 'a' ? 'b' : 'a';
+        },
+      });
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'a', name: 'A' },
+        { id: 'b', name: 'B' },
+      ],
+      plugins: [loop()],
+    });
+
+    cyclic = true;
+    const seenDuringRaise: (string | undefined)[] = [];
+    dataset.on('error', () => {
+      seenDuringRaise.push(dataset.entries.get('b')?.parent()?.id);
+    });
+    dataset.entries.update('a', { name: 'A2' });
+
+    // The chain walks from `a`, so `b`'s cyclic answer is the one refused, and `b` reads as a root —
+    // the checked tree the raise itself reports. The write set's own raw answer would read `b` as a
+    // child of `a` instead: this handler must see the checked answer, not that one, during the raise.
+    expect(seenDuringRaise).toEqual([undefined]);
+  });
+
   it('an unknown parent id reads as a root, and reports once per revision', () => {
     const ghost = () =>
       definePlugin({
         id: 'demo.ghost',
-        data(ctx) {
-          ctx.hierarchy.setSource(() => (entry) => (entry.id === 'a' ? 'nobody' : undefined));
-        },
+        hierarchySource: () => (entry) => (entry.id === 'a' ? 'nobody' : undefined),
       });
     const warnings = captureWarnings();
     const dataset = new Dataset({
@@ -257,13 +324,64 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ]);
   });
 
+  it('an unknown parent warns once, even when the construction Rollup writes rows elsewhere', () => {
+    const ghost = () =>
+      definePlugin({
+        id: 'demo.ghost',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        hierarchySource: () => (entry) => (entry.id === 'a' ? 'nobody' : entry.parentId),
+        data() {},
+      });
+    const warnings = captureWarnings();
+    new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'a', name: 'A' },
+        { id: 'p', name: 'P' },
+        { id: 'c', name: 'C', parentId: 'p', props: { cost: 500 } },
+      ],
+      plugins: [ghost()],
+    });
+
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('warns once for a refusal that exists only after the construction Rollup writes rows', () => {
+    // The source reads a rolled-up Field: "p" holds no cost of its own until the Rollup sums its
+    // child's, so this refusal cannot exist before that write lands.
+    const ghost = () =>
+      definePlugin({
+        id: 'demo.ghost',
+        fieldTypes: { money: { rollUp: 'sum' } },
+        fields: [{ key: 'cost', type: 'money' }],
+        hierarchySource: () => (entry) => {
+          const cost = (entry.props as { cost?: number }).cost;
+          return entry.id === 'p' && cost === 500 ? 'nobody' : entry.parentId;
+        },
+        data() {},
+      });
+    const warnings = captureWarnings();
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'root', name: 'Root' },
+        { id: 'p', name: 'P', parentId: 'root' },
+        { id: 'c', name: 'C', parentId: 'p', props: { cost: 500 } },
+      ],
+      plugins: [ghost()],
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('"p"');
+    expect(dataset.entries.get('p')?.parent()).toBeUndefined();
+  });
+
   it('a commit that nothing reads still reports (`F5`)', () => {
     const ghost = () =>
       definePlugin({
         id: 'demo.ghost',
-        data(ctx) {
-          ctx.hierarchy.setSource(() => (entry) => (entry.id === 'c' ? 'nobody' : undefined));
-        },
+        hierarchySource: () => (entry) => (entry.id === 'c' ? 'nobody' : undefined),
       });
     const dataset = new Dataset({
       timeZone: 'UTC',
@@ -283,50 +401,38 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     ]);
   });
 
-  it("a consumer's own bad parentId is reported as theirs, with no plugin installed (`F4`)", () => {
-    const warnings = captureWarnings();
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: [{ id: 'a', name: 'A', parentId: 'nope' }],
-    });
-
-    expect(warnings).toEqual([
-      'FreeGantt: hierarchy: the row\'s own parentId names "nope" as the parent of "a", and no Entry holds that id. "a" reads as a root.',
-    ]);
-    expect(dataset.entries.get('a')?.parent()).toBeUndefined();
-
-    const reports: ErrorReport[] = [];
-    dataset.on('error', (report) => {
-      reports.push(report);
-    });
-    dataset.entries.update('a', { name: 'A2' });
-    expect(reports.map((report) => [report.code, report.by, report.entryId])).toEqual([
-      ['unknown-parent', 'consumer', 'a'],
-    ]);
+  it('a raw dangling parentId throws at construction, with no plugin installed', () => {
+    // Construction checks the raw batch the same way `load` does (ADR 0031) — a dangling
+    // parentId no longer reaches the plugin source or a construction-time warning at all.
+    expect(
+      () => new Dataset({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A', parentId: 'nope' }] }),
+    ).toThrow('new Dataset: there is no entry with id "nope". Check the id, or add the entry first.');
   });
 
-  it("a plugin that falls through still names the consumer's own parentId (`F4`)", () => {
-    const warnings = captureWarnings();
-    // The ADR's own composing shape: it answers for the rows it owns and hands the rest back.
+  it("a plugin that falls through still names the consumer's own parentId", () => {
+    // A sound batch at construction: `sketch`'s raw parentId and its `phaseId` both name a real
+    // entry, so nothing refuses yet. Removing `build` and then clearing `phaseId` makes the plugin
+    // source fall through to the now-dangling raw value, at runtime — the door this case is about.
     const dataset = new Dataset<PhaseProps>({
       timeZone: 'UTC',
       entries: [
         { id: 'design', name: 'Design' },
-        { id: 'sketch', name: 'Sketch', parentId: 'nope' },
+        { id: 'build', name: 'Build' },
+        { id: 'sketch', name: 'Sketch', parentId: 'build', props: { phaseId: 'design' } },
       ],
       plugins: [phases()],
     });
-
-    expect(warnings).toEqual([
-      'FreeGantt: hierarchy: the row\'s own parentId names "nope" as the parent of "sketch", and no Entry holds that id. "sketch" reads as a root.',
-    ]);
 
     const reports: ErrorReport[] = [];
     dataset.on('error', (report) => {
       reports.push(report);
     });
-    dataset.entries.update('design', { name: 'Design 2' });
+    dataset.entries.remove('build');
+    dataset.entries.update('sketch', { phaseId: undefined });
     expect(reports.map((report) => [report.code, report.by])).toEqual([['unknown-parent', 'consumer']]);
+    expect(reports[0]?.message).toBe(
+      'hierarchy: the row\'s own parentId names "build" as the parent of "sketch", and no Entry holds that id. "sketch" reads as a root.',
+    );
   });
 
   it('a write to parentId still lands, and raises no warning, while a source ignores it', () => {
@@ -400,36 +506,16 @@ describe('the Rollup follows the source when a row moves', () => {
   });
 });
 
-describe('the door is closed once the plugin has set up', () => {
-  it('a setSource call after data() returns throws RegistrationClosedError', () => {
-    let callLate: (() => void) | undefined;
-    const late = () =>
-      definePlugin({
-        id: 'demo.late',
-        data(ctx) {
-          callLate = () => {
-            ctx.hierarchy.setSource((next) => next);
-          };
-        },
-      });
-    new Dataset({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A' }], plugins: [late()] });
-
-    expect(() => callLate?.()).toThrow(RegistrationClosedError);
-  });
-});
-
 describe('the cost shape holds with a source installed', () => {
   it('reading children inside an open transaction asks the source O(children + edits) times', () => {
     const asked = vi.fn<(id: string) => void>();
     const counting = () =>
-      definePlugin({
+      definePlugin<PhaseProps>({
         id: 'demo.counting',
         fields: [{ key: 'phaseId' }],
-        data(ctx) {
-          ctx.hierarchy.setSource<PhaseProps>((next) => (entry) => {
-            asked(entry.id);
-            return entry.props.phaseId ?? next(entry);
-          });
+        hierarchySource: (next) => (entry) => {
+          asked(entry.id);
+          return entry.props.phaseId ?? next(entry);
         },
       });
     // One small family inside a large dataset: the answer must cost the family, never the dataset.

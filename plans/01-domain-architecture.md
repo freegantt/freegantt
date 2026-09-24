@@ -561,7 +561,7 @@ Shipped presets cover hour→year zoom levels; custom presets are config objects
 
 - **`DatasetState`** (named `DatasetData` in earlier drafts of this doc; renamed in S2.1, OQ5) owns normalized stores (`entries`, plus reserved stores for scheduling-plugin-owned data such as `dependencies` — S5's plugin runtime; S7's `Dependency` store) with indexes (`byId`, `byParent`, `byPredecessor`, `bySuccessor` — the latter two populated only when a plugin uses them), the dataset timezone, and the generic edit-extension binding (identity when unoccupied; §1). Fully headless (D4): constructible and usable in Node with no view. `api/Dataset` is a thin façade delegating every read and the `transaction`/`on`/`off` trio to it.
 - **Transactions**: `dataset.transaction(() => { ...mutations })` batches mutations, runs the extension hook once, emits **one changeset**. Every mutation path — API and gesture — goes through a transaction. No exceptions.
-- **`data/` has two plugin seams, and each takes one occupant that composes.** The **extension hook** (D4, above) answers "what else does this edit write?", and a plugin claims it through `ctx.edits.setExtender`. The **hierarchy source** (ADR 0020) answers "which Entry is the parent of this one?", and a plugin claims it through `ctx.hierarchy.setSource`. Both start out occupied by core — the identity extender, and `(entry) => entry.parentId` — and installing wraps the current occupant rather than evicting it (D-S5-23). The source reads a `StoredEntry`, never the live `Entry`, because every live answer (`parent()`, `children()`, `depth`, `descendants()`) is built from it. Core inverts the answer into the child index, so one Entry can never have two parents; it refuses an unknown parent id and a chain that loops, reads that Entry as a root, and reports each once per revision. The Rollup walks the same source, so a plugin that changes the tree has changed the Rollup and there is no second knob that could let the two disagree.
+- **`data/` has two plugin seams, and each composes.** The **extension hook** (D4, above) answers "what else does this edit write?", and a plugin claims it through `ctx.edits.setExtender`, a `ctx` door open only while `data()` runs. The **hierarchy source** (ADR 0020) answers "which Entry is the parent of this one?", and a plugin declares it on its own definition — `hierarchySource(next) => (entry) => …` (ADR 0031) — not through a `ctx` door, because the Dataset must know every plugin's answer before it builds the store. Both start out occupied by core — the identity extender, and `(entry) => entry.parentId` — and each later plugin wraps the one before it, in setup order, so the last plugin answers first (D-S5-31). The source reads a `StoredEntry`, never the live `Entry`, because every live answer (`parent()`, `children()`, `depth`, `descendants()`) is built from it. Core inverts the answer into the child index, so one Entry can never have two parents; it refuses an unknown parent id and a chain that loops, reads that Entry as a root, and reports each once per revision. The Rollup walks the same source, so a plugin that changes the tree has changed the Rollup and there is no second knob that could let the two disagree.
 - **The envelope retired with the `Segment` type it used to compute (ADR 0026, Q39).** `start`/`end` used to be an Entry's envelope over its Segments — the earliest `start` and the latest `end` among them (ADR 0010) — computed by `time/`'s `envelopeOfSegments` and reconciled on every write path through `data/entry-reader.ts`'s `reconcileEnvelope`. A Bar is one child Entry by default now, so there is no stored Segment left to take an envelope over: `start`/`end` are ordinary Fields, written and read the same as any other. On a rolling-up parent they are ordinary rolling-up Fields too, restored by the Rollup (`data/rollup.ts`) from the parent's children on every commit, the same as any other Field with a `rollUp` aggregator — no Segment-clamp-and-widen step survives, because there is nothing left to clamp or widen. The **`EditExtender`** (`data/edit-extension.ts`) owes the same invariant a consumer's `entries.update()` does — never writing a rolling-up parent's own cell — and gets it the same way any other rolling-up Field's cascade does: the Rollup pass overwrites a cascade's proposed value on a rolling-up parent's cell unconditionally and reports the drop once per commit (ADR 0013, decision 5; `rollup.test.ts` pins this for `start` under Q39), rather than the one-refusal-or-the-other split `SegmentsOutOfSyncError` and `reconcileExtenderEdits`/`reconcileExtenderEditsForPreview` used to enforce. `data/entry-reader.ts`'s `moveEntryTo(entry, start)` is still the write a plugin author reaches for to translate an Entry's own span rigidly — it no longer says anything about Segments, because an Entry never had more than the one span to translate. **One refusal of a cascade outlives the envelope, and is not the Rollup's overwrite:** an extender that proposes an end before its start still meets `InvertedSpanError`, which was never Segment-specific (#143). Core refuses it, drops the gesture, and reports `droppedReason: 'inverted-span'` at `severity: 'warning'` with `by` naming the plugin — a refusal of a proposal, never the `'error'` fault an extender's own throw earns ([ADR 0028](../docs/adr/0028-a-plugins-impossible-proposal-is-a-refusal.md)).
 - **Changesets** are the universal delta (D7, principle 4) — an open-by-construction discriminated union, per store entity kind, so a `field` typo on `updated` and a stray property on `added`/`removed` are both caught at the type level rather than only at runtime:
 
@@ -796,8 +796,10 @@ interface ChromePlugin extends PluginIdentity {
 
 /** A plugin that owns state — Fields, the edit hook, the hierarchy source, a store — and may paint
  *  it too. **The install site is where the state lives**: this arm installs on the `Dataset`,
- *  because a Field must exist before the first Rollup (D-S5-4). Every `Gantt` bound to that Dataset
- *  then runs `view` once, each with its own context, so I2 holds by construction. */
+ *  because it declares everything that shapes construction (`fields`, `fieldTypes`, `aggregators`,
+ *  `hierarchySource`, ADR 0031) on the definition itself, and the Dataset builds completely from
+ *  those declarations before any plugin code runs. Every `Gantt` bound to that Dataset then runs
+ *  `view` once, each with its own context, so I2 holds by construction. */
 interface DataPlugin extends PluginIdentity {
   data(ctx: DatasetPluginContext): Disposer | void;
   view?(ctx: PluginContext): Disposer | void;
@@ -871,9 +873,6 @@ interface DatasetPluginContext {
   edits: {
     setExtender(wrap: ExtenderWrapper): void;  // D-S5-23: wraps the current occupant; installs compose
   };
-  hierarchy: {
-    setSource(wrap: HierarchySourceWrapper): void;  // ADR 0020: which Entry is the parent; installs compose the same way
-  };
   store: {
     reserve<T extends object>(): PluginStore<T>;                              // this plugin's own reserved store
     read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined; // another plugin's, read-only
@@ -882,10 +881,11 @@ interface DatasetPluginContext {
 }
 ```
 
-`Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin may declare a Field, and a Field
-must exist before the first Rollup, so a consumer who wants a different plugin set builds a new
-Dataset instead of reconfiguring one live. Every register* call above is legal only while the half
-that owns it runs (D-S5-4); a later call throws `RegistrationClosedError`. Every plugin's
+`Dataset.plugins` is read-only, unlike `Gantt.plugins`: a plugin declares its Fields and its
+hierarchy source on its own definition (ADR 0031), before the Dataset builds, so a consumer who wants
+a different plugin set builds a new Dataset instead of reconfiguring one live. Every register* call
+above is legal only while the half that owns it runs (ADR 0031); a later call throws
+`RegistrationClosedError`. Every plugin's
 `ctx.disposables` retracts its own registrations on uninstall, so a plugin returns a Disposer only
 for a resource it owns itself — a socket, a timer, a subscription. A `PluginStore`'s rows are the one exception to
 "a plugin remakes its own registrations": they are data the plugin cannot rebuild, so the Dataset
