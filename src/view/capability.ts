@@ -66,10 +66,11 @@ export interface CapabilityInputs {
   variantCapabilitiesFor?: ((entry: Entry) => Capabilities | undefined) | undefined;
   /** From the bound `Dataset` — `dataset.editableOf`. The effective lock on one cell (#473): a
    *  plugin's per-entry lock rule's own answer, or the Field's own `editable` when the rule has no
-   *  opinion. `canWrite` reads this **before** `capabilities`/`variantCapabilitiesFor` and refuses a
-   *  `'never'` cell outright. A consumer's `edit: true` narrows what the data layer already allows,
-   *  and does not widen it (I14, #473's `capabilities.edit` ruling). Absent in a hand-built test
-   *  fixture, `canWrite` falls back to the declared Field's own `editable` unchanged. */
+   *  opinion. `canWrite` reads this **before** `capabilities`/`variantCapabilitiesFor`, and refuses
+   *  outright whenever it is not `'anywhere'` — an `'api'` cell and a `'never'` cell both refuse this
+   *  way. `capabilities.edit` narrows what the data layer already allows; it does not widen it. Absent
+   *  in a hand-built test fixture, `canWrite` falls back to the declared Field's own `editable`
+   *  unchanged. */
   editableOf?: ((id: string, key: FieldKey) => FieldEditable) | undefined;
 }
 
@@ -97,10 +98,9 @@ function hasSomewhereToWrite(field: Field | undefined): field is Field {
  *
  *  A parent is *not* named here, and needs no name. Whether a *move* owns the dates it translates is
  *  `canWrite`'s question, gated by `ownsField` (#470). A *resize* asks `canWrite` alone, with no
- *  `ownsField` gate: it can paint a handle on a deriving parent's edge, and the commit then throws
- *  `DerivedFieldNotWritableError`. That is the pre-existing #256 trade-off, not fixed here — changing
- *  it is its own slice (T6/#481 review). This function stays one answer for every Entry, deriving or
- *  owning alike. */
+ *  `ownsField` gate. A deriving parent's edge refuses there too, so no handle paints on a cell the
+ *  data layer already refuses. This function stays one answer for every Entry, deriving or owning
+ *  alike. */
 function gestureIsOffered(): boolean {
   return true;
 }
@@ -166,28 +166,27 @@ function askWriteRule(rule: WriteRule | undefined, entry: Entry, field: FieldKey
  *  *whether the values it sets may change*.
  *
  *  So `capabilities: { resize: true }` opens the handle on a variant the library would have closed. It
- *  still cannot write a Field locked `'never'` by a per-entry lock rule (#473's ruling). That refusal
- *  is decided before `capabilities`/`variantCapabilitiesFor` get a say, and neither may widen it. Only
- *  another per-entry lock rule reopens the cell. `capabilities.edit` only narrows what the data layer
- *  already allows. One home for "may this value change" is the whole point (#256). */
+ *  still cannot write a Field the effective `editable` refuses — `'never'` or `'api'` alike. That
+ *  refusal is decided before `capabilities`/`variantCapabilitiesFor` get a say, and neither may widen
+ *  it. Only a per-entry lock rule reopens the cell. `capabilities.edit` only narrows an `'anywhere'`
+ *  cell. One home for "may this value change" is the whole point (#256). */
 export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilities {
   const { capabilities, fieldFor, variantCapabilitiesFor } = inputs;
 
   const canWrite = (entry: Entry, field: FieldKey): WriteVerdict => {
     const declared = fieldFor(field);
     if (!hasSomewhereToWrite(declared)) return NOT_WRITABLE;
-    // #473's `capabilities.edit` ruling: a hard `'never'` lock refuses outright, before the consumer
-    // or the variant gets a say. Neither may widen what the data layer already refused — only the
-    // Field's own `'api'`/`'anywhere'` leaves room for `capabilities.edit` to narrow further below.
+    // The data layer refuses first, for a locked cell and a derived one alike. The consumer and
+    // variant rules only narrow a cell the data layer already left open. Only a per-entry lock rule
+    // reopens one — its answer is what `effectiveEditable` already holds.
     const effectiveEditable = inputs.editableOf?.(entry.id, field) ?? editableOf(declared);
-    if (effectiveEditable === 'never') return NOT_WRITABLE;
+    const libraryVerdict = libraryWriteRule(entry.hasChildren, declared, effectiveEditable);
+    if (!libraryVerdict.ok) return libraryVerdict;
     const consumerAnswer = askWriteRule(capabilities?.edit, entry, field);
     if (consumerAnswer !== undefined) return consumerAnswer ? WRITABLE : NOT_WRITABLE;
     const variantAnswer = askWriteRule(variantCapabilitiesFor?.(entry)?.edit, entry, field);
     if (variantAnswer !== undefined) return variantAnswer ? WRITABLE : NOT_WRITABLE;
-    // The library's own last word (#473's ocr finding). One home for "derived, or the effective
-    // editable" replaces a second copy of `libraryWriteRule`'s own two arms.
-    return libraryWriteRule(entry.hasChildren, declared, effectiveEditable);
+    return WRITABLE;
   };
 
   /** #470: does this row own the Field at all? `resolveWriteTarget` answers from the Field and
