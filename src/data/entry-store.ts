@@ -141,10 +141,6 @@ export class EntryStore implements EntryStoreContract {
    *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
    *  never depends on who read first (`F5`). `#reportRefusedHierarchyAnswers` raises. */
   #hierarchy: () => CheckedHierarchy;
-  /** Which answers have already been raised, and for which revision. A revision is the documented
-   *  unit — one report per refused answer per revision — and a plugin that composes the seam checks
-   *  again inside the same revision, so the same bad answer must not be raised twice for it. */
-  #reportedRefusals = { revision: -1, messages: new Set<string>() };
   #byParent: () => ReadonlyMap<EntryId | undefined, readonly StoredEntry[]>;
   /** `#byParent`, ids only and with the root key (`undefined`) dropped — the same shape
    *  `childIdsByParent` derives on demand, memoized here instead so a caller with nothing to prove
@@ -275,26 +271,21 @@ export class EntryStore implements EntryStoreContract {
     return this.#childIds();
   }
 
-  /** Raises every answer core refused, once (ADR 0020, `F5`).
+  /** Raises every answer core refused (ADR 0020, `F5`).
    *
-   *  Called where the answers can change and nowhere else — at construction, on every commit, and
-   *  each time a plugin composes the seam. Not from the read path: a Fault that waits for somebody
-   *  to look is a Fault a headless Dataset never sees, and a plugin's own tests run headless.
-   *  A construction-time refusal reaches the `console` fallback and no `error` handler, because no
-   *  consumer can subscribe before the constructor returns — the same posture the construction
-   *  Rollup's own `derived-values-dropped` report already takes (ADR 0013, decision 5).
+   *  Called where the answers can change and nowhere else — at construction and on every commit,
+   *  each exactly once per revision, so this plain loop over `#hierarchy()` never raises the same
+   *  answer twice for one revision without needing its own de-dupe. Not from the read path: a Fault
+   *  that waits for somebody to look is a Fault a headless Dataset never sees, and a plugin's own
+   *  tests run headless. A construction-time refusal reaches the `console` fallback and no `error`
+   *  handler, because no consumer can subscribe before the constructor returns — the same posture
+   *  the construction Rollup's own `derived-values-dropped` report already takes (ADR 0013,
+   *  decision 5).
    *
    *  The raise lands after the write set closes and before `change` fans out, so a handler that
    *  writes in response is outside the notification window `data/` forbids a mutation in. */
   #reportRefusedHierarchyAnswers(): void {
-    const revision = this.#revision.get();
-    if (this.#reportedRefusals.revision !== revision) {
-      this.#reportedRefusals = { revision, messages: new Set<string>() };
-    }
-    const raised = this.#reportedRefusals.messages;
     for (const report of this.#hierarchy().refused) {
-      if (raised.has(report.message)) continue;
-      raised.add(report.message);
       this.#raiseError(report, () => console.warn(`FreeGantt: ${report.message}`));
     }
   }
@@ -786,7 +777,12 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /** Applies the committed `ChangeSet` (`undefined` for an empty net effect or a vetoed commit — the
-   *  write set is simply discarded) and closes the write set. */
+   *  write set is simply discarded) and closes the write set.
+   *
+   *  Did the call apply a change? `runTransaction` also calls this once with `undefined` to discard
+   *  the body's own write-set overlay, ahead of a second, real call through `commitChangeSet`
+   *  (`data/transaction.ts`). A discard applies nothing, so it reports no refusal — only the call
+   *  that lands a revision does. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
     if (changeSet) {
       this.#rememberRemovedIndexes(changeSet);
@@ -796,9 +792,9 @@ export class EntryStore implements EntryStoreContract {
       this.#restoreAdded(changeSet);
       this.#applyUpdatedRows(changeSet.updated);
       this.#revision.set(this.#revision.get() + 1);
+      this.#reportRefusedHierarchyAnswers();
     }
     this.#writeSet = null;
-    this.#reportRefusedHierarchyAnswers();
   }
 
   /** Entry rows only. A changeset also carries plugin-store rows (D-S5-24); `data/plugin-store.ts`
