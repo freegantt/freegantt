@@ -156,7 +156,7 @@ _Avoid_: Replace, Import (the harness's own verb for the button that calls `load
 _Avoid_: Refresh, Merge, Reconcile, Apply (the withdrawn `apply` door's reserved word)
 
 **Replay**:
-Writing a recorded ChangeSet onto the store's current values, through `Dataset.replay(changeSet)` — no extension hook, no Rollup (D-S2-14), so an engine whose behaviour changes between library versions cannot rewrite History. A row a sync has already settled writes nothing for it; the rest of the changeset still lands. `changeSet.origin` must be `'undo'` or `'redo'`; `'user'` throws `InvalidReplayOriginError`. `undo()`/`redo()` are built on this; a consumer History uses the same door (`plans/s2-data-core/s2b-undo-replay-seam.md`).
+Writing a recorded ChangeSet onto the store's current values, through `Dataset.replay(changeSet)` — no extension hook, no Rollup, so an engine whose behaviour changes between library versions cannot rewrite History. A row a sync has already settled writes nothing for it; the rest of the changeset still lands. `changeSet.origin` must be `'undo'` or `'redo'`; `'user'` throws `InvalidReplayOriginError`. `undo()`/`redo()` are built on this; a consumer History uses the same door (`plans/s2-data-core/s2b-undo-replay-seam.md`).
 _Avoid_: Apply (the withdrawn conflict-detecting write door's own job, D-S2-11, not open yet), Commit (the transaction's moment, ADR 0006)
 
 **Write set**:
