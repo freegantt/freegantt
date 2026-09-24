@@ -6,9 +6,11 @@
 // timeout, so a regression here would wedge the whole run; the budget turns it into a fast red.
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import type { EntryStore } from './entry-store.js';
-import { changeSetId, entryId, ParentCycleError } from '../model/index.js';
-import type { ChangeSet, Field, StoredEntry } from '../model/index.js';
+import { EntryStore } from './entry-store.js';
+import { createErrorRaiser } from './error-reporting.js';
+import type { EntryReadContext } from './entry-reader.js';
+import { entryId, ParentCycleError } from '../model/index.js';
+import type { Field, StoredEntry } from '../model/index.js';
 
 const STEP_BUDGET = 500;
 
@@ -56,24 +58,28 @@ function writeTheLoop(state: DatasetState): void {
   state.entries.update('b', { phaseId: 'a' });
 }
 
-/** `replay()` applies an already-complete `ChangeSet` unchecked (`data/replay.ts`) — construction's
- *  own batch check does not run again, so this is still the door a raw, already-looped or
- *  already-dangling `parentId` can reach a live store through. */
-function replayRawEntries(
+/** Swaps a raw `EntryStore` onto `state.entries` (test-only — production code never reassigns it),
+ *  holding `entries` exactly as given: no batch check, so an already-looped or already-dangling
+ *  `parentId` lands the way a bug elsewhere might, with none of construction's, `load`'s, `sync`'s or
+ *  `replay()`'s own doors in the way (every one of them now refuses or drops a loop before it reaches
+ *  the store). Bound to `state`'s own runner, bus, Fields and Field access, so a later
+ *  `state.entries.update(...)` call still commits, notifies and rolls up the same way it would on the
+ *  store `new DatasetState()` built. */
+function withRawEntries(
   state: DatasetState,
   entries: readonly Omit<StoredEntry, 'props' | 'siblingIndex'>[],
 ): void {
-  const changeSet: ChangeSet = {
-    id: changeSetId(1),
-    origin: 'redo',
-    added: entries.map((entity, index) => ({
-      store: 'entries' as const,
-      entity: { ...entity, props: {}, siblingIndex: index },
-    })),
-    removed: [],
-    updated: [],
-  };
-  state.replay(changeSet);
+  const context: EntryReadContext = { timeZone: state.timeZone, dateOnlyEnd: state.dateOnlyEnd };
+  const raw = entries.map((entity, index) => ({ ...entity, props: {}, siblingIndex: index }));
+  const store = new EntryStore(
+    raw,
+    context,
+    state.fields,
+    state.fieldAccess,
+    state,
+    createErrorRaiser(state.bus),
+  );
+  Object.assign(state, { entries: store });
 }
 
 describe('a hierarchy source that loops never hangs a walk (F1)', () => {
@@ -106,11 +112,11 @@ describe('a hierarchy source that loops never hangs a walk (F1)', () => {
 });
 
 describe('an authored parentId that loops never hangs the parent check (P2-2)', () => {
-  /** Construction refuses a raw loop now, so this reaches one through `replay()` instead — the
-   *  door `replayChangeSet` leaves open on a live store, unchecked. */
+  /** Every door onto a live store now refuses a raw loop — construction, `load`, `sync` and
+   *  `replay()` alike. `withRawEntries` reaches one anyway, the way a bug elsewhere might. */
   function authoredLoop(): DatasetState {
     const state = new DatasetState({ timeZone: 'UTC', entries: [] });
-    replayRawEntries(state, [
+    withRawEntries(state, [
       { id: entryId('a'), name: 'A', parentId: entryId('b') },
       { id: entryId('b'), name: 'B', parentId: entryId('a') },
       { id: entryId('c'), name: 'C' },
@@ -142,9 +148,9 @@ describe('read("parentId") and read("hierarchyParentId") answer two different qu
 
   it('a dangling parentId: every by-key door on "parentId" agrees; "hierarchyParentId" refuses it', () => {
     const state = new DatasetState({ timeZone: 'UTC', entries: [], fields: [probeField] });
-    // Construction refuses a raw dangling parentId now, so this reaches one through `replay()`
-    // instead — the door `replayChangeSet` leaves open on a live store, unchecked.
-    replayRawEntries(state, [{ id: entryId('a'), name: 'A', parentId: entryId('ghost') }]);
+    // Every door onto a live store now refuses a raw dangling parentId; withRawEntries reaches
+    // one anyway, the way a bug elsewhere might.
+    withRawEntries(state, [{ id: entryId('a'), name: 'A', parentId: entryId('ghost') }]);
 
     // "parentId" answers what was authored, on every door — the stored value never disagrees with
     // itself (ADR 0024).
@@ -158,8 +164,8 @@ describe('read("parentId") and read("hierarchyParentId") answer two different qu
 
   it('a two-row cycle: "parentId" keeps the authored link; "hierarchyParentId" drops the closing one', () => {
     const state = new DatasetState({ timeZone: 'UTC', entries: [], fields: [probeField] });
-    // Construction refuses a raw loop now; reach one through `replay()` instead.
-    replayRawEntries(state, [
+    // Every door onto a live store now refuses a raw loop; withRawEntries reaches one anyway.
+    withRawEntries(state, [
       { id: entryId('a'), name: 'A', parentId: entryId('b') },
       { id: entryId('b'), name: 'B', parentId: entryId('a') },
     ]);

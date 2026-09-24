@@ -26,13 +26,13 @@ dataset.replay({ ...recorded, origin: 'redo' });           // redo
 | `dataset.transaction(…, 'undo')` | Fails D-S2-14: the hook and rollup run. |
 | `dataset.apply(changeSet)` | Fails D-S2-11: `apply` is the sync adapter, with conflict detection this slice does not ship. |
 | `dataset.commitChangeSet(changeSet)` | Names the pipeline, not the job. |
-| **`dataset.replay(changeSet)`** | Passes. Same `beforeChange`/`change` channel; no hook, no rollup. |
+| **`dataset.replay(changeSet)`** | Passes. Same `beforeChange`/`change` channel; no hook. (Amended by #517/ADR 0035: replay now re-rolls the parents it touches, construction shape.) |
 
 `invertChangeSet` is a pure function on a ChangeSet. It is not a Dataset method. It swaps `added`↔`removed` and each `updated` row’s `from`/`to`, and sets `origin: 'undo'`. Replay mints a fresh `ChangeSetId` and ignores the incoming `id`.
 
 ## Behaviour
 
-- `replay` writes the rows as given. No extender. No rollup. `beforeChange` then `change` still fire (D-S2-25).
+- `replay` writes the rows as given. No extender. (Amended by #517/ADR 0035: it re-rolls the parents it touches.) `beforeChange` then `change` still fire (D-S2-25).
 - `changeSet.origin` must be `'undo'` or `'redo'`. `'user'` throws — that door is `apply`, later.
 - An empty changeset is a no-op: no event, no throw.
 - A veto throws `MutationCancelledError` and writes nothing. History still moves its cursor only on `change`.

@@ -156,6 +156,22 @@ describe('toProposedEdit (S4.10)', () => {
     expect('start' in edit).toBe(true);
     expect(edit.start).toBeUndefined();
   });
+
+  it('update(id, { parentId: undefined }) roots the entry, an explicit removal, not "untouched" (#542)', () => {
+    const context = createContext();
+    const entry = { ...oneEntry(context), parentId: entryId('parent') };
+    const edit = toProposedEdit({ parentId: undefined }, context, entry, registry, 'entries.update');
+    expect('parentId' in edit).toBe(true);
+    expect(edit.parentId).toBeUndefined();
+  });
+
+  it('update(id, { name: undefined }) clears the name, an explicit removal, not "untouched" (#542)', () => {
+    const context = createContext();
+    const entry = oneEntry(context);
+    const edit = toProposedEdit({ name: undefined }, context, entry, registry, 'entries.update');
+    expect('name' in edit).toBe(true);
+    expect(edit.name).toBeUndefined();
+  });
 });
 
 describe('moveEntryTo writes a rigid start/end translate (D-S5-50, #239, ADR 0026)', () => {

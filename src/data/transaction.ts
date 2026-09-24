@@ -12,6 +12,7 @@ import type {
   FieldLockRule,
   FieldUpdated,
   HierarchySource,
+  PluginStoreName,
   StoreRowUpdated,
 } from '../model/index.js';
 import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
@@ -72,6 +73,9 @@ export interface TransactionalPluginStores {
   beginTransaction(token: TxToken): void;
   pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[];
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
+  /** `id`'s committed row in `store`, with no write set overlaid — what replay reads as a store row's
+   *  current value before it decides whether to overwrite it (`data/replay-changes.ts`). */
+  committedRow(store: PluginStoreName, id: EntryId): object | undefined;
 }
 
 /** What `runTransaction` needs from a Dataset's live state. Structural, not `DatasetState` itself, for
@@ -175,11 +179,15 @@ export function applyConstructionRollUp(data: TransactionData): void {
 /**
  * The Rollup, run once against a batch of entries that is not (yet) the store's own committed rows
  * — construction's own shape (no `pending`, `committedChildIds` unread whenever `pending` is
- * `undefined`), open to a second caller. `entries.load()` (#496) is that caller: it replaces every
+ * `undefined`), open to more than one caller. `entries.load()` (#496) is one: it replaces every
  * entry, so it must roll up the input batch's own checked parents, never the store's.
+ * `changesToReplay` (`replay-changes.ts`, #517) is the other: undo and redo re-roll the working batch
+ * they are about to commit, the same construction shape, so a plain undo never demotes a parent that
+ * just lost its last child.
  *
  * `rollUpFields` itself stays a leaf only this file and the commit path may import
- * (`rollup-is-removable`, D-S4-7) — this is `entry-store.ts`'s one door onto it for `load`.
+ * (`rollup-is-removable`, D-S4-7) — this is the one door onto it for `load` (`entry-store.ts`) and
+ * for replay (`replay-changes.ts`).
  */
 export function rollUpFreshBatch(
   data: Pick<TransactionData, 'fields' | 'fieldAccess'>,

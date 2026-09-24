@@ -12,6 +12,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`docs/09-integration-pitfalls.md`](09-integration-pitfalls.md) | Traps real integrators hit — theme and an application's `dark` class, the zoom notification, `overscan`, the row click |
 | [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
 | [`docs/07-row-source-updates.md`](07-row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
+| [`docs/11-server-data.md`](11-server-data.md) | Polling a server with `entries.sync()` — the conflict rule, what undo/redo do across a sync, and what changes |
 
 ## What a Gantt shows
 
@@ -47,7 +48,7 @@ dataset.on('change', ({ changeSet }) => {
 
   for (const row of fieldRowsOf(changeSet)) {
     // row: { store: 'entries', id, field, from, to }
-    // on undo, from/to is inverted: `from` is the edit being reverted, `to` the restored value
+    // on undo, `from` is the value the undo replaced, `to` is the value it wrote back
     console.log(`${verb} ${String(row.id)} ${row.field}: ${row.from} -> ${row.to}`);
   }
   // changeSet.added / changeSet.removed carry the entries an undo restored or a redo removed
@@ -78,10 +79,63 @@ dataset.on('change', () => {
 });
 ```
 
+After a sync, one `undo()` or `redo()` click can find that every remaining step has nothing left
+to write. It then forgets those steps, writes nothing, and fires no `change`. `canUndo` and
+`canRedo` still change, but with no event to catch it. Read `canUndo`/`canRedo` again after your
+own `undo()`/`redo()` call returns, rather than waiting for `change`, if the toolbar must stay
+correct through that case.
+
 `updated` also carries plugin-store rows (`store: 'plugin:…'`, whole-value, no `field` key).
-`fieldRowsOf(changeSet)` filters to Field rows. `dataset.replay(changeSet)` is the write path
-the built-in undo/redo use, published so a consumer can write their own History against
-`on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` alone.
+`fieldRowsOf(changeSet)` filters to Field rows.
+
+### Undo after a sync
+
+`entries.sync()` (a poll against a server list) records no undo step of its own — the user's own
+earlier edits stay undoable across a poll. Undoing one of those edits later writes the value it
+held before the edit, even when a sync changed it since; redoing gives the sync's value back. See
+[`docs/11-server-data.md`](11-server-data.md) for the full set of rules a poll needs.
+
+### Advanced: your own History with `dataset.replay()`
+
+Most apps call `undo()` and `redo()` and never touch this. Reach for `dataset.replay()` only when
+the app keeps its own undo stack outside the library — one stack per user, or a stack a server
+keeps.
+
+`replay(changeSet)` is the write `undo()` and `redo()` use. It writes the `ChangeSet` you give it.
+It keeps no stack of its own and moves no cursor: `dataset.canUndo` and `dataset.canRedo` do not
+see a `replay()` call.
+
+`changeSet.origin` must be `'undo'` or `'redo'`. `'user'` throws `InvalidReplayOriginError`.
+
+`replay()` writes onto the store's **current** values, not the recorded ones. A row a sync has
+already settled since the step was recorded writes nothing; the rest of the changeset still lands.
+See [`docs/11-server-data.md`](11-server-data.md) for the full set of rules a sync needs.
+
+`replay()` renumbers every sibling group it touches, and re-rolls every parent it touches, the same
+way an ordinary commit does. No extension hook runs.
+
+A step with nothing left to write fires no event. Otherwise `beforeChange` fires, then `change`. A
+veto throws `MutationCancelledError` and writes nothing.
+
+<!-- doc-example-setup
+declare const undoButton: HTMLButtonElement;
+-->
+
+```ts
+import { invertChangeSet, type ChangeSet } from 'freegantt';
+
+// A minimal History: record every 'user' step, undo the last one on a click.
+const undoStack: ChangeSet[] = [];
+
+dataset.on('change', ({ changeSet }) => {
+  if (changeSet.origin === 'user') undoStack.push(changeSet);
+});
+
+undoButton.addEventListener('click', () => {
+  const step = undoStack.pop();
+  if (step !== undefined) dataset.replay(invertChangeSet(step));
+});
+```
 
 ## Hierarchy and rows
 

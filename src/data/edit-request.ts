@@ -73,12 +73,18 @@ export function createEditRequest(options: CreateEditRequestOptions): EditReques
 
   function entryAfterEdits(id: EntryId | string): StoredEntry | undefined {
     const asId = entryId(id);
+    // Checked before `removedEntryIds`: a `remove(id); add({ id })` replace in one transaction
+    // reports `id` through both sets (`EntryStore.pendingRemoved` carries the replaced committed
+    // row alongside the fresh add), and the re-added row is what this transaction leaves behind —
+    // the same row a mid-transaction `get`/`has` already answers.
+    const addedEntry = addedById?.get(asId);
+    if (addedEntry !== undefined) {
+      const edit = proposed.get(asId);
+      return edit === undefined ? addedEntry : entryAfterEdit(addedEntry, edit);
+    }
     if (removedEntryIds.has(asId)) return undefined;
     if (entries.has(asId)) return effectiveEntryAt(entries, proposed, asId);
-    const addedEntry = addedById?.get(asId);
-    if (addedEntry === undefined) return undefined;
-    const edit = proposed.get(asId);
-    return edit === undefined ? addedEntry : entryAfterEdit(addedEntry, edit);
+    return undefined;
   }
 
   function hasChildren(id: EntryId | string): boolean {

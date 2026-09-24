@@ -6,7 +6,9 @@ import { addMs } from '../time/index.js';
 import type { EditExtender } from './edit-extension.js';
 import type { EntryInput } from '../model/index.js';
 
-type SimpleOp =
+// Exported for `history.sync.property.test.ts` (#517 step 8): the sync properties reuse this op
+// generator, reparent and remove-a-parent-with-children included, rather than a second, weaker one.
+export type SimpleOp =
   | { kind: 'add'; id: string; name: string; start: number; end: number }
   | { kind: 'update-name'; id: string; name: string }
   | { kind: 'update-start'; id: string; start: number }
@@ -14,15 +16,20 @@ type SimpleOp =
   | { kind: 'remove'; id: string }
   // S3.3, [S3-A6]: a gesture commit writes {start, end} together in one `update()` call per row —
   // distinct from 'update-start'/'update-end' above, which each touch one field alone.
-  | { kind: 'move'; id: string; deltaMs: number };
+  | { kind: 'move'; id: string; deltaMs: number }
+  // A parentId write, root included (`parentId: undefined`). One that would close a raw loop is
+  // refused (ParentCycleError) and caught below like any other op the store rejects — a no-op, not
+  // a crash. 'p' sits in IDS so this op, and 'remove', can both reach a parent with children.
+  | { kind: 'reparent'; id: string; parentId: string | undefined };
 
-type Op = SimpleOp | { kind: 'transaction'; ops: SimpleOp[] };
+export type Op = SimpleOp | { kind: 'transaction'; ops: SimpleOp[] };
 
-const IDS = ['a', 'b', 'c', 'd', 'e', 'n1', 'n2', 'n3'] as const;
+const IDS = ['a', 'b', 'c', 'd', 'e', 'n1', 'n2', 'n3', 'p'] as const;
 const NEW_IDS = ['n1', 'n2', 'n3'] as const;
 
 const idArb = fc.constantFrom(...IDS);
 const newIdArb = fc.constantFrom(...NEW_IDS);
+const parentIdArb = fc.oneof(idArb, fc.constant(undefined));
 const nameArb = fc.string({ maxLength: 24 });
 const msArb = fc.integer({ min: 0, max: 8_000_000 });
 const spanArb = msArb.chain((start) =>
@@ -48,9 +55,10 @@ const simpleOpArb: fc.Arbitrary<SimpleOp> = fc.oneof(
     id: idArb,
     deltaMs: fc.integer({ min: -2_000_000, max: 2_000_000 }),
   }),
+  fc.record({ kind: fc.constant('reparent' as const), id: idArb, parentId: parentIdArb }),
 );
 
-const opArb: fc.Arbitrary<Op> = fc.oneof(
+export const opArb: fc.Arbitrary<Op> = fc.oneof(
   simpleOpArb,
   fc
     .array(simpleOpArb, { minLength: 1, maxLength: 10 })
@@ -99,13 +107,16 @@ function applySimple(state: DatasetState, op: SimpleOp): void {
         });
         return;
       }
+      case 'reparent':
+        state.entries.update(op.id, { parentId: op.parentId });
+        return;
     }
   } catch {
     // Duplicate ids, missing ids, and invalid field combinations are not the property — skip them.
   }
 }
 
-function applyOp(state: DatasetState, op: Op): void {
+export function applyOp(state: DatasetState, op: Op): void {
   try {
     if (op.kind === 'transaction') {
       state.transaction(() => {
@@ -119,14 +130,18 @@ function applyOp(state: DatasetState, op: Op): void {
   }
 }
 
-function undoAll(state: DatasetState): void {
+export function undoAll(state: DatasetState): void {
   while (state.canUndo) state.undo();
+}
+
+export function redoAll(state: DatasetState): void {
+  while (state.canRedo) state.redo();
 }
 
 /** A test-local equality snapshot — every stored Entry, in store order. Not a public shape; it exists
  *  only so this test can ask "did undo restore exactly what was there before?" (I7 does not change,
  *  only the way the comparison reads two states). */
-function snapshotOf(state: DatasetState): string {
+export function snapshotOf(state: DatasetState): string {
   return JSON.stringify(state.entries.all);
 }
 
@@ -143,14 +158,14 @@ function assertUndoRestores(seed: readonly EntryInput[], ops: Op[], editExtender
   expect(after).toBe(before);
 }
 
-const seedSpans: readonly EntryInput[] = [
+export const seedSpans: readonly EntryInput[] = [
   { id: 'a', name: 'a', start: 0, end: 100 },
   { id: 'b', name: 'b', start: 100, end: 200 },
   { id: 'c', name: 'c', start: 200, end: 300 },
   { id: 'x', name: 'x', start: 0, end: 10 },
 ];
 
-const seedGroups: readonly EntryInput[] = [
+export const seedGroups: readonly EntryInput[] = [
   { id: 'p', name: 'p' },
   { id: 'a', parentId: 'p', name: 'a', start: 0, end: 100 },
   { id: 'b', parentId: 'p', name: 'b', start: 100, end: 200 },

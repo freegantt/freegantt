@@ -430,6 +430,40 @@ export function writeOntoEntry(entry: StoredEntry, field: ResolvedField, value: 
   return entryAfterEdit(entry, writeField(emptyProposedEdit(), field, value));
 }
 
+/** Writes `field` on a copy of `current`. `value === undefined` omits the key instead of setting it —
+ *  an undo of an optional field's first edit must return the Entry to not having the key at all
+ *  (entry construction's "no key the input never had" rule, `exactOptionalPropertyTypes`), not to
+ *  having the key with value `undefined`. Declared Fields write through `writeOntoEntry`. Shared by
+ *  `entry-store.ts` (the Rollup's own committed writes) and `replay-changes.ts` (undo, redo and
+ *  `dataset.replay`), so a row lands the same way through either door. */
+export function applyFieldRow(
+  current: StoredEntry,
+  field: FieldKey,
+  value: unknown,
+  registry: FieldRegistry,
+): StoredEntry {
+  const declared = registry.get(field);
+  if (declared) return writeOntoEntry(current, declared, value);
+  const next: Record<string, unknown> = { ...current };
+  if (value === undefined) delete next[field];
+  else next[field] = value;
+  return next as unknown as StoredEntry;
+}
+
+/** `field`'s value on `current`, the same declared/raw split `applyFieldRow` writes through — its
+ *  read counterpart. `replay-changes.ts` reads a row's `from` this way before it decides whether the
+ *  row still has anything to write. */
+export function readFieldRow(
+  current: StoredEntry,
+  field: FieldKey,
+  registry: FieldRegistry,
+  access: FieldAccess,
+): unknown {
+  const declared = registry.get(field);
+  if (declared) return readField(current, declared, access);
+  return (current as unknown as Record<string, unknown>)[field];
+}
+
 /** Folds declared props-addressed keys from a public `EntryEdit` into a storage-shaped edit. Core
  *  keys are read straight off `edit` by `toEditReading`; this is the one door for everything else a
  *  Field declares. */
@@ -475,8 +509,8 @@ export function entryAfterEdit(entry: StoredEntry, edit: ProposedEdit): StoredEn
       continue;
     }
     // `key` is `CoreFieldKey`, but `value` is untyped `unknown` here — this cast is load-bearing,
-    // the same way entry-store.ts's `applyFieldRow` cast is: nothing narrows `value` to the field's
-    // real value union at this point.
+    // the same way `applyFieldRow`'s own cast is: nothing narrows `value` to the field's real value
+    // union at this point.
     (next as unknown as Record<string, unknown>)[key] = value;
   }
   next.props = propsAfterEdit(entry.props, edit.props, edit.proposedKeys);

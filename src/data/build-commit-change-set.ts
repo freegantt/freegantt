@@ -16,12 +16,18 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { SiblingIndexOutOfRangeError } from '../model/index.js';
-import { diffEdit, foldChangeSet } from './change-set.js';
+import {
+  diffEdit,
+  foldChangeSet,
+  foldRollUpRowsOntoAdded,
+  foldSiblingRanks,
+  mergeUpdatedRows,
+} from './change-set.js';
 import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.js';
 import { createEditRequest } from './edit-request.js';
 import type { ErrorBus } from './error-reporting.js';
 import {
-  buildCascadeDroppedReport,
+  buildRollUpOverwroteProposalReport,
   buildDerivedValuesDroppedReport,
   raiseErrorOn,
 } from './error-reporting.js';
@@ -32,7 +38,6 @@ import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
 import type { ParentIndex } from './hierarchy-source.js';
-import { renumberSiblingGroups } from './sibling-order.js';
 import type { SiblingChange, SiblingGroupKey, SiblingPlacement } from './sibling-order.js';
 import { isDevMode } from './dev-mode.js';
 
@@ -243,12 +248,12 @@ export function buildCommitChangeSet(
           return extra === undefined ? row : { ...row, entity: entryAfterEdit(row.entity, extra) };
         });
 
-  const { updated: rollupUpdated, cascadeDropped } = rollUpFields(
+  const { updated: rollupUpdated, overwrittenProposals } = rollUpFields(
     byId,
     {
       added: addedEntitiesForFold.map((row) => row.entity),
       removed,
-      edits: { body: proposed, merged: mergedBodyAndExtender },
+      edits: { merged: mergedBodyAndExtender },
     },
     data.fields,
     data.fieldAccess,
@@ -259,10 +264,11 @@ export function buildCommitChangeSet(
     },
   );
 
-  // ADR 0013, decision 5: the extension hook proposed a rolling-up Field the Rollup owns, and the
-  // Rollup overwrote it anyway. One report for the whole commit, never one per row.
-  if (cascadeDropped.length > 0) {
-    raiseErrorOn(data.bus, buildCascadeDroppedReport(cascadeDropped));
+  // ADR 0013, decision 5, and its 2026-09-24 ruling: the transaction body or an extension-hook
+  // cascade proposed a rolling-up Field the Rollup owns, and the Rollup overwrote it anyway. One
+  // report for the whole commit, never one per row.
+  if (overwrittenProposals.length > 0) {
+    raiseErrorOn(data.bus, buildRollUpOverwroteProposalReport(overwrittenProposals));
   }
 
   // ADR 0013, decision 6: an entity `entries.add()` just created was already a parent by the time
@@ -275,6 +281,12 @@ export function buildCommitChangeSet(
     raiseErrorOn(data.bus, buildDerivedValuesDroppedReport(addDropped));
   }
 
+  // An added entity carries the values the commit settles on, not a row: nothing reads an Entries row
+  // for an id that has no prior committed value to diff against. A Rollup row for an added id folds
+  // onto that entity instead, the same reason the sibling rank below folds onto the entity too.
+  const rollupUpdatedForOthers = rollupUpdated.filter((row) => !addedIds.has(row.id));
+  const rolledUpEntitiesForFold = foldRollUpRowsOntoAdded(addedEntitiesForFold, rollupUpdated, data.fields);
+
   // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
   const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
@@ -283,9 +295,10 @@ export function buildCommitChangeSet(
   // settled before order is decided for it. This pass owns every `siblingIndex` row: a write that
   // named the Field (`entries.update(id, { siblingIndex })`, or an extender edit that does the same)
   // already reached `bodyAndExtenderUpdated` through the ordinary diff, and that row is dropped here
-  // rather than folded beside this pass's own — two rows for one (id, field) is not a shape
-  // `foldChangeSet` resolves. The extender's own moves land after the body's, so a cascade lands on
-  // top of whatever the body itself placed.
+  // outright rather than left for `mergeUpdatedRows` below: the renumber pass may settle a group back
+  // to its committed order and write no row at all, and a merge would then keep the body's stale row
+  // — the wrong net effect, not merely a duplicate one. The extender's own moves land after the
+  // body's, so a cascade lands on top of whatever the body itself placed.
   const siblingChanges: readonly SiblingChange[] = [
     ...data.entries.pendingSiblingChanges(),
     ...siblingChangesFromExtenderEdits(
@@ -295,42 +308,30 @@ export function buildCommitChangeSet(
       (group) => data.entries.liveSiblingGroupSize(group),
     ),
   ];
-  const siblingRanks =
-    siblingChanges.length === 0
-      ? new Map<EntryId, number>()
-      : renumberSiblingGroups(
-          siblingChanges,
-          (group) => data.entries.committedSiblingIds(group),
-          (id) => data.entries.committedParents().get(id),
-        );
   const removedIds = new Set(removedEntities.map((row) => row.entity.id));
-  // An added entity carries its final rank on the entity itself, not a row: nothing reads a
-  // `siblingIndex` row for an id that has no prior committed value to diff against.
-  const rankedEntitiesForFold = addedEntitiesForFold.map((row) => {
-    const rank = siblingRanks.get(row.entity.id);
-    return rank === undefined || rank === row.entity.siblingIndex
-      ? row
-      : { ...row, entity: { ...row.entity, siblingIndex: rank } };
-  });
-  const siblingIndexUpdated: FieldUpdated[] = [];
-  for (const [id, rank] of siblingRanks) {
-    if (addedIds.has(id) || removedIds.has(id)) continue;
-    const committed = byId.get(id);
-    if (committed === undefined || committed.siblingIndex === rank) continue;
-    siblingIndexUpdated.push({
-      store: 'entries',
-      id,
-      field: 'siblingIndex',
-      from: committed.siblingIndex,
-      to: rank,
-    });
-  }
+  const { rankedAdded: rankedEntitiesForFold, siblingIndexUpdated } = foldSiblingRanks(
+    siblingChanges,
+    rolledUpEntitiesForFold,
+    addedIds,
+    removedIds,
+    byId,
+    (group) => data.entries.committedSiblingIds(group),
+    (id) => data.entries.committedParents().get(id),
+  );
   const updatedWithoutBodySiblingIndex = bodyAndExtenderUpdated.filter((row) => row.field !== 'siblingIndex');
 
-  return foldChangeSet(data.nextChangeSetId(), origin, rankedEntitiesForFold, removedEntities, [
-    ...updatedWithoutBodySiblingIndex,
-    ...rollupUpdated,
-    ...pluginRows,
-    ...siblingIndexUpdated,
-  ]);
+  // The body and the Rollup can each propose a row for the same (id, field) — the body's own `end`
+  // write, then the Rollup's recompute of that same `end` once the write set settles. One net row per
+  // key, not both in sequence: `invertChangeSet` keeps row order, so two rows for one key would invert
+  // to two rows too, and undo would land on the middle value instead of the one committed here.
+  return foldChangeSet(
+    data.nextChangeSetId(),
+    origin,
+    rankedEntitiesForFold,
+    removedEntities,
+    mergeUpdatedRows(
+      [...updatedWithoutBodySiblingIndex, ...rollupUpdatedForOthers, ...pluginRows, ...siblingIndexUpdated],
+      data.fields,
+    ),
+  );
 }

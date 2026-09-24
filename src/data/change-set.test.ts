@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { diffEdit, foldChangeSet, invertChangeSet } from './change-set.js';
+import { diffEdit, foldChangeSet, invertChangeSet, mergeUpdatedRows } from './change-set.js';
 import { changeSetId, entryId } from '../model/index.js';
-import type { StoredEntry, EntryId, Instant } from '../model/index.js';
+import type { StoredEntry, EntryId, FieldKey, Instant } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
 import { createFieldAccess, withProposedKeys, writeField } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
@@ -124,7 +124,7 @@ describe('foldChangeSet', () => {
     expect(result?.added).toEqual([{ store: 'entries', entity: t1 }]);
   });
 
-  it('cancels an add followed by a remove of the same id, and records neither', () => {
+  it('keeps both rows when an id names both an add and a remove — the write set already resolved a within-transaction churn before this runs, so an id reaching here in both lists is a replace, not a cancel', () => {
     const t1 = entry('t1');
     const result = foldChangeSet(
       changeSetId(1),
@@ -133,10 +133,11 @@ describe('foldChangeSet', () => {
       [{ store: 'entries', entity: t1 }],
       [],
     );
-    expect(result).toBeUndefined();
+    expect(result?.added).toEqual([{ store: 'entries', entity: t1 }]);
+    expect(result?.removed).toEqual([{ store: 'entries', entity: t1 }]);
   });
 
-  it('drops field updates belonging to a cancelled id, but keeps updates for other ids', () => {
+  it('keeps every update row, including one for an id that also names a replace', () => {
     const t1 = entry('t1');
     const t2 = entry('t2');
     const result = foldChangeSet(
@@ -149,9 +150,27 @@ describe('foldChangeSet', () => {
         { store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' },
       ],
     );
-    expect(result?.added).toEqual([]);
-    expect(result?.removed).toEqual([]);
-    expect(result?.updated).toEqual([{ store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' }]);
+    expect(result?.updated).toEqual([
+      { store: 'entries', id: t1.id, field: 'name', from: 'a', to: 'b' },
+      { store: 'entries', id: t2.id, field: 'name', from: 'a', to: 'b' },
+    ]);
+  });
+});
+
+describe('mergeUpdatedRows', () => {
+  it('keeps two rows apart when their id and field, joined by a colon, spell the same string', () => {
+    // id 'a:b' field 'c' and id 'a' field 'b:c' both stringify to 'entries:a:b:c' under a joined-string
+    // key — a merge that keys that way collapses two unrelated rows into one and drops the other.
+    const rowOne = { store: 'entries' as const, id: entryId('a:b'), field: 'c' as FieldKey, from: 1, to: 2 };
+    const rowTwo = {
+      store: 'entries' as const,
+      id: entryId('a'),
+      field: 'b:c' as FieldKey,
+      from: 10,
+      to: 20,
+    };
+    const merged = mergeUpdatedRows([rowOne, rowTwo], registry);
+    expect(merged).toEqual([rowOne, rowTwo]);
   });
 });
 
