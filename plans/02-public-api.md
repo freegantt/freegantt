@@ -154,7 +154,7 @@ dataset.entries.sync(serverRows);   // rows in any order — the same shape `loa
 
 `sync` writes through the door `load` uses: it ignores a `'never'` Field lock, a derived parent cell re-rolls instead of taking an authored value, and no `EditExtender` cascade runs. `beforeChange` can veto the whole call, the same as `load`. It refuses the same way `load` does: `TransactionAlreadyOpenError` inside `dataset.transaction()`, `MutationDuringExtensionHookError` from the extension hook, and `MutationDuringNotificationError` from inside a `beforeChange` or `change` handler, since a sync reaching the store from there would write or notify in the middle of a notification already running.
 
-Unlike `load`, `sync` commits nothing when the list already matches the store: no `ChangeSet`, no `change` event — the common case for a server poll that finds nothing new. When it does commit, the `ChangeSet` carries `origin: 'sync'`. A local edit the server has not seen is overwritten, last write wins; undoing the edit brings the local value back, and redoing it gives the server's value back in turn.
+Unlike `load`, `sync` commits nothing when the list already matches the store: no `ChangeSet`, no `change` event — the common case for a server poll that finds nothing new. When it does commit, the `ChangeSet` carries `origin: 'sync'`. A local edit the server has not seen is overwritten, last write wins; undoing the edit writes the value the edit replaced, and redo gives the server's value back.
 
 ### Undo and redo
 
