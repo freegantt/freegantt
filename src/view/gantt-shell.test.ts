@@ -1901,6 +1901,7 @@ describe('a sync leaves the view alone (#517)', () => {
     const shell = paintedShell({ wiring: {}, container, dataset, scroll: { y: scrollY } });
     scrollY.panTo(scrollY.state.max);
     const positionBefore = scrollY.state.position;
+    expect(positionBefore).toBeGreaterThan(0);
 
     dataset.entries.sync([
       { id: 'p', name: 'Parent renamed', start: '2026-01-01', end: '2026-01-10' },
