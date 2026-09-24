@@ -169,6 +169,67 @@ describe('entries.load', () => {
     expect(state.canUndo).toBe(true);
   });
 
+  // load() under a plugin hierarchy source (ADR 0020 J54): a refused source answer is a Fault, never
+  // a throw. Load's pre-stage check reads raw `parentId` only, the same way `update()`'s
+  // `#assertParentValid` does — a plugin source's own key goes through the Fault path instead.
+  describe('load() under a plugin hierarchy source (ADR 0020 J54)', () => {
+    function phaseSourced(entries: { id: string; parentId?: string }[] = []): DatasetState {
+      const state = new DatasetState({
+        timeZone: 'UTC',
+        entries: entries.map((e) => ({ ...e, name: e.id, start: 0, end: 1 })),
+        fields: [{ key: 'phaseId' }],
+      });
+      state.setHierarchySource(() => (entry) => (entry.props as { phaseId?: string }).phaseId);
+      return state;
+    }
+
+    it('a cycle only in the plugin key does not throw — it commits, and the commit reports a "hierarchy-cycle" Fault', () => {
+      const state = phaseSourced();
+      const reports: ErrorReport[] = [];
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+
+      const inputs: FlatEntryInput<{ phaseId: string }>[] = [
+        { id: 'a', name: 'A', start: 0, end: 1, phaseId: 'b' },
+        { id: 'b', name: 'B', start: 0, end: 1, phaseId: 'a' },
+      ];
+      expect(() => state.entries.load(inputs)).not.toThrow();
+
+      expect(state.entries.all.map((e) => e.id)).toEqual([entryId('a'), entryId('b')]);
+      expect(reports.map((report) => [report.code, report.by])).toContainEqual(['hierarchy-cycle', 'plugin']);
+    });
+
+    it('an unknown parent only in the plugin key does not throw — it commits, and the commit reports an "unknown-parent" Fault', () => {
+      const state = phaseSourced();
+      const reports: ErrorReport[] = [];
+      state.on('error', (report) => {
+        reports.push(report);
+      });
+
+      const inputs: FlatEntryInput<{ phaseId: string }>[] = [
+        { id: 'a', name: 'A', start: 0, end: 1, phaseId: 'ghost' },
+      ];
+      expect(() => state.entries.load(inputs)).not.toThrow();
+
+      expect(state.entries.all.map((e) => e.id)).toEqual([entryId('a')]);
+      expect(reports.map((report) => [report.code, report.by])).toContainEqual(['unknown-parent', 'plugin']);
+      expect(state.entries.get('a')?.parent()).toBeUndefined();
+    });
+
+    it("a raw parentId cycle still throws ParentCycleError under a plugin source — load's pre-stage check reads parentId, the same as update()'s #assertParentValid", () => {
+      const state = phaseSourced();
+
+      expect(() =>
+        state.entries.load([
+          { id: 'a', parentId: 'b' },
+          { id: 'b', parentId: 'a' },
+        ]),
+      ).toThrow(ParentCycleError);
+      expect(state.entries.all).toEqual([]);
+    });
+  });
+
   it('commits one change with origin "load", and canUndo/canRedo both read false after it', () => {
     const state = dataset([{ id: 'old' }]);
     state.entries.update('old', { name: 'Edited' });
