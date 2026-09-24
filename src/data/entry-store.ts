@@ -767,13 +767,16 @@ export class EntryStore implements EntryStoreContract {
     return this.#writeSet?.edits ?? new Map();
   }
 
+  /** The construction Rollup's own write, and the only caller (`data/transaction.ts`). It checks the
+   *  tree again — `#421 C4`'s fast path stays the first *user* commit's own privilege, not something
+   *  this Field write can hand it for free — but it raises no refusal of its own: the constructor's
+   *  report, just before this call, already covers every answer this Dataset checks at construction,
+   *  so raising here would only repeat it. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void {
     if (updated.length === 0) return;
     this.#applyUpdatedRows(updated);
     this.#revision.set(this.#revision.get() + 1);
-    // A rolled-up Field write can move the tree: a source may read any `props` key, and this is a
-    // revision like any other.
-    this.#reportRefusedHierarchyAnswers();
+    this.#hierarchy();
   }
 
   /** Applies the committed `ChangeSet` (`undefined` for an empty net effect or a vetoed commit — the
