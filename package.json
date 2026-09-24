@@ -70,6 +70,7 @@
     "verify:full": "node scripts/verify-full.mjs",
     "open-pr": "node scripts/open-pr.mjs",
     "pr-wait": "node scripts/pr-wait.mjs",
+    "ocr-review": "node scripts/ocr-review.mjs",
     "measure:scale": "node scripts/measure-scale.mjs"
   },
   "dependencies": {
