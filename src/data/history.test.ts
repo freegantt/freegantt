@@ -364,6 +364,30 @@ describe('History', () => {
     expect(state.entries.get('t1')?.name).toBe('t1');
   });
 
+  it('a later change subscriber that throws after a landed undo does not un-forget a moot step the same click already forgot', () => {
+    const state = dataset([{ id: 't1' }]); // name starts as 't1'
+    state.entries.update('t1', { name: 'b' }); // step 1
+    state.entries.update('t1', { name: 'c' }); // step 2
+
+    // Step 2's undo is moot, the same as the test above, so undo() forgets it for real on the way
+    // to step 1 — which does land. This handler is added after History's own, so it runs once step
+    // 1's write has already moved the cursor, and its throw must not undo that real forget too.
+    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]);
+
+    const explode = (): void => {
+      throw new Error('boom');
+    };
+    state.on('change', explode);
+    expect(() => state.undo()).toThrow('boom');
+    state.off('change', explode);
+
+    // Step 1's write landed before the later handler threw. Step 2 had nothing left to write either
+    // way, so its forget stays too — there is nothing left to undo, and step 1 alone is redoable.
+    expect(state.entries.get('t1')?.name).toBe('t1');
+    expect(state.canUndo).toBe(false);
+    expect(state.canRedo).toBe(true);
+  });
+
   it('undo of a declared props key removes the key instead of writing undefined onto props', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],

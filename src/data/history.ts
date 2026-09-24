@@ -38,6 +38,11 @@ export class History {
   // is whether the cursor moved down for this forget, so the restore moves it back up in step.
   #forgottenThisAttempt: Array<{ index: number; step: ChangeSet; satBelowCursor: boolean }> | undefined =
     undefined;
+  // Set once this attempt's own replay has landed a write — `#onChange` moved the cursor for it.
+  // A later `change` subscriber can still throw after that write lands; `#unwindOnThrow` reads this
+  // to tell a real, landed write apart from an attempt that never wrote anything, so it never undoes
+  // a forget the landed write already made permanent.
+  #writeLandedThisAttempt = false;
 
   constructor(data: TransactionData, options: HistoryOptions = {}) {
     this.#data = data;
@@ -91,24 +96,31 @@ export class History {
   }
 
   /** Runs `attempt`, which may call `#forgetStep` one or more times before either landing a write or
-   *  throwing (a vetoed `beforeChange`, or an aggregator failure). A landed write keeps every forgotten
-   *  step forgotten — they really had nothing left to write. A throw restores them in the order they
-   *  were removed, so the documented "a refused undo/redo leaves history exactly where it was" holds
-   *  even when the loop had already forgotten a moot step or two on the way to the one that threw. */
+   *  throwing (a vetoed `beforeChange`, an aggregator failure, or a later `change` subscriber's own
+   *  throw). A landed write keeps every forgotten step forgotten — they really had nothing left to
+   *  write, and `#onChange` already moved the cursor for the write that did land. A throw before any
+   *  write lands restores the forgotten steps in the order they were removed, so the documented "a
+   *  refused undo/redo leaves history exactly where it was" holds even when the loop had already
+   *  forgotten a moot step or two on the way to the one that threw. */
   #unwindOnThrow(attempt: () => void): void {
-    const outer = this.#forgottenThisAttempt;
+    const outerForgotten = this.#forgottenThisAttempt;
+    const outerLanded = this.#writeLandedThisAttempt;
     const forgotten: Array<{ index: number; step: ChangeSet; satBelowCursor: boolean }> = [];
     this.#forgottenThisAttempt = forgotten;
+    this.#writeLandedThisAttempt = false;
     try {
       attempt();
     } catch (error) {
-      for (const { index, step, satBelowCursor } of forgotten.reverse()) {
-        this.#stack.splice(index, 0, step);
-        if (satBelowCursor) this.#cursor += 1;
+      if (!this.#writeLandedThisAttempt) {
+        for (const { index, step, satBelowCursor } of forgotten.reverse()) {
+          this.#stack.splice(index, 0, step);
+          if (satBelowCursor) this.#cursor += 1;
+        }
       }
       throw error;
     } finally {
-      this.#forgottenThisAttempt = outer;
+      this.#forgottenThisAttempt = outerForgotten;
+      this.#writeLandedThisAttempt = outerLanded;
     }
   }
 
@@ -151,6 +163,7 @@ export class History {
         if (!this.#replayingOwnStep) break;
         this.#cursor -= 1;
         this.#stack[this.#cursor] = invertChangeSet(changeSet);
+        this.#writeLandedThisAttempt = true;
         break;
       case 'redo':
         // Same rule as 'undo': an outside `dataset.replay({ origin: 'redo' })` is ignored, so it
@@ -158,6 +171,7 @@ export class History {
         if (!this.#replayingOwnStep) break;
         this.#stack[this.#cursor] = changeSet;
         this.#cursor += 1;
+        this.#writeLandedThisAttempt = true;
         break;
       case 'load':
         this.clear();
