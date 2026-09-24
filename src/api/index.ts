@@ -261,6 +261,7 @@ export {
   ParentCycleError,
   EmptyCoversError,
   InvertedSpanError,
+  SiblingIndexOutOfRangeError,
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,

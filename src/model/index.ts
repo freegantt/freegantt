@@ -91,6 +91,7 @@ export {
   DuplicateEntryIdError,
   ParentCycleError,
   InvertedSpanError,
+  SiblingIndexOutOfRangeError,
   UnknownFieldError,
   UnknownGridColumnError,
   DuplicateFieldKeyError,
