@@ -14,6 +14,7 @@ import {
   MutationCancelledError,
   RegistrationClosedError,
   UnknownFieldError,
+  DuplicatePluginIdError,
 } from './index.js';
 import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput } from './index.js';
 import type { EditRequest, ProposedEdit, ProposedEdits, WriteTarget } from '../model/index.js';
@@ -1113,6 +1114,16 @@ describe('a plugin Field declared at construction is there before entries are re
 
     expect(loaded.entries.all.map((entry) => entry.toInput())).toEqual(
       fresh.entries.all.map((entry) => entry.toInput()),
+    );
+  });
+
+  it('reports a duplicate plugin id, not a shared Field key it also declares (ocr review of #532)', () => {
+    // Two installs of the same factory: same id, same declared Field key. Duplicate-id must win —
+    // that is the error docs/06-plugin-authoring.md documents for two plugins sharing an id — and it
+    // has to win *before* the Field merge below ever sees the shared key, or a factory called twice
+    // throws the wrong error naming a key instead of the plugin id it actually got wrong.
+    expect(() => new Dataset({ timeZone: 'UTC', entries: [], plugins: [locks(), locks()] })).toThrow(
+      DuplicatePluginIdError,
     );
   });
 
