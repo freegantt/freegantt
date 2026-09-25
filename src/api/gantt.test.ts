@@ -374,6 +374,20 @@ describe('Gantt.dataset (#226)', () => {
 
     gantt.destroy();
   });
+
+  it('turns its own Undo and Redo commands off when the app owns undo (history: false)', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC', history: false });
+    const gantt = new Gantt({ container, dataset });
+
+    dataset.entries.update(sampleEntries[0]!.id, { name: 'renamed' });
+
+    const available = gantt.commands.available().map((command) => command.id);
+    expect(available).not.toContain('freegantt.undo');
+    expect(available).not.toContain('freegantt.redo');
+
+    gantt.destroy();
+  });
 });
 
 describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {

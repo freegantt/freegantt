@@ -1,5 +1,6 @@
 ---
-status: accepted — verdict pending (this build). Amends [ADR 0015](0015-what-the-write-door-refuses.md),
+status: accepted — verdict pending (this build). Amended by [0036](0036-an-undo-keeps-a-foreign-write.md) —
+  an undo or a redo now keeps a value a sync wrote since, instead of overwriting it. Amends [ADR 0015](0015-what-the-write-door-refuses.md),
   [ADR 0034](0034-sibling-order-is-a-field.md) (undo and redo renumber the sibling groups they touch)
   and the rule that replay never re-runs the Rollup (undo and redo now re-roll the parents they touch).
 decided: `entries.sync(list)` writes through the same write door `entries.load()` uses, not through

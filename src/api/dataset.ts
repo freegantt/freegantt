@@ -18,6 +18,7 @@ import type {
   FieldKey,
   FieldType,
   PluginStoreView,
+  ReplayOptions,
 } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
 import type { FieldDeclarationSource } from '../data/index.js';
@@ -92,8 +93,12 @@ export interface DatasetOptions<TProps = unknown> {
   measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
    * (`plans/s2-data-core/s2.5-undo-redo.md` §1). `entries.sync()` records no step of its own
-   * (`docs/11-server-data.md`), so a frequent poll never eats into this headroom. */
-  history?: { capacity?: number };
+   * (`docs/11-server-data.md`), so a frequent poll never eats into this headroom.
+   *
+   * `false` builds no History: the app owns undo and writes each step back with `replay()`.
+   * `canUndo` and `canRedo` then always read `false`, `undo()` and `redo()` do nothing, and the
+   * Gantt's own Undo and Redo commands turn off, so the app can bind Mod+Z to its own undo. */
+  history?: false | { capacity?: number };
   /** The plugins this Dataset installs (D-S5-24, ADR 0019). An unordered set: installation resolves
    *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
    *  reverse install the same way (D-S5-31).
@@ -329,12 +334,14 @@ export class Dataset<TProps = unknown> {
     this.#state.off(name, handler);
   }
 
-  /** `true` while there is a committed changeset `undo()` can reverse. */
+  /** `true` while there is a committed changeset `undo()` can reverse. Always `false` under
+   *  `history: false`. */
   get canUndo(): boolean {
     return this.#state.canUndo;
   }
 
-  /** `true` while there is an undone changeset `redo()` can re-apply. */
+  /** `true` while there is an undone changeset `redo()` can re-apply. Always `false` under
+   *  `history: false`. */
   get canRedo(): boolean {
     return this.#state.canRedo;
   }
@@ -343,9 +350,9 @@ export class Dataset<TProps = unknown> {
    *  when `canUndo` is `false`. What it did arrives on `on('change')`, like every other commit — a
    *  refused undo throws `MutationCancelledError` and leaves the history exactly where it was.
    *
-   *  Writes onto the store's current values, not blind: a sync since this step was recorded is
-   *  overwritten, and a step left with nothing to write is skipped in favor of the one before it, in
-   *  this same call (`docs/11-server-data.md`). */
+   *  Writes onto the store's current values, not blind. An entry a sync changed since this step was
+   *  recorded keeps the sync's values, and a step left with nothing to write is skipped in favor of
+   *  the one before it, in this same call (`docs/11-server-data.md`). */
   undo(): void {
     this.#state.undo();
   }
@@ -357,18 +364,20 @@ export class Dataset<TProps = unknown> {
     this.#state.redo();
   }
 
-  /** Writes `changeSet` onto the store's current values, not blind — the same rule a sync overwrites a
-   *  local edit with (`plans/s2-data-core/s2b-undo-replay-seam.md`, amended for local-only undo across
-   *  a sync). A row for an id or a Field a sync has already settled writes nothing for it; the rest of
-   *  the changeset still lands. No extension hook. It re-rolls every parent it touches, construction
-   *  shape; with no foreign write in between, the Rollup writes nothing. `changeSet.origin` must be `'undo'` or
+  /** Writes `changeSet` onto the store's current values, not blind
+   *  (`plans/s2-data-core/s2b-undo-replay-seam.md`, amended for local-only undo across a sync). A row
+   *  for an id or a Field a sync has already settled writes nothing for it; the rest of the changeset
+   *  still lands. An entry a foreign write changed since the step recorded it keeps its current
+   *  values, unless `options.overwriteForeignWrites` is `true` (#549). No extension hook. It
+   *  re-rolls every parent it touches, construction shape; with no foreign write in between, the
+   *  Rollup writes nothing. `changeSet.origin` must be `'undo'` or
    *  `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, not open yet. When
    *  nothing is left to write, this is a no-op: no `beforeChange`, no `change`. Otherwise `beforeChange`
    *  then `change` fire, and a veto throws `MutationCancelledError` and writes nothing. This is the
    *  write path `undo()`/`redo()` use; a consumer History can now be written against this method alone,
    *  plus `invertChangeSet` and `on('change')`. */
-  replay(changeSet: ChangeSet): void {
-    this.#state.replay(changeSet);
+  replay(changeSet: ChangeSet, options?: ReplayOptions): void {
+    this.#state.replay(changeSet, options);
   }
 
   /** Call: `dataset.pluginStore('acme/locks')` — one plugin's rows, read-only, or `undefined` when

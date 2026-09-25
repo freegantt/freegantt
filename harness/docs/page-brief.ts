@@ -70,6 +70,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'Plugins over the public contract: a custom bar kind, an over-budget row, a chord command, and a popup',
       'JSON export and import round-trip the whole Dataset, and Import is a full fresh start that clears undo',
       'Sync from server diffs a fetched list against the live data, keeps a kept row selected, and records no undo step',
+      'An undo after a sync keeps the value the sync brought in',
       'A custom tickIncrement > 1 preset and snap, anchored on the calendar so gridlines hold still on a pan',
     ],
     config: [
