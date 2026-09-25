@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Drop AI tool attribution from the commit message. docs/04-hooks-and-ci.md §3.
+#
+# Cursor appends a Co-authored-by trailer after the message the author wrote. A refuse would
+# block every Cursor-agent commit. This hook deletes those lines so the commit lands without
+# the trailer. A pull request body still refuses them: `pnpm open-pr` does not get a silent
+# inject on the same path.
+
+set -euo pipefail
+root="$(git rev-parse --show-toplevel)"
+exec node "$root/scripts/refuse-ai-attribution.mjs" --commit-msg "$1"
