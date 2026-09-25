@@ -148,8 +148,15 @@ function startPolling(dataset: import('freegantt').Dataset) {
 }
 ```
 
-Stop the timer when the Gantt unmounts. `sync` itself needs no other bookkeeping: call it as often
-as your poll interval allows, and the user's own edits stay safe until the server catches up.
+Stop the timer when the Gantt unmounts. Call `sync` as often as your poll interval allows. The user's
+own edits stay undoable across every poll.
+
+A sync does not know which local edits the server has not saved yet. A poll that returns before the
+server saves an edit writes the server's older value over it, under the conflict rule above. To keep
+an unsaved edit on screen, do one of these:
+
+- Skip the poll while a save is in flight.
+- Copy the unsaved value into that entry's row in `rows` before you call `sync`.
 
 ## Related
 
