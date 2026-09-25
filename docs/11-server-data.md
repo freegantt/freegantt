@@ -44,24 +44,32 @@ dataset.canUndo; // still true — the poll did not touch it
 A sync that changes nothing commits nothing at all: no `beforeChange`, no `change`, no undo step.
 That is the common case for a poll that finds nothing new.
 
-## The conflict rule: last write wins, undo still remembers
+## The conflict rule: last write wins, and undo keeps the server's value
 
-A sync overwrites a local edit the server has not seen — last write wins. But undoing that edit
-later writes the value it held **before** the edit, not the server's value, even though a sync
-changed the field since. Redoing that same step gives the server's value back:
+A sync overwrites a local edit the server has not seen — last write wins. An undo never writes
+over a colleague's value. When a sync changed a Field that an undo step wrote, the undo keeps the
+server's value for that whole entry:
 
 ```ts
 dataset.entries.update('t1', { name: 'Renamed locally' }); // the server has not seen this yet
 
 dataset.entries.sync(fetchRowsFromServer()); // the server sends its own name for 't1' — it wins
 
-dataset.undo(); // 't1'.name goes back to what it was before "Renamed locally"
-dataset.redo(); // 't1'.name goes back to the server's value
+dataset.undo(); // 't1' keeps the server's name; the step has nothing left to write
 ```
 
-Undo and redo both write onto the entry's **current** value, not the one the step recorded — see
+The rule reads values, not origins. A Field is a **foreign write** when its current value is
+neither the value the step recorded nor the value the undo would restore. When one Field of an
+entry is a foreign write, the undo writes no Field of that entry. So a step that moved `start` and
+`end` together never lands half of that move. Other entries in the same step still land. A
+sync that changed only a Field the step never wrote blocks nothing.
+
+Redo follows the same rule. See
 [`docs/05-consumer-api.md`](05-consumer-api.md#advanced-your-own-history-with-datasetreplay) for
 `Dataset.replay`, the primitive both are built on.
+
+To write the step over a foreign write instead, own undo in the app: construct with
+`history: false`, and call `dataset.replay(step, { overwriteForeignWrites: true })`.
 
 ## A step with nothing left to write is skipped
 
@@ -76,6 +84,8 @@ step in the same call, so one click always lands a step when any undoable one re
   values. The step is skipped, and the server's entry is kept.
 - **The field already reads that value.** A step that changed a Field to the value the sync later
   set independently has nothing left to write for that field.
+- **The sync changed the entry.** Every Field row of an entry with a foreign write is kept, under
+  the conflict rule above. When that leaves the step empty, the step is skipped.
 - **The children a sync added since.** Undoing an `add` step removes the whole entry, the same way
   `entries.remove()` does. Any child the sync placed under it since goes with it.
 
@@ -111,12 +121,14 @@ mentioned changed since, through the sync.
 `change` on an `'undo'`/`'redo'`-origin write can carry more, and less, than the step first recorded:
 
 - **`from` can be the server's value.** A row's `from` reads the value the field held right before
-  this write. That can be the server's value, not the value the original step recorded.
+  this write. Under `overwriteForeignWrites: true`, that can be the server's value, not the value
+  the original step recorded.
 - **Rows the step never recorded can appear.** A sibling group's renumber rows, and a rolled-up
   parent's own row, land whenever the write touches that group or that parent. The original step
   can have never mentioned either one.
 - **Rows the step recorded can be missing.** A row can be skipped under the rules above: a gone id,
-  a settled field, a re-added entry, a dropped parent. A skipped row is left out of the changeset.
+  a settled field, a re-added entry, a dropped parent, a foreign write. A skipped row is left out
+  of the changeset.
 
 An app that saves its own changes to a server should treat an `'undo'`/`'redo'`-origin commit the
 same way it treats a `'user'`-origin one. Either one can carry a real, novel write.

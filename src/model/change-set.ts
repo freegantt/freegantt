@@ -63,6 +63,15 @@ export interface ChangeSet {
   updated: readonly UpdatedRow[];
 }
 
+/** How `dataset.replay()` treats a foreign write: a Field value that changed after the step recorded
+ *  it, through a sync or any other commit. */
+export interface ReplayOptions {
+  /** `false` (the default) keeps the current value. The replay then writes none of that entry's Field
+   *  rows, so the step never splits a pair such as `start`/`end`. `true` writes the step's value over
+   *  it, last write wins. */
+  overwriteForeignWrites?: boolean;
+}
+
 /** `beforeChange`/`change` share one payload (D-S2-5, D-S2-25): a `false` return from a `beforeChange`
  *  handler vetoes the whole changeset; `change` handler return values are ignored. Only the
  *  `before*` half is `Refusable` — `refuse(reason)` puts the vetoing handler's own words on the

@@ -451,8 +451,9 @@ importBtn.addEventListener('click', () => {
 
 // #517: sync is a poll, not a fresh start — it diffs the server's list against the live data. A kept
 // row keeps its selection and collapse state. Sync records no undo step of its own, so the user's
-// own edits stay undoable across a poll (docs/11-server-data.md); a poll that finds nothing new
-// commits nothing, so the toolbar's Undo button holds whatever it already showed.
+// own edits stay undoable across a poll (docs/11-server-data.md), and an undo never writes over a
+// value the poll brought in. A poll that finds nothing new commits nothing, so the toolbar's Undo
+// button holds whatever it already showed.
 const syncBtn = document.querySelector<HTMLButtonElement>('#sync-btn')!;
 syncBtn.addEventListener('click', () => {
   const rows = server.fetchRows();
