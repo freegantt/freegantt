@@ -369,4 +369,23 @@ describe('a plugin names its own keys', () => {
     const dataset = newDataset([definePlugin({ id: 'demo.any', fields: [{ key: 'owner' }] })]);
     expect(dataset.field('owner')).toBeDefined();
   });
+
+  it('installs a chrome plugin typed with its own keys on a Gantt typed with the consumer keys', () => {
+    interface TaskProps {
+      cost?: number;
+    }
+
+    // `marks()` names a key of its own, `consumed`, that TaskProps does not — the Gantt still
+    // installs it, because its type argument names only its own keys, not the consumer's.
+    const marks = () => definePlugin<{ consumed?: boolean }>({ id: 'demo.marks', view() {} });
+
+    const dataset = new Dataset<TaskProps>({ timeZone: 'UTC', entries, fields: [{ key: 'consumed' }] });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const gantt = new Gantt<TaskProps>({ dataset, container, plugins: [marks()] });
+
+    gantt.uninstallPlugin('demo.marks');
+    gantt.installPlugin(marks());
+    expect(gantt.hasPlugin('demo.marks')).toBe(true);
+  });
 });
