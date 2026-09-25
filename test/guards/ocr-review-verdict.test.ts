@@ -20,6 +20,7 @@ import {
   isStalled,
   newComments,
   resumeCommandFor,
+  rowsOf,
   verdictForSession,
 } from '../../scripts/ocr-review.mjs';
 
@@ -64,6 +65,17 @@ const comment = (
   startLine: parts.startLine ?? 42,
   endLine: parts.endLine ?? 42,
   severity: parts.severity ?? 'medium',
+});
+
+describe('ocr-review reads an empty ocr list as no rows', () => {
+  it('reads null as an empty list, because ocr prints null for a repo with no session yet', () => {
+    expect(rowsOf(null)).toEqual([]);
+  });
+
+  it('keeps the rows of a list ocr filled', () => {
+    const rows = [{ session_id: 'a' }];
+    expect(rowsOf(rows)).toBe(rows);
+  });
 });
 
 describe('ocr-review picks the session this run just opened', () => {
