@@ -27,7 +27,7 @@ import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
  * Does writing `to` where the Field now holds `from` leave its stored value as it is? The commit
  * path, replay, the Rollup and sync all ask this before they emit a Field row, so none of them can
  * disagree on what a write changes. A Field's own `equals` answers. Any other key compares by
- * `Object.is`.
+ * `Object.is`. A computed Field has no stored value, so every write to it is a no-op.
  */
 export function isNoOpFieldWrite(
   field: FieldKey,
@@ -35,6 +35,8 @@ export function isNoOpFieldWrite(
   to: unknown,
   fields: FieldRegistry,
 ): boolean {
+  const declared = fields.get(field);
+  if (declared !== undefined && 'compute' in declared) return true;
   return fields.valuesEqual(field, from, to);
 }
 
