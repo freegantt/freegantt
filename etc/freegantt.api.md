@@ -382,7 +382,7 @@ export class Dataset<TProps = unknown> {
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
-    get plugins(): readonly PluginOf<unknown, Dataset<TProps>>[];
+    get plugins(): readonly PluginOf<unknown, unknown>[];
     pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
     // (undocumented)
     pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
@@ -439,7 +439,7 @@ export interface DatasetOptions<TProps = unknown> {
         capacity?: number;
     };
     measureDuration?: DurationMeasure;
-    plugins?: readonly PluginOf<unknown, Dataset<TProps>>[];
+    plugins?: readonly PluginOf<unknown, unknown>[];
     timeZone?: string;
 }
 

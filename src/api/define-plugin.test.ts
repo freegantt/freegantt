@@ -322,3 +322,40 @@ describe('a failed install unwinds what it set up before it', () => {
     expect(dataset.entries.get('t1')?.name).toBe('Design');
   });
 });
+
+describe('a plugin names its own keys', () => {
+  interface LockProps {
+    locked?: boolean;
+  }
+
+  it('installs a plugin typed with its own keys into a Dataset typed with the consumer keys', () => {
+    interface TaskProps {
+      cost?: number;
+    }
+
+    const locks = () =>
+      definePlugin<LockProps>({
+        id: 'demo.locks',
+        fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+        data(ctx) {
+          ctx.dataset.entries.update('t1', { locked: true });
+        },
+      });
+
+    const dataset = new Dataset<TaskProps>({ timeZone: 'UTC', entries, plugins: [locks()] });
+    expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
+  });
+
+  it('types the plugin write against its own keys, not the consumer keys', () => {
+    const locks = () =>
+      definePlugin<LockProps>({
+        id: 'demo.locks',
+        fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+        data(ctx) {
+          // @ts-expect-error `ctx.dataset` sees this plugin's own keys, not the consumer's `cost`.
+          ctx.dataset.entries.update('t1', { cost: 1 });
+        },
+      });
+    expect(locks).toBeDefined();
+  });
+});
