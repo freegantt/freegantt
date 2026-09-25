@@ -12,6 +12,7 @@
 
 import type {
   Aggregator,
+  CoreFieldKey,
   Disposer,
   EntryStoreView,
   Field,
@@ -96,10 +97,11 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
    *  shape depends on this plugin's own options is built in the factory that returns this object —
    *  `const costing = (opts) => ({ id: 'acme.costing', fields: [{ key: 'cost', ...opts }], data() {} })`.
    *
-   *  Each `key` must be one of this plugin's own props (`PropsOf<TDataset>`), so a typo such as
-   *  `{ key: 'lockd' }` on a `definePlugin<LockProps>` call fails to compile. An untyped plugin
+   *  Each `key` must be one of this plugin's own props (`PropsOf<TDataset>`) or a core Field key, so
+   *  a typo such as `{ key: 'lockd' }` on a `definePlugin<LockProps>` call fails to compile, while
+   *  `{ key: 'start' }` — a core-Field override — still compiles. An untyped plugin
    *  (`definePlugin({ … })`, `TDataset` left as `unknown`) names any key. */
-  fields?: readonly (Field & { key: keyof PropsOf<TDataset> & string })[];
+  fields?: readonly (Field & { key: (keyof PropsOf<TDataset> & string) | CoreFieldKey })[];
   /** Named Field type bundles this plugin adds, resolved before any Field naming one (D-S4-3). */
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Aggregators this plugin adds, resolved before any Field naming one in `rollUp`. */

@@ -357,7 +357,7 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
     aggregators?: Readonly<Record<string, Aggregator>>;
     data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
     fields?: readonly (Field & {
-        key: keyof PropsOf<TDataset> & string;
+        key: (keyof PropsOf<TDataset> & string) | CoreFieldKey;
     })[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;
@@ -2535,7 +2535,7 @@ export interface ZonedTime {
 
 // Warnings were encountered during analysis:
 //
-// dist/api/plugin.d.ts:77:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
+// dist/api/plugin.d.ts:78:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
