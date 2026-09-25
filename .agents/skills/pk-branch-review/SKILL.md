@@ -36,7 +36,7 @@ Commit the report. Push it.
 
 ## Pass 2 — a fresh sub-agent verifies the findings
 
-Start pass 2 after the commit lands. Dispatch one `reviewer-planner` sub-agent for it. The sub-agent starts cold, and that is the point: it must not inherit your reading of the code. Call the Skill tool with "subagents" to write the dispatch.
+Start pass 2 after the commit lands. Dispatch one `reviewer` sub-agent for it. The sub-agent starts cold, and that is the point: it must not inherit your reading of the code. Call the Skill tool with "subagents" to write the dispatch.
 
 A review's account of the code is a claim, and a verified finding does not verify its proposed fix. On #244 all 18 findings were real, but one described the code wrongly, and the true fix was smaller.
 
