@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { changeSetId, entryId, MutationCancelledError } from '../model/index.js';
+import type { ChangeSet } from '../model/index.js';
+import { invertChangeSet } from './change-set.js';
 import type { EditExtender } from './edit-extension.js';
 
 function dataset(
@@ -20,6 +22,59 @@ function dataset(
     ...(options.capacity !== undefined ? { history: { capacity: options.capacity } } : {}),
   });
 }
+
+describe('history: false', () => {
+  function appOwnedUndo(): DatasetState {
+    return new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      history: false,
+    });
+  }
+
+  it('records no step for a user edit, a sync or a load', () => {
+    const state = appOwnedUndo();
+
+    state.entries.update('t1', { name: 'Roofing' });
+    expect(state.canUndo).toBe(false);
+    state.entries.sync([{ id: 't1', name: 'From the server', start: 0, end: 1 }]);
+    expect(state.canUndo).toBe(false);
+    state.entries.load([{ id: 't1', name: 't1', start: 0, end: 1 }]);
+    expect(state.canUndo).toBe(false);
+    expect(state.canRedo).toBe(false);
+  });
+
+  it('undo() and redo() write nothing and fire no event', () => {
+    const state = appOwnedUndo();
+    state.entries.update('t1', { name: 'Roofing' });
+    let events = 0;
+    state.on('beforeChange', () => {
+      events += 1;
+    });
+    state.on('change', () => {
+      events += 1;
+    });
+
+    state.undo();
+    state.redo();
+
+    expect(state.entries.get('t1')?.name).toBe('Roofing');
+    expect(events).toBe(0);
+  });
+
+  it('replay() still writes, so the app can undo through it', () => {
+    const state = appOwnedUndo();
+    const steps: ChangeSet[] = [];
+    state.on('change', ({ changeSet }) => {
+      if (changeSet.origin === 'user') steps.push(changeSet);
+    });
+    state.entries.update('t1', { name: 'Roofing' });
+
+    state.replay(invertChangeSet(steps.pop()!));
+
+    expect(state.entries.get('t1')?.name).toBe('t1');
+  });
+});
 
 describe('History', () => {
   it('is not undoable on a fresh dataset', () => {
@@ -302,7 +357,7 @@ describe('History', () => {
   });
 
   it('ignores an outside redo replay with a full stack instead of appending a phantom step', () => {
-    const state = dataset([{ id: 't1' }]);
+    const state = dataset([{ id: 't1' }, { id: 't2' }]);
     state.entries.update('t1', { name: 'Roofing' });
     state.undo();
     state.redo(); // canRedo now false, nothing above the top of the stack
@@ -312,19 +367,20 @@ describe('History', () => {
       origin: 'redo',
       added: [],
       removed: [],
-      updated: [{ store: 'entries', id: entryId('t1'), field: 'name', from: 'Roofing', to: 'outside-write' }],
+      updated: [{ store: 'entries', id: entryId('t2'), field: 'name', from: 't2', to: 'outside-write' }],
     });
 
-    expect(state.entries.get('t1')?.name).toBe('outside-write');
+    expect(state.entries.get('t2')?.name).toBe('outside-write');
     // No phantom entry appended, and the cursor did not advance past the real top.
     expect(state.canRedo).toBe(false);
     expect(state.canUndo).toBe(true);
     state.undo();
     expect(state.entries.get('t1')?.name).toBe('t1'); // the real step 1, not the outside write
+    expect(state.entries.get('t2')?.name).toBe('outside-write');
   });
 
   it('ignores an outside undo replay against a non-empty stack instead of corrupting the stack slot', () => {
-    const state = dataset([{ id: 't1' }]);
+    const state = dataset([{ id: 't1' }, { id: 't2' }]);
     state.entries.update('t1', { name: 'Roofing' }); // the one real undoable step
 
     state.replay({
@@ -332,13 +388,14 @@ describe('History', () => {
       origin: 'undo',
       added: [],
       removed: [],
-      updated: [{ store: 'entries', id: entryId('t1'), field: 'name', from: 'Roofing', to: 'outside-write' }],
+      updated: [{ store: 'entries', id: entryId('t2'), field: 'name', from: 't2', to: 'outside-write' }],
     });
-    expect(state.entries.get('t1')?.name).toBe('outside-write');
+    expect(state.entries.get('t2')?.name).toBe('outside-write');
 
     state.undo(); // must still invert the real step 1, not the outside write it never recorded
 
     expect(state.entries.get('t1')?.name).toBe('t1');
+    expect(state.entries.get('t2')?.name).toBe('outside-write');
   });
 
   it('a refused undo un-forgets a moot step the same click already forgot on the way to the throw', () => {

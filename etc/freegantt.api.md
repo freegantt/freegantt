@@ -387,7 +387,7 @@ export class Dataset<TProps = unknown> {
     // (undocumented)
     pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
     redo(): void;
-    replay(changeSet: ChangeSet): void;
+    replay(changeSet: ChangeSet, options?: ReplayOptions): void;
     setFieldEditable(key: FieldKey, editable: FieldEditable | boolean): void;
     get time(): ZonedTime;
     // (undocumented)
@@ -431,7 +431,7 @@ export interface DatasetOptions<TProps = unknown> {
     entries: readonly FlatEntryInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
-    history?: {
+    history?: false | {
         capacity?: number;
     };
     measureDuration?: DurationMeasure;
@@ -1989,6 +1989,11 @@ export type RendererFor<P extends RendererPoint> = P extends 'bar' ? BarRenderer
 
 // @public
 export type RendererPoint = 'bar' | 'gridCell' | 'header' | 'tooltip';
+
+// @public
+export interface ReplayOptions {
+    overwriteForeignWrites?: boolean;
+}
 
 // @public
 export type ReportCode = BuiltInReportCode | (string & {});
