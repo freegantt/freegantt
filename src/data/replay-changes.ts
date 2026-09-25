@@ -1,8 +1,9 @@
 // data/ — the pure diff behind undo, redo and `dataset.replay()` (#517 amendment, ADR 0035): a
 // recorded `ChangeSet` no longer applies blind. It applies onto the store's current values. A sync
-// between the step's recording and its replay leaves rows that no longer match what they last wrote;
-// this file decides, row by row, what still has something to write, what a sync has already settled,
-// and which value a sync brought in stays (#549). It also keeps the tree sound: a row that would land
+// between the step's recording and its replay leaves rows that no longer match what they last wrote.
+// This file decides entry by entry: when a foreign write changed one Field of an entry, no Field row
+// of that entry lands (#549). Of the rows left, a row a sync already settled writes nothing, and the
+// rest land. It also keeps the tree sound: a row that would land
 // a raw `parentId` loop or a dangling one is dropped instead, never stored and never raised. Every
 // sibling group the step touches replays dense, 0..n-1, the same math `buildCommitChangeSet` runs on
 // a live write.
@@ -268,7 +269,9 @@ function foreignWrittenIds(
 
 /** `changeSet` without a Field row for any id a foreign write changed — the whole entry keeps its
  *  current values, so a step never lands half of a pair such as `start`/`end`. Plugin store rows stay:
- *  a sync never writes one, so no foreign value is there to keep. */
+ *  a sync never writes one, so no foreign value is there to keep. A Rollup parent is judged alone, not
+ *  with the child that fed it: the Rollup re-runs last from the children as they stand, and its value
+ *  wins over the parent's recorded row. */
 function withoutForeignWrittenEntries(changeSet: ChangeSet, data: TransactionData): ChangeSet {
   const addedIds = new Set(changeSet.added.map((row) => row.entity.id));
   const foreignWritten = foreignWrittenIds(changeSet, data, addedIds);

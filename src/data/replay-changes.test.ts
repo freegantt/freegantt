@@ -792,6 +792,34 @@ describe('replay re-rolls a parent whose other child changed since the step', ()
     expect(state.entries.get('p')!.start).toBe(5);
   });
 
+  it('a foreign write on a child drops the child, and the Rollup keeps the parent at the synced children', () => {
+    const state = dataset([
+      { id: 'p' },
+      { id: 'c1', parentId: 'p', start: 10, end: 20 },
+      { id: 'c2', parentId: 'p', start: 20, end: 30 },
+    ]);
+    state.entries.update('c1', { start: 5 });
+    expect(state.entries.get('p')!.start).toBe(5);
+
+    // A foreign write moves c1 and c2 so that p keeps the start the user's step gave it. c1 is now a
+    // foreign write; p still matches the value the step recorded, so its own undo row passes alone.
+    state.entries.sync([
+      { id: 'p' },
+      { id: 'c1', parentId: 'p', start: 7, end: 20 },
+      { id: 'c2', parentId: 'p', start: 5, end: 30 },
+    ]);
+    expect(state.entries.get('p')!.start).toBe(5);
+
+    const seen = changeSets(state);
+    state.undo();
+
+    // The Rollup re-runs from the children as they stand, so p's recorded row nets to nothing.
+    expect(state.entries.get('c1')!.start).toBe(7);
+    expect(state.entries.get('p')!.start).toBe(5);
+    expect(seen).toEqual([]);
+    expect(state.canUndo).toBe(false);
+  });
+
   it('a plain undo with no foreign write emits no Rollup row', () => {
     const state = dataset([
       { id: 'p' },
