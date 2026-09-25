@@ -19,7 +19,13 @@ import type {
   StoreRowUpdated,
   UpdatedRow,
 } from '../model/index.js';
-import { foldRollUpRowsOntoAdded, foldSiblingRanks, mergeUpdatedRows } from './change-set.js';
+import {
+  foldRollUpRowsOntoAdded,
+  foldSiblingRanks,
+  isNoOpFieldWrite,
+  isNoOpStoreRowWrite,
+  mergeUpdatedRows,
+} from './change-set.js';
 import { applyFieldRow, readFieldRow } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -166,7 +172,7 @@ function siblingChangesToReplay(
 }
 
 /** A Field row for an id gone after the replay, or whose current value already equals `to`
- *  (`registry.valuesEqual`), is skipped. A `parentId` row naming a target absent from `working` is
+ *  (`isNoOpFieldWrite`, the question a commit asks too), is skipped. A `parentId` row naming a target absent from `working` is
  *  skipped too — the entry stays under its current parent, the nearest sound place available, and
  *  this never raises: `change` carries exactly what still applies (§2b's skip rule extended to
  *  hierarchy). Every other `parentId` row lands, even one that provisionally makes two rows in the
@@ -187,7 +193,7 @@ function fieldRowToReplay(
     return undefined;
   }
   const from = readFieldRow(current, row.field, registry, access);
-  if (registry.valuesEqual(row.field, from, row.to)) return undefined;
+  if (isNoOpFieldWrite(row.field, from, row.to, registry)) return undefined;
   working.set(row.id, applyFieldRow(current, row.field, row.to, registry));
   return { store: 'entries', id: row.id, field: row.field, from, to: row.to };
 }
@@ -251,8 +257,10 @@ function foreignWrittenIds(
     const entity = committed.get(row.id);
     if (!entity) continue; // gone: `fieldRowToReplay` skips it anyway
     const current = readFieldRow(entity, row.field, data.fields, data.fieldAccess);
-    const unchanged = data.fields.valuesEqual(row.field, current, row.from);
-    const settled = data.fields.valuesEqual(row.field, current, row.to);
+    // Writing the recorded `from` back would change nothing: no write since the step recorded it.
+    const unchanged = isNoOpFieldWrite(row.field, current, row.from, data.fields);
+    // Writing `to` would change nothing: a sync already settled this row.
+    const settled = isNoOpFieldWrite(row.field, current, row.to, data.fields);
     if (!unchanged && !settled) foreignWritten.add(row.id);
   }
   return foreignWritten;
@@ -305,7 +313,8 @@ function setWrittenRow(
  *  still there to carry it. Otherwise both kinds read the store's own committed value fresh, unless a
  *  row earlier in this same replay already wrote this `(store, id)` — then `written` chains off that
  *  row's `to`, the same way `fieldRowToReplay` chains through `working` — and overwrite the same way a
- *  Field row does; an identical value writes nothing. */
+ *  Field row does (`isNoOpStoreRowWrite`, the question a commit asks too); an identical value writes
+ *  nothing. */
 function storeRowToReplay(
   row: StoreRowUpdated,
   working: ReadonlyMap<EntryId, StoredEntry>,
@@ -314,13 +323,10 @@ function storeRowToReplay(
 ): StoreRowUpdated | undefined {
   const already = writtenRowFor(written, row.store, row.id);
   const from = already.has ? already.value : pluginStores.committedRow(row.store, row.id);
-  if (row.to === undefined) {
-    if (from === undefined) return undefined;
-    setWrittenRow(written, row.store, row.id, undefined);
-    return { store: row.store, id: row.id, from, to: undefined };
-  }
-  if (!working.has(row.id)) return undefined;
-  if (Object.is(from, row.to)) return undefined;
+  if (isNoOpStoreRowWrite(from, row.to)) return undefined;
+  // A value write for an entity this replay leaves gone makes no orphan row. A deletion row applies
+  // with no entity: the step recorded it next to the entry's own removal.
+  if (row.to !== undefined && !working.has(row.id)) return undefined;
   setWrittenRow(written, row.store, row.id, row.to);
   return { store: row.store, id: row.id, from, to: row.to };
 }
