@@ -202,24 +202,28 @@ function renderGridColumns({ to }: GridColumnsChange): void {
 function refreshHistoryButtons(): void {
   undoBtn.disabled = !dataset.canUndo;
   redoBtn.disabled = !dataset.canRedo;
+}
+
+function refreshCostButton(): void {
   costBtn.disabled = gantt.selectedEntries.length === 0;
 }
 
 function onChange({ changeSet }: DatasetEventMap['change']): void {
   prependChangeSet(log, changeSet);
   renderSelection();
-  refreshHistoryButtons();
+  refreshCostButton();
   syncCrewDaysLabel();
 }
 
 function bindDataset(): void {
   dataset.on('change', onChange);
+  dataset.on('historyChange', refreshHistoryButtons);
 }
 
 function bindGantt(): void {
   gantt.on('selectionChange', () => {
     renderSelection();
-    refreshHistoryButtons();
+    refreshCostButton();
   });
   gantt.on('gridColumnsChange', renderGridColumns);
   // S5.8, D-S5-19, U8: with the checkbox on, a Name edit never opens the built-in editor — this
@@ -246,6 +250,7 @@ mountTimelineToolbar({ gantt, container: toolbar });
 syncRowSourceControls();
 syncCostColumnLabel();
 refreshHistoryButtons();
+refreshCostButton();
 renderSelection();
 
 rowsModeSelect.addEventListener('change', () => applyRowsMode());
