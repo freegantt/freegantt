@@ -126,6 +126,45 @@ describe('replay writes each row onto the current value', () => {
   });
 });
 
+describe('replay writes nothing to a computed Field', () => {
+  function datasetWithShout(): DatasetState {
+    return new DatasetState({
+      entries: [{ id: 'a', name: 'a', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      fields: [{ key: 'shout', compute: (entry) => String(entry.name).toUpperCase() }],
+    });
+  }
+
+  it('a row for a computed Field makes no row and fires no change', () => {
+    const state = datasetWithShout();
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        updated: [{ store: 'entries', id: entryId('a'), field: 'shout', from: 'A', to: 'X' }],
+      }),
+    );
+
+    expect(seen).toEqual([]);
+    expect(state.entries.get('a')!.read('shout')).toBe('A');
+  });
+
+  it('a computed Field row with a stale from never keeps the entry’s other rows from landing', () => {
+    const state = datasetWithShout();
+
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'shout', from: 'STALE', to: 'X' },
+          { store: 'entries', id: entryId('a'), field: 'name', from: 'a', to: 'b' },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('a')!.name).toBe('b');
+  });
+});
+
 describe('replay re-adds a missing id, and skips an id that already exists', () => {
   it('re-adds an id the store no longer holds', () => {
     const state = dataset([{ id: 'a', name: 'A' }]);

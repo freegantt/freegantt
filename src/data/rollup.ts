@@ -7,6 +7,7 @@
 
 import type { StoredEntry, EntryId, FieldUpdated, HierarchySource } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
+import { isNoOpFieldWrite } from './change-set.js';
 import type { ProposedEdits } from './edit-extension.js';
 import {
   ancestorsOf,
@@ -333,7 +334,7 @@ export function rollUpFields(
         continue;
       }
 
-      if (registry.valuesEqual(String(field.key), from, value)) continue;
+      if (isNoOpFieldWrite(field.key, from, value, registry)) continue;
 
       const row: FieldUpdated = { store: 'entries', id: parentId, field: field.key, from, to: value };
       updated.push(row);

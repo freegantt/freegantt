@@ -3,6 +3,7 @@
 // transaction, touches no store, and commits nothing — `entry-store.ts` is the one caller that does.
 
 import type { EntityAdded, EntityRemoved, EntryId, FieldUpdated, StoredEntry } from '../model/index.js';
+import { isNoOpFieldWrite } from './change-set.js';
 import { readField } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
@@ -18,9 +19,9 @@ export interface EntryBatchChanges {
 /**
  * The changes that turn `committed` into `target` (#517): an id in `target` but not `committed` is
  * added, an id in `committed` but not `target` is removed, and a kept id gets one `FieldUpdated` row
- * per Field whose value moved. "Moved" is `registry.valuesEqual(key, from, to)` answering false — the
- * same rule every other commit's diff uses (`change-set.ts`'s `diffEdit`) — so a Field with its own
- * `equals` suppresses a row the same way here as it does anywhere else.
+ * per Field whose value moved. A Field writes a row unless `isNoOpFieldWrite` answers true, the
+ * question every commit and replay asks — so a Field with its own `equals` suppresses a row the same
+ * way here as it does anywhere else.
  *
  * A `compute` Field has no stored home, so it is never read here — comparing it would compare a
  * derivation against itself. Every other declared Field is read straight off the two `StoredEntry`s
@@ -54,7 +55,7 @@ export function changesToMatchBatch(
     for (const field of storedFields) {
       const from = readField(current, field, access);
       const to = readField(entity, field, access);
-      if (registry.valuesEqual(String(field.key), from, to)) continue;
+      if (isNoOpFieldWrite(field.key, from, to, registry)) continue;
       updated.push({ store: 'entries', id: entity.id, field: field.key, from, to });
     }
   }
