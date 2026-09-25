@@ -30,7 +30,7 @@ frontmatter.
 | [0016](0016-the-library-holds-no-save-format.md) | The library holds no save format | accepted | No `toJSON`/`fromJSON`/Document; persistence is the consumer's own job |
 | [0017](0017-the-entry-answers-questions-about-itself.md) | The Entry answers questions about itself | superseded by 0024 | `Entry`/`StoredEntry` are two types; the read seam reads `entry.read(key)` |
 | [0018](0018-a-variant-is-a-rule-not-an-id-list.md) | A variant is a rule, not an id list | accepted | A Variant is a `when` rule; nothing stores which rows wear it |
-| [0019](0019-one-plugin-one-install-site.md) | One plugin, one install site | amended by 0031 | A chrome-only plugin installs on `Gantt`; a plugin with a data half installs on `Dataset` |
+| [0019](0019-one-plugin-one-install-site.md) | One plugin, one install site | amended by 0031, 0037 | A chrome-only plugin installs on `Gantt`; a plugin with a data half installs on `Dataset` |
 | [0020](0020-a-plugin-may-own-the-hierarchy.md) | A plugin may own the hierarchy | amended by 0031 | A plugin states an Entry's parent through one hierarchy-source seam; the Rollup follows |
 | [0021](0021-the-consumers-stylesheet-wins.md) | The consumer's stylesheet wins | accepted | The base stylesheet ships in one cascade layer, so an unlayered consumer rule always wins |
 | [0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md) | Core ships variants and a variant answers about itself | amended by 0023 | Core exports `bar()`/`summary()`/`diamond()`; `gantt.variantFor(entry)` is the one resolve door |
@@ -48,6 +48,7 @@ frontmatter.
 | [0034](0034-sibling-order-is-a-field.md) | Sibling order is a Field | amended by 0035 | `siblingIndex` is an ordinary core Field; a write that moves an entry renumbers its sibling group once, at commit, so one move is one undo step, and `entries.all` reads depth-first tree order by it |
 | [0035](0035-sync-writes-like-load-and-undo-stays-local.md) | Sync writes like load, and undo stays local | amended by 0036 | `entries.sync()` writes through `load`'s door, not `entries.update()`'s: a `'never'` lock does not refuse it, a derived parent cell re-rolls, no `EditExtender` runs, and unlike `load` it records no undo step and erases no Redo. Undo and redo write onto the store's current value, so an undo can overwrite a value a sync wrote since, and redo gives the server's value back |
 | [0036](0036-an-undo-keeps-a-foreign-write.md) | An undo keeps a foreign write | accepted | A replay keeps a Field value a foreign write changed since the step recorded it, and drops every Field row of that entry; `replay(cs, { overwriteForeignWrites: true })` restores last write wins; `history: false` builds no History so an app can own undo |
+| [0037](0037-a-plugins-type-argument-names-its-own-keys.md) | A plugin's type argument names its own keys | accepted | A plugin's `TProps` names the keys it reads and writes, not the consumer's; `DatasetOptions.plugins`/`GanttOptions.plugins` hold each plugin with its props erased, and `fields` is checked against the plugin's own type argument |
 
 ## The gap at 0014
 

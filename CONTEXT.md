@@ -689,7 +689,8 @@ only for a resource the plugin owns itself — a timer, a socket, a subscription
 `register*` and every `onDomEvent` already files its removal in `ctx.disposables`, so most plugins
 return nothing at all (review P4). Built-in features (tooltips, context menu, editors) are themselves
 ChromePlugins using the same `PluginContext` a third party would use — no back-door capabilities
-reserved for first-party code.
+reserved for first-party code. A plugin's type argument names the keys it reads and writes, not the
+consumer's props. Every key in its `fields` must be one of them.
 _Avoid_: GanttPlugin, DatasetPlugin (the retired pair, one install site each — ADR 0019 replaced both with one type), Extension (Extensions is the name of the source layer that runs plugins; a Plugin is the unit within it)
 
 **PluginContext**:
