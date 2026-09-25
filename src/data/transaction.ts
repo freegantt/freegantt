@@ -284,6 +284,8 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
 
   // Which hierarchy answers did core refuse? Asked once the commit is whole — both stores closed,
   // the revision bumped, `change` delivered — so a handler that writes starts a commit of its own.
+  // A throwing `change` subscriber skips it on purpose: a `finally` would let a throwing `error`
+  // handler hide that first throw, and the next commit reports every refusal that still holds.
   data.entries.reportRefusedHierarchyAnswers();
 }
 
