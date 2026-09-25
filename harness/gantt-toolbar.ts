@@ -229,6 +229,7 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
 
   gantt.on('navigationChange', refresh);
   dataset.on('change', refresh);
+  dataset.on('historyChange', refresh);
 
   refresh();
 }

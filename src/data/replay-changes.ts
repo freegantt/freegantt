@@ -240,12 +240,12 @@ function foreignWrittenIds(
   addedIds: ReadonlySet<EntryId>,
 ): ReadonlySet<EntryId> {
   const committed = data.entries.committedById();
-  const judged = new Map<EntryId, Set<FieldKey>>();
+  const judgedFieldsById = new Map<EntryId, Set<FieldKey>>();
   const foreignWritten = new Set<EntryId>();
   for (const row of changeSet.updated) {
     if (row.store !== 'entries' || row.field === 'siblingIndex' || addedIds.has(row.id)) continue;
-    const judgedFields = judged.get(row.id) ?? new Set<FieldKey>();
-    judged.set(row.id, judgedFields);
+    const judgedFields = judgedFieldsById.get(row.id) ?? new Set<FieldKey>();
+    judgedFieldsById.set(row.id, judgedFields);
     if (judgedFields.has(row.field)) continue;
     judgedFields.add(row.field);
     const entity = committed.get(row.id);
