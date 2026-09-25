@@ -67,7 +67,9 @@ export type BuiltInReportCode =
   // back on itself. Core refuses the answer, reads that Entry as a root and carries on. `by` names
   // whoever the **answer** came from (`F4`): `'consumer'` when it is the row's own authored
   // `parentId` — which a composing plugin hands straight back when it falls through — and
-  // `'plugin'` for any other answer.
+  // `'plugin'` for any other answer. Raised after the commit's own `change` fans out, so a handler
+  // that writes here starts a commit of its own — and a handler that writes on every report loops,
+  // because each new commit still holds the refusal that raised it.
   | 'unknown-parent'
   | 'hierarchy-cycle'
   // Q10, ADR 0018: two rules from one source both matched one Entry's variant. The newest paints,
