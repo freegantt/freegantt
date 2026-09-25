@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { diffEdit, foldChangeSet, invertChangeSet, mergeUpdatedRows } from './change-set.js';
+import {
+  diffEdit,
+  foldChangeSet,
+  invertChangeSet,
+  isNoOpFieldWrite,
+  isNoOpStoreRowWrite,
+  mergeUpdatedRows,
+} from './change-set.js';
 import { changeSetId, entryId } from '../model/index.js';
 import type { StoredEntry, EntryId, FieldKey, Instant } from '../model/index.js';
 import type { ProposedEdit } from './edit-extension.js';
@@ -43,6 +50,39 @@ describe('FieldRegistry.valuesEqual', () => {
   it('falls back to Object.is for a declared Field without equals', () => {
     expect(registry.valuesEqual('cost', 1, 1)).toBe(true);
     expect(registry.valuesEqual('cost', 1, 2)).toBe(false);
+  });
+});
+
+describe('isNoOpFieldWrite', () => {
+  it("a Field's own equals decides", () => {
+    const withEquals = new FieldRegistry({
+      fields: [{ key: 'tags', equals: () => true }],
+    });
+    expect(isNoOpFieldWrite('tags', ['a'], ['b'], withEquals)).toBe(true);
+  });
+
+  it('a Field with no equals compares by Object.is, never deep', () => {
+    expect(isNoOpFieldWrite('cost', { n: 1 }, { n: 1 }, registry)).toBe(false);
+    const shared = { n: 1 };
+    expect(isNoOpFieldWrite('cost', shared, shared, registry)).toBe(true);
+  });
+
+  it('an undeclared key compares by Object.is', () => {
+    const shared = { note: 'x' };
+    expect(isNoOpFieldWrite('undeclared', shared, shared, registry)).toBe(true);
+    expect(isNoOpFieldWrite('undeclared', { note: 'x' }, { note: 'x' }, registry)).toBe(false);
+  });
+});
+
+describe('isNoOpStoreRowWrite', () => {
+  it('the same object is a no-op, and an equal-looking copy is not', () => {
+    const shared = { n: 1 };
+    expect(isNoOpStoreRowWrite(shared, shared)).toBe(true);
+    expect(isNoOpStoreRowWrite({ n: 1 }, { n: 1 })).toBe(false);
+  });
+
+  it('deleting a row that is not there is a no-op', () => {
+    expect(isNoOpStoreRowWrite(undefined, undefined)).toBe(true);
   });
 });
 
