@@ -65,7 +65,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'Programmatic mutation: every edit runs in one transaction and makes one changeset',
       'Undo and redo replay the same changeset log',
       'A beforeEntryMove veto refuses a drop before a hard date line',
-      'A Dataset plugin locks an entry and refuses every edit to it',
+      'A Dataset plugin locks an entry and refuses every new edit to it, but lets an undo or a redo through',
       "A per-entry lock rule opens a locked Field for one subtree, sharper than Field.editable (#473)",
       'Plugins over the public contract: a custom bar kind, an over-budget row, a chord command, and a popup',
       'JSON export and import round-trip the whole Dataset, and Import is a full fresh start that clears undo',
