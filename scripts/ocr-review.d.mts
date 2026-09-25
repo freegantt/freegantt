@@ -27,6 +27,10 @@ export interface ReviewComment {
   severity: string;
 }
 
+/** The rows of one `ocr ... --json` list. `ocr` prints `null`, not `[]`, when a repo has no saved
+ *  session yet, and a fresh worktree always starts there. */
+export function rowsOf<TRow>(parsed: readonly TRow[] | null): readonly TRow[];
+
 /** Which repo's session to claim, and how far back it may have started. */
 export interface OwnSessionQuery {
   repoDir: string;
