@@ -73,10 +73,9 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
    Bar draws Segments, and a Segment is a reading of a Bar, never a type. Row, not line. Field is
    what a value *is*; a grid column is where a Gantt *shows* it. No scheduling framing in core descriptions — a shift roster and
    units-sold-per-week are as much the intended use as a construction plan.
-5. **Four guards scan this folder.** `scripts/check-vendor-names.mjs` fails on a vendor Gantt
-   product name, and `test/guards/retired-words.test.ts` fails on a retired word — that file holds
-   the current list and the ADR behind each one, and it is the only place the list lives. Both read
-   `docs/**`, with the ADRs out of scope. Both run in
+5. **Three guards scan this folder.** `test/guards/retired-words.test.ts` fails on a retired word —
+   that file holds the current list and the ADR behind each one, and it is the only place the list
+   lives. It reads `docs/**`, with the ADRs out of scope. It runs in
    `pnpm verify`, so prose here breaks CI exactly like code does. Add a word to that guard in the
    same commit that deletes the type it named. A name that outlives its type keeps teaching a
    concept the library dropped, and four pages here taught one for months because no guard read
@@ -179,4 +178,4 @@ again: that is a bug, and it belongs in the tracker rather than on a page here.
 - A diagram you moved still connects: widen a column and every arrow into it moves too, and free
   text below it can fall off the `viewBox`. `pnpm guards` measures the labels, not the arrows, so
   look at the diagram.
-- `pnpm --dir website build`, `pnpm guards` and `pnpm vendor-names` pass.
+- `pnpm --dir website build` and `pnpm guards` pass.

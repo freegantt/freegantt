@@ -20,7 +20,6 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `test:node` | `vitest run --project pure` | seconds |
 | `test:dom` | `vitest run --project dom` | seconds |
 | `guards` | `vitest run test/guards` + `scripts/run-rule-tests.mjs` (the `eslint/rules/*.test.cjs` RuleTester suites) + `scripts/guard-red-test.mjs` | ~10s |
-| `vendor-names` | `scripts/check-vendor-names.mjs` | <1s |
 | `sentence-length` | `scripts/check-sentence-length.mjs` — reads a declared file list, not a glob (§7.4) | <1s |
 | `disables` | `scripts/audit-disables.mjs` | <1s |
 | `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating) | ~10s |
@@ -152,7 +151,7 @@ Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so i
 
 | Hook | Runs | Rationale |
 |---|---|---|
-| `pre-commit` | `format` (auto-fix) on staged files, **except partially staged ones** + `lint` on staged `*.ts` + `vendor-names` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
+| `pre-commit` | `format` (auto-fix) on staged files, **except partially staged ones** + `lint` on staged `*.ts` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
 | `pre-push` | `pnpm verify:full` (`verify`, then `test:e2e`) | The full gate before it becomes anyone else's problem. CI runs the same command on a ready pull request (§5); this half is faster, and it also covers a push that never becomes one |
 
 ### 3.0 A partially staged file is never formatted

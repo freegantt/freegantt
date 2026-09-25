@@ -53,5 +53,5 @@ not build a second checker for it.
 `pnpm verify` does not build the site, by design — the site is a local concern. `pnpm docs:build`
 is the check, and you run it when you change a link, a sidebar, or the Docusaurus config.
 
-`test/guards/retired-words.test.ts` and `scripts/check-vendor-names.mjs` both read `docs/**`, so
+`test/guards/retired-words.test.ts` reads `docs/**`, so
 prose there breaks CI exactly like code does.
