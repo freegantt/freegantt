@@ -26,7 +26,9 @@ import { fakeServer } from './fake-server.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
+import type { BufferKindProps } from './plugins/buffer-kind.js';
 import { riskKind } from './plugins/risk-kind.js';
+import type { RiskKindProps } from './plugins/risk-kind.js';
 import { overBudgetRows } from './plugins/over-budget-rows.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
@@ -37,13 +39,12 @@ import { mountPageBrief } from './docs/page-brief.js';
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'editing-and-data');
 
 // `bufferKind()`/`riskKind()` (harness/plugins/*) each write one of their own keys, and each reads
-// its own `when`/`command` rule off a row this page marks — this Dataset must declare all four,
-// because a chrome plugin installs after Field registration closes (ADR 0011).
-interface EditingDataProps extends DemoEntryProps {
+// its own `when`/`command` rule off a row this page marks. A chrome plugin declares no Field of its
+// own, so this page adds each plugin's exported props to its own, and declares both in `fields`
+// below — a chrome plugin installs after Field registration closes (ADR 0011).
+interface EditingDataProps extends DemoEntryProps, BufferKindProps, RiskKindProps {
   buffer?: boolean;
   risk?: boolean;
-  consumed?: boolean;
-  accepted?: boolean;
   note?: string;
 }
 

@@ -356,9 +356,10 @@ export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, D
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
     aggregators?: Readonly<Record<string, Aggregator>>;
     data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
-    fields?: readonly Field[];
+    fields?: readonly (Field & {
+        key: (keyof PropsOf<TDataset> & string) | CoreFieldKey;
+    })[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
-    // Warning: (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
     hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;
     view?(ctx: TViewContext): Disposer | void;
 }
@@ -382,7 +383,7 @@ export class Dataset<TProps = unknown> {
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
-    get plugins(): readonly PluginOf<unknown, Dataset<TProps>>[];
+    get plugins(): readonly PluginOf<unknown, unknown>[];
     pluginStore<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
     // (undocumented)
     pluginStore(): Readonly<Record<PluginId, PluginStoreView<object>>>;
@@ -439,7 +440,7 @@ export interface DatasetOptions<TProps = unknown> {
         capacity?: number;
     };
     measureDuration?: DurationMeasure;
-    plugins?: readonly PluginOf<unknown, Dataset<TProps>>[];
+    plugins?: readonly PluginOf<unknown, unknown>[];
     timeZone?: string;
 }
 
@@ -1187,12 +1188,12 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(width: GridWidth);
-    hasPlugin(plugin: ChromePlugin<TProps> | PluginId): boolean;
+    hasPlugin(plugin: ChromePlugin | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
-    installPlugin(plugin: ChromePlugin<TProps>): void;
+    installPlugin(plugin: ChromePlugin): void;
     // (undocumented)
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
@@ -1206,8 +1207,8 @@ export class Gantt<TProps = unknown> {
     set overscan(o: Overscan);
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
-    get plugins(): readonly ChromePlugin<TProps>[];
-    set plugins(next: readonly ChromePlugin<TProps>[]);
+    get plugins(): readonly ChromePlugin[];
+    set plugins(next: readonly ChromePlugin[]);
     get pointerActivation(): PointerActivation;
     set pointerActivation(next: PointerActivation);
     // (undocumented)
@@ -1242,7 +1243,7 @@ export class Gantt<TProps = unknown> {
     toggleCollapse(id: RowId | string): void;
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
-    uninstallPlugin(plugin: ChromePlugin<TProps> | PluginId): void;
+    uninstallPlugin(plugin: ChromePlugin | PluginId): void;
     variantFor(entry: Entry<TProps>): ResolvedVariant;
     get variants(): readonly EntryVariant<TProps>[];
     set variants(next: readonly EntryVariant<TProps>[]);
@@ -1338,7 +1339,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
     overscan?: Overscan;
-    plugins?: readonly ChromePlugin<TProps>[];
+    plugins?: readonly ChromePlugin[];
     pointerActivation?: PointerActivation;
     rowSource?: RowSource;
     scroll?: ScrollAxes;
@@ -2531,6 +2532,10 @@ export interface ZonedTime {
     // (undocumented)
     readonly zone: string;
 }
+
+// Warnings were encountered during analysis:
+//
+// dist/api/plugin.d.ts:78:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
