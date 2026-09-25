@@ -86,4 +86,11 @@ export interface DatasetEventMap {
    *  is the `ErrorReport` itself, not a wrapper: `dataset.on('error', (report) => …)` is the whole
    *  call. `api/watch-all-errors.ts` folds this feed and the Gantt's into one subscription. */
   error: ErrorReport;
+  /** `canUndo` or `canRedo` changed (#544). It fires only when one of the two answers changes. That
+   *  includes an `undo()` or `redo()` that forgot every step it tried, which commits nothing and so
+   *  fires no `change`. No `before*` pair: it reports History's new state, and the write that moved
+   *  it already had its own `beforeChange`. A handler may not write, the same as a `change` handler.
+   *  After a commit it fires from inside that commit's `change`, before the `change` handlers an app
+   *  added. Never fires under `history: false`. */
+  historyChange: { canUndo: boolean; canRedo: boolean };
 }

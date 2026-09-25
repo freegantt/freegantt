@@ -278,10 +278,13 @@ The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving 
 | `beforeCollapseChange` | `collapseChange` |
 | — | `navigationChange` (one Viewport Batch: Preset, Fit, Range, Pan, Anchored zoom) |
 | `beforeChange` | `change` (every committed `ChangeSet`) |
+| — | `historyChange` (`canUndo` or `canRedo` changed) |
 | — | `error` (every refusal and every recovered fault; **the one name on both buses**) |
 | — | `scheduleDiagnostics` (engine findings) |
 
 `navigationChange` (S1.12) fires once per Viewport Batch after Preset, Fit, Range, Pan, or Anchored zoom actually change. There is no `before*` pair: those writes are reconfiguration (S1.9), not a vetoable gesture. Chrome reads `presetId` / `canZoom*` from the payload, or re-reads the live Gantt getters. The payload also carries `visibleSpan` — the getter's own name, because bare `span` already means `DecorationContext.span` (issue #461) — so a fire from plain scrolling, which never moves `presetId`/`fit`/`canZoom*`, still carries new information.
+
+`historyChange` (#544) is a Dataset event with the payload `{ canUndo, canRedo }`. It fires only when one of the two answers changes. That includes an `undo()` or `redo()` that forgot every step it tried: such a click commits nothing, so `change` does not fire. A toolbar's Undo and Redo buttons listen here, not on `change`. There is no `before*` pair: it reports History's new state, and the write that moved it already had its own `beforeChange`. A handler may not write, the same as a `change` handler. Under `history: false` it never fires.
 
 `gantt.range` is the whole scrollable **content** extent (`'fitDataset'` or an authored `TimeSpan`); `gantt.visibleSpan` is what is on screen right now — narrower, and it moves on pan/zoom/resize without `range` changing at all (issue #461).
 
