@@ -60,6 +60,7 @@ export type {
   ChangeSet,
   ChangeSetId,
   ChangeOrigin,
+  ReplayOptions,
   StoreName,
   PluginStoreName,
   StoreRowUpdated,

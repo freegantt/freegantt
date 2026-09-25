@@ -27,6 +27,7 @@ import type {
   ExtenderWrapper,
   HierarchySource,
   HierarchySourceWrapper,
+  ReplayOptions,
 } from '../model/index.js';
 import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
 import { now } from '../time/index.js';
@@ -56,10 +57,9 @@ export interface DatasetStateOptions {
   entries: readonly FlatEntryInput[];
   timeZone: string;
   dateOnlyEnd?: DateOnlyEndRule;
-  /** Undo/redo capacity (`plans/s2-data-core/s2.5-undo-redo.md` §1). Defaults to a 100-entry history —
-   *  `history: { capacity: 0 }` is not a supported way to disable it; construct without `data/history.ts`
-   *  for that (D-S2-23), which S2 has no consumer-facing option for yet. */
-  history?: HistoryOptions;
+  /** Undo/redo capacity (`plans/s2-data-core/s2.5-undo-redo.md` §1). Defaults to a 100-entry history.
+   *  `false` builds no History at all (#549): the app owns undo, through `replay()`. */
+  history?: HistoryOptions | false;
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** How core measures a duration (ADR 0017, Q6/J12). Defaults to `'span'`. */
@@ -170,7 +170,8 @@ export class DatasetState implements Dataset {
   #datasetRevision = 0;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
-  readonly #history: History;
+  /** `undefined` when the app owns undo (`history: false`). */
+  readonly #history: History | undefined;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
@@ -244,7 +245,7 @@ export class DatasetState implements Dataset {
     // `data()` handler (ADR 0031) — a plugin's setup write records like any other commit, and
     // `Dataset`'s constructor clears the stack after the last `data()` returns (`clearHistory`
     // below), so `canUndo` still reads `false` once `new Dataset()` returns.
-    this.#history = new History(this, options.history);
+    this.#history = options.history === false ? undefined : new History(this, options.history);
   }
 
   /** Read by `data/transaction.test.ts`/`edit-extension.test.ts` to assert on the occupant itself —
@@ -347,7 +348,7 @@ export class DatasetState implements Dataset {
    *  what un-does that — the stack `undo()` reads goes back to empty, so `canUndo` reads `false`
    *  once `new Dataset()` returns (#137). */
   clearHistory(): void {
-    this.#history.clear();
+    this.#history?.clear();
   }
 
   nextChangeSetId(): ChangeSetId {
@@ -389,24 +390,24 @@ export class DatasetState implements Dataset {
   }
 
   get canUndo(): boolean {
-    return this.#history.canUndo;
+    return this.#history?.canUndo ?? false;
   }
 
   get canRedo(): boolean {
-    return this.#history.canRedo;
+    return this.#history?.canRedo ?? false;
   }
 
   undo(): void {
-    this.#history.undo();
+    this.#history?.undo();
   }
 
   redo(): void {
-    this.#history.redo();
+    this.#history?.redo();
   }
 
   /** The write path `data/history.ts` uses, published (`plans/s2-data-core/s2b-undo-replay-seam.md`).
    *  Only `'undo'`/`'redo'` origins are legal; `'user'` throws `InvalidReplayOriginError`. */
-  replay(changeSet: ChangeSet): void {
-    replayChangeSet(this, changeSet);
+  replay(changeSet: ChangeSet, options?: ReplayOptions): void {
+    replayChangeSet(this, changeSet, options);
   }
 }

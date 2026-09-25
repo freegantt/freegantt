@@ -93,8 +93,7 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  and erases no Redo — the user's own earlier steps stay undoable across a poll. A sync that
    *  changes nothing commits nothing: no `beforeChange`, no `change`, and no undo step — the common
    *  case for a server poll that finds nothing new. A local edit the server has not seen is
-   *  overwritten, last write wins; undoing that edit later writes the value it had before the edit,
-   *  even though a sync changed it since, and redoing gives the server's value back (see
+   *  overwritten, last write wins. An undo of that edit later keeps the server's value (see
    *  `docs/11-server-data.md`). */
   sync(inputs: readonly FlatEntryInput<TProps>[]): void;
 }
