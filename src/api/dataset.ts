@@ -115,8 +115,8 @@ export interface DatasetOptions<TProps = unknown> {
    *  plugin's type argument names its own keys, not this Dataset's `TProps`, so a `Dataset<TaskProps>`
    *  installs a `DataPlugin<LockProps>` whatever `TaskProps` and `LockProps` are. The Dataset still
    *  hands itself to that plugin's `data(ctx)` typed as `Dataset<LockProps>` — `ctx.dataset` is the
-   *  plugin's own view onto the same trust boundary the class note above describes, narrower than
-   *  this Dataset's own `TProps`, never wider. */
+   *  plugin's own view onto the same trust boundary the class note above describes. It sees the
+   *  plugin's own key set, independent of this Dataset's own `TProps`. */
   plugins?: readonly PluginOf<unknown, unknown>[];
 }
 

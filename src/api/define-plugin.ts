@@ -37,9 +37,9 @@ import type { ChromePlugin, DataPlugin } from './gantt.js';
  * Pass `TProps` — `definePlugin<LockProps>({ … })` — to read and write the keys this plugin declares
  * off `ctx.dataset` and `ctx.gantt`, with no cast: `LockProps` names this plugin's own keys, not the
  * consumer's. `fields` is checked against it too, so a key `LockProps` does not name fails to
- * compile. Leave it off for a plugin that writes no Field of its own; naming it fixes the return type
- * to the arm, and leaving it off keeps whatever extra members the object declares, so a plugin that
- * publishes its own calls beside `id` (#178) keeps them.
+ * compile. Leave it off for a plugin that reads or writes no key of its own; naming it fixes the
+ * return type to the arm, and leaving it off keeps whatever extra members the object declares, so a
+ * plugin that publishes its own calls beside `id` (#178) keeps them.
  */
 export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TProps> = ChromePlugin<TProps>>(
   plugin: TPlugin,
