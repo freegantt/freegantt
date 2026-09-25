@@ -356,9 +356,10 @@ export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, D
 export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extends PluginIdentity {
     aggregators?: Readonly<Record<string, Aggregator>>;
     data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
-    fields?: readonly Field[];
+    fields?: readonly (Field & {
+        key: keyof PropsOf<TDataset> & string;
+    })[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
-    // Warning: (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
     hierarchySource?: (next: HierarchySource<PropsOf<TDataset>>) => HierarchySource<PropsOf<TDataset>>;
     view?(ctx: TViewContext): Disposer | void;
 }
@@ -2531,6 +2532,10 @@ export interface ZonedTime {
     // (undocumented)
     readonly zone: string;
 }
+
+// Warnings were encountered during analysis:
+//
+// dist/api/plugin.d.ts:77:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

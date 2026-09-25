@@ -358,4 +358,15 @@ describe('a plugin names its own keys', () => {
       });
     expect(locks).toBeDefined();
   });
+
+  it('refuses a fields key that its type argument does not name', () => {
+    // @ts-expect-error a fields key must be a key of the plugin's own props
+    definePlugin<LockProps>({ id: 'demo.typo', fields: [{ key: 'lockd' }] });
+    expect(true).toBe(true);
+  });
+
+  it('lets an untyped plugin declare any key', () => {
+    const dataset = newDataset([definePlugin({ id: 'demo.any', fields: [{ key: 'owner' }] })]);
+    expect(dataset.field('owner')).toBeDefined();
+  });
 });

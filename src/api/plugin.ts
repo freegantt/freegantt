@@ -25,8 +25,9 @@ import type { DatasetPluginContextOf } from './dataset-plugin.js';
  *  trust boundary `api/dataset.ts`'s class note describes. Falls back to a plain record when
  *  `TDataset` names no Dataset type (the default, `unknown`), so `hierarchySource` still type-checks
  *  with no `props` shape declared. The untyped `DataPlugin<unknown>` arm infers `TProps` as `unknown`
- *  too. The `unknown extends TProps` arm catches that case the same way. Not exported:
- *  `ae-forgotten-export` records it, same as `EntryEnvelope` today. */
+ *  too. The `unknown extends TProps` arm catches that case the same way. `DataPluginOf.fields`
+ *  narrows each `key` against this same answer. Not exported: `ae-forgotten-export` records it, same
+ *  as `EntryEnvelope` today. */
 type PropsOf<TDataset> = TDataset extends { entries: EntryStoreView<infer TProps> }
   ? unknown extends TProps
     ? Record<string, unknown>
@@ -93,8 +94,12 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
    *
    *  This is the one way a plugin declares: there is no `ctx.fields.register` door. A Field whose
    *  shape depends on this plugin's own options is built in the factory that returns this object —
-   *  `const costing = (opts) => ({ id: 'acme.costing', fields: [{ key: 'cost', ...opts }], data() {} })`. */
-  fields?: readonly Field[];
+   *  `const costing = (opts) => ({ id: 'acme.costing', fields: [{ key: 'cost', ...opts }], data() {} })`.
+   *
+   *  Each `key` must be one of this plugin's own props (`PropsOf<TDataset>`), so a typo such as
+   *  `{ key: 'lockd' }` on a `definePlugin<LockProps>` call fails to compile. An untyped plugin
+   *  (`definePlugin({ … })`, `TDataset` left as `unknown`) names any key. */
+  fields?: readonly (Field & { key: keyof PropsOf<TDataset> & string })[];
   /** Named Field type bundles this plugin adds, resolved before any Field naming one (D-S4-3). */
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Aggregators this plugin adds, resolved before any Field naming one in `rollUp`. */
