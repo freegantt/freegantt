@@ -30,4 +30,5 @@ Watch the result with `pnpm pr-wait <n>`. Read `docs/agents/ci.md` for the verdi
 
 Write the title and body as the repo's own. Describe the change. Name no tool as author, co-author,
 or generator: no "Made with Claude", no "Generated with Cursor", no AI `Co-authored-by` trailer,
-no robot emoji.
+no robot emoji. `.githooks/commit-msg` drops those strings from a commit. `pnpm open-pr` refuses
+them in the title and body. They match the trailers Cursor, Claude Code, Copilot, and Codex append.
