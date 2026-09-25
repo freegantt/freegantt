@@ -17,19 +17,22 @@ Quick or simple work stays in your own session. Read the file, make the edit, ru
 
 | The job | Agent | Model |
 |---|---|---|
-| Review, critique, gate check, second opinion — any work already done | `reviewer-planner` | best Opus, high effort |
-| Plan new work — implementation strategy, design, task breakdown — before code exists | `reviewer-planner` | best Opus, high effort |
-| Code changes, tests, refactors, investigations that end in a change | `implementer` | the default (Sonnet, medium effort) |
-| Mechanical rename, typo, dead link, stale path — no judgment left in it | `simple-editor` | Haiku |
-| Split a large job, dispatch its parts, merge the results | you, the current session — `work-coordinator` only if the user explicitly asks for it | best Opus, medium effort |
-| Broad read-only search across many files, when you want the conclusion only | `Explore` | — |
+| Review, critique, gate check, second opinion — any work already done | `reviewer` | Opus 1M, medium effort |
+| Plan new work — implementation strategy, design, task breakdown — before code exists | `planner` | Opus 1M, high effort |
+| Code changes, tests, refactors, investigations that end in a change | `implementer` | Sonnet 1M, medium effort |
+| Large mechanical sweep — a rename or a docblock rewrite across about 10+ files, no judgment left in it | `simple-editor` | Haiku |
+| Large read-only lookup — about 10+ files or 5+ searches | `code-finder` | Haiku |
+| Split a large job, dispatch its parts, merge the results | you, the current session — `work-coordinator` only if the user explicitly asks for it | the owner's choice |
 
-Each agent names its model by alias (`opus`, `sonnet`, `haiku`), so every dispatch gets the current release of that tier.
+Do a small rename, docblock edit, or lookup in your own session. A dispatch costs more than it saves there.
 
-Two rules decide the hard cases:
+Each agent names its model by alias (`opus`, `sonnet`, `haiku`), so every dispatch gets the current release of that tier. The agent file owns the model and the effort. Leave the `model` parameter off every dispatch.
+
+Three rules decide the hard cases:
 
 - **Judgment goes up, not down.** A task that needs a decision — a name to invent, a design to weigh, a test that now fails — is never `simple-editor` work. When you are unsure which of two tiers fits, take the higher one.
-- **Review is not automatic.** `reviewer-planner` is best-Opus, high-effort — expensive, and not a step every dispatch earns. Send work to it only when the user asks for a review, or when the finished work is a massive or high-risk change (a multi-file slice, a public API surface, a locked-decision area). An ordinary small change reported as done does not need a review pass first.
+- **Review is not automatic.** `reviewer` runs on Opus — expensive, and not a step every dispatch earns. Send work to it only when the user asks for a review, or when the finished work is a massive or high-risk change (a multi-file slice, a public API surface, a locked-decision area). An ordinary small change reported as done does not need a review pass first.
+- **One `code-finder` per session.** Start it at the first large lookup, and record its id. Send every later lookup to that same agent with `SendMessage`. A fresh one reads the codebase again with no cache. Retire it after 45 minutes with no activity, or when it passes 200k, and start a fresh one.
 
 ## Write the dispatch
 
