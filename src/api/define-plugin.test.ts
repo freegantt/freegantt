@@ -365,6 +365,15 @@ describe('a plugin names its own keys', () => {
     expect(true).toBe(true);
   });
 
+  it('a typed plugin overrides a core Field in its own fields list', () => {
+    const overridesStart = definePlugin<LockProps>({
+      id: 'demo.overrides-start',
+      fields: [{ key: 'start', editable: 'api' }],
+      data() {},
+    });
+    expect(overridesStart).toBeDefined();
+  });
+
   it('lets an untyped plugin declare any key', () => {
     const dataset = newDataset([definePlugin({ id: 'demo.any', fields: [{ key: 'owner' }] })]);
     expect(dataset.field('owner')).toBeDefined();
