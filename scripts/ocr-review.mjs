@@ -54,6 +54,12 @@ const SESSION_START_GRACE_MILLISECONDS = 2_000;
 
 export const EXIT_CODE = { pass: 0, partial: 1, stalled: 2, failed: 3 };
 
+/** The rows of one `ocr ... --json` list. `ocr` prints `null`, not `[]`, when a repo has no saved
+ *  session yet, and a fresh worktree always starts there. */
+export function rowsOf(parsed) {
+  return parsed ?? [];
+}
+
 /** The newest session for `repoDir` that started at or after `notBefore` — the run this script just
  *  launched. Compares parsed instants, not the raw strings: `notBefore` always carries millisecond
  *  digits (`toISOString()`), but `ocr`'s Go backend marshals RFC3339Nano and trims trailing zeros
@@ -227,9 +233,9 @@ async function main() {
   }
 
   const readSessions = () =>
-    ocrJson(['session', 'list', '--json', '--repo', root, '--limit', '50']).map(normalizeSession);
+    rowsOf(ocrJson(['session', 'list', '--json', '--repo', root, '--limit', '50'])).map(normalizeSession);
   const readComments = (sessionId) =>
-    ocrJson(['session', 'comments', sessionId, '--json', '--repo', root]).map(normalizeComment);
+    rowsOf(ocrJson(['session', 'comments', sessionId, '--json', '--repo', root])).map(normalizeComment);
 
   /** One poll of the running session: fresh session and comment rows, or `undefined` when the read
    *  itself failed or the session is momentarily missing from the listing. Both are transient —
