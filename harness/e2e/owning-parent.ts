@@ -56,8 +56,8 @@ function refreshHistoryButtons(): void {
 
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
-  refreshHistoryButtons();
 });
+dataset.on('historyChange', refreshHistoryButtons);
 
 undoBtn.addEventListener('click', () => {
   attemptMutation(() => dataset.undo());

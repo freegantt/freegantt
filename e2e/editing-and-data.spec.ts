@@ -213,6 +213,8 @@ test("a sync overwrites a local rename it never saw, and undo keeps the server's
 
   await page.getByLabel('Undo').click();
   await expect(bar).toHaveText('Renamed by the server');
+  // The undo forgot the only step and committed nothing; `historyChange` still turns the button off.
+  await expect(page.getByLabel('Undo')).toBeDisabled();
   expect(nameBefore).not.toBe('Renamed by the server');
 });
 

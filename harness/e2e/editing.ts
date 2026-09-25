@@ -133,8 +133,8 @@ lockEntryCheckbox.addEventListener('change', () => {
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
   renderSelection();
-  refreshHistoryButtons();
 });
+dataset.on('historyChange', refreshHistoryButtons);
 
 // The page runs the library's own commands rather than calling `dataset.undo()` itself, so the
 // buttons and a future default chord are one implementation, not two that can drift or double-fire
