@@ -1075,3 +1075,58 @@ describe('EditRequest.addedEntryIds / removedEntryIds (#235)', () => {
     expect(seen[0]!.removedEntryIds.size).toBe(0);
   });
 });
+
+describe('the refused hierarchy answer report runs once the commit is whole', () => {
+  function ghostDataset(): DatasetState {
+    return new DatasetState({
+      entries: [{ id: 'a', name: 'a', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      // Answers 'c' with an id no Entry holds — a refused answer the added row below raises.
+      hierarchySourceWrappers: [() => (entry) => (entry.id === 'c' ? 'nobody' : undefined)],
+    });
+  }
+
+  it("an error handler's own write reaches change after the commit that raised the report", () => {
+    const state = ghostDataset();
+    const changes: ChangeSet[] = [];
+    state.on('change', ({ changeSet }) => {
+      changes.push(changeSet);
+    });
+    let handled = false;
+    state.on('error', () => {
+      if (handled) return;
+      handled = true;
+      state.entries.update(entryId('c'), { name: 'C2' });
+    });
+
+    state.entries.add({ id: 'c', name: 'C', start: 0, end: 1 });
+
+    expect(changes).toHaveLength(2);
+    expect(changes[0]!.added.map((row) => row.entity.id)).toEqual([entryId('c')]);
+    expect(fieldRowsOf(changes[1]!).map((row) => [row.field, row.to])).toEqual([['name', 'C2']]);
+  });
+
+  it('a throwing error handler still leaves the whole commit applied and recorded', () => {
+    const state = ghostDataset();
+    const lock = state.pluginStores.reserve<{ locked: true }>('demo.lock');
+    const changes: ChangeSet[] = [];
+    state.on('change', ({ changeSet }) => {
+      changes.push(changeSet);
+    });
+    state.on('error', () => {
+      throw new Error('handler bug');
+    });
+
+    expect(() =>
+      state.transaction(() => {
+        state.entries.add({ id: 'c', name: 'C', start: 0, end: 1 });
+        lock.set(entryId('c'), { locked: true });
+      }),
+    ).toThrow('handler bug');
+
+    expect(state.entries.get(entryId('c'))).toBeDefined();
+    expect(lock.get(entryId('c'))).toEqual({ locked: true });
+    expect(changes).toHaveLength(1);
+    expect(state.canUndo).toBe(true);
+  });
+});
