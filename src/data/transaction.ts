@@ -64,6 +64,9 @@ export interface TransactionalEntryStore {
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** Writes Field rows into committed entries with no `beforeChange`/`change` and no history. */
   writeCommittedFieldRows(updated: readonly FieldUpdated[]): void;
+  /** Raises every hierarchy answer core refused for the committed rows — see
+   *  `EntryStore.reportRefusedHierarchyAnswers`. */
+  reportRefusedHierarchyAnswers(): void;
 }
 
 /** What `runTransaction` reads off the plugin stores (D-S5-24) — the same three transaction steps
@@ -221,7 +224,9 @@ function endStores(data: TransactionData, token: TxToken, changeSet: ChangeSet |
  * diffing, no extension hook, and no rollup: the caller hands over the exact rows to write. `runTransaction`
  * uses this once it has built a changeset from a body; `data/history.ts` uses it directly for undo/redo,
  * which is what "neither re-runs the extension hook" (`s2.5-undo-redo.md` §2.2) means in code — replaying
- * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpFields`.
+ * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpFields`. The tail,
+ * once `change` has fanned out, raises the hierarchy answers core refused for this commit — a handler
+ * that writes in response starts a commit of its own, after this one.
  */
 export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
   if (data.notifying) {
@@ -276,6 +281,12 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   } finally {
     data.notifying = false;
   }
+
+  // Which hierarchy answers did core refuse? Asked once the commit is whole — both stores closed,
+  // the revision bumped, `change` delivered — so a handler that writes starts a commit of its own.
+  // A throwing `change` subscriber skips it on purpose: a `finally` would let a throwing `error`
+  // handler hide that first throw, and the next commit reports every refusal that still holds.
+  data.entries.reportRefusedHierarchyAnswers();
 }
 
 /**

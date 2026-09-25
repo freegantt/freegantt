@@ -41,7 +41,10 @@ export class History {
   // Set once this attempt's own replay has landed a write — `#onChange` moved the cursor for it.
   // A later `change` subscriber can still throw after that write lands; `#unwindOnThrow` reads this
   // to tell a real, landed write apart from an attempt that never wrote anything, so it never undoes
-  // a forget the landed write already made permanent.
+  // a forget the landed write already made permanent. `undo`/`redo`'s own loop reads it too, to
+  // decide whether their replay landed: an `error` handler that writes during the replay records its
+  // own step (`#record`, on the `'user'` write it makes), which moves the cursor right back to where
+  // it started, so the cursor alone can no longer tell a landed replay from a moot one.
   #writeLandedThisAttempt = false;
   // What the last `historyChange` told its handlers, so an answer that did not change fires nothing.
   #announced = { canUndo: false, canRedo: false };
@@ -74,9 +77,8 @@ export class History {
     this.#unwindOnThrow(() => {
       while (this.canUndo) {
         const index = this.#cursor - 1;
-        const cursorBefore = this.#cursor;
         this.#replayOwnStep(invertChangeSet(this.#stack[index]!));
-        if (this.#cursor !== cursorBefore) return; // the write landed; #onChange already moved the cursor
+        if (this.#writeLandedThisAttempt) return; // #onChange already moved the cursor for the write
         this.#forgetStep(index); // nothing was left to write — try the step below it
       }
     });
@@ -91,9 +93,8 @@ export class History {
     this.#unwindOnThrow(() => {
       while (this.canRedo) {
         const index = this.#cursor;
-        const cursorBefore = this.#cursor;
         this.#replayOwnStep({ ...this.#stack[index]!, origin: 'redo' });
-        if (this.#cursor !== cursorBefore) return;
+        if (this.#writeLandedThisAttempt) return;
         this.#forgetStep(index);
       }
     });

@@ -299,8 +299,11 @@ export class EntryStore implements EntryStoreContract {
    *  posture the construction Rollup's own `derived-values-dropped` report already takes (ADR 0013,
    *  decision 5).
    *
-   *  The raise lands after the write set closes and before `change` fans out, so a handler that
-   *  writes in response is outside the notification window `data/` forbids a mutation in. */
+   *  `DatasetState`'s constructor calls this once, directly, right after the construction Rollup.
+   *  `commitChangeSet` (`data/transaction.ts`) calls it once, on every later commit — after `change`
+   *  fans out, once both stores are closed and the revision is bumped, so a handler that writes in
+   *  response is outside the notification window `data/` forbids a mutation in, and starts a commit
+   *  of its own. */
   reportRefusedHierarchyAnswers(): void {
     for (const report of this.#hierarchy().refused) {
       this.#raiseError(report, () => console.warn(`FreeGantt: ${report.message}`));
@@ -782,8 +785,8 @@ export class EntryStore implements EntryStoreContract {
     // Construction's own Rollup shape (`applyConstructionRollUp`, in `transaction.ts` — `rollUpFields`
     // itself stays a leaf only that file and the commit path may import, `rollup-is-removable`):
     // no `pending`, so the pass walks `byId` as the whole tree. Refusals over this batch's hierarchy
-    // answers are not raised here: `endTransaction` below re-derives and raises them once the swap
-    // lands, the same door every other commit already raises through.
+    // answers are not raised here: `commitChangeSet` raises them once the swap lands, the same door
+    // every other commit already raises through.
     const rollupUpdated = rollUpFreshBatch(runner, byId, parents, source);
     // A batch that authors a rolling-up Field on a row that also has children in the same batch gets
     // it dropped here — one aggregate `derived-values-dropped` report for the whole load, the same
@@ -1005,12 +1008,10 @@ export class EntryStore implements EntryStoreContract {
   /** Applies the committed `ChangeSet` (`undefined` for an empty net effect or a vetoed commit — the
    *  write set is simply discarded) and closes the write set.
    *
-   *  Did the call apply a change? `runTransaction` also calls this once with `undefined` to discard
-   *  the body's own write-set overlay, ahead of a second, real call through `commitChangeSet`
-   *  (`data/transaction.ts`). A discard applies nothing, so it reports no refusal — only the call
-   *  that lands a revision does. The report itself waits for the write set to close: an `error`
-   *  handler that reads the tree during the raise must see the checked answer, not the open write
-   *  set's raw one. */
+   *  `runTransaction` also calls this once with `undefined` to discard the body's own write-set
+   *  overlay, ahead of a second, real call through `commitChangeSet` (`data/transaction.ts`). Raising
+   *  the refused-answer report is `commitChangeSet`'s own job now, once the whole commit — both
+   *  stores, the revision, `change` — is done; this method never calls it. */
   endTransaction(_token: TxToken, changeSet: ChangeSet | undefined): void {
     if (changeSet) {
       for (const { entity } of changeSet.removed) {
@@ -1021,7 +1022,6 @@ export class EntryStore implements EntryStoreContract {
       this.#revision.set(this.#revision.get() + 1);
     }
     this.#writeSet = null;
-    if (changeSet) this.reportRefusedHierarchyAnswers();
   }
 
   /** Entry rows only. A changeset also carries plugin-store rows (D-S5-24); `data/plugin-store.ts`
