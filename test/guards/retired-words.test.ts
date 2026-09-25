@@ -1,8 +1,8 @@
 // D-S1.11-3: `Project` (ADR 0004) and `host` (D-S1.11-6, #64) are retired words — both used to smuggle
 // two concepts under one name, the same "chart" failure #7 already named once. `EntryKind` (ADR 0017)
 // and `DatasetDocument` (ADR 0016) are retired for a second reason: the type each one named is gone,
-// and prose that still names it teaches a concept the library does not have. This guard, shaped like
-// `scripts/check-vendor-names.mjs`, keeps any of them from creeping back into prose or an identifier.
+// and prose that still names it teaches a concept the library does not have. This guard keeps any
+// of them from creeping back into prose or an identifier.
 //
 // `docs/` is in scope, because that is where the last four escapes happened: `EntryKind` outlived
 // its type on four `docs/architecture/` pages, and no guard fired. The site serves these files

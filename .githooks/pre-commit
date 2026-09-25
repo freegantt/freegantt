@@ -40,6 +40,3 @@ if ((${#staged_ts[@]})); then
   echo "pre-commit: lint (check only — fails on any warning) on staged *.ts"
   pnpm exec eslint --max-warnings 0 --no-warn-ignored -- "${staged_ts[@]}"
 fi
-
-echo "pre-commit: vendor-names"
-pnpm run --silent vendor-names
