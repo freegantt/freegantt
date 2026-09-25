@@ -62,7 +62,7 @@ Never cite a spec label such as `D-S5-31`, `J54` or `Q3` in a code comment, a te
 - The invariants table (`plans/01` §11, I1–I15) is the review checklist; every invariant maps to a CI job.
 - Rename a class, a type or a function with `pk-rename-symbol`. It renames through the language service, so it follows re-exports and aliases, and it skips prose. Then run `pnpm typecheck`. A same-named string in a comment or a doc stays as it is — decide those separately.
 - **CI and the verification gate**: open `docs/agents/ci.md` to run the gate before hand-off, and to troubleshoot a failing or truncated check.
-- **Pull requests**: open `docs/agents/pull-requests.md` when you create a pull request or mark one ready.
+- **Pull requests**: use the `pull-requests` skill when you create a pull request, mark one ready, or watch its CI. Never sign a pull request or a commit with an AI tool.
 - **Reviews**: open `docs/agents/review.md` before you review a branch, and before you apply a fix a plan or review proposes. It names `ocr` as the branch reviewer and gives the one command. "ocr review" and "code review" both mean that doc — read it first, and never read `ocr` as a typo.
 - **Context budget**: open `docs/agents/context-budget.md` before you re-read a hot file or a scratchpad artifact in a long session.
 - **Headroom**: a proxy compresses tool output, and it can drop words. When you need the exact text, call `mcp__headroom__headroom_retrieve` with the `hash=` from the compression marker.
