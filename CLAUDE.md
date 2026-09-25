@@ -63,4 +63,5 @@ Comment a seam with the question it answers, not the mechanism it uses. A reader
 - **Pull requests**: open `docs/agents/pull-requests.md` when you create a pull request or mark one ready.
 - **Reviews**: open `docs/agents/review.md` before you review a branch, and before you apply a fix a plan or review proposes. It names `ocr` as the branch reviewer and gives the one command. "ocr review" and "code review" both mean that doc — read it first, and never read `ocr` as a typo.
 - **Context budget**: open `docs/agents/context-budget.md` before you re-read a hot file or a scratchpad artifact in a long session.
+- **Headroom**: a proxy compresses tool output, and it can drop words. When you need the exact text, call `mcp__headroom__headroom_retrieve` with the `hash=` from the compression marker.
 
