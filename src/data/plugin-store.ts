@@ -21,6 +21,7 @@ import type {
   StoreRowUpdated,
 } from '../model/index.js';
 import { MutationDuringExtensionHookError, entryId } from '../model/index.js';
+import { isNoOpStoreRowWrite } from './change-set.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 
@@ -170,9 +171,8 @@ export class PluginStores {
 
   /**
    * Every row this transaction changed, plus one removal row per plugin row an entry removal orphans.
-   * A staged write that matches what is already stored yields no row, the same equality rule
-   * `diffEdit` applies to a Field — identity (`Object.is`), because a store row is an opaque object
-   * this library never walks.
+   * A staged write that matches what is already stored yields no row — `isNoOpStoreRowWrite` decides,
+   * the same function replay asks.
    */
   pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[] {
     const rows: StoreRowUpdated[] = [];
@@ -181,7 +181,7 @@ export class PluginStores {
       const committed = this.#committed.get(name);
       for (const [id, to] of stagedRows) {
         const from = committed?.get(id);
-        if (Object.is(from, to)) continue;
+        if (isNoOpStoreRowWrite(from, to)) continue;
         rows.push({ store: name, id, from, to });
       }
     }
@@ -191,7 +191,7 @@ export class PluginStores {
     for (const [name, committed] of this.#committed) {
       for (const id of removedEntryIds) {
         const from = committed.get(id);
-        if (from === undefined) continue;
+        if (isNoOpStoreRowWrite(from, undefined)) continue;
         if (this.#writeSet?.get(name)?.has(id)) continue;
         rows.push({ store: name, id, from, to: undefined });
       }
