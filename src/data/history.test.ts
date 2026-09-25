@@ -561,6 +561,36 @@ describe('History', () => {
     expect(state.canRedo).toBe(true);
   });
 
+  it('an error handler that writes during an undo records its write as a new undo step', () => {
+    const state = new DatasetState({
+      entries: [{ id: 'a', name: 'A', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      // Answers 'c' with an id no Entry holds — a refused answer every later commit re-reports,
+      // undo/redo commits included.
+      hierarchySourceWrappers: [() => (entry) => (entry.id === 'c' ? 'nobody' : undefined)],
+    });
+    let armed = false;
+    state.on('error', () => {
+      if (!armed) return;
+      armed = false;
+      state.entries.update('c', { name: 'from the handler' });
+    });
+
+    state.entries.add({ id: 'c', name: 'C', start: 0, end: 1 }); // step 1 — handler disarmed, no write
+    state.entries.update('a', { name: 'A2' }); // step 2
+
+    armed = true;
+    state.undo(); // undoes step 2; the report it re-raises writes step 3
+
+    expect(state.entries.get('a')?.name).toBe('A');
+    expect(state.entries.get('c')?.name).toBe('from the handler');
+    expect(state.canUndo).toBe(true);
+    expect(state.canRedo).toBe(false);
+
+    state.undo(); // undoes step 3 — the handler's own write
+    expect(state.entries.get('c')?.name).toBe('C');
+  });
+
   it('undo of a declared props key removes the key instead of writing undefined onto props', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
