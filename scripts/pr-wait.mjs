@@ -11,9 +11,11 @@
 // shared concurrency group.
 //
 // So this script never reads check suites. It lists CI workflow runs for the pull request's head
-// commit, ignores skipped and cancelled rows, and gives the waiting to `gh run watch`. Every run
-// prints exactly one verdict line, and it is the last line. Green needs that exact line. A run a
-// signal kills has no verdict line, and reads as unproven, never as green.
+// commit, ignores skipped and cancelled rows, and gives the waiting to `gh run watch`. A watched
+// run that then concludes skipped on a ready pull request is the draft-time job finishing; the
+// script waits for a newer run on that commit instead of reporting the skip as the gate (#561).
+// Every run prints exactly one verdict line, and it is the last line. Green needs that exact line.
+// A run a signal kills has no verdict line, and reads as unproven, never as green.
 //
 // Two ways CI reports nothing while looking fine, both from docs/04 §5.2:
 //   - A draft runs nothing, by design (#255). That is not a pass.
@@ -49,14 +51,27 @@ export function isLiveGateRun(run, headSha) {
 /**
  * The newest live gate run for this head.
  * `gateRunForHead(runs, pr.headSha)` reads "the gate run for this head".
+ * `besidesId` drops a run we already watched: a draft-time skip can still look
+ * live in a stale list while a newer ready run is the gate.
  */
-export function gateRunForHead(runs, headSha) {
+export function gateRunForHead(runs, headSha, { besidesId } = {}) {
   let newest;
   for (const run of runs) {
+    if (besidesId !== undefined && run.databaseId === besidesId) continue;
     if (!isLiveGateRun(run, headSha)) continue;
     if (newest === undefined || run.createdAt > newest.createdAt) newest = run;
   }
   return newest;
+}
+
+/**
+ * True when a watched run skipped on a ready pull request.
+ * That skip is the draft-time job finishing; the ready gate is a newer run on
+ * the same commit, often a few seconds later.
+ * `shouldWaitForNewerRunAfterSkip(fresh, { isDraft: pr.isDraft })`
+ */
+export function shouldWaitForNewerRunAfterSkip(run, { isDraft }) {
+  return run.conclusion === 'skipped' && !isDraft;
 }
 
 function gh(argv, options = {}) {
@@ -205,16 +220,16 @@ if (isMain) {
     return ghJson(['run', 'view', String(id), '--json', RUN_JSON_FIELDS]);
   }
 
-  function waitForLiveRun(timeoutSeconds) {
+  function waitForLiveRun(timeoutSeconds, { besidesId } = {}) {
     const deadline = elapsed() + timeoutSeconds;
-    let run = gateRunForHead(listPullRequestRuns(), headSha);
+    let run = gateRunForHead(listPullRequestRuns(), headSha, { besidesId });
     while (run === undefined && elapsed() < deadline) {
       console.log(
         `pr-wait: #${pr.number} shows no live gate run yet — waiting for one to queue ` +
           `(${elapsed()}s, ${timeoutSeconds}s budget).`,
       );
       sleepSeconds(POLL_SECONDS);
-      run = gateRunForHead(listPullRequestRuns(), headSha);
+      run = gateRunForHead(listPullRequestRuns(), headSha, { besidesId });
     }
     return run;
   }
@@ -246,9 +261,20 @@ if (isMain) {
       console.log(
         `pr-wait: run ${run.databaseId} was cancelled — waiting for a replacement pull_request run.`,
       );
-      run = waitForLiveRun(REPLACEMENT_TIMEOUT_SECONDS);
+      run = waitForLiveRun(REPLACEMENT_TIMEOUT_SECONDS, { besidesId: fresh.databaseId });
       if (run === undefined) failNoLiveRun();
       continue;
+    }
+
+    if (shouldWaitForNewerRunAfterSkip(fresh, { isDraft: pr.isDraft })) {
+      console.log(`pr-wait: run ${run.databaseId} skipped — waiting for the ready gate run on this commit.`);
+      const replacement = waitForLiveRun(REPLACEMENT_TIMEOUT_SECONDS, {
+        besidesId: fresh.databaseId,
+      });
+      if (replacement !== undefined) {
+        run = replacement;
+        continue;
+      }
     }
 
     const summary = summarizeGateRun(fresh, {
