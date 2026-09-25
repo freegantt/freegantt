@@ -90,9 +90,9 @@ step in the same call, so one click always lands a step when any undoable one re
   `entries.remove()` does. Any child the sync placed under it since goes with it.
 
 When every remaining step is skipped this way, the `undo()` or `redo()` call writes nothing and
-fires no `change`. `canUndo`/`canRedo` still flip, but with no event to announce it. Read
-`canUndo`/`canRedo` again after your own `undo()`/`redo()` call returns, rather than waiting on
-`change`, if a toolbar must stay correct through that case.
+fires no `change`. `historyChange` still fires when `canUndo` or `canRedo` changes, so a toolbar
+that listens to it stays correct (see
+[`docs/05-consumer-api.md`](05-consumer-api.md#undo-redo-and-the-change-event)).
 
 ## No parent loop, no dangling parent, ever
 

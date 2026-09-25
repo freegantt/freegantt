@@ -43,6 +43,8 @@ export class History {
   // to tell a real, landed write apart from an attempt that never wrote anything, so it never undoes
   // a forget the landed write already made permanent.
   #writeLandedThisAttempt = false;
+  // What the last `historyChange` told its handlers, so an answer that did not change fires nothing.
+  #announced = { canUndo: false, canRedo: false };
 
   constructor(data: TransactionData, options: HistoryOptions = {}) {
     this.#data = data;
@@ -78,6 +80,8 @@ export class History {
         this.#forgetStep(index); // nothing was left to write — try the step below it
       }
     });
+    // A click that only forgot steps committed nothing, so no `change` ran to announce it.
+    this.#announceHistoryChange();
   }
 
   /** Re-applies the step just above the cursor exactly as recorded, with `origin: 'redo'`. A no-op
@@ -93,6 +97,7 @@ export class History {
         this.#forgetStep(index);
       }
     });
+    this.#announceHistoryChange();
   }
 
   /** Runs `attempt`, which may call `#forgetStep` one or more times before either landing a write or
@@ -181,6 +186,7 @@ export class History {
         throw new Error(`History: no rule for origin "${String(unhandled)}"`);
       }
     }
+    this.#announceHistoryChange();
   };
 
   /** A step whose replay wrote nothing (`undo`/`redo`'s own loop, #517): splice it out of the stack,
@@ -203,6 +209,23 @@ export class History {
   clear(): void {
     this.#stack.length = 0;
     this.#cursor = 0;
+    this.#announceHistoryChange();
+  }
+
+  /** Fires `historyChange` when `canUndo` or `canRedo` differs from what the last one said (#544).
+   *  A handler may not write, the same rule a `change` handler follows, so `notifying` is set for the
+   *  span of the emit. */
+  #announceHistoryChange(): void {
+    const { canUndo, canRedo } = this;
+    if (canUndo === this.#announced.canUndo && canRedo === this.#announced.canRedo) return;
+    this.#announced = { canUndo, canRedo };
+    const wasNotifying = this.#data.notifying;
+    this.#data.notifying = true;
+    try {
+      this.#data.bus.emit('historyChange', { canUndo, canRedo });
+    } finally {
+      this.#data.notifying = wasNotifying;
+    }
   }
 
   /** A new user edit while the cursor sits below the top clears everything above it (§2.2) — that is

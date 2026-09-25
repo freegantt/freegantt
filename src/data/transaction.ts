@@ -99,8 +99,8 @@ export interface TransactionData {
    *  how deeply a write is nested is not a permission. */
   openTransactions: number;
   /** Set while `beforeChange`/`change` handlers are fanning out; a transaction started while this is
-   *  `true` throws before running its body (D-S2-9, D-S2-25). Only `runTransaction` reads or writes
-   *  this. */
+   *  `true` throws before running its body (D-S2-9, D-S2-25). `runTransaction` and `commitChangeSet`
+   *  read and write this; `data/history.ts` also sets it while `historyChange` handlers run. */
   notifying: boolean;
   /** Set while the extension hook's current occupant is running (#323). A nested write through the
    *  store does not join the hook's own transaction — `openTransactions` is already back to 0 by the
