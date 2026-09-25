@@ -72,6 +72,13 @@ describe('isNoOpFieldWrite', () => {
     expect(isNoOpFieldWrite('undeclared', shared, shared, registry)).toBe(true);
     expect(isNoOpFieldWrite('undeclared', { note: 'x' }, { note: 'x' }, registry)).toBe(false);
   });
+
+  it('a computed Field write is always a no-op, because it has no stored value', () => {
+    const withComputed = new FieldRegistry({
+      fields: [{ key: 'shout', compute: (row) => String(row.name).toUpperCase() }],
+    });
+    expect(isNoOpFieldWrite('shout', 'A', 'X', withComputed)).toBe(true);
+  });
 });
 
 describe('isNoOpStoreRowWrite', () => {
