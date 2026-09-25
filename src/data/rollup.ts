@@ -232,7 +232,8 @@ export function rollUpFields(
   // `depthOf` below run forever. The committed half is the store's own index, already checked and
   // memoized per revision (`F6`) — this pass reads it rather than walking the whole Dataset a
   // second time to reach the same answer. Nothing is reported from either half: the effective tree
-  // is one no commit has landed yet, and the store raises the committed one's refusals itself.
+  // is one no commit has landed yet, and the commit raises the committed one's refusals once it
+  // lands.
   const parentOfPrior = parentIdIn(tree.committedParents);
   // The store's committed index already holds the right answer when this commit cannot have moved a
   // row (#421 C4): `entries` and `committed` then share the same structure, so re-deriving either

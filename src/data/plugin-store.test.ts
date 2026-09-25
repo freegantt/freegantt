@@ -326,3 +326,51 @@ describe('a plugin-store write during the extension hook', () => {
     expect(thrown.mock.calls[0]?.[0]).toBeInstanceOf(MutationDuringExtensionHookError);
   });
 });
+
+describe('a plugin-store write from an error handler during a refused-answer report', () => {
+  function newGhostState(): DatasetState {
+    return new DatasetState({
+      entries: [{ id: 'a', name: 'A' }],
+      timeZone: 'UTC',
+      // Answers 'c' with an id no Entry holds — a refused answer the added row below raises.
+      hierarchySourceWrappers: [() => (entry) => (entry.id === 'c' ? 'nobody' : undefined)],
+    });
+  }
+
+  it('lands the row in a commit of its own, after the commit that raised the report', () => {
+    const state = newGhostState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const committed = recordChangeSets(state);
+    let handled = false;
+    state.on('error', () => {
+      if (handled) return;
+      handled = true;
+      lock.set('c', { locked: true });
+    });
+
+    state.entries.add({ id: 'c', name: 'C' });
+
+    expect(lock.get('c')).toEqual({ locked: true });
+    expect(committed).toHaveLength(2);
+    expect(committed[0]!.added.map((row) => row.entity.id)).toEqual(['c']);
+    expect(storeRowsOf(committed[1]!)).toEqual([
+      { store: LOCK_STORE, id: entryId('c'), from: undefined, to: { locked: true } },
+    ]);
+  });
+
+  it('a read during the report sees the row the commit just wrote', () => {
+    const state = newGhostState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    let seen: LockRow | undefined;
+    state.on('error', () => {
+      seen = lock.get('c');
+    });
+
+    state.transaction(() => {
+      state.entries.add({ id: 'c', name: 'C' });
+      lock.set('c', { locked: true });
+    });
+
+    expect(seen).toEqual({ locked: true });
+  });
+});
