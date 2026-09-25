@@ -21,6 +21,36 @@ import type { FieldRegistry } from './fields/field-registry.js';
 import { renumberSiblingGroups } from './sibling-order.js';
 import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
 
+/**
+ * Call: `isNoOpFieldWrite(row.field, current, row.to, data.fields)`.
+ *
+ * Does writing `to` where the Field now holds `from` leave its stored value as it is? The commit
+ * path, replay, the Rollup and sync all ask this before they emit a Field row, so none of them can
+ * disagree on what a write changes. A Field's own `equals` answers. Any other key compares by
+ * `Object.is`. A computed Field has no stored value, so every write to it is a no-op.
+ */
+export function isNoOpFieldWrite(
+  field: FieldKey,
+  from: unknown,
+  to: unknown,
+  fields: FieldRegistry,
+): boolean {
+  const declared = fields.get(field);
+  if (declared !== undefined && 'compute' in declared) return true;
+  return fields.valuesEqual(field, from, to);
+}
+
+/**
+ * Call: `isNoOpStoreRowWrite(committed?.get(id), to)`.
+ *
+ * Does writing `to` where a plugin store row now holds `from` leave the row as it is? Identity only
+ * (`Object.is`): a store row is an opaque object this library never walks. `undefined` on either
+ * side means "no row", so deleting a row that is not there is a no-op too.
+ */
+export function isNoOpStoreRowWrite(from: unknown, to: unknown): boolean {
+  return Object.is(from, to);
+}
+
 function pushRow(
   rows: FieldUpdated[],
   seen: Set<string>,
@@ -32,7 +62,7 @@ function pushRow(
 ): void {
   const key = String(field);
   if (seen.has(key)) return;
-  if (registry.valuesEqual(field, from, to)) return;
+  if (isNoOpFieldWrite(field, from, to, registry)) return;
   seen.add(key);
   rows.push({ store: 'entries', id, field, from, to });
 }
@@ -83,8 +113,8 @@ export function diffEdit(
  * rows lets undo apply them in order and land on the middle value, not the one a reader actually saw
  * (#517 review) — `invertChangeSet` inverts row by row and keeps their order, so two rows for one key
  * invert to two rows too. This is the one place that collapses them: `from` is the first row's `from`,
- * `to` is the last row's `to`, and a key whose net change is nothing (`registry.valuesEqual` for a
- * Field, `Object.is` for a store row) drops out the way `pushRow` already drops a no-op edit.
+ * `to` is the last row's `to`, and a key whose net change is a no-op (`isNoOpFieldWrite`,
+ * `isNoOpStoreRowWrite`) drops out the way `pushRow` already drops a no-op edit.
  *
  * Keys by nested lookup — store, then id, then Field for an entries row — never by a joined string.
  * An id or a Field key can itself hold a colon, so a joined string like `entries:a:b:c` cannot tell
@@ -131,8 +161,11 @@ export function mergeUpdatedRows(
   const merged: UpdatedRow[] = [];
   for (const { from, last } of order) {
     const to = last.to;
-    const equal = last.store === 'entries' ? registry.valuesEqual(last.field, from, to) : Object.is(from, to);
-    if (equal) continue;
+    const noOp =
+      last.store === 'entries'
+        ? isNoOpFieldWrite(last.field, from, to, registry)
+        : isNoOpStoreRowWrite(from, to);
+    if (noOp) continue;
     merged.push({ ...last, from, to });
   }
   return merged;
