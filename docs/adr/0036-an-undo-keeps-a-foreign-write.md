@@ -64,8 +64,8 @@ event carries exactly the rows that landed, and History stores that ChangeSet, n
 - An app that wants a different rule (overwrite, or ask the user) constructs with `history: false`
   and writes its own History on `dataset.replay()`. Core grows no policy knob for each rule.
 - `dataset.replay()` takes a second, optional parameter. The API report shows the change.
-- The foreign-write judgment and the commit path each compare values with their own code. Issue
-  #550 tracks one shared equality check.
+- The foreign-write judgment, replay and the commit path ask one function whether a write changes
+  anything (#550).
 
 ## Rejected alternatives
 
