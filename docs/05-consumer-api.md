@@ -113,7 +113,8 @@ It keeps no stack of its own and moves no cursor.
 
 `replay()` writes onto the store's **current** values, not the recorded ones. A row a sync has
 already settled since the step was recorded writes nothing; the rest of the changeset still lands.
-An entry a foreign write changed keeps its current values. Pass
+A row for a key no Field declares writes nothing. An entry a foreign write changed keeps its current
+values. Pass
 `{ overwriteForeignWrites: true }` to write the step over them instead. See
 [`docs/11-server-data.md`](11-server-data.md) for the full set of rules a sync needs.
 

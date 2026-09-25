@@ -67,10 +67,8 @@ describe('isNoOpFieldWrite', () => {
     expect(isNoOpFieldWrite('cost', shared, shared, registry)).toBe(true);
   });
 
-  it('an undeclared key compares by Object.is', () => {
-    const shared = { note: 'x' };
-    expect(isNoOpFieldWrite('undeclared', shared, shared, registry)).toBe(true);
-    expect(isNoOpFieldWrite('undeclared', { note: 'x' }, { note: 'x' }, registry)).toBe(false);
+  it('an undeclared key write is always a no-op, because no Field gives it a stored value', () => {
+    expect(isNoOpFieldWrite('undeclared', 1, 2, registry)).toBe(true);
   });
 
   it('a computed Field write is always a no-op, because it has no stored value', () => {
@@ -216,7 +214,8 @@ describe('mergeUpdatedRows', () => {
       from: 10,
       to: 20,
     };
-    const merged = mergeUpdatedRows([rowOne, rowTwo], registry);
+    const localRegistry = new FieldRegistry({ fields: [{ key: 'c' }, { key: 'b:c' }] });
+    const merged = mergeUpdatedRows([rowOne, rowTwo], localRegistry);
     expect(merged).toEqual([rowOne, rowTwo]);
   });
 });

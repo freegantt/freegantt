@@ -173,7 +173,9 @@ function siblingChangesToReplay(
 }
 
 /** A Field row for an id gone after the replay, or whose current value already equals `to`
- *  (`isNoOpFieldWrite`, the question a commit asks too), is skipped. A `parentId` row naming a target absent from `working` is
+ *  (`isNoOpFieldWrite`, the question a commit asks too), is skipped. So is a row for a key no Field
+ *  declares: `isNoOpFieldWrite` answers that nothing is written, the same answer a computed Field
+ *  gets. A `parentId` row naming a target absent from `working` is
  *  skipped too — the entry stays under its current parent, the nearest sound place available, and
  *  this never raises: `change` carries exactly what still applies (§2b's skip rule extended to
  *  hierarchy). Every other `parentId` row lands, even one that provisionally makes two rows in the
@@ -240,7 +242,8 @@ function revertLoopingParentRows(
  *  (id, Field) is judged: a later row for the same key chains off this step's own earlier `to`, not
  *  off the store. A `siblingIndex` row is never judged, because any sibling's move shifts that rank;
  *  the renumber pass settles it. An id the step adds is never judged either: its rows land on the
- *  entity the step itself brings back, not on the committed one. */
+ *  entity the step itself brings back, not on the committed one. A row for an undeclared or computed
+ *  key never marks its entry: `isNoOpFieldWrite` reads it as unchanged. */
 function foreignWrittenIds(
   changeSet: ChangeSet,
   data: TransactionData,
