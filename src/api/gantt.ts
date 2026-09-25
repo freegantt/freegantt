@@ -496,8 +496,9 @@ export class Gantt<TProps = unknown> {
     });
   }
 
-  /** The Dataset this Gantt was built on (#226). Call: `gantt.dataset.canUndo`, or
-   *  `gantt.dataset.on('change', …)`. It carries the consumer's own `TProps`, so a helper
+  /** The Dataset this Gantt was built on (#226). Call: `gantt.dataset.on('change', …)` for writes,
+   *  or `gantt.dataset.on('historyChange', …)` for Undo/Redo chrome — an undo that only forgets steps
+   *  fires no `change`. It carries the consumer's own `TProps`, so a helper
    *  that needs both objects takes the Gantt alone — `mountGanttToolbar({ gantt, container })` —
    *  instead of taking the pair and trusting the caller to keep it matched.
    *

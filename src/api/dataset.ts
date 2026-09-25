@@ -351,19 +351,22 @@ export class Dataset<TProps = unknown> {
   }
 
   /** Reverts the most recent undoable changeset (`plans/s2-data-core/s2.5-undo-redo.md` §1). A no-op
-   *  when `canUndo` is `false`. What it did arrives on `on('change')`, like every other commit — a
+   *  when `canUndo` is `false`. A write arrives on `on('change')`, like every other commit — a
    *  refused undo throws `MutationCancelledError` and leaves the history exactly where it was.
    *
    *  Writes onto the store's current values, not blind. An entry a sync changed since this step was
    *  recorded keeps the sync's values, and a step left with nothing to write is skipped in favor of
-   *  the one before it, in this same call (`docs/11-server-data.md`). */
+   *  the one before it, in this same call (`docs/11-server-data.md`). A click that only forgets steps
+   *  writes nothing, so it fires `historyChange` and not `change`. Undo chrome listens on
+   *  `on('historyChange')`. */
   undo(): void {
     this.#state.undo();
   }
 
-  /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. Undoing this
-   *  redo writes back exactly what this call wrote — undo then redo is neutral, even across a sync
-   *  in between. */
+  /** Re-applies the most recently undone changeset. A no-op when `canRedo` is `false`. A write
+   *  arrives on `on('change')`. A click that only forgets steps fires `historyChange` and not
+   *  `change`, the same as `undo()`. Undoing this redo writes back exactly what this call wrote —
+   *  undo then redo is neutral, even across a sync in between. */
   redo(): void {
     this.#state.redo();
   }
