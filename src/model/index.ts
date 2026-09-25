@@ -47,6 +47,7 @@ export type {
   StoreRowUpdated,
   UpdatedRow,
   ChangeSet,
+  ReplayOptions,
   DatasetEventMap,
 } from './change-set.js';
 export type {

@@ -91,25 +91,30 @@ correct through that case.
 ### Undo after a sync
 
 `entries.sync()` (a poll against a server list) records no undo step of its own — the user's own
-earlier edits stay undoable across a poll. Undoing one of those edits later writes the value it
-held before the edit, even when a sync changed it since; redoing gives the sync's value back. See
+earlier edits stay undoable across a poll. An undo never writes over a value a sync brought in:
+when a sync changed a Field an undo step wrote, that entry keeps the sync's values. See
 [`docs/11-server-data.md`](11-server-data.md) for the full set of rules a poll needs.
 
 ### Advanced: your own History with `dataset.replay()`
 
 Most apps call `undo()` and `redo()` and never touch this. Reach for `dataset.replay()` only when
-the app keeps its own undo stack outside the library — one stack per user, or a stack a server
-keeps.
+the app keeps its own undo stack outside the library — one stack per user, a stack a server keeps,
+or an undo rule the library does not ship.
+
+Construct the Dataset with `history: false` first. The library then keeps no stack of its own:
+`canUndo` and `canRedo` always read `false`, `undo()` and `redo()` do nothing, and the Gantt's own
+Undo and Redo commands turn off. Mod+Z is then free for the app's own undo.
 
 `replay(changeSet)` is the write `undo()` and `redo()` use. It writes the `ChangeSet` you give it.
-It keeps no stack of its own and moves no cursor: `dataset.canUndo` and `dataset.canRedo` do not
-see a `replay()` call.
+It keeps no stack of its own and moves no cursor.
 
 `changeSet.origin` must be `'undo'` or `'redo'`. `'user'` throws `InvalidReplayOriginError`.
 
 `replay()` writes onto the store's **current** values, not the recorded ones. A row a sync has
 already settled since the step was recorded writes nothing; the rest of the changeset still lands.
-See [`docs/11-server-data.md`](11-server-data.md) for the full set of rules a sync needs.
+An entry a foreign write changed keeps its current values. Pass
+`{ overwriteForeignWrites: true }` to write the step over them instead. See
+[`docs/11-server-data.md`](11-server-data.md) for the full set of rules a sync needs.
 
 `replay()` renumbers every sibling group it touches, and re-rolls every parent it touches, the same
 way an ordinary commit does. No extension hook runs.
@@ -124,7 +129,8 @@ declare const undoButton: HTMLButtonElement;
 ```ts
 import { invertChangeSet, type ChangeSet } from 'freegantt';
 
-// A minimal History: record every 'user' step, undo the last one on a click.
+// A minimal History on a Dataset built with `history: false`: record every 'user' step, and undo
+// the last one on a click.
 const undoStack: ChangeSet[] = [];
 
 dataset.on('change', ({ changeSet }) => {

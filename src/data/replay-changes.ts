@@ -1,18 +1,20 @@
 // data/ — the pure diff behind undo, redo and `dataset.replay()` (#517 amendment, ADR 0035): a
-// recorded `ChangeSet` no longer applies blind. It applies onto the store's current values, the same
-// way `entries.sync()` overwrites a local edit the server has not seen. A sync between the step's
-// recording and its replay leaves rows that no longer match what they last wrote; this file decides,
-// row by row, what still has something to write and what a sync has already settled. It also keeps
-// the tree sound: a row that would land a raw `parentId` loop or a dangling one is dropped instead,
-// never stored and never raised. Every sibling group the step touches replays dense, 0..n-1, the same
-// math `buildCommitChangeSet` runs on a live write.
+// recorded `ChangeSet` no longer applies blind. It applies onto the store's current values. A sync
+// between the step's recording and its replay leaves rows that no longer match what they last wrote;
+// this file decides, row by row, what still has something to write, what a sync has already settled,
+// and which value a sync brought in stays (#549). It also keeps the tree sound: a row that would land
+// a raw `parentId` loop or a dangling one is dropped instead, never stored and never raised. Every
+// sibling group the step touches replays dense, 0..n-1, the same math `buildCommitChangeSet` runs on
+// a live write.
 
 import type {
   ChangeSet,
   EntityAdded,
   EntityRemoved,
   EntryId,
+  FieldKey,
   FieldUpdated,
+  ReplayOptions,
   StoredEntry,
   StoreRowUpdated,
   UpdatedRow,
@@ -226,6 +228,47 @@ function revertLoopingParentRows(
   }
 }
 
+/** Every id whose current value for one of the step's Field rows is neither the row's recorded `from`
+ *  nor its `to` — a foreign write changed it after the step recorded it. Only the first row per
+ *  (id, Field) is judged: a later row for the same key chains off this step's own earlier `to`, not
+ *  off the store. A `siblingIndex` row is never judged, because any sibling's move shifts that rank;
+ *  the renumber pass settles it. An id the step adds is never judged either: its rows land on the
+ *  entity the step itself brings back, not on the committed one. */
+function foreignWrittenIds(
+  changeSet: ChangeSet,
+  data: TransactionData,
+  addedIds: ReadonlySet<EntryId>,
+): ReadonlySet<EntryId> {
+  const committed = data.entries.committedById();
+  const judged = new Map<EntryId, Set<FieldKey>>();
+  const foreignWritten = new Set<EntryId>();
+  for (const row of changeSet.updated) {
+    if (row.store !== 'entries' || row.field === 'siblingIndex' || addedIds.has(row.id)) continue;
+    const judgedFields = judged.get(row.id) ?? new Set<FieldKey>();
+    judged.set(row.id, judgedFields);
+    if (judgedFields.has(row.field)) continue;
+    judgedFields.add(row.field);
+    const entity = committed.get(row.id);
+    if (!entity) continue; // gone: `fieldRowToReplay` skips it anyway
+    const current = readFieldRow(entity, row.field, data.fields, data.fieldAccess);
+    const unchanged = data.fields.valuesEqual(row.field, current, row.from);
+    const settled = data.fields.valuesEqual(row.field, current, row.to);
+    if (!unchanged && !settled) foreignWritten.add(row.id);
+  }
+  return foreignWritten;
+}
+
+/** `changeSet` without a Field row for any id a foreign write changed — the whole entry keeps its
+ *  current values, so a step never lands half of a pair such as `start`/`end`. Plugin store rows stay:
+ *  a sync never writes one, so no foreign value is there to keep. */
+function withoutForeignWrittenEntries(changeSet: ChangeSet, data: TransactionData): ChangeSet {
+  const addedIds = new Set(changeSet.added.map((row) => row.entity.id));
+  const foreignWritten = foreignWrittenIds(changeSet, data, addedIds);
+  if (foreignWritten.size === 0) return changeSet;
+  const updated = changeSet.updated.filter((row) => row.store !== 'entries' || !foreignWritten.has(row.id));
+  return { ...changeSet, updated };
+}
+
 /** What `storeRowToReplay` chains its `from` off across the whole replay — nested by store, then id,
  *  the same shape `written` must take (below). */
 type WrittenStoreRows = Map<StoreRowUpdated['store'], Map<EntryId, unknown>>;
@@ -299,10 +342,18 @@ function storeRowToReplay(
  * removed one. The renumber pass judges last of all, once the cascade has settled who is even still
  * in the tree.
  *
+ * A Field value a foreign write changed after the step recorded it stays, with every other Field row
+ * for that entry (`withoutForeignWrittenEntries`), unless `options.overwriteForeignWrites` is `true`.
+ *
  * Call: `changesToReplay(data, invertChangeSet(step))` (undo), `changesToReplay(data, { ...step,
- * origin: 'redo' })` (redo), or `changesToReplay(data, changeSet)` (`dataset.replay`).
+ * origin: 'redo' })` (redo), or `changesToReplay(data, changeSet, options)` (`dataset.replay`).
  */
-export function changesToReplay(data: TransactionData, changeSet: ChangeSet): ChangeSet | undefined {
+export function changesToReplay(
+  data: TransactionData,
+  recorded: ChangeSet,
+  options: ReplayOptions = {},
+): ChangeSet | undefined {
+  const changeSet = options.overwriteForeignWrites ? recorded : withoutForeignWrittenEntries(recorded, data);
   const working = new Map(data.entries.committedById());
 
   const recordedRemoved = recordedRowsToReplay(changeSet.removed, working);

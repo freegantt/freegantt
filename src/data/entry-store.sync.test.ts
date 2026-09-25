@@ -205,7 +205,7 @@ describe('entries.sync', () => {
     expect(state.canUndo).toBe(canUndoBeforeSync); // sync records no undo step of its own
   });
 
-  it("a local edit the server has not seen is overwritten; undo writes the value before the edit, and redo gives the server's value back", () => {
+  it("a local edit the server has not seen is overwritten, and undo keeps the server's value", () => {
     const state = dataset([{ id: 'a', name: 'from server v1' }]);
     state.entries.update('a', { name: 'local edit' });
 
@@ -213,10 +213,9 @@ describe('entries.sync', () => {
     expect(state.entries.get('a')!.name).toBe('from server v2');
 
     state.undo();
-    expect(state.entries.get('a')!.name).toBe('from server v1');
-
-    state.redo();
     expect(state.entries.get('a')!.name).toBe('from server v2');
+    expect(state.canUndo).toBe(false); // the only step had nothing left to write, so History forgot it
+    expect(state.canRedo).toBe(false);
   });
 
   it('a reorder writes siblingIndex rows only', () => {
@@ -320,18 +319,50 @@ describe('entries.sync', () => {
 });
 
 describe('undo and redo across a sync (#517)', () => {
-  it("undo of a user edit after a sync changed the same Field writes the user's old value, and undo then redo gives the server's value back", () => {
-    const state = dataset([{ id: 'a', name: 'original' }]);
+  it("undo of a user edit after a sync changed the same Field keeps the server's value and undoes the step before it", () => {
+    const state = dataset([
+      { id: 'a', name: 'original' },
+      { id: 'b', name: 'b' },
+    ]);
+    state.entries.update('b', { name: 'b renamed' });
     state.entries.update('a', { name: 'local edit' });
 
-    state.entries.sync([{ id: 'a', name: 'server value', start: 0, end: 1 }]);
-    expect(state.entries.get('a')!.name).toBe('server value');
+    state.entries.sync([
+      { id: 'a', name: 'server value', start: 0, end: 1 },
+      { id: 'b', name: 'b renamed', start: 0, end: 1 },
+    ]);
 
     state.undo();
-    expect(state.entries.get('a')!.name).toBe('original');
+    expect(state.entries.get('a')!.name).toBe('server value');
+    expect(state.entries.get('b')!.name).toBe('b');
+    expect(state.canUndo).toBe(false);
 
     state.redo();
     expect(state.entries.get('a')!.name).toBe('server value');
+    expect(state.entries.get('b')!.name).toBe('b renamed');
+  });
+
+  it('undo keeps every Field of an entry the step wrote when a sync changed one of them, so a span never splits', () => {
+    const state = dataset([{ id: 'a', name: 'a', start: 0, end: 10 }]);
+    state.entries.update('a', { start: 20, end: 30 });
+
+    state.entries.sync([{ id: 'a', name: 'a', start: 20, end: 25 }]);
+
+    state.undo();
+    expect(state.entries.get('a')!.start).toBe(20);
+    expect(state.entries.get('a')!.end).toBe(25);
+  });
+
+  it('undo writes its Fields back when a sync changed only a Field the step never wrote', () => {
+    const state = dataset([{ id: 'a', name: 'a', start: 0, end: 10 }]);
+    state.entries.update('a', { start: 20, end: 30 });
+
+    state.entries.sync([{ id: 'a', name: 'renamed by the server', start: 20, end: 30 }]);
+
+    state.undo();
+    expect(state.entries.get('a')!.start).toBe(0);
+    expect(state.entries.get('a')!.end).toBe(10);
+    expect(state.entries.get('a')!.name).toBe('renamed by the server');
   });
 
   it('undo of an add whose id the server removed skips that step and undoes the step before it', () => {
