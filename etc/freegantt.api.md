@@ -1188,12 +1188,12 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get gridWidth(): number;
     set gridWidth(width: GridWidth);
-    hasPlugin(plugin: ChromePlugin<TProps> | PluginId): boolean;
+    hasPlugin(plugin: ChromePlugin | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
-    installPlugin(plugin: ChromePlugin<TProps>): void;
+    installPlugin(plugin: ChromePlugin): void;
     // (undocumented)
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
@@ -1207,8 +1207,8 @@ export class Gantt<TProps = unknown> {
     set overscan(o: Overscan);
     panToDate(date: InstantInput, align?: 'start' | 'center'): void;
     panToToday(align?: 'start' | 'center'): void;
-    get plugins(): readonly ChromePlugin<TProps>[];
-    set plugins(next: readonly ChromePlugin<TProps>[]);
+    get plugins(): readonly ChromePlugin[];
+    set plugins(next: readonly ChromePlugin[]);
     get pointerActivation(): PointerActivation;
     set pointerActivation(next: PointerActivation);
     // (undocumented)
@@ -1243,7 +1243,7 @@ export class Gantt<TProps = unknown> {
     toggleCollapse(id: RowId | string): void;
     get tooltipRenderer(): TooltipRenderer | undefined;
     set tooltipRenderer(renderer: TooltipRenderer | undefined);
-    uninstallPlugin(plugin: ChromePlugin<TProps> | PluginId): void;
+    uninstallPlugin(plugin: ChromePlugin | PluginId): void;
     variantFor(entry: Entry<TProps>): ResolvedVariant;
     get variants(): readonly EntryVariant<TProps>[];
     set variants(next: readonly EntryVariant<TProps>[]);
@@ -1339,7 +1339,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
     overscan?: Overscan;
-    plugins?: readonly ChromePlugin<TProps>[];
+    plugins?: readonly ChromePlugin[];
     pointerActivation?: PointerActivation;
     rowSource?: RowSource;
     scroll?: ScrollAxes;

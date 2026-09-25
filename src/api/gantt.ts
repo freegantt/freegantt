@@ -245,8 +245,13 @@ export interface GanttOptionsBase<TProps = unknown> {
    *
    *  ADR 0019: chrome only. A `data` half declares what shapes the Dataset's own construction, and a
    *  Dataset installs its plugins once — so a plugin with a `data` half installs on the `Dataset`
-   *  instead. `data?: never` on this arm is what stops the wrong one compiling here. */
-  plugins?: readonly ChromePlugin<TProps>[];
+   *  instead. `data?: never` on this arm is what stops the wrong one compiling here.
+   *
+   *  This Gantt holds each chrome plugin with its own props erased (`ChromePlugin`, no type
+   *  argument), for the same reason the Dataset does (`DatasetOptions.plugins`): a plugin's type
+   *  argument names its own keys, not this Gantt's `TProps`, so `Gantt<TaskProps>` installs a
+   *  `ChromePlugin<MarkProps>` whatever `TaskProps` and `MarkProps` are. */
+  plugins?: readonly ChromePlugin[];
 }
 
 /** Two ways to set the time axis, made mutually exclusive at the type level (issue #84 — the prior shape
@@ -284,7 +289,7 @@ export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttSca
  *
  *  It raises `PluginSetupError`, the error a failed install already raises. No new type ships, and
  *  the message says where the plugin goes instead. */
-function assertChromeOnly<TProps>(plugins: readonly ChromePlugin<TProps>[]): readonly ChromePlugin<TProps>[] {
+function assertChromeOnly(plugins: readonly ChromePlugin[]): readonly ChromePlugin[] {
   for (const plugin of plugins) {
     const candidate = plugin as {
       data?: unknown;
@@ -310,7 +315,12 @@ function assertChromeOnly<TProps>(plugins: readonly ChromePlugin<TProps>[]): rea
  *  `api/plugin.ts`'s file header for why the generic forms live there and the binding happens here.
  *  This file is the one that sees both `Gantt` and `Dataset`. So all four names bind here, the
  *  Dataset-installed ones included. These are the types a plugin author actually writes, and
- *  `api/index.ts` re-exports them alongside the generic `*Of` shapes. */
+ *  `api/index.ts` re-exports them alongside the generic `*Of` shapes.
+ *
+ *  `TProps` here names the plugin's own keys, not a consumer Gantt's or Dataset's — `GanttOptions.
+ *  plugins` and the `installPlugin`/`hasPlugin`/`uninstallPlugin` family below all take the erased
+ *  `ChromePlugin` (no type argument) for that reason. A plugin author writes `definePlugin<LockProps>
+ *  ({ … })` and meets this bound name through the return type `definePlugin` resolves to. */
 export type PluginContext<TProps = unknown> = PluginContextOf<Gantt<TProps>, Dataset<TProps>>;
 export type ChromePlugin<TProps = unknown> = ChromePluginOf<PluginContext<TProps>>;
 export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, Dataset<TProps>>;
@@ -1075,11 +1085,11 @@ export class Gantt<TProps = unknown> {
    *  This Gantt's own chrome plugins, and
    *  only those: a plugin installed on the Dataset stays off this list, because this Gantt cannot
    *  drop it (ADR 0019). */
-  get plugins(): readonly ChromePlugin<TProps>[] {
-    return this.#shell.plugins as readonly ChromePlugin<TProps>[];
+  get plugins(): readonly ChromePlugin[] {
+    return this.#shell.plugins as readonly ChromePlugin[];
   }
 
-  set plugins(next: readonly ChromePlugin<TProps>[]) {
+  set plugins(next: readonly ChromePlugin[]) {
     this.#shell.plugins = assertChromeOnly(next);
   }
 
@@ -1088,14 +1098,14 @@ export class Gantt<TProps = unknown> {
    *  plugin whose `id` is already installed throws `DuplicatePluginIdError`: this verb adds, and
    *  says so when there is nothing to add. To *change* an installed plugin's options, assign the
    *  list — `gantt.plugins = [timeShading(next)]` replaces the occupant of that `id` (#404). */
-  installPlugin(plugin: ChromePlugin<TProps>): void {
+  installPlugin(plugin: ChromePlugin): void {
     this.#shell.installPlugin(assertChromeOnly([plugin])[0]!);
   }
 
   /** D-S5-36. Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
    *  installed right now — what a toggle reads before it decides which verb to call. Identity is the
    *  `id`, so an object with an installed plugin's `id` answers `true`. */
-  hasPlugin(plugin: ChromePlugin<TProps> | PluginId): boolean {
+  hasPlugin(plugin: ChromePlugin | PluginId): boolean {
     const id = typeof plugin === 'string' ? plugin : plugin.id;
     return this.#shell.plugins.some((installed) => installed.id === id);
   }
@@ -1104,7 +1114,7 @@ export class Gantt<TProps = unknown> {
    *  It disposes that one plugin and leaves the rest running. Identity is the `id` in both forms,
    *  the same identity the assignment form diffs by (D-S5-3). A plugin nothing installs throws
    *  `PluginNotInstalledError`, so a misspelled id is not a silent no-op. */
-  uninstallPlugin(plugin: ChromePlugin<TProps> | PluginId): void {
+  uninstallPlugin(plugin: ChromePlugin | PluginId): void {
     this.#shell.uninstallPlugin(typeof plugin === 'string' ? plugin : plugin.id);
   }
 
