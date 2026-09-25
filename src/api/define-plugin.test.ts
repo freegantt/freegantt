@@ -322,3 +322,79 @@ describe('a failed install unwinds what it set up before it', () => {
     expect(dataset.entries.get('t1')?.name).toBe('Design');
   });
 });
+
+describe('a plugin names its own keys', () => {
+  interface LockProps {
+    locked?: boolean;
+  }
+
+  it('installs a plugin typed with its own keys into a Dataset typed with the consumer keys', () => {
+    interface TaskProps {
+      cost?: number;
+    }
+
+    const locks = () =>
+      definePlugin<LockProps>({
+        id: 'demo.locks',
+        fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+        data(ctx) {
+          ctx.dataset.entries.update('t1', { locked: true });
+        },
+      });
+
+    const dataset = new Dataset<TaskProps>({ timeZone: 'UTC', entries, plugins: [locks()] });
+    expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
+  });
+
+  it('types the plugin write against its own keys, not the consumer keys', () => {
+    const locks = () =>
+      definePlugin<LockProps>({
+        id: 'demo.locks',
+        fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+        data(ctx) {
+          // @ts-expect-error `ctx.dataset` sees this plugin's own keys, not the consumer's `cost`.
+          ctx.dataset.entries.update('t1', { cost: 1 });
+        },
+      });
+    expect(locks).toBeDefined();
+  });
+
+  it('refuses a fields key that its type argument does not name', () => {
+    // @ts-expect-error a fields key must be a key of the plugin's own props
+    definePlugin<LockProps>({ id: 'demo.typo', fields: [{ key: 'lockd' }] });
+    expect(true).toBe(true);
+  });
+
+  it('a typed plugin overrides a core Field in its own fields list', () => {
+    const overridesStart = definePlugin<LockProps>({
+      id: 'demo.overrides-start',
+      fields: [{ key: 'start', editable: 'api' }],
+      data() {},
+    });
+    expect(overridesStart).toBeDefined();
+  });
+
+  it('lets an untyped plugin declare any key', () => {
+    const dataset = newDataset([definePlugin({ id: 'demo.any', fields: [{ key: 'owner' }] })]);
+    expect(dataset.field('owner')).toBeDefined();
+  });
+
+  it('installs a chrome plugin typed with its own keys on a Gantt typed with the consumer keys', () => {
+    interface TaskProps {
+      cost?: number;
+    }
+
+    // `marks()` names a key of its own, `consumed`, that TaskProps does not — the Gantt still
+    // installs it, because its type argument names only its own keys, not the consumer's.
+    const marks = () => definePlugin<{ consumed?: boolean }>({ id: 'demo.marks', view() {} });
+
+    const dataset = new Dataset<TaskProps>({ timeZone: 'UTC', entries, fields: [{ key: 'consumed' }] });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const gantt = new Gantt<TaskProps>({ dataset, container, plugins: [marks()] });
+
+    gantt.uninstallPlugin('demo.marks');
+    gantt.installPlugin(marks());
+    expect(gantt.hasPlugin('demo.marks')).toBe(true);
+  });
+});

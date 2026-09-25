@@ -3,9 +3,15 @@
 // `src/` for the string `'buffer'` finds nothing — the whole variant lives here, in one plugin.
 
 import { definePlugin } from 'freegantt';
-import type { EntryEdit } from 'freegantt';
 
 const BUFFER_VARIANT = 'buffer';
+
+/** The key this plugin's command writes. A chrome plugin declares no Field, so the page declares
+ *  `consumed` itself (`harness/editing-and-data.ts`); `entries.update()` refuses it if the page
+ *  does not. */
+export interface BufferKindProps {
+  consumed?: boolean;
+}
 
 /** A consumer-defined `'buffer'` variant, over the two doors ADR 0018 leaves: one variant object,
  *  and one command.
@@ -18,7 +24,7 @@ const BUFFER_VARIANT = 'buffer';
  *  buffer rows in its own words, through its own Field, and a row that gains that value after
  *  install gets the variant on the next frame. */
 export function bufferKind() {
-  return definePlugin({
+  return definePlugin<BufferKindProps>({
     id: 'demo.bufferKind',
     view(ctx) {
       ctx.variants.add({
@@ -45,11 +51,9 @@ export function bufferKind() {
         when: ({ variant }) => variant === BUFFER_VARIANT,
         run: ({ entry }) => {
           if (entry === undefined) return;
-          // The Dataset's own TProps is unknown to this untyped plugin (ADR 0011: an untyped plugin
-          // sees no declared keys through EntryEdit<unknown>'s flat mapped part) — `consumed` is
-          // declared on the harness's own Dataset (harness/e2e/plugins.ts), so this write is real at
-          // runtime; the cast bridges the static gap an untyped plugin cannot close.
-          ctx.dataset.entries.update(entry.id, { consumed: true } as EntryEdit);
+          // The page declares `consumed` (`harness/editing-and-data.ts`), and `entries.update()`
+          // refuses it with `UnknownFieldError` if the page does not.
+          ctx.dataset.entries.update(entry.id, { consumed: true });
         },
       });
 

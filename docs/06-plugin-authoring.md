@@ -142,6 +142,55 @@ flat `owner: 'Ada'` value on a construction entry lands the same way
 `dataset.entries.update(id, { owner: 'Ada' })` reads and writes it like any
 other.
 
+## Write your own Field
+
+A plugin's type argument names its own keys, not the consumer's. Pass it to
+read and write those keys off `ctx.dataset` with no cast, and to catch a
+`fields` typo at compile time:
+
+```ts
+import { Dataset, definePlugin } from 'freegantt';
+import type { DataPlugin } from 'freegantt';
+
+export interface LockProps {
+  locked?: boolean;
+}
+
+function locks(): DataPlugin<LockProps> & { lock(id: string): void } {
+  let dataset: Dataset<LockProps> | undefined;
+  return {
+    ...definePlugin<LockProps>({
+      id: 'demo.locks',
+      fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+      data(ctx) {
+        dataset = ctx.dataset;
+      },
+    }),
+    lock(id) {
+      dataset?.entries.update(id, { locked: true });
+    },
+  };
+}
+
+export { locks };
+```
+
+`fields: [{ key: 'lockd' }]` — a typo — fails to compile: `LockProps` names
+`locked`, not `lockd`. `dataset?.entries.update(id, { locked: true })`
+compiles with no cast, because `dataset` is typed `Dataset<LockProps>`.
+
+A consumer installs `locks()` on any Dataset, typed with its own props or
+none: `new Dataset({ entries, plugins: [locks()] })`. That Dataset sees
+`locked` as `unknown` on its own `entries.get(id)?.read('locked')` — for a
+typed read, the consumer writes its own props to include it:
+`new Dataset<TaskProps & LockProps>({ … })`.
+
+A chrome plugin cannot declare a Field (`fields?: never`) — its type argument
+names the keys its `view()` half reads and writes instead, and the page that
+installs it declares those keys itself. `entries.update()` refuses an
+undeclared one with `UnknownFieldError`, at the same door it refuses one from
+any other caller.
+
 ## Hierarchy source
 
 A plugin that owns the tree declares `hierarchySource` on itself, the same

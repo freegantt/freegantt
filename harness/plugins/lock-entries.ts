@@ -11,10 +11,16 @@ import type { Dataset, DataPlugin, EditRequest, EntryEdit, EntryId } from 'freeg
  *  `column` means no grid ever draws one. `lock()`/`unlock()` below are the one door that writes it. */
 const LOCKED_FIELD_KEY = 'locked';
 
+/** The one key this plugin declares. A consumer that wants a typed `entry.read('locked')` on its own
+ *  Dataset adds it to its own props, e.g. `Dataset<TaskProps & LockProps>`. */
+export interface LockProps {
+  locked?: boolean;
+}
+
 /** What the page holds after installing: the plugin itself, plus the three calls a Lock/Unlock menu
  *  item makes. `isLocked` reads the `locked` Field this plugin declares, so no page keeps a `Set` of
  *  its own. */
-export interface LockEntriesPlugin extends DataPlugin {
+export interface LockEntriesPlugin extends DataPlugin<LockProps> {
   isLocked(id: string): boolean;
   lock(id: string): void;
   unlock(id: string): void;
@@ -53,7 +59,7 @@ export interface LockEntriesPlugin extends DataPlugin {
  * one undo unlocks (#156).
  */
 export function lockEntries(): LockEntriesPlugin {
-  let dataset: Dataset | undefined;
+  let dataset: Dataset<LockProps> | undefined;
 
   const isLockedEntry = (id: string): boolean => dataset?.entries.get(id)?.read(LOCKED_FIELD_KEY) === true;
 
@@ -137,18 +143,17 @@ export function lockEntries(): LockEntriesPlugin {
       return isLockedEntry(id);
     },
 
-    /** A Field write on its own: it commits, raises `change`, and one undo unlocks (#156). The cast
-     *  is the same trusted TProps boundary `entries.update()`'s own doc names: this plugin writes one
-     *  key it declared itself, on whatever `props` shape the installing page happens to hold. */
+    /** A Field write on its own: it commits, raises `change`, and one undo unlocks (#156). Writes the
+     *  one key this plugin declares, typed by `LockProps` — no cast. */
     lock(id) {
-      dataset?.entries.update(id, { [LOCKED_FIELD_KEY]: true } as EntryEdit);
+      dataset?.entries.update(id, { [LOCKED_FIELD_KEY]: true });
     },
 
     /** Clears the key rather than writing `false`: an unlocked entry never carried `locked` before
      *  this plugin composed in, and `toInput()` must read the same after an unlock as it did then —
      *  not `locked: false` (every declared consumer key is removable without exception, ADR 0011). */
     unlock(id) {
-      dataset?.entries.update(id, { [LOCKED_FIELD_KEY]: undefined } as EntryEdit);
+      dataset?.entries.update(id, { [LOCKED_FIELD_KEY]: undefined });
     },
   };
 }

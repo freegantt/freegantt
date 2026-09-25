@@ -34,11 +34,12 @@ import type { ChromePlugin, DataPlugin } from './gantt.js';
  * Wrap the call in a factory, as above. One factory call is one install's worth of state, which is
  * what keeps two Gantts on one page independent (I2).
  *
- * Pass `TProps` — `definePlugin<TaskProps>({ … })` — to read the consumer's declared Field keys off
- * `ctx.dataset` and `ctx.gantt`. Leave it off and the plugin is written against an untyped Dataset,
- * which is what a plugin published for any consumer wants. Naming it fixes the return type to the
- * arm; leaving it off keeps whatever extra members the object declares, so a plugin that publishes
- * its own calls beside `id` (#178) keeps them.
+ * Pass `TProps` — `definePlugin<LockProps>({ … })` — to read and write the keys this plugin declares
+ * off `ctx.dataset` and `ctx.gantt`, with no cast: `LockProps` names this plugin's own keys, not the
+ * consumer's. `fields` is checked against it too, so a key `LockProps` does not name fails to
+ * compile. Leave it off for a plugin that reads or writes no key of its own; naming it fixes the
+ * return type to the arm, and leaving it off keeps whatever extra members the object declares, so a
+ * plugin that publishes its own calls beside `id` (#178) keeps them.
  */
 export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TProps> = ChromePlugin<TProps>>(
   plugin: TPlugin,

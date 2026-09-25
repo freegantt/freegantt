@@ -45,8 +45,9 @@ const datasetState = new WeakMap<object, DatasetState>();
 // The Dataset-bound alias behind `api/dataset-plugin.ts`'s generic shape (the `*Of` pairing
 // `api/plugin-context.ts` and `api/command.ts` already use). A plugin author writing against the concrete
 // `Dataset` names this one; code parameterizing over its own Dataset type names the `*Of` form.
-// `TProps` defaults here for the same reason `Dataset`'s own does: a plugin that does not care about
-// the consumer's `props` shape writes `DatasetPluginContext` and nothing more.
+// `TProps` defaults here for the same reason `Dataset`'s own does: it names the plugin's own keys,
+// not the consumer's — a plugin that declares no Field of its own writes `DatasetPluginContext` and
+// nothing more.
 //
 // ADR 0019: the three plugin aliases — `ChromePlugin`, `DataPlugin`, `Plugin` — bind on `api/gantt.ts`
 // instead, because a `view` half names the `Gantt` class and this file may not import it (that
@@ -110,11 +111,13 @@ export interface DatasetOptions<TProps = unknown> {
    *  with its own context (I2). A chrome-only plugin is legal here too, and then every Gantt on this
    *  Dataset gets it; install it on one `Gantt` instead to give it to that Gantt alone.
    *
-   *  `PluginOf`'s Gantt type argument stays `unknown` here: a Dataset never calls a `view` half, so
-   *  it never needs the `Gantt` type to type-check what it holds — and naming `Gantt` in this file
-   *  would close an import cycle. Write the fully bound `Plugin<TProps>` (`api/gantt.ts`) when you
-   *  declare a plugin; it assigns here unchanged. */
-  plugins?: readonly PluginOf<unknown, Dataset<TProps>>[];
+   *  This Dataset holds each plugin with its own props erased (`PluginOf<unknown, unknown>`): a
+   *  plugin's type argument names its own keys, not this Dataset's `TProps`, so a `Dataset<TaskProps>`
+   *  installs a `DataPlugin<LockProps>` whatever `TaskProps` and `LockProps` are. The Dataset still
+   *  hands itself to that plugin's `data(ctx)` typed as `Dataset<LockProps>` — `ctx.dataset` is the
+   *  plugin's own view onto the same trust boundary the class note above describes. It sees the
+   *  plugin's own key set, independent of this Dataset's own `TProps`. */
+  plugins?: readonly PluginOf<unknown, unknown>[];
 }
 
 /** One `FieldRegistryOptions`-shaped entry per plugin, `fields`/`fieldTypes`/`aggregators` read off
@@ -171,7 +174,7 @@ export class Dataset<TProps = unknown> {
   #state: DatasetState;
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
   #time: ZonedTime;
-  readonly #plugins: readonly PluginOf<unknown, Dataset<TProps>>[];
+  readonly #plugins: readonly PluginOf<unknown, unknown>[];
   readonly #disposePlugins: () => void;
 
   constructor(options: DatasetOptions<TProps>) {
@@ -239,8 +242,9 @@ export class Dataset<TProps = unknown> {
   }
 
   /** The plugins this Dataset installed, in the order the caller wrote them. Read-only — see
-   *  `DatasetOptions.plugins` for why a Dataset cannot take a new set after construction. */
-  get plugins(): readonly PluginOf<unknown, Dataset<TProps>>[] {
+   *  `DatasetOptions.plugins` for why a Dataset cannot take a new set after construction. Each
+   *  plugin's own props stay erased here (`DatasetOptions.plugins`); the entry itself is unaffected. */
+  get plugins(): readonly PluginOf<unknown, unknown>[] {
     return this.#plugins;
   }
 

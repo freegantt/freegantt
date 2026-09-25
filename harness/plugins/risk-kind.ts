@@ -4,15 +4,21 @@
 // match different rows are neighbours rather than rivals.
 
 import { definePlugin } from 'freegantt';
-import type { EntryEdit } from 'freegantt';
 
 const RISK_VARIANT = 'risk';
+
+/** The key this plugin's command writes. A chrome plugin declares no Field, so the page declares
+ *  `accepted` itself (`harness/editing-and-data.ts`); `entries.update()` refuses it if the page
+ *  does not. */
+export interface RiskKindProps {
+  accepted?: boolean;
+}
 
 /** A consumer-defined `'risk'` variant, over the same two doors — and the proof that a second
  *  variant-defining plugin is an ordinary install, not a collision. Like `bufferKind()`, its rule
  *  reads the row, so it keeps no list of the ids it owns. */
 export function riskKind() {
-  return definePlugin({
+  return definePlugin<RiskKindProps>({
     id: 'demo.riskKind',
     view(ctx) {
       ctx.variants.add({
@@ -32,9 +38,9 @@ export function riskKind() {
         when: ({ variant }) => variant === RISK_VARIANT,
         run: ({ entry }) => {
           if (entry === undefined) return;
-          // See buffer-kind.ts's own comment: `accepted` is declared on the harness's Dataset, and this
-          // cast bridges the same static gap for an untyped plugin.
-          ctx.dataset.entries.update(entry.id, { accepted: true } as EntryEdit);
+          // See buffer-kind.ts's own comment: the page declares `accepted`, and `entries.update()`
+          // refuses it if the page does not.
+          ctx.dataset.entries.update(entry.id, { accepted: true });
         },
       });
 
