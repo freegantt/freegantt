@@ -5,7 +5,7 @@
 // `history.ts` calls this too, so it imports nothing from `transaction.ts` directly and a consumer
 // History can now be written against the public surface alone.
 
-import type { ChangeSet } from '../model/index.js';
+import type { ChangeSet, ReplayOptions } from '../model/index.js';
 import { InvalidReplayOriginError } from '../model/index.js';
 import { changesToReplay } from './replay-changes.js';
 import { commitChangeSet } from './transaction.js';
@@ -17,7 +17,11 @@ export type { TransactionData };
  *  and throws `InvalidReplayOriginError`. `changesToReplay` answers `undefined` when nothing is left
  *  to write — a step a sync has fully settled, the same as an empty recorded changeset — and this is
  *  a no-op then too: no `beforeChange`, no `change`. */
-export function replayChangeSet(data: TransactionData, changeSet: ChangeSet): void {
+export function replayChangeSet(
+  data: TransactionData,
+  changeSet: ChangeSet,
+  options: ReplayOptions = {},
+): void {
   if (changeSet.origin !== 'undo' && changeSet.origin !== 'redo') {
     throw new InvalidReplayOriginError(changeSet.origin);
   }
@@ -28,6 +32,6 @@ export function replayChangeSet(data: TransactionData, changeSet: ChangeSet): vo
   if (changeSet.added.length === 0 && changeSet.removed.length === 0 && changeSet.updated.length === 0) {
     return;
   }
-  const replayed = changesToReplay(data, changeSet);
+  const replayed = changesToReplay(data, changeSet, options);
   if (replayed) commitChangeSet(data, replayed);
 }

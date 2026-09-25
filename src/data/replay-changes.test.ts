@@ -34,7 +34,7 @@ function changeSets(state: DatasetState): ChangeSet[] {
 }
 
 describe('replay writes each row onto the current value', () => {
-  it('the change carries the value it replaced, not the value the step recorded', () => {
+  it('keeps a value a foreign write changed after the step recorded it, and writes nothing', () => {
     const state = dataset([{ id: 'a', name: 'Server value' }]);
     const seen = changeSets(state);
 
@@ -44,6 +44,44 @@ describe('replay writes each row onto the current value', () => {
           { store: 'entries', id: entryId('a'), field: 'name', from: 'Stale recorded value', to: 'Old' },
         ],
       }),
+    );
+
+    expect(state.entries.get('a')!.name).toBe('Server value');
+    expect(seen).toEqual([]);
+  });
+
+  it('keeps every Field row of an entry a foreign write changed, and still lands the other entries', () => {
+    const state = dataset([
+      { id: 'a', name: 'Server value', start: 0, end: 10 },
+      { id: 'b', name: 'b' },
+    ]);
+
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'name', from: 'Stale recorded value', to: 'Old' },
+          { store: 'entries', id: entryId('a'), field: 'end', from: 10, to: 5 },
+          { store: 'entries', id: entryId('b'), field: 'name', from: 'b', to: 'Old b' },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('a')!.name).toBe('Server value');
+    expect(state.entries.get('a')!.end).toBe(10);
+    expect(state.entries.get('b')!.name).toBe('Old b');
+  });
+
+  it('overwriteForeignWrites writes the step over a foreign write, and the change carries the value it replaced', () => {
+    const state = dataset([{ id: 'a', name: 'Server value' }]);
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'name', from: 'Stale recorded value', to: 'Old' },
+        ],
+      }),
+      { overwriteForeignWrites: true },
     );
 
     expect(state.entries.get('a')!.name).toBe('Old');
@@ -472,7 +510,7 @@ describe('replay never stores a parentId loop or a dangling parentId', () => {
       step({
         updated: [
           { store: 'entries', id: entryId('a'), field: 'parentId', from: undefined, to: entryId('b') },
-          { store: 'entries', id: entryId('a'), field: 'name', from: 'stale', to: 'New A' },
+          { store: 'entries', id: entryId('a'), field: 'name', from: 'a', to: 'New A' },
         ],
       }),
     );

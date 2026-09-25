@@ -187,11 +187,8 @@ test('import tolerates a child before its parent, clears undo, and a lock holds'
 // keeps a kept row's selection and records no undo step. `harness/fake-server.ts` scripts the
 // first "Sync from server" click as a rename and a date shift on 'entry-3'. This proves the
 // conflict rule (`docs/11-server-data.md`): the server's rename overwrites a local edit it never
-// saw, undo brings back the value from before the user's own edit, not the server's, and redo
-// gives the server's value back.
-test('a sync overwrites a local rename it never saw, and undo/redo cross the sync cleanly', async ({
-  page,
-}) => {
+// saw, and undo keeps the server's value instead of writing over it (#549).
+test("a sync overwrites a local rename it never saw, and undo keeps the server's value", async ({ page }) => {
   await page.goto('/editing-and-data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
@@ -215,10 +212,8 @@ test('a sync overwrites a local rename it never saw, and undo/redo cross the syn
   await expect(page.getByLabel('Undo')).toBeEnabled();
 
   await page.getByLabel('Undo').click();
-  await expect(bar).toHaveText(nameBefore ?? '');
-
-  await page.getByLabel('Redo').click();
   await expect(bar).toHaveText('Renamed by the server');
+  expect(nameBefore).not.toBe('Renamed by the server');
 });
 
 // #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`,
