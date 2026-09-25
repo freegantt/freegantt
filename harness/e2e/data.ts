@@ -194,7 +194,6 @@ function refreshHistoryButtons(): void {
 function onChange({ changeSet }: DatasetEventMap['change']): void {
   prependChangeSet(log, changeSet);
   syncSelectionUi();
-  refreshHistoryButtons();
 }
 
 function bindGantt(): void {
@@ -203,6 +202,7 @@ function bindGantt(): void {
 
 function bindDataset(): void {
   dataset.on('change', onChange);
+  dataset.on('historyChange', refreshHistoryButtons);
 }
 
 // Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock

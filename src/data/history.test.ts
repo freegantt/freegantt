@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
-import { changeSetId, entryId, MutationCancelledError } from '../model/index.js';
-import type { ChangeSet } from '../model/index.js';
+import {
+  changeSetId,
+  entryId,
+  MutationCancelledError,
+  MutationDuringNotificationError,
+} from '../model/index.js';
+import type { ChangeSet, DatasetEventMap } from '../model/index.js';
 import { invertChangeSet } from './change-set.js';
 import type { EditExtender } from './edit-extension.js';
 
@@ -34,6 +39,10 @@ describe('history: false', () => {
 
   it('records no step for a user edit, a sync or a load', () => {
     const state = appOwnedUndo();
+    let historyChanges = 0;
+    state.on('historyChange', () => {
+      historyChanges += 1;
+    });
 
     state.entries.update('t1', { name: 'Roofing' });
     expect(state.canUndo).toBe(false);
@@ -42,6 +51,7 @@ describe('history: false', () => {
     state.entries.load([{ id: 't1', name: 't1', start: 0, end: 1 }]);
     expect(state.canUndo).toBe(false);
     expect(state.canRedo).toBe(false);
+    expect(historyChanges).toBe(0);
   });
 
   it('undo() and redo() write nothing and fire no event', () => {
@@ -72,6 +82,112 @@ describe('history: false', () => {
 
     state.replay(invertChangeSet(steps.pop()!));
 
+    expect(state.entries.get('t1')?.name).toBe('t1');
+  });
+});
+
+describe('historyChange', () => {
+  function recordHistoryChanges(state: DatasetState): DatasetEventMap['historyChange'][] {
+    const seen: DatasetEventMap['historyChange'][] = [];
+    state.on('historyChange', (payload) => {
+      seen.push(payload);
+    });
+    return seen;
+  }
+
+  it('fires once when the first edit makes undo possible, and not again for the next edit', () => {
+    const state = dataset([{ id: 't1' }]);
+    const seen = recordHistoryChanges(state);
+
+    state.entries.update('t1', { name: 'b' });
+    state.entries.update('t1', { name: 'c' });
+
+    expect(seen).toEqual([{ canUndo: true, canRedo: false }]);
+  });
+
+  it('fires when an undo and a redo move the cursor', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'b' });
+    const seen = recordHistoryChanges(state);
+
+    state.undo();
+    state.redo();
+
+    expect(seen).toEqual([
+      { canUndo: false, canRedo: true },
+      { canUndo: true, canRedo: false },
+    ]);
+  });
+
+  it('fires after an undo that forgot every step and committed nothing', () => {
+    const state = dataset([{ id: 't1' }]); // name starts as 't1'
+    state.entries.update('t1', { name: 'b' });
+    // The sync writes back the value the undo would restore, so the step has nothing left to write.
+    state.entries.sync([{ id: 't1', name: 't1', start: 0, end: 1 }]);
+    const seen = recordHistoryChanges(state);
+    let changes = 0;
+    state.on('change', () => {
+      changes += 1;
+    });
+
+    state.undo();
+
+    expect(changes).toBe(0);
+    expect(seen).toEqual([{ canUndo: false, canRedo: false }]);
+  });
+
+  it('fires after a redo that forgot every step and committed nothing', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'b' });
+    state.undo();
+    // The sync writes the value the redo would write, so the step has nothing left to write.
+    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]);
+    const seen = recordHistoryChanges(state);
+
+    state.redo();
+
+    expect(seen).toEqual([{ canUndo: false, canRedo: false }]);
+  });
+
+  it('a refused undo fires nothing, even when it forgot a step on the way', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'b' });
+    state.entries.update('t1', { name: 'c' });
+    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]); // the top step is now moot
+    const seen = recordHistoryChanges(state);
+    state.on('beforeChange', () => false);
+
+    expect(() => state.undo()).toThrow(MutationCancelledError);
+
+    expect(seen).toEqual([]);
+  });
+
+  it('fires when a load clears History', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'b' });
+    const seen = recordHistoryChanges(state);
+
+    state.entries.load([{ id: 't1', name: 't1', start: 0, end: 1 }]);
+
+    expect(seen).toEqual([{ canUndo: false, canRedo: false }]);
+  });
+
+  it('a handler may not write, even when no change is running', () => {
+    const state = dataset([{ id: 't1' }]);
+    state.entries.update('t1', { name: 'b' });
+    state.entries.sync([{ id: 't1', name: 't1', start: 0, end: 1 }]);
+    let thrown: unknown;
+    state.on('historyChange', () => {
+      try {
+        state.entries.update('t1', { name: 'from a handler' });
+      } catch (error) {
+        thrown = error;
+      }
+    });
+
+    state.undo();
+
+    expect(thrown).toBeInstanceOf(MutationDuringNotificationError);
     expect(state.entries.get('t1')?.name).toBe('t1');
   });
 });

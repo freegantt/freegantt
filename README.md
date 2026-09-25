@@ -80,7 +80,7 @@ dataset.redo();
 
 `undo()`/`redo()` return nothing — like every other commit, what they did arrives on
 `dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`. `canUndo`/`canRedo` say whether there is
-anything to undo/redo. Dependencies land in a later slice — see `plans/03-slices.md`.
+anything to undo/redo, and `dataset.on('historyChange')` fires when either answer changes. Dependencies land in a later slice — see `plans/03-slices.md`.
 
 ## Dates and ids a consumer can write
 
@@ -248,6 +248,7 @@ dataset.undo(); // origin: 'undo' on the change event it emits
 dataset.redo(); // origin: 'redo'
 dataset.canUndo;
 dataset.canRedo;
+dataset.on('historyChange', ({ canUndo, canRedo }) => {}); // fires when either answer changes
 
 // There is no `toJSON` and no `fromJSON`: the library holds no save format (ADR 0016). A consumer
 // reads `entries.all` and `fields.all` above, and saves the shape its own backend wants.

@@ -691,7 +691,7 @@ Everything is delegated into `data/` — the public class is a thin façade over
 - **entries CRUD** — `entries.all`, `entries.add/update/remove`, and the row's own doors —
   `entry.read(key)`, `entry.children()`, `entry.hasChildren`.
 - **transactions** — `transaction(fn)` batches several edits into one changeset, one render.
-- **events** — `on('beforeChange', vetoable)`, `on('change', { changeSet })`.
+- **events** — `on('beforeChange', vetoable)`, `on('change', { changeSet })`, `on('historyChange', { canUndo, canRedo })`.
 - **fields** — `field(key)`, `fields.all`, `fieldTypes`, `aggregators`.
 - **undo / redo** — `undo()`, `redo()`, `canUndo`, `canRedo`, `replay(changeSet)`.
 - **implements DatasetContract** — States the relationship to `model/dataset.ts` instead of

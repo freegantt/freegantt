@@ -59,9 +59,8 @@ dataset.undo(); // origin 'undo', cost 200 -> 500
 dataset.redo(); // origin 'redo', cost 500 -> 200
 ```
 
-`canUndo` / `canRedo` are already post-step inside a `change` handler — the History's cursor
-moves on the `change` the undo commit emits, never on the `undo()` call — so one
-handler can drive a toolbar:
+`historyChange` fires whenever `canUndo` or `canRedo` changes, so one handler can drive a
+toolbar. The payload carries both answers:
 
 <!-- doc-example-setup
 // What the examples below stand on: a Dataset, a Gantt, and the app's own toolbar.
@@ -73,17 +72,19 @@ declare const isDark: boolean;
 -->
 
 ```ts
-dataset.on('change', () => {
-  undoButton.disabled = !dataset.canUndo;
-  redoButton.disabled = !dataset.canRedo;
+dataset.on('historyChange', ({ canUndo, canRedo }) => {
+  undoButton.disabled = !canUndo;
+  redoButton.disabled = !canRedo;
 });
 ```
 
-After a sync, one `undo()` or `redo()` click can find that every remaining step has nothing left
-to write. It then forgets those steps, writes nothing, and fires no `change`. `canUndo` and
-`canRedo` still change, but with no event to catch it. Read `canUndo`/`canRedo` again after your
-own `undo()`/`redo()` call returns, rather than waiting for `change`, if the toolbar must stay
-correct through that case.
+Use `historyChange`, not `change`, for these buttons. After a sync, one `undo()` or `redo()` click
+can find that every remaining step has nothing left to write. It then forgets those steps, writes
+nothing, and fires no `change`. `historyChange` still fires, because `canUndo` changed.
+
+`historyChange` fires only when one of the two answers changes. A second edit in a row fires
+nothing, because `canUndo` was already `true`. A handler may not write, the same as a `change`
+handler. Under `history: false` it never fires.
 
 `updated` also carries plugin-store rows (`store: 'plugin:…'`, whole-value, no `field` key).
 `fieldRowsOf(changeSet)` filters to Field rows.

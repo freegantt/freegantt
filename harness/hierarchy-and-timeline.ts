@@ -303,8 +303,8 @@ function refreshOwningParentUndo(): void {
 
 owningParentDataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   prependChangeSet(log, changeSet);
-  refreshOwningParentUndo();
 });
+owningParentDataset.on('historyChange', refreshOwningParentUndo);
 
 owningParentUndoBtn.addEventListener('click', () => attemptMutation(() => owningParentDataset.undo()));
 

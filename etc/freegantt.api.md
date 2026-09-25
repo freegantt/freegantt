@@ -415,6 +415,10 @@ export interface DatasetEventMap {
         changeSet: ChangeSet;
     };
     error: ErrorReport;
+    historyChange: {
+        canUndo: boolean;
+        canRedo: boolean;
+    };
 }
 
 // @public

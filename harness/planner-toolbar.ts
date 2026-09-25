@@ -174,6 +174,7 @@ export function mountPlannerToolbar(options: PlannerToolbarOptions): PlannerTool
 
   gantt.on('navigationChange', refresh);
   gantt.dataset.on('change', refresh);
+  gantt.dataset.on('historyChange', refresh);
 
   refresh();
 
