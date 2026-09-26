@@ -38,7 +38,7 @@ const dataset = new Dataset<PlannerEntryProps>({
 
 // The design's own column set, left to right. Each one names a Field and carries presentation only —
 // the width, the alignment, and where a cell paints something other than its formatted text.
-const GRID_COLUMNS: readonly GridColumnInput<PlannerEntryProps>[] = [
+const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'ref', align: 'center', width: 44 },
   { field: 'name', header: 'Task', width: 210, columnRenderer: taskCell },
   { field: 'owner', width: 48, columnRenderer: ownerCell },
@@ -94,21 +94,21 @@ const COMPACT_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month:
 
 /** The Start cell: `formatDate` alone, in the compact format — a start needs no inclusive-end
  *  conversion (that is `formatEndInclusive`'s job, below). */
-function startCell({ fieldValue }: ColumnRendererContext<Instant>): ElementDescription | undefined {
+function startCell({ fieldValue }: ColumnRendererContext): ElementDescription | undefined {
   if (fieldValue === undefined) return { text: '' };
-  return { text: formatDate(dataset.timeZone, fieldValue, undefined, COMPACT_DATE_FORMAT) };
+  return { text: formatDate(dataset.timeZone, fieldValue as Instant, undefined, COMPACT_DATE_FORMAT) };
 }
 
 /** The Finish cell: `formatEndInclusive`, the one place storage's half-open `end` becomes the
  *  inclusive date a reader expects, in the same compact format as Start. */
-function finishCell({ entry, fieldValue }: ColumnRendererContext<Instant>): ElementDescription | undefined {
+function finishCell({ entry, fieldValue }: ColumnRendererContext): ElementDescription | undefined {
   if (entry === undefined || fieldValue === undefined) return { text: '' };
   // End with no start (ADR 0012) shows the stored end as a plain instant — same rule the core
   // `end` Field's own `formatEnd` follows in `src/data/fields/core-fields.ts`.
   if (entry.start === undefined) {
-    return { text: formatDate(dataset.timeZone, fieldValue, undefined, COMPACT_DATE_FORMAT) };
+    return { text: formatDate(dataset.timeZone, fieldValue as Instant, undefined, COMPACT_DATE_FORMAT) };
   }
-  const span = { start: entry.start, end: fieldValue };
+  const span = { start: entry.start, end: fieldValue as Instant };
   return { text: formatEndInclusive(dataset.timeZone, span, undefined, COMPACT_DATE_FORMAT) };
 }
 

@@ -10,7 +10,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 - **Breaking:** `dataset.entries.sync(rows)` is now `dataset.entries.syncAll(rows)`. The behavior does not change. The new name pairs with `syncChanges`: `syncAll` takes every row, and `syncChanges` takes only the rows that changed. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - `dataset.entries.add()`, `load()`, `syncAll()`, `EntryDelta.upsert`, and the `Dataset` constructor's `entries` option now also take a plain `EntryInput<TProps>` row, not only `FlatEntryInput<TProps>`. A function generic over `TProps` can now pass an `EntryInput<TProps>` value straight through, with no cast. ([#527](https://github.com/freegantt/freegantt/issues/527))
-- A `columnRenderer` now types its `fieldValue` from the column's own Field key — a `start` column's renderer reads `fieldValue` as `Instant`, not `unknown`. Not breaking: every affected member keeps its default and an existing untyped renderer still compiles. Setting `gantt.gridColumns` types each renderer from this Gantt's own Dataset props; reading `gantt.gridColumns` back stays erased, so a typed `Gantt<TProps>` still widens to a plain `Gantt`. ([#522](https://github.com/freegantt/freegantt/issues/522))
 - The ingest warning for a flat key that no Field declares now says that the value drops. It also names both fixes: declare the key in `fields`, or nest it as `props: { key }`. ([#524](https://github.com/freegantt/freegantt/issues/524))
 
 ### Added

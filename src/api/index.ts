@@ -81,7 +81,6 @@ export type {
   AggregatorName,
   FieldTypeName,
   GridColumn,
-  GridColumnOf,
   GridColumnInput,
   GridColumnBase,
   GridColumnSizing,

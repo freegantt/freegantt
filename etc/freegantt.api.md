@@ -199,12 +199,12 @@ export type CollapseState = 'collapsed' | 'expanded' | 'leaf';
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 // @public (undocumented)
-export type ColumnRenderer<TValue = unknown> = (ctx: ColumnRendererContext<TValue>) => ElementDescription | undefined;
+export type ColumnRenderer = (ctx: ColumnRendererContext) => ElementDescription | undefined;
 
 // @public
-export interface ColumnRendererContext<TValue = unknown> {
+export interface ColumnRendererContext {
     entry?: Entry | undefined;
-    fieldValue: TValue | undefined;
+    fieldValue: unknown;
     value: string;
 }
 
@@ -1190,8 +1190,9 @@ export class Gantt<TProps = unknown> {
     set fit(f: TimeScaleFit);
     get gridCellRenderer(): GridCellRenderer | undefined;
     set gridCellRenderer(renderer: GridCellRenderer | undefined);
+    // (undocumented)
     get gridColumns(): readonly GridColumnInput[];
-    set gridColumns(columns: readonly GridColumnInput<TProps>[]);
+    set gridColumns(columns: readonly GridColumnInput[]);
     get gridResizable(): boolean;
     set gridResizable(resizable: boolean);
     // (undocumented)
@@ -1341,7 +1342,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
     gridCellRenderer?: GridCellRenderer;
-    gridColumns?: readonly GridColumnInput<TProps>[];
+    gridColumns?: readonly GridColumnInput[];
     gridResizable?: boolean;
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
@@ -1397,19 +1398,15 @@ export interface GridCellRendererContext {
 }
 
 // @public
-export type GridColumn<TProps = unknown> = {
-    [K in keyof CoreFieldValues]-?: GridColumnOf<TProps, K>;
-}[keyof CoreFieldValues] | {
-    [K in keyof TProps & string]-?: GridColumnOf<TProps, K>;
-}[keyof TProps & string] | (GridColumnBase<string & {}, unknown> & GridColumnSizing);
+export type GridColumn = GridColumnBase & GridColumnSizing;
 
 // @public
-export interface GridColumnBase<TKey extends FieldKey = FieldKey, TValue = unknown> {
+export interface GridColumnBase {
     // (undocumented)
     align?: ColumnAlign;
-    columnRenderer?: ColumnRenderer<TValue>;
+    columnRenderer?: ColumnRenderer;
     // (undocumented)
-    field: TKey;
+    field: FieldKey;
     // (undocumented)
     header?: string;
     hidden?: boolean;
@@ -1419,10 +1416,7 @@ export interface GridColumnBase<TKey extends FieldKey = FieldKey, TValue = unkno
 }
 
 // @public
-export type GridColumnInput<TProps = unknown> = FieldKey | GridColumn<TProps>;
-
-// @public
-export type GridColumnOf<TProps, K extends FieldKey> = GridColumnBase<K, Exclude<FieldValue<TProps, K>, undefined>> & GridColumnSizing;
+export type GridColumnInput = FieldKey | GridColumn;
 
 // @public
 export interface GridColumnsChange {
