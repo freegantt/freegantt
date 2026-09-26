@@ -360,6 +360,8 @@ export class RevealTargetNotFoundError extends FreeGanttError {
   }
 }
 
+type DuplicateEntryIdKind = 'collision' | 'duplicate-in-list' | 'upsert-and-remove';
+
 /** `code: 'duplicate-entry-id'` — three different mistakes, three different messages. `kind:
  *  'collision'` is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind:
  *  'duplicate-in-list'` is a whole-list write (`entries.load()`, and `entries.syncAll()`, #517)
@@ -371,22 +373,26 @@ export class DuplicateEntryIdError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly operation: string;
 
-  constructor(
-    entryId: EntryId,
-    operation: string,
-    kind: 'collision' | 'duplicate-in-list' | 'upsert-and-remove',
-  ) {
+  constructor(entryId: EntryId, operation: string, kind: DuplicateEntryIdKind) {
     super(
       'duplicate-entry-id' satisfies BuiltInThrownCode,
-      kind === 'collision'
-        ? `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`
-        : kind === 'duplicate-in-list'
-          ? `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`
-          : `${operation}: the delta both upserts and removes id "${entryId}". Name each id in one list only.`,
+      DuplicateEntryIdError.#message(kind, entryId, operation),
     );
     this.name = 'DuplicateEntryIdError';
     this.entryId = entryId;
     this.operation = operation;
+  }
+
+  /** The message for each `kind`, kept in one place so the constructor stays flat. */
+  static #message(kind: DuplicateEntryIdKind, entryId: EntryId, operation: string): string {
+    switch (kind) {
+      case 'collision':
+        return `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`;
+      case 'duplicate-in-list':
+        return `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`;
+      case 'upsert-and-remove':
+        return `${operation}: the delta both upserts and removes id "${entryId}". Name each id in one list only.`;
+    }
   }
 }
 
