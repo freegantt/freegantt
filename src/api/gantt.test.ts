@@ -25,6 +25,7 @@ import {
 } from './index.js';
 import type {
   ChangeSet,
+  ColumnRendererContext,
   DataPlugin,
   EditExtender,
   Entry,
@@ -33,6 +34,7 @@ import type {
   ChromePlugin,
   GridColumn,
   GridColumnInput,
+  Instant,
   PluginContext,
   TimeUnit,
   SnapRule,
@@ -2790,6 +2792,29 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     });
 
     expect(container.querySelector('.fg-row [data-field="cost"]')?.textContent).toBe('over: $1500');
+
+    gantt.destroy();
+  });
+
+  it("a start column's renderer receives entry.read('start') — what the typed fieldValue relies on", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries.slice(0, 1) });
+    let seenFieldValue: Instant | undefined;
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: [
+        {
+          field: 'start',
+          columnRenderer: ({ fieldValue }: ColumnRendererContext<Instant>) => {
+            seenFieldValue = fieldValue;
+            return undefined;
+          },
+        },
+      ],
+    });
+
+    expect(seenFieldValue).toBe(dataset.entries.get(sampleEntries[0]!.id)?.read('start'));
 
     gantt.destroy();
   });
