@@ -323,11 +323,11 @@ export type {
 } from '../model/index.js';
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them. FlatEntryInput is
-// what `DatasetOptions.entries` takes (#281) — a declared Field key sits flat, the same shape
-// `update()` takes; EntryInput stays the nested-`props`-only shape `entry.toInput()` hands back.
-// EntryIngestInput is the union `entries.add()`, `load()`, `syncAll()` and `EntryDelta.upsert` all
-// take: either shape, so a function generic over TProps can pass a plain EntryInput<TProps> with no
-// cast, where FlatEntryInput<TProps> alone does not resolve.
+// the flat-key shape a declared Field sits in, the same shape `update()` takes; EntryInput stays the
+// nested-`props`-only shape `entry.toInput()` hands back. EntryIngestInput is the union the
+// `Dataset` constructor's `entries` option, `entries.add()`, `load()`, `syncAll()` and
+// `EntryDelta.upsert` all take: either shape, so a function generic over TProps can pass a plain
+// EntryInput<TProps> with no cast, where FlatEntryInput<TProps> alone does not resolve.
 export type {
   EntryInput,
   FlatEntryInput,

@@ -166,8 +166,9 @@ export type FlatEntryInput<TProps = Record<string, unknown>> = string extends ke
       [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
     };
 
-/** What `entries.add()`, `entries.load()`, `entries.syncAll()` and `EntryDelta.upsert` all take: a
- *  `FlatEntryInput` row, or a plain `EntryInput` row.
+/** What the `Dataset` constructor's `entries` option, `entries.add()`, `entries.load()`,
+ *  `entries.syncAll()` and `EntryDelta.upsert` all take: a `FlatEntryInput` row, or a plain
+ *  `EntryInput` row.
  *
  *  A function generic over `TProps` cannot name a `FlatEntryInput<TProps>` value, because that
  *  type's own flat-key check does not resolve until `TProps` is concrete (see `FlatEntryInput`'s own
