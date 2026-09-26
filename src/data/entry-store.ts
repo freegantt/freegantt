@@ -933,11 +933,13 @@ export class EntryStore implements EntryStoreContract {
     if (edited !== undefined) this.#recordStagedParent(writeSet, edited);
   }
 
-  stageRemove(_token: TxToken, id: EntryId): void {
+  stageRemove(token: TxToken, id: EntryId): void {
     const writeSet = this.#openWriteSet();
     writeSet.removed.add(id);
     writeSet.added.delete(id);
     writeSet.edits.delete(id);
+    // The same moment this Entry's staged edits go, its plugin store rows go too.
+    this.#runner?.pluginStores.stageEntryRemoval(token, id);
     // Captured once, off the store's own committed map, which a transaction never mutates until it
     // closes — so it stays this id's true pre-transaction row no matter how many more times
     // this id is removed and re-added before the transaction ends. An id with no row here never

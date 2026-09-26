@@ -78,6 +78,9 @@ export interface TransactionalEntryStore {
 export interface TransactionalPluginStores {
   beginTransaction(token: TxToken): void;
   pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[];
+  /** Stages the removal of every row `id` holds, in every store — `EntryStore.stageRemove` calls it
+   *  as it stages the entry's own removal, so a write staged earlier never outlives its Entry. */
+  stageEntryRemoval(token: TxToken, id: EntryId): void;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** `id`'s committed row in `store`, with no write set overlaid — what replay reads as a store row's
    *  current value before it decides whether to overwrite it (`data/replay-changes.ts`). */
