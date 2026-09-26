@@ -5,7 +5,7 @@
 // so the gated branch is the only branch we exercise.
 //
 // That combination has shipped three times — `'scale-options-ignored'` and the corrected-rollup report
-// (D-S5-41, both reached no consumer), and `'look-claimed-twice'` (J33, caught in review). Each was
+// (both reached no consumer), and `'look-claimed-twice'` (caught in review). Each was
 // specified as "warn in dev mode".
 //
 // This guard is an allowlist of IMPORTERS, not a parse of what each gate contains. Two reasons. A

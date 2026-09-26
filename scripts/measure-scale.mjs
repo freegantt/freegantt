@@ -1,4 +1,4 @@
-// S6 R1/R2 (#95, #406): the measured spike D2 asks for, run on demand.
+// The measured spike D2 asks for (#95, #406), run on demand.
 //
 // **This is a measurement, not a gate.** It prints numbers and always exits 0 on a completed run.
 // #95 is explicit that a CI test which fails on frame time is a flaky proxy, and that budgets wait

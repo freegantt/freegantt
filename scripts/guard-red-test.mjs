@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Proves the dependency-cruiser boundary guard is loaded: writes a deliberate violating import
 // (scheduling/ -> render/, forbidden by plans/01 §1), asserts `depcruise` fails on it, then reverts.
-// Then proves each `*-is-removable` leaf rule (D-S2-23, S2.7 §3) actually blocks a second importer,
+// Then proves each `*-is-removable` leaf rule actually blocks a second importer,
 // the same way. docs/04-hooks-and-ci.md §4: "a guard with no failing fixture is presumed broken."
 
 import { execFileSync } from 'node:child_process';
@@ -52,7 +52,7 @@ function eslintFails(relativeFile) {
   }
 }
 
-// F7: eslint.config.js's harness/e2e/fixtures block reads the specifier *text*, which is what
+// eslint.config.js's harness/e2e/fixtures block reads the specifier *text*, which is what
 // proves the case dependency-cruiser's resolved-path exception cannot state on its own (see the
 // comment above the two calls of this below). Same write/assert/delete shape as `checkRedTestFile`,
 // pointed at `eslint` instead of `depcruise`.
@@ -87,7 +87,7 @@ checkRedTestFile(
   'interaction/ -> layout/ boundary violation (P3 widening stays to one arrow)',
 );
 
-// D-S2-23: each removable leaf has exactly one allowed importer. A second file importing the leaf
+// Each removable leaf has exactly one allowed importer. A second file importing the leaf
 // from outside that allowlist must fail the build, the same way a layer violation does.
 checkRedTestFile(
   'src/data/__rollup_red_test__.ts',
@@ -110,7 +110,7 @@ checkRedTestFile(
   'history-is-removable: second importer',
 );
 
-// D-S5-5 (plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md): extensions/ may import only
+// extensions/ (see plans/s5-extensibility-and-editing/s5.1-plugin-runtime.md) may import only
 // api/ and model/ — the dogfood gate that proves a built-in feature took no back door.
 checkRedTestFile(
   'src/extensions/__boundary_red_test__.ts',
@@ -131,20 +131,20 @@ checkRedTestFile(
   'extensions/ -> data/transaction.js boundary violation (dev-mode.ts leaf stays scoped)',
 );
 
-// #287, review finding F7: dependency-cruiser matches *resolved* paths, so `pathNot:
+// #287: dependency-cruiser matches *resolved* paths, so `pathNot:
 // '^src/api/index\.ts$'` — the clause that lets the `freegantt` alias through — cannot tell that
 // alias from a hand-written relative path naming the same file. This fixture lands one file short
 // of that clause (an internal, `src/layout/bars/variants.ts`, same shape as `render/ ->
 // data/transaction.js` above): it proves the cruiser rule still blocks a relative reach past the
 // index, not that it can tell the index path itself from the alias. That second claim is
-// `eslint.config.js`'s job (F7's ESLint check, right below) — it reads the specifier text.
+// `eslint.config.js`'s job (the ESLint check, right below) — it reads the specifier text.
 checkRedTestFile(
   'harness/__boundary_red_test__.ts',
   "// Deliberate boundary violation — harness/ may import 'freegantt' only, not a relative src/ path,\n// and this lands one file short of the one exception (src/api/index.ts) the cruiser rule states.\nimport '../src/layout/bars/variants.js';\nexport {};\n",
   'harness/ -> src/ boundary violation (an internal, one file short of the index exception, #287)',
 );
 
-// F7: the case dependency-cruiser's own exception cannot catch — a relative path that names
+// The case dependency-cruiser's own exception cannot catch — a relative path that names
 // `src/api/index.ts` itself, the exact file the `freegantt` alias resolves to. `pathNot` lets the
 // alias through by resolved path, so it lets this through too; only reading the specifier *text*
 // (eslint.config.js's harness/e2e/fixtures block) can tell the two apart. Two positions: a plain

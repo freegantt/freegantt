@@ -1,5 +1,5 @@
 // Deterministic entry inputs for the 10,000-entry acceptance page (plans/s1.11-close-the-gate/README.md
-// §3.1, D-S1.11-2) and the S7 perf spike. "seeded" names the generator; `harness/e2e/large-dataset.html`
+// §3.1) and the S7 perf spike. "seeded" names the generator; `harness/e2e/large-dataset.html`
 // is the demo page it feeds — the two are deliberately different names for two different things.
 //
 // A seeded LCG, never `Math.random`: the same seed is the same 10,000 entries forever, so a snapshot
