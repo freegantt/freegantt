@@ -3,6 +3,7 @@ status: accepted — verdict pending (this build). Amended by [0036](0036-an-und
   an undo or a redo now keeps a value a sync wrote since, instead of overwriting it. Amends [ADR 0015](0015-what-the-write-door-refuses.md),
   [ADR 0034](0034-sibling-order-is-a-field.md) (undo and redo renumber the sibling groups they touch)
   and the rule that replay never re-runs the Rollup (undo and redo now re-roll the parents they touch).
+  Renamed: entries.sync is entries.syncAll since #527; the rules here are unchanged.
 decided: `entries.sync(list)` writes through the same write door `entries.load()` uses, not through
   `entries.update()`. A `'never'` lock does not refuse it, a derived parent cell re-rolls instead of
   taking an authored value, and no `EditExtender` cascade runs. `beforeChange` can still veto the

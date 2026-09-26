@@ -1,6 +1,6 @@
-// data/ — the pure diff behind entries.sync() (#517): `changesToMatchBatch` reads two batches and
+// data/ — the pure diff behind entries.syncAll() (#517): `changesToMatchBatch` reads two batches and
 // hands back the rows that turn one into the other. No store, no transaction, no commit — those are
-// entry-store.ts's job, exercised in entry-store.sync.test.ts once entries.sync() exists.
+// entry-store.ts's job, exercised in entry-store.sync-all.test.ts once entries.syncAll() exists.
 
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';

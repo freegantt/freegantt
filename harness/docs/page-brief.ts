@@ -81,7 +81,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       "ctx.edits.setLockRule((next) => (entry, field) => …)",
       'gantt.installPlugin(bufferKind())',
       "gantt.snap = { unit: 'hour', increment: 6 }",
-      'dataset.entries.sync(server.fetchRows())',
+      'dataset.entries.syncAll(server.fetchRows())',
     ],
     specLinks: [
       { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },

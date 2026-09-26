@@ -837,7 +837,7 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
     load(inputs: readonly FlatEntryInput<TProps>[]): void;
     // (undocumented)
     remove(id: EntryId | string): void;
-    sync(inputs: readonly FlatEntryInput<TProps>[]): void;
+    syncAll(inputs: readonly FlatEntryInput<TProps>[]): void;
     // (undocumented)
     update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
 }

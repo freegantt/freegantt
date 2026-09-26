@@ -39,7 +39,7 @@ import type {
 
 /** A sync target, built from the current store's own `toInput()` list — never from scratch. Every
  *  edit reads past whatever ids the ops before it left, so a run that removed 'b' simply has fewer
- *  rows to rename or reparent, the same shrink a hand-authored `entries.sync()` call sees. */
+ *  rows to rename or reparent, the same shrink a hand-authored `entries.syncAll()` call sees. */
 interface SyncSpec {
   readonly renameStep: number; // 0 disables; else rename every row at index i where i % renameStep === 0
   readonly removeStep: number; // 0 disables; else drop every row at index i where i % removeStep === 0
@@ -60,7 +60,7 @@ let freshSyncId = 0;
 
 /** Pure: turns the current rows plus a `SyncSpec` into the next server list. The reparent step
  *  always targets the surviving list's own first row, a row this function never itself moves, so it
- *  never proposes a loop — `entries.sync()` still gets the final say (I5), and a run that manages to
+ *  never proposes a loop — `entries.syncAll()` still gets the final say (I5), and a run that manages to
  *  trip it anyway is skipped like any other refused op. */
 function applySyncSpec(current: readonly EntryInput[], spec: SyncSpec): FlatEntryInput[] {
   let rows: EntryInput[] = current.map((entry) => ({ ...entry }));
@@ -85,7 +85,7 @@ function applySyncSpec(current: readonly EntryInput[], spec: SyncSpec): FlatEntr
  *  `applyOp` skips a refused op — an invalid attempt is not this property. */
 function applySync(state: DatasetState, spec: SyncSpec): void {
   try {
-    state.entries.sync(
+    state.entries.syncAll(
       applySyncSpec(
         state.entries.all.map((entry) => entry.toInput()),
         spec,
@@ -336,7 +336,7 @@ describe('undo and redo across a sync — properties (#517 amendment)', () => {
           if (recordedCount === 0) return; // nothing recorded — not this property
 
           // Same ids, same parents, same order as the store already holds — only 'note' changes.
-          state.entries.sync(state.entries.all.map((entry) => ({ ...entry.toInput(), props: { note } })));
+          state.entries.syncAll(state.entries.all.map((entry) => ({ ...entry.toInput(), props: { note } })));
 
           undoAll(state);
           expect(undoLandings).toBe(recordedCount);

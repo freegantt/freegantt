@@ -1,4 +1,4 @@
-// data/ — the pure diff behind `entries.sync()` (#517): the rows that turn one batch of committed
+// data/ — the pure diff behind `entries.syncAll()` (#517): the rows that turn one batch of committed
 // entries into another. Reads two batches and hands back a ChangeSet's own three lists; it opens no
 // transaction, touches no store, and commits nothing — `entry-store.ts` is the one caller that does.
 

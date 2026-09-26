@@ -667,7 +667,7 @@ export class EntryStore implements EntryStoreContract {
     const { runner, byId, entries: read, rollupUpdated, reports } = this.#readBatch(inputs, 'entries.load');
 
     // An added entity carries the values the commit settles on, not a row (the same rule
-    // `sync` and `buildCommitChangeSet` follow): every id here is new to the store, so every
+    // `syncAll` and `buildCommitChangeSet` follow): every id here is new to the store, so every
     // Rollup row folds onto its entity, and the changeset holds no entries row for it.
     const rolled = this.#foldRollup(byId, rollupUpdated);
     const added = read.map((entry) => ({ store: 'entries' as const, entity: rolled.get(entry.id)! }));
@@ -701,8 +701,14 @@ export class EntryStore implements EntryStoreContract {
    * one `ChangeSet` with `origin: 'sync'`, and raises them once that commit lands — History records
    * no undo step for it and erases no Redo (`docs/11-server-data.md`).
    */
-  sync(inputs: readonly FlatEntryInput[]): void {
-    const { runner, byId, entries: read, rollupUpdated, reports } = this.#readBatch(inputs, 'entries.sync');
+  syncAll(inputs: readonly FlatEntryInput[]): void {
+    const {
+      runner,
+      byId,
+      entries: read,
+      rollupUpdated,
+      reports,
+    } = this.#readBatch(inputs, 'entries.syncAll');
 
     const rolled = this.#foldRollup(byId, rollupUpdated);
     const target = read.map((entry) => rolled.get(entry.id) ?? entry);
@@ -725,12 +731,12 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /**
-   * The read-and-roll step `load` and sync (#517) both run before either builds its own `ChangeSet`:
+   * The read-and-roll step `load` and `syncAll` both run before either builds its own `ChangeSet`:
    * checks a whole-list write may run right now (no open transaction, no running extension hook, no
    * `beforeChange`/`change` handler on the stack), reads and places the batch (`readEntryBatch`), and
    * runs construction's own Rollup once. Returns the bound runner alongside the placed entries, the
    * Rollup's updates, and the reports a dropped `siblingIndex` row and a dropped derived value owe —
-   * raised by `commitChangeSet` once the commit lands, so `sync` drops them with a call that writes
+   * raised by `commitChangeSet` once the commit lands, so `syncAll` drops them with a call that writes
    * nothing.
    */
   #readBatch(
@@ -832,7 +838,7 @@ export class EntryStore implements EntryStoreContract {
    *  is seen.
    *
    *  `seen` is the same guard `#depthOf` carries. Every door onto `parentId` checks now —
-   *  construction, `load`, `sync` and `replay()` (ADR 0031, ADR 0035) all refuse or drop a loop
+   *  construction, `load`, `syncAll` and `replay()` (ADR 0031, ADR 0035) all refuse or drop a loop
    *  before it reaches the store — so this walk should never actually meet one already there. It
    *  stays: a chain this long is cheap to walk once, and a guard that assumes "nothing upstream can
    *  go wrong" is the guard that hangs the one time it does. A loop the edit is not part of stops the
