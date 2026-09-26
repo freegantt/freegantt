@@ -433,7 +433,7 @@ export interface DatasetEvents {
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    entries: readonly FlatEntryInput<TProps>[];
+    entries: readonly EntryIngestInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: false | {
