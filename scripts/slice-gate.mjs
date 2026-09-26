@@ -21,7 +21,7 @@ export function run(cmd, cwd = root) {
 
 /** True iff a test title carrying `[<id>]` exists in the source — a fixed-string search, not a
  * regex, so `[S1-A2]`-shaped ids never get read as a character class (plans/s1.11-close-the-gate
- * README.md D-S1.11-1). Checked before anything runs: an id that was never written must fail loudly,
+ *  README.md). Checked before anything runs: an id that was never written must fail loudly,
  * not pass because the filtered run matched zero tests and exited 0 anyway. `dirs`/`cwd` default to
  * the real tree; `test/guards/slice-gate.test.ts` overrides both to drive this against a fixture. */
 export function idExistsInSource(id, { dirs = ['src', 'e2e'], cwd = root } = {}) {
@@ -35,7 +35,7 @@ export function idExistsInSource(id, { dirs = ['src', 'e2e'], cwd = root } = {})
 
 /** Runner name -> how to run the escaped, id-filtered slice of that runner. No `--project` flag on
  * vitest: an acceptance id may live in `pure` or `dom` and move between them with no gate edit
- * (D-S1.11-1). `pnpm test:e2e`, never a bare `playwright test`: the script carries the config, and
+ * `pnpm test:e2e`, never a bare `playwright test`: the script carries the config, and
  * shelling past it is how the gate and CI drift apart. */
 export const RUNNERS = {
   vitest: (id) => run(`pnpm vitest run -t "\\[${id}\\]"`),
@@ -57,7 +57,7 @@ export function tagged(id, runners, label, { runnerImpls = RUNNERS, existsOption
   };
 }
 
-/** `[S5-A1]` is the dogfood gate (D-S5-5), and its claim has two halves that only mean something
+/** `[S5-A1]` is the dogfood gate, and its claim has two halves that only mean something
  * together: the lint proves `extensions/` reaches nothing but `api/` and `model/`, and the feature
  * tests prove a built-in still does its whole job from that surface. A green lint over a plugin
  * that does nothing proves nothing, so the one line runs both. */
@@ -231,7 +231,7 @@ const GATES = {
         'a cell edit commits one transaction; beforeEntryEdit replaces the editor',
       ),
       {
-        // The two halves of D-S5-28, and the reason there are two: the probe catches a built-in an
+        // The check has two halves, and the reason there are two: the probe catches a built-in an
         // accidental import drags in, and the budget catches growth no single import causes. The
         // build runs first because both read `dist/`, the path a third party's bundler resolves.
         label: '[S5-A6] no unused built-in reaches a consumer bundle, and core does not grow past its budget',

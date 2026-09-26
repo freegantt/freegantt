@@ -1,5 +1,5 @@
 // Deterministic entry inputs for the S1.12 density-floor demo (plans/s1.12-timeline-navigation/README.md
-// D-S1.12-16): a dataset wide enough that the day preset's `minTickWidthPx` floor (D-S1.12-2) is
+// ): a dataset wide enough that the day preset's `minTickWidthPx` floor is
 // visible — the pane scrolls instead of squishing ticks to sub-pixel width. `harness/e2e/zoom.html`
 // switches between this and `sampleEntryInputs` so the floor's effect is a side-by-side comparison.
 //

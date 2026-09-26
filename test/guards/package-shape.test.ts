@@ -1,6 +1,6 @@
 // `package.json`'s `sideEffects` is a promise to every bundler that imports the package: each file
 // not named here may be dropped when nothing calls it. S0 shipped a blanket `false`, which was
-// false — `view/styles.ts` injects the base stylesheet on import (issue #137 F16), and a bundler
+// false — `view/styles.ts` injects the base stylesheet on import (issue #137), and a bundler
 // that believed the blanket promise shipped an unstyled Gantt. S5.13 narrowed it to the one file.
 //
 // Two documents describe the array today (`docs/03-boundaries-and-config.md` §3.1 and `plans/04`

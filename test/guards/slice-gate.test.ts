@@ -68,7 +68,7 @@ describe('tagged()', () => {
   });
 });
 
-// `[S5-A1]`'s line stands on a lint and a test suite together (D-S5-5), so the composition gets the
+// `[S5-A1]`'s line stands on a lint and a test suite together, so the composition gets the
 // same red-tested fixture the helper it wraps already has: either half failing must take the line
 // down. A wrapper that forwarded only the runner would report the dogfood gate green over a
 // boundary violation, which is the one thing this line exists to catch.

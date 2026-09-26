@@ -43,7 +43,7 @@ function forbid(name, from, allowedTargets, allowedLeaves = []) {
   };
 }
 
-// A "leaf" module (D-S2-23): exactly one file may import it, so deleting it is provably a
+// A "leaf" module: exactly one file may import it, so deleting it is provably a
 // degradation, not a break — dependency-cruiser is what proves the claim, not just the prose that
 // makes it. Red-test fixtures for these land with the rest of the removable-leaf set in S2.7.
 function removable(name, modulePath, allowedImporterPath) {
@@ -64,7 +64,7 @@ module.exports = {
     forbid('scheduling-boundary', 'scheduling', ['time', 'model']),
     // No 'scheduling' target: data/ has no static dependency on scheduling/ at all — they meet only
     // through the generic resolve hook, decided once at setup (plans/01 §1, issue #12).
-    // time: D-S2-1 (plans/s2-data-core/README.md) — serialization (Instant<->ISO, time/instant.ts's
+    // time (plans/s2-data-core/README.md) — serialization (Instant<->ISO, time/instant.ts's
     // toISO) and mutation-time input reading (time/input.ts's toInstant/toEndInstant) both need it.
     forbid('data-boundary', 'data', ['time', 'model']),
     // data/dev-mode.ts: S5.4 QC — render/dom/index.ts and extensions/plugin-runtime.ts each hand-
@@ -72,16 +72,16 @@ module.exports = {
     // names the single zero-dependency file both may import instead (plans/01 §1).
     forbid('render-boundary', 'render', ['layout'], [DEV_MODE_LEAF]),
     // model: Entry types flow through view as type-only params (same rationale as api, above).
-    // extensions: S5.1, D-S5-5 — `view/gantt-shell.ts` constructs the `PluginRuntime` and hands it the
+    // extensions: `view/gantt-shell.ts` constructs the `PluginRuntime` and hands it the
     // public `Gantt` façade; the arrow is view/ -> extensions/, never the reverse (see the
     // `extensions-public-only` rule below — extensions/ may not import view/ back).
     forbid('view-boundary', 'view', ['render', 'layout', 'data', 'model', 'extensions']),
-    // model: Entry/EntryId/ItemId types flow through interaction/ as type-only params (S3, D-S3-4/
-    // D-S3-5, plans/s3-direct-manipulation/README.md P3 — landed with S3.2). One arrow, nothing else:
+    // model: Entry/EntryId/ItemId types flow through interaction/ as type-only params (plans/
+    // s3-direct-manipulation/README.md P3). One arrow, nothing else:
     // interaction/ still may not reach time/, layout/ or render/ — every date/pixel computation a
     // gesture needs is a pure layout/ function the shell hands back through EntryGestureContext.
     forbid('interaction-boundary', 'interaction', ['view', 'data', 'model']),
-    // S5.1, D-S5-5: the dogfood gate as a lint rule, not a review note — replaces the old placeholder
+    // The dogfood gate is a lint rule, not a review note — it replaces the old placeholder
     // extensions-boundary rule (which allowed view/interaction and forbade api/model, backwards from
     // what this slice needs). `extensions/` (the plugin runtime plus every built-in feature) may see
     // only what a third-party plugin author can import — `api/` and `model/`. When a built-in cannot
@@ -130,11 +130,11 @@ module.exports = {
     // itself takes it structurally-typed, no import of its own — see gantt-shell.ts's
     // `AttachEntryGestures` comment), the same way it already wires view/, data/, model/, time/ and
     // layout/ together for a plain `new Gantt(...)`.
-    // extensions: S5.1, D-S5-1/D-S5-5 — `api/plugin.ts` types `PluginContext.disposables` against
+    // extensions: `api/plugin.ts` types `PluginContext.disposables` against
     // `extensions/disposables.ts`'s `DisposableStore` (a leaf with no further imports of its own, so
     // this one addition carries no risk of routing api/ through the DOM-touching parts of extensions/).
     forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction', 'extensions']),
-    // D-S2-23: the first of the four removable-leaf rules. Only `build-commit-change-set.ts` (commit
+    // The first of the four removable-leaf rules. Only `build-commit-change-set.ts` (commit
     // path) and `transaction.ts` (construction path) may import the Rollup — delete src/data/rollup.ts
     // and groups keep their authored values, the same result `rollUpKinds: 'none'` already gives a
     // consumer.
@@ -143,14 +143,14 @@ module.exports = {
       '^src/data/rollup\\.ts$',
       '^src/data/(build-commit-change-set|transaction)\\.ts$',
     ),
-    // D-S4-17's `autogroup-is-removable` rule is RETIRED here, authorized by the author 2026-09-11.
+    // The `autogroup-is-removable` rule is RETIRED here, authorized by the author 2026-09-11.
     // The rule kept `src/data/hierarchy.ts` deletable by naming its only two legal importers. ADR
     // 0013 deleted that file outright, so the rule named a path that cannot exist and could never
     // fire. Nothing is relaxed: the invariant was "this leaf stays removable", and the leaf is now
     // removed. `scripts/guard-red-test.mjs` is what caught it — its red test reported the guard
     // broken instead of passing quietly, which is the red test doing its job.
-    // D-S4-17 itself is retired with `autoGroup` (plans/s4-hierarchy-and-rows/s4.5-*.md, ADR 0013).
-    // D-S2-23/D-S2-20: view/gantt-shell.ts's one call site, plus this file's own unit test — delete
+    // That rule is retired with `autoGroup` (plans/s4-hierarchy-and-rows/s4.5-*.md, ADR 0013).
+    // The rule names view/gantt-shell.ts's one call site, plus this file's own unit test — delete
     // src/view/dataset-change-subscription.ts and its one call site and the Gantt still constructs,
     // lays out, renders and scrolls; it just renders the data as it was at construction and never
     // updates again (the static-image floor).
@@ -159,7 +159,7 @@ module.exports = {
       '^src/view/dataset-change-subscription\\.ts$',
       '^src/view/(gantt-shell\\.ts|dataset-change-subscription\\.test\\.ts)$',
     ),
-    // D-S2-23: delete src/data/history.ts and its one construction line in dataset-state.ts and the
+    // Delete src/data/history.ts and its one construction line in dataset-state.ts and the
     // commit path is unchanged, byte for byte — a Dataset just has no undo/redo
     // (plans/s2-data-core/s2.5-undo-redo.md §2.1). The property test lives in its own file
     // (history.property.test.ts), so both test files are named here.

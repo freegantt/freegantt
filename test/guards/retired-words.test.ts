@@ -1,4 +1,4 @@
-// D-S1.11-3: `Project` (ADR 0004) and `host` (D-S1.11-6, #64) are retired words — both used to smuggle
+// `Project` (ADR 0004) and `host` (#64) are retired words — both used to smuggle
 // two concepts under one name, the same "chart" failure #7 already named once. `EntryKind` (ADR 0017)
 // and `DatasetDocument` (ADR 0016) are retired for a second reason: the type each one named is gone,
 // and prose that still names it teaches a concept the library does not have. This guard keeps any
@@ -162,7 +162,7 @@ describe('retired words stay retired', () => {
     expect(hits, JSON.stringify(hits, null, 2)).toEqual([]);
   });
 
-  // F6 (#421 review): the rename that retired `Item` missed a directory, two file names and a struct
+  // #421 review: the rename that retired `Item` missed a directory, two file names and a struct
   // field — `layout/items/`, `item.ts`, `produce-items.ts`, `RowMemory.items` — because the guard
   // above only ever watched compound identifiers, never a bare path or a field re-declaration. These
   // two checks close that: one watches the filesystem shape directly (a rename cannot silently drop a
@@ -209,7 +209,7 @@ describe('retired words stay retired', () => {
   // `layout/`, `view/`, `render/`, `interaction/` would also flag every legitimate generic use those
   // four layers already have: `CellItem` (a grid cell), `RangeBand | RowStripe` decoration items,
   // `GridColumnInput` items, `syncKeyed`'s own generic `TItem`, and CSS's `align-items`/`.fg-menu-item`.
-  // F6's own survivors were all compound identifiers or file/path spellings, which the checks above
+  // The rename's own survivors were all compound identifiers or file/path spellings, which the checks above
   // now cover; a change to one of the exempt files below that starts naming a *Bar* as `item` again
   // needs a human to widen this exemption list, not a regex to guess it.
   const ITEM_WORD_EXEMPT_FILES = new Set([

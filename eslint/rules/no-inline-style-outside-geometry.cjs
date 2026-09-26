@@ -1,4 +1,4 @@
-// S1.10 (D-S1.10-6, `plans/s1.10-theming-and-a11y/README.md` §3.3): once the base stylesheet ships,
+// `plans/s1.10-theming-and-a11y/README.md` §3.3: once the base stylesheet ships,
 // inline `node.style.<prop>` writes in `src/render/**`/`src/view/**` are legitimate for exactly the
 // properties that carry per-frame or per-instance live numbers — `transform`, `width`, `height`.
 // Everything else (display, overflow, position, cursor, background, …) is structure, and structure
