@@ -402,10 +402,11 @@ export class Gantt<TProps = unknown> {
       // Applied inside the shell's own constructor, ahead of `paintFirstFrame()` below, so a
       // plugin's `view()` reads the real starting selection back through `ctx.gantt` (ADR 0032).
       ...(options.selectedEntryIds !== undefined ? { selectedEntryIds: options.selectedEntryIds } : {}),
-      // ADR 0018: one cast at the façade — see `set variants` below for why it is the only one.
+      // ADR 0018: the façade casts `variants` and `gridColumns` into the erased shapes `view/`
+      // stores — see `set variants` and `set gridColumns` below for why each one casts.
       ...(options.variants !== undefined ? { variants: options.variants as readonly EntryVariant[] } : {}),
-      // Same façade cast, for the same reason (ADR 0018): `GanttOptions<TProps>` types each
-      // column's renderer from this Gantt's own Dataset; `view/` holds the erased shape.
+      // `GanttOptions<TProps>` types each column's renderer from this Gantt's own Dataset;
+      // `columnFrom` (`view/grid-columns.ts`) erases a core-key renderer the same way on its own door.
       ...(options.gridColumns !== undefined
         ? { gridColumns: options.gridColumns as readonly GridColumnInput[] }
         : {}),
@@ -589,12 +590,9 @@ export class Gantt<TProps = unknown> {
     this.#shell.gridResizable = resizable;
   }
 
-  /** Live (S4.3). Typing sits only on the write side (`set gridColumns` below): a consumer states a
-   *  column, so a props-key renderer checks against `TProps` there. The read side stays erased —
-   *  `TValue` sits in `columnRenderer`'s parameter, a contravariant position, so a `Gantt<TProps>`
-   *  could not otherwise widen to a plain `Gantt` the way `variants` and every other typed accessor
-   *  do. Reading a renderer back off `gridColumns` is not a job this getter serves (nothing calls
-   *  one from here); erasing the read keeps that widening intact. */
+  /** Live (S4.3). Reads back the columns this Gantt was authored with. A props-key renderer reads
+   *  back untyped, so a typed `Gantt<TProps>` still widens to a plain `Gantt`. Writing (below) still
+   *  checks it against `TProps`. */
   get gridColumns(): readonly GridColumnInput[] {
     return this.#shell.gridColumns;
   }
@@ -603,7 +601,7 @@ export class Gantt<TProps = unknown> {
    *  a core key or a declared `TProps` key checks `fieldValue` against that key's own Field value,
    *  the same type `entry.read(key)` answers. */
   set gridColumns(columns: readonly GridColumnInput<TProps>[]) {
-    // ADR 0018: one cast at the façade, the same reason `set variants` casts.
+    // ADR 0018: the façade casts, the same reason `set variants` casts.
     this.#shell.gridColumns = columns as readonly GridColumnInput[];
   }
 

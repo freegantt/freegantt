@@ -79,8 +79,8 @@ function columnFrom(
   };
   // S5.7: per-column `columnRenderer` comes only from this Gantt's own column —
   // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
-  // `ResolvedColumn` stays erased (ADR 0005): the grid hands a renderer `entry.read(column.field)`
-  // (`gantt-shell.ts`'s `#fieldValueForCell`), the value `input.field`'s own type already named.
+  // `ResolvedColumn` stays erased (ADR 0005): the grid hands a renderer `entry.read(column.field)`,
+  // so a renderer typed on its field already gets the type that read answers.
   const columnRenderer = input.columnRenderer as ColumnRenderer | undefined;
   return {
     ...column,

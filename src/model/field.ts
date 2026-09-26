@@ -101,12 +101,9 @@ export type GridColumnOf<TProps, K extends FieldKey> = GridColumnBase<
 /** Presentation only. Never carries an aggregate — `data/` never holds a renderer, and no reader of
  *  this Dataset ever sees one.
  *
- *  A shipped core key (`start`, `duration`, …) and a `TProps` key each type `columnRenderer`'s
- *  `fieldValue` from `FieldValue` — the same type `entry.read(key)` answers. An open key (a plugin's
- *  own, or any key on an untyped Gantt) keeps `fieldValue: unknown`, the same as before this type
- *  took `TProps`. Two mapped types, not one over the merged key set: a `TProps` key that shares a
- *  name with a core key still reads as the core type (`entry.read`'s own rule), and a single mapped
- *  type over both key sets would let the open, `unknown`-typed member absorb the core keys instead. */
+ *  What type is `fieldValue` for this column? A shipped core key or a declared `TProps` key types it
+ *  the same way `entry.read(key)` does. Any other key — a plugin's own, or any key on an untyped
+ *  Gantt — keeps `fieldValue: unknown`. */
 export type GridColumn<TProps = unknown> =
   | { [K in keyof CoreFieldValues]-?: GridColumnOf<TProps, K> }[keyof CoreFieldValues]
   | { [K in keyof TProps & string]-?: GridColumnOf<TProps, K> }[keyof TProps & string]
