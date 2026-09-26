@@ -24,7 +24,7 @@ const ALLOWED = {
   time: ['model'],
   layout: ['time', 'model'],
   scheduling: ['time', 'model'],
-  // time: D-S2-1 (plans/s2-data-core/README.md) — serialization (Instant<->ISO) and mutation-time
+  // time (plans/s2-data-core/README.md) — serialization (Instant<->ISO) and mutation-time
   // input reading both need it; there is still no data/ --> scheduling static edge widened here.
   data: ['scheduling', 'model', 'time'],
   render: ['layout'],
@@ -118,7 +118,7 @@ export default tseslint.config(
       'freegantt/no-instant-arithmetic': 'error',
       'freegantt/no-time-to-pixel-math': 'error',
       'freegantt/no-flow-layout-rows': 'error',
-      // S1.10, D-S1.10-6: pane-layout.ts's structural writes move to the base stylesheet; only
+      // pane-layout.ts's structural writes move to the base stylesheet; only
       // transform/width/height stay inline. Scoped to src/render/** + src/view/** (§3.11) — expected
       // to widen to src/interaction/** once gesture previews need the same allowance.
       'freegantt/no-inline-style-outside-geometry': 'error',
@@ -143,7 +143,7 @@ export default tseslint.config(
     plugins: { freegantt },
     rules: {
       'freegantt/no-module-level-state': 'error',
-      // docs/02 §3.6, D-S2-18: belt to the TxToken type-gate; the rule's own allowlist names the
+      // docs/02 §3.6: belt to the TxToken type-gate; the rule's own allowlist names the
       // files it exempts, so no directory scoping is needed here.
       'freegantt/no-store-mutation-outside-transaction': 'error',
       // plans/04 §3.1, docs/02 §3.8: the rule's own HEADERS map is the real scope filter.
@@ -166,7 +166,7 @@ export default tseslint.config(
     },
   },
   {
-    // CLAUDE.md entry-kinds rule, D-S2-22: the first kind-dependent behaviour in data/ (span
+    // CLAUDE.md entry-kinds rule: the first kind-dependent behaviour in data/ (span
     // rollup) is the reason this lands now, scoped to the two layers with kind-aware code today.
     // Test files legitimately build fixtures by kind (`{ kind: 'group' }`) — that's scenario setup,
     // not the production behavior-per-kind chain the rule targets.
@@ -271,7 +271,7 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
   {
-    // #287, review finding F7: `harness-public-api-only` (.dependency-cruiser.cjs) matches
+    // #287: `harness-public-api-only` (.dependency-cruiser.cjs) matches
     // *resolved* paths, so it cannot tell a relative path naming `src/api/index.ts` from the
     // `freegantt` alias resolving to the same file — the exception that lets the alias through lets
     // a hand-written `'../src/api/index.js'` through with it. This rule reads the specifier *text*

@@ -1,4 +1,4 @@
-// Deterministic hierarchy fixture for harness/e2e/hierarchy.html (S4.11, D-S4-34): three levels deep, one
+// Deterministic hierarchy fixture for harness/e2e/hierarchy.html: three levels deep, one
 // childless parent-with-no-children ("phase-empty" — ADR 0013: a row with no children is a normal
 // Entry, not a demoted group), one single-day span, `cost` in `props` on every leaf, and `team` for
 // the filter. Fixed calendar dates only — no clock read. Dates use `Z`-suffixed ISO strings so the

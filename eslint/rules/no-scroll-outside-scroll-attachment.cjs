@@ -1,5 +1,5 @@
 // I12 (plans/01 §8.2, §11): ban scrollLeft/scrollTop/scrollTo outside the ScrollAxis binding.
-// The DOM-facing binding is src/view/scroll-attachment.ts (S1.5, #9; D-S6-1) — the only file
+// The DOM-facing binding is src/view/scroll-attachment.ts (#9) — the only file
 // allowed to touch element scroll; this rule is in force from S0 per plans/04 §3.3 so it's
 // already red-tested before there's real code to violate it.
 

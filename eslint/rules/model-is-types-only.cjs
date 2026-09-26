@@ -17,10 +17,10 @@ const IDENTITY_CAST_HELPERS = new Set([
   'changeSetId',
 ]);
 
-/** Readers of a BarId (D-S4-25). They parse; they are not identity casts. */
+/** Readers of a BarId. They parse; they are not identity casts. */
 const BAR_ID_READERS = new Set(['entryIdOfBar', 'partIndexOfBar']);
 
-/** The span invariant's one home (ADR 0012, Q5 in plans/field-redesign/BUILD-LOG.md). The author
+/** The span invariant's one home (ADR 0012, plans/field-redesign/BUILD-LOG.md). The author
  * widened the carve-out for it on 2026-09-11: one pure predicate over the two dates, with no state
  * and no dependency. It answers a question about a type this file declares, so it lives beside it. */
 const SPAN_PREDICATE = new Set(['spansTime']);
@@ -68,7 +68,7 @@ module.exports = {
   },
   create(context) {
     // CLAUDE.md's model/ carve-out is "id/brand helpers and the FreeGanttError base class" —
-    // errors.ts is the one file that widens the allowlist to error classes (plans/01 §1.1, D-S1.7-8).
+    // errors.ts is the one file that widens the allowlist to error classes (plans/01 §1.1).
     const isErrorsFile = context.filename.endsWith('errors.ts');
 
     return {

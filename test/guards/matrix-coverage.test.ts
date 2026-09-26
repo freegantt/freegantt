@@ -122,7 +122,7 @@ describe('the invariant guard matrix maps every row to a real check (#43)', () =
   });
 });
 
-// D-S1.11-11 (plans/s1.11-close-the-gate/README.md, #43's other half): the coverage above only ever
+// plans/s1.11-close-the-gate/README.md, #43's other half: the coverage above only ever
 // read the gate-check column. Thirteen `freegantt/*` rules named in the Mechanism column had no file in
 // eslint/rules/ at S1.11's baseline, seven of them on rows claiming `AUTO` — enforced today. This
 // closes that: every `freegantt/*` rule on an `AUTO`/`AUTO-PARTIAL` row must be a registered rule;
