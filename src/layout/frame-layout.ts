@@ -97,7 +97,7 @@ export interface FrameLayoutView {
  * Gantt: the cached index describes that Gantt's rows, and nothing about it is shareable. */
 export class FrameLayout implements FrameLayoutView {
   #memory = new FrameMemory();
-  /** D-S5-15: registered decoration providers' own memory, kept alive the same way `#memory` is —
+  /** Registered decoration providers' own memory, kept alive the same way `#memory` is —
    *  `run()` recomputes only when the window actually changed since the last `computeFrame` call. */
   #decorations = new DecorationRunner();
   #plan: readonly PlannedRow[] = [];
@@ -278,7 +278,7 @@ export class FrameLayout implements FrameLayoutView {
     this.#memory.invalidateFrom(index);
   }
 
-  /** Field-only updates invalidate from the lowest changed row; add/remove rebuilds from 0 (D-S2-16). */
+  /** Field-only updates invalidate from the lowest changed row; add/remove rebuilds from 0. */
   invalidateForChange(changeSet: ChangeSet): void {
     this.invalidateFrom(this.#indexToInvalidate(changeSet));
   }

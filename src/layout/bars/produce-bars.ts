@@ -1,5 +1,5 @@
-// layout/ — the one deep seam that turns a PlannedRow's entries into Bars (D-S4-19, D-S4-24,
-// D-S4-25). Header rows (`kind: 'header'`) produce no Bars.
+// layout/ — the one deep seam that turns a PlannedRow's entries into Bars. Header rows
+// (`kind: 'header'`) produce no Bars.
 //
 // ADR 0018: which shape one row draws is one question with one answer — the variant this Gantt
 // resolved for it (`variants.ts`). One resolution, one producer call, so no candidate's Bars are
@@ -19,9 +19,9 @@ import type { Bar, VariantBars } from './bar.js';
  *  Passes the resolved variant's own name to its producer (ADR 0018: a variant states its name
  *  once), so a producer never has to invent or hardcode the name its own Bars carry.
  *
- *  Passes `childrenAsSegments` straight through to the producer (#421 C2, Q33) — nothing here
+ *  Passes `childrenAsSegments` straight through to the producer (#421 C2) — nothing here
  *  skips the Entry. A segmented row's subject still reaches its own variant's producer, so a
- *  consumer's own `bars` still runs and still wins (Q26). */
+ *  consumer's own `bars` still runs and still wins. */
 export function resolveBars(
   entry: Entry,
   registry: VariantBars,
@@ -46,11 +46,11 @@ export function produceBarsForRow(
     if (entry === undefined) continue;
     // An Entry draws nothing until it spans (`spansTime`, ADR 0012). This is the one gate: no
     // producer — shipped or a plugin's own — ever sees a non-spanning Entry, so `wholeEntryBar`
-    // and the shipped producers may read `entry.start`/`entry.end` as always present (J2,
-    // ADR 0012's appendix).
+    // and the shipped producers may read `entry.start`/`entry.end` as always present
+    // (ADR 0012's appendix).
     if (!spansTime(entry)) continue;
-    // Nothing skips a segmented row's subject (Q33): the fact travels to the producer instead, so
-    // a consumer's own `bars` still runs for it and still wins (Q26).
+    // Nothing skips a segmented row's subject: the fact travels to the producer instead, so
+    // a consumer's own `bars` still runs for it and still wins.
     const childrenAsSegments = row.childrenAsSegments === true && id === row.entryIds[0];
     bars.push(...resolveBars(entry, registry, childrenAsSegments));
   }

@@ -1,15 +1,15 @@
-// layout/ — plain-data column types. No registry, no Dataset, no Field value access (D-S4-13).
+// layout/ — plain-data column types. No registry, no Dataset, no Field value access.
 
 import type { ColumnAlign, ColumnRenderer, Entry, FieldKey } from '../model/index.js';
 
 export type { ColumnAlign } from '../model/index.js';
 
 /** Paint description for one Grid column. `format` stays on `ResolvedColumn` and never reaches a
- *  backend. `resizable`/`movable` do reach a backend (S5.7, D-S5-18) — they paint the resizer grip's
+ *  backend. `resizable`/`movable` do reach a backend (S5.7) — they paint the resizer grip's
  *  visibility and the header cell's cursor, so they travel the same path `width`/`flex` already take
  *  from `ResolvedColumn` down through `columnsForFrame` (`layout/frame.ts`).
  *
- *  `field` names the column, everywhere a column is named (D-S5-37, #194): a Field has a `key`, and
+ *  `field` names the column, everywhere a column is named (#194): a Field has a `key`, and
  *  a Grid column carries the `field` it shows. `render/dom` then uses that value as its own keyed
  *  paint key, which is a different job and keeps its own word. */
 export interface FrameColumn {
@@ -22,16 +22,16 @@ export interface FrameColumn {
   movable?: boolean;
 }
 
-/** Visible Grid column, bound with this Gantt's locale (D-S4-13). `resizable`/`movable` are optional
- *  — absent reads as the default `true` (S5.7, D-S5-18); a fixture that never mentions column chrome
+/** Visible Grid column, bound with this Gantt's locale. `resizable`/`movable` are optional
+ *  — absent reads as the default `true` (S5.7); a fixture that never mentions column chrome
  *  stays unchanged. `columnRenderer` stays optional too: undefined means "fall back to the Gantt-wide
- *  one" (D-S5-17). */
+ *  one". */
 export interface ResolvedColumn extends FrameColumn {
   format(entry: Entry): string;
   columnRenderer?: ColumnRenderer;
   resizable?: boolean;
   movable?: boolean;
-  /** D-S5-13 — `true` marks this column for the default tooltip body. Not a paint concern, so it
+  /** `true` marks this column for the default tooltip body. Not a paint concern, so it
    *  stays off `FrameColumn`. */
   tooltip?: boolean;
 }

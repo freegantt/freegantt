@@ -1,4 +1,4 @@
-// layout/ — what one layout pass remembers between renders (D-S4-26). Bar production lives here so
+// layout/ — what one layout pass remembers between renders. Bar production lives here so
 // a row's Bars are produced once per dataset revision, whether `heightOfRow` forced it above the
 // viewport or `placeFrame` placed it in the window.
 
@@ -46,7 +46,7 @@ export class FrameMemory {
   #cachedRowHeight = -1;
   #datasetRevision: number | undefined;
   #heightAt: ((index: number) => number) | undefined;
-  /** Bumped when this memory builds a fresh height index (D-S2-16). */
+  /** Bumped when this memory builds a fresh height index. */
   heightIndexRevision = 0;
 
   get heights(): RowHeightIndex {
@@ -94,7 +94,7 @@ export class FrameMemory {
     this.#datasetRevision = bind.datasetRevision;
   }
 
-  /** Call: `memory.heightOfRow(index)` — every row uses `rowHeight` (singleLane, D-S4-19). */
+  /** Call: `memory.heightOfRow(index)` — every row uses `rowHeight` (singleLane). */
   heightOfRow(index: number): number {
     if (this.#heightAt !== undefined) return this.#heightAt(index);
     return this.#rowHeight;

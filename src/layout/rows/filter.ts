@@ -1,4 +1,4 @@
-// layout/ — row-source filter policies. Pure: no Dataset, no Field registry (D-S4-28, D-S4-29).
+// layout/ — row-source filter policies. Pure: no Dataset, no Field registry.
 
 import type { Entry, EntryId, RowId } from '../../model/index.js';
 import type { FilterPolicy, RowFilter, UnindexedRow } from './row-source.js';

@@ -12,7 +12,7 @@ import type { CoreFieldValues, Entry, Field, FieldKey } from '../model/index.js'
  *  on the hover path, so keep it cheap: it answers a question and draws nothing. */
 export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
 
-/** Every named Field equals the value beside it, and several keys are AND (`J6`).
+/** Every named Field equals the value beside it, and several keys are AND.
  *
  *  **A match is equality, never "has a value".** `{ 'demo:phaseId': true }` matches the rows whose
  *  `demo:phaseId` **is** `true` — not the rows that carry a phase id. Ask that with a predicate:
@@ -73,7 +73,7 @@ function valueMatches(
   // key, and this runs on every row of every layout pass, so reading first would take the frame
   // down for a typo — or for the one rule a chrome plugin cannot help itself with, because it
   // installs after the Dataset closes its Field gate. Matching nothing is the answer; saying so is
-  // the report (`J59`).
+  // the report.
   const field = fieldFor(key);
   if (field === undefined) {
     reportUnknownKey(key);

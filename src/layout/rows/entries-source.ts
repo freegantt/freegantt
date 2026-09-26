@@ -57,7 +57,7 @@ function entryRow(
     depth: number;
     expandable: boolean;
     parentRowId?: RowId;
-    /** The segmented parent's children, drawn on its row with no row of their own (Q19 shape (a) —
+    /** The segmented parent's children, drawn on its row with no row of their own (shape (a) —
      *  `entryIds[0]` stays the subject, the rest are the bars it draws). */
     segmentChildren?: readonly Entry[];
   },

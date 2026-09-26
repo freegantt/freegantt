@@ -410,7 +410,7 @@ describe('TimeScaleModel', () => {
     it("preset = notifies even when pxPerMs is unaffected — a measured pane under 'pane' fit", () => {
       // Regression: 'pane' fit's pxPerMs = paneWidth / spanMs does not depend on the preset, so a
       // preset switch that leaves range/timeZone/pxPerMs all unchanged must still be visible to the
-      // D-S1.5-4 equality check — otherwise a bound Gantt never re-renders its header bands (U1).
+      // equality check — otherwise a bound Gantt never re-renders its header bands (U1).
       const model = new TimeScaleModel();
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
