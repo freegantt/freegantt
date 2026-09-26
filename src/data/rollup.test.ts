@@ -392,7 +392,7 @@ describe('rollUpFields (S4.2)', () => {
         fieldTypes: { money: { rollUp: 'sum' } },
         fields: [{ key: 'cost', type: 'money' }],
         // A cascade that reaches for the Rollup's own cell — the write lands in `merged`, never
-        // `body`, so `rollup.ts` overwrites it rather than yielding (D-S2-22 is the body's alone).
+        // `body`, so `rollup.ts` overwrites it rather than yielding.
         editExtender: (): EntryEdits => new Map([[entryId('p1'), { cost: 999 }]]),
       });
       state.on('error', (report) => {
@@ -446,11 +446,11 @@ describe('rollUpFields (S4.2)', () => {
       expect(seen[0]!.updated.some((row) => row.store === 'entries' && row.id === 'p1')).toBe(false);
     });
 
-    // Q39: `start`/`end` are ordinary rolling-up Fields now (ADR 0026 retired the Segment that used
+    // `start`/`end` are ordinary rolling-up Fields now (ADR 0026 retired the Segment that used
     // to make them a derived pair), so an `EditExtender` cascade that proposes one on a rolling-up
     // parent hits this same mechanism — not a throw `gesture-pipeline.ts`'s commit path must catch,
     // but the Rollup silently overwriting the cascade's proposal and reporting the drop, exactly as
-    // it already does for `cost` above. D-S5-44's "the cascade owes the envelope invariant a plain
+    // it already does for `cost` above. The rule that "the cascade owes the envelope invariant a plain
     // refusal" holds; only which door enforces it moved, from an ingest-time throw to this report.
     it("a plugin cascade's write to a rolling-up parent's start is dropped, and raises one report", () => {
       const reports: ErrorReport[] = [];
@@ -704,7 +704,7 @@ describe('the Rollup reads a compute Field fresh, never the pre-commit memo (#30
         { id: 'c', name: 'Child A', parentId: 'p' },
       ],
       fields: [
-        // A `compute` Field reads the *stored* record, and storage stays sparse (#421 F8) — only the
+        // A `compute` Field reads the *stored* record, and storage stays sparse (#421) — only the
         // live `Entry.name` normalizes to `''`.
         { key: 'nameLen', compute: (entry) => (entry.name ?? '').length },
         { key: 'tally', rollUp: 'sumNameLens' },

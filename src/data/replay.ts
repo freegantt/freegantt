@@ -13,7 +13,7 @@ import type { TransactionData } from './transaction.js';
 
 export type { TransactionData };
 
-/** Only `'undo'`/`'redo'` origins are legal here — `'user'` is `apply`'s door (D-S2-11), not open yet,
+/** Only `'undo'`/`'redo'` origins are legal here — `'user'` is `apply`'s door, not open yet,
  *  and throws `InvalidReplayOriginError`. `changesToReplay` answers `undefined` when nothing is left
  *  to write — a step a sync has fully settled, the same as an empty recorded changeset — and this is
  *  a no-op then too: no `beforeChange`, no `change`. */

@@ -1,4 +1,4 @@
-// data/ — Field-aware changeset building (D-S4-2, D-S2-7). The ChangeSet shape itself is a model/
+// data/ — Field-aware changeset building. The ChangeSet shape itself is a model/
 // type (model/change-set.ts) — model/ is a leaf and MutationCancelledError needs to carry one.
 
 import type {
@@ -68,7 +68,7 @@ function pushRow(
 }
 
 /**
- * Every `FieldUpdated` row an `edit` produces against the entry's current stored values, per D-S2-7's
+ * Every `FieldUpdated` row an `edit` produces against the entry's current stored values, per its
  * equality table — a field set back to its original value is not recorded. Shared by both producers of
  * an edit in one transaction: the body's own `proposed` edits, and the extension hook's own
  * `ProposedEdits`. `edit` is a `ProposedEdit` — `proposedKeys` is required (ADR 0011), so it always
@@ -173,7 +173,7 @@ export function mergeUpdatedRows(
 
 /**
  * Folds a transaction's raw contributions into the changeset it will commit, or `undefined` when the
- * net effect is empty (D-S2-24 step 6 stops here; no store write, no event).
+ * net effect is empty (the fold stops here; no store write, no event).
  *
  * `added` and `removed` already carry the write set's own net effect (`EntryStore.stageAdd`,
  * `stageRemove`), not its intermediate steps: an id added and removed inside one transaction, with no
@@ -185,7 +185,7 @@ export function mergeUpdatedRows(
  * rows go with the old row they were keyed to — the fresh entity starts with none, the same as any
  * other `remove()` then `add()` pair.
  *
- * `updated` holds both row kinds (D-S5-24), so a transaction whose only write is a plugin-store row
+ * `updated` holds both row kinds, so a transaction whose only write is a plugin-store row
  * is not empty and does commit (#156).
  */
 export function foldChangeSet(
@@ -284,7 +284,7 @@ export function foldSiblingRanks(
  * Call: `fieldRowsOf(changeSet).filter((row) => row.field === 'start')`.
  *
  * The Field rows of a committed changeset. `ChangeSet.updated` also carries plugin-store rows since
- * D-S5-24, and a store row holds a whole value rather than a Field, so it has no `field` to read. A
+ * both row kinds, and a store row holds a whole value rather than a Field, so it has no `field` to read. A
  * consumer that only wants Field rows filters through this instead of re-deriving the `store` check.
  */
 export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[] {

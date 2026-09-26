@@ -52,7 +52,7 @@ describe('the live Entry — one row per id, and every read is live (ADR 0017)',
     expect(child.name).toBe('Staged');
   });
 
-  // D-S2-21 and ADR 0017 rule 2: two questions hide in one word. *Which* rows exist is the
+  // ADR 0017 rule 2: two questions hide in one word. *Which* rows exist is the
   // collection's question, and `all` answers it as of the last commit. *What a row is worth* is the
   // row's question, and every row answers it now.
   it('does not grow `all` inside an open transaction, and the rows `all` already holds read the write set', () => {
@@ -170,7 +170,7 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
     }
   });
 
-  // The Dataset says how core measures a duration (Q6/J12). A Gantt may not: duration is a Field,
+  // The Dataset says how core measures a duration. A Gantt may not: duration is a Field,
   // and the Rollup reads it before any Gantt exists. ADR 0026 retired the Segment `'segments'`
   // measure; `'children'` is its replacement — it sums each direct child's own span instead.
   const withGap: DatasetStateOptions['entries'] = [
@@ -199,7 +199,7 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
   });
 });
 
-// #421 F8: `entry.name` is the one accessor that normalizes. A consumer reads text and gets text,
+// #421: `entry.name` is the one accessor that normalizes. A consumer reads text and gets text,
 // so nothing downstream writes `entry.name ?? ''` — the branch review found four harness sites and
 // one in `extensions/features/tooltips.ts` doing exactly that. Storage and input stay sparse, and
 // the Field door still answers `undefined`, so "unnamed" is still a question anyone can ask.

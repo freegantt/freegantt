@@ -1,4 +1,4 @@
-// data/ — DatasetState: the live state one Dataset instance owns privately (D-S2-2, OQ5). `api/Dataset`
+// data/ — DatasetState: the live state one Dataset instance owns privately. `api/Dataset`
 // is a thin façade that constructs one of these and delegates `entries`/`timeZone`/`dateOnlyEnd` to it —
 // the same structural/façade relationship `GanttShell` already has with `Gantt`.
 
@@ -62,16 +62,16 @@ export interface DatasetStateOptions {
   history?: HistoryOptions | false;
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
-  /** How core measures a duration (ADR 0017, Q6/J12). Defaults to `'span'`. */
+  /** How core measures a duration (ADR 0017). Defaults to `'span'`. */
   measureDuration?: DurationMeasure;
   aggregators?: Readonly<Record<string, Aggregator>>;
   /** Frozen `referenceDate` for tests (issue #112) — mirrors `ResolveDateLinesInput.now`
    *  (`layout/date-line.ts`). Defaults to `now()`, the real clock. */
   referenceDate?: Instant;
-  /** The extension hook a transaction calls once per commit (D-S2-6). Internal only — `data/` is
+  /** The extension hook a transaction calls once per commit. Internal only — `data/` is
    *  unreachable through the package's `exports` map. S5 shipped the plugin-facing route instead: a
    *  plugin's `data` half installs its `EditExtender` through `DatasetOptions.plugins` (#15). The
-   *  first-party scheduler occupies the slot in S7. This option stays the route a test uses (D-S2-6,
+   *  first-party scheduler occupies the slot in S7. This option stays the route a test uses (see
    *  "How it is tested without a public claim") — S3's drag preview and undo tests take it. Defaults
    *  to `identityExtender`: an unoccupied hook is the identity function (D4).
    *
@@ -79,7 +79,7 @@ export interface DatasetStateOptions {
    *  slice from S3 to S7, so that "S3" named the scheduling slice, not today's S3 (direct
    *  manipulation, `plans/s3-direct-manipulation/README.md` §0 P1). */
   editExtender?: EditExtender;
-  /** Every installed plugin's own `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) — one
+  /** Every installed plugin's own `fields`/`fieldTypes`/`aggregators` (#496 grill round 3) — one
    *  entry per plugin, in `DatasetOptions.plugins` order. `api/dataset.ts` builds this from
    *  `Dataset<TProps>`'s own plugin list; `data/` never imports `api/`, so it takes the plain shape
    *  rather than the plugin objects themselves. Merged with this Dataset's own `fields`/`fieldTypes`/
@@ -97,7 +97,7 @@ export interface DatasetStateOptions {
 }
 
 /** One plugin's own `fields`/`fieldTypes`/`aggregators`, or the Dataset's own (#496 grill round 3,
- *  R1) — the same shape `FieldRegistryOptions` takes, `undefined` allowed on every key so a caller
+ *  recommendation 1) — the same shape `FieldRegistryOptions` takes, `undefined` allowed on every key so a caller
  *  that reads an absent option off a plugin object need not omit the key to satisfy
  *  `exactOptionalPropertyTypes`. `mergedFieldRegistryOptions` below folds a list of these into one
  *  `FieldRegistryOptions`, which never carries an explicit `undefined`. */
@@ -108,7 +108,7 @@ export interface FieldDeclarationSource {
 }
 
 /** Merges the Dataset's own Field declarations with every plugin's own, in that order (#496 grill
- *  round 3, R1): every fieldType across every source, then every Aggregator, then every Field — so a
+ *  round 3): every fieldType across every source, then every Aggregator, then every Field — so a
  *  Field naming either resolves against the whole merged set, never just its own source's. A name
  *  two sources both declare throws `DuplicateFieldKeyError`, the same error two ordinary Field
  *  declarations sharing a key already throw; a Field key collision is still caught by `FieldRegistry`
@@ -141,19 +141,19 @@ export class DatasetState implements Dataset {
    *  date) — unless `DatasetStateOptions.referenceDate` freezes it for a test. Fixed for the
    *  Dataset's lifetime — not re-derived on every layout pass. */
   readonly referenceDate: Instant;
-  /** Every plugin's own per-entry rows (D-S5-24). One per Dataset, never shared (I2). */
+  /** Every plugin's own per-entry rows. One per Dataset, never shared (I2). */
   readonly pluginStores: PluginStores;
-  /** The extension hook's one occupant (D4, D-S2-6). Composed, never replaced wholesale: installing a
-   *  plugin wraps whatever is already there (D-S5-23), so `data/` still holds one field and calls it
+  /** The extension hook's one occupant (D4). Composed, never replaced wholesale: installing a
+   *  plugin wraps whatever is already there, so `data/` still holds one field and calls it
    *  at one site. */
   #editExtender: EditExtender;
-  /** `runTransaction`'s notification channel (D-S2-5, D-S2-24). Internal only, same reasoning as
+  /** `runTransaction`'s notification channel. Internal only, same reasoning as
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
   readonly bus = new EventBus<DatasetEventMap>();
-  /** 0 = no transaction open. Read and written only by `runTransaction` (D-S2-8's nesting rule). */
+  /** 0 = no transaction open. Read and written only by `runTransaction` (the nesting rule). */
   openTransactions = 0;
-  /** Set while `beforeChange`/`change` handlers are fanning out (D-S2-9, D-S2-25). Read and written
+  /** Set while `beforeChange`/`change` handlers are fanning out. Read and written
    *  only by `runTransaction` and `commitChangeSet`. */
   notifying = false;
   /** Set while the extension hook's current occupant is running (#323). Read by `runTransaction`;
@@ -162,11 +162,11 @@ export class DatasetState implements Dataset {
   runningExtensionHook = false;
   readonly #entryContext: EntryReadContext;
   readonly fields: FieldRegistry;
-  /** `data/`'s own ambient read scope (ADR 0017, J16) — the zone, the registry, the duration
+  /** `data/`'s own ambient read scope (ADR 0017) — the zone, the registry, the duration
    *  policy and the tree. A consumer receives `ambientFieldContext(access)`, which is the zone. */
   readonly fieldAccess: FieldAccess;
   readonly computedCache = new ComputedFieldCache();
-  /** Bumped on every committed changeset — the computed-field cache key (D-S4-10). */
+  /** Bumped on every committed changeset — the computed-field cache key. */
   #datasetRevision = 0;
   /** Per-instance — never a module-level counter (I2). */
   #changeSetCounter = 0;
@@ -178,7 +178,7 @@ export class DatasetState implements Dataset {
     this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = options.referenceDate ?? now();
     this.#editExtender = options.editExtender ?? identityExtender;
-    // Registered before `entries` below is read (#496 grill round 3, R1): the Dataset's own
+    // Registered before `entries` below is read (#496 grill round 3): the Dataset's own
     // declarations, then every plugin's, so a flat value an entry carries for a plugin's Field is
     // never an undeclared key at ingest, the same as `entries.load()` already reads it.
     this.fields = new FieldRegistry(
@@ -192,7 +192,7 @@ export class DatasetState implements Dataset {
       timeZone: this.timeZone,
       measureDuration: options.measureDuration ?? 'span',
       // A row inside an open transaction is hypothetical, and `#datasetRevision` does not move
-      // until the commit lands (D-S4-10). A memo there answers a `compute` Field with the committed
+      // until the commit lands. A memo there answers a `compute` Field with the committed
       // value for a staged row, so the memo stands down until the transaction closes (ADR 0017).
       memo: () =>
         this.openTransactions > 0
@@ -232,7 +232,7 @@ export class DatasetState implements Dataset {
       hierarchySource,
     );
     this.pluginStores = new PluginStores(this);
-    // `01` §2.6 / README.md D-S2-22: a parent given children only through the initial array gets
+    // `01` §2.6 / README.md: a parent given children only through the initial array gets
     // real rolled-up values before anyone reads it, not just after the first later transaction
     // touches one of those children. No plugin has run yet (ADR 0031): a Dataset builds completely
     // — Field, hierarchy source and this Rollup all settle — before the first `data()` call.
@@ -249,7 +249,7 @@ export class DatasetState implements Dataset {
   }
 
   /** Read by `data/transaction.test.ts`/`edit-extension.test.ts` to assert on the occupant itself —
-   *  identity, and composition order — without calling it (D-S2-6, D-S5-23). `extraEditsFor` below is
+   *  identity, and composition order — without calling it. `extraEditsFor` below is
    *  the seam every real caller goes through instead. */
   get editExtender(): EditExtender {
     return this.#editExtender;
@@ -269,10 +269,10 @@ export class DatasetState implements Dataset {
     }
   }
 
-  /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and hands back
+  /** The one door onto the extension hook (D4): calls the current occupant and hands back
    *  what it returns. `api/dataset.ts`'s `extraEditsFor(dataset, request)` (the friend function this
    *  mirrors, ADR 0007) and `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two —
-   *  so `api/Dataset` never had to expose the raw occupant to get either job done (#209 Q5, replacing
+   *  so `api/Dataset` never had to expose the raw occupant to get either job done (#209, replacing
    *  the public
    *  `editExtender` getter this file used to mirror). The commit path calls `extraEditsReadingFor`
    *  below instead (#232) — it needs one more fact than this method's public return shape can carry.
@@ -316,7 +316,7 @@ export class DatasetState implements Dataset {
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.
    *  Installing composes onto the current occupant rather than evicting it, so a second plugin needs
-   *  no priority machinery and `EditExtenderConflictError` never gets written (D-S5-23). */
+   *  no priority machinery and `EditExtenderConflictError` never gets written. */
   setExtender(wrap: ExtenderWrapper): void {
     this.#editExtender = wrap(this.#editExtender);
   }
@@ -331,7 +331,7 @@ export class DatasetState implements Dataset {
    *  Opens `cost` on every descendant of `unlockedId`, not on `unlockedId` itself —
    *  `isDescendantOf` answers `false` for an Entry asked about itself (#473).
    *  Installing composes onto the current occupant rather than evicting it, exactly the way
-   *  `setExtender` above does (D-S5-23). */
+   *  `setExtender` above does. */
   setLockRule(wrap: FieldLockRuleWrapper): void {
     this.entries.setLockRule(wrap);
   }
@@ -369,7 +369,7 @@ export class DatasetState implements Dataset {
     this.#datasetRevision += 1;
   }
 
-  /** Batches `body`'s mutations into one `ChangeSet` (D-S2-8). `'user'` is the only origin a public
+  /** Batches `body`'s mutations into one `ChangeSet`. `'user'` is the only origin a public
    *  caller can produce in S2 — `interaction/` gets an option once it has a gesture to tag (S3). */
   transaction<T>(body: () => T): T {
     return runTransaction(this, body, 'user');

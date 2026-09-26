@@ -23,7 +23,7 @@ function createContext(): EntryReadContext {
   return { timeZone: 'UTC', dateOnlyEnd: 'inclusive' as const };
 }
 
-// F18: production reads `toEditReading(...).stored` directly. This test-only wrapper keeps every
+// Production reads `toEditReading(...).stored` directly. This test-only wrapper keeps every
 // assertion below reading `toProposedEdit(edit, ...)` rather than unwrapping at each call site.
 function toProposedEdit(
   edit: EntryEdit,
@@ -71,7 +71,7 @@ describe('toEntries', () => {
     expect(() => toEntries([input], createContext(), registry)).toThrow(InvertedSpanError);
   });
 
-  // The zero-length span stays legal (D-S3-4) — the regression guard the reject ruling names
+  // The zero-length span stays legal — the regression guard the reject ruling names
   // alongside the refusal itself. A full timestamp, not a date-only string, keeps `toEndInstant`'s
   // inclusive rule from bumping `end` forward a day.
   it('still accepts a zero-length construction-time entry', () => {
@@ -126,7 +126,7 @@ describe('toProposedEdit (S4.10)', () => {
     );
   });
 
-  // The zero-length write stays legal (D-S3-4) — the regression guard the reject ruling names
+  // The zero-length write stays legal — the regression guard the reject ruling names
   // alongside the refusal itself, so a resize gesture's own clamp keeps working (#143). A full
   // timestamp, not a date-only string, keeps `toEndInstant`'s inclusive rule from bumping `end`
   // forward a day.
@@ -202,13 +202,13 @@ describe('moveEntryTo writes a rigid start/end translate (D-S5-50, #239, ADR 002
     const context = createContext();
     const entry = twoDayEntry(context);
     // The zone stays the caller's to apply, because `moveEntryTo` builds an edit and is not a way in
-    // (D-S5-50). 'America/New_York' puts the start of 2026-01-05 five hours after the UTC one, and
+    // 'America/New_York' puts the start of 2026-01-05 five hours after the UTC one, and
     // the whole Entry moves by that much more.
     const edit = moveEntryTo(entry, toInstant('America/New_York', '2026-01-05', 'test'));
     expect(edit.start).toBe(utc('2026-01-05T05:00:00Z'));
   });
 
-  // Q5: this call site read `entry.start as Instant` until the span invariant got one home. The
+  // This call site read `entry.start as Instant` until the span invariant got one home. The
   // cast produced a `NaN` delta. `spansTime` now asks the question, and this pins that a caller
   // holding a start-only Entry sees nothing to translate.
   it('names no field for a start-only Entry, which holds nothing to translate', () => {
@@ -236,7 +236,7 @@ describe('moveEntryTo writes a rigid start/end translate (D-S5-50, #239, ADR 002
   });
 });
 
-// #237 / s5-231 review F4. The error used to take a bare string, and the string was wrong: it named
+// #237 / s5-231 review. The error used to take a bare string, and the string was wrong: it named
 // `entries.update` to a cascade that never called it, and it exposed nothing to catch on.
 describe('InvertedSpanError names the caller, the entry id, and both instants', () => {
   function invertedSpanErrorFrom(run: () => unknown): InvertedSpanError {
@@ -318,7 +318,7 @@ describe('InvertedSpanError names the caller, the entry id, and both instants', 
     expect(fromCascade.message).not.toContain('entries.update');
   });
 
-  // D-S5-46, and it is load-bearing: `gesture-draft.ts`'s resize clamp produces a zero-length span
+  // This is load-bearing: `gesture-draft.ts`'s resize clamp produces a zero-length span
   // as its own way of refusing an inversion (ADR 0012 does not touch this rule).
   it('leaves a zero-length span legal', () => {
     const context = createContext();
@@ -362,7 +362,7 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     expect(reading.stored.get(entry.id)?.start).toBe(utc('2026-01-02T00:00:00Z'));
   });
 
-  // An id nothing knows is skipped — there is no Entry to read the edit against (#209 Q3, #235).
+  // An id nothing knows is skipped — there is no Entry to read the edit against (#209, #235).
   it('skips an edit naming an id no lookup answers for', () => {
     const context = createContext();
     const entry = oneEntry(context);

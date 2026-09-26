@@ -663,7 +663,7 @@ describe("a rolling-up parent's cell is refused, from every door (ADR 0013, #470
   }
 
   it('is refused from update(), inside a transaction, and from a second update() in the same transaction', () => {
-    // The point of the exercise (Q7): permission follows the thing written, never the call that
+    // The point of the exercise: permission follows the thing written, never the call that
     // wrapped it. `dataset.transaction()` is public, so a bypass here is a bypass for everyone.
     const standalone = costDataset();
     expect(() => standalone.entries.update('p1', { cost: 500 })).toThrow(DerivedFieldNotWritableError);
@@ -820,7 +820,7 @@ describe('a lock holds at every caller-facing door (ADR 0015)', () => {
   /** A bar is an ordinary child Entry now (ADR 0026): removing it is `entries.remove(childId)`,
    *  which removes that Entry outright rather than un-dating some owner it used to draw a Segment
    *  for. A locked `end` on the child itself still refuses the un-date that removing it would cause
-   *  — `EntryStore#remove` names its own door, the same way `entries.update` names its (J37, and
+   *  — `EntryStore#remove` names its own door, the same way `entries.update` names its (per
    *  ADR 0015's rule: a lock holds at every caller-facing door, not just `update`). */
   it("refuses removing an Entry's own last date-bearing self when a locked 'end' would go un-dated", () => {
     const state = new DatasetState({
@@ -977,7 +977,7 @@ describe('#496 step 1 — characterization: what construction and a same-id remo
     expect(seen).toHaveLength(1);
     const changeSet = seen[0]!;
     // L1's worry stays true of `load`, which builds its own ChangeSet rather than lean on this
-    // fold (Q1) — but an ordinary transaction is not `load`: the id existed before this transaction
+    // fold — but an ordinary transaction is not `load`: the id existed before this transaction
     // opened, so both its old row and its new one belong in the changeset undo needs to invert.
     expect(changeSet.removed.map((row) => row.entity.id)).toEqual([entryId('b')]);
     expect(changeSet.removed[0]!.entity.name).toBe('b');
