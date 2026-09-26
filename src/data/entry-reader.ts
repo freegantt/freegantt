@@ -109,7 +109,10 @@ function propsFromInput(
   for (const key of Object.keys(flat)) {
     if (ENTRY_INPUT_KEYS.includes(key)) continue;
     if (!registry.has(key)) {
-      warnIngest(`"${id}" carries an undeclared key "${key}". Declare it in "fields" to make it writable.`);
+      warnIngest(
+        `"${id}" carries an undeclared key "${key}", and FreeGantt drops its value. ` +
+          `Declare it in "fields", or nest it as "props: { ${key} }".`,
+      );
       continue;
     }
     if (key in props) throw new DuplicatePropsKeyError(key, id);
