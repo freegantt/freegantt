@@ -713,6 +713,38 @@ export class EntryStore implements EntryStoreContract {
     const rolled = this.#foldRollup(byId, rollupUpdated);
     const target = read.map((entry) => rolled.get(entry.id) ?? entry);
 
+    this.#commitSyncToMatch(runner, target, reports);
+  }
+
+  /**
+   * The bound runner a whole-list write commits through, or the refusal that write owes when it may
+   * not run right now: an open transaction (`TransactionAlreadyOpenError`), a running extension hook
+   * (`MutationDuringExtensionHookError`), or a `beforeChange`/`change` handler on the stack
+   * (`MutationDuringNotificationError`). `#readBatch` calls this first.
+   */
+  #runnerForBatchWrite(operation: string): TransactionData {
+    const runner = this.#runner;
+    if (!runner) {
+      throw new Error(
+        'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
+      );
+    }
+    assertNoOpenTransaction(runner.openTransactions, operation);
+    assertNoRunningExtensionHook(runner.runningExtensionHook, operation);
+    assertNotNotifying(runner.notifying, operation);
+    return runner;
+  }
+
+  /**
+   * Diffs `target` against the store's own committed rows and commits only what changed, the shape
+   * `syncAll` and `syncChanges` both build a `ChangeSet` from. No changes, no commit: no
+   * `beforeChange`, no `change`, and no History step.
+   */
+  #commitSyncToMatch(
+    runner: TransactionData,
+    target: readonly StoredEntry[],
+    reports: readonly CommitReport[],
+  ): void {
     const changes = changesToMatchBatch(this.#byId, target, this.#registry, this.#access);
     if (changes.added.length === 0 && changes.removed.length === 0 && changes.updated.length === 0) {
       return;
@@ -732,12 +764,11 @@ export class EntryStore implements EntryStoreContract {
 
   /**
    * The read-and-roll step `load` and `syncAll` both run before either builds its own `ChangeSet`:
-   * checks a whole-list write may run right now (no open transaction, no running extension hook, no
-   * `beforeChange`/`change` handler on the stack), reads and places the batch (`readEntryBatch`), and
-   * runs construction's own Rollup once. Returns the bound runner alongside the placed entries, the
-   * Rollup's updates, and the reports a dropped `siblingIndex` row and a dropped derived value owe —
-   * raised by `commitChangeSet` once the commit lands, so `syncAll` drops them with a call that writes
-   * nothing.
+   * checks a whole-list write may run right now (`#runnerForBatchWrite`), reads and places the batch
+   * (`readEntryBatch`), and runs construction's own Rollup once. Returns the bound runner alongside
+   * the placed entries, the Rollup's updates, and the reports a dropped `siblingIndex` row and a
+   * dropped derived value owe — raised by `commitChangeSet` once the commit lands, so `syncAll` drops
+   * them with a call that writes nothing.
    */
   #readBatch(
     inputs: readonly FlatEntryInput[],
@@ -749,15 +780,7 @@ export class EntryStore implements EntryStoreContract {
     readonly rollupUpdated: readonly FieldUpdated[];
     readonly reports: readonly CommitReport[];
   } {
-    const runner = this.#runner;
-    if (!runner) {
-      throw new Error(
-        'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
-      );
-    }
-    assertNoOpenTransaction(runner.openTransactions, operation);
-    assertNoRunningExtensionHook(runner.runningExtensionHook, operation);
-    assertNotNotifying(runner.notifying, operation);
+    const runner = this.#runnerForBatchWrite(operation);
 
     const source = this.#hierarchySource;
     const {
