@@ -323,10 +323,11 @@ export class InvalidPresetError extends FreeGanttError {
 }
 
 /** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
- * D-S1.9-6) or a mutator (`entries.update`/`remove`, or a `parentId` naming a missing entry —
- * S2.3 §1.3). A read never raises it: a row is how a value is read, and `entries.get` answers
- * `undefined` for an id the Dataset has no entry for (ADR 0017). `operation` names the call that failed, so the message points at what
- * the caller asked for rather than a generic "not found". */
+ * D-S1.9-6) or a mutator (`entries.update`/`remove`, a `parentId` naming a missing entry — S2.3
+ * §1.3 — or a plugin's `store.set` for an id with no entry). A read never raises it: a row is how a
+ * value is read, and `entries.get` answers `undefined` for an id the Dataset has no entry for
+ * (ADR 0017). `operation` names the call that failed, so the message points at what the caller
+ * asked for rather than a generic "not found". */
 export class EntryNotFoundError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly operation: string;
