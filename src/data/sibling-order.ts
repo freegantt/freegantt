@@ -133,16 +133,9 @@ export interface DeltaPlacement {
 
 /**
  * The final rank of every id in every group a delta's removals and placements touched.
- *
- * Call: `siblingIndexesAfterDelta(removedIds, placements, committedSiblingIds, committedGroupOf,
- * operation)`. Builds one `SiblingChange` log — a departure for each removed id, then a placement
- * for each entry in `placements`, in call order — and hands it to `renumberSiblingGroups`, the same
- * replay a live transaction runs at commit. This is `EntryStore`'s own `#liveSiblingGroupSize`,
- * `#logSiblingPlacement` and `#logSiblingDeparture` without a transaction's write set: a local count
- * per group, seeded lazily from `committedSiblingIds`, stands in for the live one.
- *
- * A named index that is not a whole number from 0 to the group's own live count throws
- * `SiblingIndexOutOfRangeError`, and nothing in the delta is placed.
+ * Replays each removal, then each placement, over the group's committed order — the same
+ * rule a live transaction applies at commit. A named index outside the group's own live
+ * count throws `SiblingIndexOutOfRangeError`, and nothing in the delta is placed.
  */
 export function siblingIndexesAfterDelta(
   removedIds: readonly EntryId[],
