@@ -38,7 +38,7 @@ describe('buildElement', () => {
     expect(node.textContent).toBe('bold');
   });
 
-  // D-S5-10: the two text channels never combine — html wins when both are given.
+  // The two text channels never combine — html wins when both are given.
   it('html wins over text when both are given', () => {
     const node = buildElement({ html: '<b>bold</b>', text: 'never shown' });
     expect(node.innerHTML).toBe('<b>bold</b>');
@@ -99,7 +99,7 @@ describe('applyElementDescription', () => {
     expect(node.innerHTML).toBe('<b>bold</b>');
   });
 
-  // D-S5-10: the two text channels never combine — html wins when both are given.
+  // The two text channels never combine — html wins when both are given.
   it('html wins over text when both are given', () => {
     const node = document.createElement('div');
     applyElementDescription(node, { html: '<b>bold</b>', text: 'never shown' });

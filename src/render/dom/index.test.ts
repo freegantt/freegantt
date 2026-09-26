@@ -353,7 +353,7 @@ describe('render/dom backend', () => {
     // Every cell states its role and its 1-based column position, so a reorder moves the position
     // with the column. A header cell with no role leaves `aria-colindex` on a bare div and leaves
     // the header `row` owning no `columnheader` — two critical axe failures the first run of
-    // `e2e/a11y.spec.ts` caught against D-S5-25's own comment (S5.11, D-S5-27).
+    // `e2e/a11y.spec.ts` caught against the roles and column positions required here (S5.11).
     const headerCells = Array.from(gridHeader.querySelectorAll<HTMLElement>('.fg-col-header'));
     expect(headerCells.map((cell) => cell.getAttribute('role'))).toEqual(
       Array.from({ length: 4 }, () => 'columnheader'),
@@ -847,7 +847,7 @@ describe('render/dom backend', () => {
     expect(labels).toHaveLength(1);
     expect(labels[0]!.textContent).toBe('Ship');
     // The label's transform carries a second, always-zero component under the default placement
-    // (#318, D-S1.10-6) — 0 for the default and 'inHeader' alike, a caller's own px
+    // (#318) — 0 for the default and 'inHeader' alike, a caller's own px
     // otherwise.
     expect(labels[0]!.style.transform).toBe('translate(40px, 0px)');
     expect(labels[0]!.dataset['placement']).toBe('belowHeader');
@@ -972,7 +972,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  // J2: one `.fg-tick-line` per finest-band tick, mounted after `.fg-row-bands` and the decorations
+  // One `.fg-tick-line` per finest-band tick, mounted after `.fg-row-bands` and the decorations
   // layer, and before `.fg-bars` — the design's own paint order (bands -> shades -> gridLines -> bars).
   it('paints one tick line per finest-band tick, over the row bands and under the bars, with major stamped', () => {
     const backend = paintingBackend();
@@ -1022,7 +1022,7 @@ describe('render/dom backend', () => {
     backend.destroy();
   });
 
-  // D-S3-6/D-S3-7, [S3-A3]: applyState paints the fixed data-state projection, touching only the
+  // [S3-A3]: applyState paints the fixed data-state projection, touching only the
   // bars whose token set actually changed.
   it('applyState paints hovered/selected data-state tokens and clears them on the next call', () => {
     const backend = paintingBackend();
@@ -1095,7 +1095,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  // #230 R0: a one-Entry row cannot tell "reads row.entryIds[0]" apart from "reads every entryId the
+  // #230: a one-Entry row cannot tell "reads row.entryIds[0]" apart from "reads every entryId the
   // row owns". A custom row that puts two Entries on one lane can, so this pins the second reading.
   it('a row that owns several Entries paints selected from its second Entry (#230 R0)', () => {
     const [entryA, entryB] = sampleEntries.slice(0, 2);
@@ -1374,7 +1374,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  // S3.6, D-S3-18, U7: BarPreview.extra distinguishes the caller's own gesture ('dragging') from an
+  // S3.6, U7: BarPreview.extra distinguishes the caller's own gesture ('dragging') from an
   // installed extension hook's cascade ('ghost') — two entries offset in the same preview frame.
   it('applyState paints dragging/ghost data-state tokens off BarPreview.extra and clears them once the preview drops', () => {
     const backend = paintingBackend();
@@ -1706,7 +1706,7 @@ describe('render/dom backend', () => {
     ]) as readonly [Entry, Entry, Entry];
     // The same ladder `GanttShell` wires: no consumer renderer, so the resolved variant's own
     // `paint` answers. Core's `parent` names a class and no content, so the bar keeps its own
-    // label (`J34`).
+    // label.
     const backend = paintingBackend([leaf, parent, child], (entry) => {
       const paint = variantRegistry.resolveFor(entry).paint;
       return paint === undefined ? undefined : { renderer: paint };
@@ -1731,7 +1731,7 @@ describe('render/dom backend', () => {
     const leafBar = timeline.querySelector<HTMLElement>('[data-variant="leaf"]')!;
     expect(summaryBar.className.split(' ')).toContain('fg-bar-summary');
     expect(leafBar.className.split(' ')).not.toContain('fg-bar-summary');
-    // J34: a paint that names only a class decorates, so the library still paints the label.
+    // A paint that names only a class decorates, so the library still paints the label.
     expect(summaryBar.textContent).toBe(parent.name);
 
     backend.destroy();
@@ -1936,7 +1936,7 @@ describe('render/dom backend', () => {
       };
     }
 
-    // Every J1 test wants "Discovery" painted — the plain identity resolver a raw `computeFrame`
+    // Every label test wants "Discovery" painted — the plain identity resolver a raw `computeFrame`
     // call needs to stand in for `view/`'s default `barLabels` (#421 C5). One test overrides it
     // with `() => ''` to prove the "no label" case, so the caller may still pass its own.
     function frameFor(
@@ -2210,7 +2210,7 @@ describe('render/dom backend', () => {
       backend.mount({ grid, timeline });
       backend.sync(frameFor(0, 20, 2000));
 
-      // F1 (#435 follow-up): the token is `'hidden'`, not an absent attribute — the label child
+      // (#435 follow-up): the token is `'hidden'`, not an absent attribute — the label child
       // exists, measured, so a resize preview that widens this bar back past the fit line has
       // something to reveal (applyBarPreview never mounts a child mid-drag). `.fg-bar[data-label=
       // 'hidden'] .fg-bar-label { display: none }` (view/styles.ts) is what keeps it unpainted here.
@@ -2308,7 +2308,7 @@ describe('render/dom backend', () => {
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
       // Shrinks the 200px bar to 20px, crossing insideOrNone's fit line mid-drag — no frame, no
-      // canvas call, `patch` never runs. Before F1's fix, `data-label` was deleted here but the
+      // canvas call, `patch` never runs. Before this fix, `data-label` was deleted here but the
       // label child survived, so `.fg-bar-label`'s default rule (overflow: hidden; text-overflow:
       // ellipsis) kept painting it, clipped, inside the now-too-narrow bar — the exact 'inside' look
       // #435 exists to avoid.
@@ -2349,7 +2349,7 @@ describe('render/dom backend', () => {
 
       // Widens the 20px bar to 200px, crossing the fit line mid-drag. `applyBarPreview` only flips
       // `data-label`; the child patch already gave this bar on commit (hidden by CSS) is what
-      // reveals — no node is created here (F1, [S3-A3]'s zero-allocation hot path).
+      // reveals — no node is created here ([S3-A3]'s zero-allocation hot path).
       let mutations = 0;
       const observer = new MutationObserver((records) => {
         for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
@@ -2502,7 +2502,7 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
-  // S5.6, D-S5-15: an underBars decoration paints below the bar layer, an overBars one above it —
+  // S5.6: an underBars decoration paints below the bar layer, an overBars one above it —
   // DOM order alone gives the stacking, so this asserts document position, not a z-index.
   it('paints an underBars decoration below the bar layer and an overBars one above it', () => {
     const backend = paintingBackend();

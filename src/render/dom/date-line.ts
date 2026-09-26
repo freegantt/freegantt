@@ -50,8 +50,8 @@ function createHiddenDiv(): HTMLElement {
 }
 
 /** Attaches Date line paint to the timeline pane: a 1px stroke per line, keyed by array position
- * (S1.13, D-S1.13-3 — no `id`, same precedent as Header bands), and a sibling Date line label layer
- * mounted in `headerLayer` for lines that carry a `label` (D-S1.13-6). Both layers key by the source
+ * (S1.13 — no `id`, same precedent as Header bands), and a sibling Date line label layer
+ * mounted in `headerLayer` for lines that carry a `label`. Both layers key by the source
  * Date line index. Call `sync` each frame. `before` is the node the strokes' own wrapper mounts
  * ahead of — pass `contentSizer` (#118), not the end of `timelineHost`'s children: a plain `append`
  * landed after `.fg-content-sizer`, and that 1px `position: relative` sizer box (needed in flow for
@@ -83,7 +83,7 @@ export function attachDateLines(
       // `.fg-date-line` CSS gives `top: 0` but not a height. This node is a child of
       // `.fg-timeline-pane`, which is both the positioned ancestor and the `overflow: auto`
       // scroller. A CSS `bottom: 0` would size to the pane's clientHeight, not scrollHeight.
-      // `height` is an allowed inline geometry write (D-S1.10-6).
+      // `height` is an allowed inline geometry write.
       const height = Math.max(contentHeight, paneHeight);
       const lines = dateLinesOf(decorations);
       strokes.sync(layer, lines, {
@@ -118,7 +118,7 @@ export function attachDateLines(
           node.className = classListFor(geom.className, 'fg-date-line-label');
           // `belowHeader` anchors at `top: 100%` (CSS, #225); every other placement anchors at
           // `top: 0` and nudges down by a pixel offset instead — 0 for `'inHeader'`, a caller's
-          // own number otherwise. transform stays the one inline geometry write (D-S1.10-6).
+          // own number otherwise. transform stays the one inline geometry write.
           const yOffset = typeof geom.placement === 'number' ? geom.placement : 0;
           node.style.transform = `translate(${geom.x}px, ${yOffset}px)`;
           if (geom.placement === 'belowHeader') node.dataset['placement'] = 'belowHeader';
