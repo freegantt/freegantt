@@ -1,4 +1,4 @@
-// api/ — what a plugin's `data` half sees (S5.10, D-S5-23/24/30/31, ADR 0019).
+// api/ — what a plugin's `data` half sees (S5.10, ADR 0019).
 // `DatasetPluginContextOf` stays generic over `TDataset` here, so this file never imports
 // `./dataset.js` for the concrete `Dataset` class — `api/dataset.ts` already imports this file for the
 // generic shape, and dependency-cruiser's `no-circular` rule treats a type-only edge the same as a
@@ -36,16 +36,16 @@ export type { FieldLockRuleWrapper };
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
 // takes (#209), so the only type a plugin author names to write a cascade is one they already know.
 export { mergeEntryEdits } from '../data/edit-extension.js';
-// The move a plugin's cascade is honest about (D-S5-44): a spanning Entry translated rigidly to a
+// The move a plugin's cascade is honest about: a spanning Entry translated rigidly to a
 // new `start`, `end` shifted by the same delta so the Entry's own duration never changes. This is
 // how a plugin author writes a cascade move, rather than hand-rolling the same rigid translate
 // `layout/gesture-draft.ts`'s own `moveEdit` computes for a drag — beside `mergeEntryEdits`, for the
 // same reason: an app author never meets it, because it builds one value of the `EntryEdits` map
-// only an extender returns (D-S5-50, #239).
+// only an extender returns (#239).
 export { moveEntryTo } from '../data/entry-reader.js';
 
-/** `beforeChange`/`change`, the two events a Dataset raises (D-S2-5, D-S2-25). Returning `false` from a
- *  `beforeChange` handler vetoes the whole changeset — the refusal path a lock plugin uses (D-S5-24). */
+/** `beforeChange`/`change`, the two events a Dataset raises. Returning `false` from a
+ *  `beforeChange` handler vetoes the whole changeset — the refusal path a lock plugin uses. */
 export interface DatasetEvents {
   /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
    *  (I2); `on` is that seam for a Dataset event. Not gated — a plugin may call this after its own
@@ -58,7 +58,7 @@ export interface DatasetEvents {
   off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
 }
 
-/** The extension hook, as a plugin claims it (D-S5-23). Installing composes: the wrapper receives the
+/** The extension hook, as a plugin claims it. Installing composes: the wrapper receives the
  *  current occupant, so a second plugin adds to the first's cascade instead of evicting it. Merge the
  *  two results with `mergeEntryEdits`, never with a spread (#197).
  *
@@ -71,7 +71,7 @@ export interface DatasetEditHook {
   setLockRule(wrap: FieldLockRuleWrapper): void;
 }
 
-/** This plugin's own store, plus a read-only view of anybody else's (D-S5-24, D-S5-30). */
+/** This plugin's own store, plus a read-only view of anybody else's. */
 export interface DatasetStoreAccess {
   /** This plugin's own reserved store, namespaced by its id. Idempotent: a second call returns the
    *  same handle. */
@@ -81,8 +81,8 @@ export interface DatasetStoreAccess {
 }
 
 /** What a plugin's `data()` half receives, once, while the Dataset constructs. A Field declares on
- *  the plugin object itself — `fields`/`fieldTypes`/`aggregators` (#496 grill round 3, R1) — so there
- *  is no `ctx.fields` door here: one way to declare, so the pre-#496-R2 gap (a flat value dropped
+ *  the plugin object itself — `fields`/`fieldTypes`/`aggregators` (#496 grill round 3) — so there
+ *  is no `ctx.fields` door here: one way to declare, so the earlier gap (a flat value dropped
  *  because the plugin declared its Field too late for ingest to see) cannot come back. */
 export interface DatasetPluginContextOf<TDataset> {
   dataset: TDataset;

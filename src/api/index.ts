@@ -1,6 +1,6 @@
 export { Dataset } from './dataset.js';
 export type { DatasetOptions, DatasetPluginContext } from './dataset.js';
-// S5.10, D-S5-23/24/30/31: the Dataset-plugin contract. The generic shapes behind the Dataset-bound
+// S5.10: the Dataset-plugin contract. The generic shapes behind the Dataset-bound
 // aliases above, plus the vocabulary a plugin author names directly — its own store, another
 // plugin's read-only view, and the wrapper that composes onto the extension hook.
 export type {
@@ -19,14 +19,14 @@ export type {
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';
-// D-S5-44 (ADR 0026 retired the several-Segment case it names): the rigid move a plugin's cascade
+// ADR 0026 retired the several-Segment case it names: the rigid move a plugin's cascade
 // writes honestly, for the one span an Entry has.
 export { moveEntryTo } from './dataset-plugin.js';
-// The extension hook's own types (D4, D-S2-6): a plugin that writes an extender by hand, rather than
+// The extension hook's own types (D4): a plugin that writes an extender by hand, rather than
 // composing one inline, names these. EntryEdit is the write side — what a cascade returns, and what
-// `moveEntryTo` (D-S5-50) builds one of; EntryEdits is the map of those, which `mergeEntryEdits`
+// `moveEntryTo` builds one of; EntryEdits is the map of those, which `mergeEntryEdits`
 // (#197) takes and returns. ProposedEdit is the read side — what `EditRequest.proposed` holds — and
-// ProposedEdits is the map of those (#209 Q1: a plugin author who reads `request.proposed`, or factors
+// ProposedEdits is the map of those (#209: a plugin author who reads `request.proposed`, or factors
 // a helper over it, needs to name the read side too). WriteTarget is what `EditRequest.writeTarget`
 // (#466) answers — a plugin author who reads it needs to name the answer too.
 export type {
@@ -38,12 +38,12 @@ export type {
   WriteTarget,
 } from '../model/index.js';
 export { attemptMutation } from './attempt-mutation.js';
-// S5.12, D-S5-42: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
+// S5.12: one handler over the Dataset's `error` feed and the Gantt's, de-duplicated by
 // emitter identity. Beside `attemptMutation` because it is the same kind of helper — the boilerplate
 // a common consumer job needs, written once.
 export { watchAllErrors } from './watch-all-errors.js';
 export type { ErrorFeed } from './watch-all-errors.js';
-// The Error report itself (D-S5-40). A notification record a consumer subscribes to, never something
+// The Error report itself. A notification record a consumer subscribes to, never something
 // they catch — `FreeGanttError` above is the class you catch.
 export type {
   ErrorReport,
@@ -166,7 +166,7 @@ export type {
   EntryFieldEdit,
   EntryActivate,
 } from '../view/index.js';
-// S3, D-S3-9: `Gantt.capabilities`'s own type and the per-gesture rule shape (`view/capability.ts`).
+// S3: `Gantt.capabilities`'s own type and the per-gesture rule shape (`view/capability.ts`).
 // #256: `WriteRule` is the shape of `capabilities.edit`, which answers one cell rather than one
 // entry, and `WriteVerdict` is what `ctx.interaction.canWrite` hands a plugin back.
 export type {
@@ -176,16 +176,16 @@ export type {
   WriteRule,
   WriteVerdict,
 } from '../view/index.js';
-// #168 (S5.3, D-S5-8; #158): the type of both `PluginContext.view.overlay` and
+// #168 (S5.3; #158): the type of both `PluginContext.view.overlay` and
 // `PluginContext.view.rowLayer`. One mount shape, two instances — a plugin builds a `Popup` (or its
 // own primitive) against this alone, never against `view/` or `render/` directly.
 export type { MountLayer } from '../view/index.js';
 // Review N1/A3: the plugin-to-DOM seam. `ctx.view.dom` carries `GanttDom`; `targetUnder` answers
 // with a `DomTarget`; `onDomEvent` takes a `DomEventHandler` and `DomEventOptions`.
 export type { GanttDom, DomTarget, PaneName, DomEventHandler, DomEventOptions } from '../view/index.js';
-// S5.3, D-S5-8: the anchoring/flipping/clamping/dismissal primitive tooltips, the context menu and
+// S5.3: the anchoring/flipping/clamping/dismissal primitive tooltips, the context menu and
 // the cell editor (S5.5+) all build on. C3 (`plans/reviews/2026-09-02-s5-start-fixes.md`) folded its
-// Escape dismissal into the shared keymap (D-S5-9's "the innermost popup wins" needs the same
+// Escape dismissal into the shared keymap (the "innermost popup wins" rule needs the same
 // newest-first resolver core commands and plugin keybindings use) — `createPopup` now takes a
 // `RegisterKeyHandler` as a second argument, and a plugin author passes the same bound method it
 // already had: `ctx.interaction.registerKeyHandler`.
@@ -199,15 +199,15 @@ export type {
   DismissTrigger,
   Anchor,
 } from '../extensions/popup.js';
-// S5.5, D-S5-13/14: the two shipped built-ins — values a consumer imports (`plugins: [tooltips(),
-// contextMenu({ items })]`), never names in a config table (Q3, README §0). Both live in
+// S5.5: the two shipped built-ins — values a consumer imports (`plugins: [tooltips(),
+// contextMenu({ items })]`), never names in a config table (README §0). Both live in
 // `src/extensions/features/`, confined to this same public surface by the `extensions-public-only`
 // depcruise rule — `[S5-A1]`'s dogfood gate.
 export { tooltips } from '../extensions/features/tooltips.js';
 export type { TooltipsOptions } from '../extensions/features/tooltips.js';
 export { contextMenu } from '../extensions/features/context-menu.js';
 export type { ContextMenuOptions, MenuItem, MenuEntry } from '../extensions/features/context-menu.js';
-// S5.8, D-S5-19/D-S5-20: the third shipped built-in, same posture as `tooltips()`/`contextMenu()`
+// S5.8: the third shipped built-in, same posture as `tooltips()`/`contextMenu()`
 // above — a value a consumer imports, confined to the same `extensions-public-only` boundary.
 export { inlineEditing } from '../extensions/features/inline-editing.js';
 export type {
@@ -305,7 +305,7 @@ export {
   changeSetId,
 } from '../model/index.js';
 export type { PluginId, Disposer, KeyChord } from '../model/index.js';
-// S5.1, D-S5-1: `PluginContext.disposables`'s own type — a plugin author's cleanup list.
+// S5.1: `PluginContext.disposables`'s own type — a plugin author's cleanup list.
 export type { DisposableStore } from '../extensions/disposables.js';
 export type {
   Entry,
@@ -351,9 +351,9 @@ export type { ResolvedRowSource, ResolvedEntriesRowSource, ResolvedGroupRowSourc
 // General geometry vocabulary (model/geometry.ts) — the public surface's own shapes for a point or
 // a box, alongside `ClientPoint`/`PixelSpan` below.
 export type { Point, Size, ClientPoint, PixelSpan } from '../model/index.js';
-// S5.3, D-S5-10: `ctx.view.renderElement()`'s own input type — the reconciler's vocabulary as plain data.
+// S5.3: `ctx.view.renderElement()`'s own input type — the reconciler's vocabulary as plain data.
 export type { ElementDescription, TooltipColumn } from '../model/index.js';
-// S5.4, D-S5-11/12: renderer callback vocabulary — `GanttOptions.barRenderer`/etc. and
+// S5.4: renderer callback vocabulary — `GanttOptions.barRenderer`/etc. and
 // `ctx.view.registerRenderer(point, renderer)` both type against these. `FrameBar`/`FrameRow`/
 // `ResolvedColumn` ride along because the context types name them (`BarRendererContext.bar`,
 // `GridCellRendererContext.row`/`column`) — a consumer writing its own named `BarRenderer` needs them
@@ -388,7 +388,7 @@ export type {
 // (S7), no renderer reads it, and no stylesheet has a `.fg-link` rule, so a consumer styling
 // against it today would write CSS that matches nothing.
 export { BAR_FLAG_KEYS } from '../layout/index.js';
-// S5.6, D-S5-15: a decoration provider's own vocabulary — a plugin author writes `ctx.view
+// S5.6: a decoration provider's own vocabulary — a plugin author writes `ctx.view
 // .registerDecoration('underBars', (ctx) => [...])` against these alone. `RangeBand`/`RowStripe`
 // are the same pixel-resolved shapes `GeometryFrame.underBars`/`.overBars` carry.
 export type {
@@ -404,13 +404,13 @@ export type {
 // to structural inference.
 export type { Bar, BarProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
 // ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
-// it. `EntryRule` is published beside it because an author cannot guess what `when` matches (J6);
+// it. `EntryRule` is published beside it because an author cannot guess what `when` matches;
 // `EntryPredicate` names its predicate arm alone. Named for what they match — an Entry — rather than
 // for one of the two keys that take them: `EntriesRowSource.childrenAsSegments` takes the same shape
-// (#421 Q30).
+// (#421).
 export type { EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
 // ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
-// looks up again (F3).
+// looks up again.
 export type { ResolvedVariant } from '../layout/index.js';
 // Review P3: the common producer, so `(entry) => [wholeEntryBar(entry)]` replaces eight hand-written
 // lines — and the Bar id convention has one owner instead of one copy per plugin.
@@ -426,12 +426,12 @@ export { wholeSpanUnlessSegments } from '../layout/index.js';
 // object literals — `variants: [summary({ when: myRule })]` reuses core's rail instead of
 // hand-building `.fg-bar-summary` again. `diamond()` is not seeded into any Gantt; no row wears it
 // until an author installs it. `bar` and `summary` keep their plain names on purpose — the three read
-// as one family at a call site — see `bar()`'s own note in `layout/bars/variants.ts` (F13).
+// as one family at a call site — see `bar()`'s own note in `layout/bars/variants.ts`.
 export { bar, summary, diamond } from '../layout/index.js';
 // #265: shipped Grid-column cell renderers. `meter()` paints a percent as a
 // track. `image()` paints a stored URL as an img. Both take `()`, the
-// same factory shape as `diamond()`. `columnRenderer` stays on the Gantt column
-// (D-S5-17).
+// same factory shape as `diamond()`. `columnRenderer` stays on the Gantt
+// column itself.
 export { meter, image } from '../layout/index.js';
 // #264: a currency Field type is a factory, not a seeded name — `{ key: 'cost', type: currency({
 // code: 'EUR' }) }`. Consumers name `percent` / `text` / `number` with the string; those stay off
@@ -481,7 +481,7 @@ export type {
   DateFormat,
   HeaderFormat,
 } from '../time/index.js';
-// S5.6, D-S5-16: `Dataset.time`'s own type — a plugin author names this when it writes a function
+// S5.6: `Dataset.time`'s own type — a plugin author names this when it writes a function
 // that takes a `ZonedTime` rather than reading `ctx.time`/`dataset.time` inline. `PlainParts` rides
 // along: `ZonedTime.toPlain`/`.fromPlain` both name it.
 export type { ZonedTime, PlainParts } from '../time/index.js';

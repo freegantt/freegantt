@@ -71,7 +71,7 @@ import type {
 // constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
 import { attachEntryGestures, attachKeyboardEditing, attachColumnGestures } from '../interaction/index.js';
 
-/** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13, D-S1.13-2). */
+/** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13). */
 export interface DateLineInput {
   placeAt: InstantInput;
   label?: string;
@@ -98,7 +98,7 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  a Gantt built on a `Dataset<{ team: string }, { cost: number }>` hands that same typed
    *  Dataset back from `gantt.dataset`, so a page never carries the pair by hand (#226). */
   dataset: Dataset<TProps>;
-  /** Bound scroll axes (D9, D-S6-1) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
+  /** Bound scroll axes (D9) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
    * instances to sync that direction; omit a direction to keep it private. Independent of
    * `scale`/`preset`/`range`/`fit`: a Gantt may share its scroll position, its scale, both, or
    * neither. */
@@ -133,17 +133,17 @@ export interface GanttOptionsBase<TProps = unknown> {
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
-  /** Live (S1.12, D-S1.12-12). `undefined` = the runtime default. Feeds header labels and
+  /** Live (S1.12). `undefined` = the runtime default. Feeds header labels and
    *  screen-reader dates alike, with no bar remount. */
   locale?: Intl.LocalesArgument;
-  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). Default `true`: reads the clock on each render, so
+  /** Live (S1.12/S1.13). Default `true`: reads the clock on each render, so
    *  the line moves on the next render, not on a clock tick. It goes stale on a page left open past
    *  midnight until something else repaints. An app that wants a live line reassigns this on its own
    *  timer, e.g. `setInterval(() => { gantt.todayLine = new Date(); }, 60_000)`, held in a plugin's
    *  `ctx.disposables`. `false`: off, no clock read. An `InstantInput` pins it with no clock read at
    *  all. To keep today visible, pan with `panToToday()` or grow `range`. */
   todayLine?: boolean | InstantInput;
-  /** Live (S1.13, D-S1.13-4). Default `[]`. Extra Date lines beside the today wrapper —
+  /** Live (S1.13). Default `[]`. Extra Date lines beside the today wrapper —
    *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
    *  Header bands. The wrapper's own line never gets a Date line label; give one of these a `label` instead. */
   dateLines?: readonly DateLineInput[];
@@ -159,16 +159,16 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  edge and where it lands `align: 'start'` (the default) — the **Today line margin** (CONTEXT.md).
    *  Default `2`; `0` restores the old flush landing. No effect on `align: 'center'`. */
   todayLineMarginTicks?: number;
-  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live.
+  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12). Live.
    *  Default: the shipped nine-rung set. */
   zoomPresets?: readonly PresetRef[];
-  /** Live (S3, D-S3-10; ADR 0010, ADR 0025, #212, #421). Entry ids, loose on the way in;
+  /** Live (S3; ADR 0010, ADR 0025, #212, #421). Entry ids, loose on the way in;
    *  assignment runs the same cancelable sequence a click runs. Default `[]`. */
   selectedEntryIds?: readonly (EntryId | string)[];
-  /** Live (S3, D-S3-9). A gesture rule is a boolean or a per-entry predicate; `edit` takes the cell
+  /** Live (S3). A gesture rule is a boolean or a per-entry predicate; `edit` takes the cell
    *  and may answer "no opinion" (#256). Both sit over the per-kind default
    *  table. Default `{}`: every gesture resolves off the default table alone. Assignment replaces
-   *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one rule (D-S5-35). */
+   *  the whole config; `gantt.setCapabilityRule`/`clearCapabilityRule` write one rule. */
   capabilities?: Capabilities;
   /** Live (#434). Default `'click'`: `entryActivate` fires on a plain click of a bar or a row's own
    *  background. `'dblclick'` replaces click as the pointer trigger: a single click only selects,
@@ -176,11 +176,11 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `capabilities` refuses to write — a writable cell's double-click stays `inlineEditing()`'s own
    *  (the same editable-cell-wins precedence `Enter` already gives the editor). */
   pointerActivation?: PointerActivation;
-  /** Live (D-S3-24). What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
+  /** Live. What a drag and a keyboard nudge snap to: `{ unit, increment }`, `'tick'` for
    *  one tick of whatever preset is showing, or `'none'`. Omitted, the showing preset's own `snap`
    *  decides — which is `'tick'` for every shipped preset. */
   snap?: SnapSetting;
-  /** Live (S3.7, D-S3-14). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
+  /** Live (S3.7). Wheel zoom, shift+wheel pan, and keyboard pan. Default `{}`: every
    *  viewport gesture is on. `false` turns them all off. Does not gate `zoomBy` / `panToDate`. */
   viewportGestures?: ViewportGestures;
   /** Live (#262). A convenience chord's default binding (`Mod+Z`, `Mod+A`, `Delete`, the pans,
@@ -191,21 +191,21 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `Mod+Arrow` reach, `Enter`) is not in the map's key type and stays bound either way — `[S5-A4]`,
    *  WCAG 2.1.1. The command itself stays reachable through `commands.run(id)` regardless. */
   convenienceChords?: ConvenienceChords;
-  /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
+  /** Live (S4.3). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
-  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
+  /** Live (S4.6). Default `{ source: 'entries', tree: true }`. */
   rowSource?: RowSource;
-  /** Live (S4.6, D-S4-22). Collapsed row ids, loose on the way in. Default `[]`. */
+  /** Live (S4.6). Collapsed row ids, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
-  /** Live (J1). Where the default bar label paints — ignored once `barRenderer`'s output takes over
+  /** Live. Where the default bar label paints — ignored once `barRenderer`'s output takes over
    *  a bar's content. Short form is a `BarLabelPolicy` (see its own doc for the five values);
    *  default `'fitBar'`. */
   barLabels?: BarLabels;
-  /** Live (S5.4, D-S5-11). Customization ladder level 3 (`plans/02` §4). One function, over every
+  /** Live (S5.4). Customization ladder level 3 (`plans/02` §4). One function, over every
    *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.
    *
    *  A rule that names the rows it covers answers first, and the library's own summary rule is such
-   *  a rule (`J40`, `J61`). So this never paints a row with children, which the library paints as a
+   *  a rule. So this never paints a row with children, which the library paints as a
    *  summary. To paint those too, claim them with a rule of your own:
    *  `variants: [{ name: 'summary', when: (entry) => entry.hasChildren, paint }]` — a consumer's
    *  rule outranks the library's.
@@ -229,19 +229,19 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  over core's own `parent`/`leaf`. Of two rules on this list that both answer yes for one row,
    *  the later one wins. Default `[]`. */
   variants?: readonly EntryVariant<TProps>[];
-  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
+  /** Live (S5.4). Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
    *  for its own column. `ctx.column.field` lets one function branch per column. */
   gridCellRenderer?: GridCellRenderer;
-  /** Live (S5.4, D-S5-11). Grid column header chrome (S5.7 paints through it). */
+  /** Live (S5.4). Grid column header chrome (S5.7 paints through it). */
   headerRenderer?: HeaderRenderer;
-  /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature). */
+  /** Live (S5.4). Replaces a tooltip's body (S5.5's `tooltips()` feature). */
   tooltipRenderer?: TooltipRenderer;
-  /** Live (S5.1, D-S5-1, D-S5-3, #404). Values a consumer imports (`tooltips()`, `contextMenu({...})`),
+  /** Live (S5.1, #404). Values a consumer imports (`tooltips()`, `contextMenu({...})`),
    *  never names in a table. Assignment diffs by `id`, then by object identity: a new `id` sets up, a
    *  missing one disposes, the same object is left alone, and a fresh object under an installed `id`
    *  replaces that occupant — so one assignment reconfigures a plugin. Default `[]`.
-   *  `gantt.installPlugin`/`uninstallPlugin` add or drop one plugin without restating the set
-   *  (D-S5-36).
+   *  `gantt.installPlugin`/`uninstallPlugin` add or drop one plugin without restating
+   *  the set.
    *
    *  ADR 0019: chrome only. A `data` half declares what shapes the Dataset's own construction, and a
    *  Dataset installs its plugins once — so a plugin with a `data` half installs on the `Dataset`
@@ -269,16 +269,16 @@ export type GanttScaleOptions =
     }
   | {
       scale?: undefined;
-      /** Build a private default `TimeScaleModel` (D-S1.9-9) sized to the dataset's entries. */
+      /** Build a private default `TimeScaleModel` sized to the dataset's entries. */
       preset?: PresetRef;
-      /** Loose input (S1.12, D-S1.12-8), read through the dataset's zone at construction/assignment. */
+      /** Loose input (S1.12), read through the dataset's zone at construction/assignment. */
       range?: 'fitDataset' | { start: InstantInput; end: InstantInput };
       fit?: TimeScaleFit;
     };
 
 export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
 
-/** ADR 0019, `Q4`: the second line of defence. `GanttOptions.plugins` takes `ChromePlugin` alone, so
+/** ADR 0019: the second line of defence. `GanttOptions.plugins` takes `ChromePlugin` alone, so
  *  a plugin with a `data` half, or any Dataset-only member (`fields`, `fieldTypes`, `aggregators`,
  *  `hierarchySource`), is already a red squiggle in an editor. This catches the caller the compiler
  *  never met — plain JavaScript, a list built at runtime, a `Plugin` a helper widened. A library
@@ -311,7 +311,7 @@ function assertChromeOnly(plugins: readonly ChromePlugin[]): readonly ChromePlug
   return plugins;
 }
 
-/** S5.1, D-S5-1, ADR 0019: the plugin shapes and `PluginContext`, bound to this class. See
+/** S5.1, ADR 0019: the plugin shapes and `PluginContext`, bound to this class. See
  *  `api/plugin.ts`'s file header for why the generic forms live there and the binding happens here.
  *  This file is the one that sees both `Gantt` and `Dataset`. So all four names bind here, the
  *  Dataset-installed ones included. These are the types a plugin author actually writes, and
@@ -326,7 +326,7 @@ export type ChromePlugin<TProps = unknown> = ChromePluginOf<PluginContext<TProps
 export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, Dataset<TProps>>;
 export type Plugin<TProps = unknown> = PluginOf<PluginContext<TProps>, Dataset<TProps>>;
 
-/** S5.2, D-S5-6: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
+/** S5.2: `Command`/`CommandContext`/`CommandRegistry`/`KeyBinding` bound to this class — see
  *  `api/command.ts`'s file header for why the generic form lives there and the binding happens here.
  *  This is the shape a plugin author, or a `gantt.commands`/`gantt.commands.run(id)` caller, actually
  *  sees; `api/index.ts` re-exports these bound names alongside the generic `*Of` shapes. */
@@ -411,9 +411,9 @@ export class Gantt<TProps = unknown> {
       // here — that runs only once `#shell` is assigned, so a plugin's `view()` never sees an
       // unfinished Gantt.
       // Review P5: one member holds every seam that crosses the layer boundary. `view/` may not
-      // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt` façade
-      // (D-S5-5), so this file supplies all seven.
-      // S5.10, D-S5-23/D-S3-18: the drag preview ghosts whatever the installed extension hook would
+      // import `interaction/`, and it may not name the api `Dataset` or the public `Gantt`
+      // façade, so this file supplies all seven.
+      // S5.10: the drag preview ghosts whatever the installed extension hook would
       // add. Read live off the Dataset — every plugin composes onto that one occupant, so this stays
       // the identity function for a Dataset with no plugin installed. Preview only: the commit runs
       // the same occupant again, for real, inside the transaction.
@@ -425,7 +425,7 @@ export class Gantt<TProps = unknown> {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,
         columnGestures: attachColumnGestures,
-        // S3.3, D-S3-16: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset`
+        // S3.3: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset`
         // interface ("a view never opens a transaction"). This class holds the full `api/Dataset`,
         // so a committed gesture draft reaches the store through here, not through the shell.
         // `store`, not `options.dataset`: a gesture draft is built in `view/`, which is permanently
@@ -469,7 +469,7 @@ export class Gantt<TProps = unknown> {
     }
   }
 
-  /** Reads a loose `range` through the dataset's zone (S1.12, D-S1.12-8) — the one place `Gantt`
+  /** Reads a loose `range` through the dataset's zone (S1.12) — the one place `Gantt`
    *  does date math of its own, and only by delegating to `time/toInstant` (CLAUDE.md: "api/ maps
    *  fields; it never does date math of its own"). */
   #toRange(r: 'fitDataset' | { start: InstantInput; end: InstantInput }): 'fitDataset' | TimeSpan {
@@ -478,14 +478,14 @@ export class Gantt<TProps = unknown> {
     return { start: toInstant(zone, r.start, 'gantt.range'), end: toInstant(zone, r.end, 'gantt.range') };
   }
 
-  /** Reads `todayLine`'s loose pinned form through the dataset's zone (S1.13, D-S1.13-4) — booleans
+  /** Reads `todayLine`'s loose pinned form through the dataset's zone (S1.13) — booleans
    *  pass through untouched, so `true`/`false` never take a clock read they don't need. */
   #toTodayLine(todayLine: boolean | InstantInput): boolean | Instant {
     if (typeof todayLine === 'boolean') return todayLine;
     return toInstant(this.#dataset.timeZone, todayLine, 'gantt.todayLine');
   }
 
-  /** `#toRange`'s counterpart for `dateLines` (S1.13, D-S1.13-2): one `toInstant` call per entry. */
+  /** `#toRange`'s counterpart for `dateLines` (S1.13): one `toInstant` call per entry. */
   #toDateLines(lines: readonly DateLineInput[]): readonly DateLine[] {
     const zone = this.#dataset.timeZone;
     return lines.map((line) => {
@@ -590,13 +590,13 @@ export class Gantt<TProps = unknown> {
     this.#shell.gridColumns = columns;
   }
 
-  /** D-S5-34: which columns are hidden, by field key — what a column chooser reads to draw its own
+  /** Which columns are hidden, by field key — what a column chooser reads to draw its own
    *  checkboxes. Reports the columns this Gantt was configured with, never a plugin's own. */
   get hiddenGridColumns(): readonly FieldKey[] {
     return this.#shell.hiddenGridColumns;
   }
 
-  /** D-S5-34. Call: `gantt.hideGridColumn('cost')`. It takes one column off the screen. It leaves
+  /** Call: `gantt.hideGridColumn('cost')`. It takes one column off the screen. It leaves
    *  every other column alone, with the width and the order the user gave them. The caller restates
    *  no list and splices nothing back later. The hidden column stays in `gridColumns` as
    *  `{ field, hidden: true }`, so a saved list restores it hidden. It raises the same cancelable
@@ -606,13 +606,13 @@ export class Gantt<TProps = unknown> {
     this.#shell.hideGridColumn(field);
   }
 
-  /** D-S5-34. Call: `gantt.showGridColumn('cost')`. Puts a hidden column back where it was, with the
+  /** Call: `gantt.showGridColumn('cost')`. Puts a hidden column back where it was, with the
    *  width it had. Showing a column that is already on screen changes nothing. */
   showGridColumn(field: FieldKey): void {
     this.#shell.showGridColumn(field);
   }
 
-  /** Live (J1). `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once
+  /** Live. `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once
    *  `barRenderer`'s own output takes over a bar's content. Default `'fitBar'`. */
   get barLabels(): BarLabels {
     return this.#shell.barLabels;
@@ -622,7 +622,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.barLabels = value;
   }
 
-  /** Live (S5.4, D-S5-11). Assigning repaints every bar with no remount (I8). */
+  /** Live (S5.4). Assigning repaints every bar with no remount (I8). */
   get barRenderer(): BarRenderer | undefined {
     return this.#shell.barRenderer;
   }
@@ -650,19 +650,19 @@ export class Gantt<TProps = unknown> {
 
   /** The whole variant this Gantt resolved for one row (ADR 0018, ADR 0022 §3) — one door, and it
    *  answers the object, never a name a caller looks up again (`itemsFor`/`paintFor` do not exist;
-   *  `variantOf` retired for the same reason, review finding F3). Call:
+   *  `variantOf` retired for the same reason). Call:
    *  `gantt.variantFor(entry).name`, or read `.paint`/`.can`/`.css` off the same answer.
    *
    *  Not `entry.variant`. An Entry belongs to a `Dataset`; a variant resolves per Gantt. I2 lets two
    *  Gantts on one Dataset paint the same row differently, so `entry.variant` would have to pick one
    *  answer and be wrong on the other Gantt.
    *
-   *  The parameter keeps `TProps`; the answer does not (F18) — `ResolvedVariant`'s own doc says why. */
+   *  The parameter keeps `TProps`; the answer does not — `ResolvedVariant`'s own doc says why. */
   variantFor(entry: Entry<TProps>): ResolvedVariant {
     return this.#shell.variantFor(entry);
   }
 
-  /** Live (S5.4, D-S5-11). Assigning repaints every cell with no remount (I8). */
+  /** Live (S5.4). Assigning repaints every cell with no remount (I8). */
   get gridCellRenderer(): GridCellRenderer | undefined {
     return this.#shell.gridCellRenderer;
   }
@@ -671,7 +671,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.gridCellRenderer = renderer;
   }
 
-  /** Live (S5.4, D-S5-11). */
+  /** Live (S5.4). */
   get headerRenderer(): HeaderRenderer | undefined {
     return this.#shell.headerRenderer;
   }
@@ -680,7 +680,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.headerRenderer = renderer;
   }
 
-  /** Live (S5.4, D-S5-11). */
+  /** Live (S5.4). */
   get tooltipRenderer(): TooltipRenderer | undefined {
     return this.#shell.tooltipRenderer;
   }
@@ -689,7 +689,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.tooltipRenderer = renderer;
   }
 
-  /** Live (S4.6, D-S4-21). Assigning re-resolves rows with no remount. The config object is a value
+  /** Live (S4.6). Assigning re-resolves rows with no remount. The config object is a value
    *  (#187): assign a copy after a change, not the object already held.
    *
    *  Reads back resolved (#248 S4-2): `filterPolicy` and `tree` (Entries sources) come back
@@ -711,7 +711,7 @@ export class Gantt<TProps = unknown> {
    *  ```
    *
    *  The `source` check is not ceremony. This getter returns a union of all three row sources, and a
-   *  `'custom'` source carries no `filter`, `sort`, `filterPolicy` or `tree` (D-S4-21) — it resolves
+   *  `'custom'` source carries no `filter`, `sort`, `filterPolicy` or `tree` — it resolves
    *  its own rows, so it has nothing for those keys to act on. Narrowing tells the compiler which of
    *  the three you hold. Read `nestsRows(gantt.rowSource)` when the question is whether rows nest.
    *
@@ -748,8 +748,8 @@ export class Gantt<TProps = unknown> {
    *  ```
    *
    *  Throws `CustomRowSourceNotFilterableOrSortableError` when `gantt.rowSource.source === 'custom'`
-   *  — that source resolves its own rows through `resolve` and carries no `filter` key to replace
-   *  (D-S4-21). Filter inside `resolve` instead. */
+   *  — that source resolves its own rows through `resolve` and carries no `filter` key to
+   *  replace. Filter inside `resolve` instead. */
   filterRows(filter: RowFilter | undefined): void {
     const current = this.rowSource;
     if (current.source === 'custom')
@@ -812,14 +812,14 @@ export class Gantt<TProps = unknown> {
     this.#shell.preset = ref;
   }
 
-  /** D-S3-24. What a drag snaps to right now: this Gantt's own setting when it states one, else the
+  /** What a drag snaps to right now: this Gantt's own setting when it states one, else the
    *  showing preset's, else `'tick'`. A gesture resolves `'tick'` against the preset it measures, so
    *  the answer follows a zoom without the caller writing anything. */
   get snap(): SnapSetting {
     return this.#shell.snap;
   }
 
-  /** Live (D-S3-24). Call: `gantt.snap = { unit: 'day', increment: 2 }`. It states the snap for this
+  /** Live. Call: `gantt.snap = { unit: 'day', increment: 2 }`. It states the snap for this
    *  Gantt, over whatever preset is showing, and it survives a zoom. `undefined` hands the answer
    *  back to the preset. The old spelling — `gantt.preset = { ...gantt.preset, snap }` — built a
    *  one-off copy of a shipped preset, and the next `zoomIn()` threw the snap away with it. */
@@ -828,7 +828,7 @@ export class Gantt<TProps = unknown> {
   }
 
   /** Getter returns the resolved `TimeSpan` — matching how `Dataset` reads `EntryInput` once at
-   *  ingest (D-S1.12-8).
+   *  ingest.
    *
    *  This is the whole scrollable **content** extent, never the window. Read `visibleSpan` for what
    *  is on screen right now (issue #461). */
@@ -836,7 +836,7 @@ export class Gantt<TProps = unknown> {
     return this.#shell.range;
   }
 
-  /** Loose input (S1.12, D-S1.12-8): a string, a `Date`, an epoch number or an `Instant` all work on
+  /** Loose input (S1.12): a string, a `Date`, an epoch number or an `Instant` all work on
    *  `start`/`end`, read through the dataset's zone. */
   set range(r: 'fitDataset' | { start: InstantInput; end: InstantInput }) {
     this.#shell.range = this.#toRange(r);
@@ -872,19 +872,19 @@ export class Gantt<TProps = unknown> {
     return this.#shell.locale;
   }
 
-  /** Live (S1.12, D-S1.12-12): every header label and every screen-reader date re-reads in the new
+  /** Live (S1.12): every header label and every screen-reader date re-reads in the new
    *  locale, live, with no remount. */
   set locale(l: Intl.LocalesArgument | undefined) {
     this.#shell.locale = l;
   }
 
-  /** Getter returns what was resolved (S1.13, D-S1.13-4, S4-1) — a `boolean` passes straight
+  /** Getter returns what was resolved (S1.13, S4-1) — a `boolean` passes straight
    *  through; any other setting reads back the `Instant` it was pinned to, never the loose input. */
   get todayLine(): boolean | Instant {
     return this.#shell.todayLine;
   }
 
-  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). `true`/`false` pass straight through; any other
+  /** Live (S1.12/S1.13). `true`/`false` pass straight through; any other
    *  `InstantInput` is read once through the dataset's zone and pins the line with no clock read. */
   set todayLine(on: boolean | InstantInput) {
     this.#shell.todayLine = this.#toTodayLine(on);
@@ -897,7 +897,7 @@ export class Gantt<TProps = unknown> {
     return this.#shell.dateLines;
   }
 
-  /** Live (S1.13, D-S1.13-4). Loose on the way in: every `placeAt` is read through the dataset's
+  /** Live (S1.13). Loose on the way in: every `placeAt` is read through the dataset's
    *  zone via `toInstant`. */
   set dateLines(lines: readonly DateLineInput[]) {
     this.#shell.dateLines = this.#toDateLines(lines);
@@ -921,7 +921,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.todayLineMarginTicks = ticks;
   }
 
-  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). Live. */
+  /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12). Live. */
   get zoomPresets(): readonly ViewPreset[] {
     return this.#shell.zoomPresets;
   }
@@ -958,7 +958,7 @@ export class Gantt<TProps = unknown> {
     return entries;
   }
 
-  /** Live (S3, D-S3-9): re-resolves immediately, so a stricter rule hides a handle or refuses a
+  /** Live (S3): re-resolves immediately, so a stricter rule hides a handle or refuses a
    *  gesture without waiting for the next pointer move. */
   get capabilities(): Capabilities {
     return this.#shell.capabilities;
@@ -968,7 +968,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.capabilities = next;
   }
 
-  /** D-S5-35. Call: `gantt.setCapabilityRule('resize', false)`. It writes the rule for one gesture
+  /** Call: `gantt.setCapabilityRule('resize', false)`. It writes the rule for one gesture
    *  and leaves the rules for the others exactly as they are. `gantt.capabilities = { resize: false }`
    *  drops them instead. A gesture rule is a boolean, or a predicate the resolver runs per entry —
    *  `gantt.setCapabilityRule('move', (entry) => entry.kind !== 'milestone')`. The `edit` rule is
@@ -979,7 +979,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.setCapabilityRule(capability, rule);
   }
 
-  /** D-S5-35. Call: `gantt.clearCapabilityRule('resize')`. It takes this Gantt's own rule off one
+  /** Call: `gantt.clearCapabilityRule('resize')`. It takes this Gantt's own rule off one
    *  gesture, so a plugin's kind defaults and the library's per-kind table answer it again. This is
    *  not `setCapabilityRule('resize', true)`: `true` is a rule of its own, and it would also make a
    *  rolled-up parent and a milestone resizable. Clearing a gesture that carries no rule does
@@ -988,7 +988,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.clearCapabilityRule(capability);
   }
 
-  /** Live (S3.7, D-S3-14): the next wheel or key reads the new flags; no remount. */
+  /** Live (S3.7): the next wheel or key reads the new flags; no remount. */
   get viewportGestures(): ViewportGestures {
     return this.#shell.viewportGestures;
   }
@@ -1023,14 +1023,14 @@ export class Gantt<TProps = unknown> {
     return this.#shell.canZoomOut;
   }
 
-  /** Next finer entry of `zoomPresets`; no-op at the finest (S1.12, D-S1.12-6). `anchorX` defaults
+  /** Next finer entry of `zoomPresets`; no-op at the finest (S1.12). `anchorX` defaults
    *  to pane centre. Steps the preset only — under `fit: 'pane'`, density stays pane-fill until the
    *  floor bites. */
   zoomIn(anchorX?: number): void {
     this.#shell.zoomIn(anchorX);
   }
 
-  /** Next coarser entry of `zoomPresets`; no-op at the coarsest (S1.12, D-S1.12-6). */
+  /** Next coarser entry of `zoomPresets`; no-op at the coarsest (S1.12). */
   zoomOut(anchorX?: number): void {
     this.#shell.zoomOut(anchorX);
   }
@@ -1044,7 +1044,7 @@ export class Gantt<TProps = unknown> {
   }
 
   /** Resolves the density that makes `span` exactly fill the pane, then pans so `span.start` sits at
-   *  the pane's left edge — both inside one batch, one notification (S1.12, D-S1.12-7). Floored, so
+   *  the pane's left edge — both inside one batch, one notification (S1.12). Floored, so
    *  a span too long to be legible fills the pane only as far as the floor allows. */
   zoomToSpan(span: { start: InstantInput; end: InstantInput }): void {
     const zone = this.#dataset.timeZone;
@@ -1054,7 +1054,7 @@ export class Gantt<TProps = unknown> {
     });
   }
 
-  /** Pans so `date` sits at `align` within the pane (S1.12, D-S1.12-8). Loose input: a string, a
+  /** Pans so `date` sits at `align` within the pane (S1.12). Loose input: a string, a
    *  `Date`, an epoch number or an `Instant` all work, read through the dataset's zone. */
   panToDate(date: InstantInput, align: 'start' | 'center' = 'start'): void {
     this.#shell.panToInstant(toInstant(this.#dataset.timeZone, date, 'gantt.panToDate'), align);
@@ -1064,7 +1064,7 @@ export class Gantt<TProps = unknown> {
    *  margin to the left at `align: 'start'` (the default) so the today line reads as "near the
    *  start" rather than sitting flush on the pane's own edge. `align: 'center'` is unaffected:
    *  already centred, a margin has nothing to add. Off the dataset's own range, `panTo`'s clamp
-   *  (D-S1.5-2) lands at whichever edge is closest instead of throwing. */
+   *  lands at whichever edge is closest instead of throwing. */
   panToToday(align: 'start' | 'center' = 'start'): void {
     this.#shell.panToToday(now(), align);
   }
@@ -1078,7 +1078,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.reveal(id);
   }
 
-  /** Live (S5.1, D-S5-1, D-S5-3, #404). See `GanttOptions.plugins`. Assigning diffs by `id`: a new
+  /** Live (S5.1, #404). See `GanttOptions.plugins`. Assigning diffs by `id`: a new
    *  `id` sets up, a missing one disposes, and a fresh object under an installed `id` replaces that
    *  occupant — so `gantt.plugins = [timeShading(next)]` applies the new rules. Handing back the
    *  same object (`[...gantt.plugins, extra]`) runs nothing again.
@@ -1094,7 +1094,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.plugins = assertChromeOnly(next);
   }
 
-  /** D-S5-36. Call: `gantt.installPlugin(tooltips())`. It installs one plugin and leaves every
+  /** Call: `gantt.installPlugin(tooltips())`. It installs one plugin and leaves every
    *  plugin already running alone, so a caller never restates the installed set to add to it. A
    *  plugin whose `id` is already installed throws `DuplicatePluginIdError`: this verb adds, and
    *  says so when there is nothing to add. To *change* an installed plugin's options, assign the
@@ -1103,7 +1103,7 @@ export class Gantt<TProps = unknown> {
     this.#shell.installPlugin(assertChromeOnly([plugin])[0]!);
   }
 
-  /** D-S5-36. Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
+  /** Call: `gantt.hasPlugin('harness.logging')`. It answers whether that plugin is
    *  installed right now — what a toggle reads before it decides which verb to call. Identity is the
    *  `id`, so an object with an installed plugin's `id` answers `true`. */
   hasPlugin(plugin: ChromePlugin | PluginId): boolean {
@@ -1111,17 +1111,17 @@ export class Gantt<TProps = unknown> {
     return this.#shell.plugins.some((installed) => installed.id === id);
   }
 
-  /** D-S5-36. Call: `gantt.uninstallPlugin(popup)`, or `gantt.uninstallPlugin('harness.logging')`.
+  /** Call: `gantt.uninstallPlugin(popup)`, or `gantt.uninstallPlugin('harness.logging')`.
    *  It disposes that one plugin and leaves the rest running. Identity is the `id` in both forms,
-   *  the same identity the assignment form diffs by (D-S5-3). A plugin nothing installs throws
+   *  the same identity the assignment form diffs by. A plugin nothing installs throws
    *  `PluginNotInstalledError`, so a misspelled id is not a silent no-op. */
   uninstallPlugin(plugin: ChromePlugin | PluginId): void {
     this.#shell.uninstallPlugin(typeof plugin === 'string' ? plugin : plugin.id);
   }
 
-  /** S5.2, D-S5-6: the one command registry. `freegantt.*` is the core namespace — core registers
+  /** S5.2: the one command registry. `freegantt.*` is the core namespace — core registers
    *  its own commands (collapse/expand, zoom, pan, selection, undo/redo, and keyboard navigation)
-   *  before any plugin, so a plugin's own registration always wins for a shared id (D-S5-7).
+   *  before any plugin, so a plugin's own registration always wins for a shared id.
    *  `run(id)` silently no-ops when the command's `when` declines, the same posture as a disabled
    *  menu item. Read-only — `register` lives on the registry itself. */
   get commands(): CommandRegistry<TProps> {
