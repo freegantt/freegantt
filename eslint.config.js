@@ -76,9 +76,8 @@ export default tseslint.config(
     // walks the filesystem directly, so a git-only ignore rule does not stop it from being scanned.
     // Same gap `.prettierignore`'s own `.worktrees` entry closes.
     //
-    // website/** is its own independent pnpm project (own pnpm-workspace.yaml, own tooling), not
-    // a package of this one — same reasoning as `.prettierignore`'s `website` entry, closing the
-    // same gap for lint that entry closes for format.
+    // .docs-site/** is a clone of the freegantt/docs site shell that `pnpm docs` keeps — another
+    // repository, not ours to lint. Same reasoning as `.prettierignore`'s `.docs-site` entry.
     //
     // NOTE: these are ignore paths for non-source artifacts. No lint rule, layer allow-list, or
     // severity is relaxed by this entry — the I1/I10/I12 rule set below is unchanged.
@@ -91,7 +90,7 @@ export default tseslint.config(
       '.agents/skills/**',
       '.worktrees/**',
       '.claude/worktrees/**',
-      'website/**',
+      '.docs-site/**',
     ],
   },
   js.configs.recommended,
