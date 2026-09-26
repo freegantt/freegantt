@@ -763,7 +763,7 @@ export class EntryStore implements EntryStoreContract {
    * The bound runner a whole-list write commits through, or the refusal that write owes when it may
    * not run right now: an open transaction (`TransactionAlreadyOpenError`), a running extension hook
    * (`MutationDuringExtensionHookError`), or a `beforeChange`/`change` handler on the stack
-   * (`MutationDuringNotificationError`). `#readBatch` calls this first.
+   * (`MutationDuringNotificationError`). `#readBatch` and `syncChanges` call this first.
    */
   #runnerForBatchWrite(operation: string): TransactionData {
     const runner = this.#runner;

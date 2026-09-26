@@ -469,7 +469,7 @@ syncAllBtn.addEventListener('click', () => {
   logLine(landed ? 'document · synced from the server' : 'document · sync refused · server list not applied');
 });
 
-// #527: sync changes takes only the rows a server changed, not the whole list — a key a row leaves
+// Sync changes takes only the rows a server changed, not the whole list — a key a row leaves
 // out keeps its stored value, and an id the delta does not name is untouched. It shares every other
 // rule sync all follows: no undo step, no cleared Redo, and the same refusals.
 const syncChangesBtn = document.querySelector<HTMLButtonElement>('#sync-changes-btn')!;

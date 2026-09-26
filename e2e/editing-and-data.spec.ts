@@ -245,7 +245,7 @@ test("a sync overwrites a local rename it never saw, and undo keeps the server's
   expect(nameBefore).not.toBe('Renamed by the server');
 });
 
-// #527: `entries.syncChanges()` takes only the rows a server changed — `harness/fake-server.ts`
+// `entries.syncChanges()` takes only the rows a server changed — `harness/fake-server.ts`
 // scripts the first "Sync changes from server" click as a rename on `entry-6`, with every other key
 // left alone. This proves a delta poll keeps selection and records no undo step, the same as a
 // whole-list sync.

@@ -176,9 +176,10 @@ retried delta is safe to apply again. An id named in both `upsert` and `remove` 
 The tree check runs on the committed store and the delta together: an `upsert` row's `parentId` can
 name an id already in the store or an id the same delta adds, and a parent removed by the same
 delta, or absent from both, throws `EntryNotFoundError` — a direct parent and a grandparent alike.
-An existing entry keeps its sibling position; a new entry, or one whose `parentId` moved, takes the
-`siblingIndex` its row names or goes to the end of its group; several new entries in one `upsert`
-list land in the order they appear in it.
+An existing entry keeps its sibling position unless its row names a `siblingIndex`, the same as
+`update()`. A new entry, a moved entry, or a kept entry that names a `siblingIndex` takes that index,
+or goes to the end of its group when it names none. Several rows that name a `siblingIndex` in the
+same group apply in upsert order.
 
 `syncChanges` writes through the same door `syncAll` and `load` use, and shares every other rule
 `syncAll` follows above: the same refusals, the same `beforeChange` veto, the same `origin: 'sync'`
