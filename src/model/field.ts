@@ -33,29 +33,40 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
  *  branch on, and no `row` either (the sample reads only `value`/`entry`). This also keeps
  *  `GridColumn` a `model/` type with zero dependencies (`model-is-leaf`): the Gantt-wide `GridCellRenderer`
  *  lives in `layout/` because its context names `FrameRow`/`ResolvedColumn`, and `model/` may not
- *  import `layout/`. */
-export interface ColumnRendererContext {
+ *  import `layout/`.
+ *
+ *  `TValue` is the column's own Field's value, so a renderer written for `start` reads `fieldValue`
+ *  as `Instant`, never `unknown`. It carries `| undefined` once here: a group or custom row has no
+ *  Entry, so `fieldValue` is `undefined` too, and a consumer states this in one place instead of on
+ *  every read. */
+export interface ColumnRendererContext<TValue = unknown> {
   /** Undefined for a row with no backing Entry — a group or custom row. */
   entry?: Entry | undefined;
   /** What the grid paints: this column's Field value, through the Field's own `formatValue`. */
   value: string;
   /** The same Field value before formatting — what `entry.read(field)` answers (review H3). One vocabulary with the Gantt-wide `GridCellRendererContext`. */
-  fieldValue: unknown;
+  fieldValue: TValue | undefined;
 }
-export type ColumnRenderer = (ctx: ColumnRendererContext) => ElementDescription | undefined;
+export type ColumnRenderer<TValue = unknown> = (
+  ctx: ColumnRendererContext<TValue>,
+) => ElementDescription | undefined;
 
 /** Where a cell's text and header sit within the column's width. Default `'start'`. */
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 /** Every `GridColumn` key except its sizing. Split out so the sizing pair (`width`/`flex`) can join
  *  it as an exclusive union — here, and in `Field.column` below, each of which drops a different
- *  subset of these keys (#249). */
-export interface GridColumnBase {
-  field: FieldKey;
+ *  subset of these keys (#249).
+ *
+ *  `TKey` narrows `field` to one Field key; `TValue` is that key's value, and flows into
+ *  `columnRenderer`'s context. Both default open, so a bare `GridColumnBase` still reads as it did
+ *  before this pair existed. */
+export interface GridColumnBase<TKey extends FieldKey = FieldKey, TValue = unknown> {
+  field: TKey;
   header?: string;
   align?: ColumnAlign;
   /** S5.7 — per-column, more specific than `GanttOptions.gridCellRenderer`. */
-  columnRenderer?: ColumnRenderer;
+  columnRenderer?: ColumnRenderer<TValue>;
   /** Default `true`. A fixed column refuses the resize drag and the resize chord. */
   resizable?: boolean;
   /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
@@ -78,12 +89,31 @@ export interface GridColumnBase {
  *  named `width` is still rejected — only *omitting* the other key satisfies `?: never`. */
 export type GridColumnSizing = { width?: number; flex?: never } | { width?: never; flex?: number };
 
+/** One `GridColumn` over one known Field key `K`: `columnRenderer`'s `fieldValue` reads as that
+ *  key's own value. Say the call aloud — "a grid column of the Dataset's props, over key `start`" —
+ *  is the shape a consumer names once `TProps` and `K` are both known. */
+export type GridColumnOf<TProps, K extends FieldKey> = GridColumnBase<
+  K,
+  Exclude<FieldValue<TProps, K>, undefined>
+> &
+  GridColumnSizing;
+
 /** Presentation only. Never carries an aggregate — `data/` never holds a renderer, and no reader of
- *  this Dataset ever sees one. */
-export type GridColumn = GridColumnBase & GridColumnSizing;
+ *  this Dataset ever sees one.
+ *
+ *  A shipped core key (`start`, `duration`, …) and a `TProps` key each type `columnRenderer`'s
+ *  `fieldValue` from `FieldValue` — the same type `entry.read(key)` answers. An open key (a plugin's
+ *  own, or any key on an untyped Gantt) keeps `fieldValue: unknown`, the same as before this type
+ *  took `TProps`. Two mapped types, not one over the merged key set: a `TProps` key that shares a
+ *  name with a core key still reads as the core type (`entry.read`'s own rule), and a single mapped
+ *  type over both key sets would let the open, `unknown`-typed member absorb the core keys instead. */
+export type GridColumn<TProps = unknown> =
+  | { [K in keyof CoreFieldValues]-?: GridColumnOf<TProps, K> }[keyof CoreFieldValues]
+  | { [K in keyof TProps & string]-?: GridColumnOf<TProps, K> }[keyof TProps & string]
+  | (GridColumnBase<string & {}, unknown> & GridColumnSizing);
 
 /** What a consumer writes: a Field key, or a column object. */
-export type GridColumnInput = FieldKey | GridColumn;
+export type GridColumnInput<TProps = unknown> = FieldKey | GridColumn<TProps>;
 
 /** One resolved Grid column's tooltip line: `header`, the column's header text, paired with
  *  `value`, an entry's formatted value for that column. A `model/` type — the same

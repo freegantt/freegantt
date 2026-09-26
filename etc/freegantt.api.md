@@ -199,12 +199,12 @@ export type CollapseState = 'collapsed' | 'expanded' | 'leaf';
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 // @public (undocumented)
-export type ColumnRenderer = (ctx: ColumnRendererContext) => ElementDescription | undefined;
+export type ColumnRenderer<TValue = unknown> = (ctx: ColumnRendererContext<TValue>) => ElementDescription | undefined;
 
 // @public
-export interface ColumnRendererContext {
+export interface ColumnRendererContext<TValue = unknown> {
     entry?: Entry | undefined;
-    fieldValue: unknown;
+    fieldValue: TValue | undefined;
     value: string;
 }
 
@@ -1398,15 +1398,19 @@ export interface GridCellRendererContext {
 }
 
 // @public
-export type GridColumn = GridColumnBase & GridColumnSizing;
+export type GridColumn<TProps = unknown> = {
+    [K in keyof CoreFieldValues]-?: GridColumnOf<TProps, K>;
+}[keyof CoreFieldValues] | {
+    [K in keyof TProps & string]-?: GridColumnOf<TProps, K>;
+}[keyof TProps & string] | (GridColumnBase<string & {}, unknown> & GridColumnSizing);
 
 // @public
-export interface GridColumnBase {
+export interface GridColumnBase<TKey extends FieldKey = FieldKey, TValue = unknown> {
     // (undocumented)
     align?: ColumnAlign;
-    columnRenderer?: ColumnRenderer;
+    columnRenderer?: ColumnRenderer<TValue>;
     // (undocumented)
-    field: FieldKey;
+    field: TKey;
     // (undocumented)
     header?: string;
     hidden?: boolean;
@@ -1416,7 +1420,10 @@ export interface GridColumnBase {
 }
 
 // @public
-export type GridColumnInput = FieldKey | GridColumn;
+export type GridColumnInput<TProps = unknown> = FieldKey | GridColumn<TProps>;
+
+// @public
+export type GridColumnOf<TProps, K extends FieldKey> = GridColumnBase<K, Exclude<FieldValue<TProps, K>, undefined>> & GridColumnSizing;
 
 // @public
 export interface GridColumnsChange {
