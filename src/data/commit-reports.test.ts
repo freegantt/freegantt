@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { ChangeSet, EntryInput, ErrorReport, PluginId } from '../model/index.js';
 import { entryId } from '../model/index.js';
 import { DatasetState } from './dataset-state.js';
+import { fieldRowsOf } from './change-set.js';
 import { pluginStoreName } from './plugin-store.js';
 
 const LOCK: PluginId = 'demo.lock';
@@ -74,6 +75,45 @@ describe.each([
         state.entries.add({ id: 'q', name: 'q', start: 0, end: 1 });
         state.entries.add({ id: 'k', parentId: 'q', name: 'k' });
       });
+    },
+  },
+  {
+    name: 'load dropped a siblingIndex',
+    code: 'sibling-index-dropped',
+    run: (state: DatasetState) => {
+      state.entries.load([
+        { id: 'x', name: 'x', siblingIndex: 9 },
+        { id: 'y', name: 'y' },
+      ]);
+    },
+  },
+  {
+    name: 'load dropped a derived value',
+    code: 'derived-values-dropped',
+    run: (state: DatasetState) => {
+      state.entries.load([
+        { id: 'q', name: 'q', start: 0, end: 1 },
+        { id: 'k', parentId: 'q', name: 'k' },
+        { id: 'x', name: 'x' },
+      ]);
+    },
+  },
+  {
+    name: 'sync dropped a siblingIndex',
+    code: 'sibling-index-dropped',
+    run: (state: DatasetState) => {
+      state.entries.sync([{ ...seed[0]!, name: 'server' }, seed[1]!, { ...seed[2]!, siblingIndex: 9 }]);
+    },
+  },
+  {
+    name: 'sync dropped a derived value',
+    code: 'derived-values-dropped',
+    run: (state: DatasetState) => {
+      state.entries.sync([
+        ...seed,
+        { id: 'q', name: 'q', start: 0, end: 1 },
+        { id: 'k', parentId: 'q', name: 'k' },
+      ]);
     },
   },
 ])('a report about a commit fires once that commit lands: $name', ({ code, run }) => {
@@ -162,5 +202,25 @@ describe('a report about a commit', () => {
     }).toThrow();
 
     expect(reports.map((report) => report.code)).toEqual(['mutation-cancelled']);
+  });
+
+  it("sync's change carries the value each row replaced, even when the error handler writes that Field", () => {
+    const { state, changes } = newState();
+    let written = false;
+    state.on('error', () => {
+      if (written) return;
+      written = true;
+      state.entries.update('b', { name: 'from the handler' });
+    });
+
+    state.entries.sync([seed[0]!, { ...seed[1]!, name: 'server', siblingIndex: 9 }, seed[2]!]);
+
+    const nameRowsOf = (changeSet: ChangeSet) => fieldRowsOf(changeSet).filter((row) => row.field === 'name');
+    expect(nameRowsOf(changes[0]!)).toEqual([
+      { store: 'entries', id: entryId('b'), field: 'name', from: 'b', to: 'server' },
+    ]);
+    expect(nameRowsOf(changes[1]!)).toEqual([
+      { store: 'entries', id: entryId('b'), field: 'name', from: 'server', to: 'from the handler' },
+    ]);
   });
 });
