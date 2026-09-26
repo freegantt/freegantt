@@ -45,6 +45,9 @@ export type TxToken = { readonly __brand: 'TxToken' };
  *  through this seam, so they are not named here. */
 export interface TransactionalEntryStore {
   committedById(): ReadonlyMap<EntryId, StoredEntry>;
+  /** Does `id` name an Entry, as this transaction leaves it? — see `EntryStore.has`. A plugin store
+   *  write asks this before it stages. */
+  has(id: EntryId): boolean;
   /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
   committedParents(): ParentIndex;
   /** The committed rows' children, by parent id — see `EntryStore.committedChildIds`. */

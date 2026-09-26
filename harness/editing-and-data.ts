@@ -187,7 +187,7 @@ function refreshLockCheckbox(): void {
 // #473: undo/redo can close or open the subtree without the checkbox ever firing its own `change`
 // event, so the checkbox reads `notes.isOpen()` fresh on every selection sync, not just on click.
 function refreshUnlockCheckbox(): void {
-  unlockSubtreeCheckbox.checked = notes.isOpen();
+  unlockSubtreeCheckbox.checked = notes.isOpen(NOTE_UNLOCK_ROOT_ID);
 }
 
 function syncSelectionUi(): void {
@@ -271,7 +271,7 @@ costBtn.addEventListener('click', () => {
 
 unlockSubtreeCheckbox.addEventListener('change', () => {
   if (unlockSubtreeCheckbox.checked) notes.openSubtree(NOTE_UNLOCK_ROOT_ID);
-  else notes.closeSubtree();
+  else notes.closeSubtree(NOTE_UNLOCK_ROOT_ID);
 });
 
 // `dataset.editableOf` is the same answer `entries.update()` writes against (I14) — asking first

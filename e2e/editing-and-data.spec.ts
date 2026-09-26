@@ -75,6 +75,13 @@ test("unlocking Program's subtree opens note inside it, and leaves an outside en
   expect(after.inside).toBe('anywhere');
   expect(after.outside).toBe('never');
 
+  // The checkbox is a plugin-store write like any other: one undo closes the subtree again, and one
+  // redo opens it back up.
+  await page.evaluate(() => window.__dataset.undo());
+  expect(await page.evaluate(() => window.__dataset.editableOf('entry-3', 'note'))).toBe('never');
+  await page.evaluate(() => window.__dataset.redo());
+  expect(await page.evaluate(() => window.__dataset.editableOf('entry-3', 'note'))).toBe('anywhere');
+
   // The write lands: select the now-open entry and press the button.
   await page.evaluate(() => window.__gantt.reveal('entry-3'));
   const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-3:"]').first();
