@@ -241,15 +241,9 @@ export interface UpsertReading {
 
 /**
  * Reads one `entries.syncChanges()` upsert row onto the entry it changes: a key the row leaves out
- * keeps its value, and a key it sets to `undefined` clears it, the same as `update()`. Ingest runs
- * `propsFromInput`, so a declared key under nested `props` counts the same as a flat one, an
- * undeclared flat key warns and drops, and a key named both ways throws `DuplicatePropsKeyError`.
- * `siblingIndex` in the row is never copied — placing the row is `siblingIndexesAfterDelta`'s job,
- * not this function's.
- *
- * Runs `toEditReading`, so the date reads and the `InvertedSpanError` check `update()` runs also run
- * here. It does not run `assertFieldTakesWrite`: an upsert row from a server is not a write a lock
- * refuses (a `'never'` lock is ignored by design).
+ * keeps its value, and a key it sets to `undefined` clears it, the same as `update()`. It ignores a
+ * `'never'` Field lock, the same as the rest of a sync. `siblingIndex` in the row is never copied —
+ * placing the row is `siblingIndexesAfterDelta`'s job, not this function's.
  */
 export function toEntryAfterUpsert(
   input: FlatEntryInput,

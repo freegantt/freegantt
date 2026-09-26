@@ -31,13 +31,9 @@ export interface BatchAfterDelta {
 }
 
 /**
- * The committed rows plus a delta, read as one batch — the answer to "how does `syncChanges` reuse
- * `#readBatch` and the tree check when the batch is store plus delta". Reads each upsert row onto
- * the entry it changes or adds, removes each remove id's subtree, checks the result is sound, and
- * places every row a delta's upsert or the removal touched. Kept rows keep their place; a new or
- * reparented row goes to its named `siblingIndex` or the end of its group (`siblingIndexesAfterDelta`).
- *
- * Pure: it reads no store and stages nothing. `EntryStore.syncChanges` commits what this returns.
+ * The committed rows plus a delta, read as one batch: each upsert row read onto the entry it
+ * changes or adds, each remove id's subtree dropped, the result checked sound, and every touched
+ * row placed among its siblings. Pure: it reads no store and stages nothing.
  */
 export function readBatchAfterDelta(
   committed: CommittedEntries,
