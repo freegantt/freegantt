@@ -605,7 +605,7 @@ export interface DomTarget {
 
 // @public
 export class DuplicateEntryIdError extends FreeGanttError {
-    constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list');
+    constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list' | 'upsert-and-remove');
     // (undocumented)
     readonly entryId: EntryId;
     // (undocumented)

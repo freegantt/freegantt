@@ -10,7 +10,7 @@
 // `'unreadable-cell-value'` beside `'unreadable-value'` would drop out of `Extract` and break the
 // literal, rather than shipping as two names for one fault.
 import { describe, expect, it } from 'vitest';
-import { SiblingIndexOutOfRangeError } from './errors.js';
+import { DuplicateEntryIdError, SiblingIndexOutOfRangeError } from './errors.js';
 import type { BuiltInThrownCode } from './errors.js';
 import type { BuiltInReportCode } from './error-report.js';
 import { entryId } from './ids.js';
@@ -37,6 +37,16 @@ describe('SiblingIndexOutOfRangeError', () => {
     expect(error.operation).toBe('entries.update');
     expect(error.message).toBe(
       'entries.update: sibling index out of range for "t7": 9, last is 3. Give a whole number from 0 to 3.',
+    );
+  });
+});
+
+describe('DuplicateEntryIdError', () => {
+  it("names the delta and the id for kind 'upsert-and-remove'", () => {
+    const error = new DuplicateEntryIdError(entryId('t7'), 'entries.syncChanges', 'upsert-and-remove');
+
+    expect(error.message).toBe(
+      'entries.syncChanges: the delta both upserts and removes id "t7". Name each id in one list only.',
     );
   });
 });
