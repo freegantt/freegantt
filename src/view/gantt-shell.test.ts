@@ -37,7 +37,7 @@ function countingDomBackend(calls: { count: number }): RenderBackend<HTMLElement
   };
 }
 
-// D-S2-2: `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
+// `GanttShellOptions.dataset` is a store view now, not a plain array — the real `EntryStore`
 // backs these fixtures the same way a `Dataset` would, with no test-only fake to keep in sync.
 // `referenceDate` is a bare epoch-ms cast, not `time/`'s `instant()` — view/ may not import time/ (I1).
 function fakeDataset(
@@ -187,7 +187,7 @@ describe('GanttShell header band', () => {
 
     const ticks = container.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(5);
-    // S1.12 moved header formatting onto Intl.DateTimeFormatOptions (D-S1.12-11), locale-formatted.
+    // S1.12 moved header formatting onto Intl.DateTimeFormatOptions, locale-formatted.
     expect(ticks[0]?.textContent).toBe('Sep 1, 2026');
 
     shell.destroy();
@@ -226,7 +226,7 @@ describe('GanttShell header band', () => {
     });
 
     // A never called render() itself after B bound — the notify from B's bind is what requested
-    // this frame (D-S2-15); render() forces it now instead of waiting on the next animation frame.
+    // this frame; render() forces it now instead of waiting on the next animation frame.
     shellA.render();
     expect(containerA.querySelectorAll('.fg-header .fg-tick').length).toBeGreaterThan(initialTickCount);
 
@@ -364,7 +364,7 @@ describe('scroll (D9, #9)', () => {
         scroll: { y: scrollY },
       });
       FakeResizeObserver.instances[0]!.fire({ width: 500, height: 10 * DEFAULT_ROW_HEIGHT }); // 10 rows
-      shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
+      shell.render(); // the resize's render request is coalesced onto the next frame
 
       // The default `gridColumns` now also paints `start`/`end` (ADR 0012), so the name cell alone
       // — not the whole row's textContent — is what still names one Entry unambiguously.
@@ -413,8 +413,8 @@ describe('scroll (D9, #9)', () => {
       });
       FakeResizeObserver.instances[1]!.fire({ width: 500, height: 100 });
 
-      // Loosest bound across both bindings: the tall chart's 500 rows dwarf the short chart's 5
-      // (D-S1.5-1) — proving both extents actually reached the shared axis.
+      // Loosest bound across both bindings: the tall chart's 500 rows dwarf the short chart's 5 —
+      // proving both extents actually reached the shared axis.
       expect(scrollY.state.max).toBe(500 * DEFAULT_ROW_HEIGHT - 100);
 
       shortShell.destroy();
@@ -444,7 +444,7 @@ describe('GanttShell container resolution (#38)', () => {
     ).toThrow(/does-not-exist/);
   });
 
-  it('throws a typed ContainerNotFoundError with code "container-not-found" (D-S1.8-9)', () => {
+  it('throws a typed ContainerNotFoundError with code "container-not-found"', () => {
     let caught: unknown;
     try {
       new GanttShell({ wiring: {}, container: '#does-not-exist', dataset: fakeDataset(entries) });
@@ -456,11 +456,11 @@ describe('GanttShell container resolution (#38)', () => {
   });
 });
 
-describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
+describe('pane split pixel identity (S1.8)', () => {
   it('[S1-A2] grid row tops and timeline bar tops agree to the pixel at a fractional zoom', () => {
     const container = document.createElement('div');
     document.body.append(container);
-    // A non-integer --fg-row-height stands in for the "fractional zoom" acceptance box (D-S1.8-12):
+    // A non-integer --fg-row-height stands in for the "fractional zoom" acceptance box:
     // it is what actually makes `row.top` land on a non-integer pixel for rows past the first, which
     // is the case that would expose the two panes reading their `top` from different places.
     container.style.setProperty('--fg-row-height', '31.5px');
@@ -500,7 +500,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
     // happy-dom does no layout (`scrollWidth` is always 0 here), so this reads the same number the
     // real DOM's `scrollWidth` would be driven by: the content sizer's own transform (render/dom's
     // `sync()`), rather than the literal `timelinePane.scrollWidth` the spec names (that assertion
-    // belongs to e2e — plans/s1.8-pane-layout/README.md D-S1.8-10 — where a real layout engine runs).
+    // belongs to e2e — plans/s1.8-pane-layout/README.md — where a real layout engine runs).
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
@@ -515,7 +515,7 @@ describe('pane split pixel identity (S1.8, D-S1.8-1)', () => {
         gridWidth: 300,
       });
       FakeResizeObserver.instances[0]!.fire({ width: 653, height: 400 });
-      shell.render(); // D-S2-15: the resize's render request is coalesced onto the next frame
+      shell.render(); // the resize's render request is coalesced onto the next frame
 
       const sizer = container.querySelector<HTMLElement>('.fg-timeline-pane .fg-content-sizer')!;
       const match = /translate\(([-\d.]+)px,/.exec(sizer.style.transform);
@@ -595,7 +595,7 @@ describe('pane-size attachment (S1.7b, #8)', () => {
   });
 });
 
-describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () => {
+describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
   it('preset/range/fit/overscan accessors delegate straight to the bound Viewport', () => {
     const container = document.createElement('div');
     const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
@@ -613,7 +613,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
 
     expect(shell.overscan).toEqual({});
     // 256, not 128: DEFAULT_OVERSCAN.horizontalPx is already 128 (frame.ts), so 128 would resolve
-    // to the same value and the live setter's "notify iff changed" (D-S1.5-4) would treat it as a
+    // to the same value and the live setter's "notify iff changed" would treat it as a
     // no-op — not a bug, but not what this assertion means to prove.
     shell.overscan = { horizontalPx: 256 };
     expect(shell.overscan).toEqual({ horizontalPx: 256 });
@@ -637,7 +637,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     shell.destroy();
   });
 
-  it('a caller passing both scale and preset gets the shared scale, ignoring the constructor preset (D-S1.9-9)', () => {
+  it('a caller passing both scale and preset gets the shared scale, ignoring the constructor preset', () => {
     // The public `Gantt`/`GanttOptions` makes this combination a compile-time error (issue #84,
     // finding #3); `GanttShellOptions` stays a plain interface, so the warning is still reachable for
     // a caller constructing `GanttShell` directly. S5.12: nothing is subscribed to `error` here, so
@@ -924,7 +924,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
-  it('reveal(entryId) on an entry entirely past range.end scrolls toward it, not to the far left (#436 branch review F3)', () => {
+  it('reveal(entryId) on an entry entirely past range.end scrolls toward it, not to the far left (#436 branch review)', () => {
     // `barSpan` drops a bar entirely outside `[0, contentWidth)` and reports a fabricated
     // `{x: 0, width: 0}` (#436). Folding that into `unionSpan` used to send `reveal` to the far
     // left — the same direction a real reveal target at `x: 0` would ask for, so the bug reads as
@@ -968,7 +968,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
     }
   });
 
-  it('reveal(entryId) unions only the painted bars, skipping one a variant produced but barSpan dropped (#436 branch review F3)', () => {
+  it('reveal(entryId) unions only the painted bars, skipping one a variant produced but barSpan dropped (#436 branch review)', () => {
     // Two Bars for one Entry: one lands entirely outside the content and is dropped
     // (`{x: 0, width: 0}`), the other paints in range. The union must read the painted one only —
     // folding the dropped bar's fabricated origin in would widen the union toward `0` and pull
@@ -1046,7 +1046,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
   // fall back to that Segment's own dates when no bar drew it. `reveal()` only ever takes an Entry id
   // now, and `Bar` carries no per-Segment identity to target, so neither scenario exists to test.
 
-  it('[R6-F13] selectedEntryIds keeps Dataset order for two Entries a collapsed ancestor hides, instead of NaN-sorting them', () => {
+  it('selectedEntryIds keeps Dataset order for two Entries a collapsed ancestor hides, instead of NaN-sorting them', () => {
     // Finding 13: `#rowRankByEntryId` gives an unplanned Entry no rank, and the old comparator read
     // that as `Infinity`. Two unplanned Entries then subtracted `Infinity - Infinity`, which is `NaN`
     // — a comparator result `Array.prototype.sort` does not define an order for. This fixture puts
@@ -1105,7 +1105,7 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9, D-S1.9-9)', () =
   });
 });
 
-describe('a11y roles and the two panes (S1.10 D-S1.10-4, S5.11 D-S5-25)', () => {
+describe('a11y roles and the two panes (S1.10, S5.11)', () => {
   it('names the whole Gantt on the container and the timeline region, live, and claims no tab stop of its own', () => {
     const container = document.createElement('div');
     const scale = new TimeScaleModel({ range: { start: rangeStart, end: rangeEnd } });
@@ -1119,7 +1119,7 @@ describe('a11y roles and the two panes (S1.10 D-S1.10-4, S5.11 D-S5-25)', () => 
 
     expect(container.getAttribute('role')).toBe('group');
     expect(container.getAttribute('aria-label')).toBe('Room bookings');
-    // D-S5-26 retires the container's own tab stop: each pane carries one now.
+    // The container's own tab stop is retired: each pane carries one now.
     expect(container.hasAttribute('tabindex')).toBe(false);
 
     const timelinePane = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
@@ -1440,7 +1440,7 @@ describe('resolvedTheme / themeChange (#330)', () => {
   });
 });
 
-describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () => {
+describe('[S2-A3] one changeset, one layout pass, one frame', () => {
   it('a 500-entry transaction updating every entry yields one change, one computeFrame, one sync, and an unchanged height index', () => {
     // Installed before construction so the shell's own first render (#22) is call #0 — the only way
     // to reach the `FrameLayout` instance this shell owns and read its pre-transaction revision.
@@ -1471,13 +1471,13 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
         dataset.entries.update(entry.id, { name: `${entry.name} (updated)` });
       }
     });
-    shell.render(); // flushes the one frame the transaction's `change` requested (D-S2-15)
+    shell.render(); // flushes the one frame the transaction's `change` requested
 
     expect(changeCalls).toBe(1);
     expect(computeFrameSpy).toHaveBeenCalledTimes(1);
     expect(backendSyncCalls.count).toBe(1);
     // Only `updated` rows: the row-height index's cache key (rowCount, rowHeight) is untouched, so
-    // no fresh index is built (D-S2-16).
+    // no fresh index is built.
     expect(layout.heightIndexRevision).toBe(revisionBefore);
 
     computeFrameSpy.mockRestore();
@@ -1485,11 +1485,11 @@ describe('[S2-A3] one changeset, one layout pass, one frame (D-S2-15/16)', () =>
   });
 });
 
-// S3.2 (D-S3-6/D-S3-9): view/ may not import interaction/ (view-boundary), so these tests drive the
+// S3.2: view/ may not import interaction/ (view-boundary), so these tests drive the
 // injected `EntrySelectionContext.setHovered` directly rather than a real `attachEntryGestures` —
 // `interaction/entry-gestures.test.ts` already covers that the real attachment reports hover
 // correctly; this file's job is what the shell does with the report.
-describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
+describe('GanttShell hot path (S3.2, [S3-A3])', () => {
   it('[S3-A3] hovering every mounted bar of a 1,000-entry fixture calls no computeFrame, creates/removes no nodes, and writes O(changed bars) data-state', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
@@ -1520,7 +1520,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
       });
       observer.observe(container, { childList: true, subtree: true });
 
-      // D-S3-20: each hover step touches only the bar(s) whose token set actually changed — never
+      // Each hover step touches only the bar(s) whose token set actually changed — never
       // every mounted bar. `setAttribute('data-state', ...)` is the one write `paintDataState` makes,
       // so counting it directly (rather than inferring it from mutations, which also covers
       // `data-movable`/handle moves) is what tells O(changed bars) apart from O(mounted bars).
@@ -1548,7 +1548,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     }
   });
 
-  it('[R5-F7] hovering with a sole selection over a 1,000-entry fixture never re-ranks the row plan', () => {
+  it('hovering with a sole selection over a 1,000-entry fixture never re-ranks the row plan', () => {
     // Review finding 7: `#refreshAffordances` used to read the public `selectedEntryIds` getter,
     // which ranks and sorts every planned row to answer a question `projectAffordances` never asked
     // beyond "is there exactly one, and which?" — the sole-selection fallback below is exactly the
@@ -1594,7 +1594,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
   // pruning index are both gone. Selection holds Entry ids now, so a commit needs no Segment→Entry
   // lookup to prune a stale id — there is no such index left to spy on.
 
-  it('movableBarId/resizableEntryId follow the hovered entry, gated by capability (D-S3-6/D-S3-9)', () => {
+  it('movableBarId/resizableEntryId follow the hovered entry, gated by capability', () => {
     const container = document.createElement('div');
     const dataset = fakeDataset(entries);
     let hover: ((barId: BarId | undefined) => void) | undefined;
@@ -1623,7 +1623,7 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
     shell.destroy();
   });
 
-  it('resizableEntryId falls back to the sole selected entry when nothing is hovered (D-S3-6)', () => {
+  it('resizableEntryId falls back to the sole selected entry when nothing is hovered', () => {
     const container = document.createElement('div');
     const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(entries) });
 
@@ -1694,12 +1694,12 @@ describe('GanttShell hot path (S3.2, D-S3-6/D-S3-9, [S3-A3])', () => {
 
 // T1-6 (#246 S2-3): the map a drag preview reads through `committedEntriesById()` (I5) must not be
 // rebuilt on every rAF frame. `entries.storedValues` is the store's own index, so there is no copy
-// and nothing to rebuild — the shell's hand-rolled memo is gone (ADR 0017, `J20`). Request-building
+// and nothing to rebuild — the shell's hand-rolled memo is gone (ADR 0017). Request-building
 // moved to `api/dataset.ts`'s `extraEditsFor` (#466), so `extraEditsFor` itself now sees only the
 // draft; this samples the same public `entries.storedValues` index `#measuredFrom` reads internally,
 // once per frame, wiring an `extraEditsFor` hook only to get one call per preview frame to sample at.
 describe("GanttShell's committed stored rows (I5, #246 S2-3)", () => {
-  it('hands one Map identity to every preview frame, across a commit, with no copy (J20)', async () => {
+  it('hands one Map identity to every preview frame, across a commit, with no copy', async () => {
     const dataset = new DatasetState({
       entries: [
         { id: 't1', name: 't1', start: '2026-09-01', end: '2026-09-03' },
@@ -1736,7 +1736,7 @@ describe("GanttShell's committed stored rows (I5, #246 S2-3)", () => {
     expect(seenMaps[1]).toBe(seenMaps[0]); // same revision, same Map identity — no rebuild (I5)
 
     // A commit elsewhere changes what the index holds, and not which index it is: the store hands
-    // out `#byId` read-only, and nothing keys a memo on its identity (`J20`).
+    // out `#byId` read-only, and nothing keys a memo on its identity.
     dataset.entries.update('t2', { name: 't2 renamed' });
 
     session.preview(30);

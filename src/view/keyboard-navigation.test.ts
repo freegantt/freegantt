@@ -52,7 +52,7 @@ function key(props: KeyboardEventInit): KeyboardEvent {
   return new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...props });
 }
 
-describe('attachKeyboardNavigation (S3.7, D-S3-13 / D-S3-14)', () => {
+describe('attachKeyboardNavigation (S3.7)', () => {
   it('PageDown/PageUp pan vertically by one pane height', () => {
     const container = el();
     const { ctx, pans } = makeCtx();
@@ -156,13 +156,13 @@ describe('attachKeyboardNavigation (S3.7, D-S3-13 / D-S3-14)', () => {
   });
 });
 
-// S5.11, D-S5-39: `[S5-A4]` — a real `GanttShell`, wired production-default (`wiring: {}`), drives
+// S5.11: `[S5-A4]` — a real `GanttShell`, wired production-default (`wiring: {}`), drives
 // the chord-map table straight through `roving-focus.ts` + `keymap.ts` + `core-commands.ts`. One
 // assertion per row proves the *scoped* meaning ("focus scope decides what a chord means"), not
 // just that a listener exists. `keyboard-navigation.ts` above is the retired file this table
 // replaced; the gate (`s5.13-gallery-and-gate.md` line 4) still names this file, so the new rows
 // land here rather than in a new `roving-focus.test.ts`.
-describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
+describe('[S5-A4] roving-focus chord-map parity (S5.11)', () => {
   const zone = 'UTC';
   const day = (n: number): Instant => Date.parse(`2026-09-0${n + 1}T00:00:00Z`) as Instant;
 
@@ -396,7 +396,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     container.remove();
   });
 
-  it('#buildCommandContext fills all five TargetKinds from focus (D-S5-39)', () => {
+  it('#buildCommandContext fills all five TargetKinds from focus', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const captured: { target: { kind: string } | undefined } = { target: undefined };
@@ -417,7 +417,7 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11, D-S5-39)', () => {
     shell.render();
 
     // Mod+Z fires and overwrites `captured.target` on every chord below, so nothing needs to
-    // reset it first — the chord itself always runs (D-S5-7's newest-first resolution never
+    // reset it first — the chord itself always runs (the newest-first resolution never
     // skips a registered command for missing `when` state; `dataset.canUndo: false` above only
     // decides whether undo itself then runs).
     function readTargetKindFrom(el: HTMLElement): string | undefined {

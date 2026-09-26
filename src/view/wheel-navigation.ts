@@ -1,4 +1,4 @@
-// view/ — ctrl/⌘+wheel anchored zoom and shift+wheel pan (S3.7, D-S3-14). Writes no dataset.
+// view/ — ctrl/⌘+wheel anchored zoom and shift+wheel pan (S3.7). Writes no dataset.
 // Lives here, not in interaction/: those controllers own data gestures. I12: this file never
 // reads element scroll; it asks the context to zoom and pan through the bound Viewport.
 // Wheel zoom steps `zoomIn`/`zoomOut` (the same ladder the toolbar uses). Continuous `zoomBy`
@@ -36,12 +36,12 @@ export interface WheelNavigationOptions {
    *  timeline pane explicitly when `pane` is the grid pane, whose own x-axis is not time and so
    *  cannot anchor a time-scale zoom. */
   anchorPane?: HTMLElement;
-  /** #126: `pane` has no native *vertical* scroll of its own (the grid pane, D-S1.8-1) and so
+  /** #126: `pane` has no native *vertical* scroll of its own (the grid pane) and so
    *  needs a plain, unmodified wheel's vertical component forwarded into `ctx.panBy` — the
    *  timeline pane does not set this: it is a real native scroller, and a plain wheel there is
    *  already the browser's own `scroll` event (`scroll-attachment.ts`), so forwarding it too would
    *  double-handle the same gesture. A pure horizontal delta (deltaY === 0) is left alone even
-   *  when this is `true`: the grid pane is its own real horizontal scroller (D-S1.8-13), so plain
+   *  when this is `true`: the grid pane is its own real horizontal scroller, so plain
    *  horizontal wheel already reaches it as the browser's native `scroll` event. Default `false`. */
   forwardPlainWheel?: boolean;
 }

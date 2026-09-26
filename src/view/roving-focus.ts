@@ -1,4 +1,4 @@
-// view/ — roving focus, one tab stop per pane (S5.11, D-S5-25/D-S5-26/D-S5-39). The grid pane is a
+// view/ — roving focus, one tab stop per pane (S5.11). The grid pane is a
 // treegrid: its arrows move focus, never act (its Row/cell nodes are what carry the roving
 // `tabindex`). The timeline pane is a labelled region of focusable bars: its arrows act. This
 // module only decides *which* bar that action lands on. The nudge/resize themselves stay
@@ -60,7 +60,7 @@ export interface RovingFocusPorts {
    *  `EntrySelection.selectableEntriesOf` a pointer hit already asks. */
   selectOnFocus(hit: EntryHit): void;
   /** `ColumnChrome`'s own "which header cell is focused" — the same fact
-   *  `Shift+ArrowLeft`/`Alt+ArrowLeft` already gate on (S5.7, D-S5-18). Keyboard-stepping into or
+   *  `Shift+ArrowLeft`/`Alt+ArrowLeft` already gate on (S5.7). Keyboard-stepping into or
    *  off a header cell is one more writer of that fact, not a second one. */
   setFocusedColumn(field: FieldKey | undefined): void;
   /** Scrolls row `index` into the timeline pane's visible window and renders synchronously, so the
@@ -83,8 +83,8 @@ export class RovingFocus {
   #gridFocus: GridFocus | undefined;
   #timelineFocus: BarId | undefined;
   // `interaction/entry-gestures.ts` already owns selection for a pointer gesture. A bar click, a
-  // row click, and a drag that keeps a multi-select all decide selection on their own pointerup
-  // (D-S3-19). The pointerdown that starts one of those also moves real focus as its default
+  // row click, and a drag that keeps a multi-select all decide selection on their own pointerup.
+  // The pointerdown that starts one of those also moves real focus as its default
   // action. `#handleGridFocusIn`/`#handleTimelineFocusIn` would otherwise re-propose a narrower
   // selection right on top of it. This flag tells them to skip that proposal for a pointer-caused
   // arrival, and still run it for a keyboard or programmatic one.
@@ -136,7 +136,7 @@ export class RovingFocus {
   }
 
   /** The node real DOM focus currently sits on, if it is one this module manages. This is what
-   *  `GanttShell#buildCommandContext` reads to fill `CommandTarget` for a chord (D-S5-39). The
+   *  `GanttShell#buildCommandContext` reads to fill `CommandTarget` for a chord. The
    *  splitter is a sibling of the two panes, not a descendant of either (`pane-layout.ts`), so it
    *  gets its own equality check rather than falling out of a `contains()` call like a row or a
    *  bar does. */
@@ -253,7 +253,7 @@ export class RovingFocus {
     }
   }
 
-  /** `ArrowRight`/`ArrowLeft`, on either a row or a cell (D-S5-26's grid-pane table). Going right,
+  /** `ArrowRight`/`ArrowLeft`, on either a row or a cell. Going right,
    *  a row expands or steps into its first cell; going left, it collapses or stays put. A cell
    *  steps to its neighbour, clamped, and a cell 0 `ArrowLeft` steps back out to the row. */
   #onHorizontal(
@@ -276,7 +276,7 @@ export class RovingFocus {
         return;
       }
       if (row.expandable && row.expanded) this.#ports.collapseRow(row.id);
-      // Collapsed already, or a leaf: no move (the pattern's own rule, D-S5-26).
+      // Collapsed already, or a leaf: no move (the pattern's own rule).
       this.#applyGridTabIndex();
       return;
     }
@@ -352,7 +352,7 @@ export class RovingFocus {
     }
     this.#ports.setFocusedColumn(undefined);
     // A pointer gesture on this same row already proposed its own selection on pointerup
-    // (`interaction/entry-gestures.ts`, D-S3-19). A row click selects every Entry the row owns.
+    // (`interaction/entry-gestures.ts`). A row click selects every Entry the row owns.
     // A drag that grabs an already-selected bar keeps that selection through the drag.
     // Re-proposing here from focus alone would narrow either one back down.
     if (fromPointer) return;
@@ -487,8 +487,8 @@ export class RovingFocus {
     return this.#ports.rowIdForEntry(entryIdOfBar(id));
   }
 
-  /** The nearest bar one row up or down from the current one, skipping rows that draw no bar at all
-   *  (D-S5-26's timeline table). Rows are already in row order (`plannedRows`'s own contract), so a
+  /** The nearest bar one row up or down from the current one, skipping rows that draw no bar at all.
+   *  Rows are already in row order (`plannedRows`'s own contract), so a
    *  linear scan off the current bar's row is enough — no second geometry pass. */
   #nearestBarInAdjacentRow(
     bars: readonly HTMLElement[],
@@ -540,7 +540,7 @@ export class RovingFocus {
     this.#timelineFocus = id;
     // Same reasoning as `#handleGridFocusIn`: a pointer gesture on this bar already proposed its
     // own selection on pointerdown/pointerup. A drag that grabs an already-selected bar keeps the
-    // whole selection through the drag (D-S3-19) — this must not narrow it back down.
+    // whole selection through the drag — this must not narrow it back down.
     if (fromPointer) return;
     this.#ports.selectOnFocus({ kind: 'bar', barId: id });
     // `revealEntry` scrolls and renders synchronously (its own doc comment) — right for a keyboard

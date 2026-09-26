@@ -1,9 +1,9 @@
 // view/ — grid-column chrome: resolving `gridColumns` against the dataset's declared Fields, the
 // live resize/reorder preview paint, and the one commit sequence a pointer drag, a reorder drop, and
-// a plain `gantt.gridColumns = […]` assignment all share (S5.7, D-S5-18). Split out of `GanttShell`
+// a plain `gantt.gridColumns = […]` assignment all share (S5.7). Split out of `GanttShell`
 // so column-chrome behaviour is reviewable and testable on its own — `GanttShell` is the only caller,
 // closing over its own private state through `ColumnChromePorts` the same way `core-commands.ts`
-// closes over `CoreCommandPorts` (D-S5-6's precedent) and `interaction/column-gestures.ts` closes
+// closes over `CoreCommandPorts` (the `core-commands.ts` precedent) and `interaction/column-gestures.ts` closes
 // over `ColumnGestureContext` (this file's own `column-gesture-context.ts` sibling).
 
 import type { Dataset, Disposer, FieldKey, GridColumn, GridColumnInput, PluginId } from '../model/index.js';
@@ -23,7 +23,7 @@ export const DEFAULT_COLUMN_MIN_WIDTH_PX = 40;
 const MIN_COLUMN_WIDTH_POLICY = { fallback: DEFAULT_COLUMN_MIN_WIDTH_PX, accepts: 'positive' } as const;
 const COLUMN_WIDTH_PROPERTY = '--fg-column-width';
 const COLUMN_WIDTH_POLICY = { fallback: DEFAULT_COLUMN_WIDTH_PX, accepts: 'positive' } as const;
-/** One `Shift+Arrow` step (D-S5-18's keyboard parity) and the on-screen width read back when a flex
+/** One `Shift+Arrow` step (the keyboard parity `resizeStep` keeps) and the on-screen width read back when a flex
  *  column (no explicit `width`) has never been resized. */
 const COLUMN_RESIZE_STEP_PX = 16;
 const DEFAULT_COLUMN_WIDTH_FALLBACK_PX = 120;
@@ -33,7 +33,7 @@ const DEFAULT_COLUMN_WIDTH_FALLBACK_PX = 120;
  *  `#frames`), so this module never owns any of it directly. */
 export interface ColumnChromePorts {
   /** `dataset.field`/`dataset.fields`/`dataset.timeZone` — as much of `Dataset` as resolving columns
-   *  needs, re-read on every resolve/commit rather than cached (D-S4-12: always the live dataset). */
+   *  needs, re-read on every resolve/commit rather than cached (always the live dataset). */
   dataset(): Pick<Dataset, 'field' | 'fields' | 'timeZone'>;
   columnBind(): ResolveColumnsBind;
   /** Live paint only, no event, no commit — mirrors `SplitterContext.previewGridWidth`.
@@ -45,7 +45,7 @@ export interface ColumnChromePorts {
     preview: { columnKey: string; offsetPx: number; beforeColumnKey: string | null } | undefined,
   ): void;
   /** Queues a real frame — the only way a live paint's DOM override (`data-fixed`, inline width)
-   *  gets undone by the real geometry a `render()` computes (D-S5-18: "a veto restores the state the
+   *  gets undone by the real geometry a `render()` computes ("a veto restores the state the
    *  drag started from"). */
   requestFrame(): void;
   /** Recomputes whatever else a `gridColumns` change feeds besides `ColumnChrome`'s own
@@ -65,12 +65,12 @@ interface PluginColumnRegistration {
   readonly pluginId: PluginId;
 }
 
-/** One committed column and who declared it (D-S5-33, #162/#181). `declaredBy` absent means the
+/** One committed column and who declared it (#162/#181). `declaredBy` absent means the
  *  consumer wrote it — in `gridColumns`, or in the options this Gantt was constructed with. Present
  *  names the plugin that registered it, which is what keeps a resized or reordered plugin column out
  *  of `gantt.gridColumns`, out of the `gridColumnsChange` payload, and out of what the consumer
  *  saves. Provenance travels with the declaration for the same reason a `PluginStore`'s rows sit
- *  under their owner's id (D-S5-24): the library must be able to tell the two apart later. */
+ *  under their owner's id: the library must be able to tell the two apart later. */
 interface ColumnDeclaration {
   readonly column: GridColumnInput;
   readonly declaredBy?: PluginId;
@@ -81,11 +81,11 @@ interface ColumnDeclaration {
 export class ColumnChrome {
   readonly #container: HTMLElement;
   readonly #ports: ColumnChromePorts;
-  /** Every committed column, in paint order, each carrying its declarer (D-S5-33). A commit rewrites
+  /** Every committed column, in paint order, each carrying its declarer. A commit rewrites
    *  this whole list — a plugin column included, so a resize or a reorder of one sticks for the rest
    *  of the session — and `authoredColumns` reads the consumer's half back out of it. */
   #declaredColumns: readonly ColumnDeclaration[];
-  /** S5.9, D-S5-21: `ctx.view.registerGridColumn` — one column per field (#147, #154), appended
+  /** S5.9: `ctx.view.registerGridColumn` — one column per field (#147, #154), appended
    *  after the consumer's own columns by `effectiveInput()`, in registration order. A duplicate field
    *  the consumer's own list already names is dropped, the same "config beats a plugin" posture
    *  `barRenderer`/`gridCellRenderer` already take. Two plugins registering the same field stack on one
@@ -104,14 +104,14 @@ export class ColumnChrome {
   }
 
   /** What `gantt.gridColumns` answers: the columns the consumer authored, and only those — before
-   *  and after a resize, a reorder or any other commit (D-S5-33, #181). A plugin's column is the
+   *  and after a resize, a reorder or any other commit (#181). A plugin's column is the
    *  plugin's declaration, so it never appears here and never reaches what the consumer saves. */
   get authoredColumns(): readonly GridColumnInput[] {
     return this.#declaredColumns.filter(ColumnChrome.#isAuthored).map((declaration) => declaration.column);
   }
 
-  /** D-S5-34: which of the consumer's own columns are hidden right now, by field key. The consumer's
-   *  declarations only, the same rule `authoredColumns` above follows (D-S5-33). A plugin's column
+  /** Which of the consumer's own columns are hidden right now, by field key. The consumer's
+   *  declarations only, the same rule `authoredColumns` above follows. A plugin's column
    *  the consumer hid stays hidden, and stays the plugin's. So it is absent here, for the reason a
    *  resize of one reports no change in a `gridColumnsChange` payload. */
   get hiddenColumns(): readonly FieldKey[] {
@@ -120,7 +120,7 @@ export class ColumnChrome {
       .map(ColumnChrome.#fieldOfDeclaration);
   }
 
-  /** S5.9, D-S5-21: every committed column, plus every plugin-registered column whose `field` no
+  /** S5.9: every committed column, plus every plugin-registered column whose `field` no
    *  committed column already names, in registration order — what actually resolves and renders.
    *  A duplicate `field` is dropped from the plugin side: config beats a plugin. `#pluginColumns`
    *  already holds one column per field (#154) — the newest registration on a field wins, at that
@@ -140,7 +140,7 @@ export class ColumnChrome {
     return [...this.#declaredColumns, ...extras];
   }
 
-  /** S5.9, D-S5-21: `ctx.view.registerGridColumn`. Legal only while `setup` runs (D-S5-4), the same
+  /** S5.9: `ctx.view.registerGridColumn`. Legal only while `setup` runs, the same
    *  gate every other `register*` takes — enforced by the caller (`GanttShell`), not here. Returns a
    *  `Disposer` that removes it again, same lifetime a decoration provider gets. */
   registerPluginColumn(column: GridColumnInput, pluginId: PluginId): Disposer {
@@ -150,7 +150,7 @@ export class ColumnChrome {
     this.#ports.rebindFields();
     this.#ports.requestFrame();
     return () => {
-      // A commit writes the whole of `#effectiveDeclarations()` back (D-S5-18: one commit sequence,
+      // A commit writes the whole of `#effectiveDeclarations()` back (one commit sequence,
       // one write). Plugin columns go in too, so that a resize or a reorder of one sticks. So
       // disposal must also strip the committed copy, by field key: a resize rewrites the column
       // object, so identity no longer matches once committed. One question decides it: does any live
@@ -158,7 +158,7 @@ export class ColumnChrome {
       // committed column — and the width the user gave it — stays too, whether the plugin leaving was
       // the winner or a loser (#155). Only the last registration on a field takes the column out.
       // A column the *consumer* authored for the same field is never touched: it is not this
-      // plugin's to remove (D-S5-33).
+      // plugin's to remove.
       remove();
       const fieldIsAbandoned = this.#pluginColumns.get(field) === undefined;
       if (fieldIsAbandoned) {
@@ -204,7 +204,7 @@ export class ColumnChrome {
 
   /** `false` for a key `gridColumns` no longer resolves (B3: a stale `#focusedHeaderField` from
    *  before a `gridColumns` change must not still enable a resize chord); `resizable` unset on a
-   *  resolved column still defaults `true` (D-S5-18). */
+   *  resolved column still defaults `true`. */
   isResizable(columnKey: FieldKey): boolean {
     const column = this.resolvedColumn(columnKey);
     return column === undefined ? false : (column.resizable ?? true);
@@ -215,7 +215,7 @@ export class ColumnChrome {
     return column === undefined ? false : (column.movable ?? true);
   }
 
-  /** S5.7, D-S5-18: the same floor pattern `GanttShell#aboveMinGridWidth` applies to the splitter
+  /** S5.7: the same floor pattern `GanttShell#aboveMinGridWidth` applies to the splitter
    *  (#127), read live off the container so a stylesheet change takes effect on the very next drag. */
   minWidthPx(): number {
     return readPixelProperty(this.#container, MIN_COLUMN_WIDTH_PROPERTY, MIN_COLUMN_WIDTH_POLICY);
@@ -246,13 +246,13 @@ export class ColumnChrome {
     return Number.isFinite(px) ? px : DEFAULT_COLUMN_WIDTH_FALLBACK_PX;
   }
 
-  /** Live paint only (S5.7, D-S5-18) — mirrors `previewGridWidth`'s posture (`SplitterContext`): no
+  /** Live paint only (S5.7) — mirrors `previewGridWidth`'s posture (`SplitterContext`): no
    *  event, no commit, painted straight through `InteractionState` the same way a bar drag preview is. */
   previewWidth(columnKey: FieldKey, widthPx: number): void {
     this.#ports.paintColumnResizePreview({ columnKey: String(columnKey), widthPx });
   }
 
-  /** Escape / a vetoed commit (D-S5-18): clears the live resize paint and queues a real frame, whose
+  /** Escape / a vetoed commit: clears the live resize paint and queues a real frame, whose
    *  `render()` repaints the column from its actual resolved geometry — flex or fixed, whichever it
    *  was before the drag — the same restoration a landed commit already gets for free by queuing a
    *  frame of its own. */
@@ -261,7 +261,7 @@ export class ColumnChrome {
     this.#ports.requestFrame();
   }
 
-  /** Live paint only (S5.7, D-S5-18), the reorder twin of `previewWidth`: the grabbed header cell
+  /** Live paint only (S5.7), the reorder twin of `previewWidth`: the grabbed header cell
    *  rides `offsetPx` and the drop indicator marks the target edge. */
   previewReorder(preview: ColumnReorderPreview): void {
     this.#ports.paintColumnReorderPreview({
@@ -271,7 +271,7 @@ export class ColumnChrome {
     });
   }
 
-  /** Escape / a vetoed commit (D-S5-18): parks the grabbed cell and clears the drop indicator. A
+  /** Escape / a vetoed commit: parks the grabbed cell and clears the drop indicator. A
    *  reorder has no continuously-drawn geometry to restore the way a resize's width has — the paint
    *  only ever adds one transform and one attribute, and `undefined` removes both — so no
    *  `requestFrame()` is needed here. */
@@ -332,7 +332,7 @@ export class ColumnChrome {
     return declarations;
   }
 
-  /** D-S5-34. Hiding rewrites one declaration and moves none of them. So the column keeps its width
+  /** Hiding rewrites one declaration and moves none of them. So the column keeps its width
    *  and its place in the order while it is off the screen. Showing removes the key again, rather
    *  than writing `hidden: false`. A column the consumer wrote as a bare `'name'` therefore reads
    *  back as a bare `'name'`. A resize takes the same care to rewrite only what it touched (#181). */
@@ -361,7 +361,7 @@ export class ColumnChrome {
   /** A plain `gantt.gridColumns = […]` assignment restates the consumer's whole authored list, so
    *  every column in it is the consumer's. Plugin columns keep whatever shape a commit already gave
    *  them and follow the authored list — the same place `effectiveInput()` puts one that has never
-   *  been committed (D-S5-21: appended after the consumer's own). */
+   *  been committed (appended after the consumer's own). */
   #authoredThenPluginColumns(input: readonly GridColumnInput[]): readonly ColumnDeclaration[] {
     const assigned = new Set(input.map(ColumnChrome.#fieldOf));
     const pluginColumns = this.#declaredColumns.filter(
@@ -373,8 +373,8 @@ export class ColumnChrome {
   }
 
   /** The `from`/`to` a `gridColumnsChange` handler reads: the columns the consumer authored, and
-   *  only those (D-S5-33), each paired with what it resolved to. A hidden column resolves to nothing
-   *  (D-S5-34), so it reports its declaration instead. That declaration already carries
+   *  only those, each paired with what it resolved to. A hidden column resolves to nothing
+   *  so it reports its declaration instead. That declaration already carries
    *  `hidden: true`, and whatever width a resize wrote onto it. This keeps the documented save
    *  round-trip whole. A consumer who stores `to` and assigns it back gets the hidden column back,
    *  still hidden and still in its place. Dropping it here would turn "hidden" into "gone". */
@@ -389,14 +389,14 @@ export class ColumnChrome {
     });
   }
 
-  /** The one commit sequence D-S5-18 asks for: a plain `gantt.gridColumns = […]` assignment. Every
+  /** The one commit sequence a plain `gantt.gridColumns = […]` assignment asks for. Every
    *  column in `nextInput` is the consumer's own, which is what separates this entry point from the
-   *  resize and reorder ones below (D-S5-33). */
+   *  resize and reorder ones below. */
   commit(nextInput: readonly GridColumnInput[]): boolean {
     return this.#commitDeclared(this.#authoredThenPluginColumns(nextInput));
   }
 
-  /** Where a resize drag, a reorder drop and a plain assignment all meet (D-S5-18). `from`/`to` are
+  /** Where a resize drag, a reorder drop and a plain assignment all meet. `from`/`to` are
    *  `GridColumn`s (`toGridColumn`), not the layout-only `ResolvedColumn` — a consumer keeps `to` in
    *  memory and passes it straight back as `gridColumns` — and they carry the consumer's authored
    *  columns alone, so that round-trip can never save a column a plugin declared (#162, #181).
@@ -424,7 +424,7 @@ export class ColumnChrome {
   }
 
   /** Runs the commit sequence and returns whether it landed — the caller (a pointer drag, or a
-   *  keyboard chord) restores its own preview when it did not (D-S5-18: "a veto restores the state
+   *  keyboard chord) restores its own preview when it did not ("a veto restores the state
    *  the drag started from"). */
   commitWidth(columnKey: FieldKey, widthPx: number): boolean {
     return this.#commitDeclared(this.#withWidth(columnKey, widthPx));
@@ -434,7 +434,7 @@ export class ColumnChrome {
     return this.#commitDeclared(this.#reordered(columnKey, beforeColumnKey));
   }
 
-  /** D-S5-34: `gantt.hideGridColumn(field)` and `gantt.showGridColumn(field)` land here. They take
+  /** `gantt.hideGridColumn(field)` and `gantt.showGridColumn(field)` land here. They take
    *  the same commit sequence a resize drag and a reorder drop take. So the
    *  `beforeGridColumnsChange` handler that guards every other column change cancels a hide too, and
    *  no second event pair exists for a consumer to learn. Hiding an already hidden column changes
@@ -443,7 +443,7 @@ export class ColumnChrome {
     return this.#commitDeclared(this.#withHidden(columnKey, hidden));
   }
 
-  /** `Shift+ArrowLeft`/`Shift+ArrowRight` (D-S5-18, D-S5-26) — the same `commitWidth` a resize
+  /** `Shift+ArrowLeft`/`Shift+ArrowRight` — the same `commitWidth` a resize
    *  drag's pointerup runs. */
   resizeStep(columnKey: FieldKey, direction: 1 | -1): void {
     const widthPx = Math.max(
@@ -453,7 +453,7 @@ export class ColumnChrome {
     this.commitWidth(columnKey, widthPx);
   }
 
-  /** `Alt+ArrowLeft`/`Alt+ArrowRight` (D-S5-18, D-S5-26) — the same `commitReorder` a reorder
+  /** `Alt+ArrowLeft`/`Alt+ArrowRight` — the same `commitReorder` a reorder
    *  drop runs. Already at that edge is a silent no-op, the same posture `zoomIn`/`zoomOut`'s own
    *  `when` guard takes for the opposite edge (there, gated in `core-commands.ts`; here, because the
    *  index math has nowhere left to point). */

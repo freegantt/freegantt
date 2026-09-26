@@ -1,4 +1,4 @@
-// view/ — the second stylesheet a Gantt writes (ADR 0022 §5, Q6): the rules behind an installed
+// view/ — the second stylesheet a Gantt writes (ADR 0022 §5): the rules behind an installed
 // variant's own class. `styles.ts`'s `ensureBaseStyles` writes the first, once per document, and it
 // is not this module's job to repeat that — this one is a `VariantRegistry`'s own answer, restated
 // as one `<style>` node.
@@ -11,7 +11,7 @@
 // sheet already is. Two Gantts' variant rules land in the same document, in the same `@layer
 // freegantt`, so a class one Gantt's variant styles is the same class any Gantt in the document
 // paints with — a `diamond()` installed on one Gantt restyles every `.fg-bar-diamond` in the
-// document, this Gantt's included (`plans/shipped-variants/README.md` Q6). The cost of one node each
+// document, this Gantt's included (`plans/shipped-variants/README.md`). The cost of one node each
 // is duplicated text when two Gantts install one variant — that is bytes, not behaviour, because the
 // rules are identical and land in one layer either way. `ensureBaseStyles`'s own document-wide marker
 // is a different shape for a different reason: the base sheet holds no variant's own choice, so every

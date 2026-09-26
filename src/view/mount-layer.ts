@@ -1,4 +1,4 @@
-// view/ — one answer to "where do I mount, and how do I stay put" (#168; S5.3, D-S5-8, #158).
+// view/ — one answer to "where do I mount, and how do I stay put" (#168; S5.3, #158).
 //
 // A Gantt has two mount layers. The overlay escapes the pane box, and the row layer travels with the
 // rows. That difference is load-bearing (#158). The pane's own scroll already moves the row layer.
@@ -34,7 +34,7 @@ import type { Disposer } from '../model/index.js';
 export interface MountLayer {
   /** Mounts `content` in this layer. The `Disposer` takes it out again. */
   present(content: HTMLElement): Disposer;
-  /** Notifies on every resize of the Gantt's container (issue #137 F9). A reflow moves the anchor
+  /** Notifies on every resize of the Gantt's container (issue #137). A reflow moves the anchor
    *  with no scroll at all — a column width change, say. The `Disposer` unsubscribes. */
   onResize(callback: () => void): Disposer;
   /** This layer's own client rect. `content` sits at the layer's origin, so a caller positions by
@@ -42,7 +42,7 @@ export interface MountLayer {
   readonly bounds: DOMRect;
 }
 
-/** The one `ResizeObserver` per Gantt (issue #137 F9), shared by every layer over that container.
+/** The one `ResizeObserver` per Gantt (issue #137), shared by every layer over that container.
  *
  *  Test seam, the same shape `attachPaneSize`'s own `ResizeObserverCtor` parameter already uses.
  *  happy-dom does no layout, so a dom test drives this with an injected fake that fires

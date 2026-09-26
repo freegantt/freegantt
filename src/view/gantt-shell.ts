@@ -166,13 +166,13 @@ export type AttachEntryGestures = (
   ctx: EntryGestureContext,
 ) => Detachable;
 
-/** S3.5, D-S3-13: same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance.
+/** Same DI shape as `AttachEntryGestures` just above, and the same `ctx` instance.
  *  `interaction/keyboard-editing.ts`'s `attachKeyboardEditing` needs `session()`/`selection`/
  *  `selectableEntriesInRowOrder`/`entryFor`/`can` only, not `hitTest`/`setHovered`. But a second,
  *  narrower context type for one caller has no value. */
 export type AttachKeyboardEditing = (container: HTMLElement, ctx: EntryGestureContext) => Detachable;
 
-/** S5.7, D-S5-18: same DI shape again — `interaction/column-gestures.ts`'s `attachColumnGestures`
+/** Same DI shape again — `interaction/column-gestures.ts`'s `attachColumnGestures`
  *  drives the grid header pane's resize/reorder pointer stream over `ColumnGestureContext`
  *  (`./column-gesture-context.js`). */
 export type AttachColumnGestures = (
@@ -181,7 +181,7 @@ export type AttachColumnGestures = (
   ctx: ColumnGestureContext,
 ) => Detachable;
 
-/** S1.10, D-S1.10-4: theming's only preset axis — `'auto'` follows `prefers-color-scheme` (no
+/** Theming's only preset axis — `'auto'` follows `prefers-color-scheme` (no
  * `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. ADR 0029: the app pushes the
  * answer; it writes `gantt.theme` or pins `data-fg-theme` on an ancestor. The library never calls
  * back into the app to ask. */
@@ -196,7 +196,7 @@ const DEFAULT_A11Y_LABEL = 'Gantt';
  *  again on every pane-size measurement (#8, #49). `getComputedStyle` is a synchronous style read
  *  that can force a style recalculation. So it is never an unconditional read per render(). */
 
-/** Every `before*` → `*` pair `#proposeChange` runs (D-S5-6). One entry per pair, not one overload
+/** Every `before*` → `*` pair `#proposeChange` runs. One entry per pair, not one overload
  *  per pair. A future cancelable change adds a line here, instead of a new `#proposeChange`
  *  overload. Names only: each name's payload is `GanttEventMap`'s own, never restated here. A
  *  `GanttEventMap` edit that this map does not match fails to compile at the call site (#144). */
@@ -213,7 +213,7 @@ type ProposableBefore = keyof ProposableChange & keyof GanttEventMap;
 
 /** What `api/gantt.ts` hands the shell across the layer boundary (review P5). Every seam here is a
  *  collaborator `view/` may not construct for itself. `interaction/` sits above `view/`, and so do
- *  the api `Dataset` and the public `Gantt` façade (D-S5-5). `api/gantt.ts` supplies all seven on
+ *  the api `Dataset` and the public `Gantt` façade. `api/gantt.ts` supplies all seven on
  *  every real Gantt.
  *
  *  Each member stays optional, and one member alone says why. A test drives the shell with no
@@ -229,26 +229,26 @@ export interface GanttShellWiring {
   keyboardEditing?: AttachKeyboardEditing;
   /** Injected, same reason as `entryGestures`. */
   columnGestures?: AttachColumnGestures;
-  /** S3.3, D-S3-16: how a committed gesture draft reaches the store. `model/dataset.ts`'s `Dataset`
+  /** How a committed gesture draft reaches the store. `model/dataset.ts`'s `Dataset`
    *  (this shell's own `dataset` option) has no `transaction()` — "a view never opens a
    *  transaction". So `api/gantt.ts`, which holds the full `api/Dataset` the model interface narrows
    *  away, supplies this instead. It answers `false` for a sync veto and for a
    *  `MutationCancelledError` from `beforeChange`. The shell never sees the exception either way. */
   commitEntryEdits?: (edits: ProposedEdits) => boolean;
-  /** S5.1, D-S5-1: fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
-   *  those without reaching past its own boundary (D-S5-5). They are the full api `Dataset` and the
+  /** Fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
+   *  those without reaching past its own boundary. They are the full api `Dataset` and the
    *  public `Gantt` façade. `model/dataset.ts`'s narrow interface hides `.transaction()`, the same
    *  reason `commitEntryEdits` exists. The `Gantt` façade does not exist yet when this constructor
    *  runs. It returns `unknown` because `api/gantt.ts` binds the concrete
    *  `PluginContext` type. That file alone may import both `Gantt` and this generic contract without
    *  closing an import cycle (`api/plugin-context.ts`'s file header). */
   buildPluginContext?: (parts: PluginContextParts) => unknown;
-  /** S5.2, D-S5-6: fills the api-level pieces of a `CommandContext`, for the same reason
+  /** Fills the api-level pieces of a `CommandContext`, for the same reason
    *  `buildPluginContext` fills `PluginContext`'s. The full api `Dataset` (with `undo`/`redo`) and
-   *  the public `Gantt` façade are both api-level. `view/` may name neither type (D-S5-5's mirror on
-   *  the `view/` side). The shell calls it fresh on every command invocation, never
-   *  cached, so a command always reads the invocation's current selection. `target`'s shape (S5.7,
-   *  D-S5-26) is a structural subtype of api-level `CommandTarget`. `view/` may not name that type
+   *  the public `Gantt` façade are both api-level. `view/` may name neither type. The shell calls it
+   *  fresh on every command invocation, never
+   *  cached, so a command always reads the invocation's current selection. `target`'s shape is a
+   *  structural subtype of api-level `CommandTarget`. `view/` may not name that type
    *  either, but a narrower object literal reaches it fine, because `api/gantt.ts` only widens. */
   buildCommandContext?: (parts: {
     entry?: Entry;
@@ -258,7 +258,7 @@ export interface GanttShellWiring {
     target?:
       | { kind: 'header'; field: FieldKey; entryIds: readonly EntryId[] }
       | { kind: 'bar'; entryIds: readonly EntryId[] }
-      // S5.11, D-S5-26/D-S5-39: the roving-focus grid pane fills two `CommandTarget` kinds a
+      // The roving-focus grid pane fills two `CommandTarget` kinds a
       // right-click never reaches on its own. `'row'` names a focused Row. `'gridCell'` names a
       // focused Grid cell, and `field` names its column. The splitter also gains its own kind,
       // for parity with the panes either side of it.
@@ -288,10 +288,10 @@ export interface GanttShellOptions {
    * concept"). The default resolves its zone, span and fit from this shell's binding, so it needs
    * no arguments. */
   scale?: TimeScaleModel;
-  /** Bound scroll axes (D9, D-S6-1) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
+  /** Bound scroll axes (D9) — pass the same `ScrollAxis` as `x` (or `y`) to two Gantt
    * instances to sync that direction. Each omitted direction builds a private default. */
   scroll?: ScrollAxes;
-  /** Initial grid pane width (S1.8, D-S1.8-3). A number is px; `'fitColumns'` (#157) sits the pane
+  /** Initial grid pane width. A number is px; `'fitColumns'` (#157) sits the pane
    *  on its columns' own edge and keeps it there. Default: `--fg-grid-pane-width`, fallback 160. */
   gridWidth?: GridWidth;
   /** Live (#127). The floor a splitter drag clamps `gridWidth` to. Default `40` — wide enough for
@@ -300,30 +300,30 @@ export interface GanttShellOptions {
   minGridWidth?: number;
   /** Live (#432). See `GanttOptions.gridResizable`. Default `true`. */
   gridResizable?: boolean;
-  /** Build the private default `TimeScaleModel` only (D-S1.9-9). It is a no-op, with a dev-mode
+  /** Build the private default `TimeScaleModel` only. It is a no-op, with a dev-mode
    * warning, when `scale` is also supplied. The shared model already carries its own options. */
   preset?: PresetRef;
   range?: 'fitDataset' | TimeSpan;
   fit?: TimeScaleFit;
-  /** `Viewport` is never shared (D-S1.7-10), so this always applies to this shell's own viewport. */
+  /** `Viewport` is never shared, so this always applies to this shell's own viewport. */
   overscan?: Overscan;
-  /** Live (S1.10, D-S1.10-4). Default `'auto'`: follows `prefers-color-scheme`. */
+  /** Live. Default `'auto'`: follows `prefers-color-scheme`. */
   theme?: Theme;
-  /** Live (S1.10, D-S1.10-4). Default `'Gantt'`; sets `aria-label` on the container. */
+  /** Live. Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
-  /** Live (S1.12, D-S1.12-12). `undefined` = the runtime default. Feeds header labels and
+  /** Live. `undefined` = the runtime default. Feeds header labels and
    *  `a11yLabel` alike. */
   locale?: Intl.LocalesArgument;
-  /** Live (S1.12/S1.13, D-S1.12-14, D-S1.13-4). Default `true`. */
+  /** Live. Default `true`. */
   todayLine?: boolean | Instant;
-  /** Live (S1.13, D-S1.13-4). Default `[]`. */
+  /** Live. Default `[]`. */
   dateLines?: readonly DateLine[];
   /** Live. See `GanttOptions.dateLineLabelPlacement`. Default `DEFAULT_DATE_LINE_LABEL_PLACEMENT`
    *  (`'belowHeader'`). */
   dateLineLabelPlacement?: DateLineLabelPlacement;
   /** Live. See `GanttOptions.todayLineMarginTicks`. Default `DEFAULT_TODAY_LINE_MARGIN_TICKS`. */
   todayLineMarginTicks?: number;
-  /** Live (S3, D-S3-9). Per-gesture, boolean or per-entry predicate, over the per-kind default table
+  /** Live. Per-gesture, boolean or per-entry predicate, over the per-kind default table
    *  (`view/capability.ts`). Default `{}`: every gesture resolves off the default table alone. */
   capabilities?: Capabilities;
   /** Live (#434). Default `'click'`: `entryActivate` fires on a plain click of a bar or a row's own
@@ -332,10 +332,10 @@ export interface GanttShellOptions {
    *  `capabilities` refuses to write. A writable cell's double-click stays `inlineEditing()`'s own —
    *  the same editable-cell-wins precedence `Enter` already gives the editor. */
   pointerActivation?: PointerActivation;
-  /** Live (D-S3-24). What a drag snaps to on this Gantt, over the showing preset's own `snap`.
+  /** Live. What a drag snaps to on this Gantt, over the showing preset's own `snap`.
    *  Omitted, the preset decides. */
   snap?: SnapSetting;
-  /** Live (S3.7, D-S3-14). Wheel zoom/pan and keyboard pan. Default `{}`: every viewport gesture
+  /** Live. Wheel zoom/pan and keyboard pan. Default `{}`: every viewport gesture
    *  is on. `false` turns them all off. The imperative `zoomBy`/`panToDate` surface does not
    *  consult this. */
   viewportGestures?: ViewportGestures;
@@ -344,27 +344,27 @@ export interface GanttShellOptions {
    *  reach, `Enter`) is never in the map's key type. It stays bound either way — `[S5-A4]`, WCAG
    *  2.1.1. The command itself stays reachable through `commands.run(id)` regardless. */
   convenienceChords?: ConvenienceChords;
-  /** Live (S4.3, D-S4-12). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
+  /** Live. Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
   gridColumns?: readonly GridColumnInput[];
-  /** Live (S4.6, D-S4-21). Default `{ source: 'entries', tree: true }`. */
+  /** Live. Default `{ source: 'entries', tree: true }`. */
   rowSource?: RowSource;
-  /** Live (S4.6, D-S4-22). Collapsed `RowId`s, loose on the way in. Default `[]`. */
+  /** Live. Collapsed `RowId`s, loose on the way in. Default `[]`. */
   collapsed?: readonly (RowId | string)[];
-  /** Live (J1). Where the default bar label paints — ignored once `barRenderer`'s output takes over
+  /** Live. Where the default bar label paints — ignored once `barRenderer`'s output takes over
    *  a bar's content. Default `'fitBar'`. */
   barLabels?: BarLabels;
-  /** Live (S5.4, D-S5-11). A function, or a per-kind map (D-S5-12) — undefined and "no per-kind
+  /** Live. A function, or a per-kind map — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
   barRenderer?: BarRenderer;
-  /** Live (S5.4, D-S5-11). Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
+  /** Live. Gantt-wide; a per-column `GridColumn.columnRenderer` (S5.7) wins over this
    *  for its own column. */
   gridCellRenderer?: GridCellRenderer;
-  /** Live (S5.4, D-S5-11). Not painted until a later step consumes it (S5.7's grid header chrome).
+  /** Live. Not painted until a later step consumes it (S5.7's grid header chrome).
    *  The resolution slot exists now, so a plugin's `registerRenderer('header', …)` has somewhere to
    *  register into. It also keeps this option honest about not being a no-op forever. */
   headerRenderer?: HeaderRenderer;
-  /** Live (S5.4, D-S5-11). Replaces a tooltip's body (S5.5's `tooltips()` feature reads this). */
+  /** Live. Replaces a tooltip's body (S5.5's `tooltips()` feature reads this). */
   tooltipRenderer?: TooltipRenderer;
   /** Expert knob, not on `GanttOptions` (plans/02 "two callers, two surfaces"). A test names its
    * own `RenderBackend<HTMLElement>` in place of the DOM one. §9-I: the seam had two implementations
@@ -373,10 +373,10 @@ export interface GanttShellOptions {
    * mounts real elements regardless of which backend paints them. So this closes the hardcoding,
    * not DOM-free `view/`. Defaults to `createDomBackend()`. */
   backend?: RenderBackend<HTMLElement>;
-  /** S3.6, D-S3-18, P1: the door onto the installed extension hook, called for **preview only** —
+  /** P1: the door onto the installed extension hook, called for **preview only** —
    *  ghosts its extras in the rAF-coalesced drag preview. `api/gantt.ts` passes the bound Dataset's
-   *  own `extraEditsFor` here (S5.10, #209 Q5). That occupant is the identity function until a
-   *  Dataset plugin composes onto it (D-S5-23). A test that constructs `GanttShell` directly passes
+   *  own `extraEditsFor` here (S5.10, #209). That occupant is the identity function until a
+   *  Dataset plugin composes onto it. A test that constructs `GanttShell` directly passes
    *  its own, the same shape `commitEntryEdits` already uses. The real hook still runs again, for
    *  real, inside `data/transaction.ts`'s own commit. This option never writes anything itself.
    *
@@ -385,7 +385,7 @@ export interface GanttShellOptions {
    *  itself. `api/dataset.ts`'s `extraEditsFor` builds it, through `data/edit-request.ts`'s
    *  `createEditRequest`, before this ever runs. */
   extraEditsFor?: (draft: ProposedEdits) => ProposedEdits;
-  /** Internal (D-S4-24, ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
+  /** Internal (ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
    *  inject a replacement. */
   variantRegistry?: VariantRegistry;
   /** The consumer's own variants — `GanttOptions.variants`, already erased to the untyped shape
@@ -433,7 +433,7 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
  *  A Bar `barSpan` drops reports `{x: 0, width: 0}` (#436) — a fabricated point, not a real box at
  *  the origin. Folding it into the union would drag `reveal` toward `0` for an entry with one
  *  dropped bar and one real one. It would send `reveal` to `0` outright when every bar is dropped
- *  (#436 branch review F3). Skipped here for that reason. Returns `undefined` when every bar was
+ *  (#436 branch review). Skipped here for that reason. Returns `undefined` when every bar was
  *  dropped, so the caller falls back to the entry's own dates (`fallbackSpanBar`) instead of
  *  reading a union of nothing. */
 function unionSpan(
@@ -472,7 +472,7 @@ export class GanttShell {
    *  disables the splitter's attachment and paints no resize cursor. The column half is a gate
    *  applied where resolved columns are *read*: render and the resize gesture, `#renderedColumns`
    *  and `#gridResizable`'s own check in `columnGestureContext`/`isColumnResizable`. It is never a
-   *  rewrite stored on `ColumnChrome`'s own resolution. F4: that stored override used to leak a
+   *  rewrite stored on `ColumnChrome`'s own resolution. That stored override used to leak a
    *  `resizable` flip a consumer never made into `gridColumnsChange`'s `from`. A gesture that can
    *  no longer arm never fires a `before*` event. */
   #gridResizable = true;
@@ -488,39 +488,38 @@ export class GanttShell {
    *  resize. */
   #paneBox: Size = { width: 0, height: 0 };
   /** Attached once, in the constructor, and lives for the shell's own lifetime. `#applyGridResizable`
-   *  is the only caller of `setEnabled` — see that method for what "locked" looks like (#432,
-   *  F1/F5). `!` because the constructor creates `#panes` before it can attach this. */
+   *  is the only caller of `setEnabled` — see that method for what "locked" looks like (#432). `!` because the constructor creates `#panes` before it can attach this. */
   #splitterAttachment!: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
   #entryGestures: Detachable | undefined;
   #keyboardEditing: Detachable | undefined;
   #columnGestures: Detachable | undefined;
   /** Grid-column resolution, live resize/reorder preview, and the `gridColumns` commit sequence
-   *  (S5.7, D-S5-18) — `column-chrome.ts`'s own module doc explains the split. Constructed in the
+   *  — `column-chrome.ts`'s own module doc explains the split. Constructed in the
    *  constructor body (needs `#container`, not yet assigned at field-init time). */
   #columnChrome!: ColumnChrome;
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #wheelNavigationGrid: WheelNavigationAttachment | undefined;
   #rowTwistyAttachment: RowTwistyAttachment;
-  /** D-S3-6: one long-lived, mutable per-Gantt object. `applyState` diffs against what it painted
+  /** One long-lived, mutable per-Gantt object. `applyState` diffs against what it painted
    *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
    *  select step (I5). Never rebuilt per call. */
   #interactionState: InteractionState = {};
-  /** The Selection (#212, ADR 0010, ADR 0025, #230 R4): what is selected, and what a pointer hit
+  /** The Selection (#212, ADR 0010, ADR 0025, #230 round 4): what is selected, and what a pointer hit
    *  would select. Built once, right after `#capabilities` in the constructor below. */
   #entrySelection!: EntrySelection;
-  /** S3.2, D-S3-9: resolved once, re-resolved only when `capabilities` is reassigned — never per
+  /** Resolved once, re-resolved only when `capabilities` is reassigned — never per
    *  hover step. `#refreshAffordances` reads it, it never calls `resolveCapabilities` itself. */
   #capabilityRules: Capabilities = {};
   /** The consumer's own variants, and the disposers that retract them. Reassigning `variants`
    *  retracts the whole list and installs the new one (ADR 0018).
    *
-   *  A plain array, not a `DisposableStore` (`J38`). A store latches on its first `disposeAll()`
+   *  A plain array, not a `DisposableStore`. A store latches on its first `disposeAll()`
    *  and disposes anything added after it. That is right for a lifetime that ends once, and wrong
    *  for a list that is replaced live. */
   #variants: readonly EntryVariant[] = [];
   #consumerVariantDisposers: Disposer[] = [];
-  /** D-S3-24: this Gantt's own snap, or `undefined` while the showing preset decides. It changes no
+  /** This Gantt's own snap, or `undefined` while the showing preset decides. It changes no
    *  paint, so it is a plain field and not a frame setting. */
   #snap: SnapSetting | undefined;
   #viewportGestures: ViewportGestures = {};
@@ -557,7 +556,7 @@ export class GanttShell {
    *  `#registrations`'s own `fieldFor`. It is handed to `computeFrame` on every `render()` — the
    *  same "built once, read every frame" shape `variants` already takes. */
   #entryRulePorts!: EntryRulePorts;
-  /** What `resolveBarLabelText` reads outside itself (#421 F2) — the Field registry, paired with
+  /** What `resolveBarLabelText` reads outside itself (#421) — the Field registry, paired with
    *  this Gantt's own unknown-field report. Built once, right beside `#entryRulePorts`, and handed
    *  to `#labelFor` on every `render()`, the same "built once, read every frame" shape. */
   #barLabelPorts!: ResolveBarLabelPorts;
@@ -565,17 +564,17 @@ export class GanttShell {
    *  `css`. Built right after `#registrations`, and refreshed on every edge that changes what a
    *  variant registers — construction, `gantt.variants = […]`, a plugin install or dispose. */
   #variantStyles!: VariantStyles;
-  /** The single rAF owner (B10, D-S2-15): every render request past construction goes through
+  /** The single rAF owner (B10): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
-  /** S5.12, D-S5-40: this Gantt's own raise seam, over the bus above. Every collaborator that
+  /** This Gantt's own raise seam, over the bus above. Every collaborator that
    *  observes a refusal or a recovered fault takes it. That is the gesture pipeline, the render
    *  backend, the plugin runtime, and each plugin's own `ctx.raiseError`. */
   #raiseError: RaiseError = createErrorRaiser(this.#events);
   /** #448: where a shadowed `barRenderer` is reported. Built once; `render()` is its only caller. */
   #reportBarRendererShadowed = this.#createBarRendererShadowedReport();
-  /** S5.1, D-S5-1: the plain `{ on, off }` a plugin's `ctx.events` actually is. Built once, from
+  /** The plain `{ on, off }` a plugin's `ctx.events` actually is. Built once, from
    *  this shell's own `on`/`off` below. A plugin never sees the rest of this class's public surface
    *  the way handing it `this` directly would. */
   #pluginEvents: GanttEvents = {
@@ -587,8 +586,8 @@ export class GanttShell {
    *  what this Gantt owns and `uninstallPlugin` refuses what the Dataset owns. */
   #datasetPlugins: readonly ShellPlugin<unknown>[] = [];
   #chromePlugins: readonly ShellPlugin<unknown>[] = [];
-  /** S5.2, D-S5-6/D-S5-7: one registry and one keymap per Gantt (I2). Core commands and core
-   *  bindings register here first, so a plugin's own registration always wins (D-S5-7). */
+  /** One registry and one keymap per Gantt (I2). Core commands and core
+   *  bindings register here first, so a plugin's own registration always wins. */
   #commandRegistry!: CommandRegistry<unknown>;
   #keymap!: Keymap<unknown>;
   #keymapListener!: (event: KeyboardEvent) => void;
@@ -601,7 +600,7 @@ export class GanttShell {
    *  Every resource registers its own release here, on the line that builds it. So `destroy()` is
    *  one call, and no resource is built without a release. Releases run in reverse construction
    *  order. That order is what the two documented constraints ask for. A plugin disposer still
-   *  finds its overlay node (D-S5-3). A pane is torn down after everything that reads it.
+   *  finds its overlay node. A pane is torn down after everything that reads it.
    *
    *  A `DisposableStore`, not a plain array — `#consumerVariantDisposers` states the reason in
    *  reverse. A store latches on its first `disposeAll()`. That is right for a lifetime which ends
@@ -624,8 +623,8 @@ export class GanttShell {
   /** Construction phase (issue #91 §9-B): bind() notifies synchronously before pane size is wired, so
    *  those calls are not real renders yet. Becomes `'live'` after the first measurement. */
   #phase: 'constructing' | 'live' = 'constructing';
-  /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2,
-   * D-S1.5-9). No gutter added (S1.8, D-S1.8-2): the grid pane's own width is the gutter now, and the
+  /** Set by the most recent `render()` — `frame.contentWidth`/`contentHeight` (S1.5 README §3.2).
+   *  No gutter added: the grid pane's own width is the gutter now, and the
    * timeline pane's content is `contentWidth` wide, full stop. */
   #contentSize = { width: 0, height: 0 };
   #theme: Theme = DEFAULT_THEME;
@@ -652,15 +651,15 @@ export class GanttShell {
   #themePinObserver: MutationObserver;
   #a11yLabel: string = DEFAULT_A11Y_LABEL;
   #treeCollapse!: TreeCollapse;
-  /** S5.11, D-S5-25/D-S5-26: one tab stop per pane (`view/roving-focus.ts`'s own file header). Built
+  /** One tab stop per pane (`view/roving-focus.ts`'s own file header). Built
    *  once `#treeCollapse`/`#entrySelection`/`#columnChrome` exist, since its ports read all three. */
   #rovingFocus!: RovingFocus;
-  /** S5.11, D-S5-26: the one polite live region for this Gantt (`view/live-region.ts`'s own file
+  /** The one polite live region for this Gantt (`view/live-region.ts`'s own file
    *  header). Constructed and attached alongside `#rovingFocus`, once `#container` exists. */
   #liveRegion!: LiveRegion;
-  /** Issue #137 F9: the one `ResizeObserver` per Gantt, which both mount layers below share. */
+  /** Issue #137: the one `ResizeObserver` per Gantt, which both mount layers below share. */
   #containerResize: ContainerResize;
-  /** S5.3, D-S5-8: constructed once panes exist — see the plugin runtime's own comment just below for
+  /** Constructed once panes exist — see the plugin runtime's own comment just below for
    *  why. This is the layer that escapes the pane box. */
   #overlay: DomMountLayer;
   /** #158: the grid's own row layer, where a plugin mounts content that must scroll with the rows.
@@ -673,7 +672,7 @@ export class GanttShell {
   constructor(options: GanttShellOptions) {
     this.#options = options;
     this.#container = resolveContainer(options.container);
-    // S1.10, D-S1.10-8: must exist before PaneLayout builds the classed elements the stylesheet
+    // Must exist before PaneLayout builds the classed elements the stylesheet
     // targets, or there's a one-frame flash of unstyled content.
     ensureBaseStyles(this.#container.ownerDocument);
     // #432: read before the first `#bindColumns()` call below, so a locked Gantt never resolves
@@ -692,7 +691,7 @@ export class GanttShell {
     this.#teardown.add(() => this.#frames.cancel());
     this.#panes = this.#paneLayout.panes;
     this.#gridPaneWidth = new GridPaneWidth(this.#gridPaneWidthPorts(), options.gridWidth === 'fitColumns');
-    // S5.3, D-S5-8: constructed right after the panes it measures, so it is ready by the time the
+    // Constructed right after the panes it measures, so it is ready by the time the
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#containerResize = new ContainerResize(this.#container);
     this.#teardown.add(() => this.#containerResize.destroy());
@@ -716,7 +715,7 @@ export class GanttShell {
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
     if (options.scale && hasOwnOptions) {
-      // S5.12, D-S5-41: no longer behind `isDevMode()`, which resolved to `false` in every consumer's
+      // No longer behind `isDevMode()`, which resolved to `false` in every consumer's
       // build and deleted this line from the shipped library. The `console.warn` is now the fallback
       // for an unsubscribed consumer. Nobody can subscribe this early: the shell is still in its own
       // constructor. So this always prints in practice, which is the behaviour a misconfigured
@@ -773,13 +772,13 @@ export class GanttShell {
     // background and state ring at equal specificity. Starts empty; `#installConsumerVariants` fills it.
     this.#variantStyles = attachVariantStyles(this.#container.ownerDocument, this.#registrations.variants);
     this.#teardown.add(() => this.#variantStyles.destroy());
-    // Before the first frame, not after it (`J38`). `bind()` below fires its own `onChange`
+    // Before the first frame, not after it. `bind()` below fires its own `onChange`
     // synchronously, and that onChange IS this shell's first render. A consumer variant installed
     // after it would paint nothing until something else invalidated the frame.
     this.#installConsumerVariants(options.variants ?? []);
     // #127/#139: the splitter proposes a raw px delta, and `GridPaneWidth` applies both bounds on
     // the way in. So a drag can reach neither below `minGridWidth` nor past the last column's edge.
-    // #432, F1/F5: attached once, unconditionally. `#applyGridResizable` is the only thing that
+    // #432: attached once, unconditionally. `#applyGridResizable` is the only thing that
     // decides whether it is enabled, live or at construction — so both paths land in the same DOM.
     // Wired before `#bindColumns()` below: that call's own `syncAria()` needs the attachment to
     // already exist.
@@ -788,7 +787,7 @@ export class GanttShell {
       readMinWidth: () => this.#gridPaneWidth.floor,
       // S5.11: `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
       // names one whenever the columns do. A `flex` column names none, so this falls back to the
-      // container's own outer bound (`PaneLayout.bounds()`, D-S5-8's same clamp). The pane
+      // container's own outer bound (`PaneLayout.bounds()`, the same clamp). The pane
       // physically cannot outgrow the Gantt it sits in, ceiling or not.
       readMaxWidth: () => this.#gridPaneWidth.ceiling ?? this.#paneLayout.bounds().width,
       previewGridWidth: (px) => {
@@ -813,23 +812,23 @@ export class GanttShell {
         resolveBarLabelPolicy: (entry) =>
           resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
         readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
-        // ADR 0018, `J40`: a variant's own `paint` first, because it names the rows it covers. Then
+        // ADR 0018: a variant's own `paint` first, because it names the rows it covers. Then
         // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
-        // map's `'*'` entry meant. D-S5-11 still orders that catch-all: the consumer's own
-        // `barRenderer` beats a plugin's whole-point `bar` renderer.
+        // map's `'*'` entry meant. The consumer's own `barRenderer` beats a plugin's whole-point
+        // `bar` renderer.
         //
-        // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**
-        // (`J61`). A consumer who wants to paint a summary row writes a variant that matches it.
-        // Their rule then beats core's by rank, which is what D-S5-11 asks for.
+        // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**.
+        // A consumer who wants to paint a summary row writes a variant that matches it.
+        // Their rule then beats core's by rank, which is what the catch-all ordering asks for.
         resolveBarRenderer: (entry) => this.#paintFor(entry),
-        // S5.4, D-S5-11: `render/dom` never receives `ResolvedColumn` (`column.format` "never
+        // `render/dom` never receives `ResolvedColumn` (`column.format` "never
         // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
         // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
         // string it already threads through `CellItem.key`.
         resolveGridCellRenderer: (columnKey) => {
           const column = this.#columnChrome.resolvedColumn(columnKey);
           if (column === undefined) return undefined;
-          // S5.7, D-S5-17: a per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
+          // A per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
           // Gantt-wide one for that column. No `pluginId`, since a `GridColumn` only ever arrives
           // from the consumer's own config until S5.9's `registerGridColumn` exists.
           if (column.columnRenderer !== undefined) {
@@ -859,7 +858,7 @@ export class GanttShell {
             ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
           };
         },
-        // S5.4, D-S5-11: same bind-in-here posture as `resolveGridCellRenderer` just above. A
+        // Same bind-in-here posture as `resolveGridCellRenderer` just above. A
         // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`). So this only
         // ever resolves the Gantt-wide/plugin one, bound to its column.
         resolveHeaderRenderer: (columnKey) => {
@@ -884,7 +883,7 @@ export class GanttShell {
       gridHeader: this.#panes.gridHeader,
     });
 
-    // S5.2, D-S5-6: built before the plugin runtime. Core commands register into this during this
+    // Built before the plugin runtime. Core commands register into this during this
     // same constructor. A plugin's own `ctx.commands`/`ctx.interaction.registerKeybinding` (below)
     // close over it too. `#buildCommandContext` is called fresh per invocation (never cached), so a
     // command always reads the current selection.
@@ -907,17 +906,17 @@ export class GanttShell {
       const context = (options.wiring.buildPluginContext ?? (() => ({})))(parts);
       return { context, disposables: parts.disposables, registrationGate: gate };
     }, this.#raiseError);
-    // D-S5-3: registered after the panes and the backend, so it releases before them. A plugin
+    // Registered after the panes and the backend, so it releases before them. A plugin
     // disposer may still reach for its overlay node.
     this.#teardown.add(() => this.#pluginRuntime.disposeAll());
 
-    // The timeline pane is the single native scroller (D-D, D-S1.8-1); the grid pane follows it by
-    // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in,
-    // D-S1.7-1), so this field is never undefined during a render.
+    // The timeline pane is the single native scroller; the grid pane follows it by
+    // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in),
+    // so this field is never undefined during a render.
     this.#scrollAttachment = attachScroll(this.#panes.timeline, this.#viewport);
     this.#teardown.add(() => this.#scrollAttachment.detach());
 
-    // bind() fires its own onChange synchronously, once per sub-model (D-S1.5-4: bind always
+    // bind() fires its own onChange synchronously, once per sub-model (bind always
     // notifies the newcomer) — before this call returns and #viewportHandle is assigned. Those
     // premature calls are dropped while `#phase === 'constructing'`; the deliberate first render
     // below runs once everything, including the initial pane-size measurement, is wired.
@@ -933,7 +932,7 @@ export class GanttShell {
     // `TimeScaleModel` or a `ScrollModel` it shares with another Gantt. Unbinding is what lets a
     // shared model outlive this shell without accumulating a dead binding per mount.
     this.#teardown.add(() => this.#viewportHandle.unbind());
-    // The whole of this shell's dependency on data change (D-S2-20): push the fresh snapshot into
+    // The whole of this shell's dependency on data change: push the fresh snapshot into
     // the bound viewport, and request a frame. That is the changeset mechanism's own fan-out, not a
     // second reactivity path. #33's `setEntries()` warning is against a *public* one (see
     // dataset-change-subscription.ts).
@@ -1031,13 +1030,13 @@ export class GanttShell {
         this.#backend.applyState(this.#interactionState);
       },
     });
-    // D-S3-13: one `EntryGestureContext`, shared by the pointer attachment and the keyboard one.
+    // One `EntryGestureContext`, shared by the pointer attachment and the keyboard one.
     // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
     const gestureContext: EntryGestureContext = {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
       entryFor: (barId) => this.#entryFor(barId),
       can: (capability, entry, edge) => this.#capabilities.can(capability, entry, edge),
-      // #230 R4: `interaction/` asks one collaborator, not four. `EntrySelection` answers all of it
+      // #230 round 4: `interaction/` asks one collaborator, not four. `EntrySelection` answers all of it
       // (ADR 0025: a former Segment is an ordinary Entry, so there is no second projection to ask).
       selection: {
         entryIds: () => this.#entrySelection.entryIds,
@@ -1057,7 +1056,7 @@ export class GanttShell {
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };
-    // S5.2, D-S5-6/D-S5-7: core commands first, then the keymap listener. Both attach ahead of
+    // Core commands first, then the keymap listener. Both attach ahead of
     // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below. So every plugin binding and
     // every core command gets first refusal on a key event. This shell's own pointer-editing and
     // pan/page/home/end handling only sees it after that. An unmatched chord is left untouched
@@ -1073,7 +1072,7 @@ export class GanttShell {
     // #434: opt-in (`pointerActivation: 'dblclick'`), always attached — the option gates inside the
     // handler, the same shape the wheel handlers gate on `#resolvedViewportGestures`. A grid cell's
     // double-click asks the one decision `Enter`'s own Keymap resolution already asks
-    // (`#editorTakesFocusedCell`, D-S5-7): does `freegantt.editFocusedCell` take this cell? A
+    // (`#editorTakesFocusedCell`): does `freegantt.editFocusedCell` take this cell? A
     // writable cell's double-click stays the editor's own (`ctx.view.onDomEvent('dblclick', …)`)
     // and does not also activate here. This listener sits on `#container`, a bubble-phase ancestor
     // of `inlineEditing()`'s document-level one. So a `return` here always reaches that listener
@@ -1089,7 +1088,7 @@ export class GanttShell {
     };
     this.#container.addEventListener('dblclick', this.#dblClickListener);
     this.#teardown.add(() => this.#container.removeEventListener('dblclick', this.#dblClickListener));
-    // Document-level capture-phase fallback (issue #137 F1,
+    // Document-level capture-phase fallback (issue #137,
     // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
     // key event whose target sits inside `#container`. A popup opened from an outside trigger has
     // no path into that listener at all — a toolbar button in the consumer's own page, say. So its
@@ -1111,14 +1110,14 @@ export class GanttShell {
       this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true),
     );
 
-    // S5.7, D-S5-18: same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
+    // Same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
     // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`. Attached *before*
     // `entryGestures`. Both listen for `keydown` on this same `#container`. An Escape that cancels a
     // column drag must reach `column-gestures.ts`'s own handler ahead of `entry-gestures.ts`'s
     // handler. That handler swallows it, through `stopImmediatePropagation()`. In the other order,
     // the column drag's Escape would also clear the entry selection as an unrelated side effect.
     const columnGestureContext: ColumnGestureContext = {
-      // F4: the lock gates the read, not the stored resolution — see `#renderedColumns`.
+      // The lock gates the read, not the stored resolution — see `#renderedColumns`.
       isResizable: (columnKey) => this.#gridResizable && this.#columnChrome.isResizable(columnKey),
       isMovable: (columnKey) => this.#columnChrome.isMovable(columnKey),
       minColumnWidthPx: () => this.#columnChrome.minWidthPx(),
@@ -1144,7 +1143,7 @@ export class GanttShell {
       gestureContext,
     );
     this.#teardown.add(() => this.#entryGestures?.detach());
-    // S5.11, D-S5-39: scoped to the timeline pane, not the whole container. A bar's nudge/resize
+    // Scoped to the timeline pane, not the whole container. A bar's nudge/resize
     // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
     this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
     this.#teardown.add(() => this.#keyboardEditing?.detach());
@@ -1157,7 +1156,7 @@ export class GanttShell {
     };
     this.#wheelNavigation = attachWheelNavigation(this.#panes.timeline, wheelNavigationCtx);
     this.#teardown.add(() => this.#wheelNavigation?.detach());
-    // #126: the grid pane has no scroll of its own (D-S1.8-1). So this forwards its wheel input
+    // #126: the grid pane has no scroll of its own. So this forwards its wheel input
     // into the same shared scroll the timeline pane already writes into. `anchorPane` keeps ctrl/⌘+wheel
     // zoom anchored on the timeline's time axis, since the grid pane's own x-axis isn't time.
     this.#wheelNavigationGrid = attachWheelNavigation(this.#panes.rows, wheelNavigationCtx, {
@@ -1236,7 +1235,7 @@ export class GanttShell {
     return this.#frameSettings.locale;
   }
 
-  /** Live (S1.12, D-S1.12-12): re-labels every header band and every screen-reader date with no bar
+  /** Live: re-labels every header band and every screen-reader date with no bar
    *  remount — it flows straight through `LayoutInput.locale` on the next render. What that costs
    *  is `frame-settings.ts`'s own table to state, not this setter's. Every live setting below reads
    *  the same way, which is the whole point of #167. */
@@ -1244,7 +1243,7 @@ export class GanttShell {
     this.#frameSettings.set({ locale: l });
   }
 
-  /** The columns the consumer authored, and only those (D-S5-33, #181). A plugin's registered column
+  /** The columns the consumer authored, and only those (#181). A plugin's registered column
    *  renders. It stays out of this list, because it is the plugin's declaration and not this Gantt's
    *  configuration. A resize or a reorder does not change that. So the documented save round-trip
    *  (`gantt.on('gridColumnsChange', ({ to }) => save(to.map((c) => c.field)))`) never persists a
@@ -1254,20 +1253,20 @@ export class GanttShell {
   }
 
   /** A plain reconfiguration still runs the same cancelable commit sequence a resize drag or a
-   *  reorder drop runs (S5.7, D-S5-18). One write path, one place the veto lives. `set gridWidth`
+   *  reorder drop runs. One write path, one place the veto lives. `set gridWidth`
    *  above already takes the same posture for the splitter. */
   set gridColumns(columns: readonly GridColumnInput[]) {
     this.#columnChrome.commit(columns);
   }
 
-  /** S5.7, D-S5-34: which of this Gantt's own columns are hidden, by field key. Read it to label a
+  /** Which of this Gantt's own columns are hidden, by field key. Read it to label a
    *  column chooser. A plugin's column is the plugin's declaration, so this getter reports the
    *  consumer's hidden columns only — the same rule `gridColumns` above follows. */
   get hiddenGridColumns(): readonly FieldKey[] {
     return this.#columnChrome.hiddenColumns;
   }
 
-  /** S5.7, D-S5-34: takes one column off the screen and leaves the other columns alone. The hidden
+  /** Takes one column off the screen and leaves the other columns alone. The hidden
    *  column keeps its width and its position, so `showGridColumn` puts it back where it was. Runs
    *  the cancelable commit sequence a resize drag runs, so it raises
    *  `beforeGridColumnsChange`/`gridColumnsChange` and a handler can refuse it. Throws
@@ -1276,13 +1275,13 @@ export class GanttShell {
     this.#columnChrome.commitHidden(field, true);
   }
 
-  /** S5.7, D-S5-34: the twin of `hideGridColumn`. Puts a hidden column back at its own place in the
+  /** The twin of `hideGridColumn`. Puts a hidden column back at its own place in the
    *  order, with the width it had. */
   showGridColumn(field: FieldKey): void {
     this.#columnChrome.commitHidden(field, false);
   }
 
-  /** Live (J1). Reassigning repaints every bar with no remount (I8) — same posture as `barRenderer`
+  /** Live. Reassigning repaints every bar with no remount (I8) — same posture as `barRenderer`
    *  just below. */
   get barLabels(): BarLabels {
     return this.#frameSettings.barLabels;
@@ -1292,7 +1291,7 @@ export class GanttShell {
     this.#frameSettings.set({ barLabels });
   }
 
-  /** Live (S5.4, D-S5-11). Reassigning repaints every bar with no remount (I8). */
+  /** Live. Reassigning repaints every bar with no remount (I8). */
   get barRenderer(): BarRenderer | undefined {
     return this.#frameSettings.barRenderer;
   }
@@ -1365,7 +1364,7 @@ export class GanttShell {
     this.#treeCollapse.expandAll();
   }
 
-  /** One `before*` → apply → `*` sequence, for every cancelable Gantt-state change (D-S5-6):
+  /** One `before*` → apply → `*` sequence, for every cancelable Gantt-state change:
    *  collapse, selection, grid width, grid columns. `ProposableChange` pairs each `before*` name
    *  with its `*` counterpart. A new pair is one line there, not a new overload here — a future
    *  S5.8 event, say. `change` is the intersection of both events' payloads, so both `emit` calls
@@ -1436,7 +1435,7 @@ export class GanttShell {
     return this.#entrySelection.entryIds;
   }
 
-  /** Live; runs the same cancelable sequence a click runs (D-S3-10). Loose in (`EntryId | string`),
+  /** Live; runs the same cancelable sequence a click runs. Loose in (`EntryId | string`),
    *  branded out — the same asymmetry `dataset.entries.get/update/remove` already ship. */
   set selection(ids: readonly (EntryId | string)[]) {
     this.#entrySelection.propose(ids.map((id) => entryId(id)));
@@ -1464,7 +1463,7 @@ export class GanttShell {
   }
 
   /** The whole variant this Gantt resolved for one row (ADR 0018, ADR 0022 §3). One door answers
-   *  `bars`/`paint`/`can`/`css` together. No caller looks a name up again (F3, ADR 0022 §3).
+   *  `bars`/`paint`/`can`/`css` together. No caller looks a name up again (ADR 0022 §3).
    *  `render/` and `interaction/` read the same answer.
    *  `CommandContext.variant` and the two callers that want the name alone read `.name`.
    *
@@ -1493,7 +1492,7 @@ export class GanttShell {
    *  has none. One ladder, and `resolveBarRenderer` is its only caller.
    *
    *  It reads the row, never the variant's name. Two registrations may share one name. A lookup by
-   *  name can then answer with the paint of a rule that did not match this row (`F3`). No
+   *  name can then answer with the paint of a rule that did not match this row. No
    *  `pluginId` on the answer: a variant's paint is named by the variant, and the double-match
    *  diagnostic is what names a plugin. */
   #paintFor(entry: Entry): ResolvedRenderer<BarRenderer> | undefined {
@@ -1518,7 +1517,7 @@ export class GanttShell {
     return this.#capabilityRules;
   }
 
-  /** Live (S3, D-S3-9): re-resolves the capability table immediately. It then re-derives the two
+  /** Live: re-resolves the capability table immediately. It then re-derives the two
    *  resolved affordance ids off the current hover and selection. A stricter rule takes effect
    *  without waiting for the next pointer move. */
   set capabilities(next: Capabilities) {
@@ -1526,14 +1525,14 @@ export class GanttShell {
     this.#refreshCapabilities();
   }
 
-  /** D-S5-35: writes one gesture's rule and leaves every other rule standing. It replaces the value
+  /** Writes one gesture's rule and leaves every other rule standing. It replaces the value
    *  it holds with a copy, so the object a consumer assigned is never mutated (`plans/02` §2). */
   setCapabilityRule<K extends keyof Capabilities>(capability: K, rule: NonNullable<Capabilities[K]>): void {
     this.#capabilityRules = { ...this.#capabilityRules, [capability]: rule };
     this.#refreshCapabilities();
   }
 
-  /** D-S5-35: drops this Gantt's own rule for one gesture. A variant's own `capabilities` and the library
+  /** Drops this Gantt's own rule for one gesture. A variant's own `capabilities` and the library
    *  table answer that gesture again. Clearing a gesture that carries no rule changes nothing. */
   clearCapabilityRule(capability: keyof Capabilities): void {
     if (this.#capabilityRules[capability] === undefined) return;
@@ -1543,7 +1542,7 @@ export class GanttShell {
     this.#refreshCapabilities();
   }
 
-  /** `EntrySelection`'s one ports object (#230 R4, ADR 0025) — the shell's own state, behind the
+  /** `EntrySelection`'s one ports object (#230 round 4, ADR 0025) — the shell's own state, behind the
    *  closures `EntrySelectionPorts` names. `confirm`/`announce` reuse the shell's own
    *  `#proposeChange`/`#events`, so a Selection change is one more line in `ProposableChange`, not a
    *  second veto path. `paint` writes the backend's own state and re-derives hover/gesture
@@ -1563,7 +1562,7 @@ export class GanttShell {
     };
   }
 
-  /** S5.9, D-S5-22: the one place `resolveCapabilities` is called. The constructor, `set
+  /** The one place `resolveCapabilities` is called. The constructor, `set
    *  capabilities` and `set variants` all re-derive from here, rather than repeating the call. */
   #resolveCapabilities(): ResolvedCapabilities {
     return resolveCapabilities({
@@ -1584,7 +1583,7 @@ export class GanttShell {
     this.#refreshAffordances();
   }
 
-  /** D-S3-24, reversed by #489: what a drag snaps to right now — this Gantt's own setting when it
+  /** Reversed by #489: what a drag snaps to right now — this Gantt's own setting when it
    *  states one, else `'none'`. A consumer who never states `gantt.snap` gets free dragging; a
    *  preset no longer switches snapping on by itself. A gesture resolves `'tick'` against the
    *  preset it is measuring. */
@@ -1592,7 +1591,7 @@ export class GanttShell {
     return this.#snap ?? 'none';
   }
 
-  /** Live (D-S3-24). The next drag reads it; nothing repaints. `undefined` turns snapping off again.
+  /** Live. The next drag reads it; nothing repaints. `undefined` turns snapping off again.
    *  A concrete `{ unit, increment }` is checked here. A bad unit or a non-advancing increment
    *  throws on assignment. Otherwise it would surface two gestures later, inside a drag (#201).
    *  `isTimeUnit` lets a caller check the unit before it reaches this setter. A custom `SnapRule`
@@ -1613,7 +1612,7 @@ export class GanttShell {
     return this.#viewportGestures;
   }
 
-  /** Live (S3.7, D-S3-14): the next wheel or key reads the new flags; no remount. */
+  /** Live: the next wheel or key reads the new flags; no remount. */
   set viewportGestures(next: ViewportGestures) {
     this.#viewportGestures = next;
     this.#resolvedViewportGestures = resolveViewportGestures(next);
@@ -1640,16 +1639,16 @@ export class GanttShell {
     this.#resolvedConvenienceChords = resolveConvenienceChords(next);
   }
 
-  /** S5.2, D-S5-6: the live `CommandContext` builder.
+  /** The live `CommandContext` builder.
    *
    *  `entry` is the first selected entry, or `undefined` when nothing is selected. `target` names
-   *  what real keyboard focus sits on right now (S5.11, D-S5-39), one of the five `TargetKind`s.
+   *  what real keyboard focus sits on right now, one of the five `TargetKind`s.
    *
    *  A keyboard chord has no right-clicked node to reconcile against the Selection. So `target`'s
    *  `entryIds` names the Selection directly, for every kind but `'header'` and `'splitter'` (#212).
    *  `when`/`run` then read `ctx.target.entryIds` exactly as a mouse invocation does.
    *  `api/gantt.ts`'s injected `buildCommandContext` fills `dataset`/`gantt` — `view/` may not
-   *  name either type (D-S5-5's mirror).
+   *  name either type.
    *
    *  A `wiring` with no `buildCommandContext` makes every command's context an empty object, for a
    *  test that drives the shell alone. That is fine. No core command reads `ctx.dataset`/`ctx.gantt`
@@ -1659,7 +1658,7 @@ export class GanttShell {
     const entryIds = this.#entrySelection.entryIds;
     const id = entryIds[0];
     const entry = id !== undefined ? this.#options.dataset.entries.get(id) : undefined;
-    // S5.11, D-S5-39: real DOM focus is the single source of truth for "what is the target of
+    // Real DOM focus is the single source of truth for "what is the target of
     // this chord". `view/roving-focus.ts` moves focus onto the exact node a chord acts on —
     // a row, a cell, a bar, a header cell, or the splitter.
     const focused = this.#rovingFocus.focusedElement();
@@ -1671,8 +1670,8 @@ export class GanttShell {
           ? { kind: 'bar' as const, entryIds }
           : undefined
         : this.#targetFromDom(domTarget, entryIds);
-    // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`),
-    // D-S5-5's mirror. So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
+    // `view/` may not name `CommandContextOf`'s api-level fields (`dataset: Dataset`, `gantt`).
+    // So this cast trusts `api/gantt.ts`'s injected `buildCommandContext` to fill
     // them. `buildPluginContext` above already gets the same trust for `PluginContext`.
     return (this.#options.wiring.buildCommandContext ?? (() => ({})))({
       ...(entry !== undefined ? { entry, variant: this.variantFor(entry).name } : {}),
@@ -1680,7 +1679,7 @@ export class GanttShell {
     }) as CommandContext<unknown>;
   }
 
-  /** The `CommandTarget` a resolved `DomTarget` names (S5.11, D-S5-39). `'header'` and `'splitter'`
+  /** The `CommandTarget` a resolved `DomTarget` names. `'header'` and `'splitter'`
    *  stand for no Entry, so both name empty sets, matching `DomTarget`'s own contract. Every other
    *  kind names the current Selection. A keyboard chord has no separate "clicked" thing to reconcile
    *  the Selection against (this file's own doc comment above). */
@@ -1708,7 +1707,7 @@ export class GanttShell {
     }
   }
 
-  /** D-S5-6: the shell verbs `core-commands.ts`'s catalog calls, closing over this shell's own
+  /** The shell verbs `core-commands.ts`'s catalog calls, closing over this shell's own
    *  private state. `registerCoreCommands` never touches a shell field directly — this is the one
    *  seam between the two. */
   #coreCommandPorts(): CoreCommandPorts {
@@ -1749,7 +1748,7 @@ export class GanttShell {
       panLeft: () => this.#panBy(-this.#viewport.preset.preferredTickWidthPx, 0),
       panDown: () => this.#panBy(0, this.#frameSettings.rowHeight),
       panUp: () => this.#panBy(0, -this.#frameSettings.rowHeight),
-      // F4: same gate as the pointer gesture's `isResizable` above — a locked Gantt refuses the
+      // Same gate as the pointer gesture's `isResizable` above — a locked Gantt refuses the
       // keyboard resize chord (Shift+Arrow) too, off the same authored resolution.
       isColumnResizable: (key) => this.#gridResizable && this.#columnChrome.isResizable(key),
       isColumnMovable: (key) => this.#columnChrome.isMovable(key),
@@ -1882,7 +1881,7 @@ export class GanttShell {
     };
   }
 
-  /** S5.11, D-S5-39: which cell real keyboard focus sits on, if any. This runs the same `DomTarget`
+  /** Which cell real keyboard focus sits on, if any. This runs the same `DomTarget`
    *  resolution `#buildCommandContext` runs for a chord, read here for `ctx.view.focusedCell()`
    *  instead. `Enter` is `inline-editing.ts`'s first caller: it retired the "open the first editable
    *  column" stand-in the day roving focus shipped a real per-cell answer. */
@@ -1909,14 +1908,14 @@ export class GanttShell {
     };
   }
 
-  /** Where a `DoubleVariantMatch` is reported (Q10, ADR 0018). Two plugins' rules both matched one
+  /** Where a `DoubleVariantMatch` is reported (ADR 0018). Two plugins' rules both matched one
    *  Entry. The newest paints and the older draws nothing. This names both, so the consumer sees
    *  which two plugins overlap. The library never arbitrates — the consumer chose the plugins.
    *
    *  One report per pair of variants, not one per hover. `variantFor` runs on every hover change,
    *  and the same two plugins collide on every Entry they both own. The first collision is the news.
    *
-   *  Not behind `isDevMode()`, for the reason D-S5-41 already found on `'scale-options-ignored'`.
+   *  Not behind `isDevMode()`, for the reason the `'scale-options-ignored'` warning already found.
    *  That flag resolves when the *library* is built. A dev-mode gate would therefore delete this
    *  line from every consumer's build, and the warning would never fire for anybody. The
    *  `console.warn` fallback runs only when nothing is subscribed to `error`. */
@@ -1940,7 +1939,7 @@ export class GanttShell {
     };
   }
 
-  /** Where an `UnknownFieldMatch` is reported (`J59`). A `when` names a key no Field declares, so
+  /** Where an `UnknownFieldMatch` is reported. A `when` names a key no Field declares, so
    *  the rule matches no row — a typo, or a plugin key the Dataset never declared. The frame keeps
    *  drawing; this says what stopped matching.
    *
@@ -1974,7 +1973,7 @@ export class GanttShell {
    *  function is a new assignment, and gets its own check. An empty Dataset answers nothing, so it
    *  is never recorded as checked — the check runs again once an Entry exists to ask about.
    *
-   *  Not behind `isDevMode()`, for the reason D-S5-41 already found on `'scale-options-ignored'`. */
+   *  Not behind `isDevMode()`, for the reason the `'scale-options-ignored'` warning already found. */
   #createBarRendererShadowedReport(): (renderer: BarRenderer, entries: readonly Entry[]) => void {
     const checked = new WeakSet<BarRenderer>();
     return (renderer, entries) => {
@@ -1992,7 +1991,7 @@ export class GanttShell {
     };
   }
 
-  /** Where an `UnknownRowSourceField` is reported (Q29, ADR-adjacent to `J59`). A
+  /** Where an `UnknownRowSourceField` is reported, beside `UnknownFieldMatch`. A
    *  `childrenAsSegments` rule names a key no Field declares, so it matches no row — a typo, or a
    *  plugin key the Dataset never declared. Unlike a variant, `childrenAsSegments` is not one of
    *  several named rules, so it has no rule name to print. The message names the config key instead.
@@ -2015,7 +2014,7 @@ export class GanttShell {
     };
   }
 
-  /** Where an unknown bar-label Field is reported (#421 F2). `barLabels.field` — the Gantt's own,
+  /** Where an unknown bar-label Field is reported (#421). `barLabels.field` — the Gantt's own,
    *  or an `EntryVariant`'s — names a key no Field declares, once merged (`mergeBarLabels`). Both
    *  are live. `resolveBarLabelText` runs inside `render()`'s own rAF callback. A throw there
    *  reaches no consumer, so it reports and carries on; the bar prints no label.
@@ -2037,8 +2036,8 @@ export class GanttShell {
     };
   }
 
-  /** S3.7's Page/Home/End/arrow pan (D-S3-14) binds here, alongside the eleven other core commands
-   *  registered through `core-commands.ts` — a plugin can override any of them (D-S5-7). The old
+  /** Page/Home/End/arrow pan binds here, alongside the eleven other core commands
+   *  registered through `core-commands.ts` — a plugin can override any of them. The old
    *  standalone `attachKeyboardNavigation` (`view/keyboard-navigation.ts`) is superseded by this;
    *  this shell no longer calls it. */
   /** ADR 0012: a Delete on a bar un-dates the Entry that bar draws, so this asks whether those dates
@@ -2062,13 +2061,13 @@ export class GanttShell {
       this.#keymap.register({ chord, command });
     };
     // #262: a convenience chord carries one extra `when` no obligation chord needs — whether
-    // `Gantt.convenienceChords` still turns this command's own chord on. `[S5-A4]`/WCAG 2.1.1 keep
+    // `Gantt.convenienceChords` still turns this command's own chord on. WCAG 2.1.1 keeps
     // every obligation chord below on `bind` instead, with no way to silence it. The gate touches
     // only the chord: the command itself stays reachable through `commands.run(id)` either way.
     const bindConvenience = (chord: string, command: ConvenienceCommandId): void => {
       this.#keymap.register({ chord, command, when: () => this.#resolvedConvenienceChords[command] });
     };
-    // S5.11, D-S5-26: roving focus (`view/roving-focus.ts`) now owns the plain arrows, Home/End
+    // roving focus (`view/roving-focus.ts`) now owns the plain arrows, Home/End
     // and Page Up/Down in both panes. A grid-pane arrow moves focus between rows and cells. A
     // timeline-pane arrow nudges the focused bar instead (`interaction/keyboard-editing.ts`).
     // Panning gets no plain chord at all, because moving focus already scrolls the target into
@@ -2081,7 +2080,7 @@ export class GanttShell {
     bindConvenience('Alt+ArrowLeft', 'freegantt.panLeft');
     bindConvenience('Mod+Home', 'freegantt.panToStart');
     bindConvenience('Mod+End', 'freegantt.panToEnd');
-    // S5.11, D-S5-26: keyboard zoom did not exist before this slice (S3.7 shipped only the
+    // keyboard zoom did not exist before this slice (S3.7 shipped only the
     // ctrl/⌘+wheel pointer gesture). `Mod+=`/`Mod+-` mirror the browser's own page-zoom chords;
     // `Mod+0` mirrors the browser's own reset-zoom chord, repurposed here for "pan to today".
     // Convenience (#262): `zoomIn`/`zoomOut`/`panToToday` are public methods too.
@@ -2090,18 +2089,18 @@ export class GanttShell {
     bindConvenience('Mod+0', 'freegantt.panToToday');
     // Convenience (#262): `gantt.selectedEntryIds = ...` selects everything without the chord.
     bindConvenience('Mod+A', 'freegantt.selectAll');
-    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path that clears the Selection.
+    // Obligation (#262): WCAG 2.1.1 — the only keyboard path that clears the Selection.
     bind('Escape', 'freegantt.clearSelection');
     // #119: the whole-Gantt undo/redo chord. `captureInEditable` stays at its default `false`
     // (same gate `Delete` below relies on), so an `<input>`'s own native undo keeps this chord.
     // Convenience (#262): Undo/Redo has a button; `dataset.undo()`/`redo()` has a method.
     bindConvenience('Mod+Z', 'freegantt.undo');
     bindConvenience('Mod+Shift+Z', 'freegantt.redo');
-    // S5.7, D-S5-18/D-S5-26: `resizeColumnWider`/`moveColumnRight` and their pair share a chord
-    // with `panRight`/`panLeft` above. `Keymap.resolve()`'s newest-first order (D-S5-7) checks
+    // `resizeColumnWider`/`moveColumnRight` and their pair share a chord
+    // with `panRight`/`panLeft` above. `Keymap.resolve()`'s newest-first order checks
     // these two first. Their own `when` refuses unless a header cell is focused, so an unfocused
     // header falls through to the plain pan bound above it.
-    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to resize or reorder a
+    // Obligation (#262): WCAG 2.1.1 — the only keyboard path to resize or reorder a
     // column. `convenienceChords` cannot silence these even while it silences the pan above.
     bind('Shift+ArrowRight', 'freegantt.resizeColumnWider');
     bind('Shift+ArrowLeft', 'freegantt.resizeColumnNarrower');
@@ -2111,7 +2110,7 @@ export class GanttShell {
     // needs a way to move the Selection from one bar of a row to the next. `interaction/
     // keyboard-editing.ts` leaves a modified arrow alone, so this chord never also nudges the entry
     // it just reselected.
-    // Obligation (#262): `[S5-A4]`, WCAG 2.1.1 — the only keyboard path to a second bar on a row.
+    // Obligation (#262): WCAG 2.1.1 — the only keyboard path to a second bar on a row.
     bind('Mod+ArrowRight', 'freegantt.selectNextEntry');
     bind('Mod+ArrowLeft', 'freegantt.selectPreviousEntry');
     // #212, ADR 0010: the same command the right-click menu offers. `captureInEditable` stays at
@@ -2122,9 +2121,9 @@ export class GanttShell {
     bindConvenience('Delete', 'freegantt.deleteSelection');
     // #434: the fallback for `Enter`. `inlineEditing()`'s own binding to the same chord is
     // registered later (a plugin installs after `#registerCoreCommands` runs), so it is newer and
-    // gets first refusal (D-S5-7). Its `when` declines outside a focused, writable cell. The
+    // gets first refusal. Its `when` declines outside a focused, writable cell. The
     // resolver then falls through to this one, whose own `when` asks `canActivateFocused()`.
-    // Obligation (#262): a click activates too, and `[S5-A4]` requires a keyboard path for every
+    // Obligation (#262): a click activates too, and WCAG 2.1.1 requires a keyboard path for every
     // pointer capability. `Enter` is the only one this capability has, so it stays unconditional.
     bind('Enter', 'freegantt.activateEntry');
   }
@@ -2138,7 +2137,7 @@ export class GanttShell {
     });
   }
 
-  /** D-S3-9's one resolution, shared by the pointer path (`canSelect` above), the keyboard path
+  /** The one capability resolution, shared by the pointer path (`canSelect` above), the keyboard path
    *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). `edge`
    *  (#142) narrows a `'resize'` question to one handle; every other capability ignores it. */
   #canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean {
@@ -2175,7 +2174,7 @@ export class GanttShell {
 
   /** #434, I14: the row, bar, or grid cell real keyboard focus sits on right now, and its own
    *  Entry, when the `activate` capability allows it. A grid cell counts too: `freegantt.activateEntry`
-   *  is the `Enter` fallback (D-S5-7). It only ever runs where `inlineEditing()`'s own
+   *  is the `Enter` fallback. It only ever runs where `inlineEditing()`'s own
    *  `freegantt.editFocusedCell` declined — an unwritable cell, or no editing feature installed at
    *  all. Shared by `canActivateFocused`/`activateFocused` (`CoreCommandPorts`): the `when` and the
    *  `run` of `freegantt.activateEntry` ask this the same way, rather than resolve focus twice for
@@ -2197,8 +2196,8 @@ export class GanttShell {
   }
 
   /** #434: does `freegantt.editFocusedCell` take this cell? `Enter`'s own Keymap resolution already
-   *  asks the same question before falling through to `freegantt.activateEntry` (D-S5-7,
-   *  `extensions/keymap.ts`'s `resolve()`). Asked directly here, because the `dblclick` listener has
+   *  asks the same question before falling through to `freegantt.activateEntry`
+   *  (`extensions/keymap.ts`'s `resolve()`). Asked directly here, because the `dblclick` listener has
    *  no keymap resolving for it. One command's `when` answers both. A plugin that changes what
    *  "takes" a cell changes the pointer path and the key path together. The pointer path never
    *  re-derives `canWrite` on its own, so it never drifts from what the command actually decides. */
@@ -2228,7 +2227,7 @@ export class GanttShell {
     return this.#layout.rowIdForEntry(entryIdOfBar(this.#hoveredBarId));
   }
 
-  /** D-S3-6: resolves `hoveredBarId`/`movableBarId`/`resizableEntryId` from the current hover and
+  /** Resolves `hoveredBarId`/`movableBarId`/`resizableEntryId` from the current hover and
    *  selection, writes them into the one long-lived `InteractionState`, and applies. Called whenever
    *  any of the three inputs change — never per pointer move beyond that (I5). `exactOptionalPropertyTypes`
    *  makes "clear" a `delete`, not an `= undefined` assignment (`#setOptional` below; finding 7). */
@@ -2264,7 +2263,7 @@ export class GanttShell {
     return this.#theme;
   }
 
-  /** Live (S1.10, D-S1.10-4). `'auto'` writes no attribute, letting `prefers-color-scheme` (or an
+  /** Live. `'auto'` writes no attribute, letting `prefers-color-scheme` (or an
    *  ancestor's own pin, #271) decide. `'light'`/`'dark'` pin `data-fg-theme` on this container
    *  instead, which wins over both. `.fg-container` declares no colour tokens of its own to contest
    *  it. (#271 fixed the opposite bug: it used to, and always won even under an ancestor's pin.) */
@@ -2320,8 +2319,8 @@ export class GanttShell {
     return this.#a11yLabel;
   }
 
-  /** Live (S1.10, D-S1.10-4): the one name a screen reader reads for this Gantt. `PaneLayout` owns
-   *  where it lands — the container names the widget, the timeline pane names its region (D-S5-25). */
+  /** Live: the one name a screen reader reads for this Gantt. `PaneLayout` owns
+   *  where it lands — the container names the widget, the timeline pane names its region. */
   set a11yLabel(value: string) {
     this.#a11yLabel = value;
     this.#paneLayout.accessibleName = value;
@@ -2369,7 +2368,7 @@ export class GanttShell {
     this.#frames.request();
   }
 
-  /** #432, F1/F5: the one place that reads `#gridResizable` — `SplitterAttachment.setEnabled` owns
+  /** #432: the one place that reads `#gridResizable` — `SplitterAttachment.setEnabled` owns
    *  every DOM/ARIA consequence of the answer. Called once from the constructor and once from every
    *  `gridResizable` write after that. So the constructor-locked path and a live lock always land in
    *  the same DOM state. */
@@ -2470,7 +2469,7 @@ export class GanttShell {
    *  It asks `FrameLayout` for the row's Bars, and `barSpan` for each Bar's own x/width off the
    *  bound `TimeScale`. The box is included (#295), so a `diamond()` row reveals its true glyph
    *  width. That is the same formula `computeFrame` paints bars from, so the two can never drift
-   *  apart. It then hands the resulting `Rect` to `Viewport.reveal` (S1.9, D-S1.9-6). When nothing
+   *  apart. It then hands the resulting `Rect` to `Viewport.reveal`. When nothing
    *  paints the named target, its own dates are the target instead (`fallbackSpanBar`), so reveal
    *  never becomes a no-op.
    *  Throws `RevealTargetNotFoundError` for an id the dataset does not hold (#227). A collapsed
@@ -2546,7 +2545,7 @@ export class GanttShell {
     this.#events.off(name, handler);
   }
 
-  /** Live (D-S5-3): assignment diffs by `id` against what is already installed. A plugin present in
+  /** Live: assignment diffs by `id` against what is already installed. A plugin present in
    *  both lists is left alone. Only the difference is set up or disposed. `api/gantt.ts` is the only
    *  caller with a `Gantt` façade to hand `view()`, so it alone writes here.
    *
@@ -2561,13 +2560,13 @@ export class GanttShell {
     this.#chromePlugins = next;
   }
 
-  /** D-S5-36: adds one plugin to the installed set. It sets up that plugin alone and leaves every
+  /** Adds one plugin to the installed set. It sets up that plugin alone and leaves every
    *  other one untouched. An id that is already installed throws `DuplicatePluginIdError`. */
   installPlugin(plugin: ShellPlugin<unknown>): void {
     this.plugins = [...this.#chromePlugins, plugin];
   }
 
-  /** D-S5-36: disposes one installed plugin, by id, and leaves every other one running. An id
+  /** Disposes one installed plugin, by id, and leaves every other one running. An id
    *  nothing installs throws `PluginNotInstalledError` — a Dataset plugin's id included, because
    *  the Dataset owns that one (ADR 0019). */
   uninstallPlugin(id: PluginId): void {
@@ -2576,7 +2575,7 @@ export class GanttShell {
     this.plugins = next;
   }
 
-  /** S5.2, D-S5-6: `Gantt.commands`'s own backing registry — read-only, the registry object itself
+  /** `Gantt.commands`'s own backing registry — read-only, the registry object itself
    *  is mutated in place by `register`. */
   get commands(): CommandRegistry<unknown> {
     return this.#commandRegistry;
@@ -2595,12 +2594,12 @@ export class GanttShell {
   #bindColumns(): void {
     const bound = resolveGanttFields(
       this.#options.dataset,
-      // S5.9, D-S5-21: the consumer's own columns plus every plugin-registered one it does not
+      // The consumer's own columns plus every plugin-registered one it does not
       // already name — `ctx.view.registerGridColumn`'s own effect reaches rendering here.
       this.#columnChrome.effectiveInput(),
       this.#columnBind(),
     );
-    // F4: stays the consumer's own authored resolution, lock or no lock. `#renderedColumns()` and
+    // Stays the consumer's own authored resolution, lock or no lock. `#renderedColumns()` and
     // the resize-gesture gate below apply `#gridResizable` where the resolution is *read*. A
     // rewrite stored here would leak into `gridColumnsChange`'s `from` as a `resizable` flip the
     // consumer never made.
@@ -2620,7 +2619,7 @@ export class GanttShell {
     this.#splitterAttachment.syncAria();
   }
 
-  /** F4: what `render()` paints, as opposed to what `ColumnChrome` stores. Locked, every column
+  /** What `render()` paints, as opposed to what `ColumnChrome` stores. Locked, every column
    *  paints `resizable: false` — the grip disappears (`data-resizable-off`, `styles.ts`) — without
    *  touching the authored resolution `gridColumnsChange` reports from. The lock lifting repaints
    *  the real, unmodified answer on the very next frame. */
@@ -2678,7 +2677,7 @@ export class GanttShell {
   /** One measurement, pushed to everything it feeds (#8, #49). `--fg-row-height`,
    *  `--fg-tick-box-floor` and the pane size all change for one reason: a resize of the timeline
    *  pane. So one signal re-reads them all, and none of them goes stale. `size` is the timeline
-   *  pane's own client box, with no gutter to subtract (S1.8, D-S1.8-2). The grid pane's width never
+   *  pane's own client box, with no gutter to subtract. The grid pane's width never
    *  overlapped it in the first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#paneBox = size;
@@ -2746,7 +2745,7 @@ export class GanttShell {
         barLabelFor: (entry) => this.#labelFor(entry),
       }),
     );
-    // S5.11, D-S5-25: which pattern the grid pane announces, and how big it says it is. Both are
+    // Which pattern the grid pane announces, and how big it says it is. Both are
     // facts about the whole row set, so they are read here rather than per row. Only the windowed
     // rows reach `render/dom` at all (I3).
     this.#paneLayout.gridPattern = nestsRows(this.#frameSettings.rowSource) ? 'treegrid' : 'grid';
@@ -2754,7 +2753,7 @@ export class GanttShell {
     this.#backend.sync(frame);
     this.#lastBarById.clear();
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);
-    // D-S1.12-9: the grid pane's spacer mirrors the header's own band count. So both panes resolve
+    // The grid pane's spacer mirrors the header's own band count. So both panes resolve
     // their header height from the same `--fg-band-height` expression, and cannot drift.
     // A changed band stack is a changed header height, and the rows' viewport is the pane box minus
     // that. So this re-derives the viewport here, rather than waiting for the next pane resize.
@@ -2772,7 +2771,7 @@ export class GanttShell {
       this.#columnChrome.resolvedColumns,
       this.#paneLayout.gridWidth,
     );
-    // S5.11, D-S5-25: this runs after the backend syncs the DOM to this frame, not before. A row
+    // This runs after the backend syncs the DOM to this frame, not before. A row
     // or bar the sweep wants to focus must already exist as a node.
     this.#rovingFocus.syncAfterRender();
   }

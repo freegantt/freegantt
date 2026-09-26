@@ -1,4 +1,4 @@
-// view/ — one polite live region per Gantt (S5.11, D-S5-25/D-S5-26). A screen reader announces a
+// view/ — one polite live region per Gantt (S5.11). A screen reader announces a
 // change to a live region's text, so this is how a keyboard action reaches a screen-reader user
 // without a second, sighted-only notice being the only place the words live.
 //
@@ -29,7 +29,7 @@ export interface LiveRegionFeed {
  *
  *  `'info'` announces: a Refusal is the library saying no to a keystroke the user just made, and the
  *  reason is exactly what a sighted user reads off the notice `inline-editing.ts` mounts over the
- *  cell (D-S5-40/41) — a screen-reader user needs the same sentence, the same moment.
+ *  cell — a screen-reader user needs the same sentence, the same moment.
  *
  *  `'error'` announces: something broke and nothing caught it. A sighted user has no notice for this
  *  either, only a `console` line, so a screen-reader user is no worse off hearing it than a sighted

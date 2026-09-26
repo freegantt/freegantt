@@ -3,7 +3,7 @@
 // because the shell is what holds the splitter; `Gantt.on`/`Gantt.off` delegate to it, the same way
 // `Gantt` delegates every other job to its shell.
 //
-// The bus mechanism itself moved to `data/event-bus.ts` in S2.1 (D-S2-5) — `view/` imports it from
+// The bus mechanism itself moved to `data/event-bus.ts` in S2.1 — `view/` imports it from
 // there rather than owning a second copy.
 
 import type { TimeScaleFit } from '../layout/index.js';
@@ -31,15 +31,15 @@ export interface GridWidthChange {
   readonly to: number;
 }
 
-/** S5.7, D-S5-18: what a resize drag, a reorder drop, and a plain `gantt.gridColumns = […]`
+/** S5.7: what a resize drag, a reorder drop, and a plain `gantt.gridColumns = […]`
  *  assignment all fire, through one commit sequence in `GanttShell`. Payload columns are **resolved**
- *  — Field defaults already merged (D-S4-12) — but shaped as `GridColumn` (not the layout-only
+ *  — Field defaults already merged — but shaped as `GridColumn` (not the layout-only
  *  `ResolvedColumn`): a consumer keeps `to` in memory and passes it straight back as `gridColumns`
  *  within the same session, so the payload must be the same public shape that property already takes.
  *  `grid-columns.ts`'s `toGridColumn` builds one from a `ResolvedColumn`, dropping `format` (a
  *  render-time closure with no public type of its own).
  *
- *  Both lists hold the columns the **consumer** authored, and only those (D-S5-33, #181). A column a
+ *  Both lists hold the columns the **consumer** authored, and only those (#181). A column a
  *  plugin registered renders, but it is that plugin's declaration, so it never appears in either
  *  list. `from` is therefore always a list the consumer recognises. Resizing or reordering a plugin
  *  column still fires this pair, with `from` and `to` equal: the grid repainted, and the consumer's
@@ -49,7 +49,7 @@ export interface GridColumnsChange {
   readonly to: readonly GridColumn[];
 }
 
-/** S3, D-S3-10/D-S3-22; ADR 0010, ADR 0025, #212. Fires on the Gantt, never the Dataset — selection
+/** S3; ADR 0010, ADR 0025, #212. Fires on the Gantt, never the Dataset — selection
  *  is Gantt state, so two Gantt instances bound to one Dataset can hold different selections. It
  *  carries Entry ids, because the Selection holds Entries. */
 export interface SelectionChange {
@@ -57,7 +57,7 @@ export interface SelectionChange {
   readonly to: readonly EntryId[];
 }
 
-/** S5.8, D-S5-19: what `beforeEntryEdit`/`entryEdit` carry — named `EntryFieldEdit`, not `EntryEdit`
+/** S5.8: what `beforeEntryEdit`/`entryEdit` carry — named `EntryFieldEdit`, not `EntryEdit`
  *  (`EntryEdit` is already the write shape `update()` takes, `plans/02` §1 "one write shape", one
  *  name one concept). `beforeEntryEdit` fires **before the editor opens**, not before the write, so
  *  no candidate value exists yet at that point — `from` and `to` are both the entry's current stored
@@ -106,7 +106,7 @@ export interface ThemeChange {
   readonly to: ResolvedTheme;
 }
 
-/** ADR 0013, Q9: where one entry the gesture moves lands. Both dates are optional, because a
+/** ADR 0013: where one entry the gesture moves lands. Both dates are optional, because a
  *  descendant of a dragged parent bar may hold only one of them: a child with a `start` and no `end`
  *  shows in the grid, draws no bar, and still travels with its parent. The date it holds moves, and
  *  the date it lacks stays absent.
@@ -118,21 +118,20 @@ export interface ProposedDates {
   readonly end?: Instant;
 }
 
-/** S3.3, D-S3-22: what one entry's drag proposes for an entry that spans. Public — a
+/** S3.3: what one entry's drag proposes for an entry that spans. Public — a
  *  `beforeEntryMove` handler reads `start`/`end` to veto or clamp a specific placement (U5).
  *
  *  Both dates are required here. A bar is what the user grabs, and an entry draws a bar only when it
- *  spans (ADR 0012), so the grabbed entry holds both (Q9's ruling). */
+ *  spans (ADR 0012), so the grabbed entry holds both. */
 export interface ProposedSpan extends ProposedDates {
   readonly start: Instant;
   readonly end: Instant;
 }
 
-/** S3.3/S3.4, D-S3-19/D-S3-22: the grabbed entry's own proposed span, plus every entry the gesture
+/** S3.3/S3.4: the grabbed entry's own proposed span, plus every entry the gesture
  *  moves or resizes with it — a multi-selection gesture reports one event, not one per row. Extender
  *  extras are never in `entries` (S3.6): a handler sees only what the user actually grabbed. Shared
- *  by `EntryMove` and `EntryResize` — resize is not a subtype of move, both extend this instead
- *  (D-S3-22).
+ *  by `EntryMove` and `EntryResize` — resize is not a subtype of move, both extend this instead.
  *
  *  `entries` is what the gesture **writes**, grabbed first. A parent that derives its dates from a
  *  Rollup is the one gesture where the grabbed entry is not in that list (ADR 0013): dragging it
@@ -144,13 +143,13 @@ export interface EntryGestureEvent extends ProposedSpan {
 
 export type EntryMove = EntryGestureEvent;
 
-/** S3.4, D-S3-22: which edge was dragged — a `beforeEntryResize` handler reads this alongside the
+/** S3.4: which edge was dragged — a `beforeEntryResize` handler reads this alongside the
  *  proposed span to veto or clamp a specific edge placement. */
 export interface EntryResize extends EntryGestureEvent {
   readonly edge: 'start' | 'end';
 }
 
-/** S3.5, D-S3-17: the only two event names whose handler may veto asynchronously, by returning a
+/** S3.5: the only two event names whose handler may veto asynchronously, by returning a
  *  `Promise<void | false>` instead of resolving `false` synchronously — `EventBus<GanttEventMap,
  *  AsyncCancelableEvent>` is what actually grants that return shape at `on`/`off`/`emit`'s call sites
  *  (`data/event-bus.ts`'s `TAsyncKeys`). Every other event (grid width, selection) stays sync-only:
@@ -172,53 +171,53 @@ export interface GanttEventMap {
    *  event's timing differs by cause. Re-parenting the container under a differently-pinned wrapper
    *  moves `resolvedTheme`'s answer too, but fires no event: no `data-fg-theme` attribute changed. */
   themeChange: ThemeChange;
-  /** S3, D-S3-10. Sync veto: returning `false` leaves the selection untouched. */
+  /** S3. Sync veto: returning `false` leaves the selection untouched. */
   beforeSelectionChange: SelectionChange;
   selectionChange: SelectionChange;
-  /** S4.6, D-S4-22. Sync veto: returning `false` leaves the collapsed set untouched. */
+  /** S4.6. Sync veto: returning `false` leaves the collapsed set untouched. */
   beforeCollapseChange: CollapseChange;
   collapseChange: CollapseChange;
-  /** S3.3, D-S3-16. Sync or async veto (D-S3-17): returning `false` or a Promise that settles
+  /** S3.3. Sync or async veto: returning `false` or a Promise that settles
    *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles.
    *  `Refusable` on the `before*` half only (#210): `return move.refuse('…')` says why, and the
    *  words reach the `entry-move-cancelled` report core raises for the veto. */
   beforeEntryMove: EntryMove & Refusable;
   entryMove: EntryMove;
-  /** S3.4, D-S3-22. Sync or async veto (D-S3-17): returning `false` or a Promise that settles
+  /** S3.4. Sync or async veto: returning `false` or a Promise that settles
    *  `false` commits nothing. A returned Promise holds the commit-draft ghost until it settles.
    *  `Refusable` on the `before*` half only (#210), the same as `beforeEntryMove`. */
   beforeEntryResize: EntryResize & Refusable;
   entryResize: EntryResize;
-  /** S5.7, D-S5-18. Sync veto: returning `false` leaves `gridColumns` (and whatever was live-painted
+  /** S5.7. Sync veto: returning `false` leaves `gridColumns` (and whatever was live-painted
    *  during the drag that proposed this change) untouched. */
   beforeGridColumnsChange: GridColumnsChange;
   gridColumnsChange: GridColumnsChange;
-  /** S5.8, D-S5-19. Fires before the built-in editor opens, not before the write. Sync or async
-   *  veto (D-S3-17's same shape): returning `false`, or a Promise that settles `false`, suppresses
+  /** S5.8. Fires before the built-in editor opens, not before the write. Sync or async
+   *  veto: returning `false`, or a Promise that settles `false`, suppresses
    *  the built-in editor entirely — a consumer opens its own dialog instead (U8). */
   beforeEntryEdit: EntryFieldEdit;
-  /** S5.8, D-S5-19. Fires after the commit, `to` the value actually written. */
+  /** S5.8. Fires after the commit, `to` the value actually written. */
   entryEdit: EntryFieldEdit;
   /** #434: a click, `Enter`, or an opt-in double-click "opening" an Entry — independent of
    *  Selection and of `capabilities.select` (I14). Mutates nothing, so there is no `before*` pair,
    *  the same reason `navigationChange`/`themeChange` have none. */
   entryActivate: EntryActivate;
-  /** S5.12, D-S5-40: every refusal and every recovered fault a Gantt observes — a vetoed drag, a
+  /** S5.12: every refusal and every recovered fault a Gantt observes — a vetoed drag, a
    *  renderer that threw, a plugin disposer that threw. The same name and the same payload the
    *  Dataset raises (`DatasetEventMap.error`), because a consumer knows one shape either way; the
-   *  Gantt never forwards the Dataset's own reports, so nothing arrives twice (D-S5-42). Sync only,
+   *  Gantt never forwards the Dataset's own reports, so nothing arrives twice. Sync only,
    *  and no `before*` pair: a report states what already happened. */
   error: ErrorReport;
 }
 
 /** The one handler shape `Gantt.on`/`Gantt.off` and `GanttShell.on`/`GanttShell.off` all share
- *  (D-S3-17) — declared once here rather than repeating the same conditional at each of those four
+ *  — declared once here rather than repeating the same conditional at each of those four
  *  call sites. `K extends AsyncCancelableEvent` is the only two names a handler may resolve async. */
 export type GanttEventHandler<K extends keyof GanttEventMap> = (
   payload: GanttEventMap[K],
 ) => void | false | (K extends AsyncCancelableEvent ? Promise<void | false> : never);
 
-/** S5.1, D-S5-1: `PluginContext.events` is this pair, so a plugin author's autocomplete reads the
+/** S5.1: `PluginContext.events` is this pair, so a plugin author's autocomplete reads the
  *  same as a consumer's own `gantt.on(...)` (one name, one concept — CLAUDE.md) rather than a second,
  *  differently-shaped events surface. `GanttShell`'s own `on`/`off` below already satisfy this shape;
  *  a plugin gets a plain object built from them, not the shell itself (no back-door to its other

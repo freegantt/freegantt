@@ -57,7 +57,7 @@ function makeRegistry(entry?: Entry): {
   return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
 }
 
-describe('registerCoreCommands (S5.2, D-S5-6)', () => {
+describe('registerCoreCommands (S5.2)', () => {
   it('run() on each id calls the matching port', () => {
     const ports = fakePorts();
     const { registry } = makeRegistry();
@@ -133,7 +133,7 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
     expect(available).not.toContain('freegantt.zoomIn');
   });
 
-  it('the pan commands need only keyboardPanEnabled — a selection does not block them (S5.11, D-S5-26)', () => {
+  it('the pan commands need only keyboardPanEnabled — a selection does not block them (S5.11)', () => {
     const ports = fakePorts();
     ports.keyboardPanEnabled.mockReturnValue(true);
     // A focused bar always carries a selection now (Q-A11Y-3), so `nothingSelected` staying
@@ -190,7 +190,7 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
     expect(redo).not.toHaveBeenCalled();
   });
 
-  // #160, D-S5-47: the id is registered so `run` answers on a Gantt with no `inlineEditing()`,
+  // #160: the id is registered so `run` answers on a Gantt with no `inlineEditing()`,
   // and it is never offered, because this Gantt has no editor to discard.
   it("#160: the catalog's discardCellEdit placeholder is never available — inlineEditing() overrides it", () => {
     const ports = fakePorts();
@@ -213,7 +213,7 @@ describe('registerCoreCommands (S5.2, D-S5-6)', () => {
   });
 });
 
-describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, D-S5-18/D-S5-26)', () => {
+describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7)', () => {
   function makeHeaderRegistry(field?: string): {
     registry: CommandRegistry<unknown>;
     ctx: CommandContext<unknown>;
@@ -289,14 +289,14 @@ describe('column commands — Alt/Shift+Arrow over a focused header cell (S5.7, 
   });
 });
 
-// #275 item 1's sharp edge: `Alt+ArrowRight` is deliberately overloaded (D-S5-26) — `GanttShell`
+// #275 item 1's sharp edge: `Alt+ArrowRight` is deliberately overloaded — `GanttShell`
 // binds `panRight` to it first, then `moveColumnRight` second, and `Keymap.resolve()`'s
-// newest-first order (D-S5-7) means `moveColumnRight`'s own `when` gets first refusal. Every test
+// newest-first order means `moveColumnRight`'s own `when` gets first refusal. Every test
 // above this one calls `registry.run(id)` directly, which never exercises that chord resolution —
 // so nothing before this proved the overload itself works, only that each command works once
 // already selected. This resolves a real `Alt+ArrowRight` `KeyEventLike` through a real `Keymap`,
 // bound in the exact order `GanttShell#registerCoreCommands` binds it, and checks both arms.
-describe('Alt+ArrowRight overload — column move vs. Gantt-wide pan fallback (D-S5-26)', () => {
+describe('Alt+ArrowRight overload — column move vs. Gantt-wide pan fallback', () => {
   function altArrowRight(): KeyEventLike {
     return {
       key: 'ArrowRight',
@@ -317,7 +317,7 @@ describe('Alt+ArrowRight overload — column move vs. Gantt-wide pan fallback (D
     const registry = new CommandRegistry<unknown>(() => ctx);
     registerCoreCommands(registry, ports);
     const keymap = new Keymap<unknown>(registry, () => ctx);
-    // Registration order matters here (D-S5-7: newest-first) — this mirrors gantt-shell.ts's own
+    // Registration order matters here (newest-first) — this mirrors gantt-shell.ts's own
     // `bind('Alt+ArrowRight', 'freegantt.panRight')` followed by
     // `bind('Alt+ArrowRight', 'freegantt.moveColumnRight')`.
     keymap.register({ chord: 'Alt+ArrowRight', command: 'freegantt.panRight' });

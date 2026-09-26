@@ -116,7 +116,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
   return { parts, close: () => gate.close(), shell, registry, container };
 }
 
-/** Every seam that is legal only while `setup` runs (D-S5-4), named once. */
+/** Every seam that is legal only while `setup` runs, named once. */
 const gatedRegistrations: readonly (readonly [string, (parts: PluginContextParts) => Disposer])[] = [
   ['commands.register', (p) => p.commands.register({ id: 'demo.run', label: 'Run', run: () => {} })],
   [
@@ -129,7 +129,7 @@ const gatedRegistrations: readonly (readonly [string, (parts: PluginContextParts
   ['variants.add', (p) => p.variants.add({ name: 'buffer' })],
 ];
 
-describe('buildPluginPorts — the D-S5-4 gate', () => {
+describe('buildPluginPorts — the gate', () => {
   it.each(gatedRegistrations)('%s registers while setup runs', (_name, register) => {
     const harness = makeHarness();
 
@@ -217,8 +217,8 @@ describe('buildPluginPorts — disposal (#155)', () => {
 });
 
 // #168: the reconciler seam left the overlay and now sits beside the two mount layers. It is still
-// the one way `extensions/` reaches `render/dom` (D-S5-5), and it still refuses raw HTML (I13).
-describe('buildPluginPorts — renderElement (S5.3, D-S5-10)', () => {
+// the one way `extensions/` reaches `render/dom`, and it still refuses raw HTML (I13).
+describe('buildPluginPorts — renderElement', () => {
   it('builds a live node from an ElementDescription, and never as HTML', () => {
     const { parts } = makeHarness();
     const node = parts.view.renderElement({ text: '<script>alert(1)</script>' });
@@ -234,7 +234,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
   it('paints the resolved renderer’s own content', () => {
     const harness = makeHarness({ resolveTooltipRenderer: () => ({ renderer }) });
 
-    // F19: a plain string, not `as EntryId` — `resolveTooltipContent` is loose on this scalar id
+    // A plain string, not `as EntryId` — `resolveTooltipContent` is loose on this scalar id
     // (#305).
     expect(harness.parts.view.resolveTooltipContent('a')).toEqual({ text: 'body' });
   });
@@ -248,7 +248,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
     expect(harness.parts.view.resolveTooltipContent('a')).toBeUndefined();
   });
 
-  it('falls back to the default content when the renderer throws (#137 F14)', () => {
+  it('falls back to the default content when the renderer throws (#137)', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const harness = makeHarness({
       resolveTooltipRenderer: () => ({
@@ -287,7 +287,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
     errorSpy.mockRestore();
   });
 
-  it('ctx.raiseError fills `by` with the plugin own id (D-S5-40)', () => {
+  it('ctx.raiseError fills `by` with the plugin own id', () => {
     const reported: ErrorReportInput[] = [];
     const harness = makeHarness({ raiseError: (report) => reported.push(report) });
 
@@ -299,7 +299,7 @@ describe('buildPluginPorts — resolveTooltipContent (S5.5)', () => {
   });
 });
 
-describe('buildPluginPorts — the resolved-column reads (S5.8, D-S5-13)', () => {
+describe('buildPluginPorts — the resolved-column reads', () => {
   const column = (overrides: Partial<ResolvedColumn>): ResolvedColumn => ({
     field: 'cost',
     header: 'Cost',
@@ -385,7 +385,7 @@ describe('buildPluginPorts — onDomEvent, one scoped document listener (review 
     expect(seen).toEqual([]);
   });
 
-  it('stays open after setup returns — a menu attaches its listeners per open (D-S5-4)', () => {
+  it('stays open after setup returns — a menu attaches its listeners per open', () => {
     const harness = makeHarness();
     harness.close();
 

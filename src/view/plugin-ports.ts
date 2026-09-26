@@ -1,12 +1,12 @@
-// view/ — one plugin's ports: everything a `PluginContext` carries that `GanttShell` owns (S5.1,
-// D-S5-1). Split out of `GanttShell` so a plugin seam is reviewable and testable on its own, with no
+// view/ — one plugin's ports: everything a `PluginContext` carries that `GanttShell` owns. Split
+// out of `GanttShell` so a plugin seam is reviewable and testable on its own, with no
 // mounted Gantt. `GanttShell` is the only caller. It closes over its own private state through
 // `GanttShellPorts`, the same way `column-chrome.ts` closes over `ColumnChromePorts` and
 // `core-commands.ts` over `CoreCommandPorts`.
 //
 // The ports are declared in the groups a plugin reads them in. `api/gantt.ts` therefore spreads this
 // object straight into a `PluginContext` and adds only `dataset` and `gantt` — the two api-level
-// members `view/` may not name (D-S5-5). A member that lands in the wrong group no longer compiles.
+// members `view/` may not name. A member that lands in the wrong group no longer compiles.
 //
 // #191: `PluginContextParts` below carries `TGantt`/`TDataset`, so the two members that bind them
 // are declared once, here, with the rest. `api/plugin-context.ts` then binds both and adds `dataset`/`gantt`.
@@ -80,25 +80,25 @@ export interface DomEventOptions {
 export interface GanttShellPorts {
   /** The plain `{ on, off }` pair a plugin sees instead of the whole shell. */
   events: GanttEvents;
-  /** S5.3, D-S5-8. One layer per Gantt, alive as long as the plugin is. */
+  /** One layer per Gantt, alive as long as the plugin is. */
   overlay: MountLayer;
   /** #158. The grid's own row layer, alive as long as the plugin is. */
   rowLayer: MountLayer;
-  /** S5.12, D-S5-40: this Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
+  /** This Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
    *  each plugin's `by` onto it below, so a plugin never names itself. */
   raiseError: RaiseError;
   /** Review N1/A3. One resolver per Gantt. It owns every `.fg-*` class and `data-*` key a plugin
    *  used to retype, and it scopes `onDomEvent` to this Gantt (I2). */
   dom: GanttDom;
-  /** D-S5-6. The one registry per Gantt. `register` takes the gate here; `run`/`available` do not. */
+  /** The one registry per Gantt. `register` takes the gate here; `run`/`available` do not. */
   commands: CommandRegistryOf<unknown>;
-  /** D-S5-7. The one keymap per Gantt. */
+  /** The one keymap per Gantt. */
   keymap: KeyHandlerRegistrar & {
     register(binding: KeyBinding<unknown>): Disposer;
   };
   /** The seams a plugin registers into, each already carrying the refresh it owes (#170). */
   registrations: PluginRegistrar;
-  /** D-S5-11's precedence, already merged with the consumer's own live `tooltipRenderer`. */
+  /** The consumer's own live `tooltipRenderer` wins over a plugin's; already merged here. */
   resolveTooltipRenderer(): ResolvedRenderer<TooltipRenderer> | undefined;
   /** The entry's bar in the last painted frame. A hover plugin works from the DOM after the render
    *  pass, so it has no `FrameBar` of its own to build a `TooltipRendererContext` from. */
@@ -117,14 +117,14 @@ export interface GanttShellPorts {
   proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
   /** Raises `entryEdit` on this Gantt's own bus. */
   announceEntryEdit(payload: EntryFieldEdit): void;
-  /** S5.11, D-S5-39: the entry id and Field key of the cell real keyboard focus sits on right now.
+  /** The entry id and Field key of the cell real keyboard focus sits on right now.
    *  `undefined` when focus is not on a cell (a row, a bar, a header cell, the splitter, or nothing).
    *  `view/roving-focus.ts` owns the fact; this asks it the same way `#buildCommandContext` does. */
   focusedCell(): { entryId: EntryId; field: FieldKey } | undefined;
 }
 
 /** The parts of one plugin's `PluginContext` that `view/` owns — what `GanttShell` hands to
- *  `options.buildPluginContext` so it can build the whole thing (S5.1, D-S5-1). Declared in the
+ *  `options.buildPluginContext` so it can build the whole thing. Declared in the
  *  groups a plugin reads, so `api/gantt.ts` adds the two api-level members and nothing else (#150).
  *
  *  #183: `Parts`, not `Ports`. Every other `*Ports` in this repo is one collaborator's seam back
@@ -155,7 +155,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
    *  other seam: the plugin's own `DisposableStore` holds the returned `Disposer`. Uninstalling the
    *  plugin, a `plugins` reassignment, or `Gantt.destroy()` all remove the handler. */
   events: GanttEvents;
-  /** S5.12, D-S5-40: raises one Error report on this Gantt's `error` event. `by` is filled with this
+  /** Raises one Error report on this Gantt's `error` event. `by` is filled with this
    *  plugin's own id, so a subscriber can always tell which plugin spoke. Use `severity: 'info'` for
    *  a Refusal the plugin made on purpose, `'warning'` for something it recovered from, `'error'` for
    *  something it did not. */
@@ -163,13 +163,13 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
   /** This plugin's own cleanup list — add a listener or a timer here instead of closing over it by
    *  hand in the returned `Disposer`. Disposed in reverse order, ahead of that returned `Disposer`. */
   disposables: DisposableStore;
-  /** S5.2, D-S5-6: the one command registry. `register` here is legal only while `setup` runs
-   *  (D-S5-4). `run`/`available` work any time, including after this plugin's own setup returns.
+  /** The one command registry. `register` here is legal only while `setup` runs.
+   *  `run`/`available` work any time, including after this plugin's own setup returns.
    *  A command this plugin registers lives exactly as long as the plugin. Uninstalling restores
    *  whatever the id held before. For an overridden core command that is core's own (#155). */
   commands: CommandRegistryOf<TGantt, TDataset>;
   interaction: {
-    /** S5.2, D-S5-7: adds one `KeyBinding`. Legal only while `setup` runs (D-S5-4) — removed
+    /** Adds one `KeyBinding`. Legal only while `setup` runs — removed
      *  automatically when this plugin is disposed, the same lifetime every other `register*` gets.
      *  The returned `Disposer` removes it sooner, for a plugin that binds a chord only in one mode
      *  (#155). Ignoring the return value is the common case. */
@@ -177,7 +177,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     /** C3, `plans/reviews/2026-09-02-s5-start-fixes.md`: binds `chord` straight to `handler`,
      *  through the same keymap `registerKeybinding` uses. It serves a caller with no `Command` to
      *  run. A plugin that builds its own `Popup` (over `view.overlay` below) is that caller. Its
-     *  Escape dismissal then wins by the keymap's own newest-first order (D-S5-9), the same way
+     *  Escape dismissal then wins by the keymap's own newest-first order, the same way
      *  `extensions/popup.ts`'s own dismissal does.
      *
      *  Two things differ from `registerKeybinding`. This one is callable any time the plugin is
@@ -186,11 +186,11 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  auto-removing on plugin disposal. That is because a popup adds and removes its handler on
      *  every `open()`/`close()`, not once. */
     registerKeyHandler: RegisterKeyHandler;
-    /** S5.8, D-S5-19: the `edit` capability's one resolution (I14). It is the same answer
+    /** The `edit` capability's one resolution (I14). It is the same answer
      *  `move`/`resize` already read through `interaction/entry-gestures.ts`'s `ctx.can`. This
      *  surface exposes it because `inlineEditing()` is the first *plugin* that needs to ask it.
      *  Every other capability check lives inside core's own gesture wiring, which a plugin cannot
-     *  reach (D-S5-5).
+     *  reach.
      *
      *  #256: the question names a cell — one Entry, one Field — because that is what a write names.
      *  The same answer gates the bar's resize handles and its move. So a plugin that asks it here
@@ -198,25 +198,25 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  `reason` is one the user must be told about. A refusal with none is already visible, because
      *  nothing offered the write at all. */
     canWrite(entry: Entry, field: FieldKey): WriteVerdict;
-    /** S5.8, D-S5-19: proposes the edit, and the answer is a Veto. This raises `beforeEntryEdit` on
+    /** Proposes the edit, and the answer is a Veto. This raises `beforeEntryEdit` on
      *  this Gantt's own event bus. It returns exactly what the registered handlers returned:
-     *  `true`/`undefined` (no veto), `false`, or an unsettled `Promise` (D-S3-17's async-veto shape,
+     *  `true`/`undefined` (no veto), `false`, or an unsettled `Promise` (the async-veto shape,
      *  U8's `async (…) => { await myDialog.open(...); return false }`). Read the answer — a plugin
      *  that ignores it opens an editor the consumer refused. This is the one seam a plugin has to
      *  raise a `before*` pair it implements itself. Core's own gesture pipeline raises every other
      *  `before*` event, so this is scoped to one event name. A generic `emit` would let a plugin
      *  forge `selectionChange`, or any other event core itself owns. */
     proposeEntryEdit(payload: EntryFieldEdit): boolean | Promise<boolean>;
-    /** S5.8, D-S5-19: announces the committed edit. This raises `entryEdit` after the commit.
+    /** Announces the committed edit. This raises `entryEdit` after the commit.
      *  It tells, it does not ask — no veto, and nothing to return. */
     announceEntryEdit(payload: EntryFieldEdit): void;
   };
   view: {
-    /** S5.3, D-S5-8: the layer a plugin's own popup, tooltip or menu mounts into — the same
+    /** The layer a plugin's own popup, tooltip or menu mounts into — the same
      *  primitive `extensions/popup.ts`'s `Popup` is built on. It escapes the pane box, so content
      *  here may spill past a pane edge.
      *
-     *  Live for the plugin's whole lifetime, not gated by `RegistrationGate`. D-S5-4 only gates
+     *  Live for the plugin's whole lifetime, not gated by `RegistrationGate`. The gate only covers
      *  one-shot `register*` calls, and a plugin presents and dismisses content for as long as it
      *  runs. */
     overlay: MountLayer;
@@ -224,8 +224,8 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  while the pane scrolls. An open cell editor is the case.
      *
      *  The Grid pane has no vertical scrollbar of its own. This layer follows the Timeline pane's
-     *  scroll by one transform per frame (D-S1.8-1). The pane scrolls horizontally around it
-     *  (D-S1.8-13). Content mounted here therefore travels with the rows on both axes, in the same
+     *  scroll by one transform per frame. The pane scrolls horizontally around it. Content mounted
+     *  here therefore travels with the rows on both axes, in the same
      *  frame — no scroll listener, and no lag behind the paint. Position it once against
      *  `rowLayer.bounds`.
      *
@@ -233,15 +233,15 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  the pane. A popup dismisses on a scroll rather than following it. Live for the plugin's
      *  whole lifetime, the same posture as `overlay`. */
     rowLayer: MountLayer;
-    /** S5.3/S5.4, D-S5-10: builds a live node from an `ElementDescription` — the one seam
-     *  `extensions/` has to the reconciler. `extensions/` may not import `render/` itself (D-S5-5).
+    /** Builds a live node from an `ElementDescription` — the one seam
+     *  `extensions/` has to the reconciler. `extensions/` may not import `render/` itself.
      *  Never `innerHTML`d except the description's own explicit `html` opt-in (I13).
      *
      *  Call: `ctx.view.renderElement(description)`, then mount the node in either layer above. */
     renderElement(description: ElementDescription): HTMLElement;
     /** Review N1/A3: this Gantt's own rendered DOM, as three questions — `owns(node)`,
      *  `targetUnder(node)`, and `barFor(id)`/`cellFor(id, field)`. It is the whole plugin-to-DOM
-     *  contract. `extensions/` may not import `render/` (D-S5-5), so before this seam every plugin
+     *  contract. `extensions/` may not import `render/`, so before this seam every plugin
      *  retyped `.fg-bar`, `.fg-row`, `data-bar-id` and five more by hand. Nothing versioned them
      *  and nothing tested them. Renaming a class broke every plugin with a green build.
      *
@@ -264,31 +264,31 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
       handler: DomEventHandler<K>,
       options?: DomEventOptions,
     ): Disposer;
-    /** S5.11, D-S5-39: which cell real keyboard focus sits on right now — an entry id and a Field
+    /** Which cell real keyboard focus sits on right now — an entry id and a Field
      *  key. `undefined` when focus is not on a cell (a row, a bar, a header cell, the splitter, or
      *  nothing focused at all). This is a *fact*, not a node: focus is a view concern. This port is
      *  how a plugin reads it without touching view state or re-deriving it from the DOM itself.
      *  (`inline-editing.ts`'s `Enter` handler is the first caller — `ctx.view.focusedCell()`.) */
     focusedCell(): { entryId: EntryId; field: FieldKey } | undefined;
-    /** S5.4, D-S5-11: claims one of the four renderer points — `bar`, `cell`, `header`, `tooltip`.
+    /** Claims one of the four renderer points — `bar`, `cell`, `header`, `tooltip`.
      *  A consumer's own `GanttOptions.*Renderer` always wins over this. A consumer that wants a
      *  plugin's renderer to win removes its own instead.
      *
      *  `cell`, `header` and `tooltip` hold one slot each. A cell belongs to a column and a header
-     *  to a band, so neither has a key to merge on. The `bar` point's per-kind map form (D-S5-12)
+     *  to a band, so neither has a key to merge on. The `bar` point's per-kind map form
      *  holds one slot **per kind**. So a plugin that defines one kind and a plugin that defines
      *  another both install (review P2). The whole-point form — a function, not a map — stays
      *  exclusive. It answers every kind, so it refuses, and is refused by, any per-kind claim.
      *
      *  Two plugins claiming one slot throws `RendererAlreadyRegisteredError`, naming the slot and
-     *  both plugin ids. Legal only while `setup` runs (D-S5-4). Disposing the plugin frees every
+     *  both plugin ids. Legal only while `setup` runs. Disposing the plugin frees every
      *  slot this call claimed. So uninstalling and re-installing one plugin is a legal sequence,
      *  and not a collision with its own earlier registration (#155). The returned
      *  `Disposer` frees them sooner. */
     registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>): Disposer;
     /** S5.5 (API gap found while building `tooltips()`): resolves what should paint `entryId`'s
      *  tooltip body right now. It is the same precedence `registerRenderer('tooltip', …)`'s slot
-     *  resolves at paint time. D-S5-11: the consumer's own `GanttOptions.tooltipRenderer` always
+     *  resolves at paint time. The consumer's own `GanttOptions.tooltipRenderer` always
      *  wins over a plugin's.
      *
      *  `undefined` means "paint the library's own default content instead". Three cases answer that
@@ -297,16 +297,16 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  plugin works from the DOM after the fact, unlike `bar`/`cell`'s render-pass callers. Third,
      *  the resolved renderer threw, and this method catches it and logs it in dev mode. That third
      *  answer is the same fallback `render/dom/index.ts`'s own `callRenderer` gives `bar`/`cell`
-     *  (issue #137 F14).
+     *  (issue #137).
      *
      *  `tooltips()` is this method's first caller. A feature that owns a renderer point reads the
      *  same resolution the render backend would, without reaching `view/renderer-registry.ts`
-     *  directly (D-S5-5). */
+     *  directly. */
     resolveTooltipContent(entryId: EntryId | string): ElementDescription | undefined;
-    /** D-S5-13: every Grid column marked `tooltip: true`, resolved against this Gantt's current
+    /** Every Grid column marked `tooltip: true`, resolved against this Gantt's current
      *  `gridColumns`/`fields` — header text and `entry`'s formatted value for each. `tooltips()`'s
      *  default body appends these after name/dates. A consumer that builds its own tooltip content
-     *  reads the same list, instead of re-resolving columns itself (D-S5-5: `view/grid-columns.ts`
+     *  reads the same list, instead of re-resolving columns itself (`view/grid-columns.ts`
      *  stays out of reach). Empty when no column is marked `tooltip: true`. */
     resolveTooltipColumns(entry: Entry): readonly TooltipColumn[];
     /** ADR 0018, ADR 0022 §3: the variant this Gantt resolved for one row — the same answer the
@@ -316,33 +316,33 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     variantFor(entry: Entry): ResolvedVariant;
     /** Every Grid column this Gantt paints right now, in paint order. The consumer's own columns and
      *  every plugin's are both here, each with its Field defaults already merged. `gantt.gridColumns` answers a
-     *  different question: what the *consumer* authored (D-S5-33). A plugin that walks the grid wants
+     *  different question: what the *consumer* authored. A plugin that walks the grid wants
      *  this one. Call: `for (const column of ctx.view.resolvedColumns())`. */
     resolvedColumns(): readonly GridColumn[];
-    /** S5.6, D-S5-15: registers a pure decoration provider into `layer` (`underBars` below the bar
-     *  layer, `overBars` above). Legal only while `setup` runs (D-S5-4). Disposing this plugin
+    /** Registers a pure decoration provider into `layer` (`underBars` below the bar
+     *  layer, `overBars` above). Legal only while `setup` runs. Disposing this plugin
      *  removes the provider automatically. A provider has no `close()`/`unregister()` of its own, so
      *  the plugin's own lifetime is its lifetime. Call: `ctx.view.registerDecoration('underBars', (ctx) =>
      *  ctx.time.eachDay(ctx.span).filter((day) => ctx.time.dayOfWeek(day) >= 6).map((day) => ({
      *  kind: 'rangeBand', start: day, end: ctx.time.addDays(day, 1) })))`. The returned `Disposer`
      *  removes the provider sooner (#155). */
     registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
-    /** S5.9, D-S5-21: registers `column` on this Gantt's grid, appended after the consumer's own
+    /** Registers `column` on this Gantt's grid, appended after the consumer's own
      *  `gridColumns` in registration order. A duplicate `field` the consumer's own list already
      *  names is dropped (config beats a plugin). The Field it names still resolves through the
      *  ordinary Field registry (`UnknownFieldError`/`FieldColumnNotDefinedError` apply unchanged). Legal
-     *  only while `setup` runs (D-S5-4); removed automatically when this plugin is disposed. When two
+     *  only while `setup` runs; removed automatically when this plugin is disposed. When two
      *  plugins register the same field, the newest registration wins, and disposing one plugin never
      *  disturbs the other plugin's registration. The returned `Disposer` removes the column sooner —
      *  what a plugin showing its column in one mode only calls (#155).
      *
-     *  The column is this plugin's declaration, and it stays that way (D-S5-33, #181). It never joins
+     *  The column is this plugin's declaration, and it stays that way (#181). It never joins
      *  `gantt.gridColumns`, and it never joins a `gridColumnsChange` payload. A resize or a reorder
      *  of it commits and repaints, and still changes neither. So a consumer who saves `gridColumns`
      *  saves their own columns only. Declare the column again on the next install: a Document carries
      *  no plugin declaration to restore it from.
      *
-     *  **This plugin owns this column's width and its place (D-S5-38, #189).** The library reports
+     *  **This plugin owns this column's width and its place (#189).** The library reports
      *  column geometry; it stores it for nobody, the consumer included. A user resize of this column
      *  lives in session state and reaches no Document. To carry it across a reload, do what a
      *  consumer does with `gridColumnsChange`. Listen for that same event. Read your own column back
@@ -360,25 +360,25 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  draws, `paint` how it looks, and `can` what you can do to it. Omit `when` and the variant
      *  answers for every row nothing newer matches.
      *
-     *  **The newest rule wins** (`Q5`). This plugin's variant wins over core's own `parent`/`leaf`,
+     *  **The newest rule wins**. This plugin's variant wins over core's own `parent`/`leaf`,
      *  and over any variant installed before it. The consumer's own `GanttOptions.variants` wins
-     *  over every plugin's, whatever order the plugins installed in (D-S5-11). Setup order between
-     *  two plugins comes from `requires` (D-S5-31) — there is no ordering knob here.
+     *  over every plugin's, whatever order the plugins installed in. Setup order between
+     *  two plugins comes from `requires` — there is no ordering knob here.
      *
      *  Two plugins whose rules both answer yes for one row raise a `'variant-matched-twice'` Error
      *  report naming both, in every build. It is not behind `isDevMode()`: that flag resolves when
-     *  this repo builds `dist/`, so gating it would delete the line from every consumer (D-S5-41).
+     *  this repo builds `dist/`, so gating it would delete the line from every consumer.
      *  The library never arbitrates between plugins: the consumer chose which ones to install, so
      *  core reports and carries on.
      *
      *  `when` runs on the hover path, so keep it cheap. It is pure: it answers a question and draws
-     *  nothing. Legal only while `setup` runs (D-S5-4), and disposal removes the variant the same
+     *  nothing. Legal only while `setup` runs, and disposal removes the variant the same
      *  way every other `register*` seam's does. */
     add(variant: EntryVariant): Disposer;
   };
 }
 
-/** Builds one plugin's context parts, plus the `RegistrationGate` that closes them (D-S5-4).
+/** Builds one plugin's context parts, plus the `RegistrationGate` that closes them.
  *  `PluginRuntime` calls this once per installed plugin, then closes the gate the moment that
  *  plugin's `setup()` returns. The plugin's own `DisposableStore` is `parts.disposables`. */
 export function buildPluginPorts(
@@ -386,7 +386,7 @@ export function buildPluginPorts(
   pluginId: PluginId,
 ): { parts: PluginContextParts; gate: RegistrationGate } {
   const disposables = new DisposableStore();
-  // D-S5-4: one gate per plugin, closed the moment its own setup() returns. A `register*` reached
+  // One gate per plugin, closed the moment its own setup() returns. A `register*` reached
   // afterward throws `RegistrationClosedError`.
   const gate = new RegistrationGate(pluginId);
 
@@ -438,14 +438,14 @@ export function buildPluginPorts(
 
   const commands: CommandRegistryOf<unknown> = {
     // #155: a plugin's command lives exactly as long as the plugin. Uninstalling restores whatever
-    // the id held before — the core catalog's own command, where the plugin overrode one (D-S5-7).
+    // the id held before — the core catalog's own command, where the plugin overrode one.
     register: (command) => registerWhileOpen(() => shell.commands.register(command)),
     run: (id) => shell.commands.run(id),
     available: (ctx) => shell.commands.available(ctx),
   };
 
   // S5.5: the same resolve-then-call-with-fallback shape `render/dom/index.ts`'s `callRenderer` gives
-  // `bar`/`cell` (#137 F14). A throwing tooltip renderer degrades to the library's default content,
+  // `bar`/`cell` (#137). A throwing tooltip renderer degrades to the library's default content,
   // never to a broken popup. No bar in the current frame resolves the same as "no renderer".
   const resolveTooltipContent = (id: EntryId | string): ElementDescription | undefined => {
     const resolved = shell.resolveTooltipRenderer();
@@ -458,7 +458,7 @@ export function buildPluginPorts(
     try {
       return resolved.renderer({ entry, bar });
     } catch (error) {
-      // S5.12, D-S5-41: report first; the `console.error` behind it is the fallback for a consumer
+      // Report first; the `console.error` behind it is the fallback for a consumer
       // with nothing subscribed to `error`. It left `isDevMode()` for the reason that guard's own
       // audit gives — the branch was dead-code-eliminated out of every consumer's build.
       const plugin = resolved.pluginId !== undefined ? ` from plugin "${resolved.pluginId}"` : '';
@@ -499,7 +499,7 @@ export function buildPluginPorts(
       registerRenderer: (point, renderer) =>
         registerWhileOpen(() => shell.registrations.registerRenderer(point, renderer, pluginId)),
       resolveTooltipContent,
-      // D-S5-13: `tooltips()`'s default body appends every column marked `tooltip: true`. That is
+      // `tooltips()`'s default body appends every column marked `tooltip: true`. That is
       // the same resolved list the grid itself paints from, so a column's header and format stay in
       // one place.
       resolveTooltipColumns: (entry) =>

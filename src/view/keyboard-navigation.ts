@@ -1,4 +1,4 @@
-// view/ — Page/Home/End and unselected-arrow pan (S3.7, D-S3-14, D-S3-13's "nothing selected"
+// view/ — Page/Home/End and unselected-arrow pan (S3.7, the "nothing selected"
 // column plus the keys that never re-bind). Writes no dataset. `attachKeyboardEditing` in
 // interaction/ owns the "something selected" column of the same table; both listen on the
 // container and split work by selection, the same per-module pattern S3.5 already shipped.

@@ -30,7 +30,7 @@ import { RendererRegistry } from './renderer-registry.js';
 /** What these registrations borrow from `GanttShell` to make a registration visible. Each one is a
  *  pass that has to run again, never a registry: the tables themselves live here. */
 export interface PluginRegistrationPorts {
-  /** Queues one frame (B10, D-S2-15). */
+  /** Queues one frame (B10). */
   requestFrame(): void;
   /** Drops the per-row Bar cache, so every row produces its Bars again on the next render. */
   invalidateBars(): void;
@@ -59,15 +59,15 @@ export interface PluginRegistrar {
 export class PluginRegistrations implements PluginRegistrar {
   #ports: PluginRegistrationPorts;
 
-  /** S5.4, D-S5-11/12: which renderer paints a bar, cell, header or tooltip. Its own module: the
+  /** S5.4: which renderer paints a bar, cell, header or tooltip. Its own module: the
    *  claim rules (per-kind slots, whole-point refusal) are that file's subject, not this one's. */
   readonly renderers = new RendererRegistry();
 
-  /** D-S4-24, ADR 0018: one registry per Gantt, seeded with core's two variants. `LayoutInput`
+  /** ADR 0018: one registry per Gantt, seeded with core's two variants. `LayoutInput`
    *  carries the object itself, so this exposes the registry rather than a copy of its contents. */
   readonly variants: VariantRegistry;
 
-  /** S5.6, D-S5-15: every registered provider, in registration order, threaded into
+  /** S5.6: every registered provider, in registration order, threaded into
    *  `LayoutInput.decorationProviders`.
    *
    *  Decorations are the one seam where every registration paints, not only the newest. So each call
@@ -87,7 +87,7 @@ export class PluginRegistrations implements PluginRegistrar {
     this.variants = variants;
   }
 
-  /** S5.4, D-S5-11. A renderer claim changes what every painted bar, cell or header shows, and
+  /** S5.4. A renderer claim changes what every painted bar, cell or header shows, and
    *  nothing else marks the frame dirty for it. The registration that wins after disposal must paint
    *  too, so the repaint runs on both edges (#155). */
   registerRenderer<P extends RendererPoint>(
@@ -98,7 +98,7 @@ export class PluginRegistrations implements PluginRegistrar {
     return this.#withRepaint(() => this.renderers.register(point, renderer, pluginId));
   }
 
-  /** S5.6, D-S5-15. Same repaint, same both-edges reason as a renderer claim. The held provider
+  /** S5.6. Same repaint, same both-edges reason as a renderer claim. The held provider
    *  list goes with that repaint: the two edges that change what paints are the two that make it
    *  stale (#188). */
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer {
@@ -130,15 +130,15 @@ export class PluginRegistrations implements PluginRegistrar {
     );
   }
 
-  /** S5.9, D-S5-21. The one seam whose refresh stays with its own module. `ColumnChrome` strips the
+  /** S5.9. The one seam whose refresh stays with its own module. `ColumnChrome` strips the
    *  baked-in copy of an abandoned field *between* removing the registration and rebinding, so the
-   *  two cannot be pulled apart (D-S5-18, #155). This entry is here so a reader finds all four
+   *  two cannot be pulled apart (#155). This entry is here so a reader finds all four
    *  seams in one list, not so the refresh moves.
    *
    *  `pluginId` travels with the column, for the reason `registerRenderer` already takes one. A
    *  declaration must say who made it. Without that, the library cannot keep a plugin's column out
-   *  of what the consumer authored and saves (D-S5-33). A `PluginStore` carries its owner's id for
-   *  the same reason (D-S5-24). */
+   *  of what the consumer authored and saves. A `PluginStore` carries its owner's id for
+   *  the same reason. */
   registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer {
     return this.#ports.registerGridColumn(column, pluginId);
   }

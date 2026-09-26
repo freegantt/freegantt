@@ -1,6 +1,6 @@
-// view/ — `resolveBarLabelText` pinned directly (#421 F7). The happy path already reaches this
+// view/ — `resolveBarLabelText` pinned directly (#421). The happy path already reaches this
 // through `api/gantt.test.ts`'s real DOM render; these are the two branches that do not: the
-// `'none'` early return, and the unknown-field report-and-carry-on this file's own F2 fix added.
+// `'none'` early return, and the unknown-field report-and-carry-on this file's own fix added.
 
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from '../data/dataset-state.js';
@@ -106,7 +106,7 @@ describe('resolveBarLabelText', () => {
 });
 
 describe('resolveBarLabelPolicy', () => {
-  // #435 follow-up, F3: `render/dom`'s own unit tests inject a policy directly, bypassing this
+  // #435 follow-up: `render/dom`'s own unit tests inject a policy directly, bypassing this
   // function and the `mergeBarLabels` shell it sits over — so the expert form's own route to
   // `'insideOrNone'` (`{ policy: 'insideOrNone' }`, not the plain string) went unpinned. This is
   // that route, through the real merge, not a stand-in for it.

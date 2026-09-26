@@ -3,7 +3,7 @@
 // sitting on the columns' own edge across every rebind. Split out of `GanttShell` so the rules are
 // reviewable and testable on their own. `GanttShell` is the only caller, closing over its own
 // private state through `GridPaneWidthPorts` — the same way `column-chrome.ts` closes over
-// `ColumnChromePorts` (S5.7, D-S5-18's precedent).
+// `ColumnChromePorts` (S5.7).
 
 /** What `GridPaneWidth` calls back into `GanttShell` for: the pane's own stored width and floor
  *  (`PaneLayout`'s), and the resolved columns' own edge (`ColumnChrome`'s). Also the shared

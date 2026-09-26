@@ -1,6 +1,6 @@
-// view/ — resolves which renderer paints one bar/cell/header/tooltip (S5.4, D-S5-11/12). Holds only
+// view/ — resolves which renderer paints one bar/cell/header/tooltip (S5.4). Holds only
 // plugin registrations; a consumer's own `GanttOptions.*Renderer` is read live by `GanttShell` and
-// handed in on every `resolve*` call — config always wins over a plugin (D-S5-11), so this registry
+// handed in on every `resolve*` call — config always wins over a plugin, so this registry
 // never has to know the consumer's current value ahead of time, the same posture `CommandRegistry`
 // takes toward its own live `buildContext`.
 
@@ -32,7 +32,7 @@ export class RendererRegistry {
    *  whole of #155's fix. */
   #registrations = createRegistrationTable<RendererPoint, Registration>();
 
-  /** `ctx.view.registerRenderer(point, renderer)`. One slot per point (D-S5-11). A second plugin
+  /** `ctx.view.registerRenderer(point, renderer)`. One slot per point. A second plugin
    *  claiming a point already taken throws, naming the point and both plugin ids. The returned
    *  `Disposer` frees the slot: a plugin's registration lives exactly as long as the plugin does, so
    *  uninstalling and re-installing the same plugin is a legal sequence, not a collision with its
@@ -45,7 +45,7 @@ export class RendererRegistry {
     return this.#claim(point, renderer, pluginId);
   }
 
-  /** D-S5-11: the consumer's own renderer always wins over a plugin's; with neither, "nothing" (the
+  /** The consumer's own renderer always wins over a plugin's; with neither, "nothing" (the
    *  caller's own default). Call: `registry.resolve('gridCell', gantt.gridCellRenderer)`. */
   resolve<P extends RendererPoint>(
     point: P,

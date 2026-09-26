@@ -7,7 +7,7 @@ import type { SelectionChange } from './event-bus.js';
 
 // T1-7 (#246 S2-4), #421 ADR 0025: `EntrySelection` has no direct test — everything about it was
 // covered only through `GanttShell`. `EntrySelectionPorts` is the seam this module was built to be
-// tested against (#230 R4), so these tests drive that interface with literal fakes and never touch
+// tested against (#230), so these tests drive that interface with literal fakes and never touch
 // the shell.
 
 interface PortsOptions {
@@ -114,7 +114,7 @@ describe('EntrySelection.step (#212)', () => {
   // used to prove that stepping walked a several-Segment Entry's own parts in place. A Segment is an
   // ordinary child Entry now, so a single Entry has no internal parts left to step through — only a
   // shared row of several Entries has anything to step across, which is the surviving test below
-  // (#421 C3, spike Q9).
+  // (#421 C3).
 
   it('does nothing when nothing is selected, or the row has nowhere to step', () => {
     const e1 = entryId('e1');
@@ -130,7 +130,7 @@ describe('EntrySelection.step (#212)', () => {
     expect(selection.entryIds).toEqual([e1]);
   });
 
-  it('steps every selected Entry on a shared row, not only the first (#421 C3, spike Q9)', () => {
+  it('steps every selected Entry on a shared row, not only the first (#421 C3)', () => {
     // A segmented row draws three child Entries as its own bars. Selecting the first and the last and
     // stepping forward used to read `entryIds[0]` alone, move that one Entry, and drop the rest of
     // the Selection — the spike's own finding.
@@ -239,7 +239,7 @@ describe('EntrySelection.soleEntry (#212, findings 6-7, ADR 0025)', () => {
   });
 });
 
-describe('EntrySelection.propose (D-S3-10)', () => {
+describe('EntrySelection.propose', () => {
   it('is a no-op when the proposed list is the same list already selected', () => {
     const e1 = entryId('e1');
     const { ports, announced, painted } = buildPorts();

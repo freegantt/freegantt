@@ -1,4 +1,4 @@
-// view/ — the single rAF owner (B10, D-S2-15): every render request in view/ goes through this file,
+// view/ — the single rAF owner (B10): every render request in view/ goes through this file,
 // which is the only one allowed to call requestAnimationFrame.
 //
 // Not a second batcher. `BatchedNotifier` (layout/viewport) coalesces one synchronous fan-out — one

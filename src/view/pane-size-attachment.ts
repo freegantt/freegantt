@@ -15,7 +15,7 @@ export interface PaneSizeAttachment {
  *  injected fake that fires synchronously (`pane-size-attachment.test.ts`).
  *
  *  No deduping here — notify-iff-changed is the models' own contract (`ViewportHandle.setPaneSize`
- *  → `TimeScaleModel`/`ScrollAxis`, D-S1.5-4). Re-implementing that check here would just be a
+ *  → `TimeScaleModel`/`ScrollAxis`). Re-implementing that check here would just be a
  *  second copy that can disagree with the first. */
 export function attachPaneSize(
   container: HTMLElement,

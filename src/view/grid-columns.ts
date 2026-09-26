@@ -1,4 +1,4 @@
-// view/ — binds this Gantt's locale to declared Fields (D-S4-13). layout/ never learns where a Field's value lives.
+// view/ — binds this Gantt's locale to declared Fields. layout/ never learns where a Field's value lives.
 
 import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
@@ -53,7 +53,7 @@ function columnFrom(
     field: field.key,
     header: input.header ?? defaults?.header ?? String(field.key),
     align: input.align ?? defaults?.align ?? 'start',
-    // S5.7, D-S5-18: default `true`, same merge order (this Gantt's own column, then the Field's
+    // S5.7: default `true`, same merge order (this Gantt's own column, then the Field's
     // own `column` default) every other key here already follows.
     resizable: input.resizable ?? defaults?.resizable ?? true,
     movable: input.movable ?? defaults?.movable ?? true,
@@ -68,7 +68,7 @@ function columnFrom(
   const candidates = {
     width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
     flex,
-    // S5.7, D-S5-17: per-column `columnRenderer` comes only from this Gantt's own column —
+    // S5.7: per-column `columnRenderer` comes only from this Gantt's own column —
     // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
     columnRenderer: input.columnRenderer,
   };
@@ -79,10 +79,10 @@ function columnFrom(
   };
 }
 
-/** S5.7, D-S5-18: `GridColumnsChange`'s payload shape — the public `GridColumn`, not the layout-only
+/** S5.7: `GridColumnsChange`'s payload shape — the public `GridColumn`, not the layout-only
  *  `ResolvedColumn`. It drops `format`, a render-time closure with no public type of its own that
  *  never reaches a consumer. Everything else a consumer might have authored rides straight through,
- *  under the name it was authored with (D-S5-37, #194). */
+ *  under the name it was authored with (#194). */
 export function toGridColumn(column: ResolvedColumn): GridColumn {
   const shared = {
     field: column.field,
@@ -103,7 +103,7 @@ function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {
 }
 
 /** Call: `resolveColumns(gantt.gridColumns, { get: (key) => dataset.field(key) }, { timeZone, locale })`.
- *  What comes back is what the Gantt paints. A column that declares `hidden: true` (D-S5-34) stays
+ *  What comes back is what the Gantt paints. A column that declares `hidden: true` stays
  *  out of the result. It therefore stays out of everything downstream — the frame, the pane width,
  *  `ctx.view.resolvedColumns()`, and the two column gestures. It is still resolved first, so a
  *  misspelled field or a bare key with no column defined throws where the column is declared. A mistake that
@@ -136,7 +136,7 @@ export function resolveColumns(
   });
 }
 
-/** D-S5-34. A bare field key is never hidden — only the object form carries the key. */
+/** A bare field key is never hidden — only the object form carries the key. */
 export function isHidden(item: GridColumnInput): boolean {
   return typeof item !== 'string' && item.hidden === true;
 }
@@ -160,7 +160,7 @@ export function resolveFieldCompares(
 }
 
 /** Call: `resolveGanttFields(dataset, gantt.gridColumns, { timeZone, locale })`.
- *  One locale. Two lists leave: visible columns, and every Field's compare (D-S4-13). */
+ *  One locale. Two lists leave: visible columns, and every Field's compare. */
 export function resolveGanttFields(
   dataset: Pick<Dataset, 'field' | 'fields' | 'timeZone'>,
   gridColumns: readonly GridColumnInput[],

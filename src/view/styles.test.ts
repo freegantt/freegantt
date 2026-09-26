@@ -121,7 +121,7 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('.fg-live-region {');
   });
 
-  it('the injected sheet carries every D-S1.10-9 colour token on :root and on the theme pins, never on .fg-container (#271)', () => {
+  it('the injected sheet carries every colour token on :root and on the theme pins, never on .fg-container (#271)', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
@@ -146,7 +146,7 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain(':root:not([data-fg-theme])');
   });
 
-  it('[S1-A8] --fg-band-height sizes bands; --fg-header-height is gone (D-S1.12-10)', () => {
+  it('[S1-A8] --fg-band-height sizes bands; --fg-header-height is gone', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
@@ -196,7 +196,7 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('user-select: none');
   });
 
-  it('a pending bar uses reduced opacity and a dotted selection outline (D-S3-17)', () => {
+  it('a pending bar uses reduced opacity and a dotted selection outline', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
@@ -221,9 +221,9 @@ describe('ensureBaseStyles', () => {
     expect(focusVisibleIndex).toBeGreaterThan(pendingIndex);
   });
 
-  // J3: --fg-selection-color now shares --fg-bar-fill's own hue, so a flush outline would nearly
+  // --fg-selection-color now shares --fg-bar-fill's own hue, so a flush outline would nearly
   // vanish into the fill. The offset is what keeps the ring visible against the pane instead.
-  it('offsets the selected and pending bar outline off the fill, not flush against it (J3)', () => {
+  it('offsets the selected and pending bar outline off the fill, not flush against it', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
@@ -233,7 +233,7 @@ describe('ensureBaseStyles', () => {
     expect(pendingRule).toContain('outline-offset: 2px');
   });
 
-  // J3: a selected row (or filtered row band) reads as one opaque colour, not a mix over whatever
+  // A selected row (or filtered row band) reads as one opaque colour, not a mix over whatever
   // sits behind the container — so axe can check it without knowing the pane's own background.
   it('paints a selected row with the flat --fg-row-selected-bg token, not a colour-mix', () => {
     clearStyles();
@@ -245,9 +245,9 @@ describe('ensureBaseStyles', () => {
     expect(rule).not.toContain('color-mix');
   });
 
-  // J1: an inside label ellipsises rather than overflowing the bar, and an outside one paints past
+  // An inside label ellipsises rather than overflowing the bar, and an outside one paints past
   // the bar's own edge in the pane's own ink, with no ellipsis — the two rules a fit test picks between.
-  it('carries a .fg-bar-label rule that ellipsises, and an outside variant that does not (J1)', () => {
+  it('carries a .fg-bar-label rule that ellipsises, and an outside variant that does not', () => {
     clearStyles();
     ensureBaseStyles(document);
     const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
@@ -286,7 +286,7 @@ describe('ensureBaseStyles', () => {
 
   // #171: the Refusal notice used to write eleven inline declarations over this sheet, so a consumer
   // stylesheet could not reach it and the two token fallbacks were pinned to the light theme.
-  // #231 F1: it selects on its own class, so no consumer copying this selector can reach an editor.
+  // #231: it selects on its own class, so no consumer copying this selector can reach an editor.
   it('styles the refusal notice from the sheet, on published tokens with no light-theme fallback', () => {
     clearStyles();
     ensureBaseStyles(document);

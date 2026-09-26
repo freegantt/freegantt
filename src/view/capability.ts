@@ -1,6 +1,6 @@
-// view/ — capabilities resolve once, here. `interaction/` asks the same `can()` this file resolves
-// (D-S3-5). `render/dom` never asks it at all. The affordance ids `GanttShell` writes into
-// `InteractionState` (D-S3-6/D-S3-8) are this resolution's only output on the paint side. So one
+// view/ — capabilities resolve once, here. `interaction/` asks the same `can()` this file resolves.
+// `render/dom` never asks it at all. The affordance ids `GanttShell` writes into
+// `InteractionState` are this resolution's only output on the paint side. So one
 // answer both hides a handle and refuses the gesture (I14).
 //
 // #256: a write names a cell. That is one Entry and one Field, which is the changeset's own shape.
@@ -117,7 +117,7 @@ function gestureIsOffered(): boolean {
  *  (`layout/gesture-draft.ts`'s `draftForResize`/`draftForMove`).
  *
  *  `data/` owns what may be written there. A write past the dragged edge's fixed side is refused
- *  before it reaches a changeset (D-S3-4). */
+ *  before it reaches a changeset. */
 function mayWriteTheDatesItSets(
   capability: GestureCapability,
   entry: Entry,
@@ -146,7 +146,7 @@ function assertEveryGestureNamesItsWrites(capability: never): never {
 }
 
 /** One rule's answer, or `undefined` for "no opinion". A boolean pins every entry; a predicate may
- *  answer `undefined` and fall through to the next level (`J13`). One function, so the gesture
+ *  answer `undefined` and fall through to the next level. One function, so the gesture
  *  ladder and the write ladder below ask a rule the same way. */
 function askCapabilityRule(rule: CapabilityRule | undefined, entry: Entry): boolean | undefined {
   return typeof rule === 'function' ? rule(entry) : rule;
