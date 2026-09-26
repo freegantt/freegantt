@@ -4,7 +4,7 @@
 //
 // Exactly the three primitives S2's own code calls (`data/reactivity.test.ts`). `effect` is not
 // exported: nothing in S2 subscribes to a derived value — delta delivery is the event bus's job
-// (D-S2-4) — and an unused export is the I11 defect B8 lands to catch.
+// — and an unused export is the I11 defect B8 lands to catch.
 
 import { computed as alienComputed, endBatch, signal as alienSignal, startBatch } from 'alien-signals';
 

@@ -1,4 +1,4 @@
-// data/ — the shipped Field type table (D-S4-3). A Field naming a seeded type needs no local
+// data/ — the shipped Field type table. A Field naming a seeded type needs no local
 // declaration: `{ key: 'progress', type: 'percent' }` resolves on its own. `currency({ code })` is a
 // factory, not a seeded name: pass the bundle inline, or register it under a name of your own.
 
@@ -120,7 +120,7 @@ export const percent: FieldType<number> = Object.freeze<FieldType<number>>({
 
 /** An Instant Field. Formats through `formatDate` with `DATE_TIME_FORMAT` — the same display core
  *  `start` uses. Ships no `parseValue` and no `inputType`: the inline editor routes `type: 'date'`
- *  through the `dateInput` seam (D-S5-20), not the generic `<input>`. No rollUp. */
+ *  through the `dateInput` seam, not the generic `<input>`. No rollUp. */
 export const date: FieldType<Instant> = Object.freeze<FieldType<Instant>>({
   formatValue: formatInstant,
   compare: compareInstant,
@@ -142,8 +142,8 @@ function compareBoolean(a: boolean | undefined, b: boolean | undefined): number 
   return Number(a) - Number(b);
 }
 
-/** A boolean reading (Q22). Formats through `stringifyPrimitive` (`'true'`/`'false'`), sorts false
- *  before true, and opens a checkbox rather than a text `<input>` (Q31) — so it ships no
+/** A boolean reading. Formats through `stringifyPrimitive` (`'true'`/`'false'`), sorts false
+ *  before true, and opens a checkbox rather than a text `<input>` — so it ships no
  *  `parseValue`: the checkbox editor reads and writes `.checked` directly
  *  (`extensions/features/inline-editing.ts`), never `.value`. Ships no `rollUp`, the same reason
  *  every other type in this file ships none: a default aggregator would overwrite an authored

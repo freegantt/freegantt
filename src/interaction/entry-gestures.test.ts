@@ -61,9 +61,9 @@ interface SessionOverrides {
 }
 
 /** `hitTest` reads a fake `data-hit-x` position map instead of real layout — this suite is about
- *  pointer semantics (D-S3-10), not hit-testing, which `render/dom/index.test.ts` already covers. */
+ *  pointer semantics, not hit-testing, which `render/dom/index.test.ts` already covers. */
 /** Overrides merge one level into `selection`, not over it: a test that replaces
- *  `selectableEntriesOf` keeps the other three answers the fake already gives (#230 R4). */
+ *  `selectableEntriesOf` keeps the other three answers the fake already gives (#230). */
 type ContextOverrides = Partial<Omit<EntryGestureContext, 'selection'>> &
   SessionOverrides & { selection?: Partial<SelectionForGestures> };
 
@@ -136,7 +136,7 @@ function makeContext(overrides: ContextOverrides = {}): {
       // The fake answers the same question, so a test that makes an Entry incapable drops it from
       // the order rather than expecting `interaction/` to filter a second time.
       selectableEntriesInRowOrder: () => ORDER.filter((id) => ctx.can('select', entryFor(id))),
-      // #185, #212, #230 R4: the pane rule — a row names every selectable Entry it owns (the fake
+      // #185, #212, #230: the pane rule — a row names every selectable Entry it owns (the fake
       // maps one row id to the Entry of the same name, so a test that wants a multi-entry row
       // overrides it); a bar names its own Entry when it may be selected.
       selectableEntriesOf: (hit) => {
@@ -425,7 +425,7 @@ describe('attachEntryGestures — activation candidate lifetime (#434)', () => {
     expect(activations).toEqual([]);
   });
 
-  // #434 F7: a hit that exists (not a miss) but names no new candidate — a modifier held, or the
+  // #434: a hit that exists (not a miss) but names no new candidate — a modifier held, or the
   // hit itself refuses `activate` — used to leave an older, still-unconfirmed candidate in place.
   // A later, unrelated click then wrongly confirmed it.
   it('a hit that exists but is not activate-capable still drops an older, unconfirmed candidate', () => {
@@ -442,7 +442,7 @@ describe('attachEntryGestures — activation candidate lifetime (#434)', () => {
     expect(activations).toEqual([]);
   });
 
-  // #434 F7: the grid pane's row layer arms no drag of its own, so it never had a
+  // #434: the grid pane's row layer arms no drag of its own, so it never had a
   // `pointerdown`/`pointercancel` listener of its own to clear from — only `pane`'s did. A cancelled
   // sequence that named its candidate through the row layer's own `pointerup` (`onRowLayerPointerUp`)
   // must not outlive it either.

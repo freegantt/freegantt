@@ -5,9 +5,9 @@ import { test, expect } from '@playwright/test';
 // src/view/scroll-attachment.test.ts. harness/e2e/scroll-sync.html mounts two Gantts sharing a
 // ScrollAxis per direction: #tall has every fixture entry, #short has the first 20 (fewer rows ->
 // a smaller max). A second pair, #xonly-a/#xonly-b, shares only the x ScrollAxis, and a third,
-// #yonly-a/#yonly-b, shares only the y ScrollAxis (S6 R3, D-S6-1).
+// #yonly-a/#yonly-b, shares only the y ScrollAxis (S6).
 //
-// The timeline pane is the native scroller (S1.8, D-D/D-S1.8-1) — `#tall`/`#short` themselves no
+// The timeline pane is the native scroller (S1.8, D-D) — `#tall`/`#short` themselves no
 // longer scroll, so every read/write below targets each container's `.fg-timeline-pane` child.
 
 async function scrollTops(page: import('@playwright/test').Page) {
@@ -115,7 +115,7 @@ test('[S1-A4] a scroll on #tall moves #short in x and y (D9, plans/00 §4 gate c
   expect(after.short).toEqual(after.tall);
 });
 
-// S6 R3 (plans/03-slices.md, D-S6-1): #xonly-a/#xonly-b share only the x ScrollAxis. A horizontal
+// S6 (plans/03-slices.md): #xonly-a/#xonly-b share only the x ScrollAxis. A horizontal
 // scroll on either moves both; a vertical scroll on one stays private, and neither pane's row-count
 // -derived y max leaks into the other.
 test('[S6-A3] two Gantts sharing only x move together in x and stay private in y (D-S6-1)', async ({
@@ -160,7 +160,7 @@ test('[S6-A3] two Gantts sharing only x move together in x and stay private in y
   expect(afterY.b.y).toBe(before.b.y);
 });
 
-// S6 R3 (plans/03-slices.md, D-S6-1): #yonly-a/#yonly-b share only the y ScrollAxis. A vertical
+// S6 (plans/03-slices.md): #yonly-a/#yonly-b share only the y ScrollAxis. A vertical
 // scroll on either moves both; a horizontal scroll on one stays private.
 test('[S6-A4] two Gantts sharing only y move together in y and stay private in x (D-S6-1)', async ({
   page,

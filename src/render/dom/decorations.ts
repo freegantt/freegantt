@@ -1,4 +1,4 @@
-// render/dom — decoration paint (D-S5-15). Pixel geometry for a rangeBand and row lookup for a
+// render/dom — decoration paint. Pixel geometry for a rangeBand and row lookup for a
 // rowStripe both already happened in layout/ and render/dom/index.ts's own row layer respectively —
 // this file only turns `RangeBand`/`RowStripe` into DOM nodes, keyed by array position (no `id`,
 // same precedent as Header bands and Date lines).

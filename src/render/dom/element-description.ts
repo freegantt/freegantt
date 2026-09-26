@@ -1,4 +1,4 @@
-// render/dom — turns one ElementDescription into a live DOM subtree (S5.3, D-S5-10). Stays inside
+// render/dom — turns one ElementDescription into a live DOM subtree (S5.3). Stays inside
 // the reconciler's hard-bounded scope: attrs/class/style/text + keyed children, no lifecycle hook.
 // `Popup` (extensions/popup.ts) is this function's first caller — it rebuilds its content fresh on
 // every `open()` rather than diffing against a previous frame, so this file ships the one-shot build
@@ -43,7 +43,7 @@ export function buildElement(description: ElementDescription): HTMLElement {
   return node;
 }
 
-// S5.4, D-S5-10: the diffing sibling `buildElement` above flags in its own file header — patches an
+// S5.4: the diffing sibling `buildElement` above flags in its own file header — patches an
 // existing node in place for repaint-without-remount (I8: `barRenderer`/`gridCellRenderer` reassignment
 // repaints, never rebuilds, the node it patches). Stays inside the same bounded scope: attrs/class/
 // style/text + keyed children, nothing more. Keyed by a `data-fg-key` attribute stamped once per

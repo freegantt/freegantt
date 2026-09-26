@@ -1,4 +1,4 @@
-// extensions/ — the plugin runtime (S5.1, D-S5-1..D-S5-5). Generic over its own context type so this
+// extensions/ — the plugin runtime. Generic over its own context type so this
 // file never imports `api/plugin-context.ts` or `api/gantt.ts`: `view/gantt-shell.ts` (which builds the real,
 // api-level `PluginContext`) is itself imported BY `api/gantt.ts`, so a `PluginRuntime` that named the
 // concrete `PluginContext`/`Gantt` types here would close an import cycle (api -> view -> extensions
@@ -21,7 +21,7 @@ import { assertNoDuplicateIds, resolveSetupOrder } from './plugin-order.js';
  *  `requires` graph covers both halves and a chrome plugin may require it. */
 export interface ShellPlugin<TContext> {
   id: PluginId;
-  /** Plugin ids that must also be installed. Does not imply an order in the array (D-S5-31). */
+  /** Plugin ids that must also be installed. Does not imply an order in the array. */
   requires?: readonly PluginId[];
   view?(ctx: TContext): Disposer | void;
 }
@@ -37,14 +37,14 @@ interface Installed<TContext> {
  *  knowing anything about `context`'s shape. `registrationGate` is optional so S5.1's own tests (no
  *  `register*` surface at all yet) need not supply one; a step that ships a `register*` — S5.2's
  *  `registerKeybinding` first — opens one alongside `context` and this class closes it right after
- *  `view()` returns (D-S5-4). */
+ *  `view()` returns. */
 export interface BuiltPluginContext<TContext> {
   context: TContext;
   disposables: DisposableStore;
   registrationGate?: RegistrationGate;
 }
 
-/** D-S5-4: every `ctx.*.register*` opens one of these alongside its `PluginContext`. `PluginRuntime`
+/** Every `ctx.*.register*` opens one of these alongside its `PluginContext`. `PluginRuntime`
  *  closes every plugin's gate the moment that plugin's own `view()` returns. A `register*` reached
  *  after that is what turns into `RegistrationClosedError`. `view/plugin-ports.ts`'s
  *  `registerWhileOpen` is the one place that calls `assertOpen()`, so a new seam inherits the check
@@ -66,12 +66,12 @@ export class RegistrationGate {
   }
 }
 
-/** Installs, diffs and disposes one Gantt's plugin list (D-S5-1, D-S5-3). One instance per
+/** Installs, diffs and disposes one Gantt's plugin list. One instance per
  *  `GanttShell` — never shared across Gantt instances (I2). */
 export class PluginRuntime<TContext> {
   #installed: Installed<TContext>[] = [];
   #buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>;
-  /** S5.12, D-S5-40: where a throwing disposer is reported. */
+  /** Where a throwing disposer is reported. */
   #raiseError: RaiseError;
 
   constructor(buildContext: (pluginId: PluginId) => BuiltPluginContext<TContext>, raiseError: RaiseError) {
@@ -83,8 +83,8 @@ export class PluginRuntime<TContext> {
     return this.#installed.map((installed) => installed.plugin);
   }
 
-  /** Diffs `next` against what is installed, by `id` and then by object identity (D-S5-3, #404
-   *  review F4). Three answers per installed plugin:
+  /** Diffs `next` against what is installed, by `id` and then by object identity (#404
+   *  review). Three answers per installed plugin:
    *
    *  - the same object is in `next` — left alone, nothing runs again. `[...gantt.plugins, extra]`
    *    hands back the very objects this runtime installed, so adding one plugin disturbs no other.
@@ -104,7 +104,7 @@ export class PluginRuntime<TContext> {
    *  Dropped plugins keep the guarantee in full. New plugins are set up *before* any dropped plugin
    *  is disposed, and `#installed` is committed last, so a `view()` throw unwinds only this batch's
    *  own already-set-up plugins (in reverse) before rethrowing `PluginSetupError` — the previous
-   *  installed set, dropped plugins included, is untouched (issue #137 F4, C1). Disposing `removed`
+   *  installed set, dropped plugins included, is untouched (issue #137). Disposing `removed`
    *  before every addition's `view()` had succeeded left `#installed` holding plugins already
    *  disposed once, primed to be disposed again on the next `install()` call. */
   install(next: readonly ShellPlugin<TContext>[]): void {
@@ -122,14 +122,14 @@ export class PluginRuntime<TContext> {
     }
 
     // Committed before the additions run, so a `view()` throw below never leaves `#installed`
-    // holding a record this loop already disposed (the double-dispose of issue #137 F4).
+    // holding a record this loop already disposed (the double-dispose of issue #137).
     if (replaced.length > 0) {
       const outgoing = new Set(replaced);
       this.#installed = this.#installed.filter((installed) => !outgoing.has(installed));
       for (let i = replaced.length - 1; i >= 0; i--) this.#disposeOne(replaced[i]!);
     }
 
-    // D-S5-31: the whole list is sorted, then the already-installed ones drop out. Sorting `toAdd`
+    // The whole list is sorted, then the already-installed ones drop out. Sorting `toAdd`
     // alone would read a kept plugin as missing the moment a new one required it.
     const keptIds = new Set(kept.map((installed) => installed.plugin.id));
     const toAdd = resolveSetupOrder(next).filter((plugin) => !keptIds.has(plugin.id));
@@ -145,7 +145,7 @@ export class PluginRuntime<TContext> {
         }
         const built = this.#buildContext(plugin.id);
         const ownDispose = plugin.view(built.context);
-        // D-S5-4: registration is legal while view() runs only — closing the gate the moment it
+        // Registration is legal while view() runs only — closing the gate the moment it
         // returns is what turns a register* reached afterward into RegistrationClosedError.
         built.registrationGate?.close();
         justInstalled.push({
@@ -176,13 +176,13 @@ export class PluginRuntime<TContext> {
     this.#installed = [];
   }
 
-  /** A disposer throwing must not stop the rest from freeing their own resources (issue #137 F4) —
+  /** A disposer throwing must not stop the rest from freeing their own resources (issue #137) —
    *  logged, not rethrown. */
   #disposeOne(installed: Installed<TContext>): void {
     try {
       installed.dispose();
     } catch (cause) {
-      // S5.12, D-S5-41: report first, console only when nothing is subscribed.
+      // Report first, console only when nothing is subscribed.
       const message = `plugin "${installed.plugin.id}"'s disposer threw`;
       this.#raiseError(
         { code: 'disposer-failed', message, severity: 'error', by: installed.plugin.id, cause },

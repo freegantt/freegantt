@@ -1,8 +1,8 @@
-// data/ — the Rollup: `data/`'s own commit step (never an extender occupant, D-S2-22), giving every
+// data/ — the Rollup: `data/`'s own commit step (never an extender occupant), giving every
 // parent (an Entry with at least one child, ADR 0013 — there is no stored classification) its
 // rolling-up Fields from its children, bottom-up, on every commit (`01` §2.5/§2.6, S4.2). A leaf
 // module — only `data/build-commit-change-set.ts` (commit path) and `data/transaction.ts`
-// (construction path) name it (D-S4-7, `rollup-is-removable`); delete this file and every entry keeps
+// (construction path) name it (`rollup-is-removable`); delete this file and every entry keeps
 // its authored values.
 
 import type { StoredEntry, EntryId, FieldUpdated, HierarchySource } from '../model/index.js';
@@ -43,7 +43,7 @@ export interface RollUpEditSets {
 /** The two trees the Rollup walks (ADR 0020).
  *
  *  The committed one is the store's own checked index, memoized per revision — the pass reads it
- *  rather than re-deriving the same answer (`F6`), so the store and the Rollup can never disagree
+ *  rather than re-deriving the same answer, so the store and the Rollup can never disagree
  *  about who a row's parent was. The source answers for the **effective** tree instead: the one this
  *  commit leaves once its adds, removes and cascades land, which no revision holds and no index
  *  can hold. */
@@ -201,7 +201,7 @@ const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], overwrittenP
 
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
- * edits; the pass then builds the effective tree and walks only the ancestors it must (D-S4-8).
+ * edits; the pass then builds the effective tree and walks only the ancestors it must.
  */
 export function rollUpFields(
   committed: ReadonlyMap<EntryId, StoredEntry>,
@@ -231,7 +231,7 @@ export function rollUpFields(
     pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
   // The tree this pass walks, checked (ADR 0020): a source that loops would make `ancestorsOf` and
   // `depthOf` below run forever. The committed half is the store's own index, already checked and
-  // memoized per revision (`F6`) — this pass reads it rather than walking the whole Dataset a
+  // memoized per revision — this pass reads it rather than walking the whole Dataset a
   // second time to reach the same answer. Nothing is reported from either half: the effective tree
   // is one no commit has landed yet, and the commit raises the committed one's refusals once it
   // lands.

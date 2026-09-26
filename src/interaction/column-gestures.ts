@@ -1,4 +1,4 @@
-// interaction/ — resize and reorder pointer sequences for grid columns (S5.7, D-S5-18), built over
+// interaction/ — resize and reorder pointer sequences for grid columns (S5.7), built over
 // the same `createPointerGesture` controller `entry-gestures.ts` already drives. Column state is
 // Gantt view state, never Dataset data (ADR 0005) — this file commits nothing to `data/`; every
 // commit routes through `ColumnGestureContext`, `GanttShell`'s one place for the `gridColumns`
@@ -57,7 +57,7 @@ function dropTargetAt(targets: readonly DropTarget[], clientX: number): FieldKey
 /** One column gesture's three moves. `resize` and `reorder` differ in exactly these three and in
  *  nothing else, so the pointer state machine below holds one grabbed gesture. A `pointermove`
  *  previews, a `pointerup` commits, and an Escape or a veto cancels. `commit` reports whether the
- *  commit landed; the caller cancels when it did not (D-S5-18: "a veto restores the state the drag
+ *  commit landed; the caller cancels when it did not ("a veto restores the state the drag
  *  started from"). `clientX` is the pointer's page position, which only the reorder drop indicator
  *  reads. */
 interface ColumnGesture {
@@ -67,7 +67,7 @@ interface ColumnGesture {
 }
 
 /** Pointerdown on `.fg-column-resizer` arms a resize; pointerdown anywhere else on `.fg-col-header`
- *  arms a reorder — `resizable`/`movable` (D-S5-18) refuse arming the same way `EntryGestureContext`'s
+ *  arms a reorder — `resizable`/`movable` refuse arming the same way `EntryGestureContext`'s
  *  own capability checks refuse a data gesture. */
 export function attachColumnGestures(
   headerPane: HTMLElement,
@@ -172,7 +172,7 @@ export function attachColumnGestures(
   function onPointerUp(e: PointerEvent): void {
     if (drag.up(e)) return; // was a drag — commit/cancel already ran inside pointer-gesture's callbacks
     // A plain click (no drag armed): sets the "focused" header cell for `Alt+Arrow`/`Shift+Arrow`
-    // (D-S5-18/D-S5-26) — regardless of `resizable`/`movable`, since a fixed or pinned column can
+    // — regardless of `resizable`/`movable`, since a fixed or pinned column can
     // still be the command target even though both chords will decline for it.
     const target = e.target instanceof Element ? e.target : null;
     const cell = headerCellFor(target);
@@ -191,8 +191,8 @@ export function attachColumnGestures(
     if (wasArmed) e.stopImmediatePropagation();
   }
 
-  // B3: a plain click on a header cell sets "the focused header column" for `Shift+Arrow` (D-S5-18/
-  // D-S5-26, `onPointerUp` above). JS focus is not the same as "the header still has the user's
+  // B3: a plain click on a header cell sets "the focused header column" for `Shift+Arrow`
+  // (`onPointerUp` above). JS focus is not the same as "the header still has the user's
   // attention" — a later pointerdown anywhere else in this Gantt (a bar, a body cell, empty timeline)
   // must clear it, the same posture a click on empty timeline already takes for the entry selection.
   function onContainerPointerDown(e: PointerEvent): void {

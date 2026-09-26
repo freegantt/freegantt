@@ -1,4 +1,4 @@
-// extensions/ — chord parsing and newest-first key resolution (S5.2, D-S5-7).
+// extensions/ — chord parsing and newest-first key resolution.
 
 import type { KeyBindingOf } from '../api/command.js';
 import type { CommandContext } from './commands.js';
@@ -18,7 +18,7 @@ interface NormalizedChord {
   meta: boolean;
 }
 
-/** The one place this file branches on platform (D-S5-7). `userAgentData` first, `platform` as the
+/** The one place this file branches on platform. `userAgentData` first, `platform` as the
  *  fallback for engines that do not ship it yet; empty string (no `navigator`, e.g. under Node) reads
  *  as non-Apple. */
 function isApplePlatform(): boolean {
@@ -28,7 +28,7 @@ function isApplePlatform(): boolean {
   return /mac|iphone|ipad|ipod/i.test(platform);
 }
 
-/** Parses a `KeyChord` once, at registration — D-S5-7: "never re-parsed per event" (I5's spirit).
+/** Parses a `KeyChord` once, at registration — "never re-parsed per event" (I5's spirit).
  *  `Mod` resolves against `applePlatform` here, so the resulting record never branches on platform
  *  again at match time. */
 export function normalizeChord(chord: string, applePlatform: boolean = isApplePlatform()): NormalizedChord {
@@ -70,7 +70,7 @@ function chordMatches(chord: NormalizedChord, event: KeyEventLike): boolean {
   );
 }
 
-/** Issue #137 F7: typing in an editable target, or mid-IME-composition, runs no binding unless it
+/** Issue #137: typing in an editable target, or mid-IME-composition, runs no binding unless it
  *  opts in with `captureInEditable`. */
 export function isEditableTarget(event: Pick<KeyEventLike, 'isComposing' | 'target'>): boolean {
   if (event.isComposing) return true;
@@ -123,11 +123,11 @@ interface HandlerBinding {
 
 type RegisteredEntry<TGantt> = CommandBinding<TGantt> | HandlerBinding;
 
-/** D-S5-7's registry: every registered `KeyBinding` or raw handler, resolved newest-first on every
+/** The registry: every registered `KeyBinding` or raw handler, resolved newest-first on every
  *  key event. One instance per `GanttShell` — core registers first (index 0), so a later plugin's
  *  binding is checked before it, which is the whole reason a plugin can override core, and a popup
  *  registering its Escape dismissal last is why the innermost open popup wins over an outer
- *  binding (D-S5-9). `commands`/`buildContext` are fixed for the instance's lifetime (its only
+ *  binding. `commands`/`buildContext` are fixed for the instance's lifetime (its only
  *  caller, `GanttShell`, rebuilds neither per keystroke), so they are constructor-injected rather
  *  than repeated on every `resolve()` call. */
 export class Keymap<TGantt = unknown> implements KeyHandlerRegistrar {
@@ -141,7 +141,7 @@ export class Keymap<TGantt = unknown> implements KeyHandlerRegistrar {
   }
 
   /** Returns a disposer that removes this binding — a plugin's own `ctx.disposables.add(...)` target
-   *  (D-S5-1's disposal pattern; S5.2's `registerKeybinding` calls this and hands the result over). */
+   *  (the disposal pattern: `registerKeybinding` calls this and hands the result over). */
   register(binding: KeyBindingOf<TGantt>): () => void {
     const entry: CommandBinding<TGantt> = { kind: 'command', binding, chord: normalizeChord(binding.chord) };
     return this.#push(entry);
@@ -175,7 +175,7 @@ export class Keymap<TGantt = unknown> implements KeyHandlerRegistrar {
 
   /** Resolves `event` against every registered binding, newest first: the first one whose chord
    *  matches and whose (and whose command's) `when` both pass runs — through
-   *  `commands.run(binding.command)`, the same call a menu item makes (D-S5-7), so a veto or a guard
+   *  `commands.run(binding.command)`, the same call a menu item makes, so a veto or a guard
    *  written once holds for both; a `registerHandler` entry runs its callback directly instead. A
    *  binding naming an id nothing owns is skipped, not thrown for — a keystroke is not the moment to
    *  surface a plugin's misconfigured id. Returns whether anything fired, so the caller knows
@@ -198,7 +198,7 @@ export class Keymap<TGantt = unknown> implements KeyHandlerRegistrar {
       const ctx = this.#buildContext();
       if (entry.binding.when !== undefined && !entry.binding.when(ctx)) continue;
       if (command.when !== undefined && !command.when(ctx)) continue;
-      // D-S5-7: resolve once, run once — `runResolved` trusts the `when` checks just made above
+      // Resolve once, run once — `runResolved` trusts the `when` checks just made above
       // instead of `run(id)` rebuilding `ctx` and re-running both checks for the same keystroke.
       this.#commands.runResolved(entry.binding.command, ctx);
       return true;

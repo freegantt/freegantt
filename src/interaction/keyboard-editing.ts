@@ -1,5 +1,5 @@
 // interaction/ — the keyboard half of direct manipulation (plans/s3-direct-manipulation/
-// s3.5-keyboard-parity-and-async-veto.md, D-S3-13; rescoped S5.11, D-S5-39). One keydown listener,
+// s3.5-keyboard-parity-and-async-veto.md; rescoped S5.11). One keydown listener,
 // attached to the timeline pane alone: `ArrowLeft`/`ArrowRight` nudge the picked bar
 // (`ctx.session().nudge()`, D-GH-1), and `Shift+ArrowLeft`/`Shift+ArrowRight` resize it. Moving the
 // pick between bars, and between rows in the grid pane, is `view/roving-focus.ts`'s job now — this
@@ -8,8 +8,8 @@
 
 import type { Detachable, EntryGesture, EntryGestureContext } from '../view/index.js';
 
-/** D-S3-13, D-S3-9: `attachKeyboardEditing` refuses off the same `ctx.session()` the pointer path
- *  arms through (I14) — an incapable or already-`pending` (D-S3-17) grab silently no-ops, same as a
+/** `attachKeyboardEditing` refuses off the same `ctx.session()` the pointer path
+ *  arms through (I14) — an incapable or already-`pending` grab silently no-ops, same as a
  *  pointer grab on an incapable bar. */
 export function attachKeyboardEditing(container: HTMLElement, ctx: EntryGestureContext): Detachable {
   function onKeyDown(e: KeyboardEvent): void {

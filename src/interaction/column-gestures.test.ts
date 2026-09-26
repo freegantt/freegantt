@@ -30,7 +30,7 @@ interface Rect {
 
 /** One header pane with N header cells, each carrying `data-field`, a `.fg-column-resizer` grip, and
  *  a `getBoundingClientRect` happy-dom never lays out for real — this suite is about the pointer
- *  sequences (D-S5-18), not real layout, the same posture `entry-gestures.test.ts`'s fake `hitTest`
+ *  sequences, not real layout, the same posture `entry-gestures.test.ts`'s fake `hitTest`
  *  already takes. */
 function makeHeaderPane(rects: Record<string, Rect>): {
   pane: HTMLElement;
@@ -136,7 +136,7 @@ describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
     up(gripOf(cell('cost')), 230);
 
     // A veto clears the preview entirely (`cancelColumnResize`) rather than repainting the pre-drag
-    // width, so a flex column's live-paint `data-fixed` override does not linger (D-S5-18).
+    // width, so a flex column's live-paint `data-fixed` override does not linger.
     expect(cancels).toHaveLength(1);
   });
 
@@ -320,7 +320,7 @@ describe('attachColumnGestures — reorder (S5.7, D-S5-18)', () => {
     up(cell('name'), 220);
 
     // A veto clears the indicator entirely (`cancelColumnReorder`) rather than leaving it painted
-    // where the drop would have landed (D-S5-18: "a refused drag must leave nothing behind").
+    // where the drop would have landed ("a refused drag must leave nothing behind").
     expect(reorderCancels).toHaveLength(1);
   });
 

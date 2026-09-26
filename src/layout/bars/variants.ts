@@ -28,8 +28,8 @@ import { fixedWidthBar, wholeSpanUnlessSegments } from './bar.js';
 /** One row's variant, as the rule that won answered it. Every seam reads its five answers off this
  *  one object, so what a row draws, how it looks, what you can do to it and what rules its look
  *  needs always come from the same registration — never from a second lookup by name, which can
- *  answer with a different rule that happens to share the name (`F3`). */
-/** **Not generic over `TProps` (F18).** `Gantt<TProps>.variants` keeps the consumer's prop typing on
+ *  answer with a different rule that happens to share the name. */
+/** **Not generic over `TProps`.** `Gantt<TProps>.variants` keeps the consumer's prop typing on
  *  `when`, but `paint`'s type, `BarRenderer`, takes a plain `Entry` regardless of `TProps` — the same
  *  gap `GanttOptionsBase.barRenderer` and `EntryVariant.paint` already carry, not one this type
  *  introduces. A `ResolvedVariant<TProps>` would add a type parameter nothing inside actually reads,
@@ -42,7 +42,7 @@ export interface ResolvedVariant extends DrawnVariant {
   readonly capabilities: Capabilities | undefined;
   /** The rules this look needs, as CSS text, or `undefined` for none (ADR 0022 §5). The same string
    *  the variant's own `css` carried at registration — copied here so every seam answers `bars` /
-   *  `paint` / `can` / `css` off this one object, and never looks the name up a second time (`F1`). */
+   *  `paint` / `can` / `css` off this one object, and never looks the name up a second time. */
   readonly css: string | undefined;
   /** What this variant's own bars print, and where — merged key by key over the Gantt's own
    *  `barLabels` (`mergeBarLabels`, #421 C5), or `undefined` for no opinion at this level. */
@@ -71,14 +71,14 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  ADR 0026). */
   bars?: BarProducer;
   /** How it looks. A paint that names no content of its own — `class`, `style` or `attrs` alone —
-   *  decorates the library's own bar and keeps its label (`J34`). */
+   *  decorates the library's own bar and keeps its label. */
   paint?: BarRenderer;
   /** What you can do to it. One level under the consumer's own `capabilities`, one level over the
-   *  library rule. Answer `undefined` from a predicate for "no opinion" (`J13`). */
+   *  library rule. Answer `undefined` from a predicate for "no opinion". */
   capabilities?: Capabilities;
   /** The rules this look needs, as CSS text — verbatim, no scoping done for you. A variant owns
    *  `bars`, `paint` and `can` already; this is the fifth answer, the rules behind the class
-   *  `paint` names (ADR 0022 §5, Q6). `view/` wraps every installed variant's `css` once in
+   *  `paint` names (ADR 0022 §5). `view/` wraps every installed variant's `css` once in
    *  `@layer freegantt` and writes it after the base sheet, so a variant's own rule cancels
    *  `.fg-bar`'s background and state ring at equal specificity, and an unlayered consumer rule
    *  still beats it (ADR 0021).
@@ -114,7 +114,7 @@ export interface RegisteredVariant {
 
 /** A `when` names a key no Field declares. The rule matches no row — the match answers no rather
  *  than taking the layout pass down — and this names the rule and the key, so the typo is visible
- *  instead of silent (`J59`). A plugin that means to match on its own key declares it from its
+ *  instead of silent. A plugin that means to match on its own key declares it from its
  *  `data` half. */
 export interface UnknownFieldMatch {
   /** The rule that names the key. */
@@ -140,7 +140,7 @@ export type ReportDoubleMatch = (collision: DoubleVariantMatch) => void;
 
 /** Who installed a rule, and therefore which rules it can lose to. The consumer's own `variants`
  *  win over every plugin's, and every plugin's win over core's two — the same ladder `plans/02` §4
- *  already states for a renderer (D-S5-11). Within one rank, the newest registration wins (`Q5`). */
+ *  already states for a renderer. Within one rank, the newest registration wins. */
 const CORE_RANK = 0;
 const PLUGIN_RANK = 1;
 const CONSUMER_RANK = 2;
@@ -160,19 +160,18 @@ interface VariantRegistration {
 
 export interface VariantRegistry extends VariantBars {
   /** The variant this row wears, as one object. Walks newest-first, over the consumer's rules, then
-   *  every plugin's, then core's two, and stops at the first rule that answers yes (`Q5`). Every row
+   *  every plugin's, then core's two, and stops at the first rule that answers yes. Every row
    *  resolves, because core's `leaf` carries no `when`.
    *
    *  It answers with the registration that won, never with its name alone. Two registrations may
    *  share one name — a consumer's own rule over a plugin's of the same name is the shipped case —
-   *  and a second lookup by name can land on the other one (`F3`). */
+   *  and a second lookup by name can land on the other one. */
   resolveFor(entry: Entry): ResolvedVariant;
   /** `ctx.variants.add(variant)` — a plugin's own. It wins over core's two and loses to the
    *  consumer's. The returned `Disposer` removes exactly this registration. */
   addPluginVariant(variant: EntryVariant, pluginId?: PluginId): Disposer;
   /** `GanttOptions.variants` — the consumer's own. It wins over every plugin's, whatever order the
-   *  plugins installed in, which is the posture every other consumer/plugin pair already takes
-   *  (D-S5-11). */
+   *  plugins installed in, which is the posture every other consumer/plugin pair already takes. */
   addConsumerVariant(variant: EntryVariant): Disposer;
   /** Every installed variant's own `css`, in registration-ladder order — core, then every plugin,
    *  then the consumer's (ADR 0022 §5). `view/` reads this to build the one `<style>` node a Gantt
@@ -208,7 +207,7 @@ const SUMMARY_BAR: ElementDescription = Object.freeze({
 const SUMMARY_VARIANT_NAME = 'summary';
 const LEAF_VARIANT_NAME = 'leaf';
 
-/** `.fg-bar-summary`'s own rules (ADR 0022 §5, Q6). Moved out of the always-shipped base sheet: a
+/** `.fg-bar-summary`'s own rules (ADR 0022 §5). Moved out of the always-shipped base sheet: a
  *  page that never installs `summary()` no longer pays for them (they still do here, because
  *  `CORE_VARIANTS` seeds `summary()` unconditionally — but a consumer who re-skins the floor with
  *  a different `summary` no longer inherits a class the base sheet still defined behind it).
@@ -237,7 +236,7 @@ const SUMMARY_CSS = `
 const DIAMOND_VARIANT_NAME = 'diamond';
 
 /** The diamond's own fixed box, in content pixels. `harness/index.html` measured and shipped
- *  13px, so that is what core's own default carries (ADR 0022 Q3).
+ *  13px, so that is what core's own default carries (ADR 0022).
  *
  *  Declared here, beside `diamond()`'s only reader — never in `src/layout/frame.ts`, which holds
  *  the two Gantt-wide numbers `barSpan` and `frame-settings.ts` share (`DEFAULT_MIN_BAR_WIDTH_PX`).
@@ -250,12 +249,12 @@ const DIAMOND_BAR: ElementDescription = Object.freeze({
   class: Object.freeze({ 'fg-bar-diamond': true }),
 });
 
-/** `.fg-bar-diamond`'s own rules (ADR 0022 §5, Q6). The box `fixedWidthBar` sizes is the hit
+/** `.fg-bar-diamond`'s own rules (ADR 0022 §5). The box `fixedWidthBar` sizes is the hit
  *  target; the `::before` is the ink, turned 45° into the familiar diamond.
  *
  *  **Restates no size.** The ink is `width: 100%; aspect-ratio: 1` on the `::before`, so it follows
  *  whatever box the Bar states. A literal `13px` here would leave a 20px hit box around a 13px
- *  glyph the moment an author writes `diamond({ bars: fixedWidthBar(20) })` (Q3).
+ *  glyph the moment an author writes `diamond({ bars: fixedWidthBar(20) })`.
  *
  *  The box's own background and state ring are cancelled first, so the glyph — not a square bar
  *  sitting behind it — wears the hover ring and the selection outline. */
@@ -279,7 +278,7 @@ const DIAMOND_CSS = `
  *  `wholeSpanUnlessSegments` and answers for the rows `myRule` matches instead of every row nothing else
  *  matched.
  *
- *  **`bar` and `summary` keep their plain names (F13).** `import { bar } from 'freegantt'` reads as
+ *  **`bar` and `summary` keep their plain names.** `import { bar } from 'freegantt'` reads as
  *  a generic word at a package's top level, and a `*Variant` suffix would read further from a call
  *  site: `variants: [bar(), summary(), diamond()]` reads as one family, and `barVariant()` names the
  *  pipeline that builds the answer, not the job an author is doing (`CLAUDE.md`'s call-site-first
@@ -345,7 +344,7 @@ export function diamond(overrides: Partial<EntryVariant> = {}): EntryVariant {
  *  overrides. `bar()` carries no `when`, so it answers for every row no rule matches, and the floor
  *  is total.
  *
- *  **The order inside this list decides nothing** (`J60` supersedes `J37`). `hasMatchRule` sorts
+ *  **The order inside this list decides nothing.** `hasMatchRule` sorts
  *  every matching rule ahead of every last resort, so `summary()` is asked before `bar()` whichever
  *  way round they are written here. It reads floor-first anyway, because that is the order the walk
  *  ends up in and a reader should not have to derive it from a comparator. */
@@ -372,7 +371,7 @@ function matchesEntry(registration: VariantRegistration, entry: Entry): boolean 
 }
 
 /** Is a second yes worth reporting? Two rules from one source that both match one row are siblings
- *  with no order between them, and that is an authoring error worth naming (`Q5`). Everything else
+ *  with no order between them, and that is an authoring error worth naming. Everything else
  *  is a deliberate override: a consumer's rule over a plugin's, anything over core's floor, or the
  *  last-resort variant, which matches nothing at all. */
 function canCollide(painted: VariantRegistration, next: VariantRegistration): boolean {
@@ -392,7 +391,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
   /** The walk order, held between registration changes (#188's pattern): `resolveFor` runs on every
    *  hover change, where the budget is zero allocation. */
   let ordered: readonly VariantRegistration[] | undefined;
-  /** `installedCss()`'s own sorted, mapped, filtered copy, held the same way `ordered` is (F15):
+  /** `installedCss()`'s own sorted, mapped, filtered copy, held the same way `ordered` is:
    *  invalidated on the same registration edge, so a call between edges re-sorts nothing. */
   let installedCssCache: readonly string[] | undefined;
 
@@ -479,7 +478,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
       // Rank ascending, not `walkOrder`'s newest-first: this answers cascade order, not paint
       // priority. `live`'s own order already puts core first (the `for` loop above this function
       // seeds it before any plugin or consumer registers), so the sort only has to settle two
-      // registrations that share a rank. Cached the same way `ordered` is (F15): a call between
+      // registrations that share a rank. Cached the same way `ordered` is: a call between
       // registration edges re-sorts nothing.
       return (installedCssCache ??= [...live]
         .sort((a, b) => a.rank - b.rank || a.seq - b.seq)

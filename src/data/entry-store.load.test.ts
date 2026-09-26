@@ -189,7 +189,7 @@ describe('entries.load', () => {
     expect(state.canUndo).toBe(true);
   });
 
-  // load() under a plugin hierarchy source (ADR 0020 J54): a refused source answer is a Fault, never
+  // load() under a plugin hierarchy source (ADR 0020): a refused source answer is a Fault, never
   // a throw. Load's pre-stage check reads raw `parentId` only, the same way `update()`'s
   // `#assertParentValid` does — a plugin source's own key goes through the Fault path instead.
   describe('load() under a plugin hierarchy source (ADR 0020 J54)', () => {

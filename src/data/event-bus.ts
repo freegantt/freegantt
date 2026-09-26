@@ -1,7 +1,7 @@
-// data/ — the shared bus, moved verbatim from view/event-bus.ts (D-S2-5). `view/event-bus.ts`'s own
+// data/ — the shared bus, moved verbatim from view/event-bus.ts. `view/event-bus.ts`'s own
 // header used to defer this call: "a bus shared with a future Dataset event would be a third runtime
 // carve-out in a module specified as types-only. The step that actually needs sharing makes that
-// call, with the caller in front of it (D-S1.8-4)." This is that step: `plans/02` §3 puts `change` on
+// call, with the caller in front of it." This is that step: `plans/02` §3 puts `change` on
 // the Dataset and `gridWidthChange` on the Gantt, and both need one `EventBus`. `data/` is pure,
 // DOM-free, and `view/ --> data/` is an existing edge in the layer map (§1) — `model/` stays types
 // only (`model-is-types-only`).
@@ -10,8 +10,8 @@
 // `DatasetEventMap` in `model/change-set.ts` (public event vocabulary, so it lives with the rest of
 // the model/ type surface). This file exports only the mechanism.
 //
-// S3.5, D-S3-17: a handler may veto asynchronously by returning a `Promise` instead of `false` — but
-// only for the event names a caller opts into via `TAsyncKeys` (default `never`, D-S2-9's `beforeChange`
+// S3.5: a handler may veto asynchronously by returning a `Promise` instead of `false` — but
+// only for the event names a caller opts into via `TAsyncKeys` (default `never`, `beforeChange`
 // stays sync-only, unchanged). `GanttEventMap`'s `beforeEntryMove`/`beforeEntryResize` are the first
 // (and, for now, only) `TAsyncKeys` a caller names — see `view/event-bus.ts`'s `AsyncCancelableEvent`.
 
@@ -90,7 +90,7 @@ export class EventBus<TEvents, TAsyncKeys extends keyof TEvents = never> {
 
   /** Every handler runs (a sync veto from one handler does not skip the rest). Returns
    *  `false`/`true` synchronously when no handler returned a `Promise`. When one did, the overall
-   *  result waits on **all** of them (D-S3-17) — a synchronous `false` still vetoes, but it does not
+   *  result waits on **all** of them — a synchronous `false` still vetoes, but it does not
    *  abandon an already-started Promise. A rejected Promise is a veto; the rejection is re-thrown
    *  on a later turn so `void emit()` / `void session.commit()` do not become the unhandled path. */
   emit<K extends keyof TEvents>(

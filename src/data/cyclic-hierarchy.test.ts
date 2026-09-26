@@ -1,4 +1,4 @@
-// F1 / P2-2 (2026-09-12 branch review): a tree that loops must never hang the library. Every walk
+// P2-2 (2026-09-12 branch review): a tree that loops must never hang the library. Every walk
 // over the tree carries a `seen` set, so it stops at the link that closes the loop — the guard
 // `#depthOf` already had, now on `descendants()`, on the removal walk, and on the parent check.
 //

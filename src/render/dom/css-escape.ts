@@ -1,5 +1,5 @@
 // render/dom — one place for the `CSS.escape` feature-detect every `[data-field="…"]` attribute
-// selector needs (S5.7, D-S5-18): `CSS.escape` is missing in some older or non-browser DOM shims.
+// selector needs (S5.7): `CSS.escape` is missing in some older or non-browser DOM shims.
 // Every caller here builds a *quoted* attribute selector, so the fallback escapes the two characters
 // that end the quoted string — `"` and `\`. A Field key that holds one still finds its own cell.
 // `view/` reads through this too (view -> render is an allowed edge, plans/01 §1).

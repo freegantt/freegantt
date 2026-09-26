@@ -12,7 +12,7 @@ import { createVariantRegistry } from './variants.js';
 describe('wholeEntryBar (review P3)', () => {
   it('covers the entry span, stamps the variant it is told, and owns the Bar id convention', () => {
     const t1 = spanEntry('t1', { name: 'Load test' });
-    // No `label` (#421 C5, Q36): the built-in producer leaves it absent, so `placeFrame`'s bound
+    // No `label` (#421 C5): the built-in producer leaves it absent, so `placeFrame`'s bound
     // `barLabelFor` resolves the Entry's name through its Field — this Bar never restates it.
     expect(wholeEntryBar(t1, 'buffer')).toEqual({
       id: barId(t1.id, 0),
@@ -172,7 +172,7 @@ describe('produceBarsForRow', () => {
     produceBarsForRow(segmentedRow, entryByIdFor([p1!, c1!]), own);
 
     // The subject (entryIds[0]) is asked with `true`; the child it claims is asked with `false`.
-    // Nothing is skipped — the producer runs, and answers, for both (Q33).
+    // Nothing is skipped — the producer runs, and answers, for both.
     expect(seen).toEqual([
       { id: 'p1', childrenAsSegments: true },
       { id: 'c1', childrenAsSegments: false },

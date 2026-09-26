@@ -1,4 +1,4 @@
-// extensions/ — the one place that answers "in what order do these plugins set up?" (D-S5-31).
+// extensions/ — the one place that answers "in what order do these plugins set up?".
 // Both install sites ask it. The Dataset installs a plugin's `data` half. The Gantt installs its
 // `view` half. ADR 0019 gives the two halves one `requires` list between them, so the sort belongs
 // to neither install site alone.
@@ -16,7 +16,7 @@ export interface OrderedPlugin {
   requires?: readonly PluginId[];
 }
 
-/** Two entries of one `plugins` list share an id (D-S5-3). */
+/** Two entries of one `plugins` list share an id. */
 export function assertNoDuplicateIds(plugins: readonly OrderedPlugin[]): void {
   const seen = new Set<PluginId>();
   for (const plugin of plugins) {
@@ -26,13 +26,13 @@ export function assertNoDuplicateIds(plugins: readonly OrderedPlugin[]): void {
 }
 
 /**
- * Setup order, resolved from `requires` alone (D-S5-31). `[b, a]` and `[a, b]` give the same order
+ * Setup order, resolved from `requires` alone. `[b, a]` and `[a, b]` give the same order
  * when `b.requires = ['a']`, so the array is an unordered set of what to install, never a sequence of
  * when. A required id nobody installs throws `MissingPluginError` naming both ids; a requirement cycle
  * throws `PluginRequirementCycleError` naming every plugin in it.
  *
  * This is also the order extenders wrap in, so a second plugin composing onto a first sees the first's
- * output (D-S5-23), and the order `store.read()` becomes answerable in: a reader always sets up after
+ * output, and the order `store.read()` becomes answerable in: a reader always sets up after
  * the plugin whose store it reads.
  *
  * ADR 0019: one `requires` list covers both halves. A Gantt sorts the Dataset's own plugins together

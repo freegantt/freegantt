@@ -1,5 +1,5 @@
 // model/ is types + brand/id helpers only — zero runtime beyond this, zero dependencies (plans/01 §1.1).
-// The changeset shape a transaction commits (plans/s2-data-core/README.md D-S2-7). Lives here, not in
+// The changeset shape a transaction commits (plans/s2-data-core/README.md). Lives here, not in
 // data/, so `MutationCancelledError` (model/errors.ts) can carry one — model/ is a leaf and may not
 // import data/, so a type a public model/ export needs to name must itself live in model/.
 
@@ -11,14 +11,14 @@ import type { ErrorReport, Refusable } from './error-report.js';
 
 export type { CoreFieldKey, FieldKey } from './field.js';
 
-/** One plugin's own store, namespaced by that plugin's id (D-S5-24). `reserve()` and `read()` both
+/** One plugin's own store, namespaced by that plugin's id. `reserve()` and `read()` both
  *  key off this, so a reader finds exactly the store its owner made. */
 export type PluginStoreName = `plugin:${PluginId}`;
 export type StoreName = 'entries' | PluginStoreName;
 /** `'load'` is `entries.load()` (#496): a full fresh start that clears History, never merged with
  *  `'user'`'s undo record. `'sync'` is `entries.syncAll()` (#517): a diffing match-the-list write that
  *  records no undo step and erases no Redo — a server refresh is not the user's own edit, so
- *  History stays local. `'engine'` arrives with its own producer (D-S2-11).
+ *  History stays local. `'engine'` arrives with its own producer.
  *  `'load'` was first reserved for the withdrawn `apply` door's skipped-write meaning — a different
  *  meaning than the one #496 gave it; if `apply` ever returns, its origin needs its own word. */
 export type ChangeOrigin = 'user' | 'undo' | 'redo' | 'load' | 'sync'; // 'engine' arrives with its own producer
@@ -41,7 +41,7 @@ export interface FieldUpdated {
   to: unknown;
 }
 
-/** One plugin-store row's net change (D-S5-24). A store row is whole-value data the plugin owns, not
+/** One plugin-store row's net change. A store row is whole-value data the plugin owns, not
  *  a Field, so it carries no `field` key — `store` is what tells the two rows apart. `undefined` on
  *  the `from` side means the entry had no row; on the `to` side it means this transaction removed it. */
 export interface StoreRowUpdated {
@@ -72,7 +72,7 @@ export interface ReplayOptions {
   overwriteForeignWrites?: boolean;
 }
 
-/** `beforeChange`/`change` share one payload (D-S2-5, D-S2-25): a `false` return from a `beforeChange`
+/** `beforeChange`/`change` share one payload: a `false` return from a `beforeChange`
  *  handler vetoes the whole changeset; `change` handler return values are ignored. Only the
  *  `before*` half is `Refusable` — `refuse(reason)` puts the vetoing handler's own words on the
  *  report core raises for it (#210), and there is nothing to refuse once the change has landed. Public event
@@ -81,7 +81,7 @@ export interface ReplayOptions {
 export interface DatasetEventMap {
   beforeChange: Refusable & { changeSet: ChangeSet };
   change: { changeSet: ChangeSet };
-  /** S5.12, D-S5-40: every refusal and every recovered fault a Dataset observes. Sync only, and no
+  /** S5.12: every refusal and every recovered fault a Dataset observes. Sync only, and no
    *  `before*` pair — a report states what already happened, so there is nothing to veto. The payload
    *  is the `ErrorReport` itself, not a wrapper: `dataset.on('error', (report) => …)` is the whole
    *  call. `api/watch-all-errors.ts` folds this feed and the Gantt's into one subscription. */

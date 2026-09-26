@@ -1,19 +1,19 @@
 // model/ — the plugin primitives that name nothing outside `model/`, zero-dependency (CLAUDE.md:
 // model/ is a zero-dependency leaf). The plugin shapes live in api/plugin.ts, `PluginContext` in
 // api/plugin-context.ts, and `DatasetPluginContext` in api/dataset-plugin.ts — each names api/ and
-// extensions/ types `model/` may never import (issue #137 F1, plans/s5-extensibility-and-editing/
-// s5.1-plugin-runtime.md D-S5-1). What stays here is what both contracts share, plus the two store
+// extensions/ types `model/` may never import (issue #137, plans/s5-extensibility-and-editing/
+// s5.1-plugin-runtime.md). What stays here is what both contracts share, plus the two store
 // types a plugin author holds but never constructs.
 
 import type { EntryId } from './ids.js';
 
-/** A plugin's own identity, unique within the `plugins` list that installs it (D-S5-3). */
+/** A plugin's own identity, unique within the `plugins` list that installs it. */
 export type PluginId = string;
 
 /** What `setup()` returns: releases whatever that plugin's own setup acquired. Called at most once. */
 export type Disposer = () => void;
 
-/** Another plugin's store, read-only (D-S5-30). Dropping `set`/`remove` is what makes ownership
+/** Another plugin's store, read-only. Dropping `set`/`remove` is what makes ownership
  *  legible at the call site: a reviewer never has to check by hand which plugin a store call owns. */
 export interface PluginStoreView<T extends object> {
   get(id: EntryId | string): T | undefined;

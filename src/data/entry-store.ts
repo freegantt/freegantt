@@ -1,16 +1,16 @@
-// data/ — EntryStore, the view half plus the S2.2 transaction overlay (D-S2-2, D-S2-21), and (S2.3
+// data/ — EntryStore, the view half plus the S2.2 transaction overlay, and (S2.3
 // §1.1) the public mutators `dataset.entries.add/update/remove` delegate straight to.
 //
 // Two questions hide in one word, and `all` answers them differently (ADR 0017, rule 2). *Which*
 // rows exist is the collection's question, and `all` answers it as of the last commit — the array is
-// a `computed` bound to `#revision`, and `ScaleBinding` compares it by reference (D-S1.5-4, D-S2-3).
+// a `computed` bound to `#revision`, and `ScaleBinding` compares it by reference.
 // *What a row is worth* is the row's question, and every `Entry` in that array answers it now.
 // `get`/`has`/`size` read through an open write set, so a read-then-write helper inside a
 // transaction body sees its own edits.
 // The staging/apply methods below are gated by a `TxToken` only `data/transaction.ts` can mint — a
 // mutation outside a transaction does not typecheck (docs/02 §3.6). `add`/`update`/`remove` never
 // mint one themselves; they run their body through `runTransaction`, which auto-wraps when none is
-// open and joins one already open (D-S2-8) — the same entry point `DatasetState.transaction()` uses.
+// open and joins one already open — the same entry point `DatasetState.transaction()` uses.
 
 import type {
   Entry,

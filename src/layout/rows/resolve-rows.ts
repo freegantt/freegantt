@@ -1,4 +1,4 @@
-// layout/ — one row pass: produce, filter, sort, collapse (D-S4-19, D-S4-28).
+// layout/ — one row pass: produce, filter, sort, collapse.
 
 import type { Entry, FieldContext } from '../../model/index.js';
 import type { FieldCompare } from '../column.js';

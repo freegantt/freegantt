@@ -251,7 +251,7 @@ describe('Dataset timeZone omission (#129)', () => {
   });
 });
 
-describe('Dataset.time (S5.6, D-S5-16)', () => {
+describe('Dataset.time (S5.6)', () => {
   it("is bound to this Dataset's own zone", () => {
     const dataset = new Dataset({ timeZone: 'America/Chicago', entries: [oneEntry()] });
     expect(dataset.time.zone).toBe('America/Chicago');
@@ -540,7 +540,7 @@ describe('Dataset fields (S4.1)', () => {
     expect(costRows.map((row) => row.id)).toEqual(expect.arrayContaining(['root', 'leaf']));
   });
 
-  it("D-S4-11: a child cost edit leaves entries.all's order and the other child's stored cost", () => {
+  it("a child cost edit leaves entries.all's order and the other child's stored cost", () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
       fieldTypes: { money: { rollUp: 'sum' } },
@@ -673,7 +673,7 @@ describe('Dataset generics (#123)', () => {
     }
   });
 
-  // ADR 0011 Q15, #281: a declared Field key type-checks flat, at the top, at both doors that build
+  // ADR 0011, #281: a declared Field key type-checks flat, at the top, at both doors that build
   // a row — the constructor's `entries` array and `entries.add()` — the same shape `update()` already
   // typed. Runtime already read the flat key either way (`propsFromInput`); this is the static half.
   it('types a flat declared Field key at both doors: the constructor and entries.add() (#281)', () => {
@@ -738,7 +738,7 @@ describe('Dataset generics (#123)', () => {
   });
 });
 
-// S5.10, D-S5-23/24/30/31: `DatasetOptions.plugins` is the public way in. Each case below writes a
+// S5.10: `DatasetOptions.plugins` is the public way in. Each case below writes a
 // plugin the way an application author writes one — a factory returning `{ id, setup }`.
 describe('Dataset plugins (S5.10)', () => {
   interface LockRow {
@@ -746,7 +746,7 @@ describe('Dataset plugins (S5.10)', () => {
   }
 
   /** Locks one entry: its own store row says which, and `beforeChange` refuses any commit that
-   *  touches it — the same shape harness/plugins/lock-entries.ts ships (D-S5-24's refusal note). */
+   *  touches it — the same shape harness/plugins/lock-entries.ts ships. */
   function lockEntries(ids: readonly string[]): DataPlugin {
     return {
       id: 'demo.lock',
@@ -772,7 +772,7 @@ describe('Dataset plugins (S5.10)', () => {
     expect(dataset.pluginStore('demo.lock')?.get('t1')).toEqual({ locked: true });
   });
 
-  it('refuses an edit to a locked entry through beforeChange (D-S5-24)', () => {
+  it('refuses an edit to a locked entry through beforeChange', () => {
     const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [lockEntries(['t1'])] });
     expect(() => dataset.entries.update('t1', { name: 'Renamed' })).toThrow(MutationCancelledError);
     expect(first(dataset).name).toBe('Design');
@@ -888,7 +888,7 @@ describe('Dataset plugins (S5.10)', () => {
     expect(dataset.entries.get('p1')?.read('cost')).toBe(500);
   });
 
-  it('sets up in requires order, whichever order the array writes (D-S5-31)', () => {
+  it('sets up in requires order, whichever order the array writes', () => {
     const order: string[] = [];
     const base: DataPlugin = {
       id: 'demo.base',
@@ -902,7 +902,7 @@ describe('Dataset plugins (S5.10)', () => {
       requires: ['demo.base'],
       data(ctx) {
         order.push('reader');
-        // The store its prerequisite reserved is already there to read (D-S5-30).
+        // The store its prerequisite reserved is already there to read.
         seen = ctx.store.read<{ note: string }>('demo.base')?.get(entryId('t1'))?.note;
       },
     };
@@ -920,7 +920,7 @@ describe('Dataset plugins (S5.10)', () => {
     );
   });
 
-  it('composes the extension hook in that same order, rather than evicting it (D-S5-23)', () => {
+  it('composes the extension hook in that same order, rather than evicting it', () => {
     const cascadesTo = (id: string, to: string): DataPlugin => ({
       id,
       ...(id === 'demo.second' ? { requires: ['demo.first'] } : {}),
@@ -1183,7 +1183,7 @@ describe("a plugin's per-entry lock rule opens a cell for a cascade (#473)", () 
   });
 });
 
-describe('a plugin’s declared Field is the plugin’s, not the document’s (D-S5-33, #162)', () => {
+describe('a plugin’s declared Field is the plugin’s, not the document’s (#162)', () => {
   /** The S5.10 shape: a plugin declares a Field, and entries carry its values in `props`. */
   const declaresRisk: DataPlugin = {
     id: 'demo.risk',
@@ -1234,7 +1234,7 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (D
 
 describe('a plugin Field declared at construction is there before entries are read (#496 grill round 3)', () => {
   /** No `ctx.fields.register` call: the plugin declares `locked` on itself, the same shape
-   *  `DatasetOptions.fields` takes (R1). This is what `harness/plugins/lock-entries.ts` moves to. */
+   *  `DatasetOptions.fields` takes. This is what `harness/plugins/lock-entries.ts` moves to. */
   const locks = () => ({
     id: 'demo.locks',
     fields: [{ key: 'locked', type: 'boolean', editable: 'api' }] as const,
@@ -1253,7 +1253,7 @@ describe('a plugin Field declared at construction is there before entries are re
     expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
   });
 
-  it('gives new Dataset() and entries.load() the same entries for the same input (Q1 oracle)', () => {
+  it('gives new Dataset() and entries.load() the same entries for the same input (oracle)', () => {
     const rows = [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }];
     const fresh = new Dataset<{ locked?: boolean }>({ timeZone: 'UTC', entries: rows, plugins: [locks()] });
     const loaded = new Dataset<{ locked?: boolean }>({ timeZone: 'UTC', entries: [], plugins: [locks()] });

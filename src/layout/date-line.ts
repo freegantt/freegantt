@@ -5,7 +5,7 @@ import { now } from '../time/index.js';
 import type { TimeScale } from '../time/index.js';
 
 /** One vertical marker at an Instant, in content pixels. Index-keyed by the caller, like Header
- * bands — no `id` (S1.13, D-S1.13-3). `today` marks the Today line wrapper (U5) — paint writes
+ * bands — no `id`. `today` marks the Today line wrapper (U5) — paint writes
  * `data-flag="today"`; authored `dateLines` entries omit it. Named apart from `DateLine` (S4-1):
  * this is screen-space paint geometry, not the resolved Date line a consumer reads back. */
 export interface DateLineDecoration {
@@ -17,8 +17,8 @@ export interface DateLineDecoration {
 }
 
 /** What a caller states to place a Date line besides the today wrapper, resolved to an `Instant`.
- * `api/gantt.ts` publishes this same shape as `Gantt.dateLines`'s read type (S1.13, D-S1.13-2,
- * S4-1) — `DateLineInput` is its loose counterpart on the way in. */
+ * `api/gantt.ts` publishes this same shape as `Gantt.dateLines`'s read type (S4-1) — `DateLineInput`
+ * is its loose counterpart on the way in. */
 export interface DateLine {
   placeAt: Instant;
   label?: string;
@@ -64,7 +64,7 @@ function dateLineAt(
 }
 
 /** Turns the today wrapper and any authored Date lines into decorations in range, positionally
- * (no `id` — index-keying is `render/dom`'s job, S1.13, D-S1.13-3). */
+ * (no `id` — index-keying is `render/dom`'s job). */
 export function resolveDateLines(input: ResolveDateLinesInput): DateLineDecoration[] {
   const { scale } = input;
   const lines: DateLineDecoration[] = [];

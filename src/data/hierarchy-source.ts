@@ -6,7 +6,7 @@
 // that closes it. Both are refused answers, and neither throws — a Gantt whose plugin answers badly
 // still draws.
 //
-// **The check reports nothing itself** (`F5`). It hands the refused answers back, and the caller
+// **The check reports nothing itself**. It hands the refused answers back, and the caller
 // raises them where it wants them raised: the store does it once per revision, from the commit path,
 // and the Rollup's own pass — a tree no commit has landed — drops them on the floor.
 
@@ -20,7 +20,7 @@ import { entryId } from '../model/index.js';
  *  here reads either shape unchanged. Internal — never a public export. */
 export type UnplacedEntry<TProps = Record<string, unknown>> = Omit<StoredEntry<TProps>, 'siblingIndex'>;
 
-/** Core's own source, registered like any other with no special claim on the seam (D-S5-23). A
+/** Core's own source, registered like any other with no special claim on the seam. A
  *  Dataset with no plugin installed reads this and nothing else, so `parentId` stays the tree. */
 export const storedParentSource: HierarchySource = (entry) => entry.parentId;
 
@@ -47,7 +47,7 @@ export type ParentIndex = ReadonlyMap<EntryId, EntryId>;
  *
  *  `seen` is the same cycle guard `breakCycles` runs once per revision on the committed tree; here the
  *  walk simply stops rather than reporting, because a lock query answers `false` on a bad chain
- *  instead of raising (`F5` — a query is a read, not a place to raise a fault). */
+ *  instead of raising — a query is a read, not a place to raise a fault. */
 export function isDescendantOf(
   id: EntryId,
   ancestorId: EntryId,
@@ -113,7 +113,7 @@ export function checkHierarchyAnswers(
   return { parents: parentOf, refused };
 }
 
-/** One answer core refused, worded for whoever gave it (`F4`).
+/** One answer core refused, worded for whoever gave it.
  *
  *  A source composes, so who is installed does not say who answered: a plugin that falls through
  *  (`entry.props.phaseId ?? next(entry)`) hands back the row's own `parentId`, which the consumer

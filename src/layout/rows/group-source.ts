@@ -1,4 +1,4 @@
-// layout/ — `{ source: 'group', groupBy }`. One header per value, first-seen order (D-S4-21, D-S4-23).
+// layout/ — `{ source: 'group', groupBy }`. One header per value, first-seen order.
 
 import { entryId, rowId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';

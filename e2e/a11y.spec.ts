@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-// D-S5-27 (s5.11-a11y-completion.md §1): axe walks every demo page the harness nav actually links,
+// s5.11-a11y-completion.md §1: axe walks every demo page the harness nav actually links,
 // not every .html file on disk — the e2e fixtures under `harness/e2e/` are not demos. The nav's own HARNESS_PAGES array (harness/harness-nav.ts) is the
 // one list, so a page a future step adds to the gallery is covered here by construction instead of
 // by someone remembering to retype it.

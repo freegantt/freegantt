@@ -1,4 +1,4 @@
-// api/ — what a plugin's `view` half receives (S5.1, D-S5-1, issue #137 F1, ADR 0019). The three
+// api/ — what a plugin's `view` half receives (S5.1, issue #137, ADR 0019). The three
 // files read together: `api/plugin.ts` says what a plugin is, this one says what its `view` half
 // sees, and `api/dataset-plugin.ts` says what its `data` half sees.
 //

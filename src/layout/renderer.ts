@@ -1,4 +1,4 @@
-// layout/ — renderer callback vocabulary (S5.4, D-S5-10/11/12). These point types reference
+// layout/ — renderer callback vocabulary. These point types reference
 // FrameBar/FrameRow/ResolvedColumn (layout-owned) alongside Entry (model-owned), so they live here
 // rather than model/render.ts (ElementDescription's own file) — model/ is a leaf and may import
 // nothing (model-is-leaf, dependency-cruiser). `layout/index.ts` re-exports them the same way it
@@ -10,7 +10,7 @@ import type { ElementDescription } from '../model/index.js';
 import type { FrameBar, FrameRow } from './frame.js';
 import type { ResolvedColumn } from './column.js';
 
-/** One of the four renderer points (D-S5-11): one slot each. */
+/** One of the four renderer points: one slot each. */
 export type RendererPoint = 'bar' | 'gridCell' | 'header' | 'tooltip';
 
 /** Which side of the bar the label paints on. This is the *answer* for one bar at one width, not the
@@ -20,7 +20,7 @@ export type BarLabelPlacement = 'inside' | 'outside';
 
 /** The label the library resolved for one bar — the text, and the side it paints on. A `barRenderer`
  *  paints it in its own markup and needs no text ruler of its own: the library measures, in one
- *  place, for its own label and for a renderer's alike (J1). */
+ *  place, for its own label and for a renderer's alike. */
 export interface ResolvedBarLabel {
   text: string;
   placement: BarLabelPlacement;
@@ -34,7 +34,7 @@ export interface BarRendererContext {
    *  where it goes" or nothing, and "a label with nowhere to paint" stays unrepresentable. */
   label?: ResolvedBarLabel;
 }
-/** `undefined` keeps the library's own output for this one bar (D-S5-11). */
+/** `undefined` keeps the library's own output for this one bar. */
 export type BarRenderer = (ctx: BarRendererContext) => ElementDescription | undefined;
 
 export interface GridCellRendererContext {
@@ -75,7 +75,7 @@ export type RendererFor<P extends RendererPoint> = P extends 'bar'
       ? HeaderRenderer
       : TooltipRenderer;
 
-/** One point's resolved renderer, plus the plugin id it came from when it did (issue #137 F14: the
+/** One point's resolved renderer, plus the plugin id it came from when it did (issue #137: the
  *  dev-log a throwing renderer gets names the point and, when it came from a plugin, that plugin's
  *  id). No `pluginId` means it came from the consumer's own `GanttOptions`. */
 export interface ResolvedRenderer<TRenderer> {
@@ -83,7 +83,7 @@ export interface ResolvedRenderer<TRenderer> {
   pluginId?: PluginId;
 }
 
-/** Where the default bar label paints, when no `barRenderer` already owns the bar's content (J1).
+/** Where the default bar label paints, when no `barRenderer` already owns the bar's content.
  *  `'fitBar'` (the default) reads inside when the label fits, outside to the right when it does not,
  *  and falls back to inside, ellipsised, when neither fits — a family with the shipped
  *  `range: 'fitDataset'` and `gridWidth: 'fitColumns'`. `'inside'` and `'outside'` force one placement

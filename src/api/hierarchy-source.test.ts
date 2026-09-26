@@ -206,7 +206,7 @@ describe('a plugin source answers the tree, and every door follows it', () => {
 });
 
 describe('core refuses an answer it cannot use, and keeps drawing', () => {
-  /** Core raises a refused answer where it happens (`F5`), and construction happens before a
+  /** Core raises a refused answer where it happens, and construction happens before a
    *  consumer can subscribe — so the `console` fallback is what a construction-time refusal reaches,
    *  exactly as the construction Rollup's own `derived-values-dropped` report does. Every case below
    *  reads the fallback for the construction half and the `error` event for every revision after. */
@@ -308,7 +308,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
 
     expect(dataset.entries.get('a')?.parent()).toBeUndefined();
     expect(dataset.entries.get('a')?.depth).toBe(0);
-    // Four reads, one revision, and not one more report: reading asks the memoized answer (`F5`).
+    // Four reads, one revision, and not one more report: reading asks the memoized answer.
     dataset.entries.get('a')?.children();
     dataset.entries.get('b')?.parent();
     expect(warnings).toHaveLength(1);
@@ -377,7 +377,7 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     expect(dataset.entries.get('p')?.parent()).toBeUndefined();
   });
 
-  it('a commit that nothing reads still reports (`F5`)', () => {
+  it('a commit that nothing reads still reports', () => {
     const ghost = () =>
       definePlugin({
         id: 'demo.ghost',

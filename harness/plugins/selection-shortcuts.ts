@@ -4,7 +4,7 @@
 import { definePlugin } from 'freegantt';
 import type { WriteLog } from './write-log.js';
 
-/** S5.2, D-S5-6/D-S5-7: a plugin registers its own command and binds a chord to it. `Mod+K` clears
+/** S5.2: a plugin registers its own command and binds a chord to it. `Mod+K` clears
  *  the selection, through the same `ctx.commands.register` and
  *  `ctx.interaction.registerKeybinding` seams every built-in feature uses — no back door. */
 export function selectionShortcuts(writeLog: WriteLog) {

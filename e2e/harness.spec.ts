@@ -22,7 +22,7 @@ test('harness renders the fixture dataset as positioned bars', async ({ page }) 
 // the first screenful of rows culled everything to nothing — the pane went blank instead of
 // showing the rows actually scrolled into view.
 //
-// The timeline pane is the native scroller (S1.8, D-D/D-S1.8-1) — `#gantt` itself no longer scrolls.
+// The timeline pane is the native scroller (S1.8, D-D) — `#gantt` itself no longer scrolls.
 test('scrolling to the bottom of the frame shows rows, not a blank pane', async ({ page }) => {
   await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
@@ -42,7 +42,7 @@ test('scrolling to the bottom of the frame shows rows, not a blank pane', async 
 });
 
 // Regression (found while chasing the report above): PaneLayout applied both `overflow: hidden`
-// and the follow-scroll `translateY` (D-S1.8-1) to the same row-layer element. A CSS transform
+// and the follow-scroll `translateY` to the same row-layer element. A CSS transform
 // moves an element's painted position but NOT the coordinate space its own `overflow: hidden`
 // clips against (that clip is fixed to the element's local, pre-transform box) — so once scrolled
 // far enough, every row's local offset fell outside that local clip window and got painted as
@@ -119,7 +119,7 @@ test('grid pane rows are actually painted after scrolling, not just correctly po
   });
 });
 
-// D1 (plans/s1.8-pane-layout/README.md, D-S1.8-1/D-S1.8-10): the row-label gutter used to sit
+// D1 (plans/s1.8-pane-layout/README.md): the row-label gutter used to sit
 // inside the scrollable content, so the timeline pane's native scrollable range was
 // `gridWidth + contentWidth` wide though only `contentWidth` of it was timeline. This is the real
 // `scrollWidth` assertion happy-dom cannot express (src/view/gantt-shell.test.ts's D1 test reads the
@@ -134,7 +134,7 @@ test('the timeline pane has no row-label gutter in its scrollable content (D1)',
 
   // The content sizer (render/dom/index.ts) is the library's own statement of how wide the
   // timeline's content is — reading its painted right edge, not comparing scrollWidth to
-  // clientWidth, works whether or not the current preset's density floor (S1.12, D-S1.12-2) makes
+  // clientWidth, works whether or not the current preset's density floor (S1.12) makes
   // the content genuinely wider than the pane. What D1 guards against is the gutter being counted
   // a second time: `scrollWidth` must track the sizer's own extent, not sizer-extent + gridWidth.
   // getBoundingClientRect() is viewport-relative, so a scrolled pane (e.g. panToToday on load)
@@ -142,7 +142,7 @@ test('the timeline pane has no row-label gutter in its scrollable content (D1)',
   // sizer's extent against the pane's unscrolled content origin, matching scrollWidth's own frame.
   // `.fg-content-sizer` is the sizer's own name (render/dom/index.ts). This read used to take the
   // pane's first `aria-hidden` child instead, which was the sizer only for as long as the sizer was
-  // the pane's one hidden layer — the tick-line layer (J2) is hidden too, mounts earlier, and is
+  // the pane's one hidden layer — the tick-line layer is hidden too, mounts earlier, and is
   // pane-wide rather than content-wide, so the old scan measured that and read 7154px of gap.
   const sizerRight = await pane.evaluate((el) => {
     const sizer = el.querySelector<HTMLElement>('.fg-content-sizer')!;

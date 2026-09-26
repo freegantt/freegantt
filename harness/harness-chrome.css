@@ -250,7 +250,7 @@ nav.harness-site-nav a[aria-current='page'] {
 
 /* -------------------------------------------------------------- page brief */
 
-/* D-S5-29: the note above the Gantt that lists the features a page shows, the config that does it,
+/* The note above the Gantt that lists the features a page shows, the config that does it,
  * and the spec section that governs it. `harness/docs/page-brief.ts` fills it in. */
 .harness-page-brief {
   margin: 0 0 20px;
@@ -738,7 +738,7 @@ nav.harness-site-nav a[aria-current='page'] {
   --fg-bar-label-gap: 7px;
 }
 
-/* Typography inside the Gantt stays harness-owned (D-S1.11-8): the library ships structure and
+/* Typography inside the Gantt stays harness-owned: the library ships structure and
    colour, the consumer ships the type. Tabular figures are the reason this matters here — the
    grid's dates and budgets are columns that have to line up. */
 .fg-tick {

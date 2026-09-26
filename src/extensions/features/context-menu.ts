@@ -1,7 +1,7 @@
-// extensions/features/ — the context menu built-in (S5.5, D-S5-13/14). An ordinary `ChromePlugin`,
-// confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood
+// extensions/features/ — the context menu built-in. An ordinary `ChromePlugin`,
+// confined by the `extensions-public-only` rule to `api/`/`model/` imports — the dogfood
 // gate this step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
-// `api/index.ts` barrel. That barrel re-exports `contextMenu` itself (D-S5-13). `extensions/popup.ts`
+// `api/index.ts` barrel. That barrel re-exports `contextMenu` itself. `extensions/popup.ts`
 // imports `api/plugin-context.ts` directly instead of that barrel, for the same reason (no-circular).
 //
 // Review A3/A4: this file names no `.fg-*` class and no `data-*` key of the rendered Gantt. It asks
@@ -57,13 +57,13 @@ function clickedActedOn(target: DomTarget | undefined): ActedOn {
   return { entryIds: target.entryIds };
 }
 
-/** D-S5-13: right-click, or `Shift+F10`/the Menu key, opens a menu of the commands whose `when`
- *  passes for the target. `focus: 'trap'` (D-S5-9): arrow keys move between items. Enter or a click
+/** Right-click, or the menu key, opens a menu of the commands whose `when`
+ *  passes for the target. `focus: 'trap'`: arrow keys move between items. Enter or a click
  *  runs one item and closes the menu. Escape closes the menu and returns focus. `tooltips()` builds
  *  on the same primitive, `extensions/popup.ts`. This file reaches it through `createPopup` at
- *  `api/index.js`, and never imports it directly (D-S5-5).
+ *  `api/index.js`, and never imports it directly.
  *
- *  An item names a command and nothing else (D-S5-14). It carries no `run` of its own. The mouse
+ *  An item names a command and nothing else. It carries no `run` of its own. The mouse
  *  path and the keyboard path are one action, never two that can drift apart. */
 export function contextMenu(options: ContextMenuOptions = {}): ChromePlugin {
   return {
@@ -78,7 +78,7 @@ export function contextMenu(options: ContextMenuOptions = {}): ChromePlugin {
       // B2: the menu lists commands resolved for the right-clicked (or focused-row) target. `run()`
       // below must invoke that same command against that same context. It must not use whatever
       // `ctx.commands`'s own `#buildCommandContext` would rebuild from the current selection.
-      // D-S5-14: the mouse path and the keyboard path are one action. `CommandOf.run` is public
+      // The mouse path and the keyboard path are one action. `CommandOf.run` is public
       // (`api/command.ts`), so this needs no wider access than `available()` already returned.
       let openCommands: { readonly available: readonly Command[]; readonly ctx: CommandContext } | undefined;
 
@@ -195,7 +195,7 @@ export function contextMenu(options: ContextMenuOptions = {}): ChromePlugin {
 
       /** #205, and the same rule the pointer path runs. The Selection is what the keyboard landed
        *  on. So `openAt` answers with the whole Selection, not with its first Entry alone
-       *  (D-S5-14 — one action, two ways in). The bar of the first selected Entry stays the
+       *  (one action, two ways in). The bar of the first selected Entry stays the
        *  popup's anchor. A popup needs a box on screen, and `GanttDom` has no row node for an
        *  Entry. */
       const openAtFocusedRow = (): void => {
@@ -210,7 +210,7 @@ export function contextMenu(options: ContextMenuOptions = {}): ChromePlugin {
       const disposeMenuKey = ctx.interaction.registerKeyHandler('ContextMenu', () => openAtFocusedRow());
 
       // The `contextmenu` listener removes itself through `ctx.disposables`, which runs ahead of this
-      // disposer (S5.1, D-S5-3).
+      // disposer.
       return () => {
         disposeShiftF10();
         disposeMenuKey();

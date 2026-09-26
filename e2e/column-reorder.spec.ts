@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// #140, D-S5-18 ("a reorder drag moves the header cell with a drop indicator between columns"): the
+// #140 ("a reorder drag moves the header cell with a drop indicator between columns"): the
 // drop indicator alone used to be the whole gesture — the grabbed cell stayed in its slot, so the
 // drag had no grabbed thing to follow. It now rides a transform while the indicator marks the edge.
 // Both halves are asserted here, in a real browser, because the transform is a hot-path paint no
@@ -52,7 +52,7 @@ test('a reorder drag carries the grabbed header cell and drops the column in its
   // `expect.poll`, not one read: the commit is synchronous, but the header cells move on the next
   // animation frame. `ColumnChrome.commit` writes the new column list and then calls
   // `requestFrame()`, and `FrameScheduler` is the one owner of `requestAnimationFrame` (B10,
-  // D-S2-15). A single read straight after `mouse.up()` is a race with that frame. It won the race
+  // one frame at a time). A single read straight after `mouse.up()` is a race with that frame. It won the race
   // on an idle machine and lost it under full-suite load, which is #161.
   await expect.poll(orderOf).toEqual([before[1], before[0], ...before.slice(2)]);
   await expect(page.locator('#gantt .fg-col-header[data-drop]')).toHaveCount(0);

@@ -59,10 +59,10 @@ export interface DatasetOptions<TProps = unknown> {
    * a `Date`, epoch milliseconds, or an already-branded `Instant`. Read into `Entry` once, here.
    *
    * A declared Field key sits flat, at the top level, the same shape `add()`/`update()` take (ADR
-   * 0011, Q15); a nested `props` stays legal for passenger keys and for a bag already held. Typed as
+   * 0011); a nested `props` stays legal for passenger keys and for a bag already held. Typed as
    * `FlatEntryInput<TProps>` (#281) — see `model/dataset.ts`'s `EntryStore.add` for why plain
    * `EntryInput<TProps>` did not type-check the flat key, and why the `& Partial<TProps>`
-   * intersection Q15's wording first suggested was uninhabitable. */
+   * intersection an earlier wording first suggested was uninhabitable. */
   entries: readonly FlatEntryInput<TProps>[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,
    * week starts) resolves through it, so two users in different zones see identical day boundaries.
@@ -79,13 +79,13 @@ export interface DatasetOptions<TProps = unknown> {
    * covers through the 8th. `'exclusive'` reads it literally as the start of the 8th, matching
    * half-open storage exactly. Only date-only strings are affected — see `DateOnlyEndRule`. */
   dateOnlyEnd?: DateOnlyEndRule;
-  /** Consumer Field declarations. Core Fields are already in the registry (D-S4-4). */
+  /** Consumer Field declarations. Core Fields are already in the registry. */
   fields?: readonly Field[];
-  /** Named Field type bundles. A Field's own keys win over the bundle (D-S4-3). */
+  /** Named Field type bundles. A Field's own keys win over the bundle. */
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Consumer Aggregators by name. Shipped names (`min`, `sum`, …) are already registered. */
   aggregators?: Readonly<Record<string, Aggregator>>;
-  /** How core measures a duration (ADR 0017, Q6/J12). `'span'` is `end - start`, and it counts a gap
+  /** How core measures a duration (ADR 0017). `'span'` is `end - start`, and it counts a gap
    *  between children; `'children'` sums the children's own durations and counts no gap. Defaults to
    *  `'span'`.
    *  `entry.duration()`, `ctx.duration()` and the core `duration` Field all read it. It sits on the
@@ -100,9 +100,9 @@ export interface DatasetOptions<TProps = unknown> {
    * `canUndo` and `canRedo` then always read `false`, `undo()` and `redo()` do nothing, and the
    * Gantt's own Undo and Redo commands turn off, so the app can bind Mod+Z to its own undo. */
   history?: false | { capacity?: number };
-  /** The plugins this Dataset installs (D-S5-24, ADR 0019). An unordered set: installation resolves
+  /** The plugins this Dataset installs (ADR 0019). An unordered set: installation resolves
    *  setup order from each plugin's `requires`, so `[scheduling(), entryDependencies()]` and the
-   *  reverse install the same way (D-S5-31).
+   *  reverse install the same way.
    *
    *  A plugin's `fields`/`fieldTypes`/`hierarchySource` declare this Dataset's shape; `data()` itself
    *  runs only once that whole Dataset — the construction Rollup included — is built (ADR 0031). This
@@ -121,7 +121,7 @@ export interface DatasetOptions<TProps = unknown> {
 }
 
 /** One `FieldRegistryOptions`-shaped entry per plugin, `fields`/`fieldTypes`/`aggregators` read off
- *  the plugin object itself (#496 grill round 3, R1) — `DatasetState`'s constructor merges these with
+ *  the plugin object itself (#496 grill round 3) — `DatasetState`'s constructor merges these with
  *  the Dataset's own before `entries` is read. Both `PluginOf` arms declare the three keys now
  *  (`ChromePluginOf`'s own `never` guard, `api/plugin.ts`), so `'…' in plugin` here is a plain
  *  existence check, not a union narrow — a chrome-only plugin's three keys are always `undefined`. */
@@ -179,11 +179,11 @@ export class Dataset<TProps = unknown> {
 
   constructor(options: DatasetOptions<TProps>) {
     this.#plugins = options.plugins ?? [];
-    // Checked before a plugin's Field declarations are merged (#496 grill round 3, R1): that merge
+    // Checked before a plugin's Field declarations are merged (#496 grill round 3): that merge
     // throws `DuplicateFieldKeyError` on a repeated Field key, and two plugins sharing an id often
     // share their Field keys too (the same factory, called twice) — so a duplicate id has to be
     // caught here, first, to keep its own documented error (`docs/06-plugin-authoring.md`).
-    // `installDatasetPlugins` below asserts this again at its own install site (D-S5-3); this earlier
+    // `installDatasetPlugins` below asserts this again at its own install site; this earlier
     // check exists only to win that race.
     assertNoDuplicateIds(this.#plugins);
     // Declares this Dataset's whole shape — every Field, fieldType, Aggregator and hierarchy source
@@ -263,7 +263,7 @@ export class Dataset<TProps = unknown> {
     return this.#state.timeZone;
   }
 
-  /** Zone-aware date math bound to this Dataset's own zone (D-S5-16) — the one way a plugin author
+  /** Zone-aware date math bound to this Dataset's own zone — the one way a plugin author
    *  reaches `time/` (the `exports` map seals it against a direct import). Call:
    *  `dataset.time.eachDay(span).filter((day) => dataset.time.dayOfWeek(day) >= 6)`. */
   get time(): ZonedTime {
@@ -280,7 +280,7 @@ export class Dataset<TProps = unknown> {
     return this.#state.fields.get(key);
   }
 
-  /** Resolved Field declarations this Dataset owns, core Fields included (D-S4-1), each after its
+  /** Resolved Field declarations this Dataset owns, core Fields included, each after its
    *  named `type` bundle merges in. */
   get fields(): { readonly all: readonly Field[] } {
     return { all: this.#state.fields.all };
@@ -315,7 +315,7 @@ export class Dataset<TProps = unknown> {
     return this.#state.datasetRevision;
   }
 
-  /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
+  /** Batches `body`'s mutations into one changeset. Nested calls join the open transaction.
    *  `'user'` is the only origin a call to `transaction()` can produce — `entries.load()` and
    *  `entries.syncAll()` refuse to run inside one, since each is always its own transaction. */
   transaction<T>(body: () => T): T {
@@ -405,9 +405,9 @@ export class Dataset<TProps = unknown> {
 }
 
 /** Calls the extension hook's current occupant for this `dataset` — every installed plugin's
- *  wrapper, composed (D-S5-23), or the identity function when nothing claimed it — and hands back
+ *  wrapper, composed, or the identity function when nothing claimed it — and hands back
  *  what it wrote. Not a `Dataset` method (#250 A2, ADR 0007): a Gantt calls this to ghost an
- *  extender's extra edits during a drag (D-S3-18) and never writes through it; a commit calls the
+ *  extender's extra edits during a drag and never writes through it; a commit calls the
  *  same occupant again, for real, inside the transaction. `api/gantt.ts` is the one caller — an app
  *  author never proposes an `EditRequest`, so a method here would have no honest caller outside it.
  *  Exported from `api/` only, never from `api/index.ts`.

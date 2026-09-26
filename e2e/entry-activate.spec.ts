@@ -78,7 +78,7 @@ test('Enter on the just-clicked (now focused) bar activates it again, cause "key
   expect(box).not.toBeNull();
 
   // A real click both activates (cause "click") and, being on a tabIndex-bearing bar, gives it
-  // real DOM focus — the same focus `Enter` reads (D-S5-39).
+  // real DOM focus — the same focus `Enter` reads.
   await bar.click({ position: { x: 12, y: box!.height / 2 } });
   await expect(page.locator('#activation-readout')).toHaveText(`Activated: ${name} (click) ×1`);
 

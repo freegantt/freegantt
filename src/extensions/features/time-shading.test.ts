@@ -4,7 +4,7 @@ import { Dataset } from '../../api/dataset.js';
 import type { DecorationContext, DecorationInput, DecorationLayer } from '../../api/decoration-facade.js';
 import type { ZonedTime } from '../../api/time-facade.js';
 // Through the public barrel on purpose: a consumer catches on `instanceof`, so the class must be a
-// member of 'freegantt' and not of the internal model barrel alone (#404 review F2).
+// member of 'freegantt' and not of the internal model barrel alone (#404 review).
 import { EmptyCoversError } from '../../api/index.js';
 import type { TimeUnit } from '../../model/index.js';
 import { daysOfWeek, dates, hours, notCovered, spans } from './time-shading-covers.js';
@@ -163,7 +163,7 @@ describe('timeShading()', () => {
 
     it('spans() never hides on granularity, at any tick unit with increment 1', () => {
       const time = zonedTime(CHICAGO);
-      // Calls `spans()` itself, so a change to its own floor fails this (#404 review F7).
+      // Calls `spans()` itself, so a change to its own floor fails this (#404 review).
       const provider = capturedProvider(
         timeShading([{ covers: spans({ start: '2026-06-01', end: '2026-06-15' }) }]),
       );
@@ -203,7 +203,7 @@ describe('timeShading()', () => {
 
   // The stable id is what makes `gantt.plugins = [timeShading(next)]` reconfigure rather than add:
   // the setter matches the installed occupant by id, then replaces it because the object differs
-  // (#404 review F4). `plugin-runtime.test.ts` owns the replacement itself.
+  // (#404 review). `plugin-runtime.test.ts` owns the replacement itself.
   describe('one id for every rule set', () => {
     it('two timeShading() calls with different rules both mint the same plugin id', () => {
       expect(timeShading([{ covers: daysOfWeek(6, 7) }]).id).toBe(

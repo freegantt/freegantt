@@ -44,7 +44,7 @@ function barOf(entry: Entry, box?: FixedBarBox): Bar {
 }
 
 const scale = createTimeScale({ timeZone: 'UTC', range: spanOf(sampleEntries[0]!), pxPerMs: 1 / 1000 });
-// #436: barSpan now trims an 'exact' box to its own intersection with `[0, contentWidth)` (D-S1.8-1)
+// #436: barSpan now trims an 'exact' box to its own intersection with `[0, contentWidth)`
 // regardless of the viewport's own horizontal culling — `scale`'s range above is only entry[0]'s own
 // span, on purpose, for the tests that read one bar's own position. A test asserting "one bar per
 // entry" for the whole fixture needs a scale wide enough to actually contain every entry, or the
@@ -990,7 +990,7 @@ describe('computeFrame — sticky label clamp (finding 3, header readability fol
   // visible.x = 130 puts the clamp line (labelLeftClamp = max(visible.x, 0)) at x=130. With
   // horizontalPx: 200 buffering the tick scan, the ticks at x=0,60 are pulled in by overscan but
   // sit fully left of 130 (fully behind) — the scan itself never reaches further left than x=0
-  // (#436, D-S1.8-1: content starts at 0, so the query span clamps there too). The tick at x=120
+  // (#436: content starts at 0, so the query span clamps there too). The tick at x=120
   // (width 60) straddles 130 — its cell spans the clamp line, so it alone gets stuck to the
   // visible edge.
   const visible = { x: 130, y: 0, width: 200, height: 0 };
@@ -1380,7 +1380,7 @@ describe('barSpan — membership decided before any floor, fixed width, or shift
   });
 
   it('keeps a fixed box (start anchor) whose anchor sits just left of the origin, when its body still overlaps the content (#436 branch review F5)', () => {
-    // The anchor-instant-only test (this branch's first attempt at F5) dropped this case, even
+    // The anchor-instant-only test (this branch's first attempt) dropped this case, even
     // though the floored-bar path for the same entry keeps and clamps it. A box-extent test alone
     // would instead have kept a zero-length entry parked past `contentWidth` — the case #436 is
     // about — so both tests run, ANDed: the entry's own span (`inContent`) and the box's own body.
@@ -1409,7 +1409,7 @@ describe('barSpan — membership decided before any floor, fixed width, or shift
     const { x, width, span } = barSpan(barOf(straddling), scale);
     expect(x).toBe(scale.contentWidth - 20);
     expect(x + width).toBe(scale.contentWidth);
-    // #436 branch review F2: a trim changes the geometry, so it is reported as `'clipped'`, not
+    // #436 branch review: a trim changes the geometry, so it is reported as `'clipped'`, not
     // `'exact'` — `'exact'` promises the entry's own untouched start/end.
     expect(span).toBe('clipped');
   });

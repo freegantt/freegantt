@@ -2,7 +2,7 @@
 // pointerdown that becomes a drag never runs the click/selection path below — every pointerup that
 // `createPointerGesture.up()` reports as a drag skips `selectFromHit` entirely.
 //
-// Writes on pointerdown only once (#211, D-S4-30): when a move drag actually arms (the threshold is
+// Writes on pointerdown only once (#211): when a move drag actually arms (the threshold is
 // crossed) on a bar whose Entry is not already in the Selection, `drag`'s own `start()` proposes the
 // Selection right there, so the pick a picked-Entry drag reads is never stale relative to what it
 // grabbed — see the decision table's "grabbed bar not in the Selection" row in
@@ -32,14 +32,14 @@ function isPrimaryButton(e: Pick<PointerEvent, 'button'>): boolean {
 }
 
 /** Is this button event a right-click? A right-click still triggers the empty-timeline clear
- *  (#199/#205 follow-up, `plans/02` D-S3-10 amendment). A background right-click opens a menu. A
+ *  (#199/#205 follow-up). A background right-click opens a menu. A
  *  surviving highlight would misstate what the menu acts on. A middle-click opens no menu, so it
  *  does not clear. */
 function isRightClick(e: Pick<PointerEvent, 'button'>): boolean {
   return e.button === 2;
 }
 
-/** Pointer semantics (D-S3-10): plain click replaces, ctrl/⌘-click toggles, shift-click extends over
+/** Pointer semantics: plain click replaces, ctrl/⌘-click toggles, shift-click extends over
  *  `selectableEntriesInRowOrder()`, a click on empty timeline clears, Escape clears. A right-click is
  *  a click for the clearing rule too (#199/#205 follow-up): it clears the same empty timeline, but it
  *  never picks, replaces, toggles, or ranges — a right-click that lands on a bar or a row leaves the
@@ -47,14 +47,14 @@ function isRightClick(e: Pick<PointerEvent, 'button'>): boolean {
  *  the selection untouched (it is not an empty-timeline clear); ctrl/⌘-click on one is a no-op;
  *  shift-click omits incapable entries from the range and writes nothing if that empties the range.
  *
- *  Move (S3.3, D-S3-16): a pointerdown on a `move`-capable bar arms a drag once the pointer clears
+ *  Move (S3.3): a pointerdown on a `move`-capable bar arms a drag once the pointer clears
  *  the drag threshold; every subsequent move previews the draft (`session().preview`) at full pixel
  *  resolution — never snapped — so the grabbed spot on the bar tracks the cursor with no drift, and
  *  pointerup commits the snapped draft (`session().commit`) through `beforeEntryMove` → one
  *  transaction → `entryMove`. Escape mid-drag clears the preview and commits nothing (`[S3-A2]`) —
  *  the store was never touched.
  *
- *  Resize (S3.4, D-S3-4): a pointerdown on the shared resize-handle pair (`ctx.hitTest`'s `edge`)
+ *  Resize (S3.4): a pointerdown on the shared resize-handle pair (`ctx.hitTest`'s `edge`)
  *  arms the same drag machinery with a `{ kind: 'resize', edge }` gesture instead — one pointer
  *  stream, one state machine, only the grabbed gesture shape differs.
  *
@@ -125,14 +125,14 @@ export function attachEntryGestures(
       // The live preview always tracks the pointer at full resolution (never quantized to a snap
       // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
       // applies to what actually gets written — see commit() below — this only affects what paints
-      // while the gesture is in flight. Cursor line x is content space (D-S3-15): pane-local offset
+      // while the gesture is in flight. Cursor line x is content space: pane-local offset
       // plus the bound scroll, never element.scrollLeft (I12).
       const offsetX = e.clientX - pane.getBoundingClientRect().left;
       session!.preview(dxPx, { suspendSnap: true, cursorX: ctx.contentXAtPaneOffset(offsetX) });
     },
     commit(e, dxPx): void {
       // The committed value snaps to the preset's tick unit unless Alt held it off for fine
-      // placement (D-S3-12) — this is the one place snapping actually lands, now that move() above
+      // placement — this is the one place snapping actually lands, now that move() above
       // always previews raw.
       void session!.commit(dxPx, e.altKey ? { suspendSnap: true } : undefined);
       session = undefined;
@@ -176,7 +176,7 @@ export function attachEntryGestures(
     // #199/#205 (mouse path): a right-button pointerdown arms no gesture, so a right-click never
     // steals the pointer stream from a later primary-button drag.
     if (!isPrimaryButton(e)) return;
-    // A drag only ever starts on a bar: a row hit arms nothing (D-S3-10's grid-row clause).
+    // A drag only ever starts on a bar: a row hit arms nothing.
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
     const bar = hit?.kind === 'bar' ? hit : undefined;
     const entry = bar !== undefined ? ctx.entryFor(bar.barId) : undefined;
@@ -196,7 +196,7 @@ export function attachEntryGestures(
     drag.down(e);
   }
 
-  /** Pointer semantics shared by a timeline click and a grid-row click (D-S3-10, bug hunt: "grid row
+  /** Pointer semantics shared by a timeline click and a grid-row click (bug hunt: "grid row
    *  highlight and row click") — everything past "what did we hit". `clearOnMiss` is the one place
    *  the two surfaces differ: an empty timeline click clears the selection; a grid miss (a header
    *  row, padding, a twisty — `render/dom`'s `hitTest` already returns no hit for those) never does. */
@@ -284,7 +284,7 @@ export function attachEntryGestures(
     selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), true);
   }
 
-  /** The grid pane's own pointerup — never fed through `drag` (D-S3-19/22's move/resize machinery
+  /** The grid pane's own pointerup — never fed through `drag` (the move/resize machinery
    *  is armed only from a timeline `pointerdown`, `onPointerDown` below), so a row click can only
    *  ever be a click, never the start of a drag. */
   function onRowLayerPointerUp(e: PointerEvent): void {
@@ -324,7 +324,7 @@ export function attachEntryGestures(
     e.preventDefault();
   }
 
-  /** Reports the raw hit under the pointer on every move (D-S3-5's `pointerAt` precedent a step
+  /** Reports the raw hit under the pointer on every move (the `pointerAt` precedent a step
    *  early, S3.2) and feeds the same event into the drag state machine — one pointer stream, not two
    *  independent listeners racing each other. */
   function onPointerMove(e: PointerEvent): void {
