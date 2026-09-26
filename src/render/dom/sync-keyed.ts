@@ -118,7 +118,7 @@ export class NestedKeyedLayers<TParentKey, TItem, TKey, TGeom extends Record<str
     }
   }
 
-  /** Visits every child layer currently live — a row-cell preview restore (D-S5-18) needs to reach
+  /** Visits every child layer currently live — a row-cell preview restore needs to reach
    * one column's cell node across every mounted row, and a row's own key is not what it's keyed by. */
   forEach(visit: (layer: KeyedLayer<TItem, TKey, TGeom>) => void): void {
     for (const layer of this.#layers.values()) visit(layer);
