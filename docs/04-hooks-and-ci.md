@@ -147,11 +147,12 @@ A `Stop` hook running `pnpm verify` when `git status --porcelain src/` is non-em
 
 ## 3. Git hooks (`.githooks/`, no dependency)
 
-Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so it applies after `pnpm install`. No husky, no lint-staged — two shell scripts.
+Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so it applies after `pnpm install`. No husky, no lint-staged — three shell scripts.
 
 | Hook | Runs | Rationale |
 |---|---|---|
 | `pre-commit` | `format` (auto-fix) on staged files, **except partially staged ones** + `lint` on staged `*.ts` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
+| `commit-msg` | `scripts/refuse-ai-attribution.mjs --commit-msg` | Drops a trailer a coding tool appended. Cursor injects one after the author writes the message, so a refuse would block the commit. A Co-authored-by line for a person stays. A message that is only attribution is refused |
 | `pre-push` | `pnpm verify:full` (`verify`, then `test:e2e`) | The full gate before it becomes anyone else's problem. CI runs the same command on a ready pull request (§5); this half is faster, and it also covers a push that never becomes one |
 
 ### 3.0 A partially staged file is never formatted
@@ -220,6 +221,7 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | One gate, every caller | `test/guards/gate-is-one-command.test.ts` — asserts CI runs `pnpm verify:full` and no single check beside it, that `pre-push` runs that same command, that the check list derives from `verify`, and that the workflow asks for `ready_for_review` and skips a draft | a caller starts proving a subset of the gate, or the draft rule stops holding |
 | The pr-wait hook | `test/guards/require-pr-wait.test.ts` — six hand-rolled waits are blocked, ten neighbouring commands pass, and the refusal names `pnpm pr-wait` | the hook stops blocking the poll, or starts blocking a log read or `gh run watch` |
 | The draft-PR hook | `test/guards/require-draft-pr.test.ts` — five ways to create a pull request are blocked, six neighbouring commands pass, and the hook is registered and executable | the hook stops blocking, or starts blocking `gh pr ready` and its neighbours |
+| AI tool attribution | `test/guards/refuse-ai-attribution.test.ts` — vendor trailers match, `commit-msg` drops them, `open-pr` refuses them, a human Co-authored-by still passes | a new Cursor or Claude trailer lands in git history, or a person cannot co-author |
 | The gate itself | `test/guards/slice-gate.test.ts` — drives tagged gate checks against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted |
 
 That last one deserves emphasis: it ensures that every invariant has a corresponding job. The table stops being prose and becomes a checked artifact.
@@ -331,10 +333,11 @@ The draft is not a formality. It is what the trigger set reads:
 - **A draft runs nothing.** Minutes go to work that asks for review, never to work in progress.
 - **"Ready" says one thing.** This is up for review, and it is meant to merge. Nobody guesses whether a pull request wants eyes.
 - **The push proves the work first.** `open-pr` pushes, so `pre-push` runs the gate before the pull request exists. CI then re-proves it on a clean runner.
+- **The copy names no tool as author.** `open-pr` scans the title and body with the same checker as `commit-msg`. A Cursor or Claude trailer in that copy is refused before the push. The commit hook drops the same strings, because Cursor injects them on `git commit`.
 
 So: open every pull request as a draft, and mark it ready only when it is the merge decision. A branch that waits stays a draft, and costs nothing while it waits.
 
-**`pnpm pr-wait` watches workflow runs, not check suites.** Every draft push, and the close event, still creates a workflow run whose `gate` job is skipped. Those rows share the required check name, so `gh pr checks` reports "nothing started" while `gh run list` already shows a live `pull_request` run — or prints `pass` from `--watch` and returns empty JSON on the re-read. Both of those happen. `pr-wait` lists CI runs for the pull request's head commit (`gh run list --commit <sha> --event pull_request --workflow ci.yml`), ignores skipped and cancelled rows, and gives the waiting to `gh run watch`.
+**`pnpm pr-wait` watches workflow runs, not check suites.** Every draft push, and the close event, still creates a workflow run whose `gate` job is skipped. Those rows share the required check name, so `gh pr checks` reports "nothing started" while `gh run list` already shows a live `pull_request` run — or prints `pass` from `--watch` and returns empty JSON on the re-read. Both of those happen. `pr-wait` lists CI runs for the pull request's head commit (`gh run list --commit <sha> --event pull_request --workflow ci.yml`), ignores skipped and cancelled rows, and gives the waiting to `gh run watch`. A skip-run can still look live while its jobs skip; if that run then concludes skipped on a ready pull request, `pr-wait` waits a bounded time for a newer run on the same commit, and reports "gate skipped" only when none appears.
 
 **Do not dispatch a workflow to close a `pr-wait`.** `gh workflow run ci.yml --ref <branch>` is `workflow_dispatch`. That run is on the branch, not the pull request, so it cannot close this wait. Concurrency is keyed on the branch name, so the dispatch also cancels the live `pull_request` run. That is exactly what happened once: `pr-wait` said SKIPPED while the gate was two minutes in, the fallback fired, and concurrency killed the real job. If no live `pull_request` run appears, push a commit so `synchronize` fires, then run `pr-wait` again.
 
