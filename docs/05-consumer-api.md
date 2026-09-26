@@ -12,7 +12,7 @@ This file points app authors at the consumer surface. It does not replace the sp
 | [`docs/09-integration-pitfalls.md`](09-integration-pitfalls.md) | Traps real integrators hit — theme and an application's `dark` class, the zoom notification, `overscan`, the row click |
 | [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) | Plugin authoring guide — `definePlugin`, the two halves, every registration seam |
 | [`docs/07-row-source-updates.md`](07-row-source-updates.md) | Change one row-source setting and keep the rest — toolbar controls that do not fight each other |
-| [`docs/11-server-data.md`](11-server-data.md) | Polling a server with `entries.sync()` — the conflict rule, what undo/redo do across a sync, and what changes |
+| [`docs/11-server-data.md`](11-server-data.md) | Polling a server with `entries.syncAll()` and `entries.syncChanges()` — the conflict rule, what undo/redo do across a sync, and what changes |
 
 ## What a Gantt shows
 
@@ -91,10 +91,11 @@ handler. Under `history: false` it never fires.
 
 ### Undo after a sync
 
-`entries.sync()` (a poll against a server list) records no undo step of its own — the user's own
-earlier edits stay undoable across a poll. An undo never writes over a value a sync brought in:
-when a sync changed a Field an undo step wrote, that entry keeps the sync's values. See
-[`docs/11-server-data.md`](11-server-data.md) for the full set of rules a poll needs.
+`entries.syncAll()` (a poll against a server list) and `entries.syncChanges()` (a poll against a
+server delta) record no undo step of their own — the user's own earlier edits stay undoable across
+a poll. An undo never writes over a value a sync brought in: when a sync changed a Field an undo
+step wrote, that entry keeps the sync's values. See [`docs/11-server-data.md`](11-server-data.md)
+for the full set of rules a poll needs.
 
 ### Advanced: your own History with `dataset.replay()`
 

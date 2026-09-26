@@ -166,6 +166,29 @@ export type FlatEntryInput<TProps = Record<string, unknown>> = string extends ke
       [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
     };
 
+/** What the `Dataset` constructor's `entries` option, `entries.add()`, `entries.load()`,
+ *  `entries.syncAll()` and `EntryDelta.upsert` all take: a `FlatEntryInput` row, or a plain
+ *  `EntryInput` row.
+ *
+ *  A function generic over `TProps` cannot name a `FlatEntryInput<TProps>` value, because that
+ *  type's own flat-key check does not resolve until `TProps` is concrete (see `FlatEntryInput`'s own
+ *  comment above). `EntryInput<TProps>` carries no such check, so it resolves at every `TProps`,
+ *  generic or concrete — this union lets a generic caller hand ingest a plain `EntryInput<TProps>`
+ *  with no cast, while a caller with a concrete `TProps` still gets the flat-key check
+ *  `FlatEntryInput` runs. */
+export type EntryIngestInput<TProps = Record<string, unknown>> = FlatEntryInput<TProps> | EntryInput<TProps>;
+
+/** What `entries.syncChanges()` takes: only the rows a server changed, and the ids it removed. */
+export interface EntryDelta<TProps = Record<string, unknown>> {
+  /** Rows to add or change, keyed by `id`. An id the Dataset does not hold adds an entry, read the
+   *  way `add()` reads one. An id it holds takes the row as a partial edit: a key the row leaves out
+   *  keeps its value, and a key set to `undefined` clears it, the same as `update()`. */
+  readonly upsert?: readonly EntryIngestInput<TProps>[];
+  /** Ids to remove, each with its subtree. An id the Dataset does not hold is ignored, so a retried
+   *  delta is safe to apply again. */
+  readonly remove?: readonly (EntryId | string)[];
+}
+
 /** Every key a *stored* `Entry` may lack, restricted to the ones `EntryEnvelope` also carries —
  *  derived from `Entry` rather than hand-listed, so the moment `Entry.end` stops being optional, or a
  *  new optional key joins `Entry`, this (and `EntryEdit` below) follow with no edit to either. */

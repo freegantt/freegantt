@@ -1,9 +1,12 @@
-// Stands in for a server's poll endpoint (#517): each call to `fetchRows()` returns the next
-// scripted revision of the whole entry list — the shape `dataset.entries.sync()` takes. It only
-// returns rows. It runs no diff and holds no order rule of its own; `sync()` does both.
+// Stands in for a server's poll endpoint: `fetchRows()` returns the next scripted
+// revision of the whole entry list, the shape `dataset.entries.syncAll()` takes; `fetchChanges()`
+// returns the next scripted delta, the shape `dataset.entries.syncChanges()` takes. Both read and
+// move the one `rows` state, each on its own call count, so a full-list poll after a delta poll
+// sees what that delta changed. Neither diffs, merges or places a row — `syncAll()` and
+// `syncChanges()` do that.
 
 import { addMs, instant, now, MS } from 'freegantt';
-import type { EntryInput } from 'freegantt';
+import type { EntryDelta, EntryInput } from 'freegantt';
 
 /** A leaf no other rule on the page reads — the buffer, risk and lock demos each name their own
  *  row, so renaming this one touches nothing else. */
@@ -12,13 +15,39 @@ export const SERVER_ADDED_ENTRY_ID = 'server-added-1';
 export const SERVER_REMOVED_ENTRY_ID = 'entry-9';
 const SERVER_REORDERED_ROOT_IDS: readonly [string, string] = ['ops-oncall', 'staff-training'];
 
+/** Leaves other demos on the page untouched, the same way the whole-list ids above do. */
+export const SERVER_DELTA_RENAMED_ENTRY_ID = 'entry-6';
+export const SERVER_DELTA_REMOVED_ENTRY_ID = 'entry-11';
+export const SERVER_DELTA_ADDED_ENTRY_ID = 'server-delta-added-1';
+const SERVER_DELTA_PARENT_ENTRY_ID = 'entry-5';
+
 export interface FakeServer<TProps> {
   /** The next scripted revision of the whole list, or the last one again once the script runs out —
    *  a poll that finds nothing new, the common case a real server sends most of the time. */
   fetchRows(): EntryInput<TProps>[];
+  /** The next scripted delta, or `{}` once the script runs out — a poll that finds nothing new. */
+  fetchChanges(): EntryDelta<TProps>;
 }
 
 type Revision<TProps> = (rows: EntryInput<TProps>[]) => EntryInput<TProps>[];
+
+/** One scripted delta poll: the same hand-written change to `rows` a whole-list revision makes,
+ *  paired with the delta literal that describes just that change. */
+interface DeltaRevision<TProps> {
+  readonly apply: Revision<TProps>;
+  readonly delta: EntryDelta<TProps>;
+}
+
+/** Three scripted delta polls, built lazily so a date-bearing revision reads `now()` at the moment
+ *  it plays, played once each in order, then held on the third (no change):
+ *  1. a rename on `entry-6`, every other key untouched
+ *  2. an added row under `entry-5`, and the removal of `entry-11`
+ *  3. no change */
+const deltaRevisionBuilders: readonly (<TProps>() => DeltaRevision<TProps>)[] = [
+  renamedByDelta,
+  addedAndRemovedByDelta,
+  noChangeByDelta,
+];
 
 /** Four scripted revisions, played once each in order, then held on the fourth (no change):
  *  1. a rename and a date shift on `entry-3`
@@ -36,14 +65,25 @@ export function fakeServer<TProps>(seedRows: readonly EntryInput<TProps>[]): Fak
     (rows) => rows,
   ];
   let rows = seedRows.map((row) => ({ ...row }));
-  let callCount = 0;
+  let fetchRowsCallCount = 0;
+  let fetchChangesCallCount = 0;
 
   return {
     fetchRows() {
-      const revision = revisions[Math.min(callCount, revisions.length - 1)]!;
+      const revision = revisions[Math.min(fetchRowsCallCount, revisions.length - 1)]!;
       rows = revision(rows);
-      callCount += 1;
+      fetchRowsCallCount += 1;
       return rows.map((row) => ({ ...row }));
+    },
+    fetchChanges() {
+      const build = deltaRevisionBuilders[Math.min(fetchChangesCallCount, deltaRevisionBuilders.length - 1)]!;
+      const revision = build<TProps>();
+      rows = revision.apply(rows);
+      fetchChangesCallCount += 1;
+      const { delta } = revision;
+      return delta.upsert === undefined
+        ? delta
+        : { ...delta, upsert: delta.upsert.map((row) => ({ ...row })) };
     },
   };
 }
@@ -78,4 +118,33 @@ function reorderRootsAndRemoveOne<TProps>(rows: EntryInput<TProps>[]): EntryInpu
     [reordered[firstIndex], reordered[secondIndex]] = [reordered[secondIndex]!, reordered[firstIndex]!];
   }
   return reordered.filter((row) => row.id !== SERVER_REMOVED_ENTRY_ID);
+}
+
+function renamedByDelta<TProps>(): DeltaRevision<TProps> {
+  const renamed = { id: SERVER_DELTA_RENAMED_ENTRY_ID, name: 'Renamed by a server delta' };
+  return {
+    apply: (rows) =>
+      rows.map((row) => (row.id === SERVER_DELTA_RENAMED_ENTRY_ID ? { ...row, ...renamed } : row)),
+    delta: { upsert: [renamed] },
+  };
+}
+
+function addedAndRemovedByDelta<TProps>(): DeltaRevision<TProps> {
+  const start = now();
+  const end = addMs(start, MS.DAY);
+  const added = {
+    id: SERVER_DELTA_ADDED_ENTRY_ID,
+    parentId: SERVER_DELTA_PARENT_ENTRY_ID,
+    name: 'Added by a server delta',
+    start,
+    end,
+  };
+  return {
+    apply: (rows) => [...rows.filter((row) => row.id !== SERVER_DELTA_REMOVED_ENTRY_ID), added],
+    delta: { upsert: [added], remove: [SERVER_DELTA_REMOVED_ENTRY_ID] },
+  };
+}
+
+function noChangeByDelta<TProps>(): DeltaRevision<TProps> {
+  return { apply: (rows) => rows, delta: {} };
 }

@@ -11,7 +11,7 @@ import type {
   DurationMeasure,
   EntryId,
   ProposedEdits,
-  FlatEntryInput,
+  EntryIngestInput,
   EntryStore as EntryStoreContract,
   Field,
   FieldEditable,
@@ -60,10 +60,10 @@ export interface DatasetOptions<TProps = unknown> {
    *
    * A declared Field key sits flat, at the top level, the same shape `add()`/`update()` take (ADR
    * 0011); a nested `props` stays legal for passenger keys and for a bag already held. Typed as
-   * `FlatEntryInput<TProps>` (#281) — see `model/dataset.ts`'s `EntryStore.add` for why plain
-   * `EntryInput<TProps>` did not type-check the flat key, and why the `& Partial<TProps>`
-   * intersection an earlier wording first suggested was uninhabitable. */
-  entries: readonly FlatEntryInput<TProps>[];
+   * `EntryIngestInput<TProps>` — see `model/stored-entry.ts`'s own comment for why a function
+   * generic over `TProps` needs the plain `EntryInput<TProps>` half of the union, and why a
+   * concrete `TProps` still gets the flat-key check. */
+  entries: readonly EntryIngestInput<TProps>[];
   /** IANA timeZone (D6, plans/02 §2) — all zone-aware date arithmetic (day boundaries, snapping,
    * week starts) resolves through it, so two users in different zones see identical day boundaries.
    * It is also the zone a Plain (zoneless) date in `entries` resolves through.
@@ -93,7 +93,7 @@ export interface DatasetOptions<TProps = unknown> {
    *  is. */
   measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
-   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). `entries.sync()` records no step of its own
+   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). `entries.syncAll()` records no step of its own
    * (`docs/11-server-data.md`), so a frequent poll never eats into this headroom.
    *
    * `false` builds no History: the app owns undo and writes each step back with `replay()`.
@@ -317,7 +317,7 @@ export class Dataset<TProps = unknown> {
 
   /** Batches `body`'s mutations into one changeset. Nested calls join the open transaction.
    *  `'user'` is the only origin a call to `transaction()` can produce — `entries.load()` and
-   *  `entries.sync()` refuse to run inside one, since each is always its own transaction. */
+   *  `entries.syncAll()` refuse to run inside one, since each is always its own transaction. */
   transaction<T>(body: () => T): T {
     return this.#state.transaction(body);
   }

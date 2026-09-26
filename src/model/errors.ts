@@ -360,25 +360,43 @@ export class RevealTargetNotFoundError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-entry-id'` — two different mistakes, two different messages. `kind: 'collision'`
- *  is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind: 'duplicate-in-list'` is
- *  a whole-list write (`entries.load()`, and `entries.sync()`, #517) finding one id twice inside the
- *  list itself — `assertEntryBatchIsSound` (`data/entry-batch.ts`) throws this before anything
- *  stages. */
+type DuplicateEntryIdKind = 'collision' | 'duplicate-in-list' | 'upsert-and-remove';
+
+/** `code: 'duplicate-entry-id'` — three different mistakes, three different messages. `kind:
+ *  'collision'` is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind:
+ *  'duplicate-in-list'` is a whole-list write (`entries.load()`, and `entries.syncAll()`, #517)
+ *  finding one id twice inside the list itself — `assertEntryBatchIsSound` (`data/entry-batch.ts`)
+ *  throws this before anything stages. `kind: 'upsert-and-remove'` is `entries.syncChanges()` finding
+ *  one id in both its `upsert` and its `remove` list — a server that sends both has a bug, and
+ *  picking a winner would hide it. */
 export class DuplicateEntryIdError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly operation: string;
 
-  constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list') {
+  constructor(
+    entryId: EntryId,
+    operation: string,
+    kind: 'collision' | 'duplicate-in-list' | 'upsert-and-remove',
+  ) {
     super(
       'duplicate-entry-id' satisfies BuiltInThrownCode,
-      kind === 'collision'
-        ? `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`
-        : `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`,
+      DuplicateEntryIdError.#message(kind, entryId, operation),
     );
     this.name = 'DuplicateEntryIdError';
     this.entryId = entryId;
     this.operation = operation;
+  }
+
+  /** The message for each `kind`, kept in one place so the constructor stays flat. */
+  static #message(kind: DuplicateEntryIdKind, entryId: EntryId, operation: string): string {
+    switch (kind) {
+      case 'collision':
+        return `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`;
+      case 'duplicate-in-list':
+        return `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`;
+      case 'upsert-and-remove':
+        return `${operation}: the delta both upserts and removes id "${entryId}". Name each id in one list only.`;
+    }
   }
 }
 
@@ -730,11 +748,11 @@ export class MutationDuringExtensionHookError extends FreeGanttError {
   }
 }
 
-/** `code: 'transaction-already-open'` — `entries.load()` (#496), or `entries.sync()` (#517), called
- * inside an already-open `dataset.transaction()`. Both doors replace the whole Dataset's data in one
- * step and always build and commit their own ChangeSet; unlike `add`/`update`/`remove`, neither joins
- * a caller's open transaction. The write set is discarded; the caller's
- * own open transaction is not affected. */
+/** `code: 'transaction-already-open'` — `entries.load()` (#496), `entries.syncAll()`, or
+ * `entries.syncChanges()`, called inside an already-open `dataset.transaction()`. Each door replaces
+ * the Dataset's data in one step and always builds and commits its own ChangeSet; unlike
+ * `add`/`update`/`remove`, none of them joins a caller's open transaction. The write set is
+ * discarded; the caller's own open transaction is not affected. */
 export class TransactionAlreadyOpenError extends FreeGanttError {
   readonly operation: string;
 

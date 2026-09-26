@@ -15,6 +15,7 @@
 import type {
   Entry,
   StoredEntry,
+  EntryDelta,
   EntryId,
   FlatEntryInput,
   EntryEdit,
@@ -42,8 +43,9 @@ import { toEditReading, toEntry } from './entry-reader.js';
 import type { EditReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import type { UnplacedEntry } from './hierarchy-source.js';
-import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
+import { commitChangeSet, rollUpDeltaBatch, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
+import { readBatchAfterDelta } from './entry-delta.js';
 import {
   assertNoOpenTransaction,
   assertNoRunningExtensionHook,
@@ -667,7 +669,7 @@ export class EntryStore implements EntryStoreContract {
     const { runner, byId, entries: read, rollupUpdated, reports } = this.#readBatch(inputs, 'entries.load');
 
     // An added entity carries the values the commit settles on, not a row (the same rule
-    // `sync` and `buildCommitChangeSet` follow): every id here is new to the store, so every
+    // `syncAll` and `buildCommitChangeSet` follow): every id here is new to the store, so every
     // Rollup row folds onto its entity, and the changeset holds no entries row for it.
     const rolled = this.#foldRollup(byId, rollupUpdated);
     const added = read.map((entry) => ({ store: 'entries' as const, entity: rolled.get(entry.id)! }));
@@ -701,12 +703,91 @@ export class EntryStore implements EntryStoreContract {
    * one `ChangeSet` with `origin: 'sync'`, and raises them once that commit lands — History records
    * no undo step for it and erases no Redo (`docs/11-server-data.md`).
    */
-  sync(inputs: readonly FlatEntryInput[]): void {
-    const { runner, byId, entries: read, rollupUpdated, reports } = this.#readBatch(inputs, 'entries.sync');
+  syncAll(inputs: readonly FlatEntryInput[]): void {
+    const {
+      runner,
+      byId,
+      entries: read,
+      rollupUpdated,
+      reports,
+    } = this.#readBatch(inputs, 'entries.syncAll');
 
     const rolled = this.#foldRollup(byId, rollupUpdated);
     const target = read.map((entry) => rolled.get(entry.id) ?? entry);
 
+    this.#commitSyncToMatch(runner, target, reports);
+  }
+
+  /**
+   * Applies only the rows `delta` names, the way `syncAll` applies a whole list. Reads the delta
+   * onto the committed rows (`readBatchAfterDelta`), rolls the Rollup once, and commits only what
+   * changed through `#commitSyncToMatch`. `derived-values-dropped` fires only for a rolled-up key
+   * the delta itself named on a parent — a re-roll to `undefined` from a child's own clear is not a
+   * value anyone authored.
+   */
+  syncChanges(delta: EntryDelta): void {
+    const operation = 'entries.syncChanges';
+    const runner = this.#runnerForBatchWrite(operation);
+    const batch = readBatchAfterDelta(
+      {
+        byId: this.#byId,
+        parents: this.committedParents(),
+        siblingIdsOf: (group) => this.committedSiblingIds(group),
+      },
+      delta,
+      this.#context,
+      this.#registry,
+      this.#hierarchySource,
+      operation,
+    );
+
+    const byId = new Map(batch.entries.map((entry) => [entry.id, entry]));
+    const rollupUpdated = rollUpDeltaBatch(
+      runner,
+      byId,
+      batch.parents,
+      this.committedChildIds(),
+      batch.authoredKeys,
+      this.#hierarchySource,
+    );
+    const rolled = this.#foldRollup(byId, rollupUpdated);
+    const target = batch.entries.map((entry) => rolled.get(entry.id) ?? entry);
+
+    const derivedValuesDropped = rollupUpdated.filter(
+      (row) => row.to === undefined && batch.authoredKeys.get(row.id)?.has(String(row.field)) === true,
+    );
+    this.#commitSyncToMatch(runner, target, droppedValueReports([], derivedValuesDropped));
+  }
+
+  /**
+   * The bound runner a whole-list write commits through, or the refusal that write owes when it may
+   * not run right now: an open transaction (`TransactionAlreadyOpenError`), a running extension hook
+   * (`MutationDuringExtensionHookError`), or a `beforeChange`/`change` handler on the stack
+   * (`MutationDuringNotificationError`). `#readBatch` and `syncChanges` call this first.
+   */
+  #runnerForBatchWrite(operation: string): TransactionData {
+    const runner = this.#runner;
+    if (!runner) {
+      throw new Error(
+        'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
+      );
+    }
+    assertNoOpenTransaction(runner.openTransactions, operation);
+    assertNoRunningExtensionHook(runner.runningExtensionHook, operation);
+    assertNotNotifying(runner.notifying, operation);
+    return runner;
+  }
+
+  /**
+   * Diffs `target` against the store's own committed rows and commits only what changed, the shape
+   * `syncAll` and `syncChanges` both build a `ChangeSet` from. No changes, no commit: no
+   * `beforeChange`, no `change`, and no History step.
+   */
+  #commitSyncToMatch(
+    runner: TransactionData,
+    target: readonly StoredEntry[],
+    reports: readonly CommitReport[],
+  ): void {
     const changes = changesToMatchBatch(this.#byId, target, this.#registry, this.#access);
     if (changes.added.length === 0 && changes.removed.length === 0 && changes.updated.length === 0) {
       return;
@@ -725,13 +806,12 @@ export class EntryStore implements EntryStoreContract {
   }
 
   /**
-   * The read-and-roll step `load` and sync (#517) both run before either builds its own `ChangeSet`:
-   * checks a whole-list write may run right now (no open transaction, no running extension hook, no
-   * `beforeChange`/`change` handler on the stack), reads and places the batch (`readEntryBatch`), and
-   * runs construction's own Rollup once. Returns the bound runner alongside the placed entries, the
-   * Rollup's updates, and the reports a dropped `siblingIndex` row and a dropped derived value owe —
-   * raised by `commitChangeSet` once the commit lands, so `sync` drops them with a call that writes
-   * nothing.
+   * The read-and-roll step `load` and `syncAll` both run before either builds its own `ChangeSet`:
+   * checks a whole-list write may run right now (`#runnerForBatchWrite`), reads and places the batch
+   * (`readEntryBatch`), and runs construction's own Rollup once. Returns the bound runner alongside
+   * the placed entries, the Rollup's updates, and the reports a dropped `siblingIndex` row and a
+   * dropped derived value owe — raised by `commitChangeSet` once the commit lands, so `syncAll` drops
+   * them with a call that writes nothing.
    */
   #readBatch(
     inputs: readonly FlatEntryInput[],
@@ -743,15 +823,7 @@ export class EntryStore implements EntryStoreContract {
     readonly rollupUpdated: readonly FieldUpdated[];
     readonly reports: readonly CommitReport[];
   } {
-    const runner = this.#runner;
-    if (!runner) {
-      throw new Error(
-        'EntryStore: not bound to a transaction runner — data/dataset-state.ts always binds one',
-      );
-    }
-    assertNoOpenTransaction(runner.openTransactions, operation);
-    assertNoRunningExtensionHook(runner.runningExtensionHook, operation);
-    assertNotNotifying(runner.notifying, operation);
+    const runner = this.#runnerForBatchWrite(operation);
 
     const source = this.#hierarchySource;
     const {
@@ -832,7 +904,7 @@ export class EntryStore implements EntryStoreContract {
    *  is seen.
    *
    *  `seen` is the same guard `#depthOf` carries. Every door onto `parentId` checks now —
-   *  construction, `load`, `sync` and `replay()` (ADR 0031, ADR 0035) all refuse or drop a loop
+   *  construction, `load`, `syncAll` and `replay()` (ADR 0031, ADR 0035) all refuse or drop a loop
    *  before it reaches the store — so this walk should never actually meet one already there. It
    *  stays: a chain this long is cheap to walk once, and a guard that assumes "nothing upstream can
    *  go wrong" is the guard that hangs the one time it does. A loop the edit is not part of stops the
