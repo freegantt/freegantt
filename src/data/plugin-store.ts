@@ -184,6 +184,16 @@ export class PluginStores {
     this.#writeSet = new Map();
   }
 
+  /** An Entry this transaction removes takes its rows with it, now, not at commit: a later read in
+   *  the same transaction sees no row, and a write staged before the removal never lands. A re-add of
+   *  the id starts with no row, and a write after that re-add is the fresh Entry's own row. */
+  stageEntryRemoval(_token: TxToken, id: EntryId): void {
+    const names = new Set([...this.#committed.keys(), ...(this.#writeSet?.keys() ?? [])]);
+    for (const name of names) {
+      if (this.#read(name, id) !== undefined) this.#stage(name, id, undefined);
+    }
+  }
+
   /**
    * Every row this transaction changed, plus one removal row per plugin row an entry removal orphans.
    * A staged write that matches what is already stored yields no row — `isNoOpStoreRowWrite` decides,
@@ -201,8 +211,10 @@ export class PluginStores {
       }
     }
 
-    // Removing an entry removes its plugin rows in the same changeset, exactly as descendants are
-    // removed today (D-S5-24). A row this transaction already staged is left to the loop above.
+    // Removing an entry removes its plugin rows in the same changeset. Inside a transaction
+    // `stageEntryRemoval` has already staged each removal, so the loop above writes it. This loop
+    // serves `load`, `sync` and replay's cascade, which stage nothing. A row this transaction staged,
+    // a replace's fresh row included, is left to the loop above.
     for (const [name, committed] of this.#committed) {
       for (const id of removedEntryIds) {
         const from = committed.get(id);

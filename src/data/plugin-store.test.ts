@@ -362,7 +362,76 @@ describe('an entry removal and a store write in one transaction', () => {
         lock.set('t1', { locked: true });
       },
     },
+    {
+      name: 'a write, then the entry removal, with no earlier row',
+      body: (state, lock) => {
+        lock.set('t1', { locked: true });
+        state.entries.remove('t1');
+      },
+    },
+    {
+      name: 'a write, then the entry removal, over an earlier row',
+      before: { locked: true },
+      body: (state, lock) => {
+        lock.set('t1', { locked: true });
+        state.entries.remove('t1');
+      },
+    },
+    {
+      name: 'a write, then a replace',
+      before: { locked: true },
+      body: (state, lock) => {
+        lock.set('t1', { locked: true });
+        state.entries.remove('t1');
+        state.entries.add(reborn);
+      },
+    },
   ];
+
+  it('leaves no row for an entry the same transaction removes', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const committed = recordChangeSets(state);
+
+    state.transaction(() => {
+      lock.set('t1', { locked: true });
+      state.entries.remove('t1');
+    });
+
+    expect(lock.get('t1')).toBeUndefined();
+    expect(storeRowsOf(committed[0]!)).toEqual([]);
+  });
+
+  it('a write before a replace does not reach the fresh entry', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const original: LockRow = { locked: true };
+    lock.set('t1', original);
+    const committed = recordChangeSets(state);
+
+    state.transaction(() => {
+      lock.set('t1', { locked: true });
+      state.entries.remove('t1');
+      state.entries.add(reborn);
+    });
+
+    expect(lock.get('t1')).toBeUndefined();
+    expect(storeRowsOf(committed[0]!)).toEqual([
+      { store: LOCK_STORE, id: entryId('t1'), from: original, to: undefined },
+    ]);
+  });
+
+  it('reads no row for an entry the transaction removed', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    lock.set('t1', { locked: true });
+
+    state.transaction(() => {
+      state.entries.remove('t1');
+      expect(lock.get('t1')).toBeUndefined();
+      expect(lock.all.has(entryId('t1'))).toBe(false);
+    });
+  });
 
   it.each(roundTrips)('commit, undo and redo land the same store rows: $name', ({ before, body }) => {
     const state = newState();
