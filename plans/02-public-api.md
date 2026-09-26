@@ -156,15 +156,43 @@ dataset.entries.syncAll(serverRows);   // rows in any order — the same shape `
 
 Unlike `load`, `syncAll` commits nothing when the list already matches the store: no `ChangeSet`, no `change` event — the common case for a server poll that finds nothing new. When it does commit, the `ChangeSet` carries `origin: 'sync'`. A local edit the server has not seen is overwritten, last write wins; undoing the edit then keeps the server's value.
 
+### `syncChanges` — apply only the rows that changed (#527)
+
+```ts
+dataset.entries.syncChanges({
+  upsert: [{ id: 't1', name: 'Renamed on the server' }],
+  remove: ['t9'],
+});
+```
+
+`syncChanges` also matches a live Dataset to server data by diffing, but it takes only the rows a
+server changed instead of the whole list. `upsert` rows add or edit an entry, keyed by `id`: an
+unknown id adds an entry, read the way `add()` reads one; a known id takes the row as a partial
+edit — a key the row leaves out keeps its value, and a key set to `undefined` clears it, the same as
+`update()`. `remove` lists ids to drop, each with its subtree; an unknown id is ignored, so a
+retried delta is safe to apply again. An id named in both `upsert` and `remove` throws
+`DuplicateEntryIdError` with `kind: 'upsert-and-remove'`, and nothing in the call applies.
+
+The tree check runs on the committed store and the delta together: an `upsert` row's `parentId` can
+name an id already in the store or an id the same delta adds, and a parent removed by the same
+delta, or absent from both, throws `EntryNotFoundError` — a direct parent and a grandparent alike.
+An existing entry keeps its sibling position; a new entry, or one whose `parentId` moved, takes the
+`siblingIndex` its row names or goes to the end of its group; several new entries in one `upsert`
+list land in the order they appear in it.
+
+`syncChanges` writes through the same door `syncAll` and `load` use, and shares every other rule
+`syncAll` follows above: the same refusals, the same `beforeChange` veto, the same `origin: 'sync'`
+ChangeSet with no undo step and no erased Redo, and the same no-op when nothing changed.
+
 ### Undo and redo
 
 `undo()`/`redo()` return nothing — like every other commit, a write arrives on `dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`; a caller that needs to know what an undo did reads the event, not a return value. A click that only forgets steps writes nothing, so it fires `historyChange` and not `change` (below). Undo and Redo buttons listen on `historyChange`. `canUndo`/`canRedo` answer "is there anything to undo/redo" without a caller needing to try and catch. `history: { capacity: 200 }` at construction keeps 200 undoable transactions; the default is 100. An undo replays a cascade exactly as it committed — it never re-runs the extension hook, so an engine whose behaviour changed between library versions cannot rewrite history (`01` §6, `plans/s2-data-core/s2.5-undo-redo.md`).
 
-**`load` (#496) clears History instead of recording it.** After `dataset.entries.load(rows)`, `canUndo` and `canRedo` both read `false` — the stack is emptied and the cursor set to 0, the same posture a desktop app takes opening a file. `load` is a new baseline, not an undoable step: an app's first `load` must not let `Ctrl+Z` empty the chart. **`sync` (#517) records no undo step, clears nothing, and erases no Redo.** A write the user did not make leaves the stack exactly as it was; the user's own earlier edits stay undoable across any number of syncs.
+**`load` (#496) clears History instead of recording it.** After `dataset.entries.load(rows)`, `canUndo` and `canRedo` both read `false` — the stack is emptied and the cursor set to 0, the same posture a desktop app takes opening a file. `load` is a new baseline, not an undoable step: an app's first `load` must not let `Ctrl+Z` empty the chart. **`syncAll` (#517) and `syncChanges` (#527) record no undo step, clear nothing, and erase no Redo.** A write the user did not make leaves the stack exactly as it was; the user's own earlier edits stay undoable across any number of syncs.
 
 Undo and redo write onto the store's current values, not onto a frozen snapshot of what the step recorded. **An undo never writes over a foreign write (#549).** A Field is a foreign write when its current value is neither the value the step recorded nor the value the replay would write — a sync, or any commit the History did not record, changed it. When one Field of an entry is a foreign write, the replay writes no Field row of that entry, so a step never lands half of a `start`/`end` pair; the step's other entries still land. `siblingIndex` is never judged — any sibling's move shifts it, and the renumber pass settles it. Plugin store rows are never judged either — a sync never writes one. Redo follows the same rule. Undo then redo stays neutral, because each replaces its stack entry with what it actually wrote. Undo and redo also keep the tree sound (a replayed `parentId` never lands a loop or a dangling reference), renumber the sibling groups they touch, and re-run the Rollup — so an undo's `change` rows can differ from what the step first recorded. A step left with nothing to write is forgotten, and the same click moves on to the step before it. `dataset.replay(changeSet)` follows the same rules (below); `docs/11-server-data.md` states them for a consumer in full.
 
-**`history: false` hands undo to the app (#549).** The Dataset then builds no History: `canUndo`/`canRedo` always read `false`, `undo()`/`redo()` do nothing, and the core `freegantt.undo`/`freegantt.redo` commands turn off through their own `when`, which frees Mod+Z. `replay`, `load` and `sync` work unchanged. This is the door for an app with its own undo rule: a stack per user, a stack a server keeps, or a different answer to a foreign write. Core does not grow a policy knob for each such rule.
+**`history: false` hands undo to the app (#549).** The Dataset then builds no History: `canUndo`/`canRedo` always read `false`, `undo()`/`redo()` do nothing, and the core `freegantt.undo`/`freegantt.redo` commands turn off through their own `when`, which frees Mod+Z. `replay`, `load`, `syncAll` and `syncChanges` work unchanged. This is the door for an app with its own undo rule: a stack per user, a stack a server keeps, or a different answer to a foreign write. Core does not grow a policy knob for each such rule.
 
 `dataset.replay(changeSet, options?)` is the write path `undo()`/`redo()` are built on, published so a consumer can write their own History against the public surface alone: `on('change')`, `invertChangeSet`, `fieldRowsOf`, and `replay` — no `data/` import needed. `replay` writes each row onto the store's current value, the same rule undo and redo follow above, through the same `beforeChange`/`change` channel, with no extension hook. A row for a key no Field declares writes nothing, the same as a row for a computed Field; `replay` never throws for one. `{ overwriteForeignWrites: true }` writes the step over a foreign write instead of keeping it — last write wins; the built-in History never passes it. `changeSet.origin` must be `'undo'` or `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, later (§6). A changeset with nothing left to write fires neither `beforeChange` nor `change` (`plans/s2-data-core/s2b-undo-replay-seam.md`). A History panel lists what a step changed with `fieldRowsOf(changeSet).map((row) => row.field)`, dropping the plugin-store rows `updated` also carries.
 
@@ -971,7 +999,7 @@ const risk    = dataset.pluginStore('risk');            // one plugin's store, o
 
 **The inbound half is one call.** `dataset.entries.load(rows)` (#496) writes a saved list back onto a live Dataset, in any order — a child may list before its parent. Before #496 the only inbound door was `new Dataset({ entries })`, which a mounted Gantt cannot take (`gantt.dataset` is read-only) and which gives every subscriber a new identity to rebind. `load` is not a save format: it takes `FlatEntryInput[]`, the shape the constructor already takes, and adds no document type, no schema and no version — ADR 0016 stands.
 
-**A periodic server poll calls `dataset.entries.syncAll(rows)` (#517), not `load`.** `load` clears History and resets every kept entry's selection, collapse state and plugin store rows on every call — the right posture for opening a saved file, the wrong one for a refresh a user is looking at. `syncAll` takes the same `FlatEntryInput[]` shape and keeps a kept entry's state, so it fits a poll loop that runs while the app stays open.
+**A periodic server poll calls `dataset.entries.syncAll(rows)` (#517) or `dataset.entries.syncChanges(delta)` (#527), not `load`.** `load` clears History and resets every kept entry's selection, collapse state and plugin store rows on every call — the right posture for opening a saved file, the wrong one for a refresh a user is looking at. `syncAll` takes the same `FlatEntryInput[]` shape and keeps a kept entry's state, so it fits a poll loop that runs while the app stays open; `syncChanges` takes only the rows a server changed, for a server that already sends a delta.
 
 **A plugin that owns data a consumer must keep publishes its own reader.** It gets no hook into a library format. A consumer saves that data by reading it from the plugin, in the plugin's own vocabulary.
 
