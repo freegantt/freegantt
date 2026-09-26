@@ -138,7 +138,7 @@ describe('one plugin, two halves, one install site (ADR 0019)', () => {
   });
 });
 
-describe('the wrong install site (ADR 0019, Q4)', () => {
+describe('the wrong install site (ADR 0019)', () => {
   const costed = costing([]);
 
   it('throws PluginSetupError, and the message says where to install it', () => {
@@ -156,7 +156,7 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
     expect(thrown).toBeInstanceOf(PluginSetupError);
     expect((thrown as PluginSetupError).pluginId).toBe('demo.costing');
     expect((thrown as Error).message).toMatch(/installs on the Dataset, not on the Gantt/);
-    // The id is quoted, and the site is shown with no fake call around it (`F26`).
+    // The id is quoted, and the site is shown with no fake call around it.
     expect((thrown as Error).message).toContain('id "demo.costing"');
     expect((thrown as Error).message).toMatch(/new Dataset\(\{ entries, plugins: \[…\] \}\)/);
   });
@@ -230,7 +230,7 @@ describe('the wrong install site (ADR 0019, Q4)', () => {
   );
 });
 
-describe('requires covers both halves (D-S5-31)', () => {
+describe('requires covers both halves', () => {
   it('orders a chrome plugin after the Dataset plugin it requires', () => {
     const order: string[] = [];
     const base = definePlugin({

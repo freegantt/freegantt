@@ -47,8 +47,8 @@ type PropsOf<TDataset> = TDataset extends { entries: EntryStoreView<infer TProps
 export interface PluginIdentity {
   id: PluginId;
   /** Plugin ids that must also be installed. Does not imply an order in the array: installation
-   *  resolves setup order from `requires` alone, so `[a, b]` and `[b, a]` install identically
-   *  (D-S5-31). A required id nobody installs throws `MissingPluginError`. One list covers both
+   *  resolves setup order from `requires` alone, so `[a, b]` and `[b, a]` install identically. A
+   *  required id nobody installs throws `MissingPluginError`. One list covers both
    *  halves (ADR 0019). */
   requires?: readonly PluginId[];
 }
@@ -66,7 +66,7 @@ export interface ChromePluginOf<TViewContext = unknown> extends PluginIdentity {
    *  every `onDomEvent` files its own removal in `ctx.disposables`. */
   view(ctx: TViewContext): Disposer | void;
   data?: never;
-  /** Dataset-owned state, registered at construction (#496 grill round 3, R1). Unrepresentable here
+  /** Dataset-owned state, registered at construction (#496 grill round 3). Unrepresentable here
    *  for the same reason `data?: never` is: a chrome-only plugin has no `data()` to run them against.
    *  So a Field it named would install silently dropped, on the wrong site, with no error —
    *  `GanttOptions.plugins` never reads this member. */
@@ -87,8 +87,8 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
    *  a plugin that only declares `fields`, `fieldTypes`, `aggregators` or `hierarchySource`
    *  needs no `data()` to run. */
   data?(ctx: DatasetPluginContextOf<TDataset>): Disposer | void;
-  /** The same shape `DatasetOptions.fields`/`fieldTypes`/`aggregators` take (#496 grill round 3,
-   *  R1). Registered before any entry is read — alongside the Dataset's own, and before `data()`
+  /** The same shape `DatasetOptions.fields`/`fieldTypes`/`aggregators` take (#496 grill round 3).
+   *  Registered before any entry is read — alongside the Dataset's own, and before `data()`
    *  runs. So a flat value an entry carries for one of these keys survives `new Dataset(...)`, the
    *  same way `entries.load()` already does. A duplicate key across the Dataset and every plugin
    *  throws `DuplicateFieldKeyError`, the same error two ordinary declarations sharing a key throw.
@@ -102,7 +102,7 @@ export interface DataPluginOf<TViewContext = unknown, TDataset = unknown> extend
    *  core-Field override such as `{ key: 'start' }` still compiles. An untyped plugin
    *  (`definePlugin({ … })`, `TDataset` left as `unknown`) names any key. */
   fields?: readonly (Field & { key: (keyof PropsOf<TDataset> & string) | CoreFieldKey })[];
-  /** Named Field type bundles this plugin adds, resolved before any Field naming one (D-S4-3). */
+  /** Named Field type bundles this plugin adds, resolved before any Field naming one. */
   fieldTypes?: Readonly<Record<string, FieldType>>;
   /** Aggregators this plugin adds, resolved before any Field naming one in `rollUp`. */
   aggregators?: Readonly<Record<string, Aggregator>>;

@@ -1,4 +1,4 @@
-// api/ — the public command and keybinding contract (S5.2, D-S5-6, D-S5-7). Generic over `TGantt`
+// api/ — the public command and keybinding contract (S5.2). Generic over `TGantt`
 // here for the same reason `api/plugin-context.ts`'s `PluginContextOf` is (S5.1 file header):
 // `api/gantt.ts` already imports this file for the generic shape, and if this file also imported
 // `Gantt` the two would close an import cycle (`extensions/commands.ts` needs the generic form too,
@@ -116,7 +116,7 @@ export interface ActedOn {
   entryIds: readonly EntryId[];
 }
 
-/** What focus a chord or a right-click landed on (issue #137 F6) — S5.7's and S5.11's chord scoping
+/** What focus a chord or a right-click landed on (issue #137) — S5.7's and S5.11's chord scoping
  *  ("on a focused header cell", "on a selected bar", "on the splitter") has nothing else in
  *  `CommandContext` to read a `when` against. Filled by the keymap resolver from view state; a menu
  *  or `run(id)` invocation with no meaningful target for this kind leaves it `undefined`.
@@ -134,7 +134,7 @@ export interface ActedOn {
 export interface CommandTarget extends ActedOn {
   kind: TargetKind;
   /** Which Grid column this landed on, for a `'header'` or `'gridCell'` target. `field` names a column
-   *  everywhere a column is named (D-S5-37, #194) — the same word `DomTarget.field`,
+   *  everywhere a column is named (#194) — the same word `DomTarget.field`,
    *  `GridColumn.field` and a renderer's `ctx.column.field` already use. */
   field?: FieldKey;
 }
@@ -177,7 +177,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
    *  clicked or focused (`target` is that; see below). On a right-click outside the Selection, the
    *  click replaces the Selection first (`plans/02` §4.6), so `entry` reads as "the clicked bar" on
    *  that one path — but a right-click *inside* a multi-bar Selection, and every keyboard path
-   *  (`Shift+F10`, the Menu key, `Mod+Arrow`), never click at all: `entry` is whichever Entry the
+   *  (the menu key, `Mod+Arrow`), never click at all: `entry` is whichever Entry the
    *  Selection puts first, which can differ from what carries DOM focus on a segmented row.
    *  `undefined` when the Selection is empty. */
   entry?: Entry | undefined;
@@ -198,7 +198,7 @@ export interface CommandContextOf<TGantt = unknown, TDataset = Dataset> {
   target?: CommandTarget;
 }
 
-/** A named, invokable action with a label and a condition (D-S5-6). No `TArgs` generic — every
+/** A named, invokable action with a label and a condition. No `TArgs` generic — every
  *  invocation path in S5 is argument-less (issue #137 G); see the step file for why a generic here
  *  would be type-unsound at the registry boundary. */
 export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
@@ -210,14 +210,14 @@ export interface CommandOf<TGantt = unknown, TDataset = Dataset> {
   run(ctx: CommandContextOf<TGantt, TDataset>): void;
 }
 
-/** D-S5-6: register once, run by id, list what a `CommandContext` currently allows. `run` throws
+/** Register once, run by id, list what a `CommandContext` currently allows. `run` throws
  *  `UnknownCommandError` for an id nothing owns; a registered command whose `when` declines is a
  *  silent no-op, the same posture `available`'s own filter takes. */
 export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
   /** #155: registering an id a command already holds stacks on top of it rather than replacing it.
    *  The newest registration answers `run`, and the returned `Disposer` removes exactly this one —
    *  the command underneath then answers again, which is how a plugin's override of a core command
-   *  undoes itself when that plugin is uninstalled (D-S5-7). */
+   *  undoes itself when that plugin is uninstalled. */
   register(command: CommandOf<TGantt, TDataset>): Disposer;
   run(id: CommandId): void;
   /** Commands whose `when` passes for this context, in registration order. #160: `ctx` is optional —
@@ -226,7 +226,7 @@ export interface CommandRegistryOf<TGantt = unknown, TDataset = Dataset> {
   available(ctx?: CommandContextOf<TGantt, TDataset>): readonly CommandOf<TGantt, TDataset>[];
 }
 
-/** D-S5-7: newest-first resolution — the last registration gets first refusal, and a decline falls
+/** Newest-first resolution — the last registration gets first refusal, and a decline falls
  *  through to an older binding. `Mod` means `⌘` on Apple platforms and `Ctrl` elsewhere. */
 export interface KeyBindingOf<TGantt = unknown, TDataset = Dataset> {
   chord: KeyChord;
@@ -234,6 +234,6 @@ export interface KeyBindingOf<TGantt = unknown, TDataset = Dataset> {
   /** Extra condition beyond the command's own `when`. */
   when?(ctx: CommandContextOf<TGantt, TDataset>): boolean;
   /** Fire even while the event's target is editable or mid-IME-composition. Default `false`
-   *  (issue #137 F7). */
+   *  (issue #137). */
   captureInEditable?: boolean;
 }
