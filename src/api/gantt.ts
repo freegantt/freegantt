@@ -191,8 +191,11 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `Mod+Arrow` reach, `Enter`) is not in the map's key type and stays bound either way — `[S5-A4]`,
    *  WCAG 2.1.1. The command itself stays reachable through `commands.run(id)` regardless. */
   convenienceChords?: ConvenienceChords;
-  /** Live (S4.3). Field keys in display order, plus per-Gantt overrides. Default `['name']`. */
-  gridColumns?: readonly GridColumnInput[];
+  /** Live (S4.3). Field keys in display order, plus per-Gantt overrides. Default `['name']`.
+   *
+   *  A column over a declared `TProps` key or a core key types `columnRenderer`'s `fieldValue`
+   *  from that key's own Field value — the same type `entry.read(key)` answers. */
+  gridColumns?: readonly GridColumnInput<TProps>[];
   /** Live (S4.6). Default `{ source: 'entries', tree: true }`. */
   rowSource?: RowSource;
   /** Live (S4.6). Collapsed row ids, loose on the way in. Default `[]`. */
@@ -383,7 +386,6 @@ export class Gantt<TProps = unknown> {
         'snap',
         'viewportGestures',
         'convenienceChords',
-        'gridColumns',
         'rowSource',
         'collapsed',
         'barLabels',
@@ -402,6 +404,11 @@ export class Gantt<TProps = unknown> {
       ...(options.selectedEntryIds !== undefined ? { selectedEntryIds: options.selectedEntryIds } : {}),
       // ADR 0018: one cast at the façade — see `set variants` below for why it is the only one.
       ...(options.variants !== undefined ? { variants: options.variants as readonly EntryVariant[] } : {}),
+      // Same façade cast, for the same reason (ADR 0018): `GanttOptions<TProps>` types each
+      // column's renderer from this Gantt's own Dataset; `view/` holds the erased shape.
+      ...(options.gridColumns !== undefined
+        ? { gridColumns: options.gridColumns as readonly GridColumnInput[] }
+        : {}),
       // ADR 0019: the Dataset's own plugins ride along. Their `view` halves belong to every Gantt
       // bound to that Dataset, and one `requires` graph orders them together with this Gantt's own
       // chrome, once `this.plugins =` below installs both. A plugin with no `view` half joins the
@@ -582,12 +589,22 @@ export class Gantt<TProps = unknown> {
     this.#shell.gridResizable = resizable;
   }
 
+  /** Live (S4.3). Typing sits only on the write side (`set gridColumns` below): a consumer states a
+   *  column, so a props-key renderer checks against `TProps` there. The read side stays erased —
+   *  `TValue` sits in `columnRenderer`'s parameter, a contravariant position, so a `Gantt<TProps>`
+   *  could not otherwise widen to a plain `Gantt` the way `variants` and every other typed accessor
+   *  do. Reading a renderer back off `gridColumns` is not a job this getter serves (nothing calls
+   *  one from here); erasing the read keeps that widening intact. */
   get gridColumns(): readonly GridColumnInput[] {
     return this.#shell.gridColumns;
   }
 
-  set gridColumns(columns: readonly GridColumnInput[]) {
-    this.#shell.gridColumns = columns;
+  /** Live (S4.3). Assigning types each column's `columnRenderer` from this Gantt's own Dataset:
+   *  a core key or a declared `TProps` key checks `fieldValue` against that key's own Field value,
+   *  the same type `entry.read(key)` answers. */
+  set gridColumns(columns: readonly GridColumnInput<TProps>[]) {
+    // ADR 0018: one cast at the façade, the same reason `set variants` casts.
+    this.#shell.gridColumns = columns as readonly GridColumnInput[];
   }
 
   /** Which columns are hidden, by field key — what a column chooser reads to draw its own
