@@ -1,14 +1,22 @@
-import { describe, expect, it } from 'vitest';
-import { EXTENDER_OPERATION, moveEntryTo, toEditReading, toEditsReading, toEntries } from './entry-reader.js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  EXTENDER_OPERATION,
+  moveEntryTo,
+  toEditReading,
+  toEditsReading,
+  toEntries,
+  toEntryAfterUpsert,
+} from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import {
   ComputedFieldCannotBeWrittenError,
+  DuplicatePropsKeyError,
   entryId,
   FieldNotEditableError,
   InvertedSpanError,
   UnknownFieldError,
 } from '../model/index.js';
-import type { StoredEntry, EntryEdit, EntryInput } from '../model/index.js';
+import type { StoredEntry, EntryEdit, EntryInput, FlatEntryInput } from '../model/index.js';
 import { instant, toInstant } from '../time/index.js';
 import type { EntryEdits, ProposedEdit } from './edit-extension.js';
 import { FieldRegistry } from './fields/field-registry.js';
@@ -451,5 +459,121 @@ describe('toEditsReading honours the editable lock (#473, ADR 0015)', () => {
     );
 
     expect(reading.stored.get(entry.id)?.props?.['owner']).toBe('bo');
+  });
+});
+
+describe('toEntryAfterUpsert reads one syncChanges upsert row onto a kept entry', () => {
+  const noteRegistry = new FieldRegistry({ fields: [{ key: 'note' }] });
+  type NoteProps = { note?: string | undefined };
+
+  function currentEntry(context: EntryReadContext): StoredEntry {
+    const [unplaced] = toEntries(
+      [
+        {
+          id: 't1',
+          parentId: 'root',
+          name: 'Design',
+          start: '2026-01-01',
+          end: '2026-01-05',
+          props: { note: 'old' },
+        },
+      ],
+      context,
+      noteRegistry,
+    );
+    return { ...unplaced!, siblingIndex: 5 };
+  }
+
+  function upsert(context: EntryReadContext, current: StoredEntry, row: FlatEntryInput<NoteProps>) {
+    return toEntryAfterUpsert(row, current, context, noteRegistry, 'entries.syncChanges');
+  }
+
+  it('keeps every value a row leaves out: name, start, end, parentId, a declared prop', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    const { entry } = upsert(context, current, { id: current.id });
+    expect(entry.name).toBe(current.name);
+    expect(entry.start).toBe(current.start);
+    expect(entry.end).toBe(current.end);
+    expect(entry.parentId).toBe(current.parentId);
+    expect(entry.props['note']).toBe('old');
+  });
+
+  it('clears name, start, parentId and a declared prop each set to undefined', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    const { entry } = upsert(context, current, {
+      id: current.id,
+      name: undefined,
+      start: undefined,
+      parentId: undefined,
+      note: undefined,
+    });
+    expect(entry.name).toBeUndefined();
+    expect(entry.start).toBeUndefined();
+    expect(entry.parentId).toBeUndefined();
+    expect(entry.props['note']).toBeUndefined();
+  });
+
+  it('writes a declared key under nested props the same as the flat key', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    const { entry } = upsert(context, current, { id: current.id, props: { note: 'new' } });
+    expect(entry.props['note']).toBe('new');
+  });
+
+  it('does not write, and does not warn about, an undeclared nested key', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { entry } = upsert(context, current, {
+      id: current.id,
+      props: { mystery: 'x' },
+    } as FlatEntryInput<NoteProps>);
+    expect(entry.props['mystery']).toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('warns once and drops an undeclared flat key', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { entry } = upsert(context, current, { id: current.id, mystery: 'x' } as FlatEntryInput);
+    expect(entry.props['mystery']).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws DuplicatePropsKeyError when the same key is named flat and nested', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    expect(() =>
+      upsert(context, current, { id: current.id, note: 'flat', props: { note: 'nested' } }),
+    ).toThrow(DuplicatePropsKeyError);
+  });
+
+  it('never copies siblingIndex onto the entry — placement is a separate step', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    const { entry } = upsert(context, current, { id: current.id, siblingIndex: 99 });
+    expect(entry.siblingIndex).toBe(current.siblingIndex);
+  });
+
+  it('throws InvertedSpanError for a row that inverts the span against the current end', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    expect(() => upsert(context, current, { id: current.id, start: '2026-06-01' })).toThrow(
+      InvertedSpanError,
+    );
+  });
+
+  it('names exactly the keys the edit named in namedKeys', () => {
+    const context = createContext();
+    const current = currentEntry(context);
+    const { namedKeys } = upsert(context, current, {
+      id: current.id,
+      name: 'Renamed',
+      props: { note: 'new' },
+    });
+    expect([...namedKeys].sort()).toEqual(['name', 'note']);
   });
 });
