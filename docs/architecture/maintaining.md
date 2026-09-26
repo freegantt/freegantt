@@ -73,13 +73,18 @@ grep -rln 'gantt-shell' docs/architecture/*.md   # which pages cover this file?
    Bar draws Segments, and a Segment is a reading of a Bar, never a type. Row, not line. Field is
    what a value *is*; a grid column is where a Gantt *shows* it. No scheduling framing in core descriptions — a shift roster and
    units-sold-per-week are as much the intended use as a construction plan.
-5. **Three guards scan this folder.** `test/guards/retired-words.test.ts` fails on a retired word —
+5. **Four guards scan this folder.** `test/guards/retired-words.test.ts` fails on a retired word —
    that file holds the current list and the ADR behind each one, and it is the only place the list
    lives. It reads `docs/**`, with the ADRs out of scope. It runs in
    `pnpm verify`, so prose here breaks CI exactly like code does. Add a word to that guard in the
    same commit that deletes the type it named. A name that outlives its type keeps teaching a
    concept the library dropped, and four pages here taught one for months because no guard read
    them.
+
+   `test/guards/spec-labels.test.ts` fails when a new line cites a slice decision id, a review
+   finding id, or a question id. State the rule instead. `plans/` and the ADRs keep those ids.
+   The check reads lines added since `main`, so an old citation that this page still holds does
+   not fail until that line changes.
 
    The other two read what the pages measure rather than what they say.
    `test/guards/file-inventory.test.ts` fails when [File inventory](./files.md) misses a live
