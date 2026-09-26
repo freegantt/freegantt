@@ -104,4 +104,19 @@ describe("GridColumn — a per-column renderer reads fieldValue from the column 
     const column: GridColumn<Props> = { field: 'owner', width: 80, flex: 1 };
     expect(column).toBeDefined();
   });
+
+  it('compiles: a TProps key named start still reads as the core Instant type', () => {
+    const startCell = ({ fieldValue }: ColumnRendererContext<Instant>) => ({
+      text: fieldValue === undefined ? '' : formatInstant(fieldValue),
+    });
+    const column: GridColumn<{ start: string }> = { field: 'start', columnRenderer: startCell };
+    expect(column).toBeDefined();
+  });
+
+  it('does not compile: Ctx<string> on start even when a TProps key of the same name is string', () => {
+    const ownerCell = ({ fieldValue }: ColumnRendererContext<string>) => ({ text: fieldValue ?? '' });
+    // @ts-expect-error — a name shared with a core key still reads as the core type, never TProps's
+    const column: GridColumn<{ start: string }> = { field: 'start', columnRenderer: ownerCell };
+    expect(column).toBeDefined();
+  });
 });
