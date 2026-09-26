@@ -1,4 +1,4 @@
-// layout/ — row-source sort. Reads stored values through bound FieldCompare (D-S4-28, D-S4-29).
+// layout/ — row-source sort. Reads stored values through bound FieldCompare.
 
 import { UnknownFieldError } from '../../model/index.js';
 import type { Entry, FieldContext, RowId } from '../../model/index.js';

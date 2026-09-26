@@ -1,4 +1,4 @@
-// layout/ — row-source types. Pure data: no pixels, no Dataset (D-S4-19, D-S4-21). A Field registry
+// layout/ — row-source types. Pure data: no pixels, no Dataset. A Field registry
 // reaches this file as a port only (`EntryRulePorts`, #421 C1) — `childrenAsSegments`'s match needs
 // each Field's own `equals`, the same way `fieldCompares`/`fieldContext` already carry a bound
 // answer in rather than importing the registry itself.
@@ -20,7 +20,7 @@ export interface RowSort {
 }
 
 /** Shared by every row source that walks Entries directly — `'custom'` resolves its own rows, so it
- *  does not take these (D-S4-21).
+ *  does not take these.
  *
  *  Every key takes an explicit `undefined`, so one setting turns off through the same spread that
  *  turns it on (#254): `{ ...current, sort: undefined }`. A bare `sort?: RowSort` rejects that
@@ -100,7 +100,7 @@ export interface ResolvedGroupRowSource extends GroupRowSource {
 /** What `Gantt.rowSource` reads back (#248 S4-2): every key a `RowSource` may omit, filled with the
  *  default `layout/` already applies at consumption (`filterPolicyOf`, the entries source's own
  *  `tree` check) — so a consumer never has to know those defaults to read them. `'custom'` takes no
- *  `filter`/`sort`/`filterPolicy`/`tree` (D-S4-21), so it has nothing left to fill and reads back as
+ *  `filter`/`sort`/`filterPolicy`/`tree`, so it has nothing left to fill and reads back as
  *  the `CustomRowSource` a consumer authored. */
 export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSource | CustomRowSource;
 
@@ -120,14 +120,14 @@ export function resolveRowSource(source: RowSource): ResolvedRowSource {
  *  the group source — a group header owns the rows below it. `'custom'` returns a flat list of
  *  `CustomRow`, which carries no parent, so it never nests.
  *
- *  S5.11, D-S5-25 reads this to pick the grid pane's authoring pattern: a nesting source is a
+ *  This picks the grid pane's authoring pattern: a nesting source is a
  *  `treegrid`, a flat one a `grid`, and only a `treegrid` row may carry `aria-level`. */
 export function nestsRows(source: RowSource): boolean {
   if (source.source === 'entries') return source.tree === true;
   return source.source === 'group';
 }
 
-/** Derived row classification — not `Entry.kind` (D-S4-23). */
+/** Derived row classification — not `Entry.kind`. */
 export type PlannedRowKind = 'entry' | 'header';
 
 /** Row sources build rows through this lookup, never a bare `'header'`/`'entry'` literal, so the
@@ -137,13 +137,13 @@ export const PLANNED_ROW_KIND = Object.freeze({
   entry: 'entry',
 } as const satisfies Record<string, PlannedRowKind>);
 
-/** True when the row stands for no Entry (D-S4-23). Compares through a frozen lookup so `layout/`
+/** True when the row stands for no Entry. Compares through a frozen lookup so `layout/`
  *  never branches on a kind string literal inline (`no-kind-literal`). */
 export function isPlannedHeaderRow(row: Pick<PlannedRow, 'kind'>): boolean {
   return row.kind === PLANNED_ROW_KIND.header;
 }
 
-/** Internal row before pixels. A header row stands for no Entry (D-S4-23). */
+/** Internal row before pixels. A header row stands for no Entry. */
 export interface PlannedRow {
   id: RowId;
   kind: PlannedRowKind;

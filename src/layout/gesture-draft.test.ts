@@ -189,7 +189,7 @@ describe('draftForResize', () => {
 describe('previewOffsets', () => {
   const a = entry('a', '2026-06-15T14:00:00Z', '2026-06-15T16:00:00Z');
   const b = entry('b', '2026-06-16T09:00:00Z', '2026-06-16T12:00:00Z');
-  // Starts fully inside the content; the F4 case below resizes its end past `range.end`.
+  // Starts fully inside the content; the edge-clip case below resizes its end past `range.end`.
   const c = entry('c', '2026-06-25T00:00:00Z', '2026-06-28T00:00:00Z');
 
   /** The Bar an ordinary span row paints — no `box`, so `barSpan` takes the span-and-floor path.

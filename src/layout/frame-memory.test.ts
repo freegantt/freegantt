@@ -138,7 +138,7 @@ describe('FrameMemory caches entryById by entries identity, not datasetRevision 
 });
 
 // Retired (ADR 0026, #421): this describe block used to be 'FrameMemory remembers the Segment sets
-// beside the Bars (#230 R1)' — `RowMemory.segmentIds`/`segmentIdsByBar` and
+// beside the Bars' — `RowMemory.segmentIds`/`segmentIdsByBar` and
 // `FrameMemory.segmentIdsOfEntries` named which Segment(s) each Bar stood for. A core Entry now
 // always draws exactly one Bar over its own span, so there is no Segment set left to name, and
 // `RowMemory` carries only `bars`. Two tests below still ask a real question about the cache

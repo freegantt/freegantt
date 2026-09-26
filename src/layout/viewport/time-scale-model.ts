@@ -23,7 +23,7 @@ import type { PresetRef, TimeScale, TimeScaleOptions, TimeUnitWidth, ViewPreset 
 import type { Entry, Instant, TimeSpan } from '../../model/index.js';
 import { BoundValue } from './bound-value.js';
 
-/** The density mode — what `pxPerMs` resolves to (S1.9, D-S1.9-2; renamed from `TimeScaleZoom`,
+/** The density mode — what `pxPerMs` resolves to (renamed from `TimeScaleZoom`,
  *  issue #84 — "zoom" was one word for this mode, the `zoomTo` density knob, and the `zoomBy`
  *  gesture). `'pane'` (default) fits the measured pane width; `'preset'` ignores it and uses the
  *  preset's own density; a `TimeUnitWidth` states one unit's width in pixels ("a day is 14px"); an
@@ -34,7 +34,7 @@ import { BoundValue } from './bound-value.js';
  *  asserting that a day is always 24 hours (#15) — see `TimeUnitWidth`.
  *
  *  `'pane'` fills the pane down to the preset's `minTickWidthPx` floor. A range wider than that
- *  scrolls, on purpose (D-S1.12-2, issue #477): to see more, choose a coarser preset — the library
+ *  scrolls, on purpose (issue #477): to see more, choose a coarser preset — the library
  *  never picks one for you. */
 export type TimeScaleFit = 'pane' | 'preset' | number | TimeUnitWidth;
 
@@ -77,7 +77,7 @@ function sameFit(a: TimeScaleFit, b: TimeScaleFit): boolean {
 /** Zone used before any Gantt has bound, so `scale` is readable on a fresh model. */
 const UNBOUND_ZONE = 'UTC';
 
-/** Content wider than this stops being addressable by browser scroll geometry (S1.12, D-S1.12-4).
+/** Content wider than this stops being addressable by browser scroll geometry.
  *  Chromium clamps around 33.5M px; this leaves headroom for the narrowest reported limit. Mechanical,
  *  not semantic — about the DOM, not about legibility — so it is one constant here, not a per-preset
  *  knob. */
@@ -88,8 +88,8 @@ const MAX_CONTENT_PX = 16_000_000;
 export interface ScaleBindingHandle {
   unbind(): void;
   setPaneWidth(width: number): void;
-  /** Pushes a re-read `entries.all` snapshot (S2.4, D-S2-20) — the live half of `'fitDataset'`:
-   *  an edit inside the bound Dataset's own span is a no-op here (D-S1.5-4's equality check), an
+  /** Pushes a re-read `entries.all` snapshot — the live half of `'fitDataset'`:
+   *  an edit inside the bound Dataset's own span is a no-op here (the equality check), an
    *  edit outside it re-fits the range. */
   setEntries(entries: readonly Entry[]): void;
 }
@@ -102,8 +102,8 @@ interface MutableScaleBinding {
 }
 
 /** What `#scaleOptions` resolves and notifies on. `options` is exactly what `createTimeScale` takes;
- * `preset` rides alongside it purely so a preset switch is visible to the D-S1.5-4 equality check —
- * `TimeScale` itself stays preset-agnostic (`ticks` takes an explicit step, per D-S1.9-4), but a
+ * `preset` rides alongside it purely so a preset switch is visible to the equality check —
+ * `TimeScale` itself stays preset-agnostic (`ticks` takes an explicit step), but a
  * bound Gantt's render depends on the preset's headers too (`GanttShell.render` reads `viewport.preset`
  * alongside `viewport.timeScale`), and `pxPerMs` alone does not always change when the preset does —
  * `'pane'` with a measured pane resolves the same density from any preset. Without `preset`
@@ -114,7 +114,7 @@ interface ResolvedScale {
   preset: ViewPreset;
 }
 
-/** Whether a resolve actually changed anything (D-S1.5-4). Compared on exactly the fields `scale`
+/** Whether a resolve actually changed anything. Compared on exactly the fields `scale`
  * (and the preset a render also depends on) are built from, so the comparison can never drift from
  * what a bound Gantt would see. Presets are frozen singletons (shipped or a caller's own object
  * passed straight through by `resolvePreset`), so reference equality is exact, not an approximation. */
@@ -154,7 +154,7 @@ export class TimeScaleModel {
   #preset: ViewPreset;
   #range: 'fitDataset' | TimeSpan;
   #fit: TimeScaleFit;
-  /** The bindings, the options resolved from them, and the D-S1.5-4 notification contract — one
+  /** The bindings, the options resolved from them, and the notification contract — one
    * object, shared with `ScrollAxis` in implementation and with nothing else (`bound-value.ts`).
    * This model supplies only what is its own: how to resolve, and what counts as a change. */
   #scaleOptions = new BoundValue<MutableScaleBinding, ResolvedScale>({
@@ -179,7 +179,7 @@ export class TimeScaleModel {
 
   /** Live — every config key is live-reconfigurable (plans/02 §1.1). Resolved through
    *  `resolvePreset` (throws `UnknownPresetError` for an unknown id); no-op, no invalidation, when
-   *  the resolved preset is unchanged (D-S1.9-3).
+   *  the resolved preset is unchanged.
    *
    *  Shipped-only — this model has no `zoomPresets` ladder of its own to search (it can be shared
    *  by more than one `Gantt`, each with a different ladder, so it has none), so a custom id here
@@ -208,8 +208,8 @@ export class TimeScaleModel {
   }
 
   /** Live. `'pane'` (default) fits the measured pane width; `'preset'` ignores it; a
-   *  `TimeUnitWidth` states one unit's width in pixels; an explicit `number` is `pxPerMs`
-   *  (D-S1.9-2). Every mode floors at the preset's `minTickWidthPx` — a range wider than the
+   *  `TimeUnitWidth` states one unit's width in pixels; an explicit `number` is `pxPerMs`.
+   *  Every mode floors at the preset's `minTickWidthPx` — a range wider than the
    *  floor allows scrolls; pick a coarser preset to fit more (#477). */
   set fit(f: TimeScaleFit) {
     if (sameFit(this.#fit, f)) return;
@@ -226,8 +226,8 @@ export class TimeScaleModel {
     return this.#scale;
   }
 
-  /** Several writes, at most one notification, delivered iff the resolved scale actually changed
-   * (D-S1.5-4). Re-entrant; flushes at the outermost exit, in a `finally` so a throwing `run` cannot
+  /** Several writes, at most one notification, delivered iff the resolved scale actually changed.
+   * Re-entrant; flushes at the outermost exit, in a `finally` so a throwing `run` cannot
    * wedge the model (conventions §5). */
   batch(run: () => void): void {
     this.#scaleOptions.batch(run);
@@ -265,8 +265,8 @@ export class TimeScaleModel {
     return { timeZone, range, pxPerMs };
   }
 
-  /** The three `TimeScaleFit` modes (S1.9, D-S1.9-2), floored by the preset's `minTickWidthPx` and
-   *  ceilinged by `MAX_CONTENT_PX` (S1.12, D-S1.12-2, D-S1.12-4) — applied to all three modes so an
+  /** The three `TimeScaleFit` modes, floored by the preset's `minTickWidthPx` and
+   *  ceilinged by `MAX_CONTENT_PX` — applied to all three modes so an
    *  explicit `number` (what `zoomTo`/`zoomBy` write) can never walk back into the squish the floor
    *  exists to prevent. `'pane'` is otherwise the pre-S1.9 formula, unchanged — a refinement of the
    *  preset's own density when there is a pane to fit, not a precondition for having one. */
@@ -290,7 +290,7 @@ export class TimeScaleModel {
 }
 
 /** Gantt instances bind at construction (after mounting their render target — see `GanttShell`,
- * #22) and call the returned handle's `unbind` on destroy. One rule, no exceptions (D-S1.5-4):
+ * #22) and call the returned handle's `unbind` on destroy. One rule, no exceptions:
  * bind always notifies the newcomer — including this one — so a fresh binding gets its first
  * render even when nothing measurably changed; every other notification (another binding's
  * bind/unbind, a `setPaneWidth`) fires iff the resolved scale actually changed. It does not run

@@ -1,4 +1,4 @@
-// layout/viewport — the D-S1.5-4 notification contract, in one place (plans/01 §8.2 D-A):
+// layout/viewport — the notify-iff-changed contract, in one place (plans/01 §8.2 D-A):
 //
 //   `bind` always notifies the newcomer. Every other notification fires iff the resolved value
 //   actually changed.
@@ -19,7 +19,7 @@ import { BatchedNotifier } from './batched-notifier.js';
 export interface BoundValueContract<Binding, Value> {
   /** Resolves the shared value from every current binding. Called whenever the value is stale. */
   resolve: (bindings: Iterable<Binding>) => Value;
-  /** What "the resolved value actually changed" means for this value (D-S1.5-4). */
+  /** What "the resolved value actually changed" means for this value. */
   equals: (a: Value, b: Value) => boolean;
 }
 
