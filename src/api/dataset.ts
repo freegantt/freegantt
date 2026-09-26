@@ -375,9 +375,9 @@ export class Dataset<TProps = unknown> {
    *  (`plans/s2-data-core/s2b-undo-replay-seam.md`, amended for local-only undo across a sync). A row
    *  for an id or a Field a sync has already settled writes nothing for it; the rest of the changeset
    *  still lands. A row for a key no Field declares writes nothing. An entry a foreign write changed
-   *  since the step recorded it keeps its current values, unless `options.overwriteForeignWrites` is `true` (#549). No extension hook. It
-   *  re-rolls every parent it touches, construction shape; with no foreign write in between, the
-   *  Rollup writes nothing. `changeSet.origin` must be `'undo'` or
+   *  since the step recorded it keeps its current values, unless `options.overwriteForeignWrites` is
+   *  `true` (#549). No extension hook. It re-rolls every parent it touches, construction shape; with
+   *  no foreign write in between, the Rollup writes nothing. `changeSet.origin` must be `'undo'` or
    *  `'redo'`; `'user'` throws `InvalidReplayOriginError` — that door is `apply`, not open yet. When
    *  nothing is left to write, this is a no-op: no `beforeChange`, no `change`. Otherwise `beforeChange`
    *  then `change` fire, and a veto throws `MutationCancelledError` and writes nothing. This is the
