@@ -457,14 +457,28 @@ importBtn.addEventListener('click', () => {
   logLine(`document · imported ${parsed.length} entries`);
 });
 
-// #517: sync is a poll, not a fresh start — it diffs the server's list against the live data. A kept
-// row keeps its selection and collapse state. Sync records no undo step of its own, so the user's
-// own edits stay undoable across a poll (docs/11-server-data.md), and an undo never writes over a
-// value the poll brought in. A poll that finds nothing new commits nothing, so the toolbar's Undo
-// button holds whatever it already showed.
-const syncBtn = document.querySelector<HTMLButtonElement>('#sync-btn')!;
-syncBtn.addEventListener('click', () => {
+// #517: sync all is a poll, not a fresh start — it diffs the server's whole list against the live
+// data. A kept row keeps its selection and collapse state. It records no undo step of its own, so
+// the user's own edits stay undoable across a poll (docs/11-server-data.md), and an undo never
+// writes over a value the poll brought in. A poll that finds nothing new commits nothing, so the
+// toolbar's Undo button holds whatever it already showed.
+const syncAllBtn = document.querySelector<HTMLButtonElement>('#sync-all-btn')!;
+syncAllBtn.addEventListener('click', () => {
   const rows = server.fetchRows();
   const landed = attemptMutation(() => dataset.entries.syncAll(rows));
   logLine(landed ? 'document · synced from the server' : 'document · sync refused · server list not applied');
+});
+
+// #527: sync changes takes only the rows a server changed, not the whole list — a key a row leaves
+// out keeps its stored value, and an id the delta does not name is untouched. It shares every other
+// rule sync all follows: no undo step, no cleared Redo, and the same refusals.
+const syncChangesBtn = document.querySelector<HTMLButtonElement>('#sync-changes-btn')!;
+syncChangesBtn.addEventListener('click', () => {
+  const delta = server.fetchChanges();
+  const landed = attemptMutation(() => dataset.entries.syncChanges(delta));
+  logLine(
+    landed
+      ? 'document · synced changes from the server'
+      : 'document · sync refused · server delta not applied',
+  );
 });
