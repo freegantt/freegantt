@@ -272,6 +272,52 @@ describe('entries.syncChanges', () => {
     expect((reports[0] as { code: string }).code).toBe('derived-values-dropped');
   });
 
+  it('a parent that loses its last child through remove clears its rolled-up cells, the same as entries.remove()', () => {
+    const withDates = () =>
+      new DatasetState({
+        entries: [
+          { id: 'p', name: 'p' },
+          { id: 'a', name: 'a', parentId: 'p', start: 0, end: 10 },
+          { id: 'b', name: 'b', parentId: 'p', start: 5, end: 20 },
+          { id: 'q', name: 'q' },
+        ],
+        timeZone: 'UTC',
+      });
+
+    const viaSync = withDates();
+    viaSync.entries.syncChanges({ remove: ['a', 'b'] });
+
+    const viaRemove = withDates();
+    viaRemove.entries.remove('a');
+    viaRemove.entries.remove('b');
+
+    expect(viaSync.entries.get('p')!.toInput()).toEqual(viaRemove.entries.get('p')!.toInput());
+    expect(viaSync.entries.get('p')!.read('start')).toBeUndefined();
+    expect(viaSync.entries.get('p')!.read('end')).toBeUndefined();
+  });
+
+  it('a parent that loses its last child through reparent clears its rolled-up cells, the same as entries.update()', () => {
+    const withCost = () =>
+      new DatasetState({
+        entries: [
+          { id: 'p', name: 'p' },
+          { id: 'c1', name: 'c1', parentId: 'p', start: 0, end: 1, props: { cost: 100 } },
+          { id: 'q', name: 'q' },
+        ],
+        timeZone: 'UTC',
+        fields: [{ key: 'cost', type: 'number', rollUp: 'sum' }],
+      });
+
+    const viaSync = withCost();
+    viaSync.entries.syncChanges({ upsert: [{ id: 'c1', parentId: undefined }] });
+
+    const viaUpdate = withCost();
+    viaUpdate.entries.update('c1', { parentId: undefined });
+
+    expect(viaSync.entries.get('p')!.toInput()).toEqual(viaUpdate.entries.get('p')!.toInput());
+    expect(viaSync.entries.get('p')!.read('cost')).toBeUndefined();
+  });
+
   it('an undeclared flat key on a known id warns and is ignored, and does not throw', () => {
     const state = dataset([{ id: 'a' }]);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});

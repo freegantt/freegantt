@@ -194,19 +194,36 @@ interface OracleRow {
   props: Props;
 }
 
+/** A rolling-up Field's own value is the Rollup's to give a **parent**, never a row's to carry
+ *  forward: a current parent's baseline drops it, so a parent that ends this delta with no children
+ *  lands with none, the same as `entries.remove()` and `entries.update()` leave it. A leaf's own
+ *  value is plain authored data — the Rollup never touches it — so it stays. `syncAll`'s real Rollup
+ *  then gives the value back to any id that is still a parent once the delta has landed. */
+function rollingUpKeys(state: DatasetState): ReadonlySet<string> {
+  return new Set(
+    state.fields.all
+      .filter((field) => field.rollUp !== undefined && field.rollUp !== 'none')
+      .map((field) => String(field.key)),
+  );
+}
+
 /** `syncAll`'s own view of what `delta` should leave, built without touching anything `src/`
  *  exports: read the current rows, lay each upsert row on top key by key (a kept id moves to the end
  *  on a parent change, a new id appends), then drop each removed id with its subtree. */
 function overlayDelta(state: DatasetState, delta: EntryDelta<Props>): FlatEntryInput<Props>[] {
+  const rollingUp = rollingUpKeys(state);
   let rows: OracleRow[] = state.entries.all.map((entry) => {
     const input = entry.toInput();
+    const isParent = entry.children().length > 0;
+    const props: Props = { ...(input.props as Props) };
+    if (isParent) for (const key of rollingUp) delete (props as Record<string, unknown>)[key];
     return {
       id: String(input.id),
       name: input.name,
       parentId: input.parentId === undefined ? undefined : String(input.parentId),
-      start: input.start as unknown as number | undefined,
-      end: input.end as unknown as number | undefined,
-      props: { ...(input.props as Props) },
+      start: isParent && rollingUp.has('start') ? undefined : (input.start as unknown as number | undefined),
+      end: isParent && rollingUp.has('end') ? undefined : (input.end as unknown as number | undefined),
+      props,
     };
   });
 

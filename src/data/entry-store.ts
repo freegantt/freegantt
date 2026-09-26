@@ -43,7 +43,7 @@ import { toEditReading, toEntry } from './entry-reader.js';
 import type { EditReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
 import type { UnplacedEntry } from './hierarchy-source.js';
-import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
+import { commitChangeSet, rollUpDeltaBatch, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
 import { readBatchAfterDelta } from './entry-delta.js';
 import {
@@ -742,7 +742,14 @@ export class EntryStore implements EntryStoreContract {
     );
 
     const byId = new Map(batch.entries.map((entry) => [entry.id, entry]));
-    const rollupUpdated = rollUpFreshBatch(runner, byId, batch.parents, this.#hierarchySource);
+    const rollupUpdated = rollUpDeltaBatch(
+      runner,
+      byId,
+      batch.parents,
+      this.committedChildIds(),
+      batch.authoredKeys,
+      this.#hierarchySource,
+    );
     const rolled = this.#foldRollup(byId, rollupUpdated);
     const target = batch.entries.map((entry) => rolled.get(entry.id) ?? entry);
 
