@@ -5,12 +5,17 @@ import {
   DATE_TIME_FORMAT,
   dropRepeatedGranularity,
   formatDate,
+  formatDateTime,
   formatEndInclusive,
+  formatInclusiveDate,
   formatWeekNumber,
+  lastCoveredInstant,
 } from './format.js';
 import type { ViewPresetHeader } from './scale.js';
+import type { FormatContext } from '../model/index.js';
 
 const ZONE = 'America/New_York';
+const ctx = (locale: Intl.LocalesArgument = 'en-US'): FormatContext => ({ timeZone: ZONE, locale });
 
 describe('formatDate', () => {
   it('formats a start with no conversion', () => {
@@ -55,6 +60,80 @@ describe('formatEndInclusive', () => {
     expect(formatEndInclusive(ZONE, { start: at, end: at }, 'en-US', DATE_TIME_FORMAT)).toBe(
       formatDate(ZONE, at, 'en-US', DATE_TIME_FORMAT),
     );
+  });
+});
+
+describe('lastCoveredInstant', () => {
+  it('steps back one millisecond from end', () => {
+    const start = instant('2026-03-02T00:00:00Z');
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(lastCoveredInstant({ start, end })).toBe(instant('2026-03-04T23:59:59.999Z'));
+  });
+
+  it('leaves a zero-length span at its own end, never one millisecond earlier (#240)', () => {
+    const at = instant('2026-01-05T10:00:00Z');
+    expect(lastCoveredInstant({ start: at, end: at })).toBe(at);
+  });
+
+  it('works with no start at all', () => {
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(lastCoveredInstant({ end })).toBe(instant('2026-03-04T23:59:59.999Z'));
+  });
+
+  it('takes no time zone: the millisecond step is the same in every zone', () => {
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(lastCoveredInstant({ end })).toBe(instant('2026-03-04T23:59:59.999Z'));
+  });
+});
+
+describe('formatDateTime', () => {
+  it('shows the stored moment, date and clock time', () => {
+    const at = instant('2026-03-05T00:00:00Z');
+    expect(formatDateTime(at, ctx())).toBe('Mar 4, 2026, 7:00 PM');
+  });
+
+  it('shows a blank cell for no value', () => {
+    expect(formatDateTime(undefined, ctx())).toBe('');
+    expect(formatDateTime(null, ctx())).toBe('');
+  });
+});
+
+describe('formatInclusiveDate', () => {
+  const start = instant('2026-03-02T00:00:00Z');
+
+  it('shows the last day a span covers, date only', () => {
+    const end = instant('2026-03-05T00:00:00Z'); // boundary: covers through Mar 4 EST
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Mar 4, 2026');
+  });
+
+  it('works with no start at all', () => {
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(formatInclusiveDate(end, ctx(), {})).toBe('Mar 4, 2026');
+  });
+
+  it('shows a zero-length span at its own end, unchanged', () => {
+    const at = instant('2026-01-05T10:00:00Z');
+    expect(formatInclusiveDate(at, ctx(), { start: at })).toBe(formatDate(ZONE, at));
+  });
+
+  it('shows a timed end at its own day, never the day before', () => {
+    const end = instant('2026-03-05T00:00:01Z'); // one second after midnight EST
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Mar 4, 2026');
+  });
+
+  it('shows a blank cell for no value', () => {
+    expect(formatInclusiveDate(undefined, ctx(), { start })).toBe('');
+    expect(formatInclusiveDate(null, ctx(), { start })).toBe('');
+  });
+
+  it('is correct across a spring-forward DST boundary', () => {
+    const end = startOfDay(ZONE, instant('2026-03-08T12:00:00Z'));
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Mar 7, 2026');
+  });
+
+  it('is correct across a fall-back DST boundary and a month end', () => {
+    const end = startOfDay(ZONE, instant('2026-11-01T12:00:00Z'));
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Oct 31, 2026');
   });
 });
 

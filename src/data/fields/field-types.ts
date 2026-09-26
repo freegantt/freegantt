@@ -3,7 +3,7 @@
 // factory, not a seeded name: pass the bundle inline, or register it under a name of your own.
 
 import type { Duration, Entry, FieldType, FormatContext, Instant } from '../../model/index.js';
-import { addMs, DATE_TIME_FORMAT, diffDays, diffMs, formatDate, MS } from '../../time/index.js';
+import { addMs, diffDays, diffMs, formatDateTime, MS } from '../../time/index.js';
 
 /** Stringifies a primitive Field value for display; anything else (undefined, object) renders empty. */
 export function stringifyPrimitive(value: unknown): string {
@@ -32,10 +32,11 @@ function compareNumber(a: number | undefined, b: number | undefined): number {
 }
 
 /** Formats an Instant the way a date Field (and core `start`) shows it — zone-aware, with clock
- *  time. An absent value is a blank cell, not a guessed epoch. */
+ *  time. An absent value is a blank cell, not a guessed epoch. A thin re-use of `formatDateTime`
+ *  under its old name, kept for the one caller left that needs a plain instant with no paired
+ *  span (`core-fields.ts`'s no-start branch). */
 export function formatInstant(value: unknown, ctx: FormatContext): string {
-  if (value === undefined || value === null) return '';
-  return formatDate(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
+  return formatDateTime(value, ctx);
 }
 
 function compareInstant(a: Instant | undefined, b: Instant | undefined): number {
@@ -118,11 +119,12 @@ export const percent: FieldType<number> = Object.freeze<FieldType<number>>({
   column: { align: 'end' },
 });
 
-/** An Instant Field. Formats through `formatDate` with `DATE_TIME_FORMAT` — the same display core
- *  `start` uses. Ships no `parseValue` and no `inputType`: the inline editor routes `type: 'date'`
- *  through the `dateInput` seam, not the generic `<input>`. No rollUp. */
+/** An Instant Field. Formats through `formatDateTime` — the same display core `start` uses, and a
+ *  consumer's own `formatValue` override (`start`/`end`, or any Field declared with `type: 'date'`)
+ *  replaces it outright. Ships no `parseValue` and no `inputType`: the inline editor routes
+ *  `type: 'date'` through the `dateInput` seam, not the generic `<input>`. No rollUp. */
 export const date: FieldType<Instant> = Object.freeze<FieldType<Instant>>({
-  formatValue: formatInstant,
+  formatValue: formatDateTime,
   compare: compareInstant,
 });
 
