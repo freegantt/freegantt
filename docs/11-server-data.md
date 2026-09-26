@@ -67,9 +67,10 @@ same delta, or absent from both the store and the delta — throws `EntryNotFoun
 in the call applies. This catches a direct parent and a grandparent alike: removing a grandparent
 and upserting one of its children in the same call still throws.
 
-**Order.** A kept entry keeps its position. A new entry, or an entry whose `parentId` moved, takes
-the `siblingIndex` its row names, or goes to the end of its group when it names none. Several new
-entries in one `upsert` list land in the order they appear in that list.
+**Order.** A kept entry keeps its position unless its row names a `siblingIndex`, the same as
+`update()`. A new entry, a moved entry, or a kept entry that names a `siblingIndex` takes that index.
+With none named, a new or moved entry goes to the end of its group. Several rows that name a
+`siblingIndex` in the same group apply in upsert order.
 
 **The rest is the door `syncAll` uses.** `syncChanges` ignores a `'never'` Field lock, re-rolls a
 derived parent cell instead of taking an authored value, and runs no `EditExtender` cascade.
@@ -87,7 +88,7 @@ no undo step.
 | Input | Every entry | Only the rows that changed |
 | An id the input does not name | Removed | Kept |
 | A key a row leaves out | Cleared | Kept |
-| Order | From the list order | An existing entry keeps its position |
+| Order | From the list order | Kept, unless the row names `siblingIndex` |
 
 Use `syncAll` when your poll returns the whole list. Use `syncChanges` when your server already
 tells you what changed.

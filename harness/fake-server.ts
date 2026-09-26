@@ -1,4 +1,4 @@
-// Stands in for a server's poll endpoint (#517, #527): `fetchRows()` returns the next scripted
+// Stands in for a server's poll endpoint: `fetchRows()` returns the next scripted
 // revision of the whole entry list, the shape `dataset.entries.syncAll()` takes; `fetchChanges()`
 // returns the next scripted delta, the shape `dataset.entries.syncChanges()` takes. Both read and
 // move the one `rows` state, each on its own call count, so a full-list poll after a delta poll
