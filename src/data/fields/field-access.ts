@@ -448,20 +448,6 @@ export function applyFieldRow(
   return writeOntoEntry(current, declared, value);
 }
 
-/** `field`'s value on `current`, the same declared/raw split `applyFieldRow` writes through — its
- *  read counterpart. `replay-changes.ts` reads a row's `from` this way before it decides whether the
- *  row still has anything to write. */
-export function readFieldRow(
-  current: StoredEntry,
-  field: FieldKey,
-  registry: FieldRegistry,
-  access: FieldAccess,
-): unknown {
-  const declared = registry.get(field);
-  if (declared) return readField(current, declared, access);
-  return (current as unknown as Record<string, unknown>)[field];
-}
-
 /** Folds declared props-addressed keys from a public `EntryEdit` into a storage-shaped edit. Core
  *  keys are read straight off `edit` by `toEditReading`; this is the one door for everything else a
  *  Field declares. */
