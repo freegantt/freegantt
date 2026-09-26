@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const pagesDir = path.join(root, 'docs/architecture');
 
-/** Font size per text class, from `website/src/css/architecture-doc.css`. */
+/** Font size per text class, from `src/css/architecture-doc.css` in the freegantt/docs site. */
 const FONT_SIZE: Readonly<Record<string, number>> = { t: 11, s: 9.5, xs: 9 };
 
 /** Widest advance per em across the `--fg-doc-mono` fallback chain. */
