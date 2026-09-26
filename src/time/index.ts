@@ -1,5 +1,6 @@
 export { instant, now, toISO, addMs, diffMs, overlap, MS } from './instant.js';
 export { toInstant, toEndInstant, readPlainTime } from './input.js';
+export { startOfNextDay, startOfLastCoveredDay } from './date-only-end.js';
 export {
   toPlain,
   fromPlain,
