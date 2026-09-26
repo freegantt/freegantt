@@ -74,14 +74,15 @@ export function resolveDateFormat(
 }
 
 /** Plain display formatting for an instant needing no conversion — a start is already inclusive.
- *  Pass `DATE_TIME_FORMAT` (or any `Intl.DateTimeFormatOptions`) to include clock time. */
+ *  `ctx` is a `FormatContext` shape (locale optional here, since a caller with no locale
+ *  preference still has a zone). Pass `DATE_TIME_FORMAT` (or any `Intl.DateTimeFormatOptions`)
+ *  to include clock time. */
 export function formatDate(
-  zone: string,
-  i: Instant,
-  locale?: Intl.LocalesArgument,
+  value: Instant,
+  ctx: { readonly timeZone: string; readonly locale?: Intl.LocalesArgument },
   options: Intl.DateTimeFormatOptions = DEFAULT_DATE_FORMAT,
 ): string {
-  return intlFormatter(zone, locale, options).format(toJsDate(i));
+  return intlFormatter(ctx.timeZone, ctx.locale, options).format(toJsDate(value));
 }
 
 /** The one place half-open `end` becomes an inclusive display value: the last millisecond the span
@@ -98,7 +99,7 @@ export function formatEndInclusive(
   options?: Intl.DateTimeFormatOptions,
 ): string {
   const displayed = span.end === span.start ? span.end : addMs(span.end, -1);
-  return formatDate(zone, displayed, locale, options);
+  return formatDate(displayed, { timeZone: zone, locale }, options);
 }
 
 /** The last moment a half-open span `[start, end)` actually covers — `end` itself is the boundary
@@ -120,7 +121,7 @@ export function lastCoveredInstant(span: {
  *  Names the `date` type's default and pairs with `DATE_TIME_FORMAT`. */
 export function formatDateTime(value: unknown, ctx: FormatContext): string {
   if (value === undefined || value === null) return '';
-  return formatDate(ctx.timeZone, value as Instant, ctx.locale, DATE_TIME_FORMAT);
+  return formatDate(value as Instant, ctx, DATE_TIME_FORMAT);
 }
 
 /** A Field `formatValue`: the last day a span covers, date only. Reads `lastCoveredInstant(entry)`
@@ -135,7 +136,7 @@ export function formatInclusiveDate(
 ): string {
   if (value === undefined || value === null) return '';
   const covered = lastCoveredInstant({ start: entry.start, end: value as Instant });
-  return formatDate(ctx.timeZone, covered, ctx.locale);
+  return formatDate(covered, ctx);
 }
 
 /** An ISO week label — `W` followed by the week number. The escape-hatch callback shipped as a

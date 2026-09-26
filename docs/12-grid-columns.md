@@ -123,7 +123,7 @@ import { createGridColumnHelper, formatDate, type ColumnRendererContext, type In
 const columnHelper = createGridColumnHelper(dataset);
 
 function dateCell({ fieldValue }: ColumnRendererContext<Instant>) {
-  return { text: fieldValue === undefined ? '' : formatDate(dataset.timeZone, fieldValue) };
+  return { text: fieldValue === undefined ? '' : formatDate(fieldValue, { timeZone: dataset.timeZone }) };
 }
 
 const gridColumns = [

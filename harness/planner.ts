@@ -101,7 +101,7 @@ const COMPACT_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month:
  *  conversion (that is `formatEndInclusive`'s job, below). */
 function startCell({ fieldValue }: ColumnRendererContext<Instant>): ElementDescription | undefined {
   if (fieldValue === undefined) return { text: '' };
-  return { text: formatDate(dataset.timeZone, fieldValue, undefined, COMPACT_DATE_FORMAT) };
+  return { text: formatDate(fieldValue, { timeZone: dataset.timeZone }, COMPACT_DATE_FORMAT) };
 }
 
 /** The Finish cell: `formatEndInclusive`, the one place storage's half-open `end` becomes the
@@ -111,7 +111,7 @@ function finishCell({ entry, fieldValue }: ColumnRendererContext<Instant>): Elem
   // End with no start (ADR 0012) shows the stored end as a plain instant — same rule the core
   // `end` Field's own `formatEnd` follows in `src/data/fields/core-fields.ts`.
   if (entry.start === undefined) {
-    return { text: formatDate(dataset.timeZone, fieldValue, undefined, COMPACT_DATE_FORMAT) };
+    return { text: formatDate(fieldValue, { timeZone: dataset.timeZone }, COMPACT_DATE_FORMAT) };
   }
   const span = { start: entry.start, end: fieldValue };
   return { text: formatEndInclusive(dataset.timeZone, span, undefined, COMPACT_DATE_FORMAT) };
@@ -277,11 +277,11 @@ function renderSelection(): void {
   // instead of assuming the pair `formatEndInclusive` needs.
   const span =
     first.start !== undefined && first.end !== undefined
-      ? `${formatDate(zone, first.start)} → ${formatEndInclusive(zone, { start: first.start, end: first.end })}`
+      ? `${formatDate(first.start, { timeZone: zone })} → ${formatEndInclusive(zone, { start: first.start, end: first.end })}`
       : first.start !== undefined
-        ? `${formatDate(zone, first.start)} → —`
+        ? `${formatDate(first.start, { timeZone: zone })} → —`
         : first.end !== undefined
-          ? `— → ${formatDate(zone, first.end)}`
+          ? `— → ${formatDate(first.end, { timeZone: zone })}`
           : 'No dates';
   const done = first.read('progress');
   const percent = typeof done === 'number' ? ` · ${done}%` : '';
