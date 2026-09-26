@@ -70,6 +70,7 @@ export type {
   RollUpContext,
   Aggregator,
   GridColumn,
+  GridColumnOf,
   GridColumnInput,
   GridColumnBase,
   GridColumnSizing,
