@@ -269,7 +269,14 @@ costBtn.addEventListener('click', () => {
 
 // ---- Per-entry lock rule (#473) -----------------------------------------------------------------
 
+// A store row belongs to one Entry, so the page asks first that Program still exists — after a
+// Remove or an Import without it, the box logs why and stays clear instead of throwing.
 unlockSubtreeCheckbox.addEventListener('change', () => {
+  if (!dataset.entries.has(NOTE_UNLOCK_ROOT_ID)) {
+    logLine('note: the Program entry is gone — no subtree to unlock');
+    refreshUnlockCheckbox();
+    return;
+  }
   if (unlockSubtreeCheckbox.checked) notes.openSubtree(NOTE_UNLOCK_ROOT_ID);
   else notes.closeSubtree(NOTE_UNLOCK_ROOT_ID);
 });

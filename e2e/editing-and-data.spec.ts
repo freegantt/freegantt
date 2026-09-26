@@ -145,6 +145,26 @@ test('export writes the document, and import round-trips the entry count', async
 // and the import still lands in one commit. `load` is a full fresh start (L1), so it clears undo,
 // and a `locked` row the document names stays locked once the load lands (the lock plugin's own
 // `beforeChange` steps aside for `origin: 'load'`, `harness/plugins/lock-entries.ts`).
+test('with Program gone, the unlock checkbox logs why and stays clear', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  // An import with no 'program' entry removes the subtree root the checkbox names.
+  const noProgram = [{ id: 'solo', name: 'Solo', start: '2026-02-01', end: '2026-02-05' }];
+  await page.locator('#document-json').fill(JSON.stringify(noProgram));
+  await page.locator('#import-btn').click();
+  expect(await page.evaluate(() => window.__dataset.entries.has('program'))).toBe(false);
+
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  // `click`, not `check`: `check` fails when the page clears the box, and clearing it is the point.
+  await page.locator('#unlock-subtree-checkbox').click();
+
+  await expect(page.locator('#unlock-subtree-checkbox')).not.toBeChecked();
+  expect(await logLines(page)).toContainEqual(expect.stringContaining('Program entry is gone'));
+  expect(pageErrors).toEqual([]);
+});
+
 test('import tolerates a child before its parent, clears undo, and a lock holds', async ({ page }) => {
   await page.goto('/editing-and-data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
