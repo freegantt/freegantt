@@ -12,7 +12,7 @@ import { createFieldAccess, readField, writeOntoEntry } from './fields/field-acc
 import { FieldRegistry } from './fields/field-registry.js';
 import { storedParentSource } from './hierarchy-source.js';
 
-const context = { timeZone: 'UTC', dateOnlyEnd: 'inclusive' as const };
+const context = { timeZone: 'UTC' };
 
 /** Places a list the same way `load` and sync both do — `readEntryBatch`, no store involved — and
  *  hands back both shapes a diff needs: the id-keyed map `changesToMatchBatch`'s `committed` takes,

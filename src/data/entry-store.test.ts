@@ -5,7 +5,7 @@ import type { StoredEntry, Instant } from '../model/index.js';
 import type { EntryReadContext } from './entry-reader.js';
 
 function createContext(): EntryReadContext {
-  return { timeZone: 'UTC', dateOnlyEnd: 'inclusive' as const };
+  return { timeZone: 'UTC' };
 }
 
 function entry(id: string, parentId?: string): StoredEntry {

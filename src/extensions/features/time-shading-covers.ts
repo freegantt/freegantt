@@ -166,9 +166,8 @@ export function dates(at: InstantInput, ...moreAt: readonly InstantInput[]): Tim
 /**
  * One or more explicit bands, stated directly rather than walked — `spans({ start: '2026-07-01', end:
  * '2026-07-15' })` shades a two-week shutdown. A date-only `end` reads inclusively, the way an Entry's
- * own `end` does under `toEndInstant`'s default rule: `'2026-07-15'` covers the 15th, not up to its
- * midnight. This is not a config knob — `spans()` always reads this way, because a shading rule is
- * the plugin's own config, not Entry data the Dataset's `dateOnlyEnd` policy governs.
+ * own `end` does through `toEndInstant`: `'2026-07-15'` covers the 15th, not up to its midnight —
+ * the one fixed rule every date-only `end` follows, config or Entry data alike.
  *
  * Never hides on its own: a two-week shutdown is real at month zoom as much as at day zoom. A rule's
  * `hideWhenCoarserThan` still overrides this, and a tick with `tickIncrement !== 1` still hides it.

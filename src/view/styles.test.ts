@@ -11,7 +11,6 @@ import { editableOf } from '../data/fields/field-registry.js';
 function fakeDataset(list: readonly StoredEntry[]): GanttShellOptions['dataset'] {
   const context = {
     timeZone,
-    dateOnlyEnd: 'inclusive' as const,
   };
   return {
     entries: new EntryStore(list, context),

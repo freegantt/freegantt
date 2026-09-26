@@ -47,7 +47,7 @@ function changeSets(state: DatasetState): ChangeSet[] {
 
 describe('entry-batch.ts — the shared functions load and sync (#517) both reuse', () => {
   const registry = new FieldRegistry();
-  const context = { timeZone: 'UTC', dateOnlyEnd: 'inclusive' as const };
+  const context = { timeZone: 'UTC' };
   const read = (inputs: readonly Seed[]) =>
     toEntries(
       inputs.map((e) => ({ start: 0, end: 1, ...e, name: e.name ?? e.id })),

@@ -73,8 +73,8 @@ export function spansTime<T extends { start?: Instant | undefined; end?: Instant
  * `InstantInput`. An `Entry` is itself a valid `EntryInput`, so a consumer that already holds branded
  * values passes them through unchanged.
  *
- * `Dataset` reads this into a `StoredEntry` once, at construction, in the Dataset's own zone — see
- * `DateOnlyEndRule` for how a date-only `end` is read.
+ * `Dataset` reads this into a `StoredEntry` once, at construction, in the Dataset's own zone — a
+ * date-only `end` always means through that day (`time/toEndInstant`).
  *
  * Every optional key admits an explicit `undefined`, which is what keeps the sentence above true
  * under `exactOptionalPropertyTypes`: a live `Entry`'s `start` is `Instant | undefined`, and
@@ -100,7 +100,8 @@ export interface EntryInput<TProps = Record<string, unknown>> {
    * otherwise. One date with no other is legal and stores as written. An unreadable date is still an
    * `InvalidInstantError`. */
   start?: InstantInput | undefined;
-  /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
+  /** Exclusive — see plans/01 §5. A date-only string always means through that day. See `start`
+   *  for when this may be omitted. */
   end?: InstantInput | undefined;
   /** Passenger data, and a bag a consumer already holds (ADR 0011). A declared Field key belongs
    *  at the top level instead — `entries.add({ id, name, owner: 'Ali' })` — and naming one both here

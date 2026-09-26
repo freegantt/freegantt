@@ -373,8 +373,6 @@ export class Dataset<TProps = unknown> {
     get canRedo(): boolean;
     get canUndo(): boolean;
     get datasetRevision(): number;
-    // (undocumented)
-    get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
     editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     // (undocumented)
@@ -435,7 +433,6 @@ export interface DatasetEvents {
 // @public (undocumented)
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
-    dateOnlyEnd?: DateOnlyEndRule;
     entries: readonly EntryIngestInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
@@ -511,9 +508,6 @@ export interface DateLineInput {
 
 // @public
 export type DateLineLabelPlacement = 'inHeader' | 'belowHeader' | number;
-
-// @public
-export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
 // @public
 export function dates(at: InstantInput, ...moreAt: readonly InstantInput[]): TimeCover;
@@ -2566,7 +2560,7 @@ export interface ZonedTime {
     // (undocumented)
     startOfDay(at: Instant): Instant;
     step(at: Instant, unit: TimeUnit, increment?: number): Instant;
-    toEndInstant(input: InstantInput, rule?: DateOnlyEndRule): Instant;
+    toEndInstant(input: InstantInput): Instant;
     toInstant(input: InstantInput): Instant;
     // (undocumented)
     toPlain(at: Instant): PlainParts;

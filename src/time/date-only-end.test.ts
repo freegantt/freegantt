@@ -45,7 +45,7 @@ describe('the DST bug this fixes (America/Santiago 2026-09-06)', () => {
     // Before the fix, toEndInstant used addDays (a plain calendar step) on a wall clock already
     // sitting at 01:00 on the spring-forward day, so the result kept that 01:00 offset into the 7th
     // instead of landing on the 7th's own midnight. This pins the corrected value.
-    const end = toEndInstant(SANTIAGO, '2026-09-06', 'inclusive', 'test');
+    const end = toEndInstant(SANTIAGO, '2026-09-06', 'test');
     expect(end).toBe(utc('2026-09-07T03:00:00Z'));
   });
 });
@@ -67,7 +67,7 @@ describe('a date-only end reads back as the date written (property)', () => {
         fc.date({ min: new Date('1971-01-01'), max: new Date('2099-12-31') }),
         (zone, date) => {
           const iso = date.toISOString().slice(0, 10);
-          const end = toEndInstant(zone, iso, 'inclusive', 'test');
+          const end = toEndInstant(zone, iso, 'test');
           const lastDay = toPlain(zone, startOfLastCoveredDay(zone, { end }));
           const written = toPlain(zone, toInstant(zone, iso, 'test'));
           expect(lastDay.year).toBe(written.year);

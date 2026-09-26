@@ -1,12 +1,11 @@
 // data/ — DatasetState: the live state one Dataset instance owns privately. `api/Dataset`
-// is a thin façade that constructs one of these and delegates `entries`/`timeZone`/`dateOnlyEnd` to it —
+// is a thin façade that constructs one of these and delegates `entries`/`timeZone` to it —
 // the same structural/façade relationship `GanttShell` already has with `Gantt`.
 
 import type {
   Aggregator,
   ChangeSet,
   ChangeSetId,
-  DateOnlyEndRule,
   Dataset,
   DatasetEventMap,
   EntryId,
@@ -56,7 +55,6 @@ export type { HistoryOptions };
 export interface DatasetStateOptions {
   entries: readonly FlatEntryInput[];
   timeZone: string;
-  dateOnlyEnd?: DateOnlyEndRule;
   /** Undo/redo capacity (`plans/s2-data-core/s2.5-undo-redo.md` §1). Defaults to a 100-entry history.
    *  `false` builds no History at all (#549): the app owns undo, through `replay()`. */
   history?: HistoryOptions | false;
@@ -136,7 +134,6 @@ function mergedFieldRegistryOptions(sources: readonly FieldDeclarationSource[]):
 export class DatasetState implements Dataset {
   readonly entries: EntryStore;
   readonly timeZone: string;
-  readonly dateOnlyEnd: DateOnlyEndRule;
   /** The one `Date.now()` read this Dataset performs, via time/'s `now()` (CONTEXT.md, Reference
    *  date) — unless `DatasetStateOptions.referenceDate` freezes it for a test. Fixed for the
    *  Dataset's lifetime — not re-derived on every layout pass. */
@@ -175,7 +172,6 @@ export class DatasetState implements Dataset {
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
-    this.dateOnlyEnd = options.dateOnlyEnd ?? 'inclusive';
     this.referenceDate = options.referenceDate ?? now();
     this.#editExtender = options.editExtender ?? identityExtender;
     // Registered before `entries` below is read (#496 grill round 3): the Dataset's own
@@ -201,7 +197,6 @@ export class DatasetState implements Dataset {
     });
     this.#entryContext = {
       timeZone: this.timeZone,
-      dateOnlyEnd: this.dateOnlyEnd,
     };
     // Folded onto core's own source, in setup order (ADR 0031): the first wrapper wraps
     // `storedParentSource`, a later one wraps the one before it, and the last one answers first.

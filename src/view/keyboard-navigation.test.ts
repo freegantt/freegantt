@@ -170,7 +170,6 @@ describe('[S5-A4] roving-focus chord-map parity (S5.11)', () => {
     return {
       entries: new EntryStore(entries, {
         timeZone: zone,
-        dateOnlyEnd: 'inclusive' as const,
       }),
       timeZone: zone,
       datasetRevision: 0,

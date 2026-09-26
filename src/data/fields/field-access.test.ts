@@ -306,7 +306,6 @@ describe('the ComputeContext a compute Field runs inside (ADR 0017, #214)', () =
   it('reads a sibling Field through ctx.read, and this row’s duration through ctx.duration', () => {
     const state = new DatasetState({
       timeZone: 'UTC',
-      dateOnlyEnd: 'exclusive',
       entries: [{ id: 't1', name: 'Design', start: 0, end: 5 }],
       fields: [
         { key: 'cost' },
