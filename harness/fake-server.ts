@@ -19,6 +19,7 @@ const SERVER_REORDERED_ROOT_IDS: readonly [string, string] = ['ops-oncall', 'sta
 export const SERVER_DELTA_RENAMED_ENTRY_ID = 'entry-6';
 export const SERVER_DELTA_REMOVED_ENTRY_ID = 'entry-11';
 export const SERVER_DELTA_ADDED_ENTRY_ID = 'server-delta-added-1';
+const SERVER_DELTA_PARENT_ENTRY_ID = 'entry-5';
 
 export interface FakeServer<TProps> {
   /** The next scripted revision of the whole list, or the last one again once the script runs out —
@@ -79,7 +80,10 @@ export function fakeServer<TProps>(seedRows: readonly EntryInput<TProps>[]): Fak
       const revision = build<TProps>();
       rows = revision.apply(rows);
       fetchChangesCallCount += 1;
-      return revision.delta;
+      const { delta } = revision;
+      return delta.upsert === undefined
+        ? delta
+        : { ...delta, upsert: delta.upsert.map((row) => ({ ...row })) };
     },
   };
 }
@@ -130,7 +134,7 @@ function addedAndRemovedByDelta<TProps>(): DeltaRevision<TProps> {
   const end = addMs(start, MS.DAY);
   const added = {
     id: SERVER_DELTA_ADDED_ENTRY_ID,
-    parentId: 'entry-5',
+    parentId: SERVER_DELTA_PARENT_ENTRY_ID,
     name: 'Added by a server delta',
     start,
     end,

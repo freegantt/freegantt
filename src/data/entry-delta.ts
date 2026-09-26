@@ -68,10 +68,22 @@ export function readBatchAfterDelta(
 
   const entries = kept.map((row) => ({
     ...row,
-    siblingIndex: ranks.get(row.id) ?? committed.byId.get(row.id)!.siblingIndex,
+    siblingIndex: ranks.get(row.id) ?? committedSiblingIndexOf(row.id, committed, operation),
   }));
 
   return { entries, parents, authoredKeys };
+}
+
+/** A row `siblingIndexesAfterDelta` did not rank must already be a committed row — `placementsFor`
+ *  places every new row and every kept row whose checked group moved, so an unranked row is one
+ *  neither, and its committed rank stands. If that invariant ever breaks, this throws a named
+ *  error instead of a bare `TypeError` from a missing lookup. */
+function committedSiblingIndexOf(id: EntryId, committed: CommittedEntries, operation: string): number {
+  const row = committed.byId.get(id);
+  if (row === undefined) {
+    throw new Error(`${operation}: "${id}" has no rank and no committed row to fall back to`);
+  }
+  return row.siblingIndex;
 }
 
 /** An id twice in `upsert` throws (`assertEntryBatchIsSound` cannot catch this on its own: two rows
@@ -140,6 +152,8 @@ function removedSubtrees(
   upsertedIds: ReadonlySet<EntryId>,
   hierarchySource: HierarchySource,
 ): ReadonlySet<EntryId> {
+  if (removeIds.size === 0) return new Set<EntryId>();
+
   const { parents } = checkHierarchyAnswers(merged, hierarchySource);
   const childrenOf = new Map<EntryId | undefined, EntryId[]>();
   for (const id of merged.keys()) {
@@ -153,8 +167,8 @@ function removedSubtrees(
   for (const startId of removeIds) {
     if (!merged.has(startId) || upsertedIds.has(startId)) continue;
     const pending: EntryId[] = [startId];
-    while (pending.length > 0) {
-      const id = pending.shift()!;
+    for (let head = 0; head < pending.length; head += 1) {
+      const id = pending[head]!;
       if (removed.has(id) || upsertedIds.has(id)) continue;
       removed.add(id);
       for (const child of childrenOf.get(id) ?? []) pending.push(child);
