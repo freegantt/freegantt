@@ -6,7 +6,7 @@
 // `syncChanges()` do that.
 
 import { addMs, instant, now, MS } from 'freegantt';
-import type { EntryDelta, EntryInput, FlatEntryInput } from 'freegantt';
+import type { EntryDelta, EntryInput } from 'freegantt';
 
 /** A leaf no other rule on the page reads — the buffer, risk and lock demos each name their own
  *  row, so renaming this one touches nothing else. */
@@ -121,9 +121,7 @@ function renamedByDelta<TProps>(): DeltaRevision<TProps> {
   return {
     apply: (rows) =>
       rows.map((row) => (row.id === SERVER_DELTA_RENAMED_ENTRY_ID ? { ...row, ...renamed } : row)),
-    // `FlatEntryInput<TProps>` resolves its shape from a concrete `TProps` (see its own comment,
-    // `src/model/stored-entry.ts`); an unresolved generic here can only assert into it, not infer it.
-    delta: { upsert: [renamed as FlatEntryInput<TProps>] },
+    delta: { upsert: [renamed] },
   };
 }
 
@@ -139,7 +137,7 @@ function addedAndRemovedByDelta<TProps>(): DeltaRevision<TProps> {
   };
   return {
     apply: (rows) => [...rows.filter((row) => row.id !== SERVER_DELTA_REMOVED_ENTRY_ID), added],
-    delta: { upsert: [added as FlatEntryInput<TProps>], remove: [SERVER_DELTA_REMOVED_ENTRY_ID] },
+    delta: { upsert: [added], remove: [SERVER_DELTA_REMOVED_ENTRY_ID] },
   };
 }
 

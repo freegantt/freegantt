@@ -751,7 +751,7 @@ export interface EntryActivate {
 // @public
 export interface EntryDelta<TProps = Record<string, unknown>> {
     readonly remove?: readonly (EntryId | string)[];
-    readonly upsert?: readonly FlatEntryInput<TProps>[];
+    readonly upsert?: readonly EntryIngestInput<TProps>[];
 }
 
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
@@ -802,6 +802,9 @@ export function entryIdFromDataset(value: string | undefined): EntryId | undefin
 export function entryIdOfBar(id: BarId): EntryId;
 
 // @public
+export type EntryIngestInput<TProps = Record<string, unknown>> = FlatEntryInput<TProps> | EntryInput<TProps>;
+
+// @public
 export interface EntryInput<TProps = Record<string, unknown>> {
     end?: InstantInput | undefined;
     // (undocumented)
@@ -839,11 +842,11 @@ export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | E
 
 // @public
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
-    add(input: FlatEntryInput<TProps>): Entry<TProps>;
-    load(inputs: readonly FlatEntryInput<TProps>[]): void;
+    add(input: EntryIngestInput<TProps>): Entry<TProps>;
+    load(inputs: readonly EntryIngestInput<TProps>[]): void;
     // (undocumented)
     remove(id: EntryId | string): void;
-    syncAll(inputs: readonly FlatEntryInput<TProps>[]): void;
+    syncAll(inputs: readonly EntryIngestInput<TProps>[]): void;
     syncChanges(delta: EntryDelta<TProps>): void;
     // (undocumented)
     update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
