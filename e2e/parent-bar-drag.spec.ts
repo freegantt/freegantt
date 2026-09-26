@@ -17,7 +17,7 @@ import { test, expect, type Locator, type Page } from '@playwright/test';
 // **Two pages, because neither one proves both halves.**
 //
 // `hierarchy.html` carries the data half. It logs every committed ChangeSet from the changeset alone
-// (D-S2-17) and has an undo button, so who got written is readable. Its pixels prove nothing: it runs
+// and has an undo button, so who got written is readable. Its pixels prove nothing: it runs
 // `range: 'fitDataset'`, and a drag that moves every dated entry moves the fitted range with them, so
 // every bar lands back on the pixel it started on. Measured, not assumed.
 //

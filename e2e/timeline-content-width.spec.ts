@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // S1.12 bug, found during the handoff review: a coarse preset's boundary tick is one full calendar
-// unit wide (D-S1.7-4) and can be many times wider than a dataset shorter than that unit. `.fg-header`
+// unit wide and can be many times wider than a dataset shorter than that unit. `.fg-header`
 // had no width of its own and no clip, so that oversized tick leaked past `frame.contentWidth` and
 // inflated the timeline pane's native `scrollWidth` — the pane looked like it never shrank back down
 // on zoom-out. `harness/e2e/data.html`'s dataset (`demoEntryInputs.slice(0, 8)`, ~3 weeks) is shorter

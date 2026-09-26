@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 // A pre-existing harness finding (not this slice's bug, recorded per CLAUDE.md's harness-review
 // rule): `index.html`'s `#selection-readout` sits above `#gantt` in normal flow and grows from
 // "Selection: (none)" to a longer line the instant a row is first selected, reflowing `#gantt` down
-// by about one row's height. A row click is also a select (D-S3-10's grid-row amendment), so a
+// by about one row's height. A row click is also a select (the grid-row amendment), so a
 // genuine two-click double-click at one fixed screen position can have its second click land on
 // whatever the reflow put there instead — a real double-click-to-edit usability gap this page should
 // fix (give `#selection-readout` a stable box), not something `inlineEditing()` can compensate for.
@@ -69,7 +69,7 @@ test('[S5-A5] a consumer replaces the editor through beforeEntryEdit (U8)', asyn
 // carries both boxes in one frame — the earlier overlay mount had to chase the cell from a `scroll`
 // listener, which lands a frame late and reads as jitter. jsdom cannot show that: this needs a real
 // scroll in a real browser. A vetoed edit is what keeps an editor open long enough to scroll at all
-// (#137 F5) — the harness has no veto, so an untouched editor left open serves the same purpose.
+// (#137) — the harness has no veto, so an untouched editor left open serves the same purpose.
 test('an open editor stays over its cell while the pane scrolls (#158)', async ({ page }) => {
   await page.goto('/generic.html');
   const cell = page.locator('#gantt .fg-row [data-field="name"]').first();
@@ -97,7 +97,7 @@ test('an open editor stays over its cell while the pane scrolls (#158)', async (
   expect(await offsetToCell()).toEqual({ x: 0, y: 0 });
 });
 
-// Review R4/SP1: a cell that offers an editor but cannot open one here names the reason, in a notice
+// A cell that offers an editor but cannot open one here names the reason, in a notice
 // mounted over the cell (`.fg-cell-notice`, `data-reason`). Two of its properties need a real
 // browser, because happy-dom measures no layout. First, the notice must be pointer-transparent: the
 // next double-click has to reach the cell underneath it, or the grid soft-locks. `elementFromPoint`

@@ -16,7 +16,7 @@ test('[S1-A14] a consumer stylesheet styling a Date line className actually pain
   await page.goto('/e2e/zoom.html');
   await expect(page.locator('.fg-bar').first()).toBeVisible();
 
-  // The library ships no `style`/`dashed` option (D-S1.13-5) — a consumer's own stylesheet is the
+  // The library ships no `style`/`dashed` option — a consumer's own stylesheet is the
   // whole feature.
   await page.addStyleTag({
     content: '.fg-deadline-line { border-left-style: dashed; border-left-width: 2px; }',

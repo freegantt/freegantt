@@ -79,7 +79,7 @@ test('[S4-A3] switching row source changes the row set and keeps the scroll offs
   await expect.poll(async () => pane.evaluate((el) => el.scrollTop)).toBe(before);
 });
 
-// S5.11, D-S5-26: the container itself carries no tabindex any more — `view/roving-focus.ts` owns
+// S5.11: the container itself carries no tabindex any more — `view/roving-focus.ts` owns
 // one tab stop per pane instead. Expand/collapse is the grid pane's own row arrows now, so focus
 // goes on the parent's `.fg-rows` row, not `#gantt` (same pattern e2e/plugins.spec.ts uses).
 test('ArrowRight expands and ArrowLeft collapses; focus stays on the parent row', async ({ page }) => {
@@ -210,7 +210,7 @@ test('a segmented row draws its children as bars, each with its own text, look a
 
   // Cy's day is locked: dragging its right edge refuses. `end` is the field a resize actually
   // writes — `hours` is a stored prop no resize gesture here ever touches, so it would hold steady
-  // whether or not the capability gate did its job (#421 F3).
+  // whether or not the capability gate did its job (#421).
   const wednesdayBox = await wednesday.boundingBox();
   expect(wednesdayBox).not.toBeNull();
   const wedEndBefore = await page.evaluate(() => Number(window.__dataset.entries.get('req-1-wed')!.end));

@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-// ADR 0022 §5, Q6: a variant's own `css` lands in one `<style data-freegantt-variant-styles>` node
+// ADR 0022 §5: a variant's own `css` lands in one `<style data-freegantt-variant-styles>` node
 // per Gantt, after the base sheet, inside `@layer freegantt`. Two claims only a real cascade can
-// prove — happy-dom's CSSOM does not parse `@layer` (J14), so a unit test cannot resolve either one:
+// prove — happy-dom's CSSOM does not parse `@layer`, so a unit test cannot resolve either one:
 //
 //   1. A variant's rule beats the base sheet's own rule for the same element at equal specificity,
 //      because the variant's node is later in the same layer (ADR 0022 §5).

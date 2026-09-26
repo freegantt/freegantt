@@ -6,11 +6,11 @@ declare global {
   }
 }
 
-// S5.5 visible acceptance (s5.5-tooltips-and-context-menu.md §4, D-S5-13/14): the flagship demo
+// S5.5 visible acceptance (s5.5-tooltips-and-context-menu.md §4): the flagship demo
 // (index.html, harness/main.ts) installs both tooltips() and contextMenu() from the start.
 // Right-click/menu behaviour (position, defaults filtered by `when`, items() append/reorder,
 // click/Escape) is unit-tested end to end in src/extensions/features/context-menu.test.ts — a real
-// page's own scroll-into-view races Popup's `dismissOn: 'scroll'` (D-S5-9) too easily to keep an
+// page's own scroll-into-view races Popup's `dismissOn: 'scroll'` too easily to keep an
 // e2e right-click scenario stable, so only the hover path (no such race) is covered here.
 
 test('hovering a bar opens a tooltip with the entry name and dates', async ({ page }) => {
@@ -29,8 +29,8 @@ test('hovering a bar opens a tooltip with the entry name and dates', async ({ pa
 });
 
 // #437: a right-click on the timeline pane's own background, with no bar under the pointer, opens
-// the "Collapse all"/"Expand all" menu anchored at the clicked point (the mouse path, D-S5-14 —
-// `Shift+F10`'s keyboard path anchors at the pane's own top-left corner instead, context-menu.ts).
+// the "Collapse all"/"Expand all" menu anchored at the clicked point (the mouse path —
+// the context-menu key instead anchors at the pane's own top-left corner, context-menu.ts).
 // The click lands near the pane top, the same vertical band the sticky grid header and timeline
 // header occupy. No `scrollIntoView` call runs first, so this needs none of the scroll-race care
 // the file banner above warns about; the click lands on an already-visible point. Before #437,
@@ -79,7 +79,7 @@ test('[#437] a context menu opened near a pane top paints, and hit-tests, above 
 // there. index.html (harness/main.ts) installs timeShading() from the start and exposes
 // window.__gantt (S3's own test seam), so this asks it for both rungs directly.
 //
-// A preset switch changes the axis's total pixel width (D-S1.5-2: `ScrollAxis.position` is a raw
+// A preset switch changes the axis's total pixel width (`ScrollAxis.position` is a raw
 // px offset, never re-anchored to a time when content width changes), so the visible window after
 // a bare preset assignment is not the same instant range the previous preset showed. `panToDate`
 // states the instant this test actually needs — 2026-09-12, a Saturday inside the demo dataset's
@@ -122,10 +122,10 @@ test('[#404] weekend bands appear, follow a pan, and a checkbox removes the plug
 
   // Pans the visible window right, through the same core command (freegantt.panRight) a pointer
   // gesture binds to — real keyboard interaction, not an imperative call into the Gantt. S5.11,
-  // D-S5-26: the container itself carries no tabindex any more — `view/roving-focus.ts` owns one
+  // the container itself carries no tabindex any more — `view/roving-focus.ts` owns one
   // tab stop per pane instead, so focus lands on the timeline pane's own bar, the honest tab stop
   // whose bubbled keydown the shell's listener sees (same pattern e2e/hierarchy.spec.ts uses). Plain
-  // `ArrowRight` moved off panning too (D-S5-26): `Alt+ArrowRight` is the pan chord now.
+  // `ArrowRight` moved off panning too: `Alt+ArrowRight` is the pan chord now.
   // Keyed on `data-bar-id`, not a bare `.first()`: virtualization can still mount more bars ahead
   // of this one in DOM order right after the page settles (#256's own settle race, widened). A
   // `.first()` locator re-resolves on every retry, so it would then quietly point at a new,
@@ -177,7 +177,7 @@ test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin li
   await expect(stripes.first()).toBeVisible();
 });
 
-// S5.10 visible acceptance (s5.10-dataset-plugins.md §4, D-S5-23/24): harness/e2e/editing.html installs
+// S5.10 visible acceptance (s5.10-dataset-plugins.md §4): harness/e2e/editing.html installs
 // lockEntries() — harness/plugins/lock-entries.ts, written against the public 'freegantt' entry
 // alone — and its checkbox locks entry-15 through the plugin's own store. Two seams, one demo: the
 // extension hook ghosts the locked bars while a neighbour drags, and `beforeChange` refuses the drop.
@@ -304,7 +304,7 @@ test('#280: a menu taller than the pane scrolls, so every item stays reachable',
 // #280: today `paneOf` only knows the grid pane and the timeline pane
 // (pane-layout.ts) — the overlay a popup mounts into is their sibling, not inside either one. So a
 // scroll whose target sits in the menu's own overflow reads as "outside every pane" to popup.ts's
-// `scroll` dismiss trigger (D-S5-9), and never matches the anchor's own pane. That already holds by
+// `scroll` dismiss trigger, and never matches the anchor's own pane. That already holds by
 // accident; this test pins it so the newly-scrollable menu (#280) cannot regress it later.
 test('#280: scrolling inside the open menu does not dismiss it', async ({ page }) => {
   // Same shorter pane as the scroll-reachability test above — the menu must actually overflow for

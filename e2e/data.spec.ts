@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // [S2-A4] (plans/s2-data-core/s2.7-close-the-gate.md §2, plans/00 §4 gate condition 3): the
-// changeset log in harness/e2e/data.html is built from each committed ChangeSet alone (D-S2-17), never
+// changeset log in harness/e2e/data.html is built from each committed ChangeSet alone, never
 // by re-reading the dataset. `from` is what makes this falsifiable — a log built from a re-read can
 // produce `to` but never `from`, since the dataset has already moved on by the time it is read.
 //
