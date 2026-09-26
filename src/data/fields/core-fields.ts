@@ -1,4 +1,4 @@
-// data/ — core Fields are ordinary declarations (D-S4-4). A core key reads and writes the Entry
+// data/ — core Fields are ordinary declarations. A core key reads and writes the Entry
 // directly, never `props` (ADR 0011). `progress` is not declared (ADR 0008).
 
 import type { Entry, Field, FieldKey, Instant } from '../../model/index.js';

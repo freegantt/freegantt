@@ -40,7 +40,7 @@ export function effectiveEntriesFor(
 }
 
 /** `id` as `proposed` leaves it, without allocating a map to answer it — `EditRequest.entryAfterEdits`
- *  (D-S5-45)'s own implementation for a preview frame, where `effectiveEntriesFor` above (built for a
+ *  is its own implementation for a preview frame, where `effectiveEntriesFor` above (built for a
  *  named few ids at once) would still allocate a one-entry `Map` on every call. `entryAfterEdit`
  *  itself allocates only when `id` actually has an edit pending. */
 export function entryAfterEdits(

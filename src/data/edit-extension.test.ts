@@ -50,7 +50,7 @@ describe('identityExtender', () => {
   });
 });
 
-// D-S5-23: installing an extender composes rather than evicting. `data/` still holds one field and
+// Installing an extender composes rather than evicting. `data/` still holds one field and
 // calls it at one site — what changes is only how a second plugin arrives.
 describe('DatasetState.setExtender (D-S5-23)', () => {
   const requestEntries = new Map<EntryId, StoredEntry>();
@@ -130,7 +130,7 @@ describe('composing two extenders that write one Entry (#197)', () => {
     state.setExtender(() => inner);
     state.setExtender((next) => (call) => mergeEntryEdits(next(call), outer(call)));
     // `EditRequest.entries` is the pre-transaction snapshot, so it carries stored values and never
-    // a live row (D-S5-45, ADR 0017).
+    // a live row (ADR 0017).
     const entries = new Map([[target, state.entries.storedValues.get(target)!]]);
     const request = createEditRequest({
       entries,

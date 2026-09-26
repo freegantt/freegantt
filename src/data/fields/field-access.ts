@@ -172,7 +172,7 @@ export function createFieldAccess(options: FieldAccessOptions): FieldAccess {
 /**
  * The same access, with the memo stood down — for a pass that reads rows no revision holds.
  *
- * `ComputedFieldCache` is keyed by entry, Field key and **dataset revision** (D-S4-10), and a
+ * `ComputedFieldCache` is keyed by entry, Field key and **dataset revision**, and a
  * revision describes the committed rows only. A post-edit row and the Rollup's effective child are
  * both hypothetical (`model/field.ts`), so neither belongs in that cache: reading it answers with
  * the committed value for a staged row, and writing it hands the committed revision a value no
@@ -212,7 +212,7 @@ export function readingParentFrom(
   return { ...access, parentIdOf };
 }
 
-/** What a consumer receives: the zone, and nothing that belongs to one row (ADR 0017, J5). */
+/** What a consumer receives: the zone, and nothing that belongs to one row (ADR 0017). */
 export function ambientFieldContext(access: FieldAccess): FieldContext {
   return { timeZone: access.timeZone };
 }
@@ -338,7 +338,7 @@ export function createComputeContext(access: FieldAccess, entry: StoredEntry): C
 
 /** Call: `createRollUpContext(access, parent, children, field.key)` — the one place a
  *  `RollUpContext` is built, so `values`/`numericValues` route through the same read every other
- *  Field access uses (issue #124, D-S4-8: one path for shipped and consumer Aggregators). */
+ *  Field access uses (issue #124: one path for shipped and consumer Aggregators). */
 export function createRollUpContext(
   access: FieldAccess,
   parent: StoredEntry,
@@ -347,7 +347,7 @@ export function createRollUpContext(
 ): RollUpContext {
   // `access` reads each row through its own children, and both callers already hand one that does —
   // the Rollup's pass access, and the store's. A second binding that answered `children` for every
-  // id would tell a child's own `compute` Field about the parent (F22).
+  // id would tell a child's own `compute` Field about the parent.
   //
   // The pass's own `children` answers `parent`'s id from this pre-built, pre-fetched list, and every
   // other row from `access.storedChildrenOf` — both read `effectiveEntry`, so the two cannot

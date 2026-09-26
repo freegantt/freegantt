@@ -1,11 +1,11 @@
 // data/ — the extension hook every transaction calls once (D4). An unoccupied hook is the identity
-// function; an installed plugin (S7's scheduling engine) is what returns anything else (D-S2-6).
+// function; an installed plugin (S7's scheduling engine) is what returns anything else.
 
 import type { EditExtender, EntryEdit, EntryEdits, EntryId } from '../model/index.js';
 
-// `ProposedEdit`/`EntryEdits` moved to `model/entry.ts` in S3.3 (D-S3-4) so `layout/gesture-draft.ts`
+// `ProposedEdit`/`EntryEdits` moved to `model/entry.ts` in S3.3 so `layout/gesture-draft.ts`
 // can build one without reaching into `data/`; `EditRequest`/`EditExtender` followed in S5.10
-// (D-S5-23), so `ExtenderWrapper` — the type a plugin author writes against — can name them.
+// alongside them, so `ExtenderWrapper` — the type a plugin author writes against — can name them.
 // `ProposedEdits` joined them at #209's C1: the storage-shaped map name every internal caller now
 // uses, and `EntryEdits` now means the loose write shape a plugin author returns (#209 C3). All five
 // are re-exported here so every existing `data/` import site keeps working unchanged.
@@ -30,7 +30,7 @@ export const EMPTY_ENTRY_IDS: ReadonlySet<EntryId> = Object.freeze(new Set<Entry
 
 /**
  * Merges two sets of extra writes, keyed by Entry — the composition an `ExtenderWrapper` needs
- * (D-S5-23).
+ * to merge two extenders.
  *
  * ```ts
  * ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)));

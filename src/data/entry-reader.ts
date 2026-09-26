@@ -1,4 +1,4 @@
-// Moved verbatim from api/entry-input.ts (D-S2-2): construction and `entries.add()` must read an
+// Moved verbatim from api/entry-input.ts: construction and `entries.add()` must read an
 // `EntryInput` the same way, and the one place that happens is inside the store now.
 //
 // This file maps fields and nothing else. Every date decision — resolving a Plain time through the
@@ -45,7 +45,7 @@ interface EditOrigin {
 }
 
 /** The name a plugin author knows their own write by. `toEditReading` serves both
- *  `entries.update()` and an `EditExtender` cascade (D-S5-44), and a message that named the wrong one
+ *  `entries.update()` and an `EditExtender` cascade, and a message that named the wrong one
  *  sent the reader to a call they never made (#239). Exported so `build-commit-change-set.ts` can
  *  name the same call when it diffs a body author's and an extender author's edits together (#232) —
  *  one label for the one boundary, not a second string that means the same thing. */
@@ -81,7 +81,7 @@ function warnIngest(message: string): void {
 }
 
 /**
- * `entry.props` at ingest (ADR 0011, Q15): declared Field keys may sit flat, at the top level of a
+ * `entry.props` at ingest (ADR 0011): declared Field keys may sit flat, at the top level of a
  * constructor record or an `add()` call, the same shape `update()` takes; a nested `props` stays
  * legal for passenger keys and for a bag a consumer already holds. A key named both ways throws
  * (`DuplicatePropsKeyError`) — the two spellings would silently disagree about which value wins.
@@ -152,7 +152,7 @@ export function toEntries(
 }
 
 /**
- * The move a plugin's cascade is honest about (D-S5-44): `entry`'s whole span, translated rigidly by
+ * The move a plugin's cascade is honest about: `entry`'s whole span, translated rigidly by
  * `start - entry.start`. `layout/` and `data/` may not import each other (§1), so this is a second,
  * private copy of the rigid translate `layout/gesture-draft.ts`'s own `moveEdit` computes for a
  * whole-Entry drag, not a shared function.
@@ -190,7 +190,7 @@ export interface EditsReading {
 
 /** Reads an `entries.update()` edit into `ProposedEdit` (S2.3 §1.1) — every present core date field
  * goes through `time/` the way `toEntry` reads a whole `Entry`. Declared Field keys fold through
- * `writeField` so the write set stays entry-shaped (D-S4-2). An update may set `start` without `end`.
+ * `writeField` so the write set stays entry-shaped. An update may set `start` without `end`.
  *
  * `start`/`end` are ordinary Fields here, same as any other: nothing derives one from the other any
  * more (ADR 0026 retired the Segment that used to pair them), so an edit that sets one and leaves the
@@ -239,7 +239,7 @@ export function toEditReading(
  *
  * Every Field key in every Entry's edit runs `write-rule.ts`'s `assertFieldTakesWrite` — the one check
  * `entries.update()` runs too (ADR 0015, folded from two copies by #473's ocr finding): an undeclared
- * key throws `UnknownFieldError` (#209 Q2, one rule on every way in — a silent drop is the fault #197
+ * key throws `UnknownFieldError` (#209, one rule on every way in — a silent drop is the fault #197
  * existed for), a `compute` Field throws `ComputedFieldCannotBeWrittenError`, and a locked cell — the
  * Field's own `'never'`, or a plugin's per-entry lock rule (#473) — throws `FieldNotEditableError`.
  * A cascade is a caller-side write, same as `entries.update()`, so it meets the same lock a person at
@@ -248,7 +248,7 @@ export function toEditReading(
  * declaration is carried at construction ingest only (ADR 0011) — it is never a live way in.
  *
  * An id nothing knows is skipped — there is no Entry to read the edit against, and `diffEdit` emits
- * no row for such an id either (#209 Q3, tracked as #235).
+ * no row for such an id either (#209, tracked as #235).
  */
 export function toEditsReading(
   edits: EntryEdits,
@@ -262,8 +262,8 @@ export function toEditsReading(
   for (const [id, edit] of edits) {
     // The Entry as this transaction's own body leaves it, not the pre-transaction snapshot: a cascade
     // onto an Entry the same transaction added has no committed state to read against, and one whose
-    // span the body just rewrote would be read against the span the commit is replacing (D-S5-45,
-    // #212 R2 finding A).
+    // span the body just rewrote would be read against the span the commit is replacing (#212,
+    // finding A).
     const entry = entryFor(id);
     if (entry === undefined) continue;
     const query = fieldLockQueryFor(id, entryFor, (e) => parentIdFrom(hierarchySource, e));

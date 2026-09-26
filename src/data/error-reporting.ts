@@ -1,4 +1,4 @@
-// data/ — where an Error report is stamped and raised (S5.12, D-S5-40/41, ADR 0009). One file,
+// data/ — where an Error report is stamped and raised (S5.12, ADR 0009). One file,
 // because `at` comes from `time/`'s `now()` and `data/` is the lowest layer allowed to reach `time/`
 // (I10 forbids reading a clock anywhere else). `view/` and `api/` import this directly; `render/` and
 // `extensions/` may not reach `data/` at all, so they take a `RaiseError` by injection instead.
@@ -24,7 +24,7 @@ export interface ErrorBus {
   hasHandler(name: 'error'): boolean;
 }
 
-/** Raises one report on `bus`. `fallback` runs only when nothing is subscribed (D-S5-41) — the
+/** Raises one report on `bus`. `fallback` runs only when nothing is subscribed — the
  *  site's own `console` line, unchanged, so an unsubscribed consumer sees what they always saw. */
 export function raiseErrorOn(bus: ErrorBus, report: ErrorReportInput, fallback?: () => void): void {
   if (!bus.hasHandler('error')) {
