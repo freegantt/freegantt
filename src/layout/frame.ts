@@ -356,6 +356,8 @@ export interface GeometryFrame {
 }
 
 export interface LayoutInput {
+  /** The whole Dataset, `dataset.entries.all`. Never pass part of it: the tree row source reads each
+   *  Entry's own `depth` and `children()`, so an Entry whose parent is left out gets no row. */
   entries: readonly Entry[];
   scale: TimeScale;
   /** Governs header ticks — the same preset the bound TimeScaleModel resolved (plans/01 §5.1). */

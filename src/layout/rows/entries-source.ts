@@ -9,22 +9,18 @@ import { PLANNED_ROW_KIND } from './row-source.js';
 import { compileEntryRule } from '../entry-rule.js';
 import type { EntryPredicate, EntryRulePorts } from '../entry-rule.js';
 
-export function entryTreeIndex(entries: readonly Entry[]): {
+/** Reads the tree each Entry already holds (`depth`, `children()`), which a live Dataset caches per
+ *  revision. `entries` must be the whole Dataset: this pass never checks membership, so an Entry
+ *  whose parent is left out gets no row, and nothing reports it. */
+function entryTreeIndex(entries: readonly Entry[]): {
   roots: readonly Entry[];
   childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>;
 } {
-  const known = new Set(entries.map((entry) => entry.id));
-  const childRowsOf = new Map<EntryId, Entry[]>();
   const roots: Entry[] = [];
+  const childRowsOf = new Map<EntryId, readonly Entry[]>();
   for (const entry of entries) {
-    const parent = entry.parent()?.id;
-    if (parent === undefined || !known.has(parent)) {
-      roots.push(entry);
-      continue;
-    }
-    const siblings = childRowsOf.get(parent);
-    if (siblings) siblings.push(entry);
-    else childRowsOf.set(parent, [entry]);
+    if (entry.depth === 0) roots.push(entry);
+    if (entry.hasChildren) childRowsOf.set(entry.id, entry.children());
   }
   return { roots, childRowsOf };
 }
