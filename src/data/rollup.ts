@@ -262,11 +262,14 @@ export function rollUpFields(
   const byParent = committedTreeStillAnswers
     ? tree.committedChildIds
     : childIdsByParent(entries, parentOfEffective);
-  const priorByParent = committedTreeStillAnswers
-    ? byParent
-    : pending === undefined
-      ? tree.committedChildIds
-      : childIdsByParent(committed, parentOfPrior);
+  let priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>;
+  if (committedTreeStillAnswers) {
+    priorByParent = byParent;
+  } else if (pending === undefined) {
+    priorByParent = tree.committedChildIds;
+  } else {
+    priorByParent = childIdsByParent(committed, parentOfPrior);
+  }
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched, parentOfEffective);
   const computed = new Map<EntryId, StoredEntry>();
   // A `compute` Field inside this pass asks `ctx.children(row)` and must see the pass's own
