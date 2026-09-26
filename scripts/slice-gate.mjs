@@ -21,7 +21,7 @@ export function run(cmd, cwd = root) {
 
 /** True iff a test title carrying `[<id>]` exists in the source — a fixed-string search, not a
  * regex, so `[S1-A2]`-shaped ids never get read as a character class (plans/s1.11-close-the-gate
- *  README.md). Checked before anything runs: an id that was never written must fail loudly,
+ * README.md). Checked before anything runs: an id that was never written must fail loudly,
  * not pass because the filtered run matched zero tests and exited 0 anyway. `dirs`/`cwd` default to
  * the real tree; `test/guards/slice-gate.test.ts` overrides both to drive this against a fixture. */
 export function idExistsInSource(id, { dirs = ['src', 'e2e'], cwd = root } = {}) {
@@ -35,7 +35,7 @@ export function idExistsInSource(id, { dirs = ['src', 'e2e'], cwd = root } = {})
 
 /** Runner name -> how to run the escaped, id-filtered slice of that runner. No `--project` flag on
  * vitest: an acceptance id may live in `pure` or `dom` and move between them with no gate edit
- * `pnpm test:e2e`, never a bare `playwright test`: the script carries the config, and
+ * Always run `pnpm test:e2e`, never a bare `playwright test`: the script carries the config, and
  * shelling past it is how the gate and CI drift apart. */
 export const RUNNERS = {
   vitest: (id) => run(`pnpm vitest run -t "\\[${id}\\]"`),
