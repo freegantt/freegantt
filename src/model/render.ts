@@ -1,4 +1,4 @@
-// model/ — the reconciler's own vocabulary as plain data (S5.3/S5.4, D-S5-10). `ElementDescription`
+// model/ — the reconciler's own vocabulary as plain data (S5.3/S5.4). `ElementDescription`
 // is what a plugin hands back instead of a live node: `render/dom/element-description.ts` is the only
 // place that turns it into DOM, and it stays inside the reconciler's hard-bounded scope (plans/01
 // §8.1) — attrs/class/style/text plus keyed children, no lifecycle hook. S5.3's `Popup.content` is

@@ -16,12 +16,12 @@ export interface Duration {
   unit: TimeUnit;
 }
 
-/** How core measures an Entry's duration (ADR 0017, Q6/J12). One policy per Dataset — a per-Field
+/** How core measures an Entry's duration (ADR 0017). One policy per Dataset — a per-Field
  *  setting would let two Fields on one Dataset disagree about what a duration is.
  *
  *  - `'span'` — `end - start`, gaps between children counted. The default.
  *  - `'children'` — the sum of the direct children's own spans, gaps counted nowhere. A childless
- *    Entry falls back to `'span'` (#421 Q32; issue #428 tracks the real fix).
+ *    Entry falls back to `'span'` (#421; issue #428 tracks the real fix).
  *
  *  A union rather than a boolean: a calendar-aware third answer (duration in working time) is
  *  plausible at S7, and a union takes it without deleting a published key. */
@@ -30,8 +30,8 @@ export type DurationMeasure = 'span' | 'children';
 /**
  * A *plain* time: a wall-clock reading with no zone attached, so it names no `Instant` until a zone
  * resolves it (CONTEXT.md). A domain shape, not zone machinery — which is why it lives here and not
- * in `time/`: `extensions/` needs it for the `dateInput` seam (D-S5-20) and may import `model/`,
- * while `time/` is sealed from it (D-S5-5). `time/`'s own `PlainParts` extends this with the
+ * in `time/`: `extensions/` needs it for the `dateInput` seam and may import `model/`,
+ * while `time/` is sealed from it. `time/`'s own `PlainParts` extends this with the
  * `dayOfWeek` its zone math fills in.
  */
 export interface PlainParts {
@@ -42,7 +42,7 @@ export interface PlainParts {
   hour: number;
   minute: number;
   second: number;
-  /** ISO day of week: 1 = Monday … 7 = Sunday (D-S5-16). Derived, never authored: `time/`'s
+  /** ISO day of week: 1 = Monday … 7 = Sunday. Derived, never authored: `time/`'s
    *  `toPlain` always fills it and its `fromPlain` never reads it, so a caller building a
    *  `PlainParts` to write may omit it. */
   dayOfWeek?: number;

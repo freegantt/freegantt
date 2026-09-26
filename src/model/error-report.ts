@@ -1,5 +1,5 @@
 // model/ — the Error report: what the `error` event carries on the Dataset and on the Gantt alike
-// (S5.12, D-S5-40/41/42, ADR 0009). Types only; the runtime carve-out next door in `errors.ts` does
+// (S5.12, ADR 0009). Types only; the runtime carve-out next door in `errors.ts` does
 // not widen here.
 //
 // A separate file from `errors.ts` on purpose, and the split says the thing CONTEXT.md stresses:
@@ -18,7 +18,7 @@ import type { FieldKey } from './field.js';
 import type { Instant } from './time.js';
 import type { PluginId } from './plugin.js';
 
-/** How bad an Error report is (D-S5-41).
+/** How bad an Error report is.
  *
  *  `'info'` — a Refusal: the library said no on purpose and nothing is broken.
  *  `'warning'` — degraded but recovered, such as a renderer that threw and fell back.
@@ -45,7 +45,7 @@ export type BuiltInReportCode =
   // A gesture core dropped on its own, never a handler's veto (#272, #273, #377) — the reason rides
   // on `ErrorReport.droppedReason` (`GestureDroppedReason`). Its own group, not the refusal group above:
   // `by: 'core'` here, always `by: 'consumer'` above, and conflating the two misreports which one
-  // happened (branch review F2).
+  // happened (branch review).
   | 'entry-move-dropped'
   | 'entry-resize-dropped'
   // A fault core recovered from.
@@ -65,17 +65,17 @@ export type BuiltInReportCode =
   | 'rollup-corrected'
   // ADR 0020: a hierarchy source answered with an id no Entry holds, or with a chain that loops
   // back on itself. Core refuses the answer, reads that Entry as a root and carries on. `by` names
-  // whoever the **answer** came from (`F4`): `'consumer'` when it is the row's own authored
+  // whoever the **answer** came from: `'consumer'` when it is the row's own authored
   // `parentId` — which a composing plugin hands straight back when it falls through — and
   // `'plugin'` for any other answer. Raised after the commit's own `change` fans out, so a handler
   // that writes here starts a commit of its own — and a handler that writes on every report loops,
   // because each new commit still holds the refusal that raised it.
   | 'unknown-parent'
   | 'hierarchy-cycle'
-  // Q10, ADR 0018: two rules from one source both matched one Entry's variant. The newest paints,
+  // ADR 0018: two rules from one source both matched one Entry's variant. The newest paints,
   // the other is ignored, and this names both. Raised in every build, not behind `isDevMode()` —
   // that flag resolves when this repo builds `dist/`, so gating it would delete the line from every
-  // consumer (D-S5-41). The cost is avoided by asking, not by building: with no report sink wired,
+  // consumer. The cost is avoided by asking, not by building: with no report sink wired,
   // the rule walk stops at the first yes and never looks for a second.
   | 'variant-matched-twice'
   // #448: `barRenderer` is the catch-all a resolved variant with no `paint` falls through to. When
@@ -83,16 +83,16 @@ export type BuiltInReportCode =
   // nothing says why. Checked once per assignment, against the whole Dataset, not per frame — a
   // frame that shows only variant-painted rows while others sit off-window is not the same thing.
   | 'bar-renderer-shadowed'
-  // ADR 0018, `J59`: a variant's `when` names a Field key no Field declares, so the rule matches no
+  // ADR 0018: a variant's `when` names a Field key no Field declares, so the rule matches no
   // row. Reported once per rule and key, and never thrown — a typo must not take a layout pass
   // down, and a plugin whose key the Dataset never declared is the same case.
   | 'unknown-variant-field'
-  // Q29 (ADR 0026, rulings appendix): a row source's `childrenAsSegments` names a Field
+  // ADR 0026, rulings appendix: a row source's `childrenAsSegments` names a Field
   // key no Field declares, so the rule matches no row. `unknown-variant-field`'s own rule always
   // names a variant; `childrenAsSegments` is not one, so it gets its own code. Reported once per
   // rule and key, and never thrown, for the same reason `unknown-variant-field` is not thrown.
   | 'unknown-row-source-field'
-  // #421 F2: `barLabels.field` (on the Gantt, or on an `EntryVariant`) names a Field key no Field
+  // #421: `barLabels.field` (on the Gantt, or on an `EntryVariant`) names a Field key no Field
   // declares. Both are live and reassignable, and the lookup runs inside `render()`'s own rAF
   // callback, where a throw reaches no consumer. The bar prints no label; reported once per field
   // key, never thrown, and never per bar per frame.
@@ -110,8 +110,8 @@ export type BuiltInReportCode =
   // not a rolling-up parent that owns the cell. `load` raises it after the commit's own `change`
   // fans out.
   | 'sibling-index-dropped'
-  // The built-in cell editor's own refusals — one spelling, shared by `data-reason` and this code
-  // (D-S5-40). `by` is that plugin's id, not `'core'`.
+  // The built-in cell editor's own refusals — one spelling, shared by `data-reason` and this code.
+  // `by` is that plugin's id, not `'core'`.
   | 'derived-value'
   | 'no-parse-value'
   | 'no-date-value'
@@ -178,7 +178,7 @@ export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
  *  `buildGestureDroppedReport`. What `severity` cannot do is tell `'data-changed'` apart from
  *  `'entry-gone'`: two different failures a consumer may want to handle two different ways.
  *  `droppedReason` carries that, without matching on `message`'s English sentence
- *  (`ErrorReport.droppedReason`, branch review F2).
+ *  (`ErrorReport.droppedReason`, branch review).
  *
  *  `'inverted-span'` — an installed `EditExtender` cascaded an end that falls before its start.
  *  Core refuses to store that and drops the gesture. The entry keeps its stored dates, so nothing
@@ -190,15 +190,15 @@ export type ErrorReporter = 'core' | 'consumer' | (PluginId & {});
  *  at zero length, and `nudge()` runs the same draft, so neither a drag nor a key can invert a span.
  *
  *  ADR 0026 retired `'write-refused'`, which this used to carry, on the premise that the store only
- *  ever refused an envelope-only cascade against a several-Segment Entry (D-S5-44). Branch review
- *  F9 disproved it by running the case: `isEnvelopeRefusal` named two errors, and only
+ *  ever refused an envelope-only cascade against a several-Segment Entry. Branch review
+ *  disproved it by running the case: `isEnvelopeRefusal` named two errors, and only
  *  `SegmentsOutOfSyncError` died with the Segment. `InvertedSpanError` never was Segment-specific.
  *  `'inverted-span'` replaces the retired name rather than restoring it, because the envelope the
  *  old name described is gone and the condition it now reports is the one this name states. */
 export type GestureDroppedReason =
   'data-changed' | 'superseded' | 'discarded' | 'entry-gone' | 'inverted-span';
 
-/** What the `error` event carries, on the Dataset and on the Gantt alike (D-S5-40).
+/** What the `error` event carries, on the Dataset and on the Gantt alike.
  *
  *  Flat fields plus `cause`, not a wrapped error: every report renders and serializes with no type
  *  test, and nothing is lost — `cause` carries `MutationCancelledError.changeSet`,
@@ -252,13 +252,13 @@ export type ErrorReportInput = Omit<ErrorReport, 'at'>;
  *  and reads no clock.
  *
  *  `fallback` runs **only when nothing is subscribed to `error`**, the way an `EventEmitter`'s
- *  unhandled `'error'` is treated as unhandled (D-S5-41). It is where a site keeps the `console` line
+ *  unhandled `'error'` is treated as unhandled. It is where a site keeps the `console` line
  *  it printed before this seam existed: a consumer who subscribes gets silence and full control, and
  *  a consumer who does not keeps exactly the output they have today. A refusal that was always silent
  *  passes none. */
 export type RaiseError = (report: ErrorReportInput, fallback?: () => void) => void;
 
-/** What a plugin raises through `PluginContext.raiseError` (S5.12, D-S5-40). Core fills `by` with
+/** What a plugin raises through `PluginContext.raiseError` (S5.12). Core fills `by` with
  *  that plugin's own id, so `by` is a fact the runtime knows and never a claim a plugin makes about
  *  itself — the same "core fills what core knows" split `plans/02` already draws. No `fallback`
  *  either: the fallback exists to preserve a `console` line core printed before this seam, and a

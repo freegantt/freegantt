@@ -10,7 +10,7 @@ function entry(dates: { start?: Instant; end?: Instant }): StoredEntry {
   return { id: entryId('e1'), name: 'Design', props: {}, siblingIndex: 0, ...dates };
 }
 
-/** ADR 0012's span invariant, and the one place it is written (Q5). Before this, the rule was guard
+/** ADR 0012's span invariant, and the one place it is written. Before this, the rule was guard
  *  arithmetic at about ten sites plus six casts, and nothing in the suite stated it once. */
 describe('spansTime', () => {
   it('answers yes for an Entry that holds both dates', () => {
@@ -45,7 +45,7 @@ describe('spansTime', () => {
   it('narrows both dates to Instant for the caller', () => {
     const subject = entry({ start: instant(3), end: instant(8) });
     if (!spansTime(subject)) throw new Error('unreachable');
-    // Both reads compile without a cast, which is the whole point: the six load-bearing casts Q5
+    // Both reads compile without a cast, which is the whole point: the six load-bearing casts
     // retired existed because nothing narrowed here.
     const width: number = subject.end - subject.start;
     expect(width).toBe(5);

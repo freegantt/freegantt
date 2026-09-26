@@ -27,10 +27,10 @@ export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' 
  *  enum, so `dataset.fields.all` reads one word back. */
 export type FieldEditable = 'never' | 'api' | 'anywhere';
 
-/** What a per-column `columnRenderer` receives (S5.7, D-S5-17). Narrower than the Gantt-wide
+/** What a per-column `columnRenderer` receives (S5.7). Narrower than the Gantt-wide
  *  `GridCellRenderer` (`layout/renderer.ts`): a per-column renderer already knows which column it paints
  *  — the consumer wrote it right there in the same `GridColumn` — so it needs no `column` argument to
- *  branch on, and no `row` either (the sample in D-S5-17 reads only `value`/`entry`). This also keeps
+ *  branch on, and no `row` either (the sample reads only `value`/`entry`). This also keeps
  *  `GridColumn` a `model/` type with zero dependencies (`model-is-leaf`): the Gantt-wide `GridCellRenderer`
  *  lives in `layout/` because its context names `FrameRow`/`ResolvedColumn`, and `model/` may not
  *  import `layout/`. */
@@ -54,19 +54,19 @@ export interface GridColumnBase {
   field: FieldKey;
   header?: string;
   align?: ColumnAlign;
-  /** S5.7 — per-column, more specific than `GanttOptions.gridCellRenderer` (D-S5-11). */
+  /** S5.7 — per-column, more specific than `GanttOptions.gridCellRenderer`. */
   columnRenderer?: ColumnRenderer;
   /** Default `true`. A fixed column refuses the resize drag and the resize chord. */
   resizable?: boolean;
   /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
   movable?: boolean;
-  /** D-S5-34. `true` keeps this column declared but off the screen. The column holds its place in
+  /** `true` keeps this column declared but off the screen. The column holds its place in
    *  `gridColumns`, its `width`, and its position in the order, so showing it again puts it back
    *  where it was. It leaves the grid, `ctx.view.resolvedColumns()`, and the resize and reorder
    *  gestures. Default `false`. `gantt.hideGridColumn(field)` writes this key without a restatement
    *  of the whole list. */
   hidden?: boolean;
-  /** D-S5-13 — `true` adds this column's header and formatted value to the default bar tooltip.
+  /** `true` adds this column's header and formatted value to the default bar tooltip.
    *  Default `false`. `tooltip: true` on an image column shows the stored URL unless the Field's
    *  `formatValue` returns a caption. */
   tooltip?: boolean;
@@ -79,14 +79,14 @@ export interface GridColumnBase {
 export type GridColumnSizing = { width?: number; flex?: never } | { width?: never; flex?: number };
 
 /** Presentation only. Never carries an aggregate — `data/` never holds a renderer, and no reader of
- *  this Dataset ever sees one (D-S5-17). */
+ *  this Dataset ever sees one. */
 export type GridColumn = GridColumnBase & GridColumnSizing;
 
 /** What a consumer writes: a Field key, or a column object. */
 export type GridColumnInput = FieldKey | GridColumn;
 
 /** One resolved Grid column's tooltip line: `header`, the column's header text, paired with
- *  `value`, an entry's formatted value for that column (D-S5-13). A `model/` type — the same
+ *  `value`, an entry's formatted value for that column. A `model/` type — the same
  *  reason `ElementDescription` lives here — because both `api/plugin-context.ts`'s public
  *  `resolveTooltipColumns` and `view/gantt-shell.ts`'s implementation need it, and `view/` may not
  *  import `api/` (view-boundary, plans/01 §1). `api/plugin-context.ts` re-exports it as plugin vocabulary. */
@@ -150,28 +150,28 @@ export type Field<TValue = unknown> =
        *  cell — a formatter that needs the Entry declares this third parameter instead; every other
        *  formatter still assigns with two, or one (#240). */
       formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
-      /** S5.8, D-S5-20, issue #137 F12: reads what the user typed into the inline editor's `<input>`
+      /** S5.8, issue #137: reads what the user typed into the inline editor's `<input>`
        *  back into a stored value. `undefined` means the text names no value — the editor stays open in
        *  the invalid state and commits nothing. `formatValue` is not invertible in general (a
        *  currency-formatted `"€1.234,56"` cannot be parsed back without knowing the format that produced
        *  it), so the library ships no guessed default: with no `parseValue`, `type: 'text'` (or no `type`
        *  at all) reads and writes the raw string, and every other named `type` refuses to open the
        *  editor rather than parse wrong. A `type: 'date'` Field never reaches this — `inlineEditing()`
-       *  routes it through the `dateInput` seam instead (D-S5-20). */
+       *  routes it through the `dateInput` seam instead. */
       parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
       /** S5.8+: the generic inline editor's `<input type>` attribute. Default `'text'`. A
        *  native HTML affordance only (a number stepper, a numeric mobile keyboard, `tel`/`email`
        *  validation) — it does not change how a value is read back; pair it with `parseValue` when the
        *  stored value is not itself a string (a `'number'` input's `.value` is still a string).
-       *  `'checkbox'` (Q31) is the one exception: the editor reads and writes its `.checked` state
+       *  `'checkbox'` is the one exception: the editor reads and writes its `.checked` state
        *  instead of `.value`, so a `boolean` Field takes no `parseValue`. Has no effect on a `type:
        *  'date'` Field — that never reaches the generic editor, routing through the `dateInput` seam
-       *  instead (D-S5-20). For a full widget swap, not just the native input type, veto with
+       *  instead. For a full widget swap, not just the native input type, veto with
        *  `beforeEntryEdit` and mount your own control. */
       inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
-      /** D-S5-17: `columnRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
-       *  renderer, so this default set excludes it. `hidden` is excluded for a different reason
-       *  (D-S5-34): a Field default of `hidden: true` would make a Gantt that names the column show
+      /** `columnRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
+       *  renderer, so this default set excludes it. `hidden` is excluded for a different reason.
+       *  A Field default of `hidden: true` would make a Gantt that names the column show
        *  nothing. Which columns a view shows is the Gantt's question, never the Field's.
        *  `Omit<GridColumn, …>` would flatten the sizing union and let a Field default name both `width`
        *  and `flex` (#249) — so this type is built from `GridColumnBase` directly, joined back to
@@ -209,7 +209,7 @@ export type Field<TValue = unknown> =
  *  arms' *common* keys and drop `equals`/`parseValue`/`inputType` — `percent` (`field-types.ts`)
  *  needs `parseValue` and `inputType` on its own bundle. */
 export interface FieldType<TValue = unknown> {
-  /** A Field naming this type may still override it (D-S4-3) — `{ key: 'cost', type: 'money',
+  /** A Field naming this type may still override it — `{ key: 'cost', type: 'money',
    *  rollUp: 'none' }` opts one Field on a shared type out. */
   rollUp?: AggregatorName;
   /** Read `Field.editable` for the three states. A Field naming this type may override it. */
@@ -228,7 +228,7 @@ export type FieldLookup = {
 };
 
 /** Ambient. One per Dataset, reused by every read — the zone, and nothing that belongs to one row
- *  (ADR 0017, J5). `FormatContext` and `ComputeContext` both extend it, and `parseValue` receives it.
+ *  (ADR 0017). `FormatContext` and `ComputeContext` both extend it, and `parseValue` receives it.
  *
  *  It does not take the consumer's field map: a `FieldContext` reaches `layout/` and `view/`, and
  *  making those layers generic over one consumer's fields is what ADR 0005 rejected. A row's own
@@ -319,7 +319,7 @@ export interface ComputeContext extends FieldContext {
   hierarchyParentId(): EntryId | undefined;
 }
 
-/** FieldContext plus this Gantt's locale. Built only at column-resolve time (D-S4-13), and reused
+/** FieldContext plus this Gantt's locale. Built only at column-resolve time, and reused
  *  for every cell — which is why it extends the ambient half and never the per-pass one. */
 export interface FormatContext extends FieldContext {
   readonly locale: Intl.LocalesArgument;

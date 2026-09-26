@@ -45,7 +45,7 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
 }
 
 /**
- * The span invariant, and the one place it is written (ADR 0012, Q5 in its appendix). An Entry
+ * The span invariant, and the one place it is written (ADR 0012). An Entry
  * spans time when it holds **both** `start` and `end`. An Entry with one date,
  * or with no date, appears in the grid and draws no bar.
  *
@@ -102,7 +102,7 @@ export interface EntryInput<TProps = Record<string, unknown>> {
   start?: InstantInput | undefined;
   /** Exclusive — see plans/01 §5 and `DateOnlyEndRule`. See `start` for when this may be omitted. */
   end?: InstantInput | undefined;
-  /** Passenger data, and a bag a consumer already holds (ADR 0011, Q15). A declared Field key belongs
+  /** Passenger data, and a bag a consumer already holds (ADR 0011). A declared Field key belongs
    *  at the top level instead — `entries.add({ id, name, owner: 'Ali' })` — and naming one both here
    *  and at the top throws. An unknown top-level key, or a key here that names a core key, warns and
    *  is ignored rather than thrown: this Entry may come from an API this consumer does not own. */
@@ -113,7 +113,7 @@ export interface EntryInput<TProps = Record<string, unknown>> {
  *  `props` (declared consumer keys sit flat on `EntryEdit`, never nested — decision 11). */
 type EntryEnvelope<TProps> = Omit<EntryInput<TProps>, 'id' | 'props'>;
 
-/** What `entries.add()` and the constructor's `entries` array both take (ADR 0011, Q15, #281): a
+/** What `entries.add()` and the constructor's `entries` array both take (ADR 0011, #281): a
  *  declared Field key sits flat, at the top, the same shape `update()` takes —
  *  `entries.add({ id, name, owner: 'Ali' })` — and nested `props` still works for a bag already held
  *  or a passenger key ingest does not know about.
@@ -143,7 +143,7 @@ type EntryEnvelope<TProps> = Omit<EntryInput<TProps>, 'id' | 'props'>;
  *  `props`, and the declared keys — is its own mapped type, re-derived from `EntryEnvelope`/`TProps`
  *  the way `EntryEdit` already builds itself below, never an intersection with the named `EntryInput`
  *  interface. That is the whole fix: a mapped type carries no interface identity for TypeScript to
- *  refuse, so where `EntryInput<TProps> & Partial<TProps>` (the shape Q15's wording first suggested)
+ *  refuse, so where `EntryInput<TProps> & Partial<TProps>` (the shape an earlier draft first suggested)
  *  was uninhabitable by a named `EntryInput<TProps>[]` value, this type takes one straight in — it is
  *  a subset of what this type allows, `entry.toInput()`'s return included. */
 export type FlatEntryInput<TProps = Record<string, unknown>> = string extends keyof TProps
@@ -155,7 +155,7 @@ export type FlatEntryInput<TProps = Record<string, unknown>> = string extends ke
       // envelope key (`name`, `start`, …) never joins a real `TProps`, so excluding it changes
       // nothing today. It exists so a literal's own core fields can only ever explain themselves
       // through the envelope mapped type above, never through this one — without it, `new
-      // Dataset({ entries: [{ id, name, start, end }] })` (no `<TProps>` named, ADR 0011 Q15's own
+      // Dataset({ entries: [{ id, name, start, end }] })` (no `<TProps>` named, ADR 0011's own
       // common case) makes TypeScript try to infer `TProps` from `id`/`name`/`start`/`end`
       // themselves, landing on a nonsense shape and refusing the call. `'props'` is excluded for the
       // same reason, and it is not redundant with the envelope: `EntryEnvelope` already dropped
@@ -211,7 +211,7 @@ export type EntryEdit<TProps = Record<string, unknown>> = {
  *
  *  - An **app author** never meets it at all. They write an `EntryEdit` to `entries.update()`.
  *  - A **plugin author** reads one off `EditRequest.proposed`, and writes `EntryEdit`s back (#209).
- *    `moveEntryTo` builds one of those for them (D-S5-50).
+ *    `moveEntryTo` builds one of those for them.
  *
  *  Core builds these on the way in — the extension hook's writes included, at one door
  *  (`DatasetState.extraEditsFor` → `toEditsReading`) — and `diffEdit` compares one against `entries`.
