@@ -21,6 +21,7 @@ import type { EntryEdits, ProposedEdit, ProposedEdits } from './edit-extension.j
 import {
   completeProps,
   emptyProposedEdit,
+  entryAfterEdit,
   withProposedKeys,
   writeDeclaredPropsFields,
 } from './fields/field-access.js';
@@ -229,6 +230,45 @@ export function toEditReading(
 
   stored = writeDeclaredPropsFields(stored, edit, registry);
   return { stored: completeProps(entry, withProposedKeys(stored, proposed)) };
+}
+
+/** `toEntryAfterUpsert`'s result: the row the delta leaves, and the Field keys the delta named for
+ *  it — a rolled-up cell's `derived-values-dropped` report reads only these (`entry-delta.ts`). */
+export interface UpsertReading {
+  readonly entry: StoredEntry;
+  readonly namedKeys: ReadonlySet<string>;
+}
+
+/**
+ * Reads one `entries.syncChanges()` upsert row onto the entry it changes: a key the row leaves out
+ * keeps its value, and a key it sets to `undefined` clears it, the same as `update()`. Ingest runs
+ * `propsFromInput`, so a declared key under nested `props` counts the same as a flat one, an
+ * undeclared flat key warns and drops, and a key named both ways throws `DuplicatePropsKeyError`.
+ * `siblingIndex` in the row is never copied — placing the row is `siblingIndexesAfterDelta`'s job,
+ * not this function's.
+ *
+ * Runs `toEditReading`, so the date reads and the `InvertedSpanError` check `update()` runs also run
+ * here. It does not run `assertFieldTakesWrite`: an upsert row from a server is not a write a lock
+ * refuses (a `'never'` lock is ignored by design).
+ */
+export function toEntryAfterUpsert(
+  input: FlatEntryInput,
+  current: StoredEntry,
+  context: EntryReadContext,
+  registry: FieldRegistry,
+  operation: string,
+): UpsertReading {
+  const props = propsFromInput(input, registry, current.id);
+  const edit: Record<string, unknown> = {};
+  if ('parentId' in input) edit['parentId'] = input['parentId'];
+  if ('name' in input) edit['name'] = input['name'];
+  if ('start' in input) edit['start'] = input['start'];
+  if ('end' in input) edit['end'] = input['end'];
+  for (const key of Object.keys(props)) {
+    if (registry.has(key)) edit[key] = props[key];
+  }
+  const reading = toEditReading(edit, context, current, registry, operation);
+  return { entry: entryAfterEdit(current, reading.stored), namedKeys: new Set(Object.keys(edit)) };
 }
 
 /**
