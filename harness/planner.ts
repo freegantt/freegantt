@@ -2,6 +2,7 @@ import './harness-nav.ts';
 import {
   Gantt,
   Dataset,
+  createGridColumnHelper,
   tooltips,
   contextMenu,
   inlineEditing,
@@ -36,17 +37,21 @@ const dataset = new Dataset<PlannerEntryProps>({
   ...plannerFieldOptions,
 });
 
+// Types each column's renderer from this Dataset's props, so the Start and Finish cells read an Instant.
+const columnHelper = createGridColumnHelper(dataset);
+
 // The design's own column set, left to right. Each one names a Field and carries presentation only —
 // the width, the alignment, and where a cell paints something other than its formatted text.
-const GRID_COLUMNS: readonly GridColumnInput<PlannerEntryProps>[] = [
+const GRID_COLUMNS: readonly GridColumnInput[] = [
+  // `ref` is a computed Field that the props type does not name, so a plain column object shows it.
   { field: 'ref', align: 'center', width: 44 },
-  { field: 'name', header: 'Task', width: 210, columnRenderer: taskCell },
-  { field: 'owner', width: 48, columnRenderer: ownerCell },
-  { field: 'duration', header: 'Dur', align: 'end', width: 52, columnRenderer: durationCell },
-  { field: 'start', align: 'end', width: 72, columnRenderer: startCell },
-  { field: 'end', header: 'Finish', align: 'end', width: 72, columnRenderer: finishCell },
+  columnHelper.column('name', { header: 'Task', width: 210, columnRenderer: taskCell }),
+  columnHelper.column('owner', { width: 48, columnRenderer: ownerCell }),
+  columnHelper.column('duration', { header: 'Dur', align: 'end', width: 52, columnRenderer: durationCell }),
+  columnHelper.column('start', { align: 'end', width: 72, columnRenderer: startCell }),
+  columnHelper.column('end', { header: 'Finish', align: 'end', width: 72, columnRenderer: finishCell }),
   // The Done cell is core's meter. This page does not re-implement it.
-  { field: 'progress', header: 'Done', width: 82, columnRenderer: meter() },
+  columnHelper.column('progress', { header: 'Done', width: 82, columnRenderer: meter() }),
 ];
 
 // ---- Cells the design paints as something other than text ------------------------------------

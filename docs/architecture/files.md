@@ -210,6 +210,7 @@ where they do something beyond re-export.
 | `api/gantt.ts` | `Gantt, GanttOptions` | The public `Gantt` class. Constructs one `GanttShell` and forwards; exposes the live properties (preset, range, gridColumns, rowSource, collapsed, selection, plugins, commands, …). |
 | `api/plugin.ts` | `ChromePluginOf, DataPluginOf, PluginOf` | The public Gantt-plugin contract, generic over `TGantt` so this file never imports `Gantt` (no cycle). |
 | `api/define-plugin.ts` | `definePlugin()` | The one door a plugin author writes a plugin through. It returns the object it is given; what it adds is the type, so a mistake in the `data` half is a red squiggle in the editor, not a failure at mount. |
+| `api/grid-column-helper.ts` | `createGridColumnHelper()` | The typed way to write a Grid column. `column(field, options)` returns the plain column object; what it adds is the type, so a column renderer reads `fieldValue` as the key's own value. |
 | `api/plugin-context.ts` | `PluginContextOf` | What a plugin's `view` half receives. Generic over the Gantt and Dataset types so `api/` has no import ring; `api/gantt.ts` binds the arguments once as `PluginContext`, which is the name a plugin author writes. |
 | `api/dataset-plugin.ts` | `DatasetPluginContextOf, mergeEntryEdits(), moveEntryTo()` | The public Dataset-plugin contract, plus the one legal merge of two extenders' writes. |
 | `api/command.ts` | `CommandOf, CommandContextOf, BuiltInCommandId` | The public command and keybinding contract, generic over `TGantt`. |
