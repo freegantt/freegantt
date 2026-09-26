@@ -329,6 +329,7 @@ export type {
 export type {
   EntryInput,
   FlatEntryInput,
+  EntryDelta,
   InstantInput,
   TimeSpanInput,
   DateOnlyEndRule,
