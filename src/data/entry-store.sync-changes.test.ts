@@ -174,6 +174,33 @@ describe('entries.syncChanges', () => {
     expect(() => state.entries.syncChanges({ upsert: [{ id: 'a', siblingIndex: 99 }] })).toThrow(
       SiblingIndexOutOfRangeError,
     );
+
+    // A known row's siblingIndex moves it, the same as update() — 'c' names index 0 among the roots.
+    state.entries.syncChanges({ upsert: [{ id: 'c', siblingIndex: 0 }] });
+    expect(state.entries.all.map((e) => e.id)).toEqual([
+      entryId('c'),
+      entryId('first'),
+      entryId('a'),
+      entryId('b'),
+      entryId('p2'),
+      entryId('new'),
+    ]);
+
+    // Two known rows in the same group each name a siblingIndex: they apply in upsert order.
+    state.entries.syncChanges({
+      upsert: [
+        { id: 'b', siblingIndex: 0 },
+        { id: 'a', siblingIndex: 0 },
+      ],
+    });
+    expect(state.entries.all.map((e) => e.id)).toEqual([
+      entryId('a'),
+      entryId('b'),
+      entryId('c'),
+      entryId('first'),
+      entryId('p2'),
+      entryId('new'),
+    ]);
   });
 
   it('an empty delta and a delta equal to current values commit nothing, and keep entries.all identity', () => {
