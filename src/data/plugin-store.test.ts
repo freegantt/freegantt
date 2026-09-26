@@ -2,8 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { PluginStores, pluginStoreName } from './plugin-store.js';
 import { fieldRowsOf } from './change-set.js';
-import { MutationDuringExtensionHookError, entryId } from '../model/index.js';
-import type { ChangeSet, DatasetEventMap, EntryId, PluginId, PluginStoreName } from '../model/index.js';
+import { EntryNotFoundError, MutationDuringExtensionHookError, entryId } from '../model/index.js';
+import type {
+  ChangeSet,
+  DatasetEventMap,
+  EntryId,
+  PluginId,
+  PluginStore,
+  PluginStoreName,
+} from '../model/index.js';
 
 const LOCK: PluginId = 'demo.lock';
 const LOCK_STORE = pluginStoreName(LOCK);
@@ -224,7 +231,10 @@ describe('a plugin-store write on the commit path (D-S5-24)', () => {
   it('removes an entry row from a second store, even when a staged row in another store spells the same characters', () => {
     // `plugin:` + `tt1` and `plugin:t` + `t1` join to the same string. `pendingRows` must tell these
     // two stores apart by structure, not by a concatenated key (R4).
-    const state = newState();
+    const state = new DatasetState({
+      entries: [...twoEntries, { id: 'tt1', name: 'Other' }],
+      timeZone: 'UTC',
+    });
     const short = state.pluginStores.reserve<LockRow>('');
     const long = state.pluginStores.reserve<LockRow>('t');
     long.set(entryId('t1'), { locked: true });
@@ -263,6 +273,185 @@ describe('a plugin-store write on the commit path (D-S5-24)', () => {
 
     expect(() => lock.set(entryId('t1'), { locked: true })).toThrow();
     expect(lock.get(entryId('t1'))).toBeUndefined();
+  });
+});
+
+describe('a plugin-store write for an id with no entry', () => {
+  it('throws EntryNotFoundError that names store.set, and commits nothing', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const committed = recordChangeSets(state);
+
+    expect(() => lock.set('ghost', { locked: true })).toThrow(EntryNotFoundError);
+    expect(() => lock.set('ghost', { locked: true })).toThrow(/store\.set/);
+
+    expect(committed).toHaveLength(0);
+    expect(state.canUndo).toBe(false);
+  });
+
+  it('throws for an entry the same transaction removed, and rolls the whole transaction back', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const committed = recordChangeSets(state);
+
+    expect(() =>
+      state.transaction(() => {
+        state.entries.remove('t1');
+        lock.set('t1', { locked: true });
+      }),
+    ).toThrow(EntryNotFoundError);
+
+    expect(state.entries.get('t1')).toBeDefined();
+    expect(lock.get('t1')).toBeUndefined();
+    expect(committed).toHaveLength(0);
+  });
+
+  it('lands for an entry the same transaction added', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+
+    state.transaction(() => {
+      state.entries.add({ id: 't3', name: 'Test', start: '2026-09-15', end: '2026-09-22' });
+      lock.set('t3', { locked: true });
+    });
+
+    expect(lock.get('t3')).toEqual({ locked: true });
+  });
+
+  it('store.remove for an id with no entry writes nothing and does not throw', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const committed = recordChangeSets(state);
+
+    expect(() => lock.remove('ghost')).not.toThrow();
+    expect(committed).toHaveLength(0);
+  });
+});
+
+describe('an entry removal and a store write in one transaction', () => {
+  const reborn = { id: 't1', name: 'Design (reborn)', start: '2026-09-01', end: '2026-09-08' };
+
+  interface RoundTrip {
+    readonly name: string;
+    readonly before?: LockRow;
+    readonly body: (state: DatasetState, lock: PluginStore<LockRow>) => void;
+  }
+
+  const roundTrips: RoundTrip[] = [
+    {
+      name: 'a refused write after the entry removal',
+      before: { locked: true },
+      body: (state, lock) => {
+        state.entries.remove('t1');
+        expect(() => lock.set('t1', { locked: true })).toThrow(EntryNotFoundError);
+      },
+    },
+    {
+      name: 'a refused write for an id with no entry',
+      body: (state, lock) => {
+        state.entries.update('t2', { name: 'Build v2' });
+        expect(() => lock.set('ghost', { locked: true })).toThrow(EntryNotFoundError);
+      },
+    },
+    {
+      name: 'a replace, then a write for the fresh entry',
+      before: { locked: true },
+      body: (state, lock) => {
+        state.entries.remove('t1');
+        state.entries.add(reborn);
+        lock.set('t1', { locked: true });
+      },
+    },
+    {
+      name: 'a write, then the entry removal, with no earlier row',
+      body: (state, lock) => {
+        lock.set('t1', { locked: true });
+        state.entries.remove('t1');
+      },
+    },
+    {
+      name: 'a write, then the entry removal, over an earlier row',
+      before: { locked: true },
+      body: (state, lock) => {
+        lock.set('t1', { locked: true });
+        state.entries.remove('t1');
+      },
+    },
+    {
+      name: 'a write, then a replace',
+      before: { locked: true },
+      body: (state, lock) => {
+        lock.set('t1', { locked: true });
+        state.entries.remove('t1');
+        state.entries.add(reborn);
+      },
+    },
+  ];
+
+  it('leaves no row for an entry the same transaction removes', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const committed = recordChangeSets(state);
+
+    state.transaction(() => {
+      lock.set('t1', { locked: true });
+      state.entries.remove('t1');
+    });
+
+    expect(lock.get('t1')).toBeUndefined();
+    expect(storeRowsOf(committed[0]!)).toEqual([]);
+  });
+
+  it('a write before a replace does not reach the fresh entry', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    const original: LockRow = { locked: true };
+    lock.set('t1', original);
+    const committed = recordChangeSets(state);
+
+    state.transaction(() => {
+      lock.set('t1', { locked: true });
+      state.entries.remove('t1');
+      state.entries.add(reborn);
+    });
+
+    expect(lock.get('t1')).toBeUndefined();
+    expect(storeRowsOf(committed[0]!)).toEqual([
+      { store: LOCK_STORE, id: entryId('t1'), from: original, to: undefined },
+    ]);
+  });
+
+  it('reads no row for an entry the transaction removed', () => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    lock.set('t1', { locked: true });
+
+    state.transaction(() => {
+      state.entries.remove('t1');
+      expect(lock.get('t1')).toBeUndefined();
+      expect(lock.all.has(entryId('t1'))).toBe(false);
+    });
+  });
+
+  it.each(roundTrips)('commit, undo and redo land the same store rows: $name', ({ before, body }) => {
+    const state = newState();
+    const lock = state.pluginStores.reserve<LockRow>(LOCK);
+    if (before) lock.set('t1', before);
+    const rowsBefore = [...lock.all];
+    const committed = recordChangeSets(state);
+
+    state.transaction(() => body(state, lock));
+
+    const rowsAfterCommit = [...lock.all];
+    for (const id of lock.all.keys()) expect(state.entries.get(id)).toBeDefined();
+
+    state.undo();
+    expect([...lock.all]).toEqual(rowsBefore);
+
+    state.redo();
+    expect([...lock.all]).toEqual(rowsAfterCommit);
+
+    expect(storeRowsOf(committed.at(-1)!)).toEqual(storeRowsOf(committed[0]!));
   });
 });
 

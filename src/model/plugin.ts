@@ -21,12 +21,18 @@ export interface PluginStoreView<T extends object> {
 }
 
 /**
- * A plugin's own per-entry data, namespaced by that plugin's id (D-S5-24). It is a real store, not a
- * side map: a write joins the open transaction, lands in the same `ChangeSet` as the entry edit, and
- * one undo step covers both (I7). A write with no transaction open wraps itself in one, the rule
- * `entries.add` already follows.
+ * A plugin's own per-entry data, namespaced by that plugin's id. It is a real store, not a side map:
+ * a write joins the open transaction, lands in the same `ChangeSet` as the entry edit, and one undo
+ * step covers both. A write with no transaction open wraps itself in one, the rule `entries.add`
+ * already follows.
+ *
+ * A row belongs to one Entry. Removing the Entry removes its rows in the same `ChangeSet`, and an
+ * undo brings both back.
  */
 export interface PluginStore<T extends object> extends PluginStoreView<T> {
+  /** Writes `id`'s row. Throws `EntryNotFoundError` for an id with no Entry, as the open transaction
+   *  leaves it — the rule `entries.update` follows. */
   set(id: EntryId | string, value: T): void;
+  /** Removes `id`'s row. An id with no row writes nothing. */
   remove(id: EntryId | string): void;
 }

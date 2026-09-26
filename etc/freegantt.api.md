@@ -1840,9 +1840,7 @@ export class PluginSetupError extends FreeGanttError {
 
 // @public
 export interface PluginStore<T extends object> extends PluginStoreView<T> {
-    // (undocumented)
     remove(id: EntryId | string): void;
-    // (undocumented)
     set(id: EntryId | string, value: T): void;
 }
 
