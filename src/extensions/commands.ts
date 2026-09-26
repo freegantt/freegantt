@@ -1,4 +1,4 @@
-// extensions/ — the command registry (S5.2, D-S5-6). Generic over its own `TGantt`, for the same
+// extensions/ — the command registry. Generic over its own `TGantt`, for the same
 // reason `PluginRuntime` is (`plugin-runtime.ts`'s file header): `view/gantt-shell.ts` builds one
 // with `TGantt = unknown` — `view/` may not import `api/command.ts` (plans/01 §1) — and `api/gantt.ts`
 // alone binds it to the real `Gantt`. `view/` reaches the bound types (`Command`, `CommandContext`,
@@ -8,7 +8,7 @@ import { UnknownCommandError } from '../model/index.js';
 import type { Disposer } from '../model/index.js';
 // One named leaf, not a `layout/` edge (`.dependency-cruiser.cjs`, `extensions-public-only`): the
 // registration mechanism every `register*` seam shares (#154, #155). A command id keyed to a stack
-// is what makes a plugin's override of a core command undo itself on uninstall (D-S5-7).
+// is what makes a plugin's override of a core command undo itself on uninstall.
 import { createRegistrationTable } from '../layout/registration-table.js';
 import { convenienceCommandIds } from '../api/command.js';
 import type {
@@ -35,7 +35,7 @@ export type CommandContext<TGantt = unknown> = CommandContextOf<TGantt>;
 export type CommandTarget = CommandTargetType;
 export type { CommandRegistryOf };
 
-/** D-S5-6's registry. Built once per `GanttShell` (or per test) with a live context builder — called
+/** The registry. Built once per `GanttShell` (or per test) with a live context builder — called
  *  fresh on every `run()`, so a command always sees the invocation's current selection/target, never
  *  a snapshot from registration time. */
 export class CommandRegistry<TGantt = unknown> implements CommandRegistryOf<TGantt> {
@@ -59,14 +59,14 @@ export class CommandRegistry<TGantt = unknown> implements CommandRegistryOf<TGan
   }
 
   /** `extensions/keymap.ts`'s resolver peeks a binding's target command, to check the command's own
-   *  `when` before committing to that binding (D-S5-7), without running it. Not part of the public
+   *  `when` before committing to that binding, without running it. Not part of the public
    *  `CommandRegistryOf` contract — a plugin or app author only ever `register`/`run`/`available`. */
   find(id: string): CommandOf<TGantt> | undefined {
     return this.#commands.get(id);
   }
 
   /** `UnknownCommandError` for an id nothing owns. A registered command whose `when` declines is a
-   *  silent no-op — the keymap resolver already checked `when` before choosing this id (D-S5-7), and
+   *  silent no-op — the keymap resolver already checked `when` before choosing this id, and
    *  a direct `gantt.commands.run(id)` call on a currently-unavailable command is not a mistake worth
    *  throwing over, the same posture a disabled menu item takes. */
   run(id: string): void {

@@ -1,5 +1,5 @@
-// extensions/features/ — the context menu's own vocabulary and `ElementDescription` builder (S5.5,
-// D-S5-14). Pure: no DOM mounting, no plugin context, so it stays testable with plain data in and
+// extensions/features/ — the context menu's own vocabulary and `ElementDescription` builder.
+// Pure: no DOM mounting, no plugin context, so it stays testable with plain data in and
 // plain data out. Kept separate from `context-menu.ts` so that file stays about behaviour
 // (open/close/navigate), not menu shape or label-resolution rules.
 
@@ -42,7 +42,7 @@ function isSeparator(entry: MenuEntry): entry is { separator: true } {
   return 'separator' in entry;
 }
 
-/** D-S5-14: menu items come from commands, filtered by `when`. `defaults` embeds each available
+/** Menu items come from commands, filtered by `when`. `defaults` embeds each available
  *  command's own label, so `items()` can pass them through unchanged. `context-menu.ts` builds
  *  `defaults` from `commands.available(ctx)`. A caller-supplied `MenuItem` with no `label` still
  *  resolves to the command's own. A `MenuItem` naming a command that is not currently available
@@ -70,7 +70,7 @@ export function resolveMenuEntries(
  *  lands on the first one with no extra wiring.
  *
  *  `data-command` is the only channel `context-menu.ts` needs back. A delegated `click` listener
- *  reads it off `event.target.closest('.fg-menu-item')`. D-S5-10: an `ElementDescription` never
+ *  reads it off `event.target.closest('.fg-menu-item')`. An `ElementDescription` never
  *  carries event handlers. So a container-level listener plus a data attribute is the read path
  *  every interactive `ElementDescription` in this codebase already uses, `render/dom/index.ts`'s own
  *  `data-bar-id` for example.

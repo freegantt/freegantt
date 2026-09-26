@@ -1,5 +1,5 @@
 // extensions/features/ — the `timeShading()` built-in (#404, closes #97). An ordinary `ChromePlugin`,
-// confined by `extensions-public-only` (D-S5-5) to `api/`/`model/` imports. Every import below names
+// confined by `extensions-public-only` to `api/`/`model/` imports. Every import below names
 // its own narrow source file, never the `api/index.ts` barrel — that barrel re-exports `timeShading`
 // itself, so a feature file importing it back would close a cycle (no-circular). Same pattern
 // `tooltips.ts` sets.
@@ -115,7 +115,7 @@ function assertNoEmptyCoversList(rules: readonly ShadingRule[]): void {
  * ```
  *
  * Reconfiguring the shaded set is one assignment — `gantt.plugins = [timeShading(next)]` replaces
- * the occupant of this id and paints the new rules (#404 review F4).
+ * the occupant of this id and paints the new rules (#404 review).
  *
  * A predicate rule that closes over changing data (a consumer's own `WorkSchedule`) does not repaint
  * when that object mutates in place: the decoration runner memoizes on the window, and mutating the

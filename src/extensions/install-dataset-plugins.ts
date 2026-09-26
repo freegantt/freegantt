@@ -1,4 +1,4 @@
-// extensions/ — installs one Dataset's plugin list (D-S5-24, D-S5-31, ADR 0019). Generic over its own
+// extensions/ — installs one Dataset's plugin list (ADR 0019). Generic over its own
 // context type for the reason `PluginRuntime` is: `api/dataset.ts` builds the real, api-level
 // `DatasetPluginContext` and is itself what imports this file, so naming the concrete context here
 // would close an import cycle (api -> extensions -> api). `InstallablePlugin<TContext>` stays
@@ -21,7 +21,7 @@ import { assertNoDuplicateIds, resolveSetupOrder } from './plugin-order.js';
 
 /** What `installDatasetPlugins` installs — structurally the public `Plugin`, kept generic here
  *  (see file header). A plugin's own `fields`/`fieldTypes`/`aggregators` are not members here: they
- *  are read before this file runs a single `data()` (#496 grill round 3, R1) —
+ *  are read before this file runs a single `data()` (#496 grill round 3) —
  *  `pluginFieldDeclarationsOf` (`api/dataset.ts`) reads them straight off `PluginOf`, the type
  *  `Dataset`'s own plugin list already carries, before this file's `readonly InstallablePlugin[]`
  *  parameter is built. Naming them again here would be a second, unchecked copy of `DataPluginOf`'s
@@ -66,7 +66,7 @@ export function installDatasetPlugins<TContext>(
     try {
       entry.dispose();
     } catch (cause) {
-      // S5.12, D-S5-41: the report always goes out; the `console.error` behind it fires only when
+      // The report always goes out; the `console.error` behind it fires only when
       // nothing is subscribed to `error`, so an unsubscribed consumer keeps today's output.
       const message = `dataset plugin "${entry.id}"'s disposer threw`;
       raiseError({ code: 'disposer-failed', message, severity: 'error', by: entry.id, cause }, () =>

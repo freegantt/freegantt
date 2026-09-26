@@ -1,15 +1,15 @@
-// extensions/features/ — the default `dateInput` seam (S5.8, D-S5-20). `plans/04` §1 budgets two
+// extensions/features/ — the default `dateInput` seam. `plans/04` §1 budgets two
 // runtime dependencies and a picker is not one of them, so this wraps the platform's own
-// `<input type="date">`. `extensions/` may import only `api/` and `model/` (D-S5-5). `time/` is
+// `<input type="date">`. `extensions/` may import only `api/` and `model/`. `time/` is
 // sealed from here the same way it is from a third-party plugin, so this file does no zone math of
 // its own.
 //
 // `createDefaultDateInput` instead takes a small structural subset of `time/`'s `ZonedTime`
-// (D-S5-16) as a plain argument. A real `ZonedTime` already satisfies it. So `inlineEditing()` can
+// as a plain argument. A real `ZonedTime` already satisfies it. So `inlineEditing()` can
 // pass `ctx.dataset.time` straight through, with no import of `ZonedTime`'s own type.
 //
 // The *public* `DateInputFactory` a consumer writes stays narrower still — `{ zone, locale }` only,
-// D-S5-20's own signature. A consumer's own factory owns its own zone math, outside `src/`'s I10
+// A consumer's own factory owns its own zone math, outside `src/`'s I10
 // scope.
 
 import type { Disposer, Instant, PlainParts } from '../../model/index.js';
@@ -51,7 +51,7 @@ function pad(value: number, width: number): string {
  *  stored value by the time this control opens. That is `inlineEditing()`'s job, not this one's.
  *
  *  Callable only for an Instant already known to fall at local midnight. `inlineEditing()` checks
- *  that before it ever calls `write` (issue #137 F11). So this control assumes a valid date-only
+ *  that before it ever calls `write` (issue #137). So this control assumes a valid date-only
  *  value throughout. */
 export function createDefaultDateInput(time: ZoneDateMath): DateInput {
   const input = document.createElement('input');
