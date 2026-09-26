@@ -13,6 +13,9 @@ You are the coordinator. You plan, dispatch, rule, log and merge. You do not wri
 - The owner allows: merge each PR after its code review findings are fixed and CI is green. Mark drafts ready.
 - The owner does not allow: squash, amend, force-push, git stash, recurring timers, or deleting anything you did not create.
 - A decision you are unsure of: decide, mark it ⚠️ in the log, and keep going. Stop only for public API changes or conflicts with an ADR's open question. Ask about those at once, not at the end.
+- Ask the owner which ocr mode to use before the first review, in the scope-check batch. Log the answer. It holds for the whole queue:
+  1. Is ocr delegated or not delegated?
+  2. If not delegated: does it run in this session, or in a new Cursor session?
 
 ## Agents
 
@@ -51,7 +54,16 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
    - which steps to do, and when to STOP (a design question, a blocker, or the budget).
 7. **Rule fast.** When an implementer stops with a question, decide in the same turn if you can. Log it. Send the ruling with the reason and the exact edit.
 8. **Review.**
-   - Default: one `pnpm ocr-review` at the end, in the background. It reports findings as it runs; fix each one as it lands. A run of 10–30+ minutes is normal. The script kills a run only after 15 minutes with no progress. Resume a PARTIAL run with `pnpm ocr-review --resume <id>`.
+   - Default: one ocr run at the end, in the mode the owner chose (Authority). Fix each finding as it lands. A run of 10–30+ minutes is normal.
+   - **Delegated.** Orca starts a Cursor agent in the issue's worktree. The Cursor agent runs ocr in delegate mode and does the review itself. Use model `cursor-grok-4.6-high` (Grok 4.6, high effort). Never use a `-fast` model.
+     ```bash
+     orca terminal create --worktree id:<repoId>::<worktreePath> --title "ocr #<n>" \
+       --command "cursor-agent -p --force --model cursor-grok-4.6-high \"\$(cat <scratchpad>/ocr-<n>-prompt.md)\"" --json
+     orca terminal wait --terminal <handle> --for exit --timeout-ms 2400000 --json   # in the background
+     ```
+     The prompt tells the agent to run `ocr delegate preview --from origin/main --to HEAD`, then `ocr delegate rule <files>`. It reviews each file against its rules. It writes the findings to `<scratchpad>/ocr-<n>-findings.md`: one finding each, with `file:line`, the rule, and the fix. It changes no file in the repo.
+   - **Not delegated, this session.** Run `pnpm ocr-review` in the background. It reports findings as it runs. The script kills a run only after 15 minutes with no progress. Resume a PARTIAL run with `pnpm ocr-review --resume <id>`.
+   - **Not delegated, new Cursor session.** Start the Cursor agent with the same `orca terminal create` command and model as above. Its prompt tells it to run `pnpm ocr-review` and copy the findings to `<scratchpad>/ocr-<n>-findings.md`.
    - A `reviewer` pass per batch of 2–4 commits only for risky core changes (data model, undo, public API).
 9. **PR.**
    1. Merge `origin/main` in (a merge commit).
