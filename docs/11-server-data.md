@@ -1,6 +1,6 @@
-# Server data — polling with `entries.sync()`
+# Server data — polling with `entries.syncAll()`
 
-**Scope:** `dataset.entries.sync(rows)` for app authors who poll a server and want the user's own
+**Scope:** `dataset.entries.syncAll(rows)` for app authors who poll a server and want the user's own
 edits to survive the poll. See [`docs/05-consumer-api.md`](05-consumer-api.md) for the rest of the
 consumer surface, and [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) for how a plugin
 should read a `'sync'`-origin `change`.
@@ -14,7 +14,7 @@ Every example below typechecks against the built package types on each CI run
 row in `rows`, with no diff. It clears History (`canUndo`/`canRedo` both read `false` right after) —
 the same posture a desktop app takes opening a file. Use it once, at startup.
 
-`entries.sync(rows)` is a poll. It matches the live Dataset to `rows` by diffing: an id `rows` omits
+`entries.syncAll(rows)` is a poll. It matches the live Dataset to `rows` by diffing: an id `rows` omits
 is removed, a key a kept entry's input omits is cleared, and a Field whose value did not change
 writes no row. Call it every time your poll returns a fresh list.
 
@@ -24,7 +24,7 @@ when the server changed it. A new entry still gets it, because a sync adds a new
 
 ## A sync records no undo step
 
-Unlike a user edit, `sync` commits its one `ChangeSet` with `origin: 'sync'`, and the undo History
+Unlike a user edit, `syncAll` commits its one `ChangeSet` with `origin: 'sync'`, and the undo History
 does not record it. It does not clear Redo either. A user's own earlier edits stay undoable across
 any number of polls:
 
@@ -36,7 +36,7 @@ declare function fetchRowsFromServer(): import('freegantt').FlatEntryInput[];
 ```ts
 dataset.entries.update('t1', { name: 'Renamed by me' }); // origin 'user', canUndo is now true
 
-dataset.entries.sync(fetchRowsFromServer()); // origin 'sync' — records no step
+dataset.entries.syncAll(fetchRowsFromServer()); // origin 'sync' — records no step
 
 dataset.canUndo; // still true — the poll did not touch it
 ```
@@ -53,7 +53,7 @@ server's value for that whole entry:
 ```ts
 dataset.entries.update('t1', { name: 'Renamed locally' }); // the server has not seen this yet
 
-dataset.entries.sync(fetchRowsFromServer()); // the server sends its own name for 't1' — it wins
+dataset.entries.syncAll(fetchRowsFromServer()); // the server sends its own name for 't1' — it wins
 
 dataset.undo(); // 't1' keeps the server's name; the step has nothing left to write
 ```
@@ -141,7 +141,7 @@ brings its plugin store rows back with it.
 
 ## A note on locks
 
-- A `'never'`-locked Field is written anyway by `load` and `sync` — construction-time and poll
+- A `'never'`-locked Field is written anyway by `load` and `syncAll` — construction-time and poll
   writes both ignore a lock the same way, since neither runs the edit pipeline a locked cell guards.
 - A sync can set a `locked` Field itself. A consumer's own `beforeChange` handler can veto an edit
   to a locked entry, and that veto can catch an `'undo'` or a `'redo'` changeset too — a lock set
@@ -157,12 +157,12 @@ declare function startPollTimer(callback: () => void): { stop(): void };
 
 function startPolling(dataset: import('freegantt').Dataset) {
   return startPollTimer(() => {
-    dataset.entries.sync(fetchRowsFromServer());
+    dataset.entries.syncAll(fetchRowsFromServer());
   });
 }
 ```
 
-Stop the timer when the Gantt unmounts. Call `sync` as often as your poll interval allows. The user's
+Stop the timer when the Gantt unmounts. Call `syncAll` as often as your poll interval allows. The user's
 own edits stay undoable across every poll.
 
 A sync does not know which local edits the server has not saved yet. A poll that returns before the
@@ -170,10 +170,10 @@ server saves an edit writes the server's older value over it, under the conflict
 an unsaved edit on screen, do one of these:
 
 - Skip the poll while a save is in flight.
-- Copy the unsaved value into that entry's row in `rows` before you call `sync`.
+- Copy the unsaved value into that entry's row in `rows` before you call `syncAll`.
 
 ## Related
 
 - [Consumer API index](05-consumer-api.md) — undo, redo, and the `change` event.
 - [Plugin authoring guide](06-plugin-authoring.md) — reacting to a sync from inside a plugin.
-- [API reference](../etc/freegantt.api.md) — generated `EntryStore.sync`, `EntryStore.load`.
+- [API reference](../etc/freegantt.api.md) — generated `EntryStore.syncAll`, `EntryStore.load`.

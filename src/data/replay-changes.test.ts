@@ -755,7 +755,7 @@ describe('replay renumbers the sibling groups it touches, dense from 0', () => {
     state.entries.remove('a');
 
     // A foreign reorder swaps b and c ahead of a's undo landing back in the group.
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'p', start: 0, end: 1 },
       { id: 'c', parentId: 'p', start: 0, end: 1 },
       { id: 'b', parentId: 'p', start: 0, end: 1 },
@@ -799,7 +799,7 @@ describe('replay re-rolls a parent whose other child changed since the step', ()
     expect(state.entries.get('p')!.start).toBe(5);
 
     // A foreign write moves c2 earlier than c1's own edit did — a date the user's step never saw.
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'p' },
       { id: 'c1', parentId: 'p', start: 5, end: 20 },
       { id: 'c2', parentId: 'p', start: 1, end: 30 },
@@ -852,7 +852,7 @@ describe('replay re-rolls a parent whose other child changed since the step', ()
 
     // A foreign write moves c1 and c2 so that p keeps the start the user's step gave it. c1 is now a
     // foreign write; p still matches the value the step recorded, so its own undo row passes alone.
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'p' },
       { id: 'c1', parentId: 'p', start: 7, end: 20 },
       { id: 'c2', parentId: 'p', start: 5, end: 30 },

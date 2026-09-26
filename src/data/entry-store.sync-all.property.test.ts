@@ -1,7 +1,7 @@
-// data/ — entries.sync() (#517), the contract property: for any valid target list, sync(list) lands
-// the same data load(list) would, undo hands the exact prior state back, and syncing the current
-// state's own toInput() list is a no-op. Beside entry-batch-changes.test.ts's diff property and
-// entry-store.load.property.test.ts's shuffle property, at the entries.sync() call site.
+// data/ — entries.syncAll() (#517), the contract property: for any valid target list, syncAll(list)
+// lands the same data load(list) would, undo hands the exact prior state back, and syncing the
+// current state's own toInput() list is a no-op. Beside entry-batch-changes.test.ts's diff property
+// and entry-store.load.property.test.ts's shuffle property, at the entries.syncAll() call site.
 
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
@@ -132,14 +132,14 @@ function expectSameShape(a: DatasetState, b: DatasetState): void {
   }
 }
 
-describe('entries.sync, the contract properties (#517)', () => {
+describe('entries.syncAll, the contract properties (#517)', () => {
   it('leaves the same ids, Field values (siblingIndex included) and tree as load(list), from the same start', () => {
     fc.assert(
       fc.property(targetArbitrary, (params) => {
         const target = buildTarget(params);
 
         const synced = seededDataset();
-        synced.entries.sync(target);
+        synced.entries.syncAll(target);
 
         const loaded = seededDataset();
         loaded.entries.load(target);
@@ -161,7 +161,7 @@ describe('entries.sync, the contract properties (#517)', () => {
         const canUndoBefore = state.canUndo;
         const canRedoBefore = state.canRedo;
 
-        state.entries.sync(target);
+        state.entries.syncAll(target);
 
         // A removed id's store row goes right away, checked here so a broken removal (the row
         // silently kept) cannot pass by never having moved at all.
@@ -182,7 +182,7 @@ describe('entries.sync, the contract properties (#517)', () => {
       fc.property(targetArbitrary, (params) => {
         const target = buildTarget(params);
         const state = seededDataset();
-        state.entries.sync(target);
+        state.entries.syncAll(target);
 
         const allBefore = state.entries.all;
         let fired = false;
@@ -193,7 +193,7 @@ describe('entries.sync, the contract properties (#517)', () => {
           fired = true;
         });
 
-        state.entries.sync(state.entries.all.map((entry) => entry.toInput()));
+        state.entries.syncAll(state.entries.all.map((entry) => entry.toInput()));
 
         expect(fired).toBe(false);
         expect(state.entries.all).toBe(allBefore);

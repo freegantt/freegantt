@@ -93,7 +93,7 @@ export interface DatasetOptions<TProps = unknown> {
    *  is. */
   measureDuration?: DurationMeasure;
   /** Undo/redo History. `{ capacity: 200 }` keeps 200 undoable transactions; defaults to 100
-   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). `entries.sync()` records no step of its own
+   * (`plans/s2-data-core/s2.5-undo-redo.md` §1). `entries.syncAll()` records no step of its own
    * (`docs/11-server-data.md`), so a frequent poll never eats into this headroom.
    *
    * `false` builds no History: the app owns undo and writes each step back with `replay()`.
@@ -317,7 +317,7 @@ export class Dataset<TProps = unknown> {
 
   /** Batches `body`'s mutations into one changeset (D-S2-8). Nested calls join the open transaction.
    *  `'user'` is the only origin a call to `transaction()` can produce — `entries.load()` and
-   *  `entries.sync()` refuse to run inside one, since each is always its own transaction. */
+   *  `entries.syncAll()` refuse to run inside one, since each is always its own transaction. */
   transaction<T>(body: () => T): T {
     return this.#state.transaction(body);
   }

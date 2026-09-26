@@ -102,14 +102,14 @@ describe.each([
     name: 'sync dropped a siblingIndex',
     code: 'sibling-index-dropped',
     run: (state: DatasetState) => {
-      state.entries.sync([{ ...seed[0]!, name: 'server' }, seed[1]!, { ...seed[2]!, siblingIndex: 9 }]);
+      state.entries.syncAll([{ ...seed[0]!, name: 'server' }, seed[1]!, { ...seed[2]!, siblingIndex: 9 }]);
     },
   },
   {
     name: 'sync dropped a derived value',
     code: 'derived-values-dropped',
     run: (state: DatasetState) => {
-      state.entries.sync([
+      state.entries.syncAll([
         ...seed,
         { id: 'q', name: 'q', start: 0, end: 1 },
         { id: 'k', parentId: 'q', name: 'k' },
@@ -213,7 +213,7 @@ describe('a report about a commit', () => {
       state.entries.update('b', { name: 'from the handler' });
     });
 
-    state.entries.sync([seed[0]!, { ...seed[1]!, name: 'server', siblingIndex: 9 }, seed[2]!]);
+    state.entries.syncAll([seed[0]!, { ...seed[1]!, name: 'server', siblingIndex: 9 }, seed[2]!]);
 
     const nameRowsOf = (changeSet: ChangeSet) => fieldRowsOf(changeSet).filter((row) => row.field === 'name');
     expect(nameRowsOf(changes[0]!)).toEqual([

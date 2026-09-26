@@ -16,7 +16,7 @@ export type { CoreFieldKey, FieldKey } from './field.js';
 export type PluginStoreName = `plugin:${PluginId}`;
 export type StoreName = 'entries' | PluginStoreName;
 /** `'load'` is `entries.load()` (#496): a full fresh start that clears History, never merged with
- *  `'user'`'s undo record. `'sync'` is `entries.sync()` (#517): a diffing match-the-list write that
+ *  `'user'`'s undo record. `'sync'` is `entries.syncAll()` (#517): a diffing match-the-list write that
  *  records no undo step and erases no Redo — a server refresh is not the user's own edit, so
  *  History stays local. `'engine'` arrives with its own producer (D-S2-11).
  *  `'load'` was first reserved for the withdrawn `apply` door's skipped-write meaning — a different

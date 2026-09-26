@@ -465,6 +465,6 @@ importBtn.addEventListener('click', () => {
 const syncBtn = document.querySelector<HTMLButtonElement>('#sync-btn')!;
 syncBtn.addEventListener('click', () => {
   const rows = server.fetchRows();
-  const landed = attemptMutation(() => dataset.entries.sync(rows));
+  const landed = attemptMutation(() => dataset.entries.syncAll(rows));
   logLine(landed ? 'document · synced from the server' : 'document · sync refused · server list not applied');
 });

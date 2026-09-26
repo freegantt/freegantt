@@ -1326,7 +1326,9 @@ describe("harness's lockEntries() lets an undo and a redo through on a locked en
     dataset.entries.update('a', { name: 'edited' });
     // A sync records no step of its own (#517), so the undo below reverses the rename above, on an
     // entry the sync's own list has since locked.
-    dataset.entries.sync([{ id: 'a', name: 'edited', start: '2026-09-01', end: '2026-09-08', locked: true }]);
+    dataset.entries.syncAll([
+      { id: 'a', name: 'edited', start: '2026-09-01', end: '2026-09-08', locked: true },
+    ]);
 
     expect(() => dataset.undo()).not.toThrow();
     expect(dataset.entries.get('a')?.read('name')).toBe('Design');

@@ -420,7 +420,7 @@ steps aside for a load for exactly this reason.
 
 ### Reacting to a sync
 
-`entries.sync()` also commits its whole change in one step, `origin: 'sync'` — but unlike
+`entries.syncAll()` also commits its whole change in one step, `origin: 'sync'` — but unlike
 a load, a sync carries only the rows that changed: entry Field rows for an added, removed
 or edited entry, and a plugin-store row only for a removed id. A plugin reads a sync the
 same `change` subscription reads a load, and does not need a second one. It reads every

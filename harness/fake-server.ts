@@ -1,6 +1,6 @@
 // Stands in for a server's poll endpoint (#517): each call to `fetchRows()` returns the next
-// scripted revision of the whole entry list — the shape `dataset.entries.sync()` takes. It only
-// returns rows. It runs no diff and holds no order rule of its own; `sync()` does both.
+// scripted revision of the whole entry list — the shape `dataset.entries.syncAll()` takes. It only
+// returns rows. It runs no diff and holds no order rule of its own; `syncAll()` does both.
 
 import { addMs, instant, now, MS } from 'freegantt';
 import type { EntryInput } from 'freegantt';

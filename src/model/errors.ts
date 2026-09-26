@@ -362,7 +362,7 @@ export class RevealTargetNotFoundError extends FreeGanttError {
 
 /** `code: 'duplicate-entry-id'` — two different mistakes, two different messages. `kind: 'collision'`
  *  is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind: 'duplicate-in-list'` is
- *  a whole-list write (`entries.load()`, and `entries.sync()`, #517) finding one id twice inside the
+ *  a whole-list write (`entries.load()`, and `entries.syncAll()`, #517) finding one id twice inside the
  *  list itself — `assertEntryBatchIsSound` (`data/entry-batch.ts`) throws this before anything
  *  stages. */
 export class DuplicateEntryIdError extends FreeGanttError {
@@ -730,7 +730,7 @@ export class MutationDuringExtensionHookError extends FreeGanttError {
   }
 }
 
-/** `code: 'transaction-already-open'` — `entries.load()` (#496), or `entries.sync()` (#517), called
+/** `code: 'transaction-already-open'` — `entries.load()` (#496), or `entries.syncAll()` (#517), called
  * inside an already-open `dataset.transaction()`. Both doors replace the whole Dataset's data in one
  * step and always build and commit their own ChangeSet; unlike `add`/`update`/`remove`, neither joins
  * a caller's open transaction (D-S2-8 does not apply here). The write set is discarded; the caller's

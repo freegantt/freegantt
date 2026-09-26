@@ -46,7 +46,7 @@ describe('history: false', () => {
 
     state.entries.update('t1', { name: 'Roofing' });
     expect(state.canUndo).toBe(false);
-    state.entries.sync([{ id: 't1', name: 'From the server', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 't1', name: 'From the server', start: 0, end: 1 }]);
     expect(state.canUndo).toBe(false);
     state.entries.load([{ id: 't1', name: 't1', start: 0, end: 1 }]);
     expect(state.canUndo).toBe(false);
@@ -123,7 +123,7 @@ describe('historyChange', () => {
     const state = dataset([{ id: 't1' }]); // name starts as 't1'
     state.entries.update('t1', { name: 'b' });
     // The sync writes back the value the undo would restore, so the step has nothing left to write.
-    state.entries.sync([{ id: 't1', name: 't1', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 't1', name: 't1', start: 0, end: 1 }]);
     const seen = recordHistoryChanges(state);
     let changes = 0;
     state.on('change', () => {
@@ -141,7 +141,7 @@ describe('historyChange', () => {
     state.entries.update('t1', { name: 'b' });
     state.undo();
     // The sync writes the value the redo would write, so the step has nothing left to write.
-    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 't1', name: 'b', start: 0, end: 1 }]);
     const seen = recordHistoryChanges(state);
 
     state.redo();
@@ -153,7 +153,7 @@ describe('historyChange', () => {
     const state = dataset([{ id: 't1' }]);
     state.entries.update('t1', { name: 'b' });
     state.entries.update('t1', { name: 'c' });
-    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]); // the top step is now moot
+    state.entries.syncAll([{ id: 't1', name: 'b', start: 0, end: 1 }]); // the top step is now moot
     const seen = recordHistoryChanges(state);
     state.on('beforeChange', () => false);
 
@@ -175,7 +175,7 @@ describe('historyChange', () => {
   it('a handler may not write, even when no change is running', () => {
     const state = dataset([{ id: 't1' }]);
     state.entries.update('t1', { name: 'b' });
-    state.entries.sync([{ id: 't1', name: 't1', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 't1', name: 't1', start: 0, end: 1 }]);
     let thrown: unknown;
     state.on('historyChange', () => {
       try {
@@ -521,7 +521,7 @@ describe('History', () => {
 
     // A sync independently sets the field back to what undoing step 2 would write — step 2 is
     // moot, and undo() forgets it on the way to step 1 in the same click.
-    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 't1', name: 'b', start: 0, end: 1 }]);
 
     const refuse = (): false => false;
     state.on('beforeChange', refuse);
@@ -545,7 +545,7 @@ describe('History', () => {
     // Step 2's undo is moot, the same as the test above, so undo() forgets it for real on the way
     // to step 1 — which does land. This handler is added after History's own, so it runs once step
     // 1's write has already moved the cursor, and its throw must not undo that real forget too.
-    state.entries.sync([{ id: 't1', name: 'b', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 't1', name: 'b', start: 0, end: 1 }]);
 
     const explode = (): void => {
       throw new Error('boom');

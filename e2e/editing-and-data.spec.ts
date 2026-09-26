@@ -210,7 +210,7 @@ test('import tolerates a child before its parent, clears undo, and a lock holds'
   expect(lockRefused).toBe(true);
 });
 
-// #517: `entries.sync()` diffs a fetched list against the live data — unlike Import (`load`), it
+// #517: `entries.syncAll()` diffs a fetched list against the live data — unlike Import (`load`), it
 // keeps a kept row's selection and records no undo step. `harness/fake-server.ts` scripts the
 // first "Sync from server" click as a rename and a date shift on 'entry-3'. This proves the
 // conflict rule (`docs/11-server-data.md`): the server's rename overwrites a local edit it never
