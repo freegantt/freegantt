@@ -1190,9 +1190,8 @@ export class Gantt<TProps = unknown> {
     set fit(f: TimeScaleFit);
     get gridCellRenderer(): GridCellRenderer | undefined;
     set gridCellRenderer(renderer: GridCellRenderer | undefined);
-    // (undocumented)
     get gridColumns(): readonly GridColumnInput[];
-    set gridColumns(columns: readonly GridColumnInput[]);
+    set gridColumns(columns: readonly GridColumnInput<TProps>[]);
     get gridResizable(): boolean;
     set gridResizable(resizable: boolean);
     // (undocumented)
@@ -1342,7 +1341,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
     gridCellRenderer?: GridCellRenderer;
-    gridColumns?: readonly GridColumnInput[];
+    gridColumns?: readonly GridColumnInput<TProps>[];
     gridResizable?: boolean;
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;

@@ -2785,7 +2785,7 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
         'name',
         {
           field: 'cost',
-          columnRenderer: ({ value, fieldValue }) =>
+          columnRenderer: ({ value, fieldValue }: ColumnRendererContext<number>) =>
             typeof fieldValue === 'number' && fieldValue > 1000 ? { text: `over: ${value}` } : undefined,
         },
       ],
