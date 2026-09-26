@@ -69,7 +69,7 @@ function withRawEntries(
   state: DatasetState,
   entries: readonly Omit<StoredEntry, 'props' | 'siblingIndex'>[],
 ): void {
-  const context: EntryReadContext = { timeZone: state.timeZone, dateOnlyEnd: state.dateOnlyEnd };
+  const context: EntryReadContext = { timeZone: state.timeZone };
   const raw = entries.map((entity, index) => ({ ...entity, props: {}, siblingIndex: index }));
   const store = new EntryStore(
     raw,

@@ -43,13 +43,13 @@ describe('createZonedTime()', () => {
     expect(time.toInstant(0)).toBe(0);
   });
 
-  it("toEndInstant() reads a date-only end inclusively by default — '2026-07-15' covers the 15th", () => {
+  it("toEndInstant() reads a date-only end as through that day — '2026-07-15' covers the 15th", () => {
     const time = createZonedTime(CHICAGO);
     expect(time.toEndInstant('2026-07-15')).toBe(instant('2026-07-16T05:00:00Z'));
   });
 
-  it("toEndInstant() reads a date-only end literally under 'exclusive'", () => {
+  it('toEndInstant() reads an end already carrying a time of day literally', () => {
     const time = createZonedTime(CHICAGO);
-    expect(time.toEndInstant('2026-07-15', 'exclusive')).toBe(instant('2026-07-15T05:00:00Z'));
+    expect(time.toEndInstant('2026-07-15T00:00:00Z')).toBe(instant('2026-07-15T00:00:00Z'));
   });
 });

@@ -786,7 +786,7 @@ describe('runTransaction', () => {
 
     const parent = state.entries.get('p1')!;
     expect(parent.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
-    expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive', 'test'));
+    expect(parent.end).toBe(toEndInstant('UTC', '2026-03-05', 'test'));
   });
 });
 
@@ -811,7 +811,7 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
             entryId('t1'),
             {
               start: toInstant('UTC', '2026-02-01', 'test'),
-              end: toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'),
+              end: toEndInstant('UTC', '2026-02-05', 'test'),
             },
           ],
         ]),
@@ -825,7 +825,7 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
 
     const entry = state.entries.get(entryId('t1'))!;
     expect(entry.start).toBe(toInstant('UTC', '2026-02-01', 'test'));
-    expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'));
+    expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'test'));
   });
 
   it(
@@ -926,11 +926,11 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
       const startRow = rows.find((row) => row.field === 'start');
       const endRow = rows.find((row) => row.field === 'end');
       expect(startRow?.to).toBe(toInstant('UTC', '2026-01-05', 'test'));
-      expect(endRow?.to).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'));
+      expect(endRow?.to).toBe(toEndInstant('UTC', '2026-02-05', 'test'));
 
       const entry = state.entries.get(entryId('t1'))!;
       expect(entry.start).toBe(toInstant('UTC', '2026-01-05', 'test'));
-      expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'inclusive', 'test'));
+      expect(entry.end).toBe(toEndInstant('UTC', '2026-02-05', 'test'));
     },
   );
 });
@@ -969,7 +969,7 @@ describe('the extension hook writes the loose shape (#209)', () => {
     expect(state.entries.get(entryId('t2'))?.start).toBe(toInstant('America/Denver', '2026-02-01', 'test'));
   });
 
-  it('reads a date-only end by the dataset’s DateOnlyEndRule, not as a raw midnight', () => {
+  it('reads a date-only end as through that day, not as a raw midnight', () => {
     const state = datasetCascading({ end: '2026-02-05' });
     renameT1(state);
     expect(state.entries.get(entryId('t2'))?.end).toBe(toInstant('UTC', '2026-02-06', 'test'));

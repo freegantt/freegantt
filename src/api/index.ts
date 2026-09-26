@@ -338,7 +338,6 @@ export type {
   EntryDelta,
   InstantInput,
   TimeSpanInput,
-  DateOnlyEndRule,
   PlainTimeInput,
 } from '../model/index.js';
 export type {

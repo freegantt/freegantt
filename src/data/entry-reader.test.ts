@@ -28,7 +28,7 @@ const registry = new FieldRegistry({ fields: [] });
 const utc = (iso: string): number => Date.parse(iso);
 
 function createContext(): EntryReadContext {
-  return { timeZone: 'UTC', dateOnlyEnd: 'inclusive' as const };
+  return { timeZone: 'UTC' };
 }
 
 // Production reads `toEditReading(...).stored` directly. This test-only wrapper keeps every

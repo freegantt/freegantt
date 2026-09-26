@@ -21,7 +21,6 @@ declare const dataset: import('freegantt').Dataset<Props>;
 declare const gantt: import('freegantt').Gantt<Props>;
 declare const entries: import('freegantt').DatasetOptions<Props>['entries'];
 declare const timeZone: string;
-declare const dateOnlyEnd: import('freegantt').DateOnlyEndRule;
 declare const aggregators: NonNullable<import('freegantt').DatasetOptions<Props>['aggregators']>;
 declare const plugins: NonNullable<import('freegantt').DatasetOptions<Props>['plugins']>;
 declare function asCurrency(value: unknown, ctx: import('freegantt').FormatContext, entry: import('freegantt').Entry): string;
@@ -166,36 +165,22 @@ shifts forward by the gap, and an ambiguous fall-back time takes the earlier off
 A value that names no instant — `'next tuesday'`, or a date the calendar does not have such as
 `'2026-02-31'` — throws `InvalidInstantError` rather than sliding to a nearby date.
 
-### `dateOnlyEnd` — what a bare date on `end` means
+### A bare date on `end` — what it means
 
 Storage is half-open `[start, end)`, so `end` is the boundary _after_ the entry, not its last
-moment. A consumer writing a bare date on `end` normally means the last day it wants included, so that
-is the default reading:
+moment. A consumer writing a bare date on `end` means the last day it wants included:
 
 ```ts
 new Dataset({
   timeZone: 'America/Chicago',
-  dateOnlyEnd: 'inclusive', // the default
   entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-07' }],
-});
-// covers Sept 1 through Sept 7 — the stored end is the start of Sept 8
-```
-
-Set `dateOnlyEnd: 'exclusive'` to read a bare date literally instead, matching stored geometry
-exactly:
-
-```ts
-new Dataset({
-  timeZone: 'America/Chicago',
-  dateOnlyEnd: 'exclusive',
-  entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08' }],
 });
 // covers Sept 1 through Sept 7 — the stored end is the start of Sept 8
 ```
 
 The rule applies **only to a date-only string on an `end` field** (entry ends and segment ends). An
 `end` that already carries a time of day, a `Date`, epoch milliseconds, or an `Instant` is a
-boundary already and is read literally under either setting. `start` is never adjusted.
+boundary already and is read literally. `start` is never adjusted.
 
 ## Public API
 
@@ -211,7 +196,6 @@ import { Dataset } from 'freegantt';
 const dataset = new Dataset<{ cost: number; team: string }>({
   entries, // readonly EntryInput[] — see "Dates and ids a consumer can write"
   timeZone, // IANA zone; omit it and the environment's own zone resolves once, at construction
-  dateOnlyEnd, // optional, 'inclusive' (default) | 'exclusive'
   fieldTypes: { money: { rollUp: 'sum', formatValue: asCurrency, column: { align: 'end' } } },
   fields: [{ key: 'cost', type: 'money' }, { key: 'team' }],
   aggregators, // optional — named rollUp functions beside the shipped ones

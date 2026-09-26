@@ -37,7 +37,7 @@ describe('the extension hook may not propose a field the body already proposed o
     expect(state.datasetRevision).toBe(revisionBefore);
     const entry = state.entries.get('t1')!;
     expect(entry.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
-    expect(entry.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
+    expect(entry.end).toBe(toEndInstant('UTC', '2026-01-10', 'test'));
   });
 });
 

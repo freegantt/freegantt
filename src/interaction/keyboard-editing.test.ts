@@ -25,7 +25,7 @@ const rows = new EntryStore(
     props: {},
     siblingIndex: index,
   })),
-  { timeZone: 'UTC', dateOnlyEnd: 'inclusive' },
+  { timeZone: 'UTC' },
 );
 
 function entryFor(id: EntryId): Entry {
