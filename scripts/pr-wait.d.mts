@@ -32,7 +32,17 @@ export interface GateVerdict {
 /** True when this row is the gate for `headSha`: a `pull_request` run that actually ran. */
 export function isLiveGateRun(run: GateRun, headSha: string): boolean;
 
-/** The newest live gate run for this head. */
-export function gateRunForHead(runs: readonly GateRun[], headSha: string): GateRun | undefined;
+/** The newest live gate run for this head. `besidesId` drops a run we already watched. */
+export function gateRunForHead(
+  runs: readonly GateRun[],
+  headSha: string,
+  pick?: { besidesId?: number },
+): GateRun | undefined;
+
+/**
+ * True when a watched run skipped on a ready pull request, so the ready gate
+ * is a newer run on the same commit.
+ */
+export function shouldWaitForNewerRunAfterSkip(run: GateRun, context: { isDraft: boolean }): boolean;
 
 export function summarizeGateRun(run: GateRun | undefined, context: VerdictContext): GateVerdict;
