@@ -726,7 +726,16 @@ describe('Dataset generics (#123)', () => {
     });
 
     expect(dataset.entries.get('t1')?.toInput().props?.passengerKey).toBeUndefined();
-    expect(warnings.some((line) => line.includes('passengerKey'))).toBe(true);
+    // The warning names both ways out, not just the drop.
+    expect(
+      warnings.some(
+        (line) =>
+          line.includes('passengerKey') &&
+          line.includes('drops') &&
+          line.includes('props: { passengerKey }') &&
+          line.includes('"fields"'),
+      ),
+    ).toBe(true);
 
     // Nesting it under `props` instead — the documented way out — carries it through.
     const nested = new Dataset<{ owner: string; passengerKey: number }>({
