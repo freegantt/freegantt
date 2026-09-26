@@ -56,7 +56,7 @@ describe('Viewport', () => {
 
     calls = 0;
     // A single setPaneSize call touches both the scale and the scroll model, but delivers one
-    // reaction, not two (D-S1.7-1) — batched internally.
+    // reaction, not two — batched internally.
     handle.setPaneSize({ width: 400, height: 200 });
     expect(calls).toBe(1);
     expect(viewport.visible.width).toBe(400);
@@ -77,7 +77,7 @@ describe('Viewport', () => {
 
     // Pin past the small chart's own max (200) but within the big chart's (4200) — the shared
     // ScrollAxis's position is what the user asked for; each chart must still render what it can
-    // show, not what was asked for (D-S1.5-2).
+    // show, not what was asked for.
     sharedY.panTo(4200);
 
     expect(big.visible.y).toBe(4200);
@@ -335,7 +335,7 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
             const before = viewport.timeScale.instantForX(viewport.scroll.x.state.position + anchorX);
             viewport.zoomBy(factor, anchorX);
             const { position, max } = viewport.scroll.x.state;
-            // Clamping at either scroll bound (D-S1.5-2) is the ONE case where the anchor cannot
+            // Clamping at either scroll bound is the ONE case where the anchor cannot
             // stay fixed — there is no valid position that would keep it there. Away from both
             // bounds, the invariant must hold exactly (to rounding).
             if (position <= 0 || position >= max) continue;

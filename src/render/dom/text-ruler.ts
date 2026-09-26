@@ -1,5 +1,5 @@
 // render/dom — measures a bar label's width in CSS px, off a canvas 2D context sharing the bar
-// layer's own font (J1). A DOM measurement (an offscreen span, then read its layout box) would
+// layer's own font. A DOM measurement (an offscreen span, then read its layout box) would
 // force a style recalculation per call; canvas `measureText` reads glyph metrics with no layout
 // pass, which is what keeps a placement check affordable for every bar on every frame. A label's
 // width does not change mid-drag (the text itself never changes), so `syncBars` reads this once

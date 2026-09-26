@@ -1,7 +1,7 @@
-// extensions/features/ — the tooltip built-in (S5.5, D-S5-13). An ordinary `ChromePlugin`, confined
-// by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports — the dogfood gate this
+// extensions/features/ — the tooltip built-in. An ordinary `ChromePlugin`, confined
+// by the `extensions-public-only` rule to `api/`/`model/` imports — the dogfood gate this
 // step proves (`[S5-A1]`). Every import below names its own narrow source file, never the
-// `api/index.ts` barrel. That barrel re-exports `tooltips` itself (D-S5-13). `extensions/popup.ts`
+// `api/index.ts` barrel. That barrel re-exports `tooltips` itself. `extensions/popup.ts`
 // imports `api/plugin-context.ts` directly instead of that barrel, for the same reason (no-circular).
 
 import { createPopup } from '../popup.js';
@@ -24,7 +24,7 @@ const DEFAULT_PLACEMENT: PopupPlacement = 'top';
 
 /** A tooltip belongs to a bar, so the Entry it describes always spans (`spansTime`, ADR 0012).
  *  The parameter type says so, and `openFor` is where the question is asked. Three casts used to
- *  say it instead, and nothing tested them (Q5). */
+ *  say it instead, and nothing tested them. */
 function defaultContent(
   entry: Entry & TimeSpan,
   timeZone: string,
@@ -40,7 +40,7 @@ function defaultContent(
       // #421 C5: an Entry with no name prints an empty title, never `'undefined'`.
       { key: 'title', class: { 'fg-tooltip-title': true }, text: entry.name },
       { key: 'dates', class: { 'fg-tooltip-dates': true }, text: dates },
-      // D-S5-13: "and any column marked `tooltip: true`" — one row per such column, in `gridColumns`
+      // "and any column marked `tooltip: true`" — one row per such column, in `gridColumns`
       // order (`ctx.view.resolveTooltipColumns` already filtered and formatted them).
       ...columns.map((column, i) => ({
         key: `column-${i}`,
@@ -54,9 +54,9 @@ function defaultContent(
   };
 }
 
-/** D-S5-13: hover a bar, or focus it, and a popup shows the entry's name and dates. `role="img"`
+/** Hover a bar, or focus it, and a popup shows the entry's name and dates. `role="img"`
  *  bars gain a real tabindex in S5.11's a11y pass. This plugin listens for `focusin`/`focusout`
- *  now, so it needs no change once they do. `focus: 'none'` (D-S5-9) — the pointer path never steals focus,
+ *  now, so it needs no change once they do. `focus: 'none'` — the pointer path never steals focus,
  *  and the keyboard path is `role="img"`'s own accessible label (`FrameBar.a11yLabel`, S5.11) rather
  *  than this popup. Content resolves through the `tooltip` renderer point (S5.4) via
  *  `ctx.view.resolveTooltipContent`, so a consumer's `tooltipRenderer` replaces the body with no change to
@@ -140,7 +140,7 @@ export function tooltips(options: TooltipsOptions = {}): ChromePlugin {
       });
 
       // The four listeners above remove themselves through `ctx.disposables`, which runs before this
-      // disposer (S5.1, D-S5-3). Only the open popup is left to close.
+      // disposer. Only the open popup is left to close.
       return close;
     },
   };

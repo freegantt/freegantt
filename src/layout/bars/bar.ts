@@ -1,4 +1,4 @@
-// layout/ — what one row draws, as plain data (D-S4-19, D-S4-24, D-S4-25). One Bar is one bar.
+// layout/ — what one row draws, as plain data. One Bar is one bar.
 // This file holds the Bar vocabulary alone, so `variants.ts` may name `BarProducer` and
 // `produce-bars.ts` may name both, with no import ring between the three.
 
@@ -7,14 +7,14 @@ import type { Entry, EntryId, Instant, BarId } from '../../model/index.js';
 
 /** Which point of the entry's own span a fixed box holds fixed — `'center'` for a marker (a diamond
  *  points at an instant), `'start'` for a flag (the pole sits on the date and the cloth hangs to the
- *  right), `'end'` for the mirror. Named so a producer can state it as a type, not repeat the union
- *  (F12) — `fixedBoxX` (`layout/frame.ts`) is `BarAnchor`'s other reader. */
+ *  right), `'end'` for the mirror. Named so a producer can state it as a type, not repeat the union.
+ *  `fixedBoxX` (`layout/frame.ts`) is `BarAnchor`'s other reader. */
 export type BarAnchor = 'start' | 'center' | 'end';
 
 /** A painted box the time scale does not size (ADR 0022) — `Bar.box`'s own shape, named so
- *  `layout/frame.ts` and a producer both read one type instead of repeating the object literal
- *  (F12). `widthPx` is the box's width in content pixels. Frozen and shared across every Bar one
- *  producer call builds (`fixedWidthBar`, F16): nothing in `layout/` or `render/` ever writes
+ *  `layout/frame.ts` and a producer both read one type instead of repeating the object literal.
+ *  `widthPx` is the box's width in content pixels. Frozen and shared across every Bar one
+ *  producer call builds (`fixedWidthBar`): nothing in `layout/` or `render/` ever writes
  *  through a Bar's `box` after production, so one immutable instance per producer costs nothing
  *  and the `readonly` members hold a consumer to that same contract at the type level. */
 export interface FixedBarBox {
@@ -30,7 +30,7 @@ export interface Bar {
    *  the name, and nothing stores one. */
   variant: string;
   /** A producer's own text for this bar — set it and this Bar owns its label, the most specific
-   *  answer available (Q36). Omit it and `layout/frame.ts`'s `placeFrame` fills it from a bound
+   *  answer available. Omit it and `layout/frame.ts`'s `placeFrame` fills it from a bound
    *  `barLabelFor` resolver instead — `view/` builds one from the Gantt's own `barLabels` Field.
    *  The built-in producers (`entryBar`, `wholeEntryBar`, `fixedWidthBar`) never set this: an
    *  Entry's name is a Field like any other, read through `formatValue`, not restated here (#421
@@ -43,11 +43,11 @@ export interface Bar {
    *  states it here.
    *
    *  Not centred on the entry's own start — `barSpan` (`layout/frame.ts`) centres a *floored* span
-   *  on its own midpoint (ADR 0022 Q7), and `'center'` follows that same rule so the two never
+   *  on its own midpoint (ADR 0022), and `'center'` follows that same rule so the two never
    *  disagree. The two answer the same question only when `start === end`.
    *
    *  `barSpan` honours this ahead of the span-and-floor path, and `render/` stamps
-   *  `data-span="fixed"`. `fixedWidthBar` is the producer that sets it. `readonly` (F16): the box
+   *  `data-span="fixed"`. `fixedWidthBar` is the producer that sets it. `readonly`: the box
    *  a producer hoists is shared across every Bar it builds, so a write through one Bar's `box`
    *  would silently reach every other Bar that producer ever returns. */
   readonly box?: FixedBarBox;
@@ -110,7 +110,7 @@ export function entryBar(
     id: barId(entry.id, partIndex),
     entryId: entry.id,
     variant,
-    // #421 C5, Q36: no `label` — the Entry's name is a Field like any other, and `placeFrame`
+    // #421 C5: no `label` — the Entry's name is a Field like any other, and `placeFrame`
     // reads it through a bound `barLabelFor` (`formatValue`), never restated here.
     start,
     end,
@@ -122,13 +122,13 @@ export function entryBar(
  *  hand-written lines that must get the Bar id convention right from documentation alone. Pure and
  *  DOM-free, like every other `layout/` function.
  *
- *  Load-bearing cast (ADR 0012, Build 1, J2): a non-spanning Entry has no
+ *  Load-bearing cast (ADR 0012, Build 1): a non-spanning Entry has no
  *  `start`/`end` to draw, so `produceBarsForRow` never calls any producer — shipped or a
  *  plugin's own — for one. `spansTime` is where that rule is written, and `produceBarsForRow`
  *  is where it runs. The contract, not the type, is why `entry.start`/`entry.end` are read here
  *  as if they were always present.
  *
- *  This is the one cast Q5 left standing. The type fix is a narrower parameter — the Entry this
+ *  This is the one cast left standing. The type fix is a narrower parameter — the Entry this
  *  takes always spans — and that is a public signature change, so it is owed rather than taken
  *  (N10, ADR 0012's appendix). */
 export function wholeEntryBar(entry: Entry, variant: string): Bar {
@@ -142,8 +142,8 @@ export function wholeEntryBar(entry: Entry, variant: string): Bar {
  *  Omit `anchor` and it is `'center'` — the spelling already on the surface (`panToDate`'s `align`).
  *  A variant that wants a flag's left-aligned pole passes `'start'`; core picks for nobody.
  *
- *  `box` is built once, here, at registration time — not once per Bar inside the returned producer
- *  (F16). One frozen `FixedBarBox` is safe to share across every Bar this producer ever returns,
+ *  `box` is built once, here, at registration time — not once per Bar inside the returned producer.
+ *  One frozen `FixedBarBox` is safe to share across every Bar this producer ever returns,
  *  because `box` is `readonly` on `Bar` and nothing downstream writes through it (`Bar.box`'s own
  *  doc). Freezing it turns an accidental write into a loud failure in strict mode, rather than a
  *  silent one that would otherwise reach every other Bar sharing the same box.
@@ -167,7 +167,7 @@ export function fixedWidthBar(px: number, anchor: BarAnchor = 'center'): BarProd
  *  "the summary variant's bars: always one bar."
  *
  *  **"Segmented" here means `childrenAsSegments` (#421 C2).** Draws nothing for a row whose children
- *  `childrenAsSegments` already matched onto it (Q26/Q27/Q33): those children draw their own Bars
+ *  `childrenAsSegments` already matched onto it: those children draw their own Bars
  *  through their own rows, so this producer's rail would paint a second bar over the same span. A
  *  consumer producer that ignores the parameter still draws — nothing else skips it. */
 export function wholeSpanUnlessSegments(

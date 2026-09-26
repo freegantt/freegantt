@@ -1,5 +1,5 @@
 // extensions/features/ — the five `TimeCover` builders behind `timeShading()` (#404). Confined by
-// `extensions-public-only` (D-S5-5) to `api/`/`model/` imports; every import below names its own
+// `extensions-public-only` to `api/`/`model/` imports; every import below names its own
 // narrow source file, never the `api/index.ts` barrel — that barrel will re-export `timeShading`
 // itself, so a feature file importing it back would close a cycle (no-circular).
 //
@@ -89,7 +89,7 @@ export function coarsestFloor(covers: readonly TimeCover[]): TimeUnit {
  *  the first one at or after `window.start`, so a window that opens at Saturday 10:00 begins the walk
  *  on Sunday and Saturday never reads as covered. A decoration window opens wherever the pan left it
  *  (`layout/frame.ts` asks the scale for the pixel's own instant), so it is almost never day-aligned.
- *  A day-shading builder asks this instead (#404 review F1). */
+ *  A day-shading builder asks this instead (#404 review). */
 function intersectingDays(window: TimeSpan, time: ZonedTime): readonly Instant[] {
   return time.eachDay({ start: time.startOfDay(window.start), end: window.end });
 }
@@ -100,7 +100,7 @@ function intersectingDays(window: TimeSpan, time: ZonedTime): readonly Instant[]
  *  mid-Saturday still shades the rest of that Saturday. Hides above `'day'`: a weekend at month zoom
  *  is a smear across the grid, not two days.
  *
- *  The first day is its own parameter, so `daysOfWeek()` is a compile error (#404 review F8). A
+ *  The first day is its own parameter, so `daysOfWeek()` is a compile error (#404 review). A
  *  builder that names nothing matches nothing, and `notCovered()` around it shades the whole window
  *  — the very state `EmptyCoversError` refuses at the list door, reached through a cover that door
  *  cannot see. `dates()` and `spans()` read the same way for the same reason. */
@@ -125,7 +125,7 @@ export function daysOfWeek(day: DayOfWeek, ...moreDays: readonly DayOfWeek[]): T
  *  exist that day (the spring-forward gap) resolves forward. Hides above `'hour'`.
  *
  *  Equal readings shade nothing: `hours('09:00', '09:00')` names a band of no width, and the wrap
- *  fires only when `to` reads *earlier* than `from` (#404 review F6). Reading equal as a wrap would
+ *  fires only when `to` reads *earlier* than `from` (#404 review). Reading equal as a wrap would
  *  shade all 24 hours instead — the opposite of what the call says. */
 export function hours(from: PlainTimeInput, to: PlainTimeInput): TimeCover {
   const start = readPlainTime(from, 'hours');

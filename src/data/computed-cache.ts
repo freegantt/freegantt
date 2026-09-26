@@ -1,4 +1,4 @@
-// data/ — memo for compute-sourced Fields (D-S4-10). Keyed by entry, field, and dataset revision.
+// data/ — memo for compute-sourced Fields. Keyed by entry, field, and dataset revision.
 
 import type { EntryId, FieldKey } from '../model/index.js';
 

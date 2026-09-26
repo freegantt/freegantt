@@ -1,4 +1,4 @@
-// layout/ — remove collapsed subtrees after filter and sort (D-S4-29).
+// layout/ — remove collapsed subtrees after filter and sort.
 
 import type { RowId } from '../../model/index.js';
 import type { UnindexedRow } from './row-source.js';

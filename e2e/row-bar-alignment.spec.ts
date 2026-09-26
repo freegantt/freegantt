@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // children, `.fg-tick` elements, are `position: absolute` (view/styles.ts) — an absolutely
 // positioned child does not contribute to its relatively positioned parent's auto height, so the
 // header collapsed to near-zero in the timeline pane. The grid pane's spacer (view/pane-layout.ts,
-// D-S1.8-11), meanwhile, still reserved a fixed `--fg-header-height` (fallback 20px). The two
+// its own module), meanwhile, still reserved a fixed `--fg-header-height` (fallback 20px). The two
 // panes disagreed about how tall the header was, so every grid row sat well below its own bar —
 // grid pane rows are the DOM's real geometry, and by the time bars appeared they had crept up
 // under (and behind) the header instead of starting below it, matching the report that entries
@@ -24,7 +24,7 @@ test('every grid pane row lines up with its own bar in the timeline pane, centre
 
   // Matched by entry id, not by sorted position/count: the row layer windows purely on vertical
   // scroll, but the bar layer also culls on the horizontal viewport (S1.12's density floor,
-  // D-S1.12-2/3, can make fitDataset's content wider than the pane, so a visible row can
+  // which can make fitDataset's content wider than the pane, so a visible row can
   // legitimately have no bar in view at the current scroll position at some viewport widths).
   // I9 only matches a row and its OWN entry's bar agree in y — not that every row has a bar.
   const pairs = await page.evaluate(() => {

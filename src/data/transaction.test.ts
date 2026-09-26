@@ -367,7 +367,7 @@ describe('runTransaction', () => {
   // it, so comparing raw object keys made I4 refuse any extender edit that carried one — which every
   // extender composed with `mergeEntryEdits` now does. The extender states no keys of its own since
   // #209 C3: it writes `{ cost: 500 }`, the same object `entries.update()` takes, and core derives
-  // the set. A hand-built `proposedKeys` here is now an undeclared Field key and is refused (Q2).
+  // the set. A hand-built `proposedKeys` here is now an undeclared Field key and is refused.
   it('I4 reads proposedKeys as the Fields proposed, not as a Field named "proposedKeys"', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
@@ -790,7 +790,7 @@ describe('runTransaction', () => {
   });
 });
 
-// #212 R2 fix-plan review, finding B1 remainder: the envelope invariant binds an `EditExtender`'s
+// #212 fix-plan review, finding B1 remainder: the envelope invariant binds an `EditExtender`'s
 // `ProposedEdit` exactly as it binds `entries.update()` — a plugin cascade is not a second, looser door
 // onto `start`/`end`.
 //
@@ -880,7 +880,7 @@ describe('the EditExtender seam writes start/end the same as entries.update() (#
           // The pre-transaction snapshot still shows the original start — this is the rewrite the hook
           // must not be graded against (`entries.get` alone answers the wrong question here).
           expect(request.entries.get(entryId('t1'))?.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
-          // F19: a plain string, not `entryId('t1')` — `entryAfterEdits` is loose on this scalar id
+          // A plain string, not `entryId('t1')` — `entryAfterEdits` is loose on this scalar id
           // (#305).
           sawStartAtHookTime = request.entryAfterEdits('t1')?.start;
           return new Map();
@@ -1040,7 +1040,7 @@ describe('EditRequest.addedEntryIds / removedEntryIds (#235)', () => {
       { id: 'other' },
     ]);
     const { seen, extender } = captor();
-    // `entries` is `#byId` itself (D-S5-45), so it keeps updating after the transaction commits —
+    // `entries` is `#byId` itself, so it keeps updating after the transaction commits —
     // reading whether it "still holds" a removed id has to happen inside the hook's own call, not
     // from the request this test kept a reference to afterward.
     let c1NameAtHookTime: string | undefined;
@@ -1056,7 +1056,7 @@ describe('EditRequest.addedEntryIds / removedEntryIds (#235)', () => {
     expect(seen[0]!.addedEntryIds.size).toBe(0);
     for (const id of seen[0]!.removedEntryIds) expect(seen[0]!.entryAfterEdits(id)).toBeUndefined();
     // The pre-transaction snapshot still answers for a removed id, at hook time — only
-    // `entryAfterEdits` reflects the removal (D-S5-45).
+    // `entryAfterEdits` reflects the removal.
     expect(c1NameAtHookTime).toBe('c1');
   });
 

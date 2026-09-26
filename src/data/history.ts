@@ -1,6 +1,6 @@
 // data/ — undo/redo (plans/s2-data-core/s2.5-undo-redo.md). A subscriber to `change`, not a step in the
 // commit path: `data/transaction.ts` imports nothing from this file, and `history-is-removable`
-// (`.dependency-cruiser.cjs`, D-S2-23) allows exactly one importer, `data/dataset-state.ts`, which
+// (`.dependency-cruiser.cjs`) allows exactly one importer, `data/dataset-state.ts`, which
 // constructs it. Delete this file and its one construction line and the commit path is unchanged, byte
 // for byte. Recording goes through `on('change')` alone, and `undo`/`redo` replay through
 // `replayChangeSet` (`replay.ts`) — the same primitive `Dataset.replay` publishes — so this file is
@@ -13,7 +13,7 @@ import { replayChangeSet } from './replay.js';
 import type { TransactionData } from './replay.js';
 
 export interface HistoryOptions {
-  /** How many undoable transactions the stack keeps. Oldest drops first once full (D-S2-13). */
+  /** How many undoable transactions the stack keeps. Oldest drops first once full. */
   capacity?: number;
 }
 
@@ -70,7 +70,7 @@ export class History {
    *  write is forgotten, and the loop tries the one below it, so one click always lands a step when
    *  any undoable one remains. A refused undo (a `beforeChange` handler returning `false`) throws
    *  `MutationCancelledError` and leaves the stack exactly where it was — the cursor moves on the
-   *  `change` that commit emits (D-S2-25), so a veto never reaches `#onChange`; and a step the loop
+   *  `change` that commit emits, so a veto never reaches `#onChange`; and a step the loop
    *  forgot on the way there un-forgets, so a veto really does leave history untouched, not just the
    *  cursor (`#unwindOnThrow`). */
   undo(): void {
@@ -144,7 +144,7 @@ export class History {
   /** The whole coupling to the rest of `data/` — an exhaustive switch, so a future origin (#419)
    *  forces a choice here at compile time. `'user'` records a new stack entry. `'sync'` (#517) does
    *  not: a write the user did not make records no step and erases no Redo, the same rule #419's own
-   *  write door reuses. `'undo'` and `'redo'` move the cursor (D-S2-25) and replace the stack entry
+   *  write door reuses. `'undo'` and `'redo'` move the cursor and replace the stack entry
    *  with what they actually wrote — `invertChangeSet` of it for `'undo'`, as recorded for `'redo'` —
    *  so a later undo or redo inverts what really landed, not the step as first recorded; undo then
    *  redo is neutral even across a sync in between (§2g). An `'undo'`- or `'redo'`-origin write this

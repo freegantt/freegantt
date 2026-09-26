@@ -411,7 +411,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       expect(container.querySelectorAll('.fg-header .fg-band')).toHaveLength(1);
 
       gantt.preset = 'weekAndMonth';
-      // D-S2-15: the preset change's render request is coalesced onto the next animation frame.
+      // The preset change's render request is coalesced onto the next animation frame.
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
       const after = container.querySelector<HTMLElement>('.fg-bar');
@@ -550,7 +550,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       expect(lastBarXOf(containerB)).toBe(before);
 
       ganttA.zoomBy(2);
-      // D-S2-15: zoomBy's render request is coalesced onto the next animation frame, for both Gantts.
+      // zoomBy's render request is coalesced onto the next animation frame, for both Gantts.
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
       expect(lastBarXOf(containerA)).not.toBe(before);
@@ -569,7 +569,7 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
   // the public `Gantt` constructor).
 });
 
-// #195, D-S3-24: before `gantt.snap` existed, changing the snap alone meant
+// #195: before `gantt.snap` existed, changing the snap alone meant
 // `gantt.preset = { ...gantt.preset, snap }` — a one-off copy of a shipped preset, thrown away by
 // the next zoom. The harness wrote that, which is how this was found.
 describe('Gantt.snap (D-S3-24, #195)', () => {
@@ -1055,7 +1055,7 @@ describe('Gantt dateLines (S1.13)', () => {
       const lines = container.querySelectorAll<HTMLElement>('.fg-date-line');
       expect(lines).toHaveLength(2);
       // The stroke's transform is x-only (translateX); the label's carries a second, always-zero
-      // component under the default placement (#318, D-S1.10-6 — the px nudge a non-default
+      // component under the default placement (#318 — the px nudge a non-default
       // placement would carry travels the same property).
       const x = /^translateX\((.+)\)$/.exec(lines[0]!.style.transform)?.[1];
       expect(labels[0]!.style.transform).toBe(`translate(${x}, 0px)`);
@@ -1451,7 +1451,7 @@ describe('Gantt.visibleSpan (issue #461)', () => {
       // A pane far wider than one day's own content at any legible density.
       FakeResizeObserver.instances[0]!.fire({ width: 2000, height: 100 });
 
-      // `range: 'fitDataset'` reads back as that same word, by its own type (D-S1.12-8 resolves
+      // `range: 'fitDataset'` reads back as that same word, by its own type (the reader resolves
       // *loose dates* to `Instant`s; the sentinel stays a sentinel), so this compares against the
       // one entry's own dates directly. A date-only `end` is inclusive by default (`dateOnlyEnd`,
       // `data/entry-reader.ts`), so the entry's stored half-open end is one day past its authored
@@ -2478,7 +2478,7 @@ describe('Gantt gridResizable (#432)', () => {
     gantt.destroy();
   });
 
-  // F4 (branch review, 2026-09-19): a locked Gantt paints every grip off, but a programmatic
+  // (branch review, 2026-09-19): a locked Gantt paints every grip off, but a programmatic
   // column write's own `from` must still report the consumer's real, authored `resizable` — never
   // a `resizable: false` the lock forced into a stored resolution and the consumer never wrote.
   it('gridColumnsChange reports the authored resizable, not the lock, in both from and to', () => {
@@ -2917,7 +2917,7 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
     expect(before).toHaveLength(1);
     expect(after).toHaveLength(1);
     // Resolved columns arrive as the public `GridColumn` shape — a consumer keeps `to` and passes it
-    // straight back as `gridColumns`. `format` is the one thing dropped (#194, D-S5-37).
+    // straight back as `gridColumns`. `format` is the one thing dropped (#194).
     expect(before[0]!.from).toEqual([expect.objectContaining({ field: 'name' })]);
     expect(before[0]!.to).toEqual([
       expect.objectContaining({ field: 'name' }),
@@ -2928,7 +2928,7 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
     gantt.destroy();
   });
 
-  // #194, D-S5-37: a renderer context used to hand a consumer `column.key` while every other
+  // #194: a renderer context used to hand a consumer `column.key` while every other
   // surface named the same column `field`, so one page spelled one column two ways.
   it('one column, one name: a renderer, the change payload and gridColumns all say `field` (#194)', () => {
     const container = document.createElement('div');
@@ -2957,7 +2957,7 @@ describe('Gantt gridColumnsChange — one commit sequence (S5.7, D-S5-18)', () =
 
     expect(cellColumns).toContain('start');
     expect(headerColumns).toContain('start');
-    // D-S5-34: a hidden consumer column stays in the payload, so a saved list restores it hidden.
+    // A hidden consumer column stays in the payload, so a saved list restores it hidden.
     expect(payloads[0]).toEqual([{ field: 'name' }, { field: 'start' }]);
     expect(gantt.gridColumns).toEqual(['name', { field: 'start', hidden: true }]);
 
@@ -3274,7 +3274,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
       ],
     });
     const painted: string[] = [];
-    // `J40`: a rule that names the rows it covers beats a catch-all that names none. Core's `parent`
+    // A rule that names the rows it covers beats a catch-all that names none. Core's `parent`
     // is such a rule, so the summary rail stands and `barRenderer` paints every other bar.
     const gantt = new Gantt({
       container,
@@ -3301,7 +3301,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
       ],
     });
     const painted: string[] = [];
-    // The door D-S5-11 asks for: the consumer's own rule outranks core's, so their paint answers.
+    // The consumer's own rule outranks core's, so their paint answers.
     const gantt = new Gantt({
       container,
       dataset,
@@ -3372,7 +3372,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
   describe('a variant’s own css (ADR 0022 §5, Q6)', () => {
     // Date-only strings, not an Instant pair: under this Dataset's default `dateOnlyEnd:
     // 'inclusive'`, `start === end` here ingests as one calendar day, not a zero-duration point
-    // (`diamond()`'s own default `when` does not match it — F20). Named for what it delivers,
+    // (`diamond()`'s own default `when` does not match it). Named for what it delivers,
     // because this `describe` only ever asserts stylesheet text and never which row `diamond()`
     // claims — the neighbouring `pointDataset()` above, built from `instant(Date.UTC(...))`, is
     // the one that actually matches a row.
@@ -3638,7 +3638,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
           id: 'demo.unlabelledVariant',
           view(ctx) {
             // No `label` here — the producer opts back into the Gantt's own Field resolution
-            // instead of insisting on its own text (Q36: absent means "the Gantt decides").
+            // instead of insisting on its own text (absent means "the Gantt decides").
             ctx.variants.add({
               name: 'unlabelled',
               when: (entry) => entry.id === sampleEntries[0]!.id,
@@ -3713,7 +3713,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
   // `gantt.plugins = [...]`, because the unit registry never rebuilds a frame.
   //
   // Both stage two sibling plugins whose rules cover one row. That collision is what
-  // `'variant-matched-twice'` names (`J36`), so a console warning here is the design speaking.
+  // `'variant-matched-twice'` names, so a console warning here is the design speaking.
   const bufferVariant = (pluginId: string, resize: boolean) => ({
     id: pluginId,
     view(ctx: PluginContext) {
@@ -3742,7 +3742,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
 
-    // B registers last and wins (`Q5`): resize affordance visible.
+    // B registers last and wins: resize affordance visible.
     let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
     expect(start.hidden).toBe(false);
 
@@ -3861,7 +3861,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       cell.getAttribute('data-field'),
     );
     expect(fields).toEqual(['name', 'risk']);
-    // the raw, consumer-authored list is untouched by the plugin's append (D-S5-21).
+    // the raw, consumer-authored list is untouched by the plugin's append.
     expect(gantt.gridColumns).toEqual(['name']);
 
     gantt.plugins = [];
@@ -3939,7 +3939,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     // A resize drag on the plugin's own grip: `commitWidth` rewrites every column on screen, so the
-    // commit stores "risk" as a plugin-declared column of its own (D-S5-33) — the same seam
+    // commit stores "risk" as a plugin-declared column of its own — the same seam
     // `api/plugin-context.ts`'s disposal promise has to reach through.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
@@ -4049,7 +4049,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     // A resize drag on B's own grip (B is the winner) commits "risk" as a plugin-declared column at
-    // width 200 (D-S5-33) — the same seam `api/plugin-context.ts`'s disposal promise reaches.
+    // width 200 — the same seam `api/plugin-context.ts`'s disposal promise reaches.
     const grip = container.querySelector<HTMLElement>(
       '.fg-col-header[data-field="risk"] .fg-column-resizer',
     )!;
@@ -4206,7 +4206,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
     // #155: dropping B leaves A registered on `risk`, so the field is still asked for and the baked
     // column stays exactly as the resize committed it — 200px, B's committed content. A commit
-    // writes the consumer's own list (D-S5-21: config beats a plugin), and a resize is a gesture the
+    // writes the consumer's own list (config beats a plugin), and a resize is a gesture the
     // consumer performed, so a plugin leaving never takes that width with it. Only the last
     // registration on a field takes the baked column out.
     gantt.plugins = [pluginA];
@@ -4360,7 +4360,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     const container = document.createElement('div');
     document.body.append(container);
     // The same Entry, marked for both plugins' rules. The `[review P2]` test above marks disjoint
-    // rows, so it never exercises this — nothing in the suite pinned a collision before Q10.
+    // rows, so it never exercises this — nothing in the suite pinned a collision before.
     const sharedEntryId = sampleEntries[0]!.id;
     const dataset = markedDataset({ buffer: [sharedEntryId], risk: [sharedEntryId] }, 1);
     const buffer = bufferKind();
@@ -4378,7 +4378,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
     const bar = container.querySelector<HTMLElement>('.fg-bar')!;
 
-    // The newest rule wins (`Q5`). `riskKind` installed last, so the bar wears 'risk', not 'buffer'.
+    // The newest rule wins. `riskKind` installed last, so the bar wears 'risk', not 'buffer'.
     expect(bar.getAttribute('data-variant')).toBe('risk');
     expect(bar.classList.contains('demo-risk-bar')).toBe(true);
     expect(bar.classList.contains('demo-buffer-bar')).toBe(false);
@@ -4428,7 +4428,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     const container = document.createElement('div');
     document.body.append(container);
     // A typo in a `when` matches no row, and it must not take the layout pass down. Silence was the
-    // remaining half of `J59`: the rule stopped matching and nothing said why.
+    // The rule stopped matching and nothing said why.
     const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
     const reports: ErrorReport[] = [];
     const gantt = new Gantt({ container, dataset });
@@ -4436,7 +4436,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       reports.push(report);
     });
     // Assigned after the subscription, not passed to the constructor: a variant in `GanttOptions`
-    // resolves during the constructor's own first paint, the same trap `Q10`'s test above names.
+    // resolves during the constructor's own first paint, the same trap the test above names.
     gantt.variants = [{ name: 'typo', when: { notAField: true }, paint: () => ({ class: { typo: true } }) }];
     // One report for the rule and the key, however many rows resolve and however many frames run.
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -4464,10 +4464,10 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       reports.push(report);
     });
     // Assigned after the subscription, live (`plans/02`): `barLabels` in `GanttOptions` resolves
-    // during the constructor's own first paint, the same trap the `J59` test above names.
+    // during the constructor's own first paint, the same trap the test above names.
     gantt.barLabels = { field: 'notAField' };
     // One report for the field, however many bars and frames run — never one throw per bar, which
-    // would escape `FrameScheduler`'s own rAF callback and reach no consumer (#421 F2).
+    // would escape `FrameScheduler`'s own rAF callback and reach no consumer (#421).
     await new Promise((resolve) => requestAnimationFrame(resolve));
     gantt.barLabels = { field: 'notAField' };
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -4561,7 +4561,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
         reports.push(report);
       });
       // Assigned after the subscription, not passed to the constructor: `rowSource` in `GanttOptions`
-      // resolves during the constructor's own first paint, the same trap the `J59` test above names.
+      // resolves during the constructor's own first paint, the same trap the test above names.
       gantt.rowSource = { source: 'entries', childrenAsSegments: { phaes: 'build' } as never };
       await new Promise((resolve) => requestAnimationFrame(resolve));
       // One report for the key, however many frames run.
@@ -4572,7 +4572,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
         row.getAttribute('data-entry-id'),
       );
       // Every entry keeps its own row: the rule matches nothing, not `unknown-variant-field`'s
-      // "typo'd key" case, but this rule's own code (Q29).
+      // "typo'd key" case, but this rule's own code.
       expect(rowIds).toEqual(['p1', 'c1', 'c2', 'p2', 'c3']);
 
       const missing = reports.filter((report) => report.code === 'unknown-row-source-field');
@@ -4686,7 +4686,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
       const barIds = bars.map((bar) => bar.dataset['barId']);
       // p1 draws no bar of its own — `summary()` resolved for it and `wholeSpanUnlessSegments` answered `[]`
-      // (Q27). c1 and c2 draw their own bars, on p1's row.
+      // c1 and c2 draw their own bars, on p1's row.
       expect(barIds).toEqual([barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars.every((bar) => bar.dataset['variant'] === 'leaf')).toBe(true);
 
@@ -4710,7 +4710,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
         dataset,
         rowSource: { source: 'entries', childrenAsSegments: true },
         // A plugin's own rule, ranked ahead of core's `summary()` (ADR 0018). Its `items` producer
-        // names two parameters, not three, and never asks about `childrenAsSegments` — Q26 says it
+        // names two parameters, not three, and never asks about `childrenAsSegments` — it
         // still wins and still draws.
         variants: [
           {
@@ -4733,7 +4733,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const bars = Array.from(container.querySelectorAll<HTMLElement>('.fg-bar'));
       const barIds = bars.map((bar) => bar.dataset['barId']);
       // p1's own band bar draws, plus c1's and c2's own bars — the band producer ignoring the new
-      // parameter still ran and still won for p1 (Q26).
+      // parameter still ran and still won for p1.
       expect(barIds).toEqual([barId(entryId('p1'), 99), barId(entryId('c1'), 0), barId(entryId('c2'), 0)]);
       expect(bars[0]?.dataset['variant']).toBe('band');
 
@@ -4747,7 +4747,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       const dataset = new Dataset({
         timeZone: 'UTC',
         entries: [
-          // p1 has one child, so the rule matches it (Q34) — but neither carries a date, so p1's own
+          // p1 has one child, so the rule matches it — but neither carries a date, so p1's own
           // rollup start/end stays undefined too. `spansTime` already skips every dateless entry
           // (ADR 0012), so this needs no new mechanism.
           { id: 'p1', name: 'P1' },
@@ -5010,7 +5010,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
 
     // Box: "dataset.entries.update('req-1', { showDaysOnRow: false }) opens one row into sub-rows
     // in one undo step, leaves every other row alone, and undoes back with the Selection intact."
-    // Spike Q10 — the live per-Entry switch through a data write, not through `gantt.rowSource`.
+    // The live per-Entry switch through a data write, not through `gantt.rowSource`.
     it('a write to the Field the rule matches on opens the row into sub-rows, in one undo step, and undoes back (Q10)', async () => {
       const container = document.createElement('div');
       document.body.append(container);
@@ -5084,7 +5084,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     // moves every bar." A segmented row is an ordinary rolling-up parent to the write door — data/
     // carries no notion of "claimed" at all, so the refusal is proven the same way any rolling-up
     // parent's is (`entry-store.mutation.test.ts`); this pins it against the exact shape a segmented
-    // row uses. The drag half needs a bar to grab: `req-1` draws none of its own (Q26), so a
+    // row uses. The drag half needs a bar to grab: `req-1` draws none of its own, so a
     // consumer variant supplies the rail the way `harness/e2e/hierarchy.ts`'s own `summary()` case does
     // — the same shape the "consumer producer... still draws a band" test above already installs.
     it("a write to a segmented row's start/end is refused, and dragging its rail bar moves every child (ADR 0013)", () => {
@@ -5546,7 +5546,7 @@ describe('Gantt entryActivate (#434)', () => {
     gantt.destroy();
   });
 
-  // #434 F4: a writable grid cell's double-click used to assume `canWrite` alone meant "an editor
+  // #434: a writable grid cell's double-click used to assume `canWrite` alone meant "an editor
   // handles it" — with no `inlineEditing()` installed there is no editor, and the double-click did
   // nothing. The fix asks one shared question instead (`#editorTakesFocusedCell`): does
   // `freegantt.editFocusedCell` take this cell? With no `inlineEditing()`, core's own inert
@@ -5801,7 +5801,7 @@ describe('Gantt selection over a segmented row’s bars (ADR 0010, ADR 0025, #42
     container.remove();
   });
 
-  // #230 R0: the Mod+Arrow test above drives the chord, not the two commands it binds, and it never
+  // #230: the Mod+Arrow test above drives the chord, not the two commands it binds, and it never
   // presses the low-end clamp or a one-child row. This pins both commands directly, both clamps.
   it('freegantt.selectNextEntry/selectPreviousEntry step within a row and clamp at both ends', () => {
     const { container, gantt } = makeSegmentedGantt();
@@ -6052,7 +6052,7 @@ describe('Gantt capabilities / capability hot path (S3.2, D-S3-9, [S3-A3]/[S3-A5
     gantt.destroy();
   });
 
-  // #195, D-S5-35: `gantt.capabilities = { resize: false }` is the whole config, so a page that
+  // #195: `gantt.capabilities = { resize: false }` is the whole config, so a page that
   // flips one gesture with it drops every other rule it holds. These six cover the two verbs that
   // write one gesture instead.
   it('setCapabilityRule writes one gesture and leaves every other rule standing (#195)', () => {
@@ -6346,7 +6346,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
     const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
     stubPointerCapture(timeline);
     const original = document.elementFromPoint.bind(document);
-    // Hover the bar first (D-S3-6): resizableEntryId only resolves once something is hovered or
+    // Hover the bar first: resizableEntryId only resolves once something is hovered or
     // singly selected, and only then does the handle pair stop being `hidden`.
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
@@ -6473,7 +6473,7 @@ describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
 
 describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
   it('ArrowRight on the timeline pane nudges the selected entry, one transaction, undo reverts', () => {
-    // S5.11, D-S5-39: `attachKeyboardEditing` scopes to the timeline pane now, not the whole
+    // S5.11: `attachKeyboardEditing` scopes to the timeline pane now, not the whole
     // container — a bar's nudge is that pane's own job.
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
@@ -6559,7 +6559,7 @@ describe('Gantt keyboard nudge (S3.5, [S3-A1] keyboard half, D-S3-13)', () => {
   });
 
   it('ArrowDown in the grid pane moves focus to the next row without writing the dataset', () => {
-    // S5.11, D-S5-26: `view/roving-focus.ts` owns row-to-row movement now — a grid-pane arrow key,
+    // S5.11: `view/roving-focus.ts` owns row-to-row movement now — a grid-pane arrow key,
     // not the timeline's own nudge chord.
     const container = document.createElement('div');
     const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
@@ -6625,7 +6625,7 @@ describe('Gantt async veto and pending (S3.5, D-S3-17)', () => {
     expect(bar.dataset['state']).toContain('pending');
     const heldTransform = bar.style.transform;
     expect(heldTransform).not.toBe(originTransform);
-    // D-S3-17: held paint is the snapped commit draft, not the last unsnapped pointer preview.
+    // Held paint is the snapped commit draft, not the last unsnapped pointer preview.
     expect(heldTransform).not.toBe(unsnappedPreview);
     expect(afterEvents).toEqual([]);
 
@@ -6770,7 +6770,7 @@ describe('Gantt viewport gestures (S3.7, [S3-A7], D-S3-14)', () => {
   }
 
   it('[S3-A7] ctrl+wheel zooms, anchored; shift+wheel pans; Mod+Home/End pan; dataset.on("change") never fires', () => {
-    // S5.11, D-S5-26: bare `PageDown`/`Home`/`End` moved off the timeline this slice — the grid
+    // S5.11: bare `PageDown`/`Home`/`End` moved off the timeline this slice — the grid
     // pane's `RovingFocus` now owns them, for paging and jumping between rows (`roving-focus.test.ts`
     // covers that). The timeline keeps `Mod+Home`/`Mod+End` as its own axis-wide fallback.
     FakeResizeObserver.instances = [];
@@ -7096,7 +7096,7 @@ describe('Gantt scroll re-clamp when the row count shrinks', () => {
     }
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    // D-S1.5-2: a shrink never rewrites `position` by itself — it stays exactly where the
+    // A shrink never rewrites `position` by itself — it stays exactly where the
     // caller last asked, even past the new, smaller `max`, until something re-clamps it.
     expect(scroll.state.position).toBe(yBefore);
     expect(scroll.state.position).not.toBe(0);
@@ -7189,7 +7189,7 @@ describe('Gantt.plugins (S5.1, D-S5-1/D-S5-3)', () => {
     gantt.destroy();
   });
 
-  // #195, D-S5-36: adding one plugin at runtime used to mean restating the installed set —
+  // #195: adding one plugin at runtime used to mean restating the installed set —
   // `gantt.plugins = [...gantt.plugins, x]` to add and a `filter` to remove. `harness/main.ts` wrote
   // both, three times in one file.
   it('installPlugin adds one plugin and leaves the running ones untouched (#195)', () => {
@@ -7373,7 +7373,7 @@ describe('Gantt.commands (S5.2, D-S5-6/D-S5-7)', () => {
   });
 
   it('a plugin binding on Mod+A wins over core only while its when passes', () => {
-    // S5.11, D-S5-26: `Mod+A` replaces the old exemplar `ArrowRight` here — plain `ArrowRight` is
+    // S5.11: `Mod+A` replaces the old exemplar `ArrowRight` here — plain `ArrowRight` is
     // no longer a core chord at all (roving focus owns the plain arrows now). `Mod+A` still binds
     // unconditionally to `freegantt.selectAll`, so it keeps this test's fallback-to-core check.
     const container = document.createElement('div');
@@ -7616,7 +7616,7 @@ describe('Gantt.interaction.registerKeyHandler out-of-container dismissal (issue
   it('a chord registered through ctx.interaction.registerKeyHandler still fires for a key event whose target sits outside the container', () => {
     // A popup opened from a trigger that lives outside the Gantt's own container (a toolbar button
     // in the consumer's own page, say) has no path through the container's own bubble-phase listener — this is
-    // exactly the second regression the QC review found (F1): the old document-wide capture listener
+    // exactly the second regression the QC review found: the old document-wide capture listener
     // C3 removed used to catch this, and nothing replaced it. `plans/reviews/2026-09-03-s5-start-fixes-qc.md`.
     const container = document.createElement('div');
     document.body.append(container);
@@ -7708,7 +7708,7 @@ describe('plugin registrations live exactly as long as their plugin (#155)', () 
     const gantt = new Gantt({ container, dataset, plugins: [plugin] });
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
-    // D-S5-7: while the plugin is installed, its override wins — core's own select-all never runs.
+    // While the plugin is installed, its override wins — core's own select-all never runs.
     gantt.commands.run('freegantt.selectAll');
     expect(hijacked).toBe(1);
     expect(gantt.selectedEntryIds).toEqual([]);
@@ -7893,7 +7893,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
       container,
       dataset: riskDataset(),
       // The consumer names "risk" themselves: config beats a plugin, so this column is the
-      // consumer's, and the plugin leaving must not take it away (D-S5-33).
+      // consumer's, and the plugin leaving must not take it away.
       gridColumns: ['name', 'risk'],
       plugins: [riskColumnPlugin],
     });
@@ -7909,7 +7909,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
     gantt.destroy();
   });
 
-  // #189, D-S5-38: the plugin owns its own column's geometry, the way the consumer owns theirs. The
+  // #189: the plugin owns its own column's geometry, the way the consumer owns theirs. The
   // library reports the width and persists it for nobody. This is that path, end to end, through the
   // public plugin surface alone: hear the commit, read your own column, register it back next time.
   it('a plugin carries its own column width across a reload, with no library-side store (#189)', async () => {
@@ -7924,7 +7924,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
           ctx.view.resolvedColumns().find((column) => column.field === 'risk')?.width;
         readMyColumn = myWidth;
         // The pair fires for every commit, a resize of this plugin's own column included. Its
-        // payload truthfully reports no change to the consumer's columns (D-S5-33), so the plugin
+        // payload truthfully reports no change to the consumer's columns, so the plugin
         // reads its own column rather than the payload.
         ctx.events.on('gridColumnsChange', () => {
           savedWidth = myWidth();
@@ -7945,7 +7945,7 @@ describe('a plugin column never becomes the consumer’s config (D-S5-33, #162/#
     dragColumnEdge(first, 'risk', 300);
 
     expect(savedWidth).toBeGreaterThan(100);
-    // Nothing the consumer saves carries it — that is D-S5-33 working, not a regression.
+    // Nothing the consumer saves carries it — the rule working, not a regression.
     expect(gantt.gridColumns).toEqual(['name']);
     gantt.destroy();
 
@@ -8128,7 +8128,7 @@ describe('a hidden grid column keeps its width and its place (S5.7, D-S5-34, #18
 });
 
 // #186 at the public seam: `api/gantt.ts` hands the drag preview an *arrow* over the Dataset's edit
-// hook, so every drag re-reads whatever occupies that hook (D-S5-23). This suite proves the arrow
+// hook, so every drag re-reads whatever occupies that hook. This suite proves the arrow
 // reaches an installed extender through the public `Gantt` surface, and ghosts nothing when the hook
 // stands empty.
 //
@@ -8147,7 +8147,7 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
   /** Occupies the Dataset's edit hook with `cascade`, through the one seam a real plugin uses
    *  (#250 A2: `extraEditsFor` is no longer a `Dataset` method, so a test can no longer intercept it
    *  by subclassing). Nothing else installs here, so the wrapper discards the occupant it composes
-   *  onto — `data/edit-extension.test.ts` is where composition order is asserted (D-S5-23). */
+   *  onto — `data/edit-extension.test.ts` is where composition order is asserted. */
   function extenderPlugin(cascade: EditExtender): DataPlugin {
     return {
       id: 'test.extender',
@@ -8160,7 +8160,7 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
   /** Moves `x` — never grabbed — whenever a move on `a` is proposed. Absolute instants, so no
    *  arithmetic on an `Instant` happens outside `time/` (I10).
    *
-   *  The target stays inside the Dataset's own range on purpose (#436 branch review F6). A cascade
+   *  The target stays inside the Dataset's own range on purpose (#436). A cascade
    *  that lands past `range.end` paints no bar at all, so there is no ghost geometry to assert —
    *  `previewOffsets` reports no offset for a side `barSpan` dropped, rather than forming a delta
    *  from the dropped sentinel and teleporting the node to `x ≈ 0`, collapsed, mid-drag. */
@@ -8200,7 +8200,7 @@ describe('Gantt ghosts the Dataset’s edit hook occupant (#186)', () => {
 
     timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 55, clientY: 5, pointerId: 1 }));
-    // The preview coalesces on the pipeline's own rAF, not synchronously per pointermove (D-S3-18).
+    // The preview coalesces on the pipeline's own rAF, not synchronously per pointermove.
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(barA.dataset['state']).toContain('dragging');
@@ -8524,7 +8524,7 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     // `#revealRect` read `rowTop`/`barsForEntry` off the stale memory.
     //
     // The row's own `rowTop` cannot prove this alone: with every row the library's own uniform
-    // height (D-S4-19), a stale height index still answers `topAt(i)` correctly from row count
+    // height, a stale height index still answers `topAt(i)` correctly from row count
     // alone (`row-height-index.ts`'s `heightAt` never bounds-checks `i`). `barsForEntry` is the one
     // answer a stale `#memory` truly cannot fake — a `rowById` map still built for one row holds no
     // Bars for row 'c' at all (`FrameMemory.rowMemory`'s `#noRow` fallback), so `reveal`'s x falls

@@ -1,6 +1,6 @@
 // layout/ — runs every registered decoration provider for the current window, converts their
 // time-based output into content pixels through the bound `TimeScale`, and memoizes the result so a
-// static provider costs one call per window change, not one per render (D-S5-15).
+// static provider costs one call per window change, not one per render.
 
 import type { Instant, TimeSpan, TimeUnit } from '../model/index.js';
 import { createZonedTime } from '../time/index.js';

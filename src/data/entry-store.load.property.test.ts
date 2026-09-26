@@ -1,5 +1,5 @@
 // data/ — entries.load() (#496), the property step (5): a child may list before its parent, in any
-// order, and `load` still lands the Q1 oracle — the same rows `new Dataset({ entries })` builds.
+// order, and `load` still lands the oracle — the same rows `new Dataset({ entries })` builds.
 // Beside `history.property.test.ts`, the property test style step 5 asks for.
 
 import fc from 'fast-check';

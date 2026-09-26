@@ -27,7 +27,7 @@ import type { ParentCycleRow } from './parent-cycle.js';
 type EntryRow = ParentCycleRow;
 
 /**
- * Every reason a whole-list write refuses the batch, checked before any of it stages (#496 Q2):
+ * Every reason a whole-list write refuses the batch, checked before any of it stages (#496):
  * two entries name the same id (`DuplicateEntryIdError`), an entry's `parentId` names an id outside
  * the batch (`EntryNotFoundError`), or a chain of `parentId`s loops (`ParentCycleError`). `load`
  * replaces every entry, so "outside the batch" means exactly that — there is no existing store to
@@ -56,7 +56,7 @@ export function assertEntryBatchIsSound(entries: readonly EntryRow[], operation:
 }
 
 /** What a whole-list ingest hands its caller: the placed rows, in the order the caller listed them
- *  (#496 Q1), and the checked tree those rows now agree with — `load` and construction both stage
+ *  (#496), and the checked tree those rows now agree with — `load` and construction both stage
  *  their adds in this order and roll up against these same `parents`. */
 export interface PlacedEntryBatch {
   readonly entries: readonly StoredEntry[];
@@ -115,9 +115,9 @@ export function readEntryBatch(
 }
 
 /**
- * Refuses a whole-list write called from inside an already-open `dataset.transaction()` (#496 Q4,
+ * Refuses a whole-list write called from inside an already-open `dataset.transaction()` (#496,
  * #517). `load` and `syncAll` are always their own transaction — unlike `add`/`update`/`remove`, which
- * join one already open (D-S2-8), a whole-list write replaces every entry in one step and must not
+ * join one already open, a whole-list write replaces every entry in one step and must not
  * become a nested step inside a caller's own batch.
  */
 export function assertNoOpenTransaction(openTransactions: number, operation: string): void {

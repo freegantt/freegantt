@@ -1,5 +1,5 @@
 // #126: fixed-width grid columns summing past the pane's own gridWidth used to clip silently
-// (D-S1.8-13). #139: the same overflow with no width authored at all, plus the `flex` opt-out.
+// #139: the same overflow with no width authored at all, plus the `flex` opt-out.
 // This fixture is what e2e/grid-scroll.spec.ts drives.
 
 import { Gantt, Dataset } from 'freegantt';
@@ -16,7 +16,7 @@ const gridColumns: readonly GridColumnInput[] = [
 ];
 
 // Distinct a11yLabel per instance: the default ('Gantt') is fine for one Gantt on a page, but three
-// sharing it name the same accessible region three times over (axe landmark-unique, D-S5-27).
+// sharing it name the same accessible region three times over (axe landmark-unique).
 new Gantt({ container: '#gantt', dataset, gridColumns, a11yLabel: 'Fixed-width columns' });
 
 // #139: the same four columns with nothing authored. A Grid column is fixed-width by default — it

@@ -5,7 +5,7 @@
 import { addMs, diffMs, fieldRowsOf, mergeEntryEdits, moveEntryTo } from 'freegantt';
 import type { Dataset, DataPlugin, EditRequest, EntryEdit, EntryId } from 'freegantt';
 
-/** The lock flag, an ordinary Field, not a plugin store row (#496 Q8): per-entry data a consumer
+/** The lock flag, an ordinary Field, not a plugin store row (#496): per-entry data a consumer
  *  must export and load back has to sit where `toInput()` and `entries.load()` both read it, and
  *  neither reads a plugin store. `editable: 'api'` keeps the cell dead in every grid; declaring no
  *  `column` means no grid ever draws one. `lock()`/`unlock()` below are the one door that writes it. */
@@ -40,7 +40,7 @@ export interface LockEntriesPlugin extends DataPlugin<LockProps> {
  * `initiallyLocked` list of its own — `data()` runs on the finished Dataset (ADR 0031), so it reads
  * every entry's `locked` Field straight off `ctx.dataset.entries` instead of staging one.
  *
- * Two seams, two jobs (D-S5-24's refusal note):
+ * Two seams, two jobs:
  * - the **extension hook** adds a cascade edit for every locked entry, on every call — a preview call
  *   and the real commit call carry the same `EditRequest`, so an extender can never tell them apart
  *   and must never refuse. This is what makes the locked bar ghost alongside the dragged one. The

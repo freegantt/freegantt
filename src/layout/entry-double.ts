@@ -10,7 +10,7 @@
 // It also proves the seam by construction. `layout/` satisfies the whole interface out of `model/`
 // and `time/` alone, so `layout/` never needed `data/` and the boundary rule stays untouched.
 //
-// **`duration()` here states the `'span'` measure, and only that one** (`F25`). The real answer is
+// **`duration()` here states the `'span'` measure, and only that one**. The real answer is
 // `measureEntryDuration`, which lives in `data/` and reads the Dataset's own `measureDuration`, so
 // this double cannot call it. A green layout test therefore says nothing about a `'children'`
 // Dataset: a rule like `when: (entry) => entry.duration()?.value === 0` is exercised under one

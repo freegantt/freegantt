@@ -6,7 +6,7 @@ import { test, expect } from '@playwright/test';
 // Only a real engine can prove attachPaneSize actually reaches the browser's own resize signal.
 
 // `frame.contentWidth` is not exposed directly, but the content sizer (render/dom/index.ts) is
-// translated to `contentWidth - 1` (S1.8, D-S1.8-1/D-S1.8-2 — no gutter added to the timeline pane's
+// translated to `contentWidth - 1` (S1.8 — no gutter added to the timeline pane's
 // content any more) and is otherwise invisible — reading its actual painted right edge (via
 // `getBoundingClientRect`, relative to the pane's own left edge) is the least invasive way to read
 // the fitted content width from outside the library. This avoids parsing the `transform` string
@@ -46,7 +46,7 @@ async function dragSplitterBy(page: import('@playwright/test').Page, deltaX: num
 
 test('resizing the window re-fits the axis (#8)', async ({ page }) => {
   // Both widths wide enough that the sample dataset's day-preset density floor (S1.12,
-  // D-S1.12-2/3) does not clamp fitDataset's pxPerMs at either end — a floored pane doesn't move
+  // which does not clamp fitDataset's pxPerMs at either end) — a floored pane doesn't move
   // its content edge on resize by design (the point of the floor is to scroll instead of squish),
   // so a resize test has to stay above that floor to observe a re-fit at all. The full demo dataset
   // spans ~83 days at dayPreset's minTickWidthPx of 96 (raised from 32 in the header readability
@@ -253,7 +253,7 @@ test('both panes stay pixel-aligned after a splitter drag (U1)', async ({ page }
 
   // Matched by entry id, not by array position/count: the row layer windows purely on vertical
   // scroll, but the bar layer also culls on the horizontal viewport (S1.12's density floor,
-  // D-S1.12-2/3, routinely makes fitDataset's content wider than the pane for this dataset, so
+  // which routinely makes fitDataset's content wider than the pane for this dataset, so
   // some visible rows legitimately have no bar in view right now). I9 only claims that a row and
   // its OWN entry's bar agree in y — not that every row has a bar. Positions come from
   // `getBoundingClientRect()`, not a parsed `transform` string, so this survives the library

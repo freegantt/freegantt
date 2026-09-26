@@ -3,7 +3,7 @@
 // the gallery calls `destroy()`, so nothing else shows what it leaves behind.
 //
 // `e2e/mount-destroy.spec.ts` drives this page and counts nodes and listeners in a real browser —
-// the half of S6's R4 a fake DOM cannot answer, because happy-dom has no detached-node accounting.
+// the half of S6's teardown check a fake DOM cannot answer, because happy-dom has no detached-node accounting.
 
 import { Gantt, Dataset, ScrollAxis, TimeScaleModel } from 'freegantt';
 import { sampleEntryInputs } from '../../fixtures/sample-dataset.js';
@@ -14,7 +14,7 @@ const cycleCount = document.querySelector<HTMLOutputElement>('[data-testid="cycl
 // What the pair shares, built once and never rebuilt. This is the point of the page: a shared
 // object outlives every Gantt bound to it, so it is where a leftover binding would pile up.
 //
-// x only, with y left private — the first consumer's own shape (D-S6-1, #405). Their two panes hold
+// x only, with y left private — the first consumer's own shape (#405). Their two panes hold
 // different row sets, so a shared vertical scroll would align rows that mean nothing to each other.
 const scale = new TimeScaleModel({ fit: 'preset' });
 const scroll = { x: new ScrollAxis() };

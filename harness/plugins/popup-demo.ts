@@ -20,7 +20,7 @@ export interface PopupDemoPlugin extends ChromePlugin {
 
 export function popupDemo(): PopupDemoPlugin {
   /** Held per `popupDemo()` call, so two Gantts on one page hold two of these and share nothing.
-   *  S5.3, D-S5-8: a plugin's `view()` half is the only place `ctx.view` reaches page scope.
+   *  S5.3: a plugin's `view()` half is the only place `ctx.view` reaches page scope.
    *
    *  It keeps `ctx.view.dom` beside the `Popup`: finding an entry's bar is the library's job.
    *  `ctx.view.dom.barFor(id)` replaces the raw `#gantt .fg-bar[data-bar-id="…"]` selector the two

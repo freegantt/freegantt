@@ -1,5 +1,5 @@
 // interaction/ — the low-level pointer-drag primitive `entry-gestures.ts` drives (plans/03 §S3,
-// D-S3-5): threshold, pointer capture, Escape-cancel, and touch long-press (D-S3-21). Knows nothing
+// threshold, pointer capture, Escape-cancel, and touch long-press). Knows nothing
 // about entries, drafts or gestures — `start`/`move`/`commit`/`cancel` are plain callbacks, so this
 // file stays reusable for any future drag (resize, S3.4) over the same shape.
 //
@@ -8,7 +8,7 @@
 // drag must never also change the selection).
 
 /** A mouse/pen drag arms once movement crosses `DRAG_THRESHOLD_PX`; a touch drag arms only after
- *  `LONG_PRESS_MS` holds still, so a finger can still scroll a dense chart (D-S3-21). */
+ *  `LONG_PRESS_MS` holds still, so a finger can still scroll a dense chart. */
 const DRAG_THRESHOLD_PX = 4;
 const LONG_PRESS_MS = 400;
 

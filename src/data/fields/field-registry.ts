@@ -1,14 +1,14 @@
-// data/ — one FieldRegistry per DatasetState (D-S4-1). Resolves Field types, stores the whole
+// data/ — one FieldRegistry per DatasetState. Resolves Field types, stores the whole
 // declaration (`column` included), and never formats or paints.
 //
 // A Dataset plugin declares Fields on its own object — `fields`/`fieldTypes`/`aggregators` (#496
-// grill round 3, R1) — the same shape `DatasetOptions` takes. `DatasetState`'s constructor merges
+// grill round 3) — the same shape `DatasetOptions` takes. `DatasetState`'s constructor merges
 // every source's declarations, core Fields first, before `entries` is read. A data half declares
 // what shapes the Dataset's own construction, and a Dataset installs its plugins once — which is
 // also why `Dataset.plugins` is read-only where `Gantt.plugins` is not.
 //
 // `all` answers what this Dataset resolves against, core Fields, the consumer's own, and a plugin's,
-// in one declaration order (D-S5-33). No door singles out who declared which — a declaration is code
+// in one declaration order. No door singles out who declared which — a declaration is code
 // the caller already holds, not data the library owes a reader (ADR 0016).
 
 import type {
@@ -152,7 +152,7 @@ export function requireResolvedIndex(
  *  iterates this list; a key added here needs no other line changed, and no key names itself twice.
  *  `rollUp` is on the list, but `overridableKeysFor` narrows it further: `plans/01` §6 puts only
  *  `start`/`end` on the rollUp override path, because those are the only core Fields that declare a
- *  `rollUp` of their own (D-S4-3) — a core Field with no `rollUp` (`name`, `parentId`) has nothing
+ *  `rollUp` of their own — a core Field with no `rollUp` (`name`, `parentId`) has nothing
  *  for a consumer's `rollUp` to override, and letting one through would let a consumer's Field rows
  *  roll a value that core never computes at all. */
 const CORE_FIELD_OVERRIDABLE_KEYS = ['editable', 'rollUp'] as const;
@@ -280,7 +280,7 @@ export class FieldRegistry {
   }
 
   /** Call: `dataset.setFieldEditable('start', 'never')` — the one Field attribute that may change
-   *  after setup (ADR 0015, Q16). It changes a declared Field; it never adds one, so an unknown key
+   *  after setup (ADR 0015). It changes a declared Field; it never adds one, so an unknown key
    *  is `UnknownFieldError`.
    *
    *  It copies the Field and replaces `all`'s array identity, because a config value is a value
@@ -311,7 +311,7 @@ export class FieldRegistry {
     return this.#aggregators[name];
   }
 
-  /** Fields that participate in the Rollup after type merge (D-S4-3). */
+  /** Fields that participate in the Rollup after type merge. */
   rollingUpFields(): readonly RollingUpField[] {
     return this.all.filter((field): field is RollingUpField => rollsUp(field));
   }

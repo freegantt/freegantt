@@ -1,4 +1,4 @@
-// D-S5-29: every demo page opens with one short note, above the Gantt, for a reader who has never
+// Every demo page opens with one short note, above the Gantt, for a reader who has never
 // seen this library. It answers three questions: which features this page shows, the config that
 // does it, and where the spec says so. One table holds every page's answer; every page calls one
 // mount function.

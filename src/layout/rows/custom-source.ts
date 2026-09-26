@@ -1,4 +1,4 @@
-// layout/ — `{ source: 'custom' }`. Adapts public CustomRow once; PlannedRow stays internal (D-S4-21).
+// layout/ — `{ source: 'custom' }`. Adapts public CustomRow once; PlannedRow stays internal.
 
 import { DuplicateRowIdError, entryId, rowId } from '../../model/index.js';
 import type { CustomRowInput, CustomRowSource, UnindexedRow } from './row-source.js';

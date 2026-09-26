@@ -1,5 +1,5 @@
 // data/ — the transaction runner: the only place that mints TxToken, and the sole path from a set of
-// store mutations to one committed ChangeSet (D-S2-24). Imports no history and no view — both are
+// store mutations to one committed ChangeSet. Imports no history and no view — both are
 // subscribers to the `change` event this file emits, never callers of it.
 
 import type {
@@ -102,7 +102,7 @@ export interface TransactionData {
   readonly pluginStores: TransactionalPluginStores;
   /** The one door onto the extension hook (D4, D-S2-6): calls the current occupant and returns
    *  what it wrote. A method, not a fixed field, because `ctx.edits.setExtender` composes onto the
-   *  occupant while plugins set up (D-S5-23) — this always calls whichever one is current (#209 Q5).
+   *  occupant while plugins set up — this always calls whichever one is current (#209).
    *
    *  `DatasetState.extraEditsReadingFor` is this method's one implementation; the friend function
    *  `extraEditsFor(dataset, request)` the drag preview calls (`api/dataset.ts`, ADR 0007) is a

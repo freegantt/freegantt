@@ -1,4 +1,4 @@
-// layout/ — decoration provider types (D-S5-15). A provider is a pure function of the window,
+// layout/ — decoration provider types. A provider is a pure function of the window,
 // registered from the DOM side (`ctx.view.registerDecoration`) and invoked from here — the same
 // shape `BarProducer` already has (ADR 0002's precedent). It never touches the DOM and never
 // mutates its input.
@@ -19,7 +19,7 @@ export interface DecorationContext {
   /** The visible time span, widened by overscan and then bounded by the content's own
    *  `[0, contentWidth]` (#436). The bound is not a narrowing a provider has to work around: a
    *  decoration placed outside the content paints past the timeline's own edge and widens the
-   *  pane's native `scrollWidth` past the content sizer, the harm D-S1.8-1 exists to stop. So the
+   *  pane's native `scrollWidth` past the content sizer, the harm the content bound exists to stop. So the
    *  span a provider reads is exactly the span it is allowed to paint over.
    *
    *  Not the same number as `Gantt.visibleSpan` (issue #461): that one excludes overscan on
@@ -29,7 +29,7 @@ export interface DecorationContext {
   span: TimeSpan;
   /** The rows in that window, so a provider can shade a row instead of a date range. */
   rows: readonly FrameRow[];
-  /** Zone-bound date math (D-S5-16). The provider never touches `Date` or a magic constant. */
+  /** Zone-bound date math. The provider never touches `Date` or a magic constant. */
   time: ZonedTime;
   /** What one tick column stands for — `'day'` with an increment of 1 means a reader can see
    *  individual days. A provider that only makes sense at some granularity tests these two and

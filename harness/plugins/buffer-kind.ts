@@ -30,10 +30,10 @@ export function bufferKind() {
       ctx.variants.add({
         name: BUFFER_VARIANT,
         // Which rows are mine? The ones the page marked as buffer. A field match is equality, so
-        // this matches the rows whose `buffer` value **is** `true` (J6).
+        // this matches the rows whose `buffer` value **is** `true`.
         when: { buffer: true },
         // How does it look? A hatched fill, painted through the variant's own `paint` — no bespoke
-        // paint path, and the library keeps painting the bar's label (J34).
+        // paint path, and the library keeps painting the bar's label.
         paint: () => ({ class: { 'demo-buffer-bar': true } }),
         // What can you do to it? Move and select stay at the library default; resize refuses — a
         // buffer's length comes from the schedule around it, not a drag.

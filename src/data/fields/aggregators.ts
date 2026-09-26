@@ -1,4 +1,4 @@
-// data/ — shipped Aggregators, registered by name (D-S4-3). A name serializes; a function does not.
+// data/ — shipped Aggregators, registered by name. A name serializes; a function does not.
 // Skip holes (`undefined`, non-numeric for sum/min/max, zero-duration children for the weighted
 // mean) and never throw. Every child skipped → `undefined`, meaning "no opinion" (`model/field.ts`).
 // On a roll-up parent that clears the stored value instead of keeping it — `rollup.ts` (#270),

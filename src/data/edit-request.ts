@@ -43,7 +43,7 @@ export interface CreateEditRequestOptions {
   readonly lockRule: FieldLockRule;
 }
 
-/** Builds the object `EditExtender` reads (D4, D-S2-6). The effective child index `hasChildren` and
+/** Builds the object `EditExtender` reads (D4). The effective child index `hasChildren` and
  *  `writeTarget` both need is built lazily, on the first call that needs it, and never before — a
  *  preview frame that asks neither allocates nothing (I5). It shares `rollup.ts`'s own "this commit
  *  moves no row" shortcut (#421 C4, `entry-tree.ts`'s `commitMovesNoRow`) rather than repeating it:

@@ -13,7 +13,7 @@ import type { StoredEntry } from './stored-entry.js';
  *  refuses the key at runtime. */
 export type CoreFieldKey = keyof Omit<StoredEntry, 'id' | 'props'>;
 
-/** A Field's name, and the changeset's `field`. Open by construction (D-S2-26, ADR 0005). */
+/** A Field's name, and the changeset's `field`. Open by construction (ADR 0005). */
 export type FieldKey = CoreFieldKey | (string & {});
 
 /** What each shipped Field reads as: the `Entry` keys (minus `props`, ADR 0011's one reserved key),

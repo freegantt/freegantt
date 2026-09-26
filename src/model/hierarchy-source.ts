@@ -15,7 +15,7 @@ import type { StoredEntry } from './stored-entry.js';
  * from this function. A source handed a live `Entry` would ask the question it exists to answer.
  *
  * Core's own source is `(entry) => entry.parentId`, registered like any other with no special claim
- * on the seam (D-S5-23).
+ * on the seam.
  *
  * One Entry in, one parent id out — never the whole dataset. Core inverts the answer into the child
  * index, so a query stays O(children + edits) instead of O(dataset).

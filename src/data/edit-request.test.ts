@@ -71,7 +71,7 @@ function proposedEdit(patch: Record<string, unknown>): ProposedEdit {
 
 describe('createEditRequest', () => {
   it('answers entryAfterEdits with one .get, never a walk of the committed entries (D-S5-45)', () => {
-    // D-S5-45: a hook reads `entryAfterEdits` on every preview frame to see this transaction's own
+    // A hook reads `entryAfterEdits` on every preview frame to see this transaction's own
     // body edit — that read must cost one lookup, not a copy or a walk of the roster, whether or not
     // this row has a proposed edit at all (`gesture-pipeline.test.ts` pins the other half of this
     // idea: wiring a hook at all must not force a roster copy).

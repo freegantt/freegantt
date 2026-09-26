@@ -31,7 +31,7 @@ import type { UnplacedEntry } from './hierarchy-source.js';
 
 /** `model/write-verdict.ts` declares the verdict pair (and, since #466, `WriteTarget`) under its
  *  public names, so a consumer can import what `view/capability.ts` republishes and what
- *  `EditRequest.writeTarget` returns (F1, `ae-forgotten-export`). This file keeps its own
+ *  `EditRequest.writeTarget` returns (`ae-forgotten-export`). This file keeps its own
  *  `Field`-prefixed names as local aliases, because every call site here already reads by them. */
 export type FieldWriteRefusalReason = WriteRefusalReason;
 export type FieldWriteVerdict = WriteVerdict;
@@ -50,7 +50,7 @@ export const DERIVED: FieldWriteVerdict = Object.freeze({ ok: false, reason: 'de
  *  asked. A write refused here is refused standalone and refused inside `dataset.transaction()`
  *  alike: grouping decides when writes land together and what one undo step covers, never what is
  *  allowed. The signal it replaced was transaction depth, and `dataset.transaction()` is public, so
- *  a consumer set it in one call (Q7, ADR 0013's appendix — still open).
+ *  a consumer set it in one call (ADR 0013's appendix — still open).
  *
  *  Three readers ask, and they must agree (I14): `entries.update()` decides a write with it,
  *  `view/capability.ts` decides whether the cell offers an editor at all, and `EditRequest.writeTarget`
@@ -67,7 +67,7 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field | undefine
 
 /** Core's own lock rule (#473): silence, on every cell. The first occupant of `ctx.edits.setLockRule`
  *  — a plugin composes onto this the way it composes onto `identityExtender`/`storedParentSource`
- *  (D-S5-23) — so a Dataset with no plugin installed answers every cell with `Field.editable` alone. */
+ *  — so a Dataset with no plugin installed answers every cell with `Field.editable` alone. */
 export const identityFieldLockRule: FieldLockRule = () => undefined;
 
 /** One frozen `FieldLockQuery`, safe to share across every cell for as long as `identityFieldLockRule`

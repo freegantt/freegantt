@@ -6,7 +6,7 @@
 // Every action here is `gantt.commands.run(id)`, never a second implementation. Undo, redo, expand
 // all, collapse all, zoom and Today are all registered core commands with default keybindings, so a
 // button that called `gantt.undo()` directly would drift from the keystroke that does the same job
-// (D-S5-26: a pointer affordance and its command are one implementation, two entry points). Where
+// (a pointer affordance and its command are one implementation, two entry points). Where
 // the control sets a value rather than performing an act — preset, snap — it writes the
 // published property, because those are configuration, not commands.
 //

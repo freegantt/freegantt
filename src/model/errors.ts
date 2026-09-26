@@ -1,5 +1,5 @@
 // model/'s runtime carve-out widens here: id/brand helpers and this base class, zero dependencies
-// (plans/01 §1.1, D-S1.7-8). A public error type is part of the API surface (only api/ and model/
+// (plans/01 §1.1). A public error type is part of the API surface (only api/ and model/
 // types are public), so it lives where the rest of the public surface lives.
 //
 // Every message follows one rule (#237). Say what happened in one plain sentence. Then say what to
@@ -10,8 +10,8 @@
 // those belong in the doc comment above the class, where they already are.
 //
 // `operation` is how the caller's own name reaches the message. An error class never asserts one:
-// `reconcileEnvelope` alone is reached by `entries.update()` and by an `EditExtender` cascade
-// (D-S5-44), so a baked-in prefix tells one of those two callers about a call it never made (#239).
+// `reconcileEnvelope` alone is reached by `entries.update()` and by an `EditExtender` cascade,
+// so a baked-in prefix tells one of those two callers about a call it never made (#239).
 
 import type { FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
@@ -165,7 +165,7 @@ export class ContainerNotFoundError extends FreeGanttError {
  *  - `'no-such-date'` — a calendar date the calendar does not have, such as `'2026-02-31'`.
  *  - `'not-finite'` — a `number` that is not a finite count of epoch milliseconds (`NaN`, `Infinity`).
  *  - `'null-value'` — `null` or `undefined`. Not a zone problem: an absent date is a value left out,
- *    not a null one (#431 F6).
+ *    not a null one (#431).
  *  - `'zoneless'` — a real wall-clock reading with no zone attached, handed to `instant()`, which
  *    resolves no zone. Only `instant()` produces it — `toInstant` has a zone and resolves such a
  *    string instead of refusing it. */
@@ -251,7 +251,7 @@ export class InvalidPlainTimeError extends FreeGanttError {
 }
 
 /** `code: 'unknown-preset'` — a `PresetId` string outside every table `resolvePreset` searched
- * (S1.9, D-S1.9-3; ladder search added #489). `gantt.preset` searches this Gantt's own
+ * (S1.9; ladder search added #489). `gantt.preset` searches this Gantt's own
  * `zoomPresets` before the shipped table (#489 owner ruling); `gantt.zoomPresets` and a shared
  * `TimeScaleModel`'s own `preset` have no ladder to search and stay shipped-only. `ladderIds` is
  * empty for those two doors — the message then names only the shipped table, honestly reporting
@@ -322,8 +322,8 @@ export class InvalidPresetError extends FreeGanttError {
   }
 }
 
-/** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9,
- * D-S1.9-6) or a mutator (`entries.update`/`remove`, a `parentId` naming a missing entry — S2.3
+/** `code: 'entry-not-found'` — an id the Dataset has no entry for, from `reveal(entryId)` (S1.9)
+ * or a mutator (`entries.update`/`remove`, a `parentId` naming a missing entry — S2.3
  * §1.3 — or a plugin's `store.set` for an id with no entry). A read never raises it: a row is how a
  * value is read, and `entries.get` answers `undefined` for an id the Dataset has no entry for
  * (ADR 0017). `operation` names the call that failed, so the message points at what the caller
@@ -402,7 +402,7 @@ export class ParentCycleError extends FreeGanttError {
  *  and not silently collapsed. A zero-length span (`start === end`) stays legal — it is the empty
  *  half-open interval `[t, t)`, a different question from an inverted one.
  *
- *  The constructor is structural for the reason `InvalidSnapIncrementError`'s is (s5-231 review, F4).
+ *  The constructor is structural for the reason `InvalidSnapIncrementError`'s is (s5-231 review).
  *  It names the Entry the consumer wrote and prints both instants — a bulk load whose zone shifted by
  *  an hour is invisible without them. It takes `operation` from the caller, because an `EditExtender`
  *  cascade reaches the same check as `entries.update()` does. */
@@ -450,7 +450,7 @@ export class SiblingIndexOutOfRangeError extends FreeGanttError {
 }
 
 /** `code: 'unknown-field'` — an edit or `entry.read(key)` naming a key that is not a declared
- *  Field. The registry is the legal set: core Fields plus the consumer's (D-S4-5, D-S2-26). */
+ *  Field. The registry is the legal set: core Fields plus the consumer's. */
 export class UnknownFieldError extends FreeGanttError {
   readonly field: FieldKey;
   readonly operation: string;
@@ -467,7 +467,7 @@ export class UnknownFieldError extends FreeGanttError {
 }
 
 /** `code: 'duplicate-field-key'` — two Field declarations share a `key`, including two declarations
- *  that both override the same core Field (D-S4-5, #142). A declaration naming a core Field's key
+ *  that both override the same core Field (#142). A declaration naming a core Field's key
  *  alone, or naming one alongside an illegal key, is `IllegalCoreFieldOverrideError` instead — this
  *  error is for an outright clash, the same key claimed twice. */
 export class DuplicateFieldKeyError extends FreeGanttError {
@@ -500,7 +500,7 @@ export class ReservedFieldKeyError extends FreeGanttError {
 }
 
 /** `code: 'duplicate-props-key'` — a constructor entry (or `entries.add()`) names one declared Field
- *  key twice: once flat, at the top level, and once again inside `props` (ADR 0011, Q15). The two
+ *  key twice: once flat, at the top level, and once again inside `props` (ADR 0011). The two
  *  spellings would silently disagree about which value wins, so this throws instead of picking one —
  *  an undeclared key never reaches here, because ingest carries it without a second opinion to
  *  conflict with. */
@@ -605,7 +605,7 @@ export class DerivedFieldNotWritableError extends FreeGanttError {
 }
 
 /** `code: 'unknown-aggregator'` — `rollUp` names an Aggregator that is not shipped and not in
- *  `DatasetOptions.aggregators` (D-S4-5). */
+ *  `DatasetOptions.aggregators`. */
 export class UnknownAggregatorError extends FreeGanttError {
   readonly aggregatorName: string;
 
@@ -619,7 +619,7 @@ export class UnknownAggregatorError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-field-type'` — `type` names a bundle that is not in `fieldTypes` (D-S4-5). */
+/** `code: 'unknown-field-type'` — `type` names a bundle that is not in `fieldTypes`. */
 export class UnknownFieldTypeError extends FreeGanttError {
   readonly typeName: string;
 
@@ -633,7 +633,7 @@ export class UnknownFieldTypeError extends FreeGanttError {
   }
 }
 
-/** `code: 'aggregator-failed'` — a consumer Aggregator threw during the Rollup (D-S4-9). The
+/** `code: 'aggregator-failed'` — a consumer Aggregator threw during the Rollup. The
  *  transaction rolls back; nothing commits and no history entry is pushed. */
 export class AggregatorFailedError extends FreeGanttError {
   readonly fieldKey: FieldKey;
@@ -663,7 +663,7 @@ export class AggregatorFailedError extends FreeGanttError {
 }
 
 /** `code: 'field-column-not-defined'` — `gridColumns` used a bare key, and that Field has no
- *  `column` defaults (D-S4-12). Pass a column object in `gridColumns`, or add a `column` section
+ *  `column` defaults. Pass a column object in `gridColumns`, or add a `column` section
  *  on a Field you declared. Thrown when S4.3 resolves columns. */
 export class FieldColumnNotDefinedError extends FreeGanttError {
   readonly key: string;
@@ -679,7 +679,7 @@ export class FieldColumnNotDefinedError extends FreeGanttError {
 }
 
 /** `code: 'unknown-grid-column'` — `gantt.hideGridColumn` or `gantt.showGridColumn` named a field
- *  that no declared column carries (D-S5-34). Both verbs act on a column this Gantt already
+ *  that no declared column carries. Both verbs act on a column this Gantt already
  *  declares. Neither one adds a column, so a name nothing declares is a mistake and says so. A
  *  hidden column stays declared, so `showGridColumn` always reaches what `hideGridColumn` hid. */
 export class UnknownGridColumnError extends FreeGanttError {
@@ -696,7 +696,7 @@ export class UnknownGridColumnError extends FreeGanttError {
 }
 
 /** `code: 'mutation-during-notification'` — a mutator called while `beforeChange` or `change` handlers
- * are running (D-S2-9, D-S2-25). The write set is discarded; nothing about the notification in
+ * are running. The write set is discarded; nothing about the notification in
  * progress is affected. */
 export class MutationDuringNotificationError extends FreeGanttError {
   readonly operation: string;
@@ -733,7 +733,7 @@ export class MutationDuringExtensionHookError extends FreeGanttError {
 /** `code: 'transaction-already-open'` — `entries.load()` (#496), or `entries.syncAll()` (#517), called
  * inside an already-open `dataset.transaction()`. Both doors replace the whole Dataset's data in one
  * step and always build and commit their own ChangeSet; unlike `add`/`update`/`remove`, neither joins
- * a caller's open transaction (D-S2-8 does not apply here). The write set is discarded; the caller's
+ * a caller's open transaction. The write set is discarded; the caller's
  * own open transaction is not affected. */
 export class TransactionAlreadyOpenError extends FreeGanttError {
   readonly operation: string;
@@ -749,7 +749,7 @@ export class TransactionAlreadyOpenError extends FreeGanttError {
 }
 
 /** `code: 'mutation-cancelled'` — a `beforeChange` handler returned `false`, refusing the whole
- * changeset (D-S2-25). Thrown by the programmatic call that triggered the transaction, carrying the
+ * changeset. Thrown by the programmatic call that triggered the transaction, carrying the
  * changeset that was refused — `entries.update()`'s contract is to return the stored entry, and if
  * nothing was stored, returning one would be a lie.
  *
@@ -801,7 +801,7 @@ export class UnreadableCellValueError extends FreeGanttError {
 }
 
 /** `code: 'invalid-replay-origin'` — `replay(changeSet)` given a changeset whose `origin` is not
- * `'undo'` or `'redo'`. `'user'` is `apply`'s door (D-S2-11), not open yet
+ * `'undo'` or `'redo'`. `'user'` is `apply`'s door, not open yet
  * (`plans/s2-data-core/s2b-undo-replay-seam.md`). */
 export class InvalidReplayOriginError extends FreeGanttError {
   readonly origin: string;
@@ -830,7 +830,7 @@ export class DuplicateRowIdError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-plugin-id'` — two entries of one `plugins` list share one `PluginId` (D-S5-3).
+/** `code: 'duplicate-plugin-id'` — two entries of one `plugins` list share one `PluginId`.
  *  A `Gantt`'s own list and the Dataset's are checked together, because one `requires` graph covers
  *  both (ADR 0019). */
 export class DuplicatePluginIdError extends FreeGanttError {
@@ -847,8 +847,8 @@ export class DuplicatePluginIdError extends FreeGanttError {
 }
 
 /** `code: 'plugin-not-installed'` — `gantt.uninstallPlugin` named a plugin this Gantt does not have
- *  installed (D-S5-36). The verb acts on the installed set, and it never adds to it, so a name
- *  nothing installs is a mistake rather than a silent no-op — the same call D-S5-34 made for
+ *  installed. The verb acts on the installed set, and it never adds to it, so a name
+ *  nothing installs is a mistake rather than a silent no-op — the same call made for
  *  `UnknownGridColumnError`. Distinct from `MissingPluginError`, which is a `requires` entry no
  *  `plugins` list supplies. */
 export class PluginNotInstalledError extends FreeGanttError {
@@ -865,7 +865,7 @@ export class PluginNotInstalledError extends FreeGanttError {
 }
 
 /** `code: 'missing-plugin'` — a plugin names a `requires` id that the same `plugins` list
- *  does not install (D-S5-31). Thrown at construction, naming both ids. `requires` is a check, never
+ *  does not install. Thrown at construction, naming both ids. `requires` is a check, never
  *  a supplier: a missing prerequisite is this error, not a quiet default. */
 export class MissingPluginError extends FreeGanttError {
   readonly pluginId: PluginId;
@@ -883,7 +883,7 @@ export class MissingPluginError extends FreeGanttError {
 }
 
 /** `code: 'plugin-requirement-cycle'` — two or more plugins require each other, so no setup order
- *  satisfies every `requires` (D-S5-31). This is not the `PluginOrderError` D-S5-31 refuses: installation
+ *  satisfies every `requires`. This is not the `PluginOrderError` that refused a bad order: installation
  *  computes the order, so a caller can no longer write a wrong one — but a cycle leaves no right one
  *  to compute. Thrown at construction, naming every plugin in the cycle. */
 export class PluginRequirementCycleError extends FreeGanttError {
@@ -900,7 +900,7 @@ export class PluginRequirementCycleError extends FreeGanttError {
 }
 
 /** `code: 'registration-closed'` — a `ctx.*.register*` call reached after that plugin's `setup()`
- *  already returned (D-S5-4). Registration is legal only while `setup` is running. */
+ *  already returned. Registration is legal only while `setup` is running. */
 export class RegistrationClosedError extends FreeGanttError {
   readonly pluginId: PluginId;
 
@@ -915,7 +915,7 @@ export class RegistrationClosedError extends FreeGanttError {
 }
 
 /** `code: 'plugin-setup-failed'` — a plugin's `setup()` threw. Every plugin already set up in this
- *  install batch is disposed, in reverse order, before this is thrown (issue #137 F4). */
+ *  install batch is disposed, in reverse order, before this is thrown (issue #137). */
 export class PluginSetupError extends FreeGanttError {
   readonly pluginId: PluginId;
 
@@ -935,7 +935,7 @@ export class PluginSetupError extends FreeGanttError {
    *  Dataset's own construction, so it fails loudly and says where it goes instead. Same error,
    *  same `code` — a misplaced plugin is a setup that did not happen, and it needs no type of its own.
    *
-   *  The message quotes the id and shows the **site**, never a call (`F26`). A `PluginId` is a dotted
+   *  The message quotes the id and shows the **site**, never a call. A `PluginId` is a dotted
    *  string, so `plugins: [acme.locks]` reads as a property access on an object named `acme` — it is
    *  not pasteable, and the library cannot know the name of the variable the author holds. */
   static wrongInstallSite(pluginId: PluginId): PluginSetupError {
@@ -951,10 +951,10 @@ export class PluginSetupError extends FreeGanttError {
 }
 
 /** `code: 'renderer-already-registered'` — two plugins both call `ctx.view.registerRenderer` for the
- *  same slot (S5.4, D-S5-11). A consumer who wants a plugin's renderer to win removes its own
+ *  same slot (S5.4). A consumer who wants a plugin's renderer to win removes its own
  *  `GanttOptions` renderer instead — this error is only for two *plugins* colliding.
  *  `slot` names what collided: a renderer point (`'gridCell'`), or one kind of the `bar` point's
- *  per-kind form (`'bar:buffer'`, D-S5-12, review P2). It stays a bare `string` here (not layout/'s
+ *  per-kind form (`'bar:buffer'`, review P2). It stays a bare `string` here (not layout/'s
  *  `RendererPoint`) — model/ is a leaf and may import nothing (model-is-leaf). */
 export class RendererAlreadyRegisteredError extends FreeGanttError {
   readonly slot: string;
@@ -973,7 +973,7 @@ export class RendererAlreadyRegisteredError extends FreeGanttError {
   }
 }
 
-/** `code: 'unknown-command'` — `CommandRegistry.run(id)` given an id nothing registered (D-S5-6). A
+/** `code: 'unknown-command'` — `CommandRegistry.run(id)` given an id nothing registered. A
  *  binding whose `command` names an id nothing owns is not this: the keymap resolver treats an
  *  unresolved binding as a non-match and falls through, rather than surfacing the mistake mid-key-press. */
 export class UnknownCommandError extends FreeGanttError {
@@ -995,7 +995,7 @@ export class UnknownCommandError extends FreeGanttError {
  *  plugin author meant to write. A consumer mistake at the config boundary, not a value core
  *  derives. `operation` names the caller, because two of them
  *  reach this and a baked-in prefix would tell one about a call it never made (see the file header,
- *  #239; #404 review F3). */
+ *  #239; #404 review). */
 export class EmptyCoversError extends FreeGanttError {
   readonly operation: string;
 
@@ -1012,7 +1012,7 @@ export class EmptyCoversError extends FreeGanttError {
 /** `code: 'custom-row-source-not-filterable-or-sortable'` — `gantt.filterRows()` or
  *  `gantt.sortRows()` called while `gantt.rowSource.source === 'custom'` (#495 follow-up). A
  *  `'custom'` source resolves its own rows through `resolve()` and carries no `filter`/`sort` key
- *  for either helper to replace (D-S4-21) — there is nothing here to spread a new value onto.
+ *  for either helper to replace — there is nothing here to spread a new value onto.
  *  `operation` names the caller, the same reason `EmptyCoversError` above takes it: two callers
  *  reach this. */
 export class CustomRowSourceNotFilterableOrSortableError extends FreeGanttError {

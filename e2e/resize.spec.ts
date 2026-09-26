@@ -1,6 +1,6 @@
 import { test, expect, type Locator } from '@playwright/test';
 
-// Regression: the shared resize-handle pair (D-S3-8) was appended as a sibling of `.fg-bars`
+// Regression: the shared resize-handle pair was appended as a sibling of `.fg-bars`
 // directly on `timelineHost`, so its `position: absolute` resolved against the pane instead of
 // `.fg-bars` — the same coordinate origin a bar's own transform (`syncBars`) uses. `.fg-header`
 // sits above `.fg-bars` in normal flow, so the handle pair painted one header-height too high: it
@@ -126,7 +126,7 @@ async function committedSpan(
 }
 
 // #240: dragging one edge past the opposite one must never commit `end < start` —
-// `layout/gesture-draft.ts`'s `resizeEdit` clamps the dragged edge to zero length (D-S5-46 keeps
+// `layout/gesture-draft.ts`'s `resizeEdit` clamps the dragged edge to zero length (which keeps
 // that legal), never past it. `data-bar-id` is `${entryId}:${segmentIndex}` (`model/ids.ts`'s
 // `barId`), so the bar's own attribute is the DOM→Entry trust boundary — no re-derivation of that
 // mapping here.

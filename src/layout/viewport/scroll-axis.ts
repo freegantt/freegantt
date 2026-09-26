@@ -1,15 +1,15 @@
 // layout/ owns ScrollAxis — the standalone, shareable one-direction scroll object a Gantt binds to
-// (plans/01 §8.2, D-S6-1). A Gantt holds two, `{ x, y }`; passing the same instance as one Gantt's
+// (plans/01 §8.2). A Gantt holds two, `{ x, y }`; passing the same instance as one Gantt's
 // `x` and another Gantt's `x` syncs that direction only — the unit two Gantt instances share is one
-// axis, never both at once. Same seam, same contract (D-S1.5-4): `bind` always notifies the
+// axis, never both at once. Same seam, same contract: `bind` always notifies the
 // newcomer; every other notification fires iff the resolved value changed.
 //
-// D-S1.5-1's fallback carries over unchanged, per direction: the axis owns ONE shared position; each
+// The loosest-bound fallback carries over unchanged, per direction: the axis owns ONE shared position; each
 // bound Gantt clamps it locally to its own content. Two charts sharing an axis with different
 // extents is the designed fallback, not an error case — the shorter one pins at its last position
 // and picks up where it stopped, with zero remembered state (S1.5 README U3).
 //
-// `ScrollModel` retired here (D-S6-1): fusing both directions into one object meant sharing the
+// `ScrollModel` retired here: fusing both directions into one object meant sharing the
 // instance always linked both, with no way to share one and keep the other private.
 
 import { BoundValue } from './bound-value.js';
@@ -34,9 +34,9 @@ export interface ScrollAxisBindingHandle {
 /** The resolved state — all of it in one object, so there is one path to the resolution and one
  * thing to notify about. */
 export interface ScrollAxisState {
-  /** Where the caller asked to be. May exceed `max` after a shrink — see D-S1.5-2. */
+  /** Where the caller asked to be. May exceed `max` after a shrink — `panTo` clamps only at write time. */
   readonly position: number;
-  /** How far `panTo` may ask: the loosest bound any bound Gantt needs (D-S1.5-1). Not a claim
+  /** How far `panTo` may ask: the loosest bound any bound Gantt needs. Not a claim
    * about any one chart's scroller — each clamps its own. */
   readonly max: number;
   /** How many bindings this direction currently holds. One Gantt contributes one binding per
@@ -45,7 +45,7 @@ export interface ScrollAxisState {
   readonly bindingCount: number;
 }
 
-/** What `GanttOptions.scroll` takes. Omitting a direction keeps it private (D-S6-1) — the library
+/** What `GanttOptions.scroll` takes. Omitting a direction keeps it private — the library
  * ships no sharing modes; which directions sync falls out of which fields are supplied. */
 export interface ScrollAxes {
   readonly x?: ScrollAxis;
@@ -83,7 +83,7 @@ const internals = new WeakMap<ScrollAxis, { state: BoundValue<MutableBinding, Sc
 
 export class ScrollAxis {
   #position: number;
-  /** The bindings, the state resolved from them, and the D-S1.5-4 notification contract — the same
+  /** The bindings, the state resolved from them, and the notification contract — the same
    * object `TimeScaleModel` binds through (`bound-value.ts`). This axis supplies only what is its
    * own: how to resolve `{position, max, bindingCount}`, and what counts as a change. */
   #state = new BoundValue<MutableBinding, ScrollAxisState>({
@@ -101,7 +101,7 @@ export class ScrollAxis {
     return this.#state.resolved;
   }
 
-  /** Move this direction. Clamps to `[0, max]` at write time (D-S1.5-2) — nothing else ever
+  /** Move this direction. Clamps to `[0, max]` at write time — nothing else ever
    * rewrites `position`; a later shrink of `max` leaves it exactly where a caller last asked. */
   panTo(position: number): void {
     const clamped = clamp(position, this.state.max);
@@ -116,7 +116,7 @@ export class ScrollAxis {
     this.#state.batch(run);
   }
 
-  /** `max` is the loosest bound any bound Gantt needs (D-S1.5-1) — not a claim about any one
+  /** `max` is the loosest bound any bound Gantt needs — not a claim about any one
    *  chart's scroller. */
   #resolve(bindings: Iterable<MutableBinding>): ScrollAxisState {
     let max = 0;

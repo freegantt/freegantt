@@ -59,7 +59,7 @@ test('hovering a bar paints the grid row that owns it, across the splitter the o
   expect(hoveredRowId).toBeTruthy();
   const painted = await paintOf(page, hoveredRowId!);
   expect(painted.band?.state).toBe('hovered');
-  // And the bar itself takes the ring D-S3-7's `hovered` token had no rule for until now.
+  // And the bar itself takes the hover ring the `hovered` token had no rule for until now.
   await expect(bar).toHaveAttribute('data-state', /hovered/);
   expect(await bar.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe('none');
 });

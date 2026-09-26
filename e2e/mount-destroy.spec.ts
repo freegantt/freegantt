@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
 
-// S6 acceptance R4 (#403), the half a fake DOM cannot answer. `test/dom/leak-cycles.test.ts` counts
+// S6 acceptance (#403), the half a fake DOM cannot answer. `test/dom/leak-cycles.test.ts` counts
 // listeners, observers and animation frames over 100 cycles in happy-dom. happy-dom keeps no
 // detached-node accounting and no real listener table, so a node the browser would still hold is
 // invisible there. Chromium's own `Performance.getMetrics` counts both, and this drives the same
-// mount/destroy loop against it (#403 Q1: "observables and listeners in test:dom, node count in
+// mount/destroy loop against it (#403: "observables and listeners in test:dom, node count in
 // e2e").
 //
 // Cycles are deliberately modest here. A leak that survives 50 mounts survives 5,000; the count is
@@ -48,7 +48,7 @@ test('[S6-R4] repeated mount/destroy of a linked pair holds no nodes or listener
   const cycle = page.getByTestId('cycle-pairs');
   const mountedPairs = page.getByTestId('cycle-count');
 
-  // The baseline comes after a first round, never before the first mount (#403 Q2): the base
+  // The baseline comes after a first round, never before the first mount (#403): the base
   // stylesheet and the page's own chrome land once and stay, and that is setup, not a leak.
   await cycle.click();
   await expect(mountedPairs).toHaveText(/26 pairs mounted so far/u);

@@ -1,12 +1,12 @@
-// extensions/ — the anchoring, flipping, clamping and dismissal primitive (S5.3, D-S5-8/D-S5-9). One
+// extensions/ — the anchoring, flipping, clamping and dismissal primitive. One
 // implementation serves the tooltip, the context menu and the cell editor (S5.5+) — three positioners
 // would be three sets of edge-case bugs. Built on `ctx.view` alone — the overlay layer it mounts in
 // and the rects `ctx.view.dom` measures — the same seam a third-party plugin reaches, with no back
-// door into `view/` or `render/` (D-S5-5).
+// door into `view/` or `render/`.
 
 import type { Disposer, ElementDescription } from '../model/index.js';
 // `../api/plugin-context.js` directly, not the `api/index.js` barrel: `api/index.ts` re-exports
-// `createPopup` from this very file (D-S5-8's "a third party reaches the same primitive we do"), and
+// `createPopup` from this very file ("a third party reaches the same primitive we do"), and
 // importing the barrel back would close that edge into a cycle (no-circular).
 import type {
   DomEventHandler,
@@ -18,12 +18,12 @@ import type {
 import { activateFocusTrap } from './focus-trap.js';
 import type { FocusTrap } from './focus-trap.js';
 import { DisposableStore } from './disposables.js';
-// `./keymap.js` is a sibling `extensions/` module, not a `view/`/`render/` back door (D-S5-5 only
+// `./keymap.js` is a sibling `extensions/` module, not a `view/`/`render/` back door (that rule only
 // forbids those) — see `KeyHandlerRegistrar`'s own doc for why Escape folds into it (C3,
 // `plans/reviews/2026-09-02-s5-start-fixes.md`). The one method, not the whole interface: a
 // third-party plugin has no `Keymap` instance, only the one bound method
 // `ctx.interaction.registerKeyHandler` gives it, so `createPopup` takes that function directly
-// instead of asking the caller to wrap it back into a one-field object (D-S5-8).
+// instead of asking the caller to wrap it back into a one-field object.
 import type { RegisterKeyHandler } from './keymap.js';
 
 export type PopupPlacement = 'top' | 'bottom' | 'start' | 'end';
@@ -37,7 +37,7 @@ export type DismissTrigger = 'escape' | 'outsidePointer' | 'scroll' | 'blur';
  *  this file actually reads. */
 export interface PopupSurface {
   overlay: MountLayer;
-  /** Builds the popup body from `options.content` — `ctx.view.renderElement` (D-S5-10). */
+  /** Builds the popup body from `options.content` — `ctx.view.renderElement`. */
   renderElement(description: ElementDescription): HTMLElement;
   dom: Pick<GanttDom, 'bounds' | 'paneBounds' | 'paneOf'>;
   /** One `document` listener, scoped to this Gantt (review A4). The scroll dismissal listens here
@@ -90,7 +90,7 @@ function anchorRect(anchor: Anchor): DOMRect {
 }
 
 /** Which of the two panes `rect` sits in — geometric, not a class-name sniff, since neither `Anchor`
- *  nor a scroll event's target is guaranteed to carry one (D-S5-8: "bounds remains the outer clamp
+ *  nor a scroll event's target is guaranteed to carry one ("bounds remains the outer clamp
  *  for a popup whose anchor is not inside either pane"). `undefined` means neither pane. */
 function paneNameFor(rect: DOMRect, paneBounds: GanttDom['paneBounds']): PaneName | undefined {
   const cx = rect.left + rect.width / 2;
@@ -133,7 +133,7 @@ const OPPOSITE: Record<PopupPlacement, PopupPlacement> = Object.freeze({
   end: 'start',
 });
 
-/** True when the box's own placement axis lands entirely inside `pane` — the only axis D-S5-8 asks
+/** True when the box's own placement axis lands entirely inside `pane` — the only axis a flip asks
  *  a flip to fix; the cross axis is `clamp`'s job, below. */
 function fitsOnPlacementAxis(
   side: PopupPlacement,
@@ -187,7 +187,7 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
   // `stopPropagation` here, not in `Keymap.resolve` itself: only this dismissal needs "never seen
   // past this popup" (the same guarantee the old document-capture listener gave). Scoping it to the
   // handler keeps every other keybinding's propagation behaviour untouched.
-  // `captureInEditable: true` (issue #137 F1, `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the
+  // `captureInEditable: true` (issue #137, `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the
   // editable-target gate protects page-level editables from a stray keybinding. It does not exist to
   // protect a popup's own `<input>` from its own close button. Without this flag, Escape typed
   // inside the popup's own input never reaches this handler at all.
@@ -214,7 +214,7 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
   },
 
   // Scroll does not bubble — only its own target fires it — so this listens on the capture phase.
-  // It scopes to the anchor's own pane (D-S5-9): a popup anchored in the timeline pane stays open
+  // It scopes to the anchor's own pane: a popup anchored in the timeline pane stays open
   // while the grid pane scrolls, and the other way round.
   //
   // "Whose scroll was that" is an ownership question, so `paneOf` answers it by element identity
@@ -255,13 +255,13 @@ const DISMISS_LISTENERS: Readonly<Record<DismissTrigger, (ctx: DismissContext) =
   },
 });
 
-/** `Popup`'s one implementation (D-S5-8). `view` and `registerKeyHandler` are the only things this
+/** `Popup`'s one implementation. `view` and `registerKeyHandler` are the only things this
  *  reaches past plain DOM APIs. Escape folds into `registerKeyHandler` (C3,
  *  `plans/reviews/2026-09-02-s5-start-fixes.md`) instead of a bespoke document-capture listener +
- *  per-layer `WeakMap` LIFO stack: `Keymap` already resolves newest-registration-first (D-S5-7), so
+ *  per-layer `WeakMap` LIFO stack: `Keymap` already resolves newest-registration-first, so
  *  a popup registering its Escape handler on `open()` and unregistering it on `close()` gets
- *  "innermost open thing wins" (D-S5-9) for free, and the shared `isEditableTarget` gate (S5.2,
- *  issue #137 F7) restores the IME-composition rule this primitive was missing — a lone document
+ *  "innermost open thing wins" for free, and the shared `isEditableTarget` gate (S5.2,
+ *  issue #137) restores the IME-composition rule this primitive was missing — a lone document
  *  listener with no gate closed a popup mid-IME-cancel too. */
 export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup {
   const { overlay, dom } = view;

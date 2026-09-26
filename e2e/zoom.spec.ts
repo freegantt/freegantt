@@ -81,7 +81,7 @@ test('a preset switch redraws header bands with no bar remount (U1, I8)', async 
     node.dataset['e2eMarker'] = 'still-here';
   }, barId);
 
-  // Scoped to the header (S1.12, D-S1.12-9): the grid pane's spacer now mirrors one empty
+  // Scoped to the header (S1.12): the grid pane's spacer now mirrors one empty
   // `.fg-band` per header band too, so an unscoped `.fg-band` count would double-count.
   await expect(page.locator('.fg-header .fg-band')).toHaveCount(1);
 
@@ -142,7 +142,7 @@ test('[S1-A8] a three-band preset renders three full-height bands aligned with t
   const headerBox = await page.locator('.fg-header').boundingBox();
   const spacerBox = await page.locator('.fg-grid-spacer').boundingBox();
   if (!headerBox || !spacerBox) throw new Error('missing bounding box');
-  // Sub-pixel layout: one CSS pixel of disagreement is the D-S1.8-12 residue, not a height bug.
+  // Sub-pixel layout: one CSS pixel of disagreement is rounding residue, not a height bug.
   expect(Math.abs(headerBox.height - spacerBox.height)).toBeLessThan(1);
 
   const bandBox = await headerBands.first().boundingBox();

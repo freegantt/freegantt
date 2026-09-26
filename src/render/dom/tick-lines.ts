@@ -1,5 +1,5 @@
 // render/dom — timeline grid lines. Geometry lives in layout/frame.ts (`GeometryFrame.tickLines`).
-// J2: a consumer opts out by setting `--fg-tick-line-color`/`--fg-tick-line-strong-color` to
+// A consumer opts out by setting `--fg-tick-line-color`/`--fg-tick-line-strong-color` to
 // `transparent`. There is no config key and no boolean for this — the token pair is the whole knob.
 
 import type { FrameTickLine } from '../../layout/index.js';

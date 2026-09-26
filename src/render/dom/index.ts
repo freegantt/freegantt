@@ -65,7 +65,7 @@ import {
 
 /** A cell's renderer, already bound to its `ResolvedColumn` (render/dom never receives that type —
  *  `column.format` "stays on `ResolvedColumn` and never reaches a backend", `layout/column.ts`) and
- *  keyed by `GanttShell` per `FrameColumn.field` (S5.4, D-S5-11). */
+ *  keyed by `GanttShell` per `FrameColumn.field` (S5.4). */
 type BoundGridCellRenderer = (ctx: {
   entry?: Entry | undefined;
   row: FrameRow;
@@ -84,11 +84,11 @@ type BoundHeaderRenderer = () => ElementDescription | undefined;
  *  it for free by omitting the whole options object. */
 export interface DomBackendOptions {
   entryById: (id: EntryId) => Entry | undefined;
-  /** S5.12, D-S5-40: where a renderer that threw is reported. `GanttShell` passes the raiser bound to
+  /** S5.12: where a renderer that threw is reported. `GanttShell` passes the raiser bound to
    *  its own `error` bus. Omitted — a test backend built with no options — the console fallback runs
    *  every time, which is the honest answer when there is no bus for anyone to subscribe to. */
   raiseError?: RaiseError;
-  /** J1, #421 C5. Per entry, not per frame: `EntryVariant.barLabels` merges key by key over the
+  /** #421 C5. Per entry, not per frame: `EntryVariant.barLabels` merges key by key over the
    *  Gantt's own `barLabels`, and a merge needs the row's own variant. Read fresh every `syncBars`
    *  call, same live-reconfiguration posture `resolveBarRenderer` below already takes. Omitted — a
    *  test backend built with no options — falls back to `'fitBar'` for every entry. */
@@ -110,8 +110,8 @@ function callRenderer<TCtx>(
   try {
     return resolved.renderer(ctx);
   } catch (error) {
-    // Issue #137 F14: one bad renderer degrades one bar or cell, never the paint pass.
-    // S5.12, D-S5-41: the report always goes out; the `console.error` behind it is a fallback that
+    // Issue #137: one bad renderer degrades one bar or cell, never the paint pass.
+    // S5.12: the report always goes out; the `console.error` behind it is a fallback that
     // fires only when nothing is subscribed to `error`. It is no longer behind `isDevMode()` — that
     // helper reads `import.meta.env.DEV`, which Vite resolves when *this repo* builds `dist/`, so the
     // line was dead-code-eliminated out of every consumer's build, dev and production alike.
@@ -136,7 +136,7 @@ type CellItem = {
   key: string;
   text: string;
   first: boolean;
-  /** 1-based position among the configured Grid columns — `aria-colindex` (S5.11, D-S5-25). 1-based
+  /** 1-based position among the configured Grid columns — `aria-colindex` (S5.11). 1-based
    *  because that is what the attribute counts in; a reorder moves it, which is the point. */
   columnIndex: number;
   align: ColumnAlign;
@@ -144,9 +144,9 @@ type CellItem = {
   flex?: number;
   expandable: boolean;
   expanded: boolean;
-  /** S5.4, D-S5-11: a resolved `columnRenderer`'s output for this one cell — undefined keeps `text`. */
+  /** S5.4: a resolved `columnRenderer`'s output for this one cell — undefined keeps `text`. */
   content?: ElementDescription;
-  /** S5.7, D-S5-18: header cells only — `cellItemsForRow`'s row cells never set these. */
+  /** S5.7: header cells only — `cellItemsForRow`'s row cells never set these. */
   resizable?: boolean;
   movable?: boolean;
 };
@@ -167,7 +167,7 @@ type HeaderCellGeom = {
   align: ColumnAlign;
   width: number;
   flex: number;
-  /** S5.7, D-S5-18: default `true` when absent — painted as an attribute so the base stylesheet can
+  /** S5.7: default `true` when absent — painted as an attribute so the base stylesheet can
    *  hide the resizer grip / drop the movable cursor for a fixed or pinned column. */
   resizable: boolean;
   movable: boolean;
@@ -181,7 +181,7 @@ type RowGeom = {
   gridCells: readonly string[];
   index: number;
   rowCount: number;
-  /** S5.11, D-S5-25: `aria-level`, `aria-expanded`, `aria-posinset` and `aria-setsize` belong to a
+  /** S5.11: `aria-level`, `aria-expanded`, `aria-posinset` and `aria-setsize` belong to a
    *  `treegrid` row. A flat `grid` row takes `aria-rowindex` alone. */
   tree: boolean;
   depth: number;
@@ -198,12 +198,12 @@ type RowBandGeom = {
   parity: RowParity;
 };
 /** The `data-label` token `patch` paints, and whether a `.fg-bar-label` child exists at all (#435
- *  follow-up, F1). `BarLabelPlacement`'s two values still mean "paints, on this side." `'hidden'`
+ *  follow-up). `BarLabelPlacement`'s two values still mean "paints, on this side." `'hidden'`
  *  adds a third: the child exists, measured, but must not paint — `'insideOrNone'` on a bar too
  *  narrow reaches this, not the plain "no child at all" case `undefined` keeps. Named for the DOM
  *  state it describes, not for the `BarLabelPolicy` value that produces it (`'none'`) — a consumer
  *  reading `[data-label='hidden']` in a stylesheet sees a present-but-unpainted child, where `'none'`
- *  would have read as "no label," the opposite of the truth (R1, pass-2 branch review, #435).
+ *  would have read as "no label," the opposite of the truth (pass-2 branch review, #435).
  *  The split matters on the resize hot path (`applyBarPreview`): that path only flips `data-label`,
  *  never adds or removes the child, so a mode that can flip mid-drag needs a child to already exist,
  *  hidden, at the far end of the flip — `undefined` cannot express "hidden but present," and deleting
@@ -213,7 +213,7 @@ type RowBandGeom = {
  *  `.fg-bar-label` span, mounted cold by `patch` during `syncBars` — never on the hot path, which
  *  only ever flips the attribute — and bounded to the visible slice by the horizontal cull
  *  (`layout/frame.ts`'s `intersectsHorizontally`) and the row window, not to the dataset. `display:
- *  none` drops it from layout and paint, so the bound is node memory, not frame time (R2, pass-2
+ *  none` drops it from layout and paint, so the bound is node memory, not frame time (pass-2
  *  branch review). A bar with `capabilities.resize: false` still gets the hidden child even though
  *  it can never enter the mid-drag flip this exists for — the renderer has no capability resolution
  *  at `sync` to gate on, and no consumer has asked for that narrowing yet. */
@@ -222,9 +222,9 @@ type BarGeom = Pick<
   FrameBar,
   'variant' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'span'
 > & {
-  /** S5.4, D-S5-11: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
+  /** S5.4: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
-  /** J1: this frame's label token — see `BarLabelToken` for what each value means and costs.
+  /** This frame's label token — see `BarLabelToken` for what each value means and costs.
    *  `undefined` means no label child at all. */
   labelPlacement: BarLabelToken | undefined;
 };
@@ -265,7 +265,7 @@ function resolveBarLabelPlacement(
   return fitsOutside ? 'outside' : 'inside';
 }
 
-/** Does this paint own the bar's content, or only decorate it (ADR 0018, `J34`)? A description that
+/** Does this paint own the bar's content, or only decorate it (ADR 0018)? A description that
  *  names `text`, `html` or `children` replaces what the library would draw, label included. One that
  *  names only `class`, `style` or `attrs` says nothing about content, so the library's own label
  *  stays. Core's `parent` variant is the first caller: it adds `fg-bar-summary` and keeps the
@@ -284,7 +284,7 @@ function barContent(painted: ElementDescription | undefined, label: ElementDescr
   if (paintsItsOwnContent(painted)) return painted;
   return { ...painted, ...label };
 }
-/** What the shared handle pair (D-S3-8) needs to place itself over a committed bar — a narrower slice
+/** What the shared handle pair needs to place itself over a committed bar — a narrower slice
  *  than `BarGeom`, which also carries paint fields the handles don't read. */
 type HandleGeom = Pick<FrameBar, 'x' | 'y' | 'width' | 'height'>;
 /** Bands carry no per-frame geometry of their own yet (height/stacking is S1.9/S1.10) — an always-
@@ -292,7 +292,7 @@ type HandleGeom = Pick<FrameBar, 'x' | 'y' | 'width' | 'height'>;
 type BandGeom = Record<string, never>;
 const EMPTY_BAND_GEOM: BandGeom = Object.freeze({});
 
-/** `data-flag` is generated from `BAR_FLAG_KEYS` (S1.10, D-S1.10-2) — adding a new key to that list
+/** `data-flag` is generated from `BAR_FLAG_KEYS` (S1.10) — adding a new key to that list
  * needs no edit here (U7). Iterating the list, not `Object.keys(flags)`, also fixes the token
  * order and drops a stray key the type does not carry. */
 function flagTokens(flags: BarFlags): string {
@@ -357,14 +357,14 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // No injected raiser means no bus, so nothing can be subscribed and the fallback always runs.
   const raiseError: RaiseError = options.raiseError ?? ((_report, fallback) => fallback?.());
   // The grid pane's row layer (RenderSurfaces.grid) — created by `view/pane-layout.ts`, not this
-  // backend (S1.8, D-S1.8-2). No scrollbar of its own: it follows the timeline pane's scroll
-  // position by one `translateY(-visible.y)` per frame (D-S1.8-1), written in `sync()` below.
+  // backend (S1.8). No scrollbar of its own: it follows the timeline pane's scroll
+  // position by one `translateY(-visible.y)` per frame, written in `sync()` below.
   let gridLayer: HTMLElement | undefined;
   let gridHeaderLayer: HTMLElement | undefined;
-  /** S5.7, D-S5-18: written by `syncGridHeader`, read by `applyState`'s drop-indicator paint for the
+  /** S5.7: written by `syncGridHeader`, read by `applyState`'s drop-indicator paint for the
    *  `beforeColumnKey: null` ("at the end") case. */
   let lastHeaderColumnKeys: readonly string[] = [];
-  /** What `applyState`'s resize-preview paint last touched (S5.7, D-S5-18) — diff-and-touch-only,
+  /** What `applyState`'s resize-preview paint last touched (S5.7) — diff-and-touch-only,
    *  the same posture every other `paintedX` field in this file already takes (I5). */
   let paintedColumnResize: { columnKey: string; widthPx: number } | undefined;
   /** The two header cells a reorder preview last touched: the one wearing `data-drop`, and the
@@ -376,7 +376,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // and sizer layers mount inside it, at x=0: no gutter to offset by, the grid pane owns that width.
   let timelineHost: HTMLElement | undefined;
   let headerLayer: HTMLElement | undefined;
-  // #225: `.fg-header` itself stays `overflow: visible` so the Date line label (D-S1.13-6, an
+  // #225: `.fg-header` itself stays `overflow: visible` so the Date line label (an
   // absolutely-positioned child of `.fg-header` itself) can sit at `top: 100%` of `.fg-header`'s own
   // height, right below the bands, with no clip cutting it off. `headerBandsHost` is the exact-band-
   // height box that carries the width-to-contentWidth clip `.fg-header` used to carry itself
@@ -388,21 +388,21 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   let dateLines: DateLineAttachment | undefined;
   let tickLines: TickLineAttachment | undefined;
   let decorations: DecorationsAttachment | undefined;
-  // D-S3-8: one shared handle pair, created once at mount() and moved/parked by applyState — never
+  // One shared handle pair, created once at mount() and moved/parked by applyState — never
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
   let endHandle: HTMLElement | undefined;
-  // S3.8, D-S3-15: Cursor line singletons, created once at mount() and moved/parked by applyState.
+  // S3.8: Cursor line singletons, created once at mount() and moved/parked by applyState.
   let cursorLine: HTMLElement | undefined;
   let cursorLineLabel: HTMLElement | undefined;
   let cursorLineHeight = 0;
-  // J1: one ruler per backend instance (I2 — never module-level). Built in mount(), off the bar
+  // One ruler per backend instance (I2 — never module-level). Built in mount(), off the bar
   // layer's own computed font, and never rebuilt after — a label's font does not change mid-life.
   let textRuler: TextRuler | undefined;
   // --fg-bar-label-gap (px), read once at mount (pixel-property.ts's own re-read cadence rule: a
   // caller states its cadence, and a label's gap does not change with the pane's size).
   let barLabelGapPx = DEFAULT_BAR_LABEL_GAP_PX;
-  // The last frame's contentWidth (J1's "outside" clause needs it, and it arrives with `sync`, not
+  // The last frame's contentWidth (the "outside" clause needs it, and it arrives with `sync`, not
   // with each bar) — read by `toGeom` below, so the fit test always runs against the frame that is
   // actually being painted.
   let contentWidthPx = 0;
@@ -418,7 +418,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   const headerCellLayer = new KeyedLayer<CellItem, string, HeaderCellGeom>();
   const barLayerCache = new KeyedLayer<FrameBar, BarId, BarGeom>();
 
-  // D-S3-6/D-S3-7: what the last applyState() call painted, so the next call touches only the bars
+  // What the last applyState() call painted, so the next call touches only the bars
   // whose token set actually changed — O(changed bars), not O(bars) (I5, [S3-A3]).
   let paintedHovered: BarId | undefined;
   let paintedSelected: ReadonlySet<BarId> = new Set();
@@ -433,12 +433,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  handle names the bar under the pointer instead of a Bar id built from an Entry id (#185). */
   let paintedHandleBars: { start: BarId; end: BarId } | undefined;
   let paintedMovable: BarId | undefined;
-  /** S3.5, D-S3-17: bars an unsettled `beforeEntryMove`/`beforeEntryResize` Promise is holding. */
+  /** S3.5: bars an unsettled `beforeEntryMove`/`beforeEntryResize` Promise is holding. */
   let paintedPending: ReadonlySet<BarId> = new Set();
-  /** S3.3, D-S3-18: bars this backend currently holds off their committed transform for a drag
+  /** S3.3: bars this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
   let paintedPreview: ReadonlySet<BarId> = new Set();
-  /** S3.6, D-S3-18: split of `paintedPreview` by `BarPreview.extra` — `dragging` is the caller's own
+  /** S3.6: split of `paintedPreview` by `BarPreview.extra` — `dragging` is the caller's own
    *  gesture, `ghost` is an installed extension hook's cascade. Tracked separately from
    *  `paintedPreview` (which drives the transform, not the token) so a `data-state` repaint touches
    *  only the bars whose *token* actually changed, same diff-and-touch pattern as `paintedPending`. */
@@ -449,7 +449,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  restamp a freshly-created node from it. `paintedSelected` above is its bar-side reading, derived
    *  from `barIdsByEntryId` rather than authored. */
   let paintedSelectedEntryIds: ReadonlySet<EntryId> = new Set();
-  /** What the last `applyState` call stamped `data-state~="selected"` on (D-S3-6/D-S3-7's own
+  /** What the last `applyState` call stamped `data-state~="selected"` on (the same
    *  diff-and-touch posture, applied to rows) — `syncRows` below is the only other writer, and only
    *  for a row it just created. */
   let paintedSelectedRows: ReadonlySet<RowId> = new Set();
@@ -457,14 +457,14 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  twin above keeps. */
   let paintedHoveredRow: RowId | undefined;
   /** The Entries each mounted row owns (a header row owns none) — what `applyState`'s row diff reads
-   *  `FrameRow.entryIds` into (#230 R5, #421), so the row diff never resolves an Entry to answer it.
+   *  `FrameRow.entryIds` into (#230, #421), so the row diff never resolves an Entry to answer it.
    *  `syncRows` is the only writer, rebuilt from the frame's own rows every render — never grows
    *  stale across a prune. */
   const rowEntryIds = new Map<RowId, readonly EntryId[]>();
-  // Committed geometry per mounted bar (D-S3-6): what the handle pair and the future preview offsets
+  // Committed geometry per mounted bar: what the handle pair and the future preview offsets
   // (S3.3) both read. `syncBars` is the only writer.
   const barGeomByBarId = new Map<BarId, HandleGeom>();
-  /** J1: each mounted bar's label width, measured once in `syncBars`'s own `toGeom` and read again,
+  /** Each mounted bar's label width, measured once in `syncBars`'s own `toGeom` and read again,
    *  with no re-measurement, by `applyBarPreview`'s mid-drag flip check — "a label's text width does
    *  not change during a drag" is the fact this cache banks on. `undefined` means either no label
    *  (`barLabels: 'none'`, or a `barRenderer` owns this bar's content) or no 2d context to measure
@@ -472,7 +472,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  placement: `'insideOrNone'` on a bar too narrow measures the text and still stores `'hidden'` in
    *  `labelPlacementByBarId` below, so the two maps disagree on purpose for that one state. */
   const labelWidthByBarId = new Map<BarId, number | undefined>();
-  /** J1: each mounted bar's last-committed label token — what `restoreBarTransform` puts back on
+  /** Each mounted bar's last-committed label token — what `restoreBarTransform` puts back on
    *  `data-label` once a resize preview that flipped it mid-drag clears without a commit. Written in
    *  `syncBars`'s own `toGeom`, the same cadence `labelWidthByBarId` keeps. `'hidden'` (`BarLabelToken`)
    *  restores a hidden-but-present child, not an absent attribute. */
@@ -525,7 +525,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     return a.start === b.start && a.end === b.end;
   }
 
-  /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both (D-S3-8) when
+  /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both when
    *  it is undefined. Each handle reads its own bar: the start handle sits on the leftmost bar
    *  and the end handle on the rightmost (#200). `hidden` is a DOM property write, not
    *  `.style` — the base stylesheet owns `[hidden] { display: none }`.
@@ -562,7 +562,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     paintedHandleBars = bars;
   }
 
-  /** S3.8, D-S3-15: parks the Cursor line when `x` is undefined; otherwise translates the stroke
+  /** S3.8: parks the Cursor line when `x` is undefined; otherwise translates the stroke
    *  and writes the snapped caption. Height comes from the last `sync()`, same rule as Date lines. */
   function paintCursorLine(x: number | undefined, label: string | undefined): void {
     if (!cursorLine || !cursorLineLabel) return;
@@ -579,13 +579,13 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     cursorLineLabel.textContent = label ?? '';
   }
 
-  /** S5.7, D-S5-18: a resize drag's live width, painted on the header cell and every currently
+  /** S5.7: a resize drag's live width, painted on the header cell and every currently
    *  mounted body cell for that column — the same `data-field` attribute `cellSpec`/`headerCellSpec`
    *  already stamp, so no second index is needed to find them. Diffs against what was last painted
    *  (I5): a no-op when neither the column nor the width actually changed. */
   /** Puts the header cell and every mounted body cell for `columnKey` back to the geometry
    *  `syncKeyed` last patched onto them — the real committed width/flex, not whatever a live resize
-   *  preview overwrote it with. Used only when a resize preview clears (D-S5-18: "a refused drag must
+   *  preview overwrote it with. Used only when a resize preview clears (a refused drag must
    *  leave nothing behind") — the queued `requestFrame()` will still repaint on the next frame, but
    *  that must not be the only thing standing between a veto and a stuck `width: …px` in the meantime. */
   function restoreColumnBox(columnKey: string): void {
@@ -629,7 +629,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     }
   }
 
-  /** S5.7, D-S5-18: `data-drop` on the header cell a reorder would land before — or, for `null`
+  /** S5.7: `data-drop` on the header cell a reorder would land before — or, for `null`
    *  ("at the end"), on the last header cell with `data-drop="after"` instead of `"before"`, so the
    *  stylesheet can paint the indicator on the correct edge. */
   function paintColumnDropIndicator(beforeColumnKey: string | null): void {
@@ -656,7 +656,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     paintedColumnDropKey = undefined;
   }
 
-  /** S5.7, D-S5-18: the grabbed header cell follows the pointer. A `translateX` on the cell itself
+  /** S5.7: the grabbed header cell follows the pointer. A `translateX` on the cell itself
    *  plus one `data-dragging` attribute for the lifted bar — a hot-path write only (I5): the cell
    *  keeps its slot in the header's flex flow, so no neighbour reflows and every other cell's
    *  on-screen position holds still for the whole drag. */
@@ -679,7 +679,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     paintedColumnDragKey = undefined;
   }
 
-  /** S5.7, D-S5-18: one reorder drag's whole live paint — the grabbed cell's follow transform and
+  /** S5.7: one reorder drag's whole live paint — the grabbed cell's follow transform and
    *  the drop indicator, which always move together. `undefined` (Escape, or a vetoed drop) parks
    *  both: a refused reorder leaves nothing behind. */
   function paintColumnReorderPreview(preview: InteractionState['columnReorderPreview']): void {
@@ -693,14 +693,14 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   }
 
   /** Applies the base committed transform (`syncBars`'s own geometry) to one bar — what a previewed
-   *  bar returns to once the preview clears (S3.3, D-S3-18). */
+   *  bar returns to once the preview clears (S3.3). */
   function restoreBarTransform(id: BarId): void {
     const node = barLayerCache.node(id);
     const geom = barGeomByBarId.get(id);
     if (!node || !geom) return;
     node.style.transform = `translate(${geom.x}px, ${geom.y}px)`;
     node.style.width = `${geom.width}px`;
-    // J1: a resize preview that flipped the label mid-drag (see applyBarPreview) must not leave that
+    // A resize preview that flipped the label mid-drag (see applyBarPreview) must not leave that
     // flip stamped once the preview clears without a commit — restore syncBars's own last answer.
     // `undefined` means this bar owns no label child at all (see BarLabelToken); anything else,
     // `'hidden'` included, is a token `patch` already gave this bar's child, so it is safe to restamp.
@@ -720,7 +720,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     node.style.transform = `translate(${x}px, ${geom.y}px)`;
     if (preview.dWidth === 0) return;
     node.style.width = `${width}px`;
-    // J1: a resize preview can cross the inside/outside fit line, or (F1, #435 follow-up) the
+    // A resize preview can cross the inside/outside fit line, or (#435 follow-up) the
     // inside/none fit line `'insideOrNone'` draws, mid-drag. Reuse the label width syncBars already
     // measured — no canvas call on the hot path — and touch the dataset only on an actual flip, the
     // same diff-and-touch-only posture every other paintedX field in this file keeps.
@@ -729,7 +729,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     const entry = entryById(entryIdOfBar(id));
     const policy = entry === undefined ? 'fitBar' : resolveBarLabelPolicy(entry);
     const placement = resolveBarLabelPlacement(policy, textWidth, x, width, barLabelGapPx, contentWidthPx);
-    // Invariant this line leans on (R4, pass-2 branch review): `labelWidthByBarId` is defined for a
+    // Invariant this line leans on (pass-2 branch review): `labelWidthByBarId` is defined for a
     // bar (the guard above) only when `toGeom` measured a label for it, and `toGeom` measures a label
     // only for a bar that also gets a `.fg-bar-label` child — either painting, or hidden and ready to
     // reveal (`canFlipToLabel`). So the one shape `resolveBarLabelPlacement` can return `undefined`
@@ -750,7 +750,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     next.forEach((preview, id) => applyBarPreview(id, preview));
     paintedPreview = new Set(next.keys());
 
-    // S3.6, D-S3-18: `dragging` (the caller's own draft) vs `ghost` (an installed extension hook's
+    // S3.6: `dragging` (the caller's own draft) vs `ghost` (an installed extension hook's
     // `extra`, U7) — same diff-and-touch-only-changed shape `applyState`'s selected/pending sets use.
     const nextDragging = new Set<BarId>();
     const nextGhost = new Set<BarId>();
@@ -840,7 +840,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     },
   };
 
-  // Bands keyed by index, coarsest first (D-S1.7-6); ticks keyed within a band. Today every shipped
+  // Bands keyed by index, coarsest first; ticks keyed within a band. Today every shipped
   // preset has exactly one header, so this renders byte-identical output to the pre-S1.7 single list.
   function syncHeader(bands: readonly FrameHeaderBand[]): void {
     if (!headerBandsHost) return;
@@ -869,7 +869,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     create: (_cell: CellItem, key: string): HTMLElement => {
       const node = document.createElement('div');
       node.dataset[FIELD_KEY] = key;
-      // S5.11, D-S5-25: one Grid column's box on one Row is a `gridcell`. `tabIndex` stays off the
+      // S5.11: one Grid column's box on one Row is a `gridcell`. `tabIndex` stays off the
       // node here — `view/roving-focus.ts` owns which one cell in the pane is the tab stop.
       node.setAttribute('role', 'gridcell');
       const twisty = document.createElement('button');
@@ -903,7 +903,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       node.className = COLUMN_HEADER_CLASS;
       node.dataset[FIELD_KEY] = key;
       node.setAttribute('role', 'columnheader');
-      // S5.11, D-S5-25: one Grid column's header cell is a `columnheader`, inside the header row
+      // S5.11: one Grid column's header cell is a `columnheader`, inside the header row
       // `view/pane-layout.ts` mounts it in. `tabIndex` stays off the node here — `view/roving-focus.ts`
       // owns which one header cell is the pane's tab stop.
       const label = document.createElement('span');
@@ -952,7 +952,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       create: (row, key) => {
         const node = document.createElement('div');
         node.className = ROW_CLASS;
-        // S5.11, D-S5-25: `row`, not `listitem`. A `listitem` has no `list` ancestor here and may
+        // S5.11: `row`, not `listitem`. A `listitem` has no `list` ancestor here and may
         // not carry `aria-level`, which is what made axe red before this step.
         node.setAttribute('role', 'row');
         node.dataset[TESTID_KEY] = ROW_TESTID;
@@ -993,7 +993,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         node.style.setProperty('--fg-row-depth', String(geom.depth));
         // Only the windowed rows exist, so the row states where it sits in the whole set (I3). Every
         // pattern takes `aria-rowindex`; the three tree attributes belong to a `treegrid` alone
-        // (S5.11, D-S5-25), and the header row above the body takes index 1.
+        // (S5.11), and the header row above the body takes index 1.
         node.setAttribute('aria-rowindex', String(geom.index + 2));
         setTreeRowAttributes(node, geom);
         node.dataset['parity'] = rowParity(geom.index);
@@ -1007,7 +1007,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   /** `aria-level`, `aria-posinset`, `aria-setsize` and `aria-expanded` describe a row's place in a
    *  tree. A flat `grid` row has no such place, and carrying them there is what `aria-allowed-attr`
-   *  refuses (S5.11, D-S5-25, §0.1). `aria-expanded` comes off the row itself, not off the twisty:
+   *  refuses (S5.11, §0.1). `aria-expanded` comes off the row itself, not off the twisty:
    *  the twisty is a button inside the row and states its own expanded status separately. */
   function setTreeRowAttributes(node: HTMLElement, geom: RowGeom): void {
     if (!geom.tree) {
@@ -1093,7 +1093,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       return item;
     });
     headerCellLayer.sync(gridHeaderLayer, items, headerCellSpec);
-    // S5.7, D-S5-18: `applyState`'s drop-indicator paint needs "the last column" for the `null`
+    // S5.7: `applyState`'s drop-indicator paint needs "the last column" for the `null`
     // ("at the end") case — the only place that order is known outside `syncGridHeader` itself.
     lastHeaderColumnKeys = items.map((item) => item.key);
   }
@@ -1134,9 +1134,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       },
       toGeom: (bar) => {
         // The row, never `bar.variant`: which paint this bar wears is the rule that matched this
-        // row, and two rules may share one name (`F3`).
+        // row, and two rules may share one name.
         const entry = entryById(bar.entryId);
-        // J1: the library measures and places every bar's label first, before any renderer runs, so
+        // The library measures and places every bar's label first, before any renderer runs, so
         // a `barRenderer` can paint the label the library already decided on. One text ruler, in one
         // place — a renderer never needs one of its own to know inside from outside.
         // An empty label (no name, #421 C5) prints nothing: skip the placement decision entirely
@@ -1157,11 +1157,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           content = callRenderer('bar', resolved, context, raiseError);
         }
         // A `barRenderer` result owns this bar's content, so the library injects no label child and
-        // stamps no `data-label` for it — the S5.4 seam (D-S5-11). The renderer's own label rides in
+        // stamps no `data-label` for it — the S5.4 seam. The renderer's own label rides in
         // its markup instead, which is also why the mid-drag restamp below skips such a bar: its
         // label placement is a frame fact for it, not a hot-path one.
         const ownsContent = content !== undefined && paintsItsOwnContent(content);
-        // F1 (#435 follow-up): a resize preview can still widen an `insideOrNone` bar past the fit
+        // (#435 follow-up): a resize preview can still widen an `insideOrNone` bar past the fit
         // line mid-drag (applyBarPreview), and that hot path only flips `data-label` — it never grows
         // the child `patch` owns. So this one case gets a child up front, holding the `'hidden'` token
         // (see `BarLabelToken` for what it costs), instead of no child at all.
@@ -1193,7 +1193,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         if (geom.span === 'exact') delete node.dataset['span'];
         else node.dataset['span'] = geom.span;
         node.dataset['flag'] = flagTokens(geom.flags);
-        // J1: see `BarLabelToken` for what `undefined` vs. each token means and costs.
+        // See `BarLabelToken` for what `undefined` vs. each token means and costs.
         if (geom.labelPlacement === undefined) delete node.dataset['label'];
         else node.dataset['label'] = geom.labelPlacement;
         node.setAttribute('aria-label', geom.a11yLabel);
@@ -1262,7 +1262,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       headerLayer.append(headerBandsHost);
       barLayer = document.createElement('div');
       barLayer.className = 'fg-bars';
-      // J1: one ruler per mount, off the bar layer's own computed font — the font a label actually
+      // One ruler per mount, off the bar layer's own computed font — the font a label actually
       // paints in, whatever the consumer's stylesheet cascades onto `.fg-bars`.
       textRuler = createTextRuler(barLayer);
       barLabelGapPx = readPixelProperty(barLayer, '--fg-bar-label-gap', {
@@ -1273,7 +1273,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // so a plugin's own rowStripe still paints on top of the pane's zebra.
       rowBandLayer = document.createElement('div');
       rowBandLayer.className = 'fg-row-bands';
-      // Owns the native scrollable extent (S1.5 README D-S1.5-9): rows/bars are positioned absolutely,
+      // Owns the native scrollable extent (S1.5 README): rows/bars are positioned absolutely,
       // so nothing else in this DOM makes `timelineHost` actually overflow — without this, neither the
       // x nor the y `ScrollAxis`'s `panTo` has anywhere real to write. Zero visual footprint; `sync()`
       // moves it to the frame's bottom-right corner every render.
@@ -1294,7 +1294,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // instead would position absolute against the pane itself and land one header-height too high.
       // `syncKeyed` (sync-keyed.ts) only reorders the bar nodes it tracks and never touches a foreign
       // child, so appending the handles here once leaves them undisturbed at the end of barLayer's
-      // children on every later sync — still painted above every bar (D-S3-8).
+      // children on every later sync — still painted above every bar.
       barLayer.append(startHandle, endHandle);
       cursorLine = document.createElement('div');
       cursorLine.className = 'fg-cursor-line';
@@ -1305,7 +1305,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       cursorLineLabel.setAttribute('aria-hidden', 'true');
       cursorLineLabel.hidden = true;
       timelineHost.append(headerLayer, rowBandLayer, barLayer, contentSizer);
-      // S5.6, D-S5-15: mounted before Date lines, so a registered decoration paints below the
+      // S5.6: mounted before Date lines, so a registered decoration paints below the
       // today wrapper and any authored Date line — those stay the topmost stroke either way.
       decorations = attachDecorations(timelineHost, barLayer);
       // Inserted between the decorations and the bars, so the lines paint over the zebra, the
@@ -1331,7 +1331,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       syncGridHeader(frame.columns);
       syncRows(frame.rows, frame.rowCount, frame.tree, frame.columns);
       syncRowBands(frame.rows, frame.contentWidth, frame.visible.width);
-      // J1: banked for `applyBarPreview`'s mid-drag flip check, which never receives a `frame` of its
+      // Banked for `applyBarPreview`'s mid-drag flip check, which never receives a `frame` of its
       // own — the "outside" fit test runs against the frame actually on screen, not a stale one.
       contentWidthPx = frame.contentWidth;
       syncBars(frame.bars);
@@ -1362,7 +1362,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
       if (gridLayer) {
         // The grid pane has no scrollbar of its own; its row layer follows the timeline pane's
-        // native scroll by one transform per frame instead of a second real scroller (D-S1.8-1).
+        // native scroll by one transform per frame instead of a second real scroller.
         // Both panes read `top` from the same `frame.rows` array, so pixel-identity (I9) is
         // structural rather than a property this line has to maintain by hand.
         gridLayer.style.transform = `translateY(${-frame.visible.y}px)`;
@@ -1370,14 +1370,14 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       if (contentSizer) {
         // The sizer itself is 1x1px, so its far edge — not its origin — must land at the content
         // extent, or the browser's native scrollable range ends up 1px past what the ScrollAxis computed.
-        // No gutter to add: the timeline pane's content is `contentWidth` wide, full stop (D-S1.8-1).
+        // No gutter to add: the timeline pane's content is `contentWidth` wide, full stop.
         const x = Math.max(0, frame.contentWidth - 1);
         const y = Math.max(0, frame.contentHeight - 1);
         contentSizer.style.transform = `translate(${x}px, ${y}px)`;
       }
     },
     applyState(state: InteractionState) {
-      // D-S3-6/D-S3-7: diff against what was last painted, touch only the bars whose token set
+      // Diff against what was last painted, touch only the bars whose token set
       // changed. No frame recompute, no node creation — `barLayerCache` already holds every mounted
       // bar's node from the last sync().
       const nextSelectedEntryIds = new Set(state.selectedEntryIds ?? []);
@@ -1411,7 +1411,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedPending = nextPending;
 
       // Bug hunt (S5 fixes): `.fg-row`'s own selection paint, off the same Selection the bars paint
-      // from. A row paints selected when the Selection holds any Entry it owns (#212, #230 R5, #421).
+      // from. A row paints selected when the Selection holds any Entry it owns (#212, #230, #421).
       // Still diff-and-touch-only (I5): only rows whose token actually flips get written, exactly
       // like the bar loop above.
       const nextSelectedRows = new Set<RowId>();
@@ -1441,7 +1441,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedSelectedRows = nextSelectedRows;
       paintedHoveredRow = nextHoveredRow;
 
-      // D-S3-8: the shared handle pair follows `resizableEntryId`, positioned off the committed
+      // The shared handle pair follows `resizableEntryId`, positioned off the committed
       // geometry `syncBars` already recorded — never a per-bar computation of its own. #211: the
       // Selection can narrow with `resizableEntryId` unchanged (a click on the already-hovered bar),
       // so the repaint gate also has to catch a pair whose own bars moved, not only a changed Entry.
@@ -1460,7 +1460,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         paintedResizableEdges = nextEdges;
       }
 
-      // D-S3-6: `cursor: grab` follows `movableBarId` via a boolean attribute, not an inline style
+      // `cursor: grab` follows `movableBarId` via a boolean attribute, not an inline style
       // (`no-inline-style-outside-geometry`) — the base stylesheet owns the actual `cursor` rule.
       const nextMovable = state.movableBarId;
       if (nextMovable !== paintedMovable) {
@@ -1479,8 +1479,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // (plans/01 §4) — no materialized hit-region array (#31).
       if (!barLayer) return null;
       const el = document.elementFromPoint(at.x, at.y);
-      // S3.4, D-S3-4: the shared handle pair sits above the bar layer in paint order, so a hit on a
-      // handle is checked first — `paintedHandleBars` names the bar each handle sits on (D-S3-8,
+      // S3.4: the shared handle pair sits above the bar layer in paint order, so a hit on a
+      // handle is checked first — `paintedHandleBars` names the bar each handle sits on (
       // #200), a parked (hidden) handle is never returned by elementFromPoint.
       const handle = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_HANDLE_CLASS}`) : null;
       if (handle && paintedHandleBars !== undefined) {

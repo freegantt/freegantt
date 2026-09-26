@@ -1,5 +1,5 @@
-// extensions/ — Tab cycling and focus restore for `Popup`'s `focus: 'trap'` policy (S5.3, D-S5-9).
-// ~40 lines, no dependency: plain DOM only, so it stays inside `extensions/`'s own boundary (D-S5-5).
+// extensions/ — Tab cycling and focus restore for `Popup`'s `focus: 'trap'` policy.
+// ~40 lines, no dependency: plain DOM only, so it stays inside `extensions/`'s own boundary.
 
 const FOCUSABLE_SELECTOR =
   'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),' +

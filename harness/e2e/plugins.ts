@@ -8,7 +8,7 @@ import { logEverything } from '../plugins/log-everything.js';
 import { selectionShortcuts } from '../plugins/selection-shortcuts.js';
 import { popupDemo } from '../plugins/popup-demo.js';
 
-// S5.4's visible-acceptance box (s5.4-renderers.md §4, D-S5-10/11/12): a milestone diamond and a
+// S5.4's visible-acceptance box (s5.4-renderers.md §4): a milestone diamond and a
 // red over-budget cost cell, painted through `barRenderer`/`gridCellRenderer` alone — no bespoke
 // paint path — with a toggle that switches both off live, no remount.
 const BUDGET_THRESHOLD = 1000;
@@ -64,7 +64,7 @@ function writeLog(line: string): void {
   log.prepend(entry);
 }
 
-// D-S5-36: one verb per plugin, so the page never restates the installed set to change one of them.
+// One verb per plugin, so the page never restates the installed set to change one of them.
 // `hasPlugin` is what a toggle reads before it decides which verb to call.
 toggleBtn.addEventListener('click', () => {
   if (gantt.hasPlugin('harness.logEverything')) {
@@ -76,7 +76,7 @@ toggleBtn.addEventListener('click', () => {
   }
 });
 
-// S5.2/S5.3, D-S5-6/D-S5-7/D-S5-8: both demos live in `harness/plugins/`, beside `overBudgetRows()`
+// S5.2/S5.3: both demos live in `harness/plugins/`, beside `overBudgetRows()`
 // and the two variant plugins, so this page and `main.ts` install one copy each instead of holding two
 // (review H1). Both are written against 'freegantt' alone, like every other file in that directory.
 // #178: the page keeps the plugin object, the same way it keeps `lockEntries()`'s. That handle is
@@ -96,8 +96,8 @@ popupBtn.addEventListener('click', () => {
   if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
-// S5.4, D-S5-10/11/12: `barRenderer`/`gridCellRenderer` are `GanttOptions.*` — the consumer's own,
-// level 3 of the ladder (D-S5-11) — so setting them here needs no plugin at all. The cell renderer
+// S5.4: `barRenderer`/`gridCellRenderer` are `GanttOptions.*` — the consumer's own,
+// level 3 of the ladder — so setting them here needs no plugin at all. The cell renderer
 // below branches on `ctx.fieldValue`, the `cost` Field's own value (review H3), and paints
 // `ctx.value`, the string the library formatted from it. Neither half reaches into `entry.props`:
 // the whole point of a declared Field is that a consumer reads it by name, not by storage key.
@@ -108,9 +108,9 @@ popupBtn.addEventListener('click', () => {
 // already reads that token into `--fg-bar-fill-painted`, and `diamond()`'s own `::before` paints
 // from it. `buffer` and `risk` stay hand-written: core ships neither look, and naming them here too
 // demonstrates that a consumer's own variant wins over a plugin's of the same name whatever order
-// the plugins installed in (D-S5-11). Uncheck this toggle to see both plugin variants take over
+// the plugins installed in. Uncheck this toggle to see both plugin variants take over
 // instead — same pixels, two different sources, and neither plugin refuses the other (review P2).
-// `name: 'milestone'` (F10) tells ADR 0018's own story here too, the same as `buffer` and `risk`
+// `name: 'milestone'` tells ADR 0018's own story here too, the same as `buffer` and `risk`
 // below — an app names a row in its own word, and `diamond()`'s look reads none of them.
 const demoVariants: readonly EntryVariant[] = [
   diamond({ name: 'milestone', when: { milestone: true } }),
@@ -153,7 +153,7 @@ timeShadingToggle.addEventListener('change', () => {
   }
 });
 
-// S5.6, D-S5-15/D-S5-16, [S5-A2]: overBudgetRows() is written against the public surface alone
+// S5.6, [S5-A2]: overBudgetRows() is written against the public surface alone
 // ('freegantt', harness/plugins/over-budget-rows.ts) — no core edit, no private import. Dogfoods the
 // `rowStripe` half of `DecorationInput`, beside `timeShading()`'s own `rangeBand` above. Installed
 // from the start; the checkbox removes it live through the same `uninstallPlugin` verb.
@@ -170,7 +170,7 @@ overBudgetRowsToggle.addEventListener('change', () => {
   }
 });
 
-// S5.9, D-S5-21/D-S5-22, [S5-A3]: bufferKind() is written against the public surface alone
+// S5.9, [S5-A3]: bufferKind() is written against the public surface alone
 // ('freegantt', harness/plugins/buffer-kind.ts) — no core edit, no private import. Review P2:
 // riskKind() is a second plugin that defines a second variant, and both install — two rules that
 // match different rows never collide. contextMenu() installs alongside them so each
@@ -188,7 +188,7 @@ function installKindPlugins(): void {
 }
 
 /** `hasPlugin` first: the drop-risk button below can already have removed one of the three, and the
- *  verbs are strict where the assignment form was quiet (D-S5-36). */
+ *  verbs are strict where the assignment form was quiet. */
 function uninstallKindPlugins(): void {
   for (const plugin of kindPlugins) if (gantt.hasPlugin(plugin)) gantt.uninstallPlugin(plugin);
   kindPlugins = [];

@@ -17,7 +17,7 @@ function child(id: string, values: Record<string, unknown>, duration = 1): Store
 }
 
 /** The real context the Rollup builds, not a hand-rolled stand-in: a shipped Aggregator must read
- *  through the same `values`/`numericValues` a consumer's Aggregator gets (D-S4-8, one path). The
+ *  through the same `values`/`numericValues` a consumer's Aggregator gets (one path). The
  *  children ride on the context now, never beside the parent (ADR 0017). */
 function ctx(field: FieldKey, children: readonly StoredEntry[]): RollUpContext {
   const registry = new FieldRegistry({
