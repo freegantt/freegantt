@@ -309,7 +309,9 @@ observes, a Gantt raises what a Gantt observes, and neither forwards the other's
 Dataset therefore deliver a Dataset report once, not twice, and a report raised inside
 `new Dataset(...)` is not lost for want of a Gantt to raise it on. A consumer who wants the two feeds
 as one calls `watchAllErrors([dataset, gantt], handler)`, which de-duplicates by emitter identity and
-returns one disposer. There is no `before*` pair: a report states what already happened.
+returns one disposer. There is no `before*` pair: a report states what already happened. A report about a commit fires
+after that commit's `change`, so an `error` handler that writes starts a commit of its own. A commit
+a `beforeChange` handler refuses raises its refusal, and no report about what it would have dropped.
 
 The payload is flat — `at`, `code`, `message`, `severity`, `by`, and the optional `entryId`, `field`
 and `cause` — so it renders and serializes with no type test. `severity` is `'info'` for a Refusal

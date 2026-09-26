@@ -34,6 +34,18 @@ export function raiseErrorOn(bus: ErrorBus, report: ErrorReportInput, fallback?:
   bus.emit('error', { at: now(), ...report });
 }
 
+/** A report about one commit, raised once that commit lands. `fallback` is the site's own
+ *  `console` line, the same one `raiseErrorOn` takes. */
+export interface CommitReport {
+  readonly report: ErrorReportInput;
+  readonly fallback?: () => void;
+}
+
+/** Call: `raiseCommitReports(data.bus, reports)`. Raises each report a commit owes, in order. */
+export function raiseCommitReports(bus: ErrorBus, reports: readonly CommitReport[]): void {
+  for (const { report, fallback } of reports) raiseErrorOn(bus, report, fallback);
+}
+
 /** The `RaiseError` for one bus, for a collaborator that cannot reach the bus itself — `render/dom`'s
  *  backend options, `PluginRuntime`'s constructor, `PluginContext.raiseError`. */
 export function createErrorRaiser(bus: ErrorBus): RaiseError {

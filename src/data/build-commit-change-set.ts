@@ -25,12 +25,8 @@ import {
 } from './change-set.js';
 import type { EditRequest, ProposedEdit, ProposedEdits } from './edit-extension.js';
 import { createEditRequest } from './edit-request.js';
-import type { ErrorBus } from './error-reporting.js';
-import {
-  buildRollUpOverwroteProposalReport,
-  buildDerivedValuesDroppedReport,
-  raiseErrorOn,
-} from './error-reporting.js';
+import type { CommitReport } from './error-reporting.js';
+import { buildRollUpOverwroteProposalReport, buildDerivedValuesDroppedReport } from './error-reporting.js';
 import type { EditsReading } from './entry-reader.js';
 import { EXTENDER_OPERATION } from './entry-reader.js';
 import { mergeProposedEditsByEntry, entryAfterEdit, proposedKeysOf } from './fields/field-access.js';
@@ -91,10 +87,13 @@ export interface CommitChangeSetInput {
    *  `TransactionData.lockRule`. */
   readonly lockRule: FieldLockRule;
   nextChangeSetId(): ChangeSetId;
-  /** ADR 0013, decision 5/6: where this commit's own dropped-derived-value warnings go. Read here,
-   *  not threaded back out through the return value, because a commit that folds to `undefined`
-   *  (net-empty) still owes the warning — the drop already happened in the Rollup pass above it. */
-  readonly bus: ErrorBus;
+}
+
+/** The ChangeSet a commit folded — `undefined` when its net effect is empty — and the reports it
+ *  owes once it lands. A net-empty commit still owes them: the Rollup already dropped the value. */
+export interface BuiltCommit {
+  readonly changeSet: ChangeSet | undefined;
+  readonly reports: readonly CommitReport[];
 }
 
 export function diffEdits(
@@ -188,18 +187,15 @@ function siblingChangesFromExtenderEdits(
 }
 
 /**
- * Runs the five commit stages against staged store state and returns a folded `ChangeSet`, or
- * `undefined` when the net effect is empty (D-S2-24 step 6).
+ * Runs the five commit stages against staged store state and returns the folded `ChangeSet`
+ * (`undefined` when the net effect is empty, D-S2-24 step 6) and the reports it owes.
  *
  * A plugin-store row counts toward "empty" exactly as a Field row does (D-S5-24, #156). Collecting the
  * rows here, rather than only where entries are diffed, is what lets a transaction whose only write is
  * a plugin row still commit: it builds a changeset, so `runTransaction` does not return early, and the
  * ordinary commit emits `change`, records one undo step, and bumps `datasetRevision` once.
  */
-export function buildCommitChangeSet(
-  data: CommitChangeSetInput,
-  origin: ChangeOrigin,
-): ChangeSet | undefined {
+export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeOrigin): BuiltCommit {
   const byId = data.entries.committedById();
   const proposed = data.entries.pendingEdits();
   const addedEntities = data.entries.pendingAdded();
@@ -266,9 +262,11 @@ export function buildCommitChangeSet(
 
   // ADR 0013, decision 5, and its 2026-09-24 ruling: the transaction body or an extension-hook
   // cascade proposed a rolling-up Field the Rollup owns, and the Rollup overwrote it anyway. One
-  // report for the whole commit, never one per row.
+  // report for the whole commit, never one per row. Collected, not raised: the commit raises it
+  // once it lands.
+  const reports: CommitReport[] = [];
   if (overwrittenProposals.length > 0) {
-    raiseErrorOn(data.bus, buildRollUpOverwroteProposalReport(overwrittenProposals));
+    reports.push({ report: buildRollUpOverwroteProposalReport(overwrittenProposals) });
   }
 
   // ADR 0013, decision 6: an entity `entries.add()` just created was already a parent by the time
@@ -278,7 +276,7 @@ export function buildCommitChangeSet(
   const addedIds = new Set(addedEntitiesForFold.map((row) => row.entity.id));
   const addDropped = rollupUpdated.filter((row) => row.to === undefined && addedIds.has(row.id));
   if (addDropped.length > 0) {
-    raiseErrorOn(data.bus, buildDerivedValuesDroppedReport(addDropped));
+    reports.push({ report: buildDerivedValuesDroppedReport(addDropped) });
   }
 
   // An added entity carries the values the commit settles on, not a row: nothing reads an Entries row
@@ -324,7 +322,7 @@ export function buildCommitChangeSet(
   // write, then the Rollup's recompute of that same `end` once the write set settles. One net row per
   // key, not both in sequence: `invertChangeSet` keeps row order, so two rows for one key would invert
   // to two rows too, and undo would land on the middle value instead of the one committed here.
-  return foldChangeSet(
+  const changeSet = foldChangeSet(
     data.nextChangeSetId(),
     origin,
     rankedEntitiesForFold,
@@ -334,4 +332,5 @@ export function buildCommitChangeSet(
       data.fields,
     ),
   );
+  return { changeSet, reports };
 }
