@@ -181,26 +181,7 @@ dataset.entries.update('roofing', { siblingIndex: 0 });
 
 ### Gantt
 
-- `gridColumns` — which Fields this view shows, in order. `columnRenderer` stays on the column, and it types `fieldValue` from the column's own Field key — a `start` column's renderer reads `fieldValue` as `Instant`, never `unknown`. `meter()` and `image()` are the shipped column renderers; default alt is the Field's formatted value, and `{ alt: 'Logo' }` is a static override for a column that is one picture. Store a URL; let `formatValue` return the caption so alt (and tooltip) speak the name, not the URL.
-
-  ```ts
-  import { Dataset, Gantt, type ColumnRendererContext, type Instant } from 'freegantt';
-
-  const startCell = ({ fieldValue }: ColumnRendererContext<Instant>) =>
-    fieldValue === undefined ? undefined : { text: fieldValue.toString() };
-
-  const dataset = new Dataset({ timeZone: 'Europe/Warsaw', entries: [] });
-
-  new Gantt({
-    container: document.getElementById('gantt')!,
-    dataset,
-    gridColumns: [{ field: 'start', columnRenderer: startCell }],
-  });
-  ```
-
-  An inline arrow written straight on `columnRenderer` still needs this annotation on a known
-  key — the parameter is otherwise implicit `any`. `gantt.gridColumns` reads back the erased
-  form, so a typed `Gantt<TProps>` still widens to a plain `Gantt`.
+- `gridColumns` — which Fields this view shows, in order. `columnRenderer` stays on the column. `meter()` and `image()` are the shipped column renderers; default alt is the Field's formatted value, and `{ alt: 'Logo' }` is a static override for a column that is one picture. Store a URL; let `formatValue` return the caption so alt (and tooltip) speak the name, not the URL.
 - Grid columns are fixed-width. A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it. Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.
