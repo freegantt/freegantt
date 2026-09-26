@@ -27,7 +27,7 @@ import {
   isNoOpStoreRowWrite,
   mergeUpdatedRows,
 } from './change-set.js';
-import { applyFieldRow, readFieldRow } from './fields/field-access.js';
+import { applyFieldRow, readFieldByKey } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { checkHierarchyAnswers } from './hierarchy-source.js';
@@ -173,7 +173,9 @@ function siblingChangesToReplay(
 }
 
 /** A Field row for an id gone after the replay, or whose current value already equals `to`
- *  (`isNoOpFieldWrite`, the question a commit asks too), is skipped. A `parentId` row naming a target absent from `working` is
+ *  (`isNoOpFieldWrite`, the question a commit asks too), is skipped. So is a row for a key no Field
+ *  declares: `isNoOpFieldWrite` answers that nothing is written, the same answer a computed Field
+ *  gets. A `parentId` row naming a target absent from `working` is
  *  skipped too — the entry stays under its current parent, the nearest sound place available, and
  *  this never raises: `change` carries exactly what still applies (§2b's skip rule extended to
  *  hierarchy). Every other `parentId` row lands, even one that provisionally makes two rows in the
@@ -193,7 +195,7 @@ function fieldRowToReplay(
   if (row.field === 'parentId' && row.to !== undefined && !working.has(row.to as EntryId)) {
     return undefined;
   }
-  const from = readFieldRow(current, row.field, registry, access);
+  const from = readFieldByKey(current, row.field, access);
   if (isNoOpFieldWrite(row.field, from, row.to, registry)) return undefined;
   working.set(row.id, applyFieldRow(current, row.field, row.to, registry));
   return { store: 'entries', id: row.id, field: row.field, from, to: row.to };
@@ -240,7 +242,8 @@ function revertLoopingParentRows(
  *  (id, Field) is judged: a later row for the same key chains off this step's own earlier `to`, not
  *  off the store. A `siblingIndex` row is never judged, because any sibling's move shifts that rank;
  *  the renumber pass settles it. An id the step adds is never judged either: its rows land on the
- *  entity the step itself brings back, not on the committed one. */
+ *  entity the step itself brings back, not on the committed one. A row for an undeclared or computed
+ *  key never marks its entry: `isNoOpFieldWrite` reads it as unchanged. */
 function foreignWrittenIds(
   changeSet: ChangeSet,
   data: TransactionData,
@@ -257,7 +260,7 @@ function foreignWrittenIds(
     judgedFields.add(row.field);
     const entity = committed.get(row.id);
     if (!entity) continue; // gone: `fieldRowToReplay` skips it anyway
-    const current = readFieldRow(entity, row.field, data.fields, data.fieldAccess);
+    const current = readFieldByKey(entity, row.field, data.fieldAccess);
     // Writing the recorded `from` back would change nothing: no write since the step recorded it.
     const unchanged = isNoOpFieldWrite(row.field, current, row.from, data.fields);
     // Writing `to` would change nothing: a sync already settled this row.

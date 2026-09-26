@@ -99,13 +99,16 @@ export type BuiltInReportCode =
   | 'unknown-bar-label-field'
   // ADR 0013: a write to a rolling-up parent's rolling-up Field. `entries.update()` throws
   // `DerivedFieldNotWritableError`; `add()` and the Dataset constructor drop the value instead and
-  // raise this code once per operation (decision 5) — never per value.
+  // raise this code once per operation (decision 5) — never per value. Raised after the commit's own
+  // `change` fans out, so a handler that writes here starts a commit of its own. (Construction still
+  // raises it inside `new Dataset()`, before any handler exists.)
   | 'derived-values-dropped'
   // #528: construction and `load` set `siblingIndex` from list position, and an authored value that
   // differs from it is dropped rather than stored. Raised once per operation, naming every dropped
   // value, never once per value — the same aggregation `derived-values-dropped` uses, and a
   // different code because this Field's value is dropped for a different reason: list position wins,
-  // not a rolling-up parent that owns the cell.
+  // not a rolling-up parent that owns the cell. `load` raises it after the commit's own `change`
+  // fans out.
   | 'sibling-index-dropped'
   // The built-in cell editor's own refusals — one spelling, shared by `data-reason` and this code
   // (D-S5-40). `by` is that plugin's id, not `'core'`.
