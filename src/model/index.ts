@@ -17,6 +17,7 @@ export type {
   StoredEntry,
   EntryInput,
   FlatEntryInput,
+  EntryDelta,
   EntryEdit,
   PropsEdit,
   ProposedEdit,

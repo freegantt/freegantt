@@ -748,6 +748,12 @@ export interface EntryActivate {
     readonly target: TargetKind;
 }
 
+// @public
+export interface EntryDelta<TProps = Record<string, unknown>> {
+    readonly remove?: readonly (EntryId | string)[];
+    readonly upsert?: readonly FlatEntryInput<TProps>[];
+}
+
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "RemovableEntryKey" needs to be exported by the entry point index.d.ts
 //
