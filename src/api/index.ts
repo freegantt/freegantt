@@ -81,7 +81,6 @@ export type {
   AggregatorName,
   FieldTypeName,
   GridColumn,
-  GridColumnOf,
   GridColumnInput,
   GridColumnBase,
   GridColumnSizing,
@@ -126,6 +125,9 @@ export type { PluginContextOf, PluginContextParts } from './plugin-context.js';
 // ADR 0019: one plugin, one install site. `definePlugin` narrows to the arm the object fills, so a
 // plugin with a `data` half never type-checks into `GanttOptions.plugins`.
 export { definePlugin } from './define-plugin.js';
+// A Grid column typed from one Dataset's props. Optional: a plain column object is a complete column.
+export { createGridColumnHelper } from './grid-column-helper.js';
+export type { GridColumnHelper, TypedGridColumnKey, TypedGridColumnOptions } from './grid-column-helper.js';
 export type {
   BuiltInCommandId,
   ConvenienceCommandId,

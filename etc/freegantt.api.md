@@ -312,6 +312,9 @@ export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
 export type CoverPredicate = (start: Instant, time: ZonedTime) => boolean;
 
 // @public
+export function createGridColumnHelper<TProps>(dataset: Dataset<TProps>): GridColumnHelper<TProps>;
+
+// @public
 export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup;
 
 // @public
@@ -1190,8 +1193,9 @@ export class Gantt<TProps = unknown> {
     set fit(f: TimeScaleFit);
     get gridCellRenderer(): GridCellRenderer | undefined;
     set gridCellRenderer(renderer: GridCellRenderer | undefined);
+    // (undocumented)
     get gridColumns(): readonly GridColumnInput[];
-    set gridColumns(columns: readonly GridColumnInput<TProps>[]);
+    set gridColumns(columns: readonly GridColumnInput[]);
     get gridResizable(): boolean;
     set gridResizable(resizable: boolean);
     // (undocumented)
@@ -1341,7 +1345,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     dateLineLabelPlacement?: DateLineLabelPlacement;
     dateLines?: readonly DateLineInput[];
     gridCellRenderer?: GridCellRenderer;
-    gridColumns?: readonly GridColumnInput<TProps>[];
+    gridColumns?: readonly GridColumnInput[];
     gridResizable?: boolean;
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
@@ -1397,19 +1401,15 @@ export interface GridCellRendererContext {
 }
 
 // @public
-export type GridColumn<TProps = unknown> = {
-    [K in keyof CoreFieldValues]-?: GridColumnOf<TProps, K>;
-}[keyof CoreFieldValues] | {
-    [K in keyof TProps & string]-?: GridColumnOf<TProps, K>;
-}[keyof TProps & string] | (GridColumnBase<string & {}, unknown> & GridColumnSizing);
+export type GridColumn = GridColumnBase & GridColumnSizing;
 
 // @public
-export interface GridColumnBase<TKey extends FieldKey = FieldKey, TValue = unknown> {
+export interface GridColumnBase {
     // (undocumented)
     align?: ColumnAlign;
-    columnRenderer?: ColumnRenderer<TValue>;
+    columnRenderer?: ColumnRenderer;
     // (undocumented)
-    field: TKey;
+    field: FieldKey;
     // (undocumented)
     header?: string;
     hidden?: boolean;
@@ -1419,10 +1419,12 @@ export interface GridColumnBase<TKey extends FieldKey = FieldKey, TValue = unkno
 }
 
 // @public
-export type GridColumnInput<TProps = unknown> = FieldKey | GridColumn<TProps>;
+export interface GridColumnHelper<TProps> {
+    column<K extends TypedGridColumnKey<TProps>>(field: K, options?: TypedGridColumnOptions<Exclude<FieldValue<TProps, K>, undefined>>): GridColumn;
+}
 
 // @public
-export type GridColumnOf<TProps, K extends FieldKey> = GridColumnBase<K, Exclude<FieldValue<TProps, K>, undefined>> & GridColumnSizing;
+export type GridColumnInput = FieldKey | GridColumn;
 
 // @public
 export interface GridColumnsChange {
@@ -2397,6 +2399,14 @@ export class TransactionAlreadyOpenError extends FreeGanttError {
     // (undocumented)
     readonly operation: string;
 }
+
+// @public
+export type TypedGridColumnKey<TProps> = keyof CoreFieldValues | (keyof TProps & string);
+
+// @public
+export type TypedGridColumnOptions<TValue> = Omit<GridColumnBase, 'field' | 'columnRenderer'> & {
+    columnRenderer?: ColumnRenderer<TValue>;
+} & GridColumnSizing;
 
 // @public
 export class UnknownAggregatorError extends FreeGanttError {
