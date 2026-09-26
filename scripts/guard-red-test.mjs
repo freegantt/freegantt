@@ -52,7 +52,7 @@ function eslintFails(relativeFile) {
   }
 }
 
-// eslint.config.js's harness/e2e/fixtures block reads the specifier *text*, which is what
+// The eslint.config.js harness/e2e/fixtures block reads the specifier *text*, which is what
 // proves the case dependency-cruiser's resolved-path exception cannot state on its own (see the
 // comment above the two calls of this below). Same write/assert/delete shape as `checkRedTestFile`,
 // pointed at `eslint` instead of `depcruise`.

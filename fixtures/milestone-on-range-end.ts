@@ -6,7 +6,7 @@
 // and centres it on its own instant, so a milestone on the last instant of the range used to put
 // half its box — and all of its label — past `contentWidth`. A painted node past `contentWidth`
 // widens the pane's native `scrollWidth`, which opens a scroll range no `ScrollAxis` knows about
-// Under the default `fit: 'pane'` that is the only way two Gantts sharing one axis can
+// Under the default `fit: 'pane'`, that overflow is the only way two Gantts sharing one axis can
 // desync, because the axis max is 0 there and nothing else can move.
 //
 // Two harness pages need exactly this shape and built it twice: `harness/e2e/scroll-sync.ts`'s

@@ -825,7 +825,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         openFor(entry, field, target.element);
       });
 
-      /** `Enter` is reserved for opening the inline editor. It opens the **focused** cell
+      /** `Enter` is reserved for opening the inline editor. It opens the **focused** cell.
        *  `ctx.view.focusedCell()` is roving focus's own answer to "which cell", read
        *  through the same one capability resolution (`canWrite`, I14) every other write path already
        *  checks. `Enter` with focus anywhere else (a row, a bar, a header, the splitter) opens
