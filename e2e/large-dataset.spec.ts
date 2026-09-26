@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// [S1-A1] (plans/s1.11-close-the-gate/README.md §6, D-S1.11-5): harness/e2e/large-dataset.html mounts
+// [S1-A1] (plans/s1.11-close-the-gate/README.md §6): harness/e2e/large-dataset.html mounts
 // 10,000 seeded entries at `zoom: 'preset'` (content wider than the pane). The DOM must hold a bounded
 // number of rows the whole time, not 10,000 — and the visible id set must actually move on scroll, so
 // a bound alone (nothing rendered) can't pass.
