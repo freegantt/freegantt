@@ -1064,7 +1064,10 @@ export interface FormatContext extends FieldContext {
 }
 
 // @public
-export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
+export function formatDate(value: Instant, ctx: {
+    readonly timeZone: string;
+    readonly locale?: Intl.LocalesArgument;
+}, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
 export function formatDateTime(value: unknown, ctx: FormatContext): string;

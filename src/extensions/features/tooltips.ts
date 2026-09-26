@@ -31,7 +31,7 @@ function defaultContent(
   locale: Intl.LocalesArgument | undefined,
   columns: readonly TooltipColumn[],
 ): ElementDescription {
-  const start = formatDate(timeZone, entry.start, locale);
+  const start = formatDate(entry.start, { timeZone, locale });
   const end = formatEndInclusive(timeZone, { start: entry.start, end: entry.end }, locale);
   const dates = start === end ? start : `${start} – ${end}`;
   return {

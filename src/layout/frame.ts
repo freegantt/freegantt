@@ -464,7 +464,7 @@ function barA11yLabel(
   scale: TimeScale,
   locale: Intl.LocalesArgument | undefined,
 ): string {
-  const span = `${formatDate(scale.timeZone, bar.start, locale)} – ${formatEndInclusive(scale.timeZone, bar, locale)}`;
+  const span = `${formatDate(bar.start, { timeZone: scale.timeZone, locale })} – ${formatEndInclusive(scale.timeZone, bar, locale)}`;
   // #421 C5: a nameless Entry announces its dates alone, never a leading ", ".
   const prefix = label === '' ? '' : `${label}, `;
   if (partCount <= 1) return `${prefix}${span}`;

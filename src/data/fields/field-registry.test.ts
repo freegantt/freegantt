@@ -399,7 +399,7 @@ describe('shipped Field types resolve by name with no local fieldTypes', () => {
     const field = registry.get('due')!;
     expect(field.type).toBe('date');
     expect(field.formatValue!(noon, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe(
-      formatDate('UTC', noon, 'en-US', DATE_TIME_FORMAT),
+      formatDate(noon, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT),
     );
     expect(field).not.toHaveProperty('parseValue');
   });
@@ -487,9 +487,9 @@ describe('core Fields consume the shipped type table', () => {
     const withStart = { start, end } as Entry;
     const formatted = registry.get('end')!.formatValue!(end, formatCtx, withStart);
     expect(formatted).toBe(formatEndInclusive('UTC', { start, end }, 'en-US', DATE_TIME_FORMAT));
-    expect(formatted).not.toBe(formatDate('UTC', end, 'en-US', DATE_TIME_FORMAT));
+    expect(formatted).not.toBe(formatDate(end, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT));
     expect(registry.get('end')!.formatValue!(end, formatCtx, { end } as Entry)).toBe(
-      formatDate('UTC', end, 'en-US', DATE_TIME_FORMAT),
+      formatDate(end, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT),
     );
   });
 

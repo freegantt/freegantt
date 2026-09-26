@@ -91,7 +91,7 @@ export function mountPlannerToolbar(options: PlannerToolbarOptions): PlannerTool
     el(
       'span',
       'demo-toolbar-subtitle',
-      `${formatDate(zone, projectSpan.start, undefined, { month: 'short', day: 'numeric' })} – ${formatEndInclusive(zone, projectSpan, undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      `${formatDate(projectSpan.start, { timeZone: zone }, { month: 'short', day: 'numeric' })} – ${formatEndInclusive(zone, projectSpan, undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
     ),
   );
   row1.append(titleGroup, el('div', 'demo-toolbar-spacer'));

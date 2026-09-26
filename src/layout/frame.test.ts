@@ -156,7 +156,7 @@ describe('computeFrame', () => {
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
     expect(bar?.a11yLabel).toBe(
-      `${entry.name}, ${formatDate(scale.timeZone, entry.start as Instant)} – ${formatEndInclusive(scale.timeZone, spanOf(entry))}`,
+      `${entry.name}, ${formatDate(entry.start as Instant, { timeZone: scale.timeZone })} – ${formatEndInclusive(scale.timeZone, spanOf(entry))}`,
     );
   });
 

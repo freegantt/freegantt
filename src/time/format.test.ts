@@ -20,14 +20,19 @@ const ctx = (locale: Intl.LocalesArgument = 'en-US'): FormatContext => ({ timeZo
 describe('formatDate', () => {
   it('formats a start with no conversion', () => {
     const start = instant('2026-08-26T14:30:00Z'); // 10:30 EDT
-    expect(formatDate(ZONE, start)).toBe('Aug 26, 2026');
+    expect(formatDate(start, ctx())).toBe('Aug 26, 2026');
   });
 
   it('includes clock time when DATE_TIME_FORMAT is passed', () => {
     const start = instant('2026-08-26T14:30:00Z'); // 10:30 EDT
-    const text = formatDate(ZONE, start, 'en-US', DATE_TIME_FORMAT);
+    const text = formatDate(start, ctx(), DATE_TIME_FORMAT);
     expect(text).toContain('Aug 26, 2026');
     expect(text).toMatch(/10:30/);
+  });
+
+  it('takes a locale-less ctx: locale is optional', () => {
+    const start = instant('2026-08-26T14:30:00Z');
+    expect(formatDate(start, { timeZone: ZONE })).toBe('Aug 26, 2026');
   });
 });
 
@@ -58,7 +63,7 @@ describe('formatEndInclusive', () => {
   it('displays a zero-length span at its own end, instead of one millisecond earlier (#240)', () => {
     const at = instant('2026-01-05T10:00:00Z');
     expect(formatEndInclusive(ZONE, { start: at, end: at }, 'en-US', DATE_TIME_FORMAT)).toBe(
-      formatDate(ZONE, at, 'en-US', DATE_TIME_FORMAT),
+      formatDate(at, ctx(), DATE_TIME_FORMAT),
     );
   });
 });
@@ -113,7 +118,7 @@ describe('formatInclusiveDate', () => {
 
   it('shows a zero-length span at its own end, unchanged', () => {
     const at = instant('2026-01-05T10:00:00Z');
-    expect(formatInclusiveDate(at, ctx(), { start: at })).toBe(formatDate(ZONE, at));
+    expect(formatInclusiveDate(at, ctx(), { start: at })).toBe(formatDate(at, ctx()));
   });
 
   it('shows a timed end at its own day, never the day before', () => {
