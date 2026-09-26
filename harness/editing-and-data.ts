@@ -34,7 +34,7 @@ import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
-// D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
+// The block above the Gantt names what this page demonstrates, the config that does it,
 // and the spec section that governs it.
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'editing-and-data');
 
@@ -63,8 +63,8 @@ function withKindProps(entry: EntryInput<DemoEntryProps>): EntryInput<EditingDat
   return entry;
 }
 
-// S5.10, D-S5-24: one Dataset plugin owns every lock on this page — the checkbox below writes its
-// `locked` Field (#496 Q8), so the page keeps no lock state of its own. `Dataset.plugins` is
+// S5.10: one Dataset plugin owns every lock on this page — the checkbox below writes its
+// `locked` Field (#496), so the page keeps no lock state of its own. `Dataset.plugins` is
 // read-only, so it installs here, at construction.
 const locks = lockEntries();
 
@@ -102,7 +102,7 @@ const drawsChildrenAsSegments = (entry: Entry): boolean => entry.id === SEGMENTE
 
 const BUDGET_THRESHOLD = 5000;
 
-// S5.4, D-S5-10/11: `gridCellRenderer` is plain `GanttOptions`, no plugin needed — the same `cost`
+// S5.4: `gridCellRenderer` is plain `GanttOptions`, no plugin needed — the same `cost`
 // value `overBudgetRows()` below reads through `entry.read('cost')`, painted the cell's own way.
 const overBudgetCell: GridCellRenderer = ({ column, value, fieldValue }) =>
   column.field === 'cost' && typeof fieldValue === 'number' && fieldValue > BUDGET_THRESHOLD
@@ -175,7 +175,7 @@ function refreshMutationButtons(): void {
   noteBtn.disabled = none;
 }
 
-// D-S2-25, made visible: the checkbox locks every currently selected entry, and reads back locked
+// The lock veto, made visible: the checkbox locks every currently selected entry, and reads back locked
 // exactly when the whole selection already is. Checking it is a real dataset write — it commits, it
 // logs like any other change, and one undo lifts it (#156).
 function refreshLockCheckbox(): void {
@@ -204,7 +204,7 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   syncSelectionUi();
 });
 
-// Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
+// Who reports a refusal? The library, on one subscription over both emitters — the lock
 // plugin's and the mobilization veto's own `refuse(reason)` words arrive here, so this page keeps
 // no refusal callback of its own.
 const toast = document.querySelector<HTMLDivElement>('#toast')!;

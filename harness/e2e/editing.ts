@@ -80,7 +80,7 @@ function hideToast(): void {
   toast.textContent = '';
 }
 
-// S5.12, D-S5-42: one subscription over both emitters. Every refusal and every recovered fault the
+// S5.12: one subscription over both emitters. Every refusal and every recovered fault the
 // Dataset or the Gantt observes arrives here, and the page decides what to keep. Retention is the
 // page's policy, so core keeps nothing: there is no `gantt.errors` to read.
 //
@@ -122,7 +122,7 @@ holdDrop.addEventListener('change', () => {
   hideToast();
 });
 
-// Locking writes the plugin's `locked` Field (#496 Q8) — a real dataset write, so it commits, it
+// Locking writes the plugin's `locked` Field (#496) — a real dataset write, so it commits, it
 // logs like every other change, and Ctrl+Z lifts it (#156).
 lockEntryCheckbox.addEventListener('change', () => {
   attemptMutation(() =>
@@ -138,7 +138,7 @@ dataset.on('historyChange', refreshHistoryButtons);
 
 // The page runs the library's own commands rather than calling `dataset.undo()` itself, so the
 // buttons and a future default chord are one implementation, not two that can drift or double-fire
-// (D-S5-26). The `window` listener below is the page's stand-in until a default keymap ships; it
+// The `window` listener below is the page's stand-in until a default keymap ships; it
 // goes when one does.
 function undo(): void {
   attemptMutation(() => gantt.commands.run('freegantt.undo'));

@@ -52,7 +52,7 @@ mountGanttToolbar({ gantt, container: document.querySelector<HTMLDivElement>('#t
 
 // The overview: the same Dataset and the same time axis, a shorter pane, only `x` shared. Its own
 // row window stays private (a second `y`), so its far-fewer visible rows never clamp the main
-// chart's scroll range (D-S6-1).
+// chart's scroll range.
 new Gantt({
   container: '#overview-gantt',
   dataset,
@@ -78,7 +78,7 @@ const renderedReadout = document.querySelector<HTMLSpanElement>('#rendered-reado
 buildReadout.innerHTML = `Dataset build: <b>${buildMs.toFixed(1)} ms</b>`;
 countReadout.innerHTML = `Entries: <b>${dataset.entries.all.length.toLocaleString()}</b>`;
 
-// First paint: the constructor above only requests a render (D-S2-15); the browser paints it on
+// First paint: the constructor above only requests a render; the browser paints it on
 // the next animation frame, so that is where the clock stops.
 requestAnimationFrame(() => {
   const paintMs = performance.now() - paintStart;

@@ -1,4 +1,4 @@
-// D-S4-34, #435, #436, #470, S1.12/S1.13: one Gantt over the hierarchy fixture — tree, roll-ups, row
+// #435, #436, #470, S1.12/S1.13: one Gantt over the hierarchy fixture — tree, roll-ups, row
 // sources, segmented rows, and the timeline navigation surface — plus one small second Gantt where a
 // feature needs its own Dataset: an owning parent's Fields opt out of the roll-up dataset-wide, so it
 // cannot share a Dataset with the rows that roll up above.
@@ -34,7 +34,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'hierarch
 
 /** The fixture's own published shape (`cost`, `team`, the crew-lead row's own keys), plus the
  *  phase-hierarchy plugin's own `phaseId` (ADR 0020) — imported, never hand-copied, so this page
- *  cannot drift from either one (J41). */
+ *  cannot drift from either one. */
 type HierarchyProps = HierarchyEntryProps & PhaseProps;
 
 const GRID_COLUMNS: readonly GridColumnInput[] = [
@@ -210,7 +210,7 @@ gantt.on('selectionChange', renderSelection);
 // and no dataset `change` — the readout needs this subscription too, or it goes stale.
 gantt.on('collapseChange', renderSelection);
 
-// S5.8, D-S5-19: fires before the built-in editor opens. Cy's day is locked the same way its
+// S5.8: fires before the built-in editor opens. Cy's day is locked the same way its
 // resize is (`capabilities.resize` above) — a double-click on it never opens an editor at all.
 gantt.on('beforeEntryEdit', ({ entry }) => {
   if (entry.read('locked') === true) return false;

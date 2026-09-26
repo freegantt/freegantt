@@ -32,11 +32,11 @@ import { popupDemo } from './plugins/popup-demo.js';
 import { lockEntries } from './plugins/lock-entries.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
-// D-S5-29: the block above the Gantt names what this page demonstrates, the config that does it,
+// The block above the Gantt names what this page demonstrates, the config that does it,
 // and the spec section that governs it — the one thing a reader new to the library needs first.
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'generic-demo');
 
-// S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
+// S5.8: `editable` is the Field's own answer now (#142), so no column here restates it.
 // Name, Start, End and Budget take their Fields' own defaults and are editable.
 //
 // Duration still shows a refused cell: it is a `compute` Field and has no stored home to write back
@@ -49,13 +49,13 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'cost', header: 'Budget' },
 ];
 
-// S5.10, D-S5-24: one Dataset plugin owns every lock on this page — the checkbox below and the
-// right-click Lock/Unlock items both write its `locked` Field (#496 Q8), so the page keeps no lock
+// S5.10: one Dataset plugin owns every lock on this page — the checkbox below and the
+// right-click Lock/Unlock items both write its `locked` Field (#496), so the page keeps no lock
 // state of its own. `Dataset.plugins` is read-only, so it is installed here, at construction.
 const locks = lockEntries();
 
 // `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A
-// hand-written copy here drifted from it the moment ADR 0018 added `milestone` (`J41`).
+// hand-written copy here drifted from it the moment ADR 0018 added `milestone`.
 const dataset = new Dataset<DemoEntryProps>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
@@ -217,7 +217,7 @@ removeBtn.addEventListener('click', () => {
 
 syncSelectionUi();
 
-// S5.7, D-S5-34: the page keeps no copy of which columns show. One list above declares the
+// S5.7: the page keeps no copy of which columns show. One list above declares the
 // columns; `hideGridColumn` takes one off the screen and leaves the widths and the order the user
 // set on the other four alone, and `hiddenGridColumns` says which are off right now.
 toggleBudgetBtn.addEventListener('click', () => {
@@ -347,7 +347,7 @@ costBtn.addEventListener('click', () => {
   });
 });
 
-// D-S2-25 / S5.10: the checkbox locks the dataset's current first entry through the same plugin the
+// S5.10: the checkbox locks the dataset's current first entry through the same plugin the
 // right-click menu uses. Locking writes the plugin's `locked` Field — a real dataset write, so it
 // commits, it logs like every other change, and Ctrl+Z unlocks (#156). The refusal itself is the
 // plugin's own `beforeChange`.
@@ -355,7 +355,7 @@ function firstEntryId(): string | undefined {
   return dataset.entries.all[0]?.id;
 }
 
-// Who reports a refusal? The library, on one subscription over both emitters (D-S5-42) — the lock
+// Who reports a refusal? The library, on one subscription over both emitters — the lock
 // plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
 watchAllErrors([dataset, gantt], (report) => {
   const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
@@ -440,7 +440,7 @@ gantt.setCapabilityRule('edit', (entry, field) =>
 // rather than naming a fixture row of its own.
 window.__fixedFinishEntryId = FIXED_FINISH_ENTRY;
 
-// #195, D-S5-35: the page writes the one rule it owns. Assigning `gantt.capabilities` would
+// #195: the page writes the one rule it owns. Assigning `gantt.capabilities` would
 // restate the whole capability config, and drop any other rule this page had set. Unchecking the box
 // clears the rule rather than setting `resize: true`, so a group row stays unresizable.
 lockResizeCheckbox.addEventListener('change', () => {
@@ -457,7 +457,7 @@ const toggleLoggingBtn = document.querySelector<HTMLButtonElement>('#toggle-plug
 // log writer, because each page owns its log panel.
 const writeLog = (line: string): void => prependLogLine(log, line);
 
-// #195, D-S5-36: install and uninstall name one plugin. The page never restates the installed set,
+// #195: install and uninstall name one plugin. The page never restates the installed set,
 // so a plugin installed elsewhere on this page cannot be dropped by this button.
 toggleLoggingBtn.addEventListener('click', () => {
   const installed = gantt.hasPlugin('harness.logEverything');
@@ -487,14 +487,14 @@ popupBtn.addEventListener('click', () => {
   if (demoPopup.openOn(selected)) writeLog(`popup demo: opened on ${selected}`);
 });
 
-// S5.4, D-S5-10/11: `gridCellRenderer`/`headerRenderer` as plain `GanttOptions.*` — no plugin needed.
+// S5.4: `gridCellRenderer`/`headerRenderer` as plain `GanttOptions.*` — no plugin needed.
 // ADR 0022: `diamond()` is core's own shipped glyph, so this page states only which rows wear one —
 // the `milestone` Field the fixture writes on "Requirements review" (`fixtures/demo-dataset.ts`), so
 // `update(id, { milestone: true })` would pin a second row with no code change here. The purple fill
 // is an ordinary rule in `harness-chrome.css` (`.fg-bar-diamond { --fg-bar-fill: … }`), no JavaScript
 // in between (refuted item 8) — `.fg-bar` already reads that token into `--fg-bar-fill-painted`, and
 // `diamond()`'s own `::before` paints from it.
-// `name: 'milestone'` (F10) tells ADR 0018's story on this page too — an app names a row in its own
+// `name: 'milestone'` tells ADR 0018's story on this page too — an app names a row in its own
 // word, and `diamond()`'s look rides its class (`.fg-bar-diamond`) and `css`, neither of which reads
 // the name, so renaming costs nothing.
 // Every leaf entry already carries a `cost` (`fixtures/demo-dataset.ts`), so this reuses the
@@ -549,7 +549,7 @@ timeShadingToggle.addEventListener('change', () => {
 });
 
 // Which commands does an entry menu show? — Delete, Lock and Unlock, the same three for the
-// right-clicked bar, its grid row, or `Shift+F10` on a selected row (context-menu.ts and the
+// right-clicked bar, its grid row, or the menu key on a selected row (context-menu.ts and the
 // keymap both resolve through `resolveActedOn`, `api/command.ts`). Right-clicking empty timeline
 // or an unpopulated grid stretch leaves `ctx.entry` undefined, so none of the three show there —
 // background right-clicks stay on "Collapse all"/"Expand all".
@@ -603,12 +603,12 @@ function entryContextActions() {
   });
 }
 
-// S5.5, D-S5-13/14: the two shipped built-ins, installed straight from `plugins: [...]` — no config
+// S5.5: the two shipped built-ins, installed straight from `plugins: [...]` — no config
 // table, no core edit (`[S5-A1]`'s dogfood gate). Hover a bar for its name and dates; right-click a
 // bar or its grid row for an entry-only menu ("Delete"/"Lock"/"Unlock" — `items` below drops the
 // background-only defaults for that target), or the timeline canvas for "Collapse all"/"Expand all";
-// `Shift+F10` opens the same entry menu for a selected row.
-// S5.8, D-S5-19: `inlineEditing()` joins them — double-click Name, Start or Budget to edit in place.
+// The menu key opens the same entry menu for a selected row.
+// S5.8: `inlineEditing()` joins them — double-click Name, Start or Budget to edit in place.
 gantt.installPlugin(tooltips());
 gantt.installPlugin(
   contextMenu({

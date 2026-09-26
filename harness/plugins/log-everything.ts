@@ -4,7 +4,7 @@
 import { definePlugin } from 'freegantt';
 import type { WriteLog } from './write-log.js';
 
-/** The two-line logging plugin the S5.1 acceptance box asks for (README §3, D-S5-1). A page
+/** The two-line logging plugin the S5.1 acceptance box asks for (README §3). A page
  *  installs and removes it live through `gantt.plugins` — no private import, and no remount. It owns
  *  a real disposer, because it holds a subscription `ctx.disposables` knows nothing about. */
 export function logEverything(writeLog: WriteLog) {
