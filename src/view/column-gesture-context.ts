@@ -1,18 +1,18 @@
-// view/ — the seam `interaction/column-gestures.ts` drives and `GanttShell` implements (S5.7,
-// D-S5-18). Same split as `entry-gesture-context.ts` (S3, D-S3-5): `interaction/` performs no
+// view/ — the seam `interaction/column-gestures.ts` drives and `GanttShell` implements. Same split
+// as `entry-gesture-context.ts`: `interaction/` performs no
 // arithmetic of its own — every commit, every floor clamp, every capability check runs behind this
 // context, which `GanttShell` builds closing over its own private state.
 
 import type { FieldKey } from '../model/index.js';
 
-/** One resize or reorder gesture's outcome (S5.7, D-S5-18): `GanttShell` runs the one
+/** One resize or reorder gesture's outcome: `GanttShell` runs the one
  *  `beforeGridColumnsChange` → commit → `gridColumnsChange` sequence and reports whether it landed.
  *  `false` means a `before*` handler vetoed it — the caller (`interaction/column-gestures.ts`) is the
  *  one holding the pre-drag state to restore, since it captured the real on-screen width/order at
  *  drag start. */
 export type ColumnGestureCommit = boolean;
 
-/** One in-flight reorder drag, as the screen shows it (S5.7, D-S5-18): the grabbed header cell rides
+/** One in-flight reorder drag, as the screen shows it: the grabbed header cell rides
  *  `offsetPx` from its own slot, and the drop indicator marks where the drop would land. Both halves
  *  travel together because both change on the same `pointermove` — a cell that follows the pointer
  *  while the indicator lags a frame behind would read as two separate gestures. */
@@ -28,7 +28,7 @@ export interface ColumnReorderPreview {
 }
 
 /** What `interaction/column-gestures.ts`'s pointer sequences and `GanttShell`'s own keyboard chords
- *  (Alt+Arrow move, Shift+Arrow resize, D-S5-26) both run through — one place decides whether a
+ *  (Alt+Arrow move, Shift+Arrow resize) both run through — one place decides whether a
  *  column may be dragged/nudged and what a gesture actually commits. */
 export interface ColumnGestureContext {
   /** `GridColumn.resizable`, resolved. Default `true`. */
@@ -43,7 +43,7 @@ export interface ColumnGestureContext {
   /** The one commit sequence, for a resize. Returns `false` when vetoed. */
   commitColumnWidth(columnKey: FieldKey, widthPx: number): ColumnGestureCommit;
   /** Escape, or a vetoed commit: drops the live resize paint and repaints the column's real geometry
-   *  — a refused drag must leave nothing behind (D-S5-18), so this does more than
+   *  — a refused drag must leave nothing behind, so this does more than
    *  `previewColumnWidth(columnKey, startWidthPx)` would: that call still leaves the preview's
    *  `data-fixed`/inline-width override on the DOM node even when the column was flex-sized before
    *  the drag started. */
@@ -55,14 +55,14 @@ export interface ColumnGestureContext {
   previewColumnReorder(preview: ColumnReorderPreview): void;
   /** The one commit sequence, for a reorder. Returns `false` when vetoed. */
   commitColumnReorder(columnKey: FieldKey, beforeColumnKey: FieldKey | null): ColumnGestureCommit;
-  /** Escape, or a vetoed commit (D-S5-18): clears the drop indicator and parks the grabbed cell back
+  /** Escape, or a vetoed commit: clears the drop indicator and parks the grabbed cell back
    *  on its own slot — a refused reorder must leave nothing behind, the same contract
    *  `cancelColumnResize` holds for a resize. */
   cancelColumnReorder(): void;
   /** A plain click (not a drag) on a header cell — or `undefined` for a click that missed every
-   *  header cell. D-S1.10-5 keeps the container the one real tab stop until S5.11's roving pattern
+   *  header cell. The container stays the one real tab stop until S5.11's roving pattern
    *  lands, so this is a JS-tracked "focused column" rather than a DOM focus move, the same way a bar
    *  click sets the *selection* without moving focus off the container. `CommandContext.target`
-   *  (`Alt+Arrow`/`Shift+Arrow`, D-S5-26) reads it. */
+   *  (`Alt+Arrow`/`Shift+Arrow`) reads it. */
   setFocusedColumn(columnKey: FieldKey | undefined): void;
 }

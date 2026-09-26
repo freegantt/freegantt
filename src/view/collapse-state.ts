@@ -1,4 +1,4 @@
-// view/ — collapsed RowIds for one Gantt (D-S4-22). Never reaches the Dataset.
+// view/ — collapsed RowIds for one Gantt. Never reaches the Dataset.
 
 import type { RowId } from '../model/index.js';
 

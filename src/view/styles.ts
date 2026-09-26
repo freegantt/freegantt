@@ -1,4 +1,4 @@
-// view/ — the base stylesheet (plans/s1.10-theming-and-a11y/README.md D-S1.10-6, D-S1.10-8, D-S1.10-9).
+// view/ — the base stylesheet (plans/s1.10-theming-and-a11y/README.md).
 // `ensureBaseStyles` writes the structural rules every Gantt shares, and it is the only place the
 // library writes *this* stylesheet — `variant-styles.ts` writes a second one, per Gantt, for the
 // rules an installed variant's own `css` carries (ADR 0022 §5). Idempotent per document via a
@@ -9,7 +9,7 @@
 // not that — the second Gantt's call is a no-op precisely because the marker makes it safe to call twice,
 // and no state is shared, exchanged, or capable of drifting between instances).
 //
-// Structural rules absorb every inline write pane-layout.ts/render/dom used to make (D-S1.10-6) — the
+// Structural rules absorb every inline write pane-layout.ts/render/dom used to make — the
 // new `freegantt/no-inline-style-outside-geometry` lint rule leaves `transform`/`width`/`height` as the
 // only properties still legitimately written inline.
 //
@@ -140,7 +140,7 @@ const LIGHT_COLOR_TOKENS = `
   --fg-row-unmatched-label-color: #726D65;
   --fg-bar-fill: oklch(0.49 0.13 248);
   --fg-bar-label-color: #FFFFFF;
-  /* J1: a label pushed outside the bar paints on the pane, not on --fg-bar-fill, so it takes the
+  /* A label pushed outside the bar paints on the pane, not on --fg-bar-fill, so it takes the
      pane's own ink family (--fg-header-subtext's) rather than --fg-bar-label-color. */
   --fg-bar-label-outside-color: #5E5A53;
   --fg-warn: #B4690E;
@@ -152,11 +152,11 @@ const LIGHT_COLOR_TOKENS = `
   /* Ink on a Date/Cursor line label, which is a filled chip in the time colour — the same
      fill/label pairing --fg-bar-fill and --fg-bar-label-color already make. */
   --fg-date-line-label-color: #FFFFFF;
-  /* The hovered bar's inset hairline — D-S3-7's hovered token, unpainted until now. It borrows no
+  /* The hovered bar's inset hairline — the hovered token, unpainted until now. It borrows no
      meaning hue, so a hovered bar and a selected one are never confusable — and it stays inside the
      bar's own box, so a hover never shifts a neighbour. */
   --fg-hover-ring: rgb(26 24 21 / 0.22);
-  /* The dragged bar's lift — D-S3-7's dragging token. One static, hard-offset shadow: no blur to
+  /* The dragged bar's lift — the dragging token. One static, hard-offset shadow: no blur to
      rasterize and no animation, so it never lands on the drag hot path. */
   --fg-drag-shadow: 0 2px 0 rgb(26 24 21 / 0.18);
   /* Selection is the accent blue, close to --fg-bar-fill on purpose, and it never touches it: the
@@ -166,7 +166,7 @@ const LIGHT_COLOR_TOKENS = `
      failed — it landed within a few degrees of the date line's own red, so a selected row and an
      error read as the same paint. This blue sits far from both. */
   --fg-selection-color: oklch(0.55 0.13 245);
-  /* S5.11, D-S5-25/D-S5-26: the roving-focus ring — a hue of its own, so a keyboard-focused row/cell/
+  /* S5.11: the roving-focus ring — a hue of its own, so a keyboard-focused row/cell/
      bar/header-cell/splitter reads as "focused" and never as "selected" (--fg-selection-color) or
      "conflict"/"pending" (--fg-warn). This is the violet --fg-selection-color vacated above: the
      design carries no focus hue of its own, and violet stays unclaimed by every other meaning on
@@ -294,12 +294,12 @@ ${DARK_COLOR_TOKENS}
 /* position: relative so .fg-overlay's inset: 0 (below) anchors to the container's own box, not an
    outer one — the container had no positioned ancestor of its own to need before S5.3. */
 .fg-container { display: flex; overflow: hidden; user-select: none; position: relative; }
-/* D-S1.8-13, #126: horizontal is a real, independent native scroller — vertical stays hidden here
-   and transform-driven (.fg-rows-clip below owns that clip; D-S1.8-1 unchanged for that axis). */
+/* #126: horizontal is a real, independent native scroller — vertical stays hidden here
+   and transform-driven (.fg-rows-clip below owns that clip; unchanged for that axis). */
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow-x: auto; overflow-y: hidden; background: var(--fg-pane-bg); }
-/* S1.12, D-S1.12-9: mirrors .fg-header's own band stack — one .fg-band per header band
+/* S1.12: mirrors .fg-header's own band stack — one .fg-band per header band
    (setHeaderBandCount), sized from the same --fg-band-height expression.
-   width: --fg-grid-content-width (D-S1.8-13, #126) — falls back to 100% (today's layout, unchanged)
+   width: --fg-grid-content-width (#126) — falls back to 100% (today's layout, unchanged)
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: ${INTERNAL_Z.paneChrome}; color: var(--fg-header-text); }
@@ -314,11 +314,11 @@ ${DARK_COLOR_TOKENS}
 .fg-col-header[data-fixed] { flex: 0 0 auto; }
 .fg-col-header[data-align='end'] { justify-content: flex-end; text-align: end; }
 .fg-col-header[data-align='center'] { justify-content: center; text-align: center; }
-/* S5.7, D-S5-18: a fixed/pinned column's cursor stays a plain pointer — no resize/reorder affordance
+/* S5.7: a fixed/pinned column's cursor stays a plain pointer — no resize/reorder affordance
    to promise. */
 .fg-col-header[data-movable-off] { cursor: default; }
 .fg-col-header-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
-/* S5.7, D-S5-18: the resize grip. 6px wide visually; --fg-column-resizer-hit (default 12px, via the
+/* S5.7: the resize grip. 6px wide visually; --fg-column-resizer-hit (default 12px, via the
    ::before overlay below) widens only the pointer hit target, so adjacent cells' text never loses
    space to it. --fg-column-min-width (default 40, read by GanttShell, no rule of its own here — same
    posture --fg-splitter-width/--fg-grid-pane-width already take) floors how far a drag can shrink the
@@ -330,12 +330,12 @@ ${DARK_COLOR_TOKENS}
 .fg-column-resizer:hover::after { right: 1px; width: 3px; background: var(--fg-splitter-color); }
 .fg-column-resizer::before { content: ''; position: absolute; inset-block: 0; left: 50%; width: var(--fg-column-resizer-hit, 12px); transform: translateX(-50%); }
 .fg-col-header[data-resizable-off] .fg-column-resizer { display: none; }
-/* S5.7, D-S5-18: the reorder drop indicator — an inset border on the edge a drop would land against,
+/* S5.7: the reorder drop indicator — an inset border on the edge a drop would land against,
    painted on the target header cell rather than a floating element (render/dom/index.ts's own
    data-drop attribute, "before" or "after"). */
 .fg-col-header[data-drop='before'] { box-shadow: inset 2px 0 0 0 var(--fg-selection-color); }
 .fg-col-header[data-drop='after'] { box-shadow: inset -2px 0 0 0 var(--fg-selection-color); }
-/* S5.7, D-S5-18: the grabbed header cell during a reorder drag — it rides a translateX written by
+/* S5.7: the grabbed header cell during a reorder drag — it rides a translateX written by
    render/dom/index.ts (a transform only, so it keeps its slot in the flow and no neighbour reflows).
    z-index and --fg-popup-shadow (the same lifted-surface token .fg-popup uses) raise it over its
    neighbours, and a --fg-header-bg wash gives it a panel of its own to read as one carried cell.
@@ -354,15 +354,15 @@ ${DARK_COLOR_TOKENS}
    scrollbar cannot move the date under a given screen x. view/scroll-attachment.ts toggles the
    class; a lone Gantt never carries it and keeps the full width. */
 .fg-timeline-pane.fg-shared-axis { scrollbar-gutter: stable; }
-/* S1.12, D-S1.12-9/D-S1.12-15: height comes from band count × one band height, not a fixed total
+/* S1.12: height comes from band count × one band height, not a fixed total
    split N ways — and it stays pinned to the top of the timeline pane while rows scroll under it
-   (closes the S1.8 debt, D-S1.12-15). */
+   (closes the S1.8 debt). */
 .fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: ${INTERNAL_Z.paneChrome}; height: auto; overflow: visible; }
 /* #225: the S1.12 width clip moves here so .fg-header stays overflow: visible. */
 .fg-header-bands { display: flex; flex-direction: column; overflow: hidden; }
 .fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); min-height: 0; }
-/* padding/overflow are structural, not typography (D-S1.10-6/D-S1.11-8 leave font-size/family to the
-   consumer): a tick's box is exactly its own width, so a label that would collide with its neighbour
+/* padding/overflow are structural, not typography (font-size/family stay the consumer's):
+   a tick's box is exactly its own width, so a label that would collide with its neighbour
    clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up).
    border-left marks each tick's own cell boundary so adjacent ticks in the same band read as
    separate columns, matching .fg-band's existing border-bottom between bands.
@@ -376,7 +376,7 @@ ${DARK_COLOR_TOKENS}
    paint, from the same FrameRow, so the two panes stripe the same rows in both themes. */
 .fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { background: var(--fg-row-odd-bg); }
 .fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { background: var(--fg-row-even-bg); }
-/* J2: one line per finest-band tick boundary, mounted between the decorations layer and .fg-bars, so
+/* One line per finest-band tick boundary, mounted between the decorations layer and .fg-bars, so
    the zebra, the selected-row band, and weekend shading paint over the lines, and every bar paints
    over them in turn — the design's own paint order. height is set inline per frame
    (render/dom/tick-lines.ts), not bottom: 0 — same reason .fg-date-line states: .fg-timeline-pane is
@@ -418,7 +418,7 @@ ${DARK_COLOR_TOKENS}
 /* image(): the img must fit the row. Height follows the row token minus the cell's own
    block padding, so a tall photo cannot stretch the row. */
 .fg-image-cell { display: block; height: calc(var(--fg-row-height, ${DEFAULT_ROW_HEIGHT}px) - 2 * var(--fg-cell-padding-block, 4px)); width: auto; max-width: 100%; object-fit: cover; }
-/* S5.6, D-S5-15: registered decoration providers' own layers — one mounted below .fg-bars, one
+/* S5.6: registered decoration providers' own layers — one mounted below .fg-bars, one
    above. DOM order alone gives the paint order (no z-index needed against .fg-bars either). */
 .fg-decorations-under, .fg-decorations-over { position: relative; }
 .fg-range-band { position: absolute; top: 0; left: 0; pointer-events: none; }
@@ -429,14 +429,14 @@ ${DARK_COLOR_TOKENS}
 .fg-time-shading { background: var(--fg-time-shading-fill); }
 .fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
 .fg-bars { position: relative; }
-/* D-S3-21: touch-action: none on the bar itself, not just the resize handles — a touch drag must
+/* touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
 /* T1-1: the colour-mix lives on the bar itself, not .fg-container — a renderer's own
    --fg-bar-fill override (set on this element, e.g. by barRenderer) only reaches the painted
    colour if the mix reads --fg-bar-fill at this element too. --fg-bar-opacity stays declared on
    .fg-container alone and inherits down unchanged. */
 .fg-bar { --fg-bar-fill-painted: color-mix(in oklch, var(--fg-bar-fill) calc(var(--fg-bar-opacity) * 100%), transparent); background: var(--fg-bar-fill-painted); color: var(--fg-bar-label-color); border-radius: var(--fg-bar-radius, ${DEFAULT_BAR_RADIUS_PX}px); position: absolute; top: 0; left: 0; touch-action: none; display: flex; align-items: center; }
-/* J1: the default label — a keyed child (render/dom/index.ts), not bare text, so it can be
+/* The default label — a keyed child (render/dom/index.ts), not bare text, so it can be
    positioned and coloured on its own once a barLabels placement pushes it outside the bar.
    min-width: 0 is what lets a flex child shrink below its own text's natural width at all; without
    it text-overflow never gets the chance to run. Shrinking stops at this label's own padding-inline
@@ -457,19 +457,19 @@ ${DARK_COLOR_TOKENS}
    renderer-owned bar (ownsContent ⇒ no data-label, render/dom/index.ts) whose children are the
    consumer's to position — clipping those is the #325 defect one seam further out. Nothing else is
    ever a child of .fg-bar: a resize handle sits in barLayer, a sibling of every bar, never inside
-   one. Same D-S1.8-1 obligation .fg-header-bands already keeps for ticks.
+   one. Same obligation .fg-header-bands already keeps for ticks.
    The hot path pays nothing: applyBarPreview flips this attribute and the clip follows the flip. */
 .fg-bar[data-label='inside'] { overflow: hidden; }
-/* data-label='hidden' (F1, #435 follow-up: render/dom/index.ts's own BarLabelToken) — barLabels:
+/* data-label='hidden' (#435 follow-up: render/dom/index.ts's own BarLabelToken) — barLabels:
    'insideOrNone' on a bar too narrow for its label. Named for what the DOM shows, not for the
-   'none' policy value that produces it — this child exists and is measured, only unpainted (R1,
-   pass-2 branch review). It still exists at all so a resize preview can flip this attribute back to
+   'none' policy value that produces it — this child exists and is measured, only unpainted (pass-2
+   branch review). It still exists at all so a resize preview can flip this attribute back to
    'inside' mid-drag (the hot path only flips attributes, never grows a child); this rule hides it
    instead of the library leaving the child unmounted, which is what kept the label painted, clipped,
    on a shrink that crossed the fit line mid-drag. */
 .fg-bar[data-label='hidden'] .fg-bar-label { display: none; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
-/* D-S3-7: data-state is a fixed five-token projection of InteractionState, painted once here — not a
+/* data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). All five tokens paint now.
    Hover is a box-shadow and selection an outline, so a bar that is both wears both without either
    rule overwriting the other. */
@@ -478,10 +478,10 @@ ${DARK_COLOR_TOKENS}
    an outline flush against the fill would nearly vanish into it. The offset moves the ring onto the
    pane beside the bar, where it reads against a different colour. */
 .fg-bar[data-state~="selected"] { outline: 2px solid var(--fg-selection-color); outline-offset: 2px; }
-/* S3.5, D-S3-17: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
+/* S3.5: an unsettled beforeEntryMove/beforeEntryResize Promise holds the bar here. Selected
    uses 2px solid; pending uses 2px dotted of the same token so the two read apart. */
 .fg-bar[data-state~="pending"] { opacity: var(--fg-pending-opacity, ${DEFAULT_PENDING_OPACITY}); outline: 2px dotted var(--fg-selection-color); outline-offset: 2px; }
-/* S5.11, D-S5-25/D-S5-26: one focus ring style for every roving-focus target — the two panes
+/* S5.11: one focus ring style for every roving-focus target — the two panes
    themselves (axe scrollable-region-focusable: a scrollable pane needs its own tab stop), a grid
    row/cell, a column header cell, a bar, and the splitter. An inset ring keeps the outline inside
    the element's own box instead of colliding with a neighbour row/cell/bar. */
@@ -496,16 +496,16 @@ ${DARK_COLOR_TOKENS}
   outline: 2px solid var(--fg-focus-ring);
   outline-offset: -2px;
 }
-/* S3.6, D-S3-18, U7: an installed extension hook's own preview extra (BarPreview.extra) — a second
+/* S3.6, U7: an installed extension hook's own preview extra (BarPreview.extra) — a second
    bar the caller never grabbed, moved by the hook's own cascade. */
 .fg-bar[data-state~="ghost"] { opacity: var(--fg-ghost-opacity, ${DEFAULT_GHOST_OPACITY}); pointer-events: none; }
 /* The caller's own grabbed bar (BarPreview.extra: false). It comes after 'pending' and 'ghost' so
    its opacity wins: a bar the pointer is carrying reads solid, whatever else it also is. */
 .fg-bar[data-state~="dragging"] { box-shadow: var(--fg-drag-shadow); opacity: 1; }
-/* D-S3-6: movableBarId's cursor is a boolean attribute, not an inline style — cursor is not one of
+/* movableBarId's cursor is a boolean attribute, not an inline style — cursor is not one of
    the geometry properties no-inline-style-outside-geometry allows inline. */
 .fg-bar[data-movable] { cursor: grab; }
-/* D-S3-8: one shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
+/* One shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */
 .fg-bar-handle { position: absolute; top: 0; left: -4px; width: 8px; cursor: ew-resize; touch-action: none; z-index: ${INTERNAL_Z.paneChrome}; }
@@ -526,7 +526,7 @@ ${DARK_COLOR_TOKENS}
 /* A label is a filled chip, not bare coloured text. Bare text put a thin time-coloured word on the
    header band and asked it to clear 4.5:1 there; a chip carries its own ground, so the label reads
    at any band colour a theme picks.
-   D-S1.13-8 retired the Today-only colour token with no alias: Today is a Date line that carries
+   The Today-only colour token retired with no alias: Today is a Date line that carries
    data-flag="today", not a line with a palette of its own. Paint now stamps that flag on the label
    as well as the stroke, so a consumer that wants Today apart from the rest can reach both halves —
    .fg-date-line[data-flag='today'] and .fg-date-line-label[data-flag='today']. The sheet itself
@@ -534,18 +534,18 @@ ${DARK_COLOR_TOKENS}
 .fg-date-line-label, .fg-cursor-line-label { position: absolute; left: 0; top: 0; white-space: nowrap; padding: 1px 5px; border-radius: 3px; background: var(--fg-date-line-color); color: var(--fg-date-line-label-color); }
 /* #225, widened #318: top: 0 above is 'inHeader''s and a numeric offset's own anchor
    (render/dom/date-line.ts adds the px nudge through transform, the one inline write geometry
-   allows — D-S1.10-6). 'belowHeader', the default, instead paints below the bands, clear of
+   allows). 'belowHeader', the default, instead paints below the bands, clear of
    the ticks — no pixel math, render/dom stamps data-placement to pick this rule over the anchor
    above. */
 .fg-date-line-label[data-placement='belowHeader'] { top: 100%; }
-/* S3.8, D-S3-15: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
+/* S3.8: hot-path Cursor line — same stroke token as Date lines, never a frame decoration. */
 .fg-cursor-line { position: absolute; top: 0; z-index: ${INTERNAL_Z.abovePaneChrome}; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
 /* #319: the shared rule above gives every label top: 0, which collided with the header's own
    ticks the same way the Date line label's did before #225. The Cursor line label has no placement
    option of its own (it is a hot-path hover readout, never a Frame decoration) — one rule, always
    below the bands. */
 .fg-cursor-line-label { z-index: ${INTERNAL_Z.abovePaneChrome}; pointer-events: none; top: 100%; }
-/* S5.3, D-S5-8: the one overlay layer, above both panes. DOM order alone does not reach here —
+/* S5.3: the one overlay layer, above both panes. DOM order alone does not reach here —
    .fg-container creates no stacking context of its own, so .fg-grid-header, .fg-header, a dragged
    column header, and the cursor line all compete with this layer on z-index alone, not paint order
    (#437: a context menu opened near a pane's own header painted under it, and the part underneath
@@ -561,11 +561,11 @@ ${DARK_COLOR_TOKENS}
    this rule's own 1px top and bottom border, the two pixels its own box-sizing (content-box, the
    default) adds on top of max-height. */
 .fg-popup { position: absolute; top: 0; left: 0; pointer-events: auto; background: var(--fg-popup-bg); border: 1px solid var(--fg-popup-border); box-shadow: var(--fg-popup-shadow); border-radius: 6px; overflow: hidden auto; max-height: var(--fg-popup-max-height, none); }
-/* S5.5, D-S5-13: tooltips()'s own content, mounted inside .fg-popup. */
+/* S5.5: tooltips()'s own content, mounted inside .fg-popup. */
 .fg-tooltip { padding: 7px 10px; font: inherit; line-height: 1.45; max-width: 280px; }
 .fg-tooltip-title { font-weight: 600; }
 .fg-tooltip-dates { color: var(--fg-header-subtext); font-size: 0.9em; font-variant-numeric: tabular-nums; }
-/* S5.5, D-S5-14: contextMenu()'s own content, mounted inside .fg-popup. */
+/* S5.5: contextMenu()'s own content, mounted inside .fg-popup. */
 .fg-menu { padding: 5px; min-width: 184px; }
 /* The item is inset from the menu's own padding box so its hover paint is a rounded row floating
    inside the popup, not a band running edge to edge. Full-bleed hover fights the popup's radius at
@@ -577,10 +577,10 @@ ${DARK_COLOR_TOKENS}
 .fg-menu-item:hover, .fg-menu-item:focus { background: color-mix(in oklab, var(--fg-bar-fill) 14%, transparent); outline: none; }
 .fg-menu-item:active { background: color-mix(in oklab, var(--fg-bar-fill) 22%, transparent); }
 .fg-menu-separator { height: 1px; margin: 5px 4px; background: var(--fg-header-divider-color); }
-/* S5.8, D-S5-19: inlineEditing()'s own control — mounted through the overlay layer directly (not
+/* S5.8: inlineEditing()'s own control — mounted through the overlay layer directly (not
    wrapped in .fg-popup: the cell editor has no flip/clamp, it always sits at the cell's own rect,
    Popup's own file header explains why it is built differently). data-state="invalid" is a failed
-   parseValue, a beforeChange veto, or the default dateInput's non-midnight refusal (issue #137 F11/F12). */
+   parseValue, a beforeChange veto, or the default dateInput's non-midnight refusal (issue #137). */
 .fg-cell-editor { position: absolute; top: 0; left: 0; pointer-events: auto; box-sizing: border-box; }
 /* The ring is the affordance: a 1px border alone reads as a table cell, and the open editor has to
    read as the one live control on the chart. It uses the Selection token because an open editor IS
@@ -589,24 +589,24 @@ ${DARK_COLOR_TOKENS}
 /* Invalid swaps the whole ring, not only the border colour, so the state is legible at a glance and
    not just to a reader comparing two 1px lines. */
 .fg-cell-editor[data-state='invalid'] .fg-cell-editor-control { border-color: var(--fg-warn); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg-warn) 22%, transparent); padding-inline-end: 22px; }
-/* #160, D-S5-47: the invalid editor's own discard button, laid over the control's own end edge —
+/* #160: the invalid editor's own discard button, laid over the control's own end edge —
    .fg-cell-editor already establishes the positioning context. It comes after the control in the
    markup, so it paints on top with no z-index. Not a .fg-cell-editor-control, so the rule above never
    reaches it. */
 .fg-cell-editor-discard { position: absolute; top: 50%; right: 2px; transform: translateY(-50%); width: 18px; height: 18px; padding: 0; border: none; border-radius: 3px; background: none; font: inherit; line-height: 1; color: var(--fg-warn); cursor: pointer; }
 .fg-cell-editor-discard:hover, .fg-cell-editor-discard:focus-visible { background: color-mix(in oklab, var(--fg-warn) 18%, transparent); outline: none; }
 /* The Refusal notice (#171): words over the cell that could not open an editor. It is its own class
-   and not a .fg-cell-editor (#231 F1) — a refused *commit* stamps data-reason on the open editor too
-   (#160, D-S5-47), so the attribute alone stopped telling the two apart, and the :not(:has(...)) that
+   and not a .fg-cell-editor (#231) — a refused *commit* stamps data-reason on the open editor too
+   (#160), so the attribute alone stopped telling the two apart, and the :not(:has(...)) that
    stood in here reached the wrong node the moment a consumer copied the selector by hand.
    pointer-events: none is load-bearing — the notice sits over the cell, and the next double-click must
    reach the cell. It is also why the split matters: an editor styled by this rule would lose its own
    control and its discard button to the same declaration.
-   S5.12, D-S5-40: data-reason holds the kebab-case Error report code. This rule matches the attribute
+   S5.12: data-reason holds the kebab-case Error report code. This rule matches the attribute
    and never one of its values, so a rename reaches no selector here. A consumer styling one reason
    writes [data-reason='derived-value'], which is also the code they read off the report. */
 .fg-cell-notice { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; padding-inline: var(--fg-cell-padding-inline, 10px); border: 1px solid var(--fg-warn); background: var(--fg-pane-bg); color: var(--fg-warn); }
-/* S5.11, D-S5-26: the polite live region (view/live-region.ts). Visually hidden, never hidden from
+/* S5.11: the polite live region (view/live-region.ts). Visually hidden, never hidden from
    assistive tech — display: none/visibility: hidden would remove the node from the accessibility
    tree along with the page, and a screen reader would never read a text change it cannot see happen.
    The 1px clip-rect technique keeps the node painted, at zero size, off-screen. */

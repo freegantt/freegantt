@@ -1,8 +1,8 @@
 // view/ — a pointer drag over the splitter chrome that proposes a grid width; it commits nothing
-// itself (plans/01 §8.3, D-S1.8-5). Lives in view/, not interaction/: interaction/ owns *data*
+// itself (plans/01 §8.3). Lives in view/, not interaction/: interaction/ owns *data*
 // gestures over drafts and transactions (plans/01 §9), and a splitter mutates no data.
 //
-// S5.11, D-S5-26: the splitter is also a keyboard widget, scope `'splitter'`. `ArrowLeft`/
+// S5.11: the splitter is also a keyboard widget, scope `'splitter'`. `ArrowLeft`/
 // `ArrowRight` step the width; `Home`/`End` jump to the #127 floor and the #139 ceiling — the
 // published window-splitter pattern's own reading of those two keys, and the only "first/last"
 // this one-node scope has. Every step runs `hooks.commitGridWidth`, the same cancelable commit
@@ -11,19 +11,19 @@
 // this handle produces, drag or key.
 
 /** One `ArrowLeft`/`ArrowRight` press moves the pane this many px — the same step
- *  `column-chrome.ts`'s own header-cell resize already uses (D-S5-18, `COLUMN_RESIZE_STEP_PX`), so
+ *  `column-chrome.ts`'s own header-cell resize already uses (`COLUMN_RESIZE_STEP_PX`), so
  *  a keyboard resize feels the same size everywhere in the Gantt. */
 const SPLITTER_RESIZE_STEP_PX = 16;
 
 export interface SplitterAttachment {
-  /** Turns the widget on or off (#432, F1/F5). This is the one place that knows what "a locked
+  /** Turns the widget on or off (#432). This is the one place that knows what "a locked
    *  splitter" is, so a Gantt that starts locked and a Gantt that locks live land in the same DOM
    *  state.
    *  On: the pointer and keyboard listeners are live, the handle is a tab stop, and it carries the
    *  full separator contract — an accessible name, an orientation, and the live `aria-value*` trio.
    *  Off: no listener can arm a drag, the handle drops out of the tab order, and it disappears from
    *  the accessibility tree. A widget nobody can operate must not still read as a named, valued
-   *  control (F1) — this sets `aria-hidden="true"` rather than dropping `role="separator"`: the node
+   *  control — this sets `aria-hidden="true"` rather than dropping `role="separator"`: the node
    *  stays the same fixed-width divider either way, and `aria-hidden` says plainly that it now
    *  carries no operable semantics. */
   setEnabled(enabled: boolean): void;
@@ -53,14 +53,14 @@ export interface SplitterContext {
  *  `PaneLayout`'s job (`gridWidth`'s setter), not this attachment's — it proposes a raw px delta and
  *  nothing more. Starts disabled: the caller's first `setEnabled` call (constructor or live) decides
  *  the initial state, so there is only ever one path into "enabled" DOM, not a second one for
- *  construction (#432, F1/F5). */
+ *  construction (#432). */
 export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): SplitterAttachment {
   let dragging = false;
   let pointerId: number | undefined;
   let startWidth = 0;
   let startX = 0;
   // `undefined`, not `false`: the handle starts with none of the disabled DOM applied either, so the
-  // very first `setEnabled` call — `false` included — still has to run its branch (#432, F1/F5).
+  // very first `setEnabled` call — `false` included — still has to run its branch (#432).
   let enabled: boolean | undefined;
 
   function syncAria(): void {
@@ -108,7 +108,7 @@ export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): Spl
   }
 
   /** `ArrowLeft`/`ArrowRight`/`Home`/`End`, plain — the splitter has nothing else to navigate away
-   *  from, so a modified chord (`Alt+ArrowLeft` pans, D-S5-26) is left for the Gantt-wide fallback
+   *  from, so a modified chord (`Alt+ArrowLeft` pans) is left for the Gantt-wide fallback
    *  to see. Ignored mid-drag: a live drag already owns this handle's Escape key, and a second
    *  write path here would race it. */
   function onSplitterKeyDown(e: KeyboardEvent): void {
@@ -139,7 +139,7 @@ export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): Spl
     }
   }
 
-  /** #432, F1/F5: the one place that decides what "enabled" and "locked" each look like in the DOM.
+  /** #432: the one place that decides what "enabled" and "locked" each look like in the DOM.
    *  Idempotent, so a caller may call it with the answer it already holds. */
   function setEnabled(next: boolean): void {
     if (next === enabled) return;
@@ -172,7 +172,7 @@ export function attachSplitter(handle: HTMLElement, hooks: SplitterContext): Spl
       // No listener can arm a drag, so the resize cursor (`.fg-splitter[data-resize-off]`,
       // styles.ts) would be the one affordance left advertising a gesture that does nothing.
       handle.setAttribute('data-resize-off', '');
-      // F1: a screen reader must not meet a named, valued widget it cannot operate. `role` stays —
+      // A screen reader must not meet a named, valued widget it cannot operate. `role` stays —
       // the node is still the same layout divider — but every trace of "you can resize this" goes,
       // and `aria-hidden` says the node carries no operable semantics at all right now.
       handle.removeAttribute('aria-label');

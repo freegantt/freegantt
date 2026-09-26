@@ -30,7 +30,7 @@ const linearScale: TimeScale = {
   contentWidth: 1000,
 };
 
-/** D-S3-24: the pipeline asks `deps.snap()` what a drag snaps to, so a fake preset carries no snap
+/** The pipeline asks `deps.snap()` what a drag snaps to, so a fake preset carries no snap
  *  of its own. This one stands in wherever only the tick unit is unused. */
 const barePreset = {} as unknown as ViewPreset;
 
@@ -49,7 +49,7 @@ function entry(id: string, start: number, end: number): Entry {
 }
 
 /** The same row as stored values. `EditRequest.entries` is the pre-transaction snapshot and is
- *  committed-only by contract (D-S5-45, ADR 0017), so it never carries a live row. */
+ *  committed-only by contract (ADR 0017), so it never carries a live row. */
 function storedRow(id: string, start: number, end: number): StoredEntry {
   return {
     id: entryId(id),
@@ -93,7 +93,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     snap: () => 'none',
     selectedEntryIds: () => [],
     entryById: (id) => entries.get(id),
-    // The committed Bar the preview measures against (#436 branch review F4).
+    // The committed Bar the preview measures against (#436 branch review).
     barForEntry: spanBarFor(entries),
     minBarWidthPx: () => 12,
     canGesture: () => true,
@@ -164,7 +164,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     });
     const pipeline = new GesturePipeline(deps);
 
-    // session() resolves the armed entry set synchronously (D-S3-19/D-S3-22): a first, then the
+    // session() resolves the armed entry set synchronously: a first, then the
     // selection in order — b (capable), a (already seen, skipped without a second capability check),
     // c (checked and refused).
     expect(pipeline.session(a.id, { kind: 'move' })).toBeDefined();
@@ -234,7 +234,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
   // exists at this layer any more. Each one maps onto coverage that already exists elsewhere:
   //   - "moves every bar ... with no pick" is `entriesMovedBy` writing every descendant of a grabbed
   //     parent bar — pinned by `'writes the descendants, leaves the parent unwritten, and names the
-  //     parent in the event'` below (ADR 0013, Q9).
+  //     parent in the event'` below (ADR 0013).
   //   - "moves only the selected bar, envelope follows" is now just grabbing that child Entry
   //     directly — an ordinary single-entry move (`'preview() moves a single entry by raw px delta
   //     when snap is none'` below). The envelope no longer "follows": `start`/`end` are ordinary
@@ -281,7 +281,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     const preview = applied.at(-1) as readonly { dx: number; dWidth: number }[];
     // Clamped to the fixed end (200): start moves to meet it, so the drafted span is zero-length.
-    // `previewOffsets` reads that through `barSpan` (#436 branch review F4), which paints a
+    // `previewOffsets` reads that through `barSpan` (#436 branch review), which paints a
     // zero-length span as a centred, floored box (12px, `DEFAULT_MIN_BAR_WIDTH_PX`) rather than a
     // literal 0px point — so the reported delta is the painted one (94, -88), not the raw one
     // (100, -100) a bare start/end diff would give.
@@ -365,7 +365,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(emitted.map(([name]) => name)).toEqual(['beforeEntryMove']);
   });
 
-  it('a vetoed drag draws nothing, throws nothing, and raises one Error report (D-S5-40)', async () => {
+  it('a vetoed drag draws nothing, throws nothing, and raises one Error report', async () => {
     const { deps, reported, applied } = withRoster([entry('a', 100, 200)], {
       emit: ((name: string) =>
         name === 'beforeEntryMove' ? false : undefined) as GesturePipelineDeps['emit'],
@@ -453,7 +453,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     expect(applied.at(-1)).toBeUndefined();
   });
 
-  describe('nudge() (S3.5, D-S3-13)', () => {
+  describe('nudge()', () => {
     /** `tickPreset`/`tickScale` pair a 5-minute tick with a fixed 5-minute px width, so a `direction:
      *  1` nudge is unambiguously "one tick forward" — `linearScale`/`barePreset` above stub
      *  `widthForDuration` to 0, which would make every nudge a no-op. 300_000 (not one of I10's
@@ -529,7 +529,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
     });
   });
 
-  describe('async veto and pending (S3.5, D-S3-17)', () => {
+  describe('async veto and pending', () => {
     it('an unsettled before* Promise paints pending ids and the commit-draft preview, then clears both', async () => {
       let resolveVeto!: (value: boolean) => void;
       const veto = new Promise<boolean>((resolve) => {
@@ -855,7 +855,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(ghost.dx).toBe(50); // x0 300 -> x1 350
     });
 
-    // [S3-A4] used to pin a several-Segment envelope-only cascade refusal (D-S5-44). ADR 0026/Q39
+    // [S3-A4] used to pin a several-Segment envelope-only cascade refusal. ADR 0026
     // retired that scenario along with `Segment` itself: a Bar is one child Entry by default now, so
     // there is no several-Segment Entry left to refuse, and `'write-refused'` no longer exists on
     // `GestureDroppedReason` (`model/error-report.ts`) — an extender cascade on a rolling-up parent
@@ -1001,14 +1001,14 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]?.message).toContain('was removed before the write');
     });
 
-    // Branch review F9. An extender that cascades an end before its start proposed something core
+    // Branch review. An extender that cascades an end before its start proposed something core
     // defines as impossible, and core declines it (#143). That is a refusal, not a fault: the
     // gesture drops, the entry keeps its stored dates, and nothing broke. So it reports at
     // `'warning'` beside `'data-changed'`, never at `'error'` beside a plugin falling over.
     //
     // `by` still names the plugin, because the plugin is who asked. Two fields, two questions —
     // `severity` says what it cost, `by` says whose proposal it was.
-    it('[F9] an InvertedSpanError from an extender cascade drops the gesture, and does not fault', async () => {
+    it('an InvertedSpanError from an extender cascade drops the gesture, and does not fault', async () => {
       const refused = new InvertedSpanError(
         entryId('a'),
         { start: 200 as Instant, end: 100 as Instant },
@@ -1036,11 +1036,11 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]?.message).toContain('an end before its start');
     });
 
-    // The other half of the line F9 drew, and the reason this pair sits together: an extender that
+    // The other half of that line, and the reason this pair sits together: an extender that
     // *throws* is a bug nobody proposed, and it keeps the fault code and `'error'`. Loosening the
     // branch above to catch every error would delete this distinction, and #258 and #332 both
     // ruled that calling a plugin's bug a refusal is a misreport.
-    it('[F9] a bare Error from the same hook is still a fault, not a refusal', async () => {
+    it('a bare Error from the same hook is still a fault, not a refusal', async () => {
       const { deps, reported } = withRoster([entry('a', 100, 200)], {
         commitEntryEdits: () => {
           throw new Error('the extender itself fell over');
@@ -1072,7 +1072,7 @@ describe('GesturePipeline.session (D-GH-1/D-GH-2)', () => {
       expect(reported[0]?.message).toContain('resize');
     });
 
-    it('preview with cursorX paints a Cursor line and cancel parks it (D-S3-15)', async () => {
+    it('preview with cursorX paints a Cursor line and cancel parks it', async () => {
       const cursors: ({ x: number; label: string } | undefined)[] = [];
       const { deps } = withRoster([entry('a', 100, 200)], {
         applyGestureState: (_preview, _pending, cursor) => cursors.push(cursor),
@@ -1137,7 +1137,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 
   it('never copies the dataset on a preview frame just because an extension hook is wired', async () => {
     // #466 narrowed `extraEditsFor` to `(draft) => ProposedEdits` — request-building (and the
-    // `entryAfterEdits` one-lookup cost D-S5-45 names) moved to `data/edit-request.ts`'s
+    // `entryAfterEdits` one-lookup cost) moved to `data/edit-request.ts`'s
     // `createEditRequest`, pinned there in `edit-request.test.ts`. This file's own concern is the
     // half that stays here: wiring a hook at all must not force a roster copy (`never copies the
     // dataset on a preview frame when no extension hook is installed`, above, is the other half).
@@ -1162,7 +1162,7 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
   });
 });
 
-describe('a parent bar drag translates its descendants (ADR 0013, Q9)', () => {
+describe('a parent bar drag translates its descendants (ADR 0013)', () => {
   /** A row that holds one date, no span (ADR 0012): it shows in the grid and draws no bar. */
   function startOnly(id: string, start: number): Entry {
     return entryDouble({ id, start });

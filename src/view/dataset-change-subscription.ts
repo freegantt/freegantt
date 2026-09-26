@@ -1,5 +1,5 @@
-// view/ — the whole of the view's dependency on data change, in one removable file (D-S2-20).
-// `dataset-change-subscription-is-removable` (.dependency-cruiser.cjs, D-S2-23) allows exactly one
+// view/ — the whole of the view's dependency on data change, in one removable file.
+// `dataset-change-subscription-is-removable` (.dependency-cruiser.cjs) allows exactly one
 // importer, `view/gantt-shell.ts`: delete this file and its one call site and a Gantt still
 // constructs, lays out, renders and scrolls — it shows the data as it was at construction and never
 // updates. A static image is the honest floor of this design.

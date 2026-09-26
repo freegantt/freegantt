@@ -2,7 +2,7 @@
 // three questions a feature plugin asks of a node. Is this node mine? What is it? Where is the
 // element for this entry?
 //
-// Why it exists. `extensions/` may not import `render/` (D-S5-5). Before this file, plugin code
+// Why it exists. `extensions/` may not import `render/`. Before this file, plugin code
 // retyped the contract between them: eight `.fg-*` selectors and three `data-*` keys.
 // Nothing versioned them and nothing tested them, so renaming a class in `render/dom` broke every
 // plugin with a green build. Every one of those strings now comes from `render/dom/dom-contract.ts`,
@@ -69,7 +69,7 @@ export interface DomTarget {
   field?: FieldKey;
 }
 
-/** This Gantt's own DOM, as questions (S5.3, D-S5-8; review N1/A3). Reached by a plugin through
+/** This Gantt's own DOM, as questions (S5.3; review N1/A3). Reached by a plugin through
  *  `ctx.view.dom`. Every member is scoped to one container, which is what keeps two Gantts on one
  *  page independent (I2). */
 export interface GanttDom {
@@ -94,12 +94,12 @@ export interface GanttDom {
   cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined;
   /** The text one grid cell shows right now — the string `field.formatValue` already produced for
    *  this paint. The inline editor seeds itself with it rather than formatting the value a second
-   *  time from a `FormatContext` a plugin cannot reach (D-S5-5). */
+   *  time from a `FormatContext` a plugin cannot reach. */
   cellText(cell: HTMLElement): string;
   /** The container's own client rect — the outer clamp, so a popup never spills past the Gantt
    *  entirely. */
   readonly bounds: DOMRect;
-  /** The grid pane's and timeline pane's own client rects (issue #137 F8). The container spans both
+  /** The grid pane's and timeline pane's own client rects (issue #137). The container spans both
    *  panes, so `bounds` alone cannot flip a popup at a pane edge. Placement flips and clamps against
    *  the anchor's own pane rect instead. `bounds` stays the outer clamp for a popup whose anchor
    *  sits in neither pane (a toolbar button, say). */

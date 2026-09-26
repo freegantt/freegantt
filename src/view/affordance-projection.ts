@@ -1,4 +1,4 @@
-// view/ — pure affordance resolution (S3.2/S3.4, D-S3-6). `GanttShell#refreshAffordances` calls this
+// view/ — pure affordance resolution (S3.2/S3.4). `GanttShell#refreshAffordances` calls this
 // to decide which bar ids get hover/move/resize paint before it writes `InteractionState` and calls
 // `applyState` — no DOM, no shell, no `InteractionState` knowledge here, only the resolution rule.
 
@@ -33,7 +33,7 @@ export interface AffordanceIds {
   resizableEdges?: { start: boolean; end: boolean };
 }
 
-/** D-S3-6: the hovered bar decides when there is one — even a hover that resolves to "no handles"
+/** The hovered bar decides when there is one — even a hover that resolves to "no handles"
  *  wins over the selection fallback. Only when nothing is hovered does the single selected entry, if
  *  there is exactly one, get a turn. */
 export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {

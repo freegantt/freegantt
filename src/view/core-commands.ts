@@ -1,4 +1,4 @@
-// view/ — the core command catalog (S5.2, D-S5-6). Split out of GanttShell so the commands are
+// view/ — the core command catalog (S5.2). Split out of GanttShell so the commands are
 // reviewable as a table, not interleaved with shell construction. `GanttShell` is the
 // only caller: it builds a `CoreCommandPorts` closing over its own private state and hands it here
 // with its own `CommandRegistry` — this file never touches a shell field directly.
@@ -8,7 +8,7 @@ import { MutationCancelledError } from '../model/index.js';
 import type { BuiltInCommandId, Command, CommandContext } from '../extensions/commands.js';
 
 /** The shell verbs the core catalog calls — pan, zoom, select, collapse/expand. Undo/redo read
- *  `CommandContext.dataset` directly (D-S5-6 already gives every command that), so they need no
+ *  `CommandContext.dataset` directly, so they need no
  *  port here. `GanttShell` builds one of these per registration pass, closing over its own private
  *  fields; nothing else may implement it. */
 export interface CoreCommandPorts {
@@ -56,18 +56,18 @@ export interface CoreCommandPorts {
   panLeft(): void;
   panDown(): void;
   panUp(): void;
-  /** S5.7, D-S5-18/D-S5-26. */
+  /** S5.7. */
   isColumnResizable(key: FieldKey): boolean;
   isColumnMovable(key: FieldKey): boolean;
   resizeColumnStep(key: FieldKey, direction: 1 | -1): void;
   moveColumnStep(key: FieldKey, direction: 1 | -1): void;
 }
 
-/** D-S5-6: every command a consumer already has as a public method or default keybinding, named
+/** Every command a consumer already has as a public method or default keybinding, named
  *  under the `freegantt.*` namespace. No bare count here — one went stale by six (#259) — the set
  *  this function registers is `BuiltInCommandId` in full. Every `register` below is typed against
  *  that union, so an id it does not name fails to compile, and `api/command.test.ts` catches the
- *  other direction (#333). Registered before any plugin, so a plugin can override any of them (D-S5-7).
+ *  other direction (#333). Registered before any plugin, so a plugin can override any of them.
  *  Mechanical extraction from `GanttShell`'s old `#registerCoreCommands`/`#registerNavigationCommands`
  *  — ids, labels, and `when` clauses are unchanged; default keybindings still bind in `GanttShell`
  *  itself (a separate concern from the catalog). */
@@ -144,7 +144,7 @@ export function registerCoreCommands(
     when: () => ports.hasSelection(),
     run: () => ports.selectPreviousEntry(),
   });
-  // #434: registered before any plugin (D-S5-7's newest-first order), so `inlineEditing()`'s own
+  // #434: registered before any plugin (newest-first order), so `inlineEditing()`'s own
   // `Enter` binding — bound to its own `when`-gated command, not a raw handler — gets first refusal
   // on a focused cell and falls through to this one everywhere else: a focused row or bar, or a
   // focused cell that refuses the editor. `entryActivate`'s own doc names the cause `'key'`.
@@ -190,13 +190,13 @@ export function registerCoreCommands(
       }
     },
   });
-  // #160, D-S5-47: registered first and inert (`when` always declines), so a Gantt with no
-  // `inlineEditing()` carries no editor code (D-S5-19). The plugin overrides this the moment it
-  // installs (D-S5-7) — Q2/Q5's real `when`/`run`, closing over its own `CellEditing`.
+  // #160: registered first and inert (`when` always declines), so a Gantt with no
+  // `inlineEditing()` carries no editor code. The plugin overrides this the moment it
+  // installs, with its own real `when`/`run`, closing over its own `CellEditing`.
   //
   // The registration alone is the point: `gantt.commands.run('freegantt.discardCellEdit')` answers
   // on every Gantt instead of throwing `UnknownCommandError`. `run` stays empty because a declining
-  // `when` means the registry never calls it (#231 F3), so a port here would be one a reader traces
+  // `when` means the registry never calls it (#231), so a port here would be one a reader traces
   // to nothing.
   register({
     id: 'freegantt.discardCellEdit',
@@ -204,11 +204,11 @@ export function registerCoreCommands(
     when: () => false,
     run: () => {},
   });
-  // #434: the same #160/D-S5-47 shape as `freegantt.discardCellEdit` just above — registered first
+  // #434: the same #160 shape as `freegantt.discardCellEdit` just above — registered first
   // and inert, so `gantt.commands.run('freegantt.editFocusedCell')` answers on every Gantt, and
   // `Enter`'s own `freegantt.activateEntry` fallback (bound below) has a real `when` to ask "did the
   // editor take this cell?" even with no `inlineEditing()` installed. `inlineEditing()` overrides this
-  // the moment it installs (D-S5-7), with its own `when`/`run` closing over its `CellEditing`.
+  // the moment it installs, with its own `when`/`run` closing over its `CellEditing`.
   register({
     id: 'freegantt.editFocusedCell',
     label: 'Edit cell',
@@ -252,8 +252,8 @@ export function registerCoreCommands(
     when: () => ports.keyboardPanEnabled(),
     run: () => ports.panToEnd(),
   });
-  // S5.11, D-S5-26: `nothingSelected()` used to gate these four, back when a bare arrow chord
-  // panned only when nothing carried an edit focus (D-S3-13's shared-chord disambiguation).
+  // S5.11: `nothingSelected()` used to gate these four, back when a bare arrow chord
+  // panned only when nothing carried an edit focus.
   // `RovingFocus` now pairs a focused bar with a selection (Q-A11Y-3). That gate would then block
   // `Alt+Arrow`'s pan the moment any bar has focus. That is the opposite of a Gantt-wide fallback.
   // Pan and nudge sit on separate chords now, so the gate no longer disambiguates anything. This
@@ -283,7 +283,7 @@ export function registerCoreCommands(
     run: () => ports.panUp(),
   });
 
-  // S5.7, D-S5-18/D-S5-26: `Alt+Arrow` moves, `Shift+Arrow` resizes — both scoped to a focused
+  // S5.7: `Alt+Arrow` moves, `Shift+Arrow` resizes — both scoped to a focused
   // header cell (`ctx.target.kind === 'header'`) and gated on the same `resizable`/`movable` a
   // pointer drag already refuses (`interaction/column-gestures.ts`). Both run the same
   // `#commitColumnWidth`/`#commitColumnReorder` a pointer drag's commit runs.

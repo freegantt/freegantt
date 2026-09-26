@@ -1,5 +1,5 @@
-// view/ — one sentence: what is selected, and what would this land select? (finding 15, #230 R4;
-// ADR 0010, #212, #216 Q3, #421 ADR 0025).
+// view/ — one sentence: what is selected, and what would this land select? (finding 15, #230;
+// ADR 0010, #212, #216, #421 ADR 0025).
 //
 // Question B, one owner. `interaction/entry-gestures.ts` used to re-derive ADR 0010's pane rule with
 // its own switch on hit kind — the same switch `ContainerDom#resolve` already makes.
@@ -12,7 +12,7 @@
 // unit, so a later reader finds the whole story in one file.
 //
 // `entryIds` publishes on the `ActedOn` shape (`api/command.ts`). `GanttShell#buildCommandContext`
-// reads this one object where it used to compose a literal from two separate reads — the #216 Q3
+// reads this one object where it used to compose a literal from two separate reads — the #216
 // carry this plan hands off.
 //
 // #421, ADR 0025: the Selection holds `EntryId` alone. A former Segment is an ordinary child Entry
@@ -42,9 +42,9 @@ export interface EntrySelectionPorts {
   plannedRows(): readonly EntrySelectionRow[];
   /** Which row currently shows this Entry (D4). */
   rowIdForEntry(id: EntryId): RowId | undefined;
-  /** D-S3-9's one capability resolution (I14) — never resolved twice for the same question. */
+  /** One capability resolution (I14) — never resolved twice for the same question. */
   canGesture(capability: GestureCapability, id: EntryId): boolean;
-  /** The cancelable `beforeSelectionChange` → apply → `selectionChange` sequence (D-S3-10). Returns
+  /** The cancelable `beforeSelectionChange` → apply → `selectionChange` sequence. Returns
    *  whether `apply` ran, the same boolean `GanttShell#proposeChange` already returns. */
   confirm(change: SelectionChange, apply: () => void): boolean;
   /** The past-tense event alone, with no veto — the prune below is not a user gesture to cancel. */
@@ -81,7 +81,7 @@ export class EntrySelection {
   }
 
   /** The selectable entries in resolved row order — a keyboard row step, a shift-range, and a
-   *  select-all all walk this list (D-S4-32). */
+   *  select-all all walk this list. */
   selectableEntriesInRowOrder(): readonly EntryId[] {
     const out: EntryId[] = [];
     for (const row of this.#ports.plannedRows()) {
@@ -114,7 +114,7 @@ export class EntrySelection {
   }
 
   /** Proposes a new Selection through the cancelable `beforeSelectionChange` → `selectionChange`
-   *  sequence (D-S3-10). A no-op when `next` is the same list already selected. */
+   *  sequence. A no-op when `next` is the same list already selected. */
   propose(next: readonly EntryId[]): void {
     const from = this.#entries;
     if (from.length === next.length && from.every((id, i) => id === next[i])) return;
@@ -124,7 +124,7 @@ export class EntrySelection {
     });
   }
 
-  /** #212: steps every selected Entry one position within its own row (#421 C3, spike Q9).
+  /** #212: steps every selected Entry one position within its own row (#421 C3).
    *  `Mod+ArrowRight` and `Mod+ArrowLeft` run it. A shared row can hold several selected Entries.
    *  Each one steps on its own row's list, so a multi-Entry pick on one row moves together instead of
    *  collapsing to the first. An Entry already at the end of its row's list stays. The chord writes
