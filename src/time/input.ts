@@ -10,8 +10,9 @@
 import type { DateOnlyEndRule, Instant, InstantInput, PlainTimeInput } from '../model/index.js';
 import { InvalidPlainTimeError } from '../model/index.js';
 import { addMs, instant } from './instant.js';
+import { startOfNextDay } from './date-only-end.js';
 import { invalidInstant as invalid } from './instant-fault.js';
-import { addDays, fromPlain, toPlain } from './zone.js';
+import { fromPlain, toPlain } from './zone.js';
 
 /** A calendar date with no time of day — `'2026-09-08'`. */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -125,7 +126,7 @@ export function toEndInstant(
 ): Instant {
   const boundary = toInstant(zone, input, operation);
   if (rule === 'exclusive' || !isDateOnly(input)) return boundary;
-  return addDays(zone, boundary, 1);
+  return startOfNextDay(zone, boundary);
 }
 
 /**
