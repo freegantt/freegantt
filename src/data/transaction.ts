@@ -194,16 +194,15 @@ export function applyConstructionRollUp(data: TransactionData): void {
 
 /**
  * The Rollup, run once against a batch of entries that is not (yet) the store's own committed rows
- * — construction's own shape (no `pending`, `committedChildIds` unread whenever `pending` is
- * `undefined`), open to more than one caller. `entries.load()` (#496) is one: it replaces every
- * entry, so it must roll up the input batch's own checked parents, never the store's.
- * `changesToReplay` (`replay-changes.ts`, #517) is the other: undo and redo re-roll the working batch
- * they are about to commit, the same construction shape, so a plain undo never demotes a parent that
- * just lost its last child.
+ * — construction's own shape (no `pending`), open to more than one caller. `entries.load()` is one:
+ * it replaces every entry, so it must roll up the input batch's own checked parents, never the
+ * store's — an empty `committedChildIds` means "no prior tree," so a parent absent from the fresh
+ * batch was never demoted, it just never existed. `changesToReplay` (`replay-changes.ts`) is the
+ * other: undo and redo re-roll the working batch they are about to commit, the same shape.
  *
  * `rollUpFields` itself stays a leaf only this file and the commit path may import
- * (`rollup-is-removable`, D-S4-7) — this is the one door onto it for `load` (`entry-store.ts`) and
- * for replay (`replay-changes.ts`).
+ * (`rollup-is-removable`) — this is the one door onto it for `load` (`entry-store.ts`) and for
+ * replay (`replay-changes.ts`). `syncChanges` uses `rollUpDeltaBatch` below instead.
  */
 export function rollUpFreshBatch(
   data: Pick<TransactionData, 'fields' | 'fieldAccess'>,
@@ -216,6 +215,32 @@ export function rollUpFreshBatch(
     committedChildIds: new Map(),
     source,
   }).updated;
+}
+
+/**
+ * `rollUpFreshBatch`'s sibling for `entries.syncChanges()`, the one caller whose fresh batch is not
+ * the whole store: a delta only ever names the rows it changed, so a parent that had children in the
+ * store's own tree and has none in `byId` just lost its last one, and ADR 0013 demotes it. Passing
+ * the store's own `committedChildIds()` as the prior tree, rather than an empty one, is what lets
+ * `rollUpFields` see that. `authoredKeys` names the Field keys the delta itself set, per id, so a
+ * demoted parent's own authored write stands rather than being cleared with the rest.
+ */
+export function rollUpDeltaBatch(
+  data: Pick<TransactionData, 'fields' | 'fieldAccess'>,
+  byId: ReadonlyMap<EntryId, StoredEntry>,
+  committedParents: ParentIndex,
+  priorChildIds: ReadonlyMap<EntryId, readonly EntryId[]>,
+  authoredKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
+  source: HierarchySource,
+): readonly FieldUpdated[] {
+  return rollUpFields(
+    byId,
+    undefined,
+    data.fields,
+    data.fieldAccess,
+    { committedParents, committedChildIds: priorChildIds, source },
+    authoredKeys,
+  ).updated;
 }
 
 /** Opens the write set on every store one transaction spans. Entries and plugin stores stage
