@@ -1,6 +1,6 @@
 // interaction/ — [S3-A4]: a real pointer drag through `attachEntryGestures` previews an installed
 // extension hook's own cascade as a ghost, on the same rAF-coalesced frame the caller's own drag
-// previews on (D-S3-18, U7). `interaction/` may import `view/`, `data/` and `model/` only (I1,
+// previews on (U7). `interaction/` may import `view/`, `data/` and `model/` only (I1,
 // plans/01 §1) — never `scheduling/`, which does not exist yet (S7): this file proves the S3.6
 // extender-preview feature with no dependency on it, `data/edit-extension.ts`'s generic
 // `EditExtender` hook standing in for whatever a future scheduling plugin would install.
@@ -28,7 +28,7 @@ const A_END = instant('2026-09-03T00:00:00Z');
 const X_START = instant('2026-09-05T00:00:00Z');
 const X_END = instant('2026-09-06T00:00:00Z');
 
-/** Cascades `x` (never grabbed) by the same delta a move on `a` proposes — the shape D-S3-18's
+/** Cascades `x` (never grabbed) by the same delta a move on `a` proposes — the shape the
  *  pseudocode names: `extra = extender({ entries: committed, proposed: draft })`.
  *
  *  It writes the loose shape (#209 C3): plain epoch milliseconds, which are a legal `InstantInput`
@@ -69,7 +69,7 @@ function paintedShell(options: GanttShellOptions): GanttShell {
 
 /** Builds a real `GanttShell` over a real `DatasetState` — `commitEntryEdits` writes through
  *  `state.transaction()`/`state.entries.update()`, the same shape `api/gantt.ts` wires for real
- *  Gantt usage (D-S3-16). `extraEditsFor` is a `GanttShellOptions`-only field (P1: no public install
+ *  Gantt usage. `extraEditsFor` is a `GanttShellOptions`-only field (P1: no public install
  *  API in S3, so `api/gantt.ts` never passes one) — this is the "internal option" the S3.6 plan names. */
 function buildShell(options: { extender?: EditExtender; shell?: Partial<GanttShellOptions> } = {}): {
   shell: GanttShell;
@@ -156,13 +156,13 @@ describe('[S3-A4] extender preview', () => {
 
     timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 55, clientY: 5, pointerId: 1 }));
-    // D-S3-18: the preview coalesces on the pipeline's own rAF, not synchronously per pointermove.
+    // The preview coalesces on the pipeline's own rAF, not synchronously per pointermove.
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(barA.dataset['state']).toContain('dragging');
     expect(barX.dataset['state']).toContain('ghost');
     // The ghost actually moved by the same delta the grabbed bar previews at (identical ms delta,
-    // D-S3-18's EditRequest shape) — diff each bar's now-previewed x against its pre-drag committed
+    // The EditRequest shape) — diff each bar's now-previewed x against its pre-drag committed
     // one, rather than comparing raw transforms, which differ per bar by their own base geometry.
     const dxA = transformXOf(barA) - committedXA;
     const dxX = transformXOf(barX) - committedXX;
@@ -187,7 +187,7 @@ describe('[S3-A4] extender preview', () => {
     expect(barX.dataset['state']).toContain('ghost');
 
     container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    // Escape's own cancel() clears the preview through the same rAF-coalesced path (D-S3-18) — the
+    // Escape's own cancel() clears the preview through the same rAF-coalesced path — the
     // repaint lands on the next frame, not synchronously.
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -201,7 +201,7 @@ describe('[S3-A4] extender preview', () => {
 
   // #167: the trap the S5.10 author flagged. `api/gantt.ts` passes an *arrow*
   // (`(request) => options.dataset.extraEditsFor(request)`), never the function the Dataset holds at
-  // construction. A Dataset plugin composes onto that hook later (D-S5-23, S5.10), so anything that
+  // construction. A Dataset plugin composes onto that hook later (S5.10), so anything that
   // stored the arrow's result would silently ghost nothing from that moment on. That is invisible
   // today and wrong the moment S7's scheduling plugin installs after the Gantt is built.
   it('reads the Dataset’s occupant live, so a plugin installed after the Gantt still ghosts', async () => {
