@@ -213,7 +213,8 @@ export class PluginStores {
 
     // Removing an entry removes its plugin rows in the same changeset. Inside a transaction
     // `stageEntryRemoval` has already staged each removal, so the loop above writes it. This loop
-    // serves `load`, `syncAll` and replay's cascade, which stage nothing. A row this transaction staged,
+    // serves `load`, `syncAll`, `syncChanges` and replay's cascade, which stage nothing. A row this
+    // transaction staged,
     // a replace's fresh row included, is left to the loop above.
     for (const [name, committed] of this.#committed) {
       for (const id of removedEntryIds) {

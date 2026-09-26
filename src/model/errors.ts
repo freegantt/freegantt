@@ -738,11 +738,11 @@ export class MutationDuringExtensionHookError extends FreeGanttError {
   }
 }
 
-/** `code: 'transaction-already-open'` — `entries.load()` (#496), or `entries.syncAll()` (#517), called
- * inside an already-open `dataset.transaction()`. Both doors replace the whole Dataset's data in one
- * step and always build and commit their own ChangeSet; unlike `add`/`update`/`remove`, neither joins
- * a caller's open transaction. The write set is discarded; the caller's
- * own open transaction is not affected. */
+/** `code: 'transaction-already-open'` — `entries.load()` (#496), `entries.syncAll()`, or
+ * `entries.syncChanges()`, called inside an already-open `dataset.transaction()`. Each door replaces
+ * the Dataset's data in one step and always builds and commits its own ChangeSet; unlike
+ * `add`/`update`/`remove`, none of them joins a caller's open transaction. The write set is
+ * discarded; the caller's own open transaction is not affected. */
 export class TransactionAlreadyOpenError extends FreeGanttError {
   readonly operation: string;
 
