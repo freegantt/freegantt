@@ -1,6 +1,14 @@
 // view/ — binds this Gantt's locale to declared Fields. layout/ never learns where a Field's value lives.
 
-import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
+import type {
+  ColumnRenderer,
+  Dataset,
+  Entry,
+  Field,
+  FormatContext,
+  GridColumn,
+  GridColumnInput,
+} from '../model/index.js';
 import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
 
 import { stringifyPrimitive } from '../data/fields/field-types.js';
@@ -68,13 +76,16 @@ function columnFrom(
   const candidates = {
     width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
     flex,
-    // S5.7: per-column `columnRenderer` comes only from this Gantt's own column —
-    // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
-    columnRenderer: input.columnRenderer,
   };
+  // S5.7: per-column `columnRenderer` comes only from this Gantt's own column —
+  // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
+  // `ResolvedColumn` stays erased (ADR 0005): the grid hands a renderer `entry.read(column.field)`,
+  // so a renderer typed on its field already gets the type that read answers.
+  const columnRenderer = input.columnRenderer as ColumnRenderer | undefined;
   return {
     ...column,
-    ...pickDefined(candidates, ['width', 'flex', 'columnRenderer']),
+    ...pickDefined(candidates, ['width', 'flex']),
+    ...(columnRenderer === undefined ? {} : { columnRenderer }),
     ...(tooltip === undefined ? {} : { tooltip }),
   };
 }
