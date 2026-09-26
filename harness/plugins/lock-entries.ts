@@ -53,7 +53,10 @@ export interface LockEntriesPlugin extends DataPlugin<LockProps> {
  *   L1): `load` is a full fresh start that removes every old entry regardless of its lock, and the
  *   `locked` Field on the rows it loads is what the lock reads back once the load lands. A `'sync'`
  *   changeset steps around it too (#517): the list it diffs against carries `locked` the same way a
- *   `load` list does, so the server's own list is what the lock reads back once the sync lands.
+ *   `load` list does, so the server's own list is what the lock reads back once the sync lands. An
+ *   `'undo'` or a `'redo'` changeset steps around it as well: the lock guards a new edit, not the
+ *   reversal of a step the user already made, so a lock set after the step still lets the undo
+ *   through.
  *
  * The lock flag is a Field, so locking is a real dataset write: it commits, it raises `change`, and
  * one undo unlocks (#156).
@@ -124,11 +127,20 @@ export function lockEntries(): LockEntriesPlugin {
 
       // What refuses the drop? The finished changeset, once, at commit — never the extender above. A
       // load replaces the whole dataset (#496 L1), and a sync's list carries `locked` the way a
-      // load's does (#517), so this refusal steps aside for both. Why does the refusal say the entry
-      // id? `refuse(reason)` puts the plugin's own words on the report core raises (#210), so the
-      // page needs no callback of its own to tell a user why.
+      // load's does (#517), so this refusal steps aside for both. An undo or a redo reverses a step
+      // the user already made, and the lock guards only a new edit, so the refusal steps aside for
+      // those too. Why does the refusal say the entry id? `refuse(reason)` puts the plugin's own
+      // words on the report core raises (#210), so the page needs no callback of its own to tell a
+      // user why.
       ctx.events.on('beforeChange', ({ changeSet, refuse }) => {
-        if (changeSet.origin === 'load' || changeSet.origin === 'sync') return undefined;
+        if (
+          changeSet.origin === 'load' ||
+          changeSet.origin === 'sync' ||
+          changeSet.origin === 'undo' ||
+          changeSet.origin === 'redo'
+        ) {
+          return undefined;
+        }
         const refused = fieldRowsOf(changeSet).find(
           (row) => row.field !== LOCKED_FIELD_KEY && isLockedEntry(String(row.id)),
         );
