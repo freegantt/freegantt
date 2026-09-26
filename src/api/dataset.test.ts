@@ -1339,6 +1339,21 @@ describe("harness's lockEntries() lets an undo and a redo through on a locked en
   });
 });
 
+describe('Dataset.entries.syncChanges', () => {
+  it('reaches the store: an unknown id in upsert adds an entry', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'a', start: '2026-09-01', end: '2026-09-02' }],
+    });
+
+    dataset.entries.syncChanges({
+      upsert: [{ id: 'b', name: 'b', start: '2026-09-03', end: '2026-09-04' }],
+    });
+
+    expect(dataset.entries.get('b')?.name).toBe('b');
+  });
+});
+
 /** Every tree answer an extender can read off one `EditRequest`, in one object — so a disagreement
  *  between two callers shows up as one failed comparison rather than six. */
 interface TreeAnswers {
