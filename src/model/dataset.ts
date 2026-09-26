@@ -4,7 +4,7 @@
 // class adds `transaction()` and the construction-time options a view never reads.
 
 import type { Entry } from './entry.js';
-import type { EntryEdit, FlatEntryInput, StoredEntry } from './stored-entry.js';
+import type { EntryDelta, EntryEdit, FlatEntryInput, StoredEntry } from './stored-entry.js';
 import type { Field, FieldEditable, FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
@@ -36,8 +36,9 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
  *  mutator returns the entry as the store holds it after the call (branded id, resolved instants),
  *  never the input, and each auto-wraps itself in a transaction when none is already open.
- *  `load` and `syncAll` are the two exceptions to both: each returns `void`, and each refuses an open
- *  transaction (`TransactionAlreadyOpenError`) rather than join one — see their own comments below. */
+ *  `load`, `syncAll` and `syncChanges` are the three exceptions to both: each returns `void`, and
+ *  each refuses an open transaction (`TransactionAlreadyOpenError`) rather than join one — see their
+ *  own comments below. */
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
   /** Declared Field keys sit flat at the top, the same shape `update()` takes (ADR 0011):
    *  `entries.add({ id, name, owner: 'Ali' })`. Nested `props` stays legal for a bag already held or
@@ -96,6 +97,13 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  overwritten, last write wins. An undo of that edit later keeps the server's value (see
    *  `docs/11-server-data.md`). */
   syncAll(inputs: readonly FlatEntryInput<TProps>[]): void;
+  /** Applies only the rows a server changed, where `syncAll` takes the whole list. An `upsert` row
+   *  with a new id adds an entry. A row with a known id edits that entry: an omitted key keeps its
+   *  value, and `undefined` clears it. `remove` drops each id with its subtree and ignores an
+   *  unknown id. An id in both lists throws `DuplicateEntryIdError`, and nothing applies. Writes and
+   *  commits the way `syncAll` does, so a delta that changes nothing commits nothing (see
+   *  `docs/11-server-data.md`). */
+  syncChanges(delta: EntryDelta<TProps>): void;
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.

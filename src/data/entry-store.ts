@@ -15,6 +15,7 @@
 import type {
   Entry,
   StoredEntry,
+  EntryDelta,
   EntryId,
   FlatEntryInput,
   EntryEdit,
@@ -44,6 +45,7 @@ import type { EntryReadContext } from './entry-reader.js';
 import type { UnplacedEntry } from './hierarchy-source.js';
 import { commitChangeSet, rollUpFreshBatch, runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
+import { readBatchAfterDelta } from './entry-delta.js';
 import {
   assertNoOpenTransaction,
   assertNoRunningExtensionHook,
@@ -714,6 +716,40 @@ export class EntryStore implements EntryStoreContract {
     const target = read.map((entry) => rolled.get(entry.id) ?? entry);
 
     this.#commitSyncToMatch(runner, target, reports);
+  }
+
+  /**
+   * Applies only the rows `delta` names, the way `syncAll` applies a whole list. Reads the delta
+   * onto the committed rows (`readBatchAfterDelta`), rolls the Rollup once, and commits only what
+   * changed through `#commitSyncToMatch`. `derived-values-dropped` fires only for a rolled-up key
+   * the delta itself named on a parent — a re-roll to `undefined` from a child's own clear is not a
+   * value anyone authored.
+   */
+  syncChanges(delta: EntryDelta): void {
+    const operation = 'entries.syncChanges';
+    const runner = this.#runnerForBatchWrite(operation);
+    const batch = readBatchAfterDelta(
+      {
+        byId: this.#byId,
+        parents: this.committedParents(),
+        siblingIdsOf: (group) => this.committedSiblingIds(group),
+      },
+      delta,
+      this.#context,
+      this.#registry,
+      this.#hierarchySource,
+      operation,
+    );
+
+    const byId = new Map(batch.entries.map((entry) => [entry.id, entry]));
+    const rollupUpdated = rollUpFreshBatch(runner, byId, batch.parents, this.#hierarchySource);
+    const rolled = this.#foldRollup(byId, rollupUpdated);
+    const target = batch.entries.map((entry) => rolled.get(entry.id) ?? entry);
+
+    const derivedValuesDropped = rollupUpdated.filter(
+      (row) => row.to === undefined && batch.authoredKeys.get(row.id)?.has(String(row.field)) === true,
+    );
+    this.#commitSyncToMatch(runner, target, droppedValueReports([], derivedValuesDropped));
   }
 
   /**
