@@ -12,7 +12,7 @@ import type { SnapRule, TickStep } from './snap.js';
 // one type — `ViewPresetHeader` and `TimeScale.ticks` below still key off it.
 export type { TickStep };
 
-/** What a caller states that a drag snaps to (D-S3-12, D-S3-24, #489): a named unit and increment,
+/** What a caller states that a drag snaps to (#489): a named unit and increment,
  *  one tick of whatever preset is showing, a custom `SnapRule`, or `'none'` for raw pixel placement
  *  — the free-dragging default a consumer who states nothing gets. `Gantt.snap` is the one place
  *  this is stated; the gesture resolves it to a `SnapUnit` at commit time, when the preset's own
@@ -22,14 +22,14 @@ export type SnapSetting = TickStep | 'tick' | 'none' | SnapRule;
 export interface Tick {
   instant: Instant;
   x: number;
-  /** To the next boundary at this step — what a band cell is drawn with (D-S1.7-4). */
+  /** To the next boundary at this step — what a band cell is drawn with. */
   width: number;
 }
 
 /** Widened with `locale` (S1.12). Adding a parameter is source-compatible with existing callbacks. */
 export type HeaderFormat = (i: Instant, zone: string, locale: Intl.LocalesArgument | undefined) => string;
 
-/** What a header band states to turn an Instant into its label (S1.12, D-S1.12-11). Options are
+/** What a header band states to turn an Instant into its label. Options are
  * resolved through `Intl.DateTimeFormat` in the Gantt's locale and the Dataset's zone; a callback is
  * the escape hatch for anything Intl has no field for (see `formatWeekNumber`). */
 export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
@@ -65,7 +65,7 @@ export interface TimeScale {
   /** Dataset's IANA timeZone (D6, #37 — one name for this concept, matching plans/02's DatasetOptions). */
   readonly timeZone: string;
   /** Density: content px per ms, constant across the whole range at this zoom. What `Viewport.zoomBy`
-   *  reads before scaling it (S1.9, D-S1.9-5) — every other quantity `zoomTo`/`zoomBy` need already
+   *  reads before scaling it — every other quantity `zoomTo`/`zoomBy` need already
    *  existed. It's a Cartesian scale — constant by construction, not a per-point read. */
   readonly pxPerMs: number;
   xForInstant(i: Instant): number;
@@ -80,7 +80,7 @@ export interface TimeScale {
    *  bad `tickIncrement`/header `increment` at registration (`time/presets.ts`), so the throw only
    *  reaches a caller building a `TickStep` by hand. */
   ticks(step: TickStep, span: PixelSpan): readonly Tick[];
-  /** What time a pixel extent stands for. Clamps to `[0, contentWidth]` first (D-S1.8-1: there is no
+  /** What time a pixel extent stands for. Clamps to `[0, contentWidth]` first (there is no
    *  time outside the content), so a caller hands over whatever pixels it has and never repeats the
    *  bound itself. Half-open, like every other span. A zero-width extent answers a degenerate span,
    *  which is the honest reading: no pixels stand for no time. */
@@ -218,7 +218,7 @@ export function pxPerMsForUnitWidth(zone: string, width: TimeUnitWidth, at: Inst
 }
 
 /** The density floor this preset implies: one tick occupies at least `minTickWidthPx`. Falls back to
- *  `preferredTickWidthPx`, so a custom preset that states nothing never compresses (D-S1.12-2). */
+ *  `preferredTickWidthPx`, so a custom preset that states nothing never compresses. */
 export function minPxPerMsForPreset(zone: string, preset: ViewPreset, at: Instant): number {
   const floorPx = preset.minTickWidthPx ?? preset.preferredTickWidthPx;
   return floorPx / tickMsForPreset(zone, preset, at);

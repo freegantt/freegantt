@@ -2,7 +2,7 @@
 // these faults — `instant()` (the public helper, absolute values only) and `toInstant()` (the
 // zone-aware reader every Entry write goes through) — and a consumer who meets both must not get two
 // vocabularies for one mistake. `instant.ts` cannot import `input.ts`, which already imports it, so
-// this shared door lives here rather than in either reader (#431 F6).
+// this shared door lives here rather than in either reader (#431).
 //
 // The message itself is `InvalidInstantError`'s own job now (#242): `reason` is a closed
 // `InvalidInstantReason`, not prose, so a consumer branches on data instead of parsing the message.

@@ -28,7 +28,7 @@ const OPENS_LIKE_A_DATE = /^\d{4}-\d{2}-\d{2}/;
  * Every refusal is an `InvalidInstantError` carrying the value the consumer wrote, in the same
  * vocabulary `toInstant` uses (`instant-fault.ts`). It used to be a bare `RangeError` that named a
  * zone problem for every input it did not like, including `null` — which is the one thing a missing
- * date is not (#431 F6). It also used to answer `NaN` rather than refuse, for `new Date('nope')`,
+ * date is not (#431). It also used to answer `NaN` rather than refuse, for `new Date('nope')`,
  * for `Number.NaN`, and for any unparsable string ending in `Z`: a `NaN` Instant flows on and
  * surfaces much later as an unpainted bar, with nothing left pointing at the value that caused it.
  */
