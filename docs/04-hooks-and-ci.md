@@ -221,6 +221,7 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | The pr-wait hook | `test/guards/require-pr-wait.test.ts` — six hand-rolled waits are blocked, ten neighbouring commands pass, and the refusal names `pnpm pr-wait` | the hook stops blocking the poll, or starts blocking a log read or `gh run watch` |
 | The draft-PR hook | `test/guards/require-draft-pr.test.ts` — five ways to create a pull request are blocked, six neighbouring commands pass, and the hook is registered and executable | the hook stops blocking, or starts blocking `gh pr ready` and its neighbours |
 | The gate itself | `test/guards/slice-gate.test.ts` — drives tagged gate checks against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted |
+| Spec ids stay in `plans/` | `test/guards/spec-labels.test.ts` — matcher fixtures plus a canned diff; the live check reads lines added since `main`'s merge-base | a new comment, test name or doc cites a slice decision, a review finding, or a question id |
 
 That last one deserves emphasis: it ensures that every invariant has a corresponding job. The table stops being prose and becomes a checked artifact.
 

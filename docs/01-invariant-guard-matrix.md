@@ -62,6 +62,7 @@ The single table a reviewer (human or agent) checks against. Every rule in `CLAU
 | Slice gates pass before next slice | `scripts/slice-gate.mjs` reads the current slice from `.slice`, runs its acceptance-linked jobs and prints a checklist. `pnpm gate` is run deliberately, at a slice boundary, so it sits outside `verify` and outside CI | `gate` (local) | `AUTO-PARTIAL` (the "harness shows X" items stay human) |
 | Hot path / structure inline-style split | `freegantt/no-inline-style-outside-geometry` — bans `node.style.<prop> = …` for `prop` outside `{ transform, width, height }`, scoped to `src/render/**` + `src/view/**`; structure moves to `view/styles.ts`'s base stylesheet instead | `lint` | `AUTO` |
 | Published `--fg-*` tokens and `.fg-*` Parts match the sheet | `test/guards/theming-contract.test.ts` — every sheet token and class is in `docs/05-consumer-api.md`, internal names never leak into a consumer table, and documented token defaults match their real source | `guards` | `AUTO` |
+| Spec ids stay in `plans/` | `test/guards/spec-labels.test.ts` — a slice decision id, a review finding id, or a question id on a line added since `main`'s merge-base fails outside `plans/` and `docs/adr/`. **Residue:** citations that already sit in `src/`, `docs/`, `CONTEXT.md` and `harness/` until a sweep rewrites them; invariant ids (`I1`–`I16`) are out of scope on purpose | `guards` | `AUTO-PARTIAL` |
 
 ---
 
