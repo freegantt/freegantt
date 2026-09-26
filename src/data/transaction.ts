@@ -21,8 +21,15 @@ import {
   MutationDuringExtensionHookError,
   MutationDuringNotificationError,
 } from '../model/index.js';
+import type { BuiltCommit } from './build-commit-change-set.js';
 import { buildCommitChangeSet } from './build-commit-change-set.js';
-import { buildDerivedValuesDroppedReport, buildRefusalReport, raiseErrorOn } from './error-reporting.js';
+import type { CommitReport } from './error-reporting.js';
+import {
+  buildDerivedValuesDroppedReport,
+  buildRefusalReport,
+  raiseCommitReports,
+  raiseErrorOn,
+} from './error-reporting.js';
 import type { EditRequest, ProposedEdits } from './edit-extension.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
@@ -45,6 +52,9 @@ export type TxToken = { readonly __brand: 'TxToken' };
  *  through this seam, so they are not named here. */
 export interface TransactionalEntryStore {
   committedById(): ReadonlyMap<EntryId, StoredEntry>;
+  /** Does `id` name an Entry, as this transaction leaves it? — see `EntryStore.has`. A plugin store
+   *  write asks this before it stages. */
+  has(id: EntryId): boolean;
   /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
   committedParents(): ParentIndex;
   /** The committed rows' children, by parent id — see `EntryStore.committedChildIds`. */
@@ -75,6 +85,9 @@ export interface TransactionalEntryStore {
 export interface TransactionalPluginStores {
   beginTransaction(token: TxToken): void;
   pendingRows(removedEntryIds: readonly EntryId[]): readonly StoreRowUpdated[];
+  /** Stages the removal of every row `id` holds, in every store — `EntryStore.stageRemove` calls it
+   *  as it stages the entry's own removal, so a write staged earlier never outlives its Entry. */
+  stageEntryRemoval(token: TxToken, id: EntryId): void;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** `id`'s committed row in `store`, with no write set overlaid — what replay reads as a store row's
    *  current value before it decides whether to overwrite it (`data/replay-changes.ts`). */
@@ -225,10 +238,15 @@ function endStores(data: TransactionData, token: TxToken, changeSet: ChangeSet |
  * uses this once it has built a changeset from a body; `data/history.ts` uses it directly for undo/redo,
  * which is what "neither re-runs the extension hook" (`s2.5-undo-redo.md` §2.2) means in code — replaying
  * or inverting a recorded `ChangeSet` never goes near `data.editExtender` or `rollUpFields`. The tail,
- * once `change` has fanned out, raises the hierarchy answers core refused for this commit — a handler
- * that writes in response starts a commit of its own, after this one.
+ * once `change` has fanned out, raises the reports this commit owes, then the hierarchy answers core
+ * refused for this commit — a handler that writes in response starts a commit of its own, after this
+ * one.
  */
-export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): void {
+export function commitChangeSet(
+  data: TransactionData,
+  changeSet: ChangeSet,
+  reports: readonly CommitReport[] = [],
+): void {
   if (data.notifying) {
     throw new MutationDuringNotificationError('commitChangeSet');
   }
@@ -282,10 +300,12 @@ export function commitChangeSet(data: TransactionData, changeSet: ChangeSet): vo
     data.notifying = false;
   }
 
-  // Which hierarchy answers did core refuse? Asked once the commit is whole — both stores closed,
-  // the revision bumped, `change` delivered — so a handler that writes starts a commit of its own.
-  // A throwing `change` subscriber skips it on purpose: a `finally` would let a throwing `error`
-  // handler hide that first throw, and the next commit reports every refusal that still holds.
+  // What did this commit drop, and which hierarchy answers did core refuse? Asked once the commit is
+  // whole — both stores closed, the revision bumped, `change` delivered — so a handler that writes
+  // starts a commit of its own. A throwing `change` subscriber skips both on purpose: a `finally`
+  // would let a throwing `error` handler hide that first throw, and the drop reports below are lost
+  // with it, while the next commit still reports every hierarchy refusal that still holds.
+  raiseCommitReports(data.bus, reports);
   data.entries.reportRefusedHierarchyAnswers();
 }
 
@@ -327,21 +347,19 @@ export function runTransaction<T>(
   data.openTransactions -= 1;
   if (!outermost) return result; // nested: joins the outer transaction, commits nothing itself (D-S2-8)
 
+  let built: BuiltCommit;
   try {
-    const changeSet = buildCommitChangeSet(data, origin);
-
-    if (!changeSet) {
-      endStores(data, token, undefined);
-      return result;
-    }
-
-    // Discard the body's write set. `commitChangeSet` opens its own transaction to apply the folded
-    // rows — a second `beginTransaction` here would wipe the overlay instead of closing it.
-    endStores(data, token, undefined);
-    commitChangeSet(data, changeSet);
-    return result;
+    built = buildCommitChangeSet(data, origin);
   } catch (error) {
     endStores(data, token, undefined);
     throw error;
   }
+
+  // Discard the body's write set. `commitChangeSet` opens its own transaction to apply the folded
+  // rows — a second `beginTransaction` here would wipe the overlay instead of closing it.
+  endStores(data, token, undefined);
+  // A net-empty commit lands nothing, and still owes its reports: raised now, with every store closed.
+  if (built.changeSet) commitChangeSet(data, built.changeSet, built.reports);
+  else raiseCommitReports(data.bus, built.reports);
+  return result;
 }

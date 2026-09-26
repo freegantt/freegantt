@@ -165,6 +165,55 @@ describe('replay writes nothing to a computed Field', () => {
   });
 });
 
+describe('replay writes nothing to a key no Field declares', () => {
+  it('a replayed row for an undeclared key writes nothing', () => {
+    const state = dataset([{ id: 'a' }]);
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        updated: [{ store: 'entries', id: entryId('a'), field: 'bogus', from: undefined, to: 7 }],
+      }),
+    );
+
+    expect(seen).toEqual([]);
+    expect(state.entries.committedById().get(entryId('a'))).not.toHaveProperty('bogus');
+  });
+
+  it('overwriteForeignWrites never rewrites an entry’s id or its whole props bag', () => {
+    const state = dataset([{ id: 'a' }]);
+    const seen = changeSets(state);
+
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'id', from: 'a', to: 'x' },
+          { store: 'entries', id: entryId('a'), field: 'props', from: {}, to: { x: 1 } },
+        ],
+      }),
+      { overwriteForeignWrites: true },
+    );
+
+    expect(seen).toEqual([]);
+    expect(state.entries.committedById().get(entryId('a'))).toMatchObject({ id: 'a', props: {} });
+  });
+
+  it('a row for an undeclared key never keeps the entry’s other rows from landing', () => {
+    const state = dataset([{ id: 'a' }]);
+
+    state.replay(
+      step({
+        updated: [
+          { store: 'entries', id: entryId('a'), field: 'bogus', from: 'STALE', to: 7 },
+          { store: 'entries', id: entryId('a'), field: 'name', from: 'a', to: 'b' },
+        ],
+      }),
+    );
+
+    expect(state.entries.get('a')!.name).toBe('b');
+  });
+});
+
 describe('replay re-adds a missing id, and skips an id that already exists', () => {
   it('re-adds an id the store no longer holds', () => {
     const state = dataset([{ id: 'a', name: 'A' }]);

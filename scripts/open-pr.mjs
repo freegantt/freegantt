@@ -21,6 +21,7 @@
 // `--reviewer`, and the rest keep their meaning.
 
 import { execFileSync, spawnSync } from 'node:child_process';
+import { aiToolAttributionIn, openPrCopy, refuseAiToolAttributionMessage } from './refuse-ai-attribution.mjs';
 
 const USAGE =
   'usage: pnpm open-pr --title "<title>" --body-file <path> [--ready] [more flags]\n' +
@@ -117,6 +118,9 @@ if (existingPr !== undefined && existingPr.state === 'OPEN') {
 // them fails without touching the remote.
 if (!TITLE_FLAGS.some(carries)) stop(`a pull request needs a title.\n${USAGE}`);
 if (!BODY_FLAGS.some(carries)) stop(`a pull request needs a body: --body, --body-file, or --fill.\n${USAGE}`);
+
+const copyHits = aiToolAttributionIn(openPrCopy(args));
+if (copyHits.length > 0) stop(refuseAiToolAttributionMessage(copyHits));
 
 const hasUpstream =
   spawnSync('git', ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { stdio: 'ignore' })

@@ -1,6 +1,7 @@
-// data/ — the per-plugin per-entry stores (D-S5-24, D-S5-30). One `PluginStores` per DatasetState,
-// holding every plugin's rows in one place, so a transaction stages, folds and applies plugin rows
-// through the same three steps `EntryStore` already uses for entries.
+// data/ — the per-plugin per-entry stores. One `PluginStores` per DatasetState, holding every
+// plugin's rows in one place, so a transaction stages, folds and applies plugin rows through the
+// same three steps `EntryStore` already uses for entries. A row belongs to one Entry: a write for
+// an id with no Entry throws, and removing the Entry removes its rows.
 //
 // ADR 0002 named the problem this solves: per-plugin per-entry data must not live in `entry.props`,
 // or an application and a plugin collide in one field.
@@ -20,7 +21,7 @@ import type {
   PluginStoreView,
   StoreRowUpdated,
 } from '../model/index.js';
-import { MutationDuringExtensionHookError, entryId } from '../model/index.js';
+import { EntryNotFoundError, MutationDuringExtensionHookError, entryId } from '../model/index.js';
 import { isNoOpStoreRowWrite } from './change-set.js';
 import { runTransaction } from './transaction.js';
 import type { TransactionData, TxToken } from './transaction.js';
@@ -101,8 +102,13 @@ export class PluginStores {
       get all(): ReadonlyMap<EntryId, T> {
         return view.all;
       },
-      set: (id: EntryId | string, value: T): void => this.#write(name, entryId(id), value),
-      remove: (id: EntryId | string): void => this.#write(name, entryId(id), undefined),
+      set: (id: EntryId | string, value: T): void =>
+        this.#write(() => {
+          const key = entryId(id);
+          this.#assertEntryExists(key);
+          this.#stage(name, key, value);
+        }),
+      remove: (id: EntryId | string): void => this.#write(() => this.#stage(name, entryId(id), undefined)),
     };
   }
 
@@ -136,13 +142,15 @@ export class PluginStores {
    *  has not reached `endStores` yet — so the "join the open transaction" branch below would otherwise
    *  stage a hook-time write straight into the write set it is already inside, silently, instead of
    *  refusing it the way a store bound through `runTransaction` does. The `runningExtensionHook` check
-   *  must run before that branch, not inside `runTransaction`, for exactly that reason. */
-  #write(name: PluginStoreName, id: EntryId, value: object | undefined): void {
+   *  must run before that branch, not inside `runTransaction`, for exactly that reason.
+   *
+   *  `stage` runs inside the transaction, so a refusal it throws rolls the whole transaction back. */
+  #write(stage: () => void): void {
     if (this.#runner?.runningExtensionHook) {
       throw new MutationDuringExtensionHookError('dataset.transaction');
     }
     if (this.#writeSet) {
-      this.#stage(name, id, value);
+      stage();
       return;
     }
     if (!this.#runner) {
@@ -150,7 +158,14 @@ export class PluginStores {
         'PluginStores: not bound to a transaction runner — data/dataset-state.ts always binds one',
       );
     }
-    runTransaction(this.#runner, () => this.#stage(name, id, value), 'user');
+    runTransaction(this.#runner, stage, 'user');
+  }
+
+  /** A row belongs to one Entry: a write for an id this transaction leaves with no Entry is refused,
+   *  the same rule `entries.update` follows. Asked inside the transaction, so an Entry this same
+   *  transaction added takes a row, and one it removed does not. */
+  #assertEntryExists(id: EntryId): void {
+    if (this.#runner?.entries.has(id) !== true) throw new EntryNotFoundError(id, 'store.set');
   }
 
   #stage(name: PluginStoreName, id: EntryId, value: object | undefined): void {
@@ -167,6 +182,16 @@ export class PluginStores {
 
   beginTransaction(_token: TxToken): void {
     this.#writeSet = new Map();
+  }
+
+  /** An Entry this transaction removes takes its rows with it, now, not at commit: a later read in
+   *  the same transaction sees no row, and a write staged before the removal never lands. A re-add of
+   *  the id starts with no row, and a write after that re-add is the fresh Entry's own row. */
+  stageEntryRemoval(_token: TxToken, id: EntryId): void {
+    const names = new Set([...this.#committed.keys(), ...(this.#writeSet?.keys() ?? [])]);
+    for (const name of names) {
+      if (this.#read(name, id) !== undefined) this.#stage(name, id, undefined);
+    }
   }
 
   /**
@@ -186,8 +211,10 @@ export class PluginStores {
       }
     }
 
-    // Removing an entry removes its plugin rows in the same changeset, exactly as descendants are
-    // removed today (D-S5-24). A row this transaction already staged is left to the loop above.
+    // Removing an entry removes its plugin rows in the same changeset. Inside a transaction
+    // `stageEntryRemoval` has already staged each removal, so the loop above writes it. This loop
+    // serves `load`, `sync` and replay's cascade, which stage nothing. A row this transaction staged,
+    // a replace's fresh row included, is left to the loop above.
     for (const [name, committed] of this.#committed) {
       for (const id of removedEntryIds) {
         const from = committed.get(id);

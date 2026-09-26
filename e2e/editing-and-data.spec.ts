@@ -75,6 +75,13 @@ test("unlocking Program's subtree opens note inside it, and leaves an outside en
   expect(after.inside).toBe('anywhere');
   expect(after.outside).toBe('never');
 
+  // The checkbox is a plugin-store write like any other: one undo closes the subtree again, and one
+  // redo opens it back up.
+  await page.evaluate(() => window.__dataset.undo());
+  expect(await page.evaluate(() => window.__dataset.editableOf('entry-3', 'note'))).toBe('never');
+  await page.evaluate(() => window.__dataset.redo());
+  expect(await page.evaluate(() => window.__dataset.editableOf('entry-3', 'note'))).toBe('anywhere');
+
   // The write lands: select the now-open entry and press the button.
   await page.evaluate(() => window.__gantt.reveal('entry-3'));
   const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-3:"]').first();
@@ -138,6 +145,26 @@ test('export writes the document, and import round-trips the entry count', async
 // and the import still lands in one commit. `load` is a full fresh start (L1), so it clears undo,
 // and a `locked` row the document names stays locked once the load lands (the lock plugin's own
 // `beforeChange` steps aside for `origin: 'load'`, `harness/plugins/lock-entries.ts`).
+test('with Program gone, the unlock checkbox logs why and stays clear', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  // An import with no 'program' entry removes the subtree root the checkbox names.
+  const noProgram = [{ id: 'solo', name: 'Solo', start: '2026-02-01', end: '2026-02-05' }];
+  await page.locator('#document-json').fill(JSON.stringify(noProgram));
+  await page.locator('#import-btn').click();
+  expect(await page.evaluate(() => window.__dataset.entries.has('program'))).toBe(false);
+
+  const pageErrors: string[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  // `click`, not `check`: `check` fails when the page clears the box, and clearing it is the point.
+  await page.locator('#unlock-subtree-checkbox').click();
+
+  await expect(page.locator('#unlock-subtree-checkbox')).not.toBeChecked();
+  expect(await logLines(page)).toContainEqual(expect.stringContaining('Program entry is gone'));
+  expect(pageErrors).toEqual([]);
+});
+
 test('import tolerates a child before its parent, clears undo, and a lock holds', async ({ page }) => {
   await page.goto('/editing-and-data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();

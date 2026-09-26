@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { entryId } from '../../model/index.js';
 import type { ChangeSet, Field, StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
+  applyFieldRow,
   createComputeContext,
   createFieldAccess,
   createRollUpContext,
@@ -496,5 +497,16 @@ describe('a cross-door invariant: every door agrees on a stored Field (ADR 0024,
     expect(warn.mock.calls[0]?.[0]).not.toContain('"b"');
 
     warn.mockRestore();
+  });
+});
+
+describe('applyFieldRow', () => {
+  it('writes nothing for a key no Field declares', () => {
+    const registry = new FieldRegistry({});
+    const entry = span();
+
+    expect(applyFieldRow(entry, 'bogus', 7, registry)).toEqual(entry);
+    expect(applyFieldRow(entry, 'bogus', 7, registry)).not.toHaveProperty('bogus');
+    expect(applyFieldRow(entry, 'id', 'x', registry).id).toBe('t1');
   });
 });

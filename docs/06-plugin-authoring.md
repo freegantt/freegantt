@@ -383,10 +383,11 @@ drag, not a resize. Give it no `column`, and no grid draws one either.
 `harness/plugins/lock-entries.ts` is the model case: `locked` is a Field, not a store
 row, so a saved document that names a locked entry loads locked again.
 
-**Where a Field does not fit:** data that is not about one entry — a link between two
-entries, or (`harness/plugins/subtree-unlock.ts`) which subtree is open right now —
-stays in the plugin's own store, and the plugin publishes its own reader and writer
-(ADR 0016).
+**Where a Field does not fit:** state a consumer does not save — which subtree is open
+right now (`harness/plugins/subtree-unlock.ts`) — stays in the plugin's own store. A
+store row belongs to one Entry, keyed by its id: `store.set` throws `EntryNotFoundError`
+for an id with no Entry, and removing the Entry removes its rows. The plugin publishes
+its own reader and writer (ADR 0016).
 
 ### Reacting to a load
 
@@ -615,6 +616,7 @@ that one `requires` graph.
 | `PluginSetupError` | `'plugin-setup-failed'` | A plugin's half throws, or a plugin with a `data` half reaches a `Gantt` | `src/api/define-plugin.test.ts`, "the message says where to install it" |
 | `RendererAlreadyRegisteredError` | `'renderer-already-registered'` | Two plugins claim the same `RendererPoint` slot | `src/view/renderer-registry.test.ts` |
 | `PluginNotInstalledError` | `'plugin-not-installed'` | `gantt.uninstallPlugin(id)` is called with an `id` that is not installed | |
+| `EntryNotFoundError` | `'entry-not-found'` | `store.set` names an id with no Entry | `src/data/plugin-store.test.ts`, "throws EntryNotFoundError that names store.set, and commits nothing" |
 
 A throw during a batch install unwinds only that batch, in
 reverse order, and leaves the plugins that were already installed before
