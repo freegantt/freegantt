@@ -84,8 +84,9 @@ Sync writes through the door `load` uses, not through `entries.update()`. So:
 - `dataset.replay(changeSet)` carries the same rules as `undo()`/`redo()`, since a consumer's own
   History is built on it.
 - A `beforeChange` veto can still refuse an `'undo'`/`'redo'` step. A lock a server sets through a
-  sync can make that refusal permanent for that one step; this is accepted for this build, and a
-  follow-up issue tracks a lock-aware exception (#541).
+  sync can make that refusal permanent for that one step; a consumer's own lock plugin closes this
+  by letting `'undo'` and `'redo'` through, the way the harness lock does. Core keeps the veto rule
+  unchanged, and History still keeps a step a veto refuses.
 - A consumer's exhaustive `switch` over `ChangeOrigin` breaks at compile time when a case is missed.
   This is pre-release, and the API report shows the change.
 
@@ -112,4 +113,5 @@ Sync writes through the door `load` uses, not through `entries.update()`. So:
   a write-door question.
 - A partial update, a skip-undo rule, and conflict detection. Filed separately (#527, #419, and the
   withdrawn `apply` door).
-- A lock-aware exception to the `beforeChange` veto risk above. Filed separately (#541).
+- A lock-aware exception to the `beforeChange` veto risk above. Resolved in the harness lock
+  plugin, not in core: see the "Consequences" note above.

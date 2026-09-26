@@ -144,9 +144,11 @@ brings its plugin store rows back with it.
 - A `'never'`-locked Field is written anyway by `load` and `sync` — construction-time and poll
   writes both ignore a lock the same way, since neither runs the edit pipeline a locked cell guards.
 - A sync can set a `locked` Field itself. A consumer's own `beforeChange` handler can veto an edit
-  to a locked entry. Once a sync locks an entry, that same handler vetoes an undo of an older edit
-  on it too. It does this on every click, not just the first one. Tracked at
-  [#541](https://github.com/freegantt/freegantt/issues/541).
+  to a locked entry, and that veto can catch an `'undo'` or a `'redo'` changeset too — a lock set
+  after the edit it undoes still guards it, and the veto fires on every click, not just the first
+  one. An undo reverses the user's own step, not a new edit, so a consumer's lock should let
+  `'undo'` and `'redo'` through the same way the harness lock (`harness/plugins/lock-entries.ts`)
+  does.
 
 ## A poll loop
 
