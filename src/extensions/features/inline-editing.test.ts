@@ -173,7 +173,7 @@ function input(container: HTMLElement): HTMLInputElement {
 /** The refusal notice a cell mounts when it offers an editor that cannot open here (review SP1).
  *  It carries its own class and the machine-readable `data-reason` whose text the user reads. The
  *  class alone tells a notice from a refused *commit*'s own editor, which also carries `data-reason`
- *  (#160, D-S5-47) — the same one selector `view/styles.ts` writes (#231 F1). */
+ *  (#160) — the same one selector `view/styles.ts` writes (#231). */
 function refusal(container: HTMLElement): HTMLElement | null {
   return container.querySelector<HTMLElement>(NOTICE_SELECTOR);
 }
@@ -572,7 +572,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  // #231 F1: the notice's selector is published (`plans/02` §S5.8 Parts), so a consumer writes it by
+  // #231: the notice's selector is published (`plans/02` §S5.8 Parts), so a consumer writes it by
   // hand. While a notice and a refused editor shared one class, that hand-written selector matched
   // the live editor too, and the notice's own `pointer-events: none` put the editor's control and its
   // discard button out of reach. Two classes are what stop it, so this asserts the two never cross.
@@ -724,7 +724,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     container.remove();
   });
 
-  // #160, D-S5-47: the invalid editor's own exit, for a pointer user who does not know Escape.
+  // #160: the invalid editor's own exit, for a pointer user who does not know Escape.
   describe('the invalid editor has a visible exit (#160, D-S5-47)', () => {
     function discardButton(container: HTMLElement): HTMLButtonElement | null {
       return container.querySelector<HTMLButtonElement>('.fg-cell-editor-discard');
@@ -896,7 +896,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
       container.remove();
     });
 
-    // #231 F2: one command behind both entry points. Escape used to call the plugin's own method and
+    // #231: one command behind both entry points. Escape used to call the plugin's own method and
     // skip the registry, so a consumer's override changed the button and left the keyboard alone.
     it('an overridden freegantt.discardCellEdit answers Escape and the discard button alike', () => {
       const { container, gantt, dataset } = makeGantt();
@@ -1084,7 +1084,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
     const { container: containerA, gantt: ganttA } = makeGantt();
     const { container: containerB, gantt: ganttB } = makeGantt();
 
-    // D-S5-39: Enter opens the cell that holds keyboard focus, not the selected entry. Real
+    // Enter opens the cell that holds keyboard focus, not the selected entry. Real
     // focus lives on one Gantt's own DOM at a time, so B's own cell must not affect A's.
     cellFor(containerB, 'e1', 'name').focus();
 
@@ -1257,7 +1257,7 @@ describe('entryActivate precedence against inlineEditing() (#434)', () => {
 
     // #434: a real double-click's first mousedown moves DOM focus onto the cell before `dblclick`
     // fires — the gantt-shell listener asks the same "does the editor take this cell?" question
-    // `Enter` does, off that same real focus (D-S5-39). This synthetic `dblclick` carries no
+    // `Enter` does, off that same real focus. This synthetic `dblclick` carries no
     // mousedown of its own, so the test moves focus itself first.
     const cell = cellFor(container, 'e1', 'name');
     cell.focus();

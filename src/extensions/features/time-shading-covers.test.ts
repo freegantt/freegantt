@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Dataset } from '../../api/dataset.js';
 import type { ZonedTime } from '../../api/time-facade.js';
-// Through the public barrel: a consumer catches on `instanceof` (#404 review F2).
+// Through the public barrel: a consumer catches on `instanceof` (#404 review).
 import { EmptyCoversError } from '../../api/index.js';
 import type { TimeSpan } from '../../model/index.js';
 import {
@@ -93,7 +93,7 @@ describe('hours()', () => {
     const time = zonedTime(CHICAGO);
     const day = time.startOfDay(time.toInstant('2026-06-15'));
     // Two days wide on purpose. A one-day window clips the band at its own midnight, so the wrap
-    // itself would be unobservable and any present band would pass (#404 review F3).
+    // itself would be unobservable and any present band would pass (#404 review).
     const window: TimeSpan = { start: day, end: time.addDays(day, 2) };
     const eveningReading = time.fromPlain({ ...time.toPlain(day), hour: 17, minute: 0, second: 0 });
     const nextMorningReading = time.fromPlain({
@@ -161,7 +161,7 @@ describe('hours()', () => {
     const day = time.startOfDay(time.toInstant('2026-03-08'));
     // 02:30 never happens on a spring-forward day in America/Chicago (clocks jump 02:00 -> 03:00).
     // 'compatible' shifts it forward by the gap's own size (one hour), landing on 03:30, not 03:00.
-    // `hours()` adds no arithmetic of its own, so the band inherits that reading (#404 review F7:
+    // `hours()` adds no arithmetic of its own, so the band inherits that reading (#404 review:
     // this asserts through the builder, so a builder that stopped using `fromPlain` fails it).
     const shiftedForward = time.fromPlain({ ...time.toPlain(day), hour: 3, minute: 30, second: 0 });
     const window: TimeSpan = { start: day, end: time.addDays(day, 1) };
@@ -247,7 +247,7 @@ describe('notCovered()', () => {
   });
 });
 
-// #404 review F8: a builder that names nothing matches nothing, and `notCovered()` around it shades
+// #404 review: a builder that names nothing matches nothing, and `notCovered()` around it shades
 // the whole window — the state `EmptyCoversError` refuses at the list door, reached through a cover
 // that door cannot see. The first argument is required, so the call never compiles.
 describe('a builder always names at least one thing', () => {

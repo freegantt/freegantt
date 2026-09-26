@@ -1,5 +1,5 @@
-// extensions/features/ — the inline cell editor (S5.8, D-S5-19/D-S5-20). An ordinary `ChromePlugin`,
-// confined by the `extensions-public-only` rule (D-S5-5) to `api/`/`model/` imports, same as
+// extensions/features/ — the inline cell editor. An ordinary `ChromePlugin`,
+// confined by the `extensions-public-only` rule to `api/`/`model/` imports, same as
 // `tooltips()`/`contextMenu()`. Every import below names its own narrow source file, never the
 // `api/index.js` barrel. That barrel re-exports `inlineEditing` itself. Importing it back would
 // close a cycle (`no-circular`). `context-menu.ts` and `popup.ts` do the same, for the same reason.
@@ -14,8 +14,8 @@
 //
 // It mounts through `ctx.view.rowLayer`, not the `overlay` a popup uses (#158). A tooltip and a menu
 // *dismiss* on a scroll; an open editor must *follow* its cell. The row layer is the element the
-// pane's own scroll already moves. That is one transform per frame for the vertical axis (D-S1.8-1),
-// and native horizontal scrolling of the pane around it (D-S1.8-13). A sibling of the rows therefore
+// pane's own scroll already moves. That is one transform per frame for the vertical axis,
+// and native horizontal scrolling of the pane around it. A sibling of the rows therefore
 // travels with them, in the same frame, and nothing repositions it on a scroll. Repositioning an
 // overlay from a `scroll` listener runs a frame behind the paint it chases, which reads as jitter. The clip is a
 // bonus: `.fg-rows-clip` keeps the editor inside the pane instead of over the timeline.
@@ -53,11 +53,11 @@ import type { DateInput, DateInputFactory } from './date-input.js';
 export type { DateInput, DateInputFactory } from './date-input.js';
 
 export interface InlineEditingOptions {
-  /** Replaces the default `<input type="date">` factory (D-S5-20). */
+  /** Replaces the default `<input type="date">` factory. */
   dateInput?: DateInputFactory;
 }
 
-/** S5.8, D-S5-20: `field.type === 'date'` routes through the `dateInput` seam. Core `start` and
+/** `field.type === 'date'` routes through the `dateInput` seam. Core `start` and
  *  `end` name that type, and so does a consumer Instant Field `{ key: 'permitExpiry', type: 'date' }`.
  *  The shipped type table seeds `date`, so no local `fieldTypes.date` bundle is required. A Field
  *  with no `type` does not take this editor. */
@@ -65,9 +65,9 @@ function isDateField(field: Field): boolean {
   return field.type === 'date';
 }
 
-/** Issue #137 F12: with no `parseValue`, only `type: 'text'` reads and writes the raw string. A
+/** Issue #137: with no `parseValue`, only `type: 'text'` reads and writes the raw string. A
  *  Field with no `type` at all reads and writes it too — a plain `props`-addressed Field like the
- *  harness's `team`. `type: 'boolean'` (Q31) is the other named exception — it needs no
+ *  harness's `team`. `type: 'boolean'` is the other named exception — it needs no
  *  `parseValue`, because its editor reads `.checked` and never `.value` (`isCheckboxField` below).
  *  Any other named `type` refuses to open rather than guess a parse. */
 function canOpenGeneric(field: Field): boolean {
@@ -79,7 +79,7 @@ function canOpenGeneric(field: Field): boolean {
   );
 }
 
-/** S5.8+, Q31: a `boolean` Field's generic editor is a checkbox, keyed off `inputType` — the same
+/** A `boolean` Field's generic editor is a checkbox, keyed off `inputType` — the same
  *  attribute that already decides the native `<input>` shape (`Field.inputType`). A checkbox reads
  *  and writes `.checked`; every other generic editor reads and writes `.value`. */
 function isCheckboxField(field: Field): boolean {
@@ -90,7 +90,7 @@ function isCheckboxField(field: Field): boolean {
  *  wrapper and the control, so no control factory has to remember to.
  *
  *  An editor holds a control the user types into. A notice holds words the user reads and takes no
- *  pointer. They are two things, so they carry two class names (#231 F1). One class told them apart
+ *  pointer. They are two things, so they carry two class names (#231). One class told them apart
  *  only through `:not(:has(.fg-cell-editor-control))`. The stylesheet spelled that trick, and a test
  *  spelled it again. A consumer who copied the documented editor selector reached the notice too. */
 const EDITOR_CLASS = 'fg-cell-editor';
@@ -119,13 +119,13 @@ export const REFUSAL_TEXT = {
 /** Why the editor refused a cell that does offer one. The key is the machine-readable half — it goes
  *  on the notice's own `data-reason` — and `REFUSAL_TEXT` holds the half the user reads.
  *
- *  S5.12, D-S5-40: the keys are kebab-case because each one is also the `code` of the Error report
+ *  The keys are kebab-case because each one is also the `code` of the Error report
  *  this plugin raises. One refusal must not have two spellings, and kebab is the better value for a
  *  DOM attribute anyway. */
 export type CellEditorRefusal = keyof typeof REFUSAL_TEXT;
 
 /** Every commit refusal, with the words the user reads (#234). A second table from `REFUSAL_TEXT`,
- *  because the two vocabularies sit on two elements (#231 F1). These words belong to an open
+ *  because the two vocabularies sit on two elements (#231). These words belong to an open
  *  `.fg-cell-editor`; those belong to a `.fg-cell-notice`. The class alone answers which vocabulary
  *  a `data-reason` speaks.
  *
@@ -139,11 +139,11 @@ export const COMMIT_REFUSAL_TEXT = {
   'refused-write': 'this editor still holds a value that did not save; correct it, or discard the edit',
 } as const;
 
-/** Why a *commit* left the editor invalid (#160, D-S5-47): the control read no value back
+/** Why a *commit* left the editor invalid (#160): the control read no value back
  *  (`unreadable-value`), or a `beforeChange` handler vetoed the write (`refused-write`).
  *
  *  The key is the machine-readable half. It goes on the open editor's own `data-reason`, and it is
- *  also the `code` of the Error report the editor raises (#234, D-S5-40). `COMMIT_REFUSAL_TEXT`
+ *  also the `code` of the Error report the editor raises (#234). `COMMIT_REFUSAL_TEXT`
  *  holds the half the user reads. One refusal, one spelling. */
 export type CellEditorCommitRefusal = keyof typeof COMMIT_REFUSAL_TEXT;
 
@@ -199,7 +199,7 @@ export interface CellEditorPorts {
    *  recycled row stops answering for the entry it used to hold. */
   readonly dom: Pick<GanttDom, 'cellFor'>;
   /** Binds Escape for as long as this editor is open. The plugin routes it through the shared
-   *  Keymap, so the newest handler wins (D-S5-9). */
+   *  Keymap, so the newest handler wins. */
   bindEscape(onEscape: () => void): Disposer;
   /** The stored entry, re-read at commit time — the session keeps no copy of it. */
   entryById(id: EntryId): Entry | undefined;
@@ -209,20 +209,20 @@ export interface CellEditorPorts {
    *  `MutationCancelledError` on a `beforeChange` veto, and `EntryNotFoundError` when the entry went
    *  away (`plans/02` §7). The session answers both. */
   writeValue(id: EntryId, field: FieldKey, value: unknown): void;
-  /** Raises `entryEdit` after the write (D-S5-19). */
+  /** Raises `entryEdit` after the write. */
   announceEntryEdit(payload: EntryFieldEdit): void;
   /** The session asks its owner to close it. The owner decides, and drops its own reference, so one
    *  place alone knows whether an editor is open. */
   requestCommit(): void;
-  /** The session asks its owner to close it and write nothing (#160, D-S5-47). Escape asks, and so
+  /** The session asks its owner to close it and write nothing (#160). Escape asks, and so
    *  does the invalid editor's discard button.
    *
-   *  D-S5-26 puts one command behind both, so this runs `freegantt.discardCellEdit` rather than
+   *  One command sits behind both, so this runs `freegantt.discardCellEdit` rather than
    *  `CellEditing.discard()`. A consumer who overrides that command changes the keyboard and the
-   *  pointer together (#231 F2). Escape used to skip the command and reach the method, so an
+   *  pointer together (#231). Escape used to skip the command and reach the method, so an
    *  override changed the button alone. */
   requestDiscard(): void;
-  /** S5.12, D-S5-40: reports one refusal on the Gantt's `error` event. A consumer can then toast it,
+  /** Reports one refusal on the Gantt's `error` event. A consumer can then toast it,
    *  rather than rely on a notice the user may not look at. `ctx.raiseError` fills `by` with this
    *  plugin's id. */
   raiseError(report: PluginErrorReport): void;
@@ -257,7 +257,7 @@ export class CellEditorSession {
     this.#wrapper = document.createElement('div');
     this.#wrapper.className = EDITOR_CLASS;
     // One place dresses the control, whichever control it is. That is the default `<input>`, the
-    // default date input, or a consumer's own from the `dateInput` factory (D-S5-20).
+    // default date input, or a consumer's own from the `dateInput` factory.
     control.element.classList.add(EDITOR_CONTROL_CLASS);
     this.#wrapper.append(control.element);
   }
@@ -282,13 +282,13 @@ export class CellEditorSession {
 
   /** Writes what the control holds, then closes. It answers `false` when the control reads no
    *  value, and when `beforeChange` vetoes the changeset. It then stays open in the invalid state,
-   *  with focus on the control. Those are D-S5-19's two refusals. */
+   *  with focus on the control. Those are the two refusals. */
   commit(): boolean {
     if (!this.#open) return true;
     const entry = this.#ports.entryById(this.entryId);
     if (entry === undefined) {
       // The entry went away while the editor was open. Nothing is left to write to, and a value
-      // typed against a gone entry is not a value the consumer asked for (issue #137 F10).
+      // typed against a gone entry is not a value the consumer asked for (issue #137).
       this.#close();
       return true;
     }
@@ -312,7 +312,7 @@ export class CellEditorSession {
       }
       if (error instanceof EntryNotFoundError) {
         // Another call removed the entry after the read above, and before this write. The user's own
-        // edit is moot now, so this closes and reports no error (issue #137 F10).
+        // edit is moot now, so this closes and reports no error (issue #137).
         this.#close();
         return true;
       }
@@ -340,7 +340,7 @@ export class CellEditorSession {
     if (cell) this.#positionOver(cell);
   }
 
-  /** Whether this editor's own cell is still on screen (issue #137 F10). It goes false once
+  /** Whether this editor's own cell is still on screen (issue #137). It goes false once
    *  virtualization scrolls the row away, or recycles it for another entry. `cellFor` answers for
    *  this entry and this Field, so a recycled node stops matching. */
   stillAnchored(): boolean {
@@ -351,7 +351,7 @@ export class CellEditorSession {
     return this.#ports.dom.cellFor(this.entryId, this.field);
   }
 
-  /** #160, D-S5-47, Q4: a blur out of an already-invalid editor stays put. Re-attempting a value the
+  /** #160: a blur out of an already-invalid editor stays put. Re-attempting a value the
    *  commit path already refused buys nothing, and pulling focus back is the trap this issue exists
    *  to close. A blur out of a *valid* editor still commits, unchanged. */
   readonly #onFocusOut = (event: FocusEvent): void => {
@@ -365,14 +365,14 @@ export class CellEditorSession {
     positionOver(this.#wrapper, cell, this.#ports.mountLayer.bounds);
   }
 
-  /** The one "this did not save" signal (D-S5-19). The editor stays open, the state and reason name
-   *  the refusal, and focus goes back to the control. #160, D-S5-47 adds the discard button — the
+  /** The one "this did not save" signal. The editor stays open, the state and reason name
+   *  the refusal, and focus goes back to the control. #160 adds the discard button — the
    *  invalid state's only affordance, because a valid editor already has Enter, click-away and
    *  Escape.
    *
-   *  It also reports (#234, D-S5-40). Until now a commit refusal told the screen and nothing else.
+   *  It also reports (#234). Until now a commit refusal told the screen and nothing else.
    *  A consumer who logged every refusal kept a partial log, with nothing to say so.
-   *  `severity: 'info'`, because a Refusal is the library working correctly (D-S5-41). The report
+   *  `severity: 'info'`, because a Refusal is the library working correctly. The report
    *  reads the same words the user reads, so one refusal has one spelling everywhere.
    *
    *  A cell is often narrower than the sentence, so the words are the hover text too. That is the
@@ -396,7 +396,7 @@ export class CellEditorSession {
 
   /** Idempotent: a second refused commit on the same editor must not append a second button. Placed
    *  after the control so `activateFocusTrap`'s first-focusable-descendant rule still opens focus on
-   *  the control, and Tab reaches this button next (#160, D-S5-47, Q6). */
+   *  the control, and Tab reaches this button next (#160). */
   #ensureDiscardButton(): void {
     if (this.#discardButton !== undefined) return;
     const button = document.createElement('button');
@@ -408,8 +408,8 @@ export class CellEditorSession {
     // Some browsers do not focus a <button> on click. Without this, the click's own focusout fires
     // first, with a null relatedTarget, which would run one more doomed commit before the click lands.
     button.addEventListener('pointerdown', (event) => event.preventDefault());
-    // The command, not the method (D-S5-26): a consumer who overrides `freegantt.discardCellEdit`
-    // changes what this button does too. Escape takes the same one road (#231 F2).
+    // The command, not the method: a consumer who overrides `freegantt.discardCellEdit`
+    // changes what this button does too. Escape takes the same one road (#231).
     button.addEventListener('click', () => this.#ports.requestDiscard());
     this.#wrapper.append(button);
     this.#discardButton = button;
@@ -447,10 +447,10 @@ function repositionNotice(ports: RefusalNoticePorts, element: HTMLElement, edite
   if (cell) positionOver(element, cell, ports.mountLayer.bounds);
 }
 
-/** Puts the refusal where the user acted: over the cell (D-S5-19, issue #137 F11/F12). It is a
+/** Puts the refusal where the user acted: over the cell (issue #137). It is a
  *  notice, not an editor. It mounts no control and it takes no focus, so it never becomes a sixth
  *  thing the user must close. That is why it carries its own class and not `.fg-cell-editor`
- *  (#231 F1). A selector for the notice must never reach a live editor. The notice's own
+ *  (#231). A selector for the notice must never reach a live editor. The notice's own
  *  `pointer-events: none` would put that editor's control and discard button out of reach.
  *
  *  It paints nothing of its own (#171). `view/styles.ts` styles `.fg-cell-notice[data-reason]`, so a
@@ -459,7 +459,7 @@ function repositionNotice(ports: RefusalNoticePorts, element: HTMLElement, edite
  *
  *  `role="status"` is the strongest thing a plugin can say on its own node today. The real
  *  announcement reaches a screen reader another way. `raiseError` below raises the same report on
- *  this Gantt's `error` event. The per-Gantt polite live region D-S5-26 adds (`view/live-region.ts`)
+ *  this Gantt's `error` event. The per-Gantt polite live region (`view/live-region.ts`)
  *  reads it from there, not from this node. */
 export function presentRefusal(
   ports: RefusalNoticePorts,
@@ -490,7 +490,7 @@ export function presentRefusal(
   return notice;
 }
 
-/** One attempt to open an editor, from the veto question to the mount (D-S5-19, #169).
+/** One attempt to open an editor, from the veto question to the mount (#169).
  *
  *  `beforeEntryEdit` may answer asynchronously. So an older answer can arrive after a newer
  *  double-click has already opened its own editor. Both calls below do nothing once a newer attempt
@@ -545,7 +545,7 @@ export class CellEditing {
   }
 
   /** Closes the open editor and writes nothing — Escape's answer, and the discard command's answer
-   *  (#160, D-S5-47). It always closes. */
+   *  (#160). It always closes. */
   discard(): void {
     this.#editor?.discard();
     this.#editor = undefined;
@@ -560,7 +560,7 @@ export class CellEditing {
 
   /** The frame moved under whatever is mounted, so the anchors are worth re-checking. An editor
    *  closes without writing when its anchor is gone. An anchor goes away two ways: the Entry left
-   *  the Dataset (issue #137 F10), or the cell left the current frame (issue #137 F1). */
+   *  the Dataset (issue #137), or the cell left the current frame (issue #137). */
   onAnchorLost(): void {
     this.dismissNotice();
     const editor = this.#editor;
@@ -581,7 +581,7 @@ export class CellEditing {
     this.dismissNotice();
     this.#notice = presentRefusal(this.#ports, edited, cell, reason);
     // The notice and the report say the same thing, in the same words, under the same name: the
-    // notice's `data-reason` is this `code` (D-S5-40). `severity: 'info'` — the library said no on
+    // notice's `data-reason` is this `code`. `severity: 'info'` — the library said no on
     // purpose and nothing is broken.
     this.#ports.raiseError({
       code: reason,
@@ -613,7 +613,7 @@ export class CellEditing {
   }
 }
 
-/** D-S5-19/D-S5-20: a cost cell edits in place, in one transaction, and a consumer replaces the whole
+/** A cost cell edits in place, in one transaction, and a consumer replaces the whole
  *  editor through `beforeEntryEdit` (`[S5-A5]`). Call: `new Gantt({ plugins: [inlineEditing()] })`. */
 export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin {
   return {
@@ -654,10 +654,10 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
       // The `requestCommit`/`requestDiscard` ports above read it after it is built, never before.
       const editing = new CellEditing(ports);
 
-      // #160, D-S5-47, Q2/Q5: the public way to close an invalid editor with no keyboard and no
+      // #160: the public way to close an invalid editor with no keyboard and no
       // Escape. `core-commands.ts` registers the same id first, as an inert placeholder — a
-      // read-only Gantt with no `inlineEditing()` carries no editor code (D-S5-19). This overrides
-      // that placeholder for as long as this plugin is installed (D-S5-7). The id namespace names the
+      // read-only Gantt with no `inlineEditing()` carries no editor code. This overrides
+      // that placeholder for as long as this plugin is installed. The id namespace names the
       // command's vendor, not the layer that registered it.
       ctx.commands.register({
         id: 'freegantt.discardCellEdit',
@@ -666,7 +666,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         run: () => editing.discard(),
       });
 
-      /** Issue #137 F1/F10: the anchor cell disappears — removed from the Dataset, or virtualized
+      /** Issue #137: the anchor cell disappears — removed from the Dataset, or virtualized
        *  out of frame — so an open editor closes without committing. `CellEditing.onAnchorLost`
        *  asks both questions. */
       function onDatasetChange(): void {
@@ -702,7 +702,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         const checkbox = isCheckboxField(field);
         const input = document.createElement('input');
         input.type = field.inputType ?? 'text';
-        // Q31: a checkbox is a `.checked` control, not a `.value` one. Seeding and reading it
+        // A checkbox is a `.checked` control, not a `.value` one. Seeding and reading it
         // through `seedText`/`.value` would write the string `'on'` back as the field's value.
         if (checkbox) input.checked = fieldValue === true;
         else input.value = seedText(field, fieldValue, cell);
@@ -738,7 +738,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         if (factory !== undefined) {
           dateInput = factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.locale });
         } else {
-          // Issue #137 F11: the default `<input type="date">` has no time-of-day control. An
+          // Issue #137: the default `<input type="date">` has no time-of-day control. An
           // Instant that is not local midnight would silently round-trip to midnight on an
           // unchanged Enter. So this refuses to open the *default* editor, rather than lose data. A
           // consumer's own `dateInput` factory (a `datetime-local` control, say) owns this instead.
@@ -762,7 +762,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         });
       }
 
-      /** D-S5-19: the veto question fires *before the editor opens*, not before the write. A
+      /** The veto question fires *before the editor opens*, not before the write. A
        *  consumer's `beforeEntryEdit` handler opens its own dialog, and returns `false` to suppress
        *  the built-in editor entirely (U8). */
       function openFor(entry: Entry, field: Field, cell: HTMLElement): void {
@@ -825,8 +825,8 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         openFor(entry, field, target.element);
       });
 
-      /** D-S3-13: `Enter` is reserved for opening the inline editor. It opens the **focused** cell
-       *  (D-S5-39). `ctx.view.focusedCell()` is roving focus's own answer to "which cell", read
+      /** `Enter` is reserved for opening the inline editor. It opens the **focused** cell
+       *  `ctx.view.focusedCell()` is roving focus's own answer to "which cell", read
        *  through the same one capability resolution (`canWrite`, I14) every other write path already
        *  checks. `Enter` with focus anywhere else (a row, a bar, a header, the splitter) opens
        *  nothing.
@@ -835,7 +835,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
        *  its chord once it matches, with no way to decline (`Keymap`'s own contract). Core's own
        *  `Enter` fallback (`freegantt.activateEntry`, `gantt-shell.ts`) needs that decline, for a
        *  focused row or bar, or a focused cell this editor refuses. A command's `when` gives it one:
-       *  this binding is newer (a plugin installs after core's own registration, D-S5-7), so it gets
+       *  this binding is newer (a plugin installs after core's own registration), so it gets
        *  first refusal. The resolver falls through to core's own `when` once this one says no. */
       const canEditFocusedCell = (): boolean => {
         const focused = ctx.view.focusedCell();
@@ -863,8 +863,8 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
       ctx.interaction.registerKeybinding({ chord: 'Enter', command: 'freegantt.editFocusedCell' });
 
       // The two `onDomEvent` listeners above remove themselves through `ctx.disposables`, which
-      // runs ahead of this disposer (S5.1, D-S5-3). So does the command and the keybinding just
-      // above (S5.2, D-S5-6/D-S5-7). Both are legal only while `setup` runs, and both auto-remove
+      // runs ahead of this disposer. So does the command and the keybinding just
+      // above. Both are legal only while `setup` runs, and both auto-remove
       // on uninstall — the same lifetime `ctx.commands.register('freegantt.discardCellEdit')` already
       // gets above.
       return () => {

@@ -1,4 +1,4 @@
-// extensions/ — a plugin's own cleanup list (S5.1, D-S5-1). One per plugin, handed to it fresh on
+// extensions/ — a plugin's own cleanup list. One per plugin, handed to it fresh on
 // `ctx.disposables` at setup: whatever a plugin adds here runs on the same schedule as its own
 // `setup()` return value — on removal, or on `Gantt.destroy()`.
 

@@ -22,7 +22,7 @@ function boundRegisterHandler(keymap: Keymap<unknown>): RegisterKeyHandler {
   return keymap.registerHandler.bind(keymap);
 }
 
-/** A minimal `ctx.view` fake — the same seam a third-party plugin gets (D-S5-8) — so `Popup` can be
+/** A minimal `ctx.view` fake — the same seam a third-party plugin gets — so `Popup` can be
  *  driven with no `PaneLayout`/DOM measurement at all. `present` mounts into a plain container;
  *  `renderElement` mirrors `render/dom/element-description.ts`'s own text-only behaviour, enough for
  *  these tests' content. The layer's `bounds` is the container box, the same relation a real
@@ -209,7 +209,7 @@ describe('Popup', () => {
   });
 
   it('Escape typed inside the popup content own input still closes it (issue #137 F1 regression)', () => {
-    // The editable-target gate (issue #137 F7) exists to protect a *page-level* editable from a
+    // The editable-target gate (issue #137) exists to protect a *page-level* editable from a
     // stray keybinding, not to protect a popup's own input from the popup's own close key — so this
     // registration must opt in with `captureInEditable: true`. Modeled on the same bubble-phase
     // container wiring as the test above: the input sits inside the popup, which is mounted inside
