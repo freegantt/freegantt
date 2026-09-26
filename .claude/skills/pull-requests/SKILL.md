@@ -5,6 +5,20 @@ description: Open a FreeGantt pull request, mark one ready, or watch its CI. Use
 
 # Pull requests
 
+## Update the changelog
+
+`CHANGELOG.md` at the repo root records every change a consumer can see. Before you open a pull
+request, check that it has one line under `## [Unreleased]` for each such change:
+
+- a new or changed public API: a method, a type, an option, an error kind;
+- a change in behavior;
+- a bug fix a consumer could notice;
+- a new harness feature.
+
+Put each line under `Added`, `Changed`, `Fixed`, or `Removed`. Start a breaking change with
+`**Breaking:**`. Link the issue. Write the line in the commit that makes the change, not in a
+catch-up commit. An internal refactor, a test, or a docs-only change needs no line.
+
 ## Open as a draft
 
 Open every pull request as a draft:
