@@ -55,18 +55,22 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
 7. **Rule fast.** When an implementer stops with a question, decide in the same turn if you can. Log it. Send the ruling with the reason and the exact edit.
 8. **Review.**
    - Default: one ocr run at the end, in the mode the owner chose (Authority). Fix each finding as it lands. A run of 10–30+ minutes is normal.
-   - **Delegated.** Orca starts a Cursor agent in the issue's worktree. The Cursor agent runs ocr in delegate mode and does the review itself. Use model `cursor-grok-4.6-high` (Grok 4.6, high effort). Never use a `-fast` model.
+   - **Delegated.** A supervised Orca worker runs a Cursor agent in the issue's worktree. The agent runs ocr in delegate mode and does the review itself. Use model `cursor-grok-4.6-high` (Grok 4.6, high effort). Never use a `-fast` model. Load the `orchestration` skill first; it owns the loop below.
      ```bash
-     orca terminal create --worktree id:<repoId>::<worktreePath> --title "ocr #<n>" \
-       --command "cursor-agent -p --force --model cursor-grok-4.6-high \"\$(cat <scratchpad>/ocr-<n>-prompt.md)\"; echo \$? > <scratchpad>/ocr-<n>.exit" --json
-     # in the background: it exits when cursor-agent exits, on success or on a crash
-     timeout 2400 bash -c 'until [ -e <scratchpad>/ocr-<n>.exit ]; do sleep 10; done'
+     orca orchestration run-create --objective "ocr review #<n>" --json          # once per queue
+     orca orchestration worker-start --run <run> --worktree path:<worktreePath> \
+       --agent cursor --model cursor-grok-4.6-high --task-title "ocr #<n>" \
+       --spec "$(cat <scratchpad>/ocr-<n>-prompt.md)" --json
+     # in the background:
+     orca orchestration check --wait --run <run> --types "worker_done,escalation,question" --timeout-ms 2400000 --json
      ```
-     Do not wait with `orca terminal wait --for exit`. The terminal shell stays open after `cursor-agent` exits, so that wait never fires. When the loop exits, read `ocr-<n>.exit` (0 is success), read the findings, then `orca terminal close --terminal <handle>`.
+     Answer a `question` with `orchestration reply`. On `worker_done`, read the findings. Then `worker-release --dispatch <id>` and `check --ack <delivery>`. Release closes the worker's terminal.
+
+     Do not start the agent with `orca terminal create --command` and `terminal wait --for exit`. Orca types `--command` into an interactive shell. The shell stays open after `cursor-agent` exits, so the wait never fires.
 
      The prompt tells the agent to run `ocr delegate preview --from origin/main --to HEAD`, then `ocr delegate rule <files>`. It reviews each file against its rules. It writes the findings to `<scratchpad>/ocr-<n>-findings.md`: one finding each, with `file:line`, the rule, and the fix. It changes no file in the repo.
    - **Not delegated, this session.** Run `pnpm ocr-review` in the background. It reports findings as it runs. The script kills a run only after 15 minutes with no progress. Resume a PARTIAL run with `pnpm ocr-review --resume <id>`.
-   - **Not delegated, new Cursor session.** Start the Cursor agent with the same `orca terminal create` command and model as above. Its prompt tells it to run `pnpm ocr-review` and copy the findings to `<scratchpad>/ocr-<n>-findings.md`.
+   - **Not delegated, new Cursor session.** Start the Cursor agent with the same `worker-start` command and model as above. Its prompt tells it to run `pnpm ocr-review` and copy the findings to `<scratchpad>/ocr-<n>-findings.md`.
    - A `reviewer` pass per batch of 2–4 commits only for risky core changes (data model, undo, public API).
 9. **PR.**
    1. Merge `origin/main` in (a merge commit).
