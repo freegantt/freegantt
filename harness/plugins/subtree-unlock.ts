@@ -5,7 +5,8 @@ import type { DataPlugin, FieldKey, FieldLockQuery, PluginStore } from 'freegant
 
 /** What the store holds: one row per Entry whose subtree is open. The row is about that one Entry,
  *  so it keys by the Entry's own id — removing the Entry closes its subtree, and an undo opens it
- *  again. */
+ *  again. The row's presence is the whole answer: a store row must be an object, so `open` marks
+ *  it, and no code reads the flag. */
 interface OpenSubtreeRow {
   readonly open: true;
 }
