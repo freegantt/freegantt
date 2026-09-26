@@ -174,6 +174,7 @@ export type UnindexedRow = Omit<PlannedRow, 'index'> & {
 
 /** One pass over the rows: source production plus filter, sort, and collapse. */
 export interface RowPassInput {
+  /** The whole Dataset — see `LayoutInput.entries`. A filter runs on rows, never on this list. */
   entries: readonly Entry[];
   source: RowSource;
   collapsed: ReadonlySet<string>;
