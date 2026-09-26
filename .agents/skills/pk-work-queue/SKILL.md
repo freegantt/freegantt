@@ -58,9 +58,12 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
    - **Delegated.** Orca starts a Cursor agent in the issue's worktree. The Cursor agent runs ocr in delegate mode and does the review itself. Use model `cursor-grok-4.6-high` (Grok 4.6, high effort). Never use a `-fast` model.
      ```bash
      orca terminal create --worktree id:<repoId>::<worktreePath> --title "ocr #<n>" \
-       --command "cursor-agent -p --force --model cursor-grok-4.6-high \"\$(cat <scratchpad>/ocr-<n>-prompt.md)\"" --json
-     orca terminal wait --terminal <handle> --for exit --timeout-ms 2400000 --json   # in the background
+       --command "cursor-agent -p --force --model cursor-grok-4.6-high \"\$(cat <scratchpad>/ocr-<n>-prompt.md)\"; echo \$? > <scratchpad>/ocr-<n>.exit" --json
+     # in the background: it exits when cursor-agent exits, on success or on a crash
+     timeout 2400 bash -c 'until [ -e <scratchpad>/ocr-<n>.exit ]; do sleep 10; done'
      ```
+     Do not wait with `orca terminal wait --for exit`. The terminal shell stays open after `cursor-agent` exits, so that wait never fires. When the loop exits, read `ocr-<n>.exit` (0 is success), read the findings, then `orca terminal close --terminal <handle>`.
+
      The prompt tells the agent to run `ocr delegate preview --from origin/main --to HEAD`, then `ocr delegate rule <files>`. It reviews each file against its rules. It writes the findings to `<scratchpad>/ocr-<n>-findings.md`: one finding each, with `file:line`, the rule, and the fix. It changes no file in the repo.
    - **Not delegated, this session.** Run `pnpm ocr-review` in the background. It reports findings as it runs. The script kills a run only after 15 minutes with no progress. Resume a PARTIAL run with `pnpm ocr-review --resume <id>`.
    - **Not delegated, new Cursor session.** Start the Cursor agent with the same `orca terminal create` command and model as above. Its prompt tells it to run `pnpm ocr-review` and copy the findings to `<scratchpad>/ocr-<n>-findings.md`.
