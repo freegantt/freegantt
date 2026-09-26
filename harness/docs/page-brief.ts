@@ -69,7 +69,8 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       "A per-entry lock rule opens a locked Field for one subtree, sharper than Field.editable (#473)",
       'Plugins over the public contract: a custom bar kind, an over-budget row, a chord command, and a popup',
       'JSON export and import round-trip the whole Dataset, and Import is a full fresh start that clears undo',
-      'Sync from server diffs a fetched list against the live data, keeps a kept row selected, and records no undo step',
+      'Sync all from server diffs a fetched list against the live data, keeps a kept row selected, and records no undo step',
+      'Sync changes from server applies only the rows a server changed, keeps the keys a row leaves out, and records no undo step',
       'An undo after a sync keeps the value the sync brought in',
       'A custom tickIncrement > 1 preset and snap, anchored on the calendar so gridlines hold still on a pan',
     ],
@@ -82,6 +83,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'gantt.installPlugin(bufferKind())',
       "gantt.snap = { unit: 'hour', increment: 6 }",
       'dataset.entries.syncAll(server.fetchRows())',
+      'dataset.entries.syncChanges(server.fetchChanges())',
     ],
     specLinks: [
       { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },

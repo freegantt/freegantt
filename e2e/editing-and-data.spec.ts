@@ -231,7 +231,7 @@ test("a sync overwrites a local rename it never saw, and undo keeps the server's
   await expect(bar).toHaveText('Renamed locally');
   await expect(page.getByLabel('Undo')).toBeEnabled();
 
-  await page.locator('#sync-btn').click();
+  await page.locator('#sync-all-btn').click();
 
   await expect(bar).toHaveText('Renamed by the server');
   const selectionAfter = await page.evaluate(() => window.__gantt.selectedEntryIds);
@@ -243,6 +243,34 @@ test("a sync overwrites a local rename it never saw, and undo keeps the server's
   // The undo forgot the only step and committed nothing; `historyChange` still turns the button off.
   await expect(page.getByLabel('Undo')).toBeDisabled();
   expect(nameBefore).not.toBe('Renamed by the server');
+});
+
+// #527: `entries.syncChanges()` takes only the rows a server changed — `harness/fake-server.ts`
+// scripts the first "Sync changes from server" click as a rename on `entry-6`, with every other key
+// left alone. This proves a delta poll keeps selection and records no undo step, the same as a
+// whole-list sync.
+test('a sync of changes only renames the one row a server delta named, and keeps selection', async ({
+  page,
+}) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.evaluate(() => window.__gantt.reveal('entry-6'));
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-6:"]').first();
+  await expect(bar).toBeVisible();
+  await bar.click();
+
+  const startBefore = await page.evaluate(() => window.__dataset.entries.get('entry-6')?.start);
+  await expect(page.getByLabel('Undo')).toBeDisabled();
+
+  await page.locator('#sync-changes-btn').click();
+
+  await expect(bar).toHaveText('Renamed by a server delta');
+  const selectionAfter = await page.evaluate(() => window.__gantt.selectedEntryIds);
+  expect(selectionAfter).toEqual(['entry-6']);
+  const startAfter = await page.evaluate(() => window.__dataset.entries.get('entry-6')?.start);
+  expect(startAfter).toBe(startBefore);
+  await expect(page.getByLabel('Undo')).toBeDisabled();
 });
 
 // #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`,
