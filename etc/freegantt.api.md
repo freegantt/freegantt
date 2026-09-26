@@ -1067,10 +1067,18 @@ export interface FormatContext extends FieldContext {
 export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
+export function formatDateTime(value: unknown, ctx: FormatContext): string;
+
+// @public
 export function formatEndInclusive(zone: string, span: TimeSpan, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
 export const formatHour: HeaderFormat;
+
+// @public
+export function formatInclusiveDate(value: unknown, ctx: FormatContext, entry: {
+    readonly start?: Instant | undefined;
+}): string;
 
 // @public
 export const formatWeekNumber: HeaderFormat;
@@ -1620,6 +1628,12 @@ export interface KeyEventLike {
     // (undocumented)
     target: EventTarget | null;
 }
+
+// @public
+export function lastCoveredInstant(span: {
+    readonly start?: Instant | undefined;
+    readonly end: Instant;
+}): Instant;
 
 // @public (undocumented)
 export type MenuEntry = MenuItem | {
