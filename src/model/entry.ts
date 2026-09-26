@@ -31,7 +31,7 @@ export interface Entry<TProps = Record<string, unknown>> {
    *  a row (#421 C5), and a reader should never write `entry.name ?? ''` to say so. The input and
    *  the stored record both stay sparse: `EntryInput.name` is optional, `StoredEntry.name` is
    *  omitted when unset, and `entry.read('name')` still answers `undefined` for a caller who has to
-   *  tell "unnamed" from "named empty". This one accessor is what normalizes (#421 F8). */
+   *  tell "unnamed" from "named empty". This one accessor is what normalizes (#421). */
   readonly name: string;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` iff it draws a bar. */
   readonly start?: Instant | undefined;

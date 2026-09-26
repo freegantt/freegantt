@@ -32,7 +32,7 @@ export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEdi
 
 /**
  * How a plugin claims the seam, composing onto the current occupant the way `ExtenderWrapper` and
- * `HierarchySourceWrapper` do (D-S5-23):
+ * `HierarchySourceWrapper` do:
  *
  * ```ts
  * ctx.edits.setLockRule((next) => (entry, field) =>
