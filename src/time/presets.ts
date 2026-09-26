@@ -1,7 +1,7 @@
-// time/ owns the shipped view presets and the one way in to them (plans/01 §5.1, S1.9 D-S1.9-3).
+// time/ owns the shipped view presets and the one way in to them.
 // scale.ts keeps the engine and the shape of a preset; this file is the data — a new zoom level is
 // never a library edit (CONTEXT.md, ViewPreset), just a new entry here. Every shipped band's `format`
-// is an `Intl.DateTimeFormatOptions` object (S1.12, D-S1.12-11) except `formatWeekNumber` and
+// is an `Intl.DateTimeFormatOptions` object except `formatWeekNumber` and
 // `formatHour`, the escape-hatch callbacks Intl has no reliable field for.
 
 import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
@@ -10,8 +10,8 @@ import { isCoarserStep } from './zone.js';
 import type { ViewPreset } from './scale.js';
 
 /** `minTickWidthPx` is the density floor below which a preset's labels stop being legible;
- * `preferredTickWidthPx` is the zoom the preset resolves to with nothing else deciding (D-S1.12-2,
- * `pxPerMsForPreset`/`minPxPerMsForPreset`). A floor above the preset's own preferred density is
+ * `preferredTickWidthPx` is the zoom the preset resolves to with nothing else deciding
+ * (`pxPerMsForPreset`/`minPxPerMsForPreset`). A floor above the preset's own preferred density is
  * unreachable at that density and can only be an authoring mistake — caught here for both shipped
  * presets (`freezePreset`, at module load) and custom ones (`resolvePreset`, at first use), so a
  * future preset edit can't silently reintroduce the header-readability follow-up's finding 5 (a
@@ -168,7 +168,7 @@ export const dayPreset: ViewPreset = freezePreset({
   tickIncrement: 1,
   headers: [{ unit: 'day', increment: 1, format: DAY_FORMAT }],
   preferredTickWidthPx: 112,
-  // S1.12, D-S1.12-3, revised (header readability follow-up): a lone day band's label is the full
+  // A lone day band's label is the full
   // "Sep 21, 2026" — nothing coarser above it to drop granularity against — and that clips below
   // 96px at a 12px tick label. Multi-band presets below don't need this much:
   // `dropRepeatedGranularity` leaves their day band showing only the day number once a coarser band
@@ -205,7 +205,7 @@ export const yearPreset: ViewPreset = freezePreset({
   minTickWidthPx: 40,
 });
 
-/** Shipped two-band presets (S1.9, D-S1.9-3/4). `tickUnit` is never coarser than the last (finest)
+/** Shipped two-band presets. `tickUnit` is never coarser than the last (finest)
  * header: the header bands are what a human reads, `tickUnit` is what the grid gridlines and a
  * future snap-to-tick gesture actually step by, and it must resolve at least as finely as the
  * finest thing labelled, or a label would claim a boundary no gridline draws. */
@@ -262,7 +262,7 @@ export const monthAndYearPreset: ViewPreset = freezePreset({
   minTickWidthPx: 50,
 });
 
-/** Three-band presets (S1.12, D-S1.12-3 §3.2). */
+/** Three-band presets. */
 export const hourDayWeekPreset: ViewPreset = freezePreset({
   id: 'hourDayWeek',
   tickUnit: 'hour',
@@ -341,7 +341,7 @@ export const presets: Readonly<Record<ShippedPresetId, ViewPreset>> = Object.fre
   weekMonthYear: weekMonthYearPreset,
 });
 
-/** The `ViewPresets` `zoomIn`/`zoomOut` step through, finest first (S1.12, D-S1.12-5). */
+/** The `ViewPresets` `zoomIn`/`zoomOut` step through, finest first. */
 export const ZOOM_PRESETS: readonly ViewPreset[] = Object.freeze([
   hourPreset,
   hourDayWeekPreset,

@@ -1,4 +1,4 @@
-// time/ — the zone-bound façade a plugin author reaches through `Dataset.time` (D-S5-16). The zone
+// time/ — the zone-bound façade a plugin author reaches through `Dataset.time`. The zone
 // is bound once, at construction; every method forwards straight to `zone.ts`. No method adds date
 // arithmetic of its own — I10 stays true: all the math still lives in `zone.ts`.
 
@@ -20,7 +20,7 @@ import { toEndInstant, toInstant } from './input.js';
 
 /**
  * Zone-aware date math with the dataset's own zone already bound — no caller passes it, and no
- * caller can pass the wrong one (D-S5-16). A plugin cannot import `time/` directly (the `exports`
+ * caller can pass the wrong one. A plugin cannot import `time/` directly (the `exports`
  * map seals it), so this is the one way a plugin author reaches zone-correct day arithmetic.
  *
  * Call: `dataset.time.eachDay(span).filter((day) => dataset.time.dayOfWeek(day) >= 6)`.

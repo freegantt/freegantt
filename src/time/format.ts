@@ -1,7 +1,7 @@
 // time/ — human-readable date display (plans/01 §5, S1.10, S1.12). `formatEndInclusive` is the one
 // place half-open `end` becomes an inclusive display value — no `end - 1` anywhere else in the
 // codebase. Formatting goes through `Intl.DateTimeFormat` directly, in the dataset zone and a
-// caller-chosen locale (D-S1.12-11); `weekOfYear` (zone.ts) is the one thing Intl has no field for.
+// caller-chosen locale; `weekOfYear` (zone.ts) is the one thing Intl has no field for.
 
 import type { Instant, TimeSpan } from '../model/index.js';
 import { toPlain, weekOfYear } from './zone.js';
@@ -88,8 +88,8 @@ export function formatDate(
  * actually covers, read back through the dataset zone. No `end - 1` anywhere else in the codebase
  * (plans/01 §5, promised since S0).
  *
- * Takes the whole span, not `end` alone, because a zero-length span (`end === start`, legal under
- * D-S5-46) has no millisecond before its own start to display — `end - 1` there reads as one minute
+ * Takes the whole span, not `end` alone, because a zero-length span (`end === start`) has no
+ * millisecond before its own start to display — `end - 1` there reads as one minute
  * earlier than `start` (#240). A zero-length span displays its own `end` unchanged instead. */
 export function formatEndInclusive(
   zone: string,
@@ -101,8 +101,9 @@ export function formatEndInclusive(
   return formatDate(zone, displayed, locale, options);
 }
 
-/** `W37`. The escape-hatch callback shipped as a named value, because Intl has no week field
- *  (D-S1.12-13). Exported from `api/` — unlike the individual preset constants — because a custom-
+/** An ISO week label — `W` followed by the week number. The escape-hatch callback shipped as a
+ *  named value, because Intl has no week field.
+ *  Exported from `api/` — unlike the individual preset constants — because a custom-
  *  preset author cannot produce a week number any other way. */
 export const formatWeekNumber: HeaderFormat = (i, zone) => `W${weekOfYear(zone, i)}`;
 

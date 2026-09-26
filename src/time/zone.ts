@@ -25,7 +25,7 @@ export function resolveDefaultTimeZone(): string {
 
 /** The plain wall-clock shape is `model/` vocabulary, not zone machinery, so it is declared there
  *  and re-exported here — one name, one concept (#144). `extensions/` may import `model/` but not
- *  `time/` (D-S5-5), which is why the declaration has to sit on that side. */
+ *  `time/`, which is why the declaration has to sit on that side. */
 export type { PlainParts };
 
 function toZoned(zone: string, i: Instant): ZonedDateTimeFns.Record {
@@ -50,7 +50,7 @@ export function toPlain(zone: string, i: Instant): PlainParts {
   };
 }
 
-/** ISO day of week of `i` in `zone`: 1 = Monday … 7 = Sunday (D-S5-16). */
+/** ISO day of week of `i` in `zone`: 1 = Monday … 7 = Sunday. */
 export function dayOfWeek(zone: string, i: Instant): number {
   return ZonedDateTimeFns.dayOfWeek(toZoned(zone, i));
 }
@@ -65,7 +65,7 @@ export function startOfDay(zone: string, i: Instant): Instant {
   return fromZoned(ZonedDateTimeFns.startOfDay(toZoned(zone, i)));
 }
 
-/** ISO week number (1-53) of `i` in `zone` (D-S1.12-13). `Intl.DateTimeFormatOptions` has no week
+/** ISO week number (1-53) of `i` in `zone`. `Intl.DateTimeFormatOptions` has no week
  * field, so this is the one thing formatting still reaches the polyfill for directly. The polyfill
  * types this `| undefined` for calendars with no week numbering; `toZoned` always builds an ISO
  * calendar reading, which always has one. */
@@ -92,7 +92,7 @@ export function eachUnit(zone: string, span: TimeSpan, unit: TimeUnit): readonly
   return boundaries;
 }
 
-/** Each day boundary in `[span.start, span.end)`, ascending, in `zone` (D-S5-16). Delegates to
+/** Each day boundary in `[span.start, span.end)`, ascending, in `zone`. Delegates to
  * `eachUnit` with `'day'`, so the two walks can never disagree. */
 export function eachDay(zone: string, span: TimeSpan): readonly Instant[] {
   return eachUnit(zone, span, 'day');

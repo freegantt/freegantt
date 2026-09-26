@@ -1,6 +1,5 @@
 // time/ owns all zone-aware date arithmetic (I10) — a drag gesture's snap-to-grid math lands here,
-// not in layout/gesture-draft.ts, so that file never touches an Instant except through these calls
-// (plans/s3-direct-manipulation/README.md D-S3-12).
+// not in layout/gesture-draft.ts, so that file never touches an Instant except through these calls.
 
 import type { Instant, TimeUnit } from '../model/index.js';
 import { InvalidSnapIncrementError } from '../model/index.js';
@@ -28,7 +27,7 @@ export interface TickStep {
   readonly increment: number;
 }
 
-/** A consumer's own snap rule (D-S3-24, #489): decides exactly where `at` settles, in `zone`. The
+/** A consumer's own snap rule (#489): decides exactly where `at` settles, in `zone`. The
  *  escape hatch for anything a plain `TickStep` cannot state — business hours only, a fixed list of
  *  milestones. Built from the same tools `time/` uses for its own tick walk: `nextTickBoundary` for
  *  "the next drawn line", `snapInstant` for "the nearest one". */
@@ -66,7 +65,7 @@ export function nextTickBoundary(zone: string, at: Instant, step: TickStep): Ins
 }
 
 /** How many whole `increment`-sized `unit` steps separate `from` and `to` — the calendar delta a
- *  multi-entry drag re-applies to every grabbed entry's own `start`/`end` (D-S3-3, D-S3-19), instead
+ *  multi-entry drag re-applies to every grabbed entry's own `start`/`end`, instead
  *  of a raw millisecond difference that would drift a wall-clock time across a DST transition.
  *  Zero when the two already match. `snap: 'none'`'s caller has no unit to count steps in — it takes
  *  the millisecond difference directly through `diffMs`/`addMs` instead of this function. */

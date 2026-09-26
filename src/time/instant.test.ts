@@ -22,7 +22,7 @@ describe('instant()', () => {
     expect(() => instant('2026-09-01')).toThrow(/names no instant until a zone resolves it/);
   });
 
-  it('refuses null with its own fault, not the zoneless one (#431 F6)', () => {
+  it('refuses null with its own fault, not the zoneless one (#431)', () => {
     // The public helper meets the same untyped door `toInstant` does — a row out of a database
     // carrying `start: null`. Sending that reader to look at zones is the one wrong answer, because
     // a zone is the single thing that is not the matter here.
