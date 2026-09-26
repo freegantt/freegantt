@@ -112,7 +112,7 @@ function git(args: string[]): string {
 }
 
 function resolveBaseRef(): string {
-  const configured = process.env.FG_BASE_REF ?? 'main';
+  const configured = process.env['FG_BASE_REF'] ?? 'main';
   for (const candidate of [`origin/${configured}`, configured]) {
     try {
       git(['rev-parse', '--verify', candidate]);
