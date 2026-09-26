@@ -273,6 +273,26 @@ test('a sync of changes only renames the one row a server delta named, and keeps
   await expect(page.getByLabel('Undo')).toBeDisabled();
 });
 
+// The second scripted delta poll both upserts a new row and removes one — `harness/fake-server.ts`
+// adds `server-delta-added-1` under `entry-5` and removes `entry-11`. This proves a delta remove
+// drops the row while every other row keeps its value.
+test('a second sync of changes adds one row and removes another named by the delta', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.locator('#sync-changes-btn').click();
+  await page.locator('#sync-changes-btn').click();
+
+  await page.evaluate(() => window.__gantt.reveal('server-delta-added-1'));
+  await expect(page.locator('#gantt .fg-bar[data-bar-id^="server-delta-added-1:"]').first()).toHaveText(
+    'Added by a server delta',
+  );
+  const removedEntry = await page.evaluate(() => window.__dataset.entries.get('entry-11'));
+  expect(removedEntry).toBeUndefined();
+  const keptEntry = await page.evaluate(() => window.__dataset.entries.get('entry-9')?.name);
+  expect(keptEntry).toBeDefined();
+});
+
 // #489 owner ruling: `gantt.preset = '<id>'` also finds a preset in this Gantt's own `zoomPresets`,
 // not only the shipped table — the picker's one line (`harness/gantt-toolbar.ts`,
 // `gantt.preset = presetSelect.value`) needs no special case for the custom "sixHour" rung
