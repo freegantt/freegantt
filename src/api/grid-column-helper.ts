@@ -54,8 +54,9 @@ export function createGridColumnHelper<TProps>(): GridColumnHelper<TProps> {
   return {
     column(field, options) {
       // The grid calls a renderer with `entry.read(field)`, the value this key's own type names. So a
-      // renderer typed on that key widens to the stored `unknown` renderer with no loss.
-      return { field, ...options } as GridColumn;
+      // renderer typed on that key widens to the stored `unknown` renderer with no loss. `field` goes
+      // last, so an untyped caller's own `options.field` never replaces the key.
+      return { ...options, field } as GridColumn;
     },
   };
 }

@@ -29,6 +29,13 @@ describe('createGridColumnHelper — column() returns the plain column object', 
     });
   });
 
+  it('keeps the key when an untyped caller also puts `field` in the options', () => {
+    const columnHelper = createGridColumnHelper(costDataset());
+    const untypedOptions = { field: 'owner', header: 'Cost' } as { header: string };
+
+    expect(columnHelper.column('cost', untypedOptions)).toEqual({ field: 'cost', header: 'Cost' });
+  });
+
   it('returns `{ field }` alone when it gets no options', () => {
     const columnHelper = createGridColumnHelper(costDataset());
 
