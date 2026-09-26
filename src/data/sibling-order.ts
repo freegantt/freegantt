@@ -4,6 +4,7 @@
 // back a rank per id. `buildCommitChangeSet` turns these ranks into rows for a live write; replay
 // (`changesToReplay`) reuses the same math to renumber the sibling groups undo and redo touch.
 
+import { SiblingIndexOutOfRangeError } from '../model/index.js';
 import type { EntryId } from '../model/index.js';
 
 /** The group an entry belongs to — a Hierarchy source's answer, or `undefined` for a root. The same
@@ -119,4 +120,72 @@ export function renumberSiblingGroups(
     siblings.forEach((id, index) => ranks.set(id, index));
   }
   return ranks;
+}
+
+/** One entry a delta places: the group it ends up in, and the index the delta named, if any. */
+export interface DeltaPlacement {
+  readonly id: EntryId;
+  readonly group: SiblingGroupKey;
+  readonly namedIndex: number | undefined;
+  /** True for an id the store did not hold before the delta. */
+  readonly isNew: boolean;
+}
+
+/**
+ * The final rank of every id in every group a delta's removals and placements touched.
+ * Replays each removal, then each placement, over the group's committed order — the same
+ * rule a live transaction applies at commit. A named index outside the group's own live
+ * count throws `SiblingIndexOutOfRangeError`, and nothing in the delta is placed.
+ */
+export function siblingIndexesAfterDelta(
+  removedIds: readonly EntryId[],
+  placements: readonly DeltaPlacement[],
+  committedSiblingIds: (group: SiblingGroupKey) => readonly EntryId[],
+  committedGroupOf: (id: EntryId) => SiblingGroupKey,
+  operation: string,
+): ReadonlyMap<EntryId, number> {
+  const counts = new Map<SiblingGroupKey, number>();
+
+  function countFor(group: SiblingGroupKey): number {
+    const known = counts.get(group);
+    if (known !== undefined) return known;
+    const seeded = committedSiblingIds(group).length;
+    counts.set(group, seeded);
+    return seeded;
+  }
+
+  function adjustCount(group: SiblingGroupKey, by: number): void {
+    counts.set(group, countFor(group) + by);
+  }
+
+  const log: SiblingChange[] = [];
+
+  for (const id of removedIds) {
+    log.push({ id });
+    adjustCount(committedGroupOf(id), -1);
+  }
+
+  for (const placement of placements) {
+    const { id, group, namedIndex, isNew } = placement;
+    let others: number;
+    if (isNew) {
+      others = countFor(group);
+    } else {
+      const previous = committedGroupOf(id);
+      others = countFor(group) - (group === previous ? 1 : 0);
+      log.push({ id });
+      adjustCount(previous, -1);
+    }
+    const at = namedIndex ?? others;
+    if (
+      namedIndex !== undefined &&
+      (!Number.isInteger(namedIndex) || namedIndex < 0 || namedIndex > others)
+    ) {
+      throw new SiblingIndexOutOfRangeError(id, namedIndex, others, operation);
+    }
+    log.push({ id, group, at });
+    adjustCount(group, 1);
+  }
+
+  return renumberSiblingGroups(log, committedSiblingIds, committedGroupOf);
 }

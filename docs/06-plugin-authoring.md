@@ -420,10 +420,10 @@ steps aside for a load for exactly this reason.
 
 ### Reacting to a sync
 
-`entries.sync()` also commits its whole change in one step, `origin: 'sync'` — but unlike
-a load, a sync carries only the rows that changed: entry Field rows for an added, removed
-or edited entry, and a plugin-store row only for a removed id. A plugin reads a sync the
-same `change` subscription reads a load, and does not need a second one. It reads every
+`entries.syncAll()` and `entries.syncChanges()` both commit their whole change in one step,
+`origin: 'sync'` — but unlike a load, a sync carries only the rows that changed: entry Field rows
+for an added, removed or edited entry, and a plugin-store row only for a removed id. A plugin reads
+a sync the same `change` subscription reads a load, and does not need a second one. It reads every
 other origin — `'user'`, `'undo'`, `'redo'` — the same way: only `'load'` is a fresh start,
 so a plugin folds `added`/`removed`/`updated` into its cache on every other origin, sync
 included, rather than singling sync out:

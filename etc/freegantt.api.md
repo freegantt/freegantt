@@ -433,7 +433,7 @@ export interface DatasetEvents {
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
     dateOnlyEnd?: DateOnlyEndRule;
-    entries: readonly FlatEntryInput<TProps>[];
+    entries: readonly EntryIngestInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
     history?: false | {
@@ -605,7 +605,7 @@ export interface DomTarget {
 
 // @public
 export class DuplicateEntryIdError extends FreeGanttError {
-    constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list');
+    constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list' | 'upsert-and-remove');
     // (undocumented)
     readonly entryId: EntryId;
     // (undocumented)
@@ -748,6 +748,12 @@ export interface EntryActivate {
     readonly target: TargetKind;
 }
 
+// @public
+export interface EntryDelta<TProps = Record<string, unknown>> {
+    readonly remove?: readonly (EntryId | string)[];
+    readonly upsert?: readonly EntryIngestInput<TProps>[];
+}
+
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "RemovableEntryKey" needs to be exported by the entry point index.d.ts
 //
@@ -796,6 +802,9 @@ export function entryIdFromDataset(value: string | undefined): EntryId | undefin
 export function entryIdOfBar(id: BarId): EntryId;
 
 // @public
+export type EntryIngestInput<TProps = Record<string, unknown>> = FlatEntryInput<TProps> | EntryInput<TProps>;
+
+// @public
 export interface EntryInput<TProps = Record<string, unknown>> {
     end?: InstantInput | undefined;
     // (undocumented)
@@ -833,11 +842,12 @@ export type EntryRule<TProps = Record<string, unknown>> = FieldMatch<TProps> | E
 
 // @public
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
-    add(input: FlatEntryInput<TProps>): Entry<TProps>;
-    load(inputs: readonly FlatEntryInput<TProps>[]): void;
+    add(input: EntryIngestInput<TProps>): Entry<TProps>;
+    load(inputs: readonly EntryIngestInput<TProps>[]): void;
     // (undocumented)
     remove(id: EntryId | string): void;
-    sync(inputs: readonly FlatEntryInput<TProps>[]): void;
+    syncAll(inputs: readonly EntryIngestInput<TProps>[]): void;
+    syncChanges(delta: EntryDelta<TProps>): void;
     // (undocumented)
     update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
 }

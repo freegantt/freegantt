@@ -1866,7 +1866,7 @@ describe('a sync leaves the view alone (#517)', () => {
     const { dataset, shell } = syncFixture();
     expect(shell.selectedEntryIds).toEqual([entryId('c'), entryId('gone')]);
 
-    dataset.entries.sync([
+    dataset.entries.syncAll([
       { id: 'p', name: 'Parent', start: '2026-01-01', end: '2026-01-10' },
       { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
     ]);
@@ -1879,7 +1879,7 @@ describe('a sync leaves the view alone (#517)', () => {
     const { dataset, shell } = syncFixture();
     expect(shell.collapsed).toEqual([rowId('p')]);
 
-    dataset.entries.sync([
+    dataset.entries.syncAll([
       { id: 'p', name: 'Parent renamed', start: '2026-01-01', end: '2026-01-10' },
       { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
     ]);
@@ -1903,7 +1903,7 @@ describe('a sync leaves the view alone (#517)', () => {
     const positionBefore = scrollY.state.position;
     expect(positionBefore).toBeGreaterThan(0);
 
-    dataset.entries.sync([
+    dataset.entries.syncAll([
       { id: 'p', name: 'Parent renamed', start: '2026-01-01', end: '2026-01-10' },
       { id: 'c', name: 'Child', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
     ]);
@@ -1930,7 +1930,7 @@ describe('a sync leaves the view alone (#517)', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
     calls.count = 0;
 
-    dataset.entries.sync(dataset.entries.all.map((entry) => entry.toInput()));
+    dataset.entries.syncAll(dataset.entries.all.map((entry) => entry.toInput()));
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     expect(calls.count).toBe(0);

@@ -4,7 +4,7 @@
 // class adds `transaction()` and the construction-time options a view never reads.
 
 import type { Entry } from './entry.js';
-import type { EntryEdit, FlatEntryInput, StoredEntry } from './stored-entry.js';
+import type { EntryDelta, EntryEdit, EntryIngestInput, StoredEntry } from './stored-entry.js';
 import type { Field, FieldEditable, FieldKey } from './field.js';
 import type { EntryId } from './ids.js';
 import type { DatasetEventMap } from './change-set.js';
@@ -36,21 +36,23 @@ export interface EntryStoreView<TProps = Record<string, unknown>> {
 /** The Dataset's entries, read and write — `dataset.entries.add/update/remove`. Each
  *  mutator returns the entry as the store holds it after the call (branded id, resolved instants),
  *  never the input, and each auto-wraps itself in a transaction when none is already open.
- *  `load` and `sync` are the two exceptions to both: each returns `void`, and each refuses an open
- *  transaction (`TransactionAlreadyOpenError`) rather than join one — see their own comments below. */
+ *  `load`, `syncAll` and `syncChanges` are the three exceptions to both: each returns `void`, and
+ *  each refuses an open transaction (`TransactionAlreadyOpenError`) rather than join one — see their
+ *  own comments below. */
 export interface EntryStore<TProps = Record<string, unknown>> extends EntryStoreView<TProps> {
   /** Declared Field keys sit flat at the top, the same shape `update()` takes (ADR 0011):
    *  `entries.add({ id, name, owner: 'Ali' })`. Nested `props` stays legal for a bag already held or
    *  a passenger key — naming one both there and at the top throws.
    *
-   *  Typed as `FlatEntryInput<TProps>` (#281), not `EntryInput<TProps>` and not the `&
-   *  Partial<TProps>` intersection an earlier draft first suggested — that intersection is
-   *  uninhabitable by a named `EntryInput<TProps>[]` value once `TProps` defaults to an open record
+   *  Typed as `EntryIngestInput<TProps>` (#281, #527), not the `& Partial<TProps>` intersection an
+   *  earlier draft first suggested — that intersection is uninhabitable by a named
+   *  `EntryInput<TProps>[]` value once `TProps` defaults to an open record
    *  (`Partial<Record<string, unknown>>` demands an index signature `EntryInput` does not carry),
-   *  which broke every fixture that pre-types its own array. `FlatEntryInput` closes the gap: see its
-   *  own comment (`stored-entry.ts`) for why re-deriving every piece as a mapped type, instead of
-   *  intersecting the named `EntryInput` interface, makes the flat key check compile. */
-  add(input: FlatEntryInput<TProps>): Entry<TProps>;
+   *  which broke every fixture that pre-types its own array. `EntryIngestInput`'s own comment
+   *  (`stored-entry.ts`) explains both halves of the union: the flat-key check `FlatEntryInput` runs
+   *  for a concrete `TProps`, and the plain `EntryInput<TProps>` a caller generic over `TProps` must
+   *  fall back to, since `FlatEntryInput<TProps>` does not resolve for it. */
+  add(input: EntryIngestInput<TProps>): Entry<TProps>;
   update(id: EntryId | string, edit: EntryEdit<TProps>): Entry<TProps>;
   remove(id: EntryId | string): void;
   /** A full fresh start (#496): replaces every Entry with `inputs`, in the list's own order — a
@@ -72,12 +74,12 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  `TransactionAlreadyOpenError` when called inside `dataset.transaction()`: `load` is always its
    *  own transaction.
    *
-   *  The undoable, diffing counterpart that keeps per-entry state for a kept id is `entries.sync()`
+   *  The undoable, diffing counterpart that keeps per-entry state for a kept id is `entries.syncAll()`
    *  (#517). */
-  load(inputs: readonly FlatEntryInput<TProps>[]): void;
+  load(inputs: readonly EntryIngestInput<TProps>[]): void;
   /** Matches a live Dataset to `inputs` by diffing instead of replacing (#517): an id the list omits
    *  is removed, a key a kept entry's input omits is cleared, and a Field whose value did not change
-   *  writes no row. After `sync(inputs)`, the entry ids, every declared Field value (`siblingIndex`
+   *  writes no row. After `syncAll(inputs)`, the entry ids, every declared Field value (`siblingIndex`
    *  included) and the tree are the same as `load(inputs)` would leave — only History and per-entry
    *  state differ. A kept id keeps its selection, its collapse state and its plugin store rows; a
    *  removed id loses them, and an undo brings a removed id's store rows back with it. An undeclared
@@ -95,7 +97,14 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
    *  case for a server poll that finds nothing new. A local edit the server has not seen is
    *  overwritten, last write wins. An undo of that edit later keeps the server's value (see
    *  `docs/11-server-data.md`). */
-  sync(inputs: readonly FlatEntryInput<TProps>[]): void;
+  syncAll(inputs: readonly EntryIngestInput<TProps>[]): void;
+  /** Applies only the rows a server changed, where `syncAll` takes the whole list. An `upsert` row
+   *  with a new id adds an entry. A row with a known id edits that entry: an omitted key keeps its
+   *  value, and `undefined` clears it. `remove` drops each id with its subtree and ignores an
+   *  unknown id. An id in both lists throws `DuplicateEntryIdError`, and nothing applies. Writes and
+   *  commits the way `syncAll` does, so a delta that changes nothing commits nothing (see
+   *  `docs/11-server-data.md`). */
+  syncChanges(delta: EntryDelta<TProps>): void;
 }
 
 /** What a Gantt (and any other `change` subscriber) holds: entries, zone, and the change bus.

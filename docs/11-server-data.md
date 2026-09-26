@@ -1,9 +1,10 @@
-# Server data — polling with `entries.sync()`
+# Server data — polling with `entries.syncAll()` and `entries.syncChanges()`
 
-**Scope:** `dataset.entries.sync(rows)` for app authors who poll a server and want the user's own
-edits to survive the poll. See [`docs/05-consumer-api.md`](05-consumer-api.md) for the rest of the
-consumer surface, and [`docs/06-plugin-authoring.md`](06-plugin-authoring.md) for how a plugin
-should read a `'sync'`-origin `change`.
+**Scope:** `dataset.entries.syncAll(rows)` and `dataset.entries.syncChanges(delta)` for app authors
+who poll a server and want the user's own edits to survive the poll. See
+[`docs/05-consumer-api.md`](05-consumer-api.md) for the rest of the consumer surface, and
+[`docs/06-plugin-authoring.md`](06-plugin-authoring.md) for how a plugin should read a
+`'sync'`-origin `change`.
 
 Every example below typechecks against the built package types on each CI run
 (`scripts/check-doc-examples.mjs`), so none of it can drift from the shipped API.
@@ -14,7 +15,7 @@ Every example below typechecks against the built package types on each CI run
 row in `rows`, with no diff. It clears History (`canUndo`/`canRedo` both read `false` right after) —
 the same posture a desktop app takes opening a file. Use it once, at startup.
 
-`entries.sync(rows)` is a poll. It matches the live Dataset to `rows` by diffing: an id `rows` omits
+`entries.syncAll(rows)` is a poll. It matches the live Dataset to `rows` by diffing: an id `rows` omits
 is removed, a key a kept entry's input omits is cleared, and a Field whose value did not change
 writes no row. Call it every time your poll returns a fresh list.
 
@@ -22,9 +23,79 @@ A sync compares declared Fields only. An undeclared `props` key on a kept entry 
 when the server changed it. A new entry still gets it, because a sync adds a new entry the same way
 `load` does. Declare a Field for every server value that a poll must keep up to date.
 
+## Sync only what changed
+
+`entries.syncChanges(delta)` takes only the rows a server changed, not the whole list. Use it when
+your server already tells you what changed — a webhook payload, a diff endpoint, a change feed.
+
+<!-- doc-example-setup
+declare const dataset: import('freegantt').Dataset;
+-->
+
+```ts
+dataset.entries.syncChanges({
+  upsert: [{ id: 't1', name: 'Renamed on the server' }],
+  remove: ['t9'],
+});
+```
+
+An `EntryDelta` has two parts, both optional: `upsert`, rows to add or change, keyed by `id`; and
+`remove`, ids to drop, each with its subtree.
+
+**Upsert adds or edits.** An id the Dataset does not hold adds an entry, the same rule `add()`
+follows. An id it holds takes the row as a partial edit: a key the row leaves out keeps its stored
+value, and a key set to `undefined` clears it, the same rule `update()` follows.
+
+<!-- doc-example-setup
+declare const datasetWithCost: import('freegantt').Dataset<{ cost: number }>;
+-->
+
+```ts
+datasetWithCost.entries.update('t2', { name: 'Kept locally', cost: 500 });
+
+datasetWithCost.entries.syncChanges({ upsert: [{ id: 't2', cost: 600 }] }); // name stays 'Kept locally'
+```
+
+**Remove drops a subtree.** Each removed id takes its whole subtree with it, the same rule
+`entries.remove()` follows. An id the Dataset does not hold is ignored, so a retried delta is safe
+to send again. An id named in both `upsert` and `remove` throws `DuplicateEntryIdError` — a server
+that sends both has a bug, and picking a winner would hide it.
+
+**The tree check reads the store and the delta together.** A row's `parentId` can name an id already
+in the store, or an id the same delta adds. An `upsert` row whose parent is missing — removed by the
+same delta, or absent from both the store and the delta — throws `EntryNotFoundError`, and nothing
+in the call applies. This catches a direct parent and a grandparent alike: removing a grandparent
+and upserting one of its children in the same call still throws.
+
+**Order.** A kept entry keeps its position unless its row names a `siblingIndex`, the same as
+`update()`. A new entry, a moved entry, or a kept entry that names a `siblingIndex` takes that index.
+With none named, a new or moved entry goes to the end of its group. Several rows that name a
+`siblingIndex` in the same group apply in upsert order.
+
+**The rest is the door `syncAll` uses.** `syncChanges` ignores a `'never'` Field lock, re-rolls a
+derived parent cell instead of taking an authored value, and runs no `EditExtender` cascade.
+`beforeChange` can veto the whole call, and it refuses the same way `syncAll` does:
+`TransactionAlreadyOpenError` inside `dataset.transaction()`, `MutationDuringExtensionHookError`
+from the extension hook, and `MutationDuringNotificationError` from inside a `beforeChange` or
+`change` handler. It commits its `ChangeSet` with `origin: 'sync'`: it records no undo step and
+erases no Redo, and a delta that changes nothing commits nothing — no `beforeChange`, no `change`,
+no undo step.
+
+### `syncAll` or `syncChanges`?
+
+| | `syncAll(rows)` | `syncChanges(delta)` |
+| --- | --- | --- |
+| Input | Every entry | Only the rows that changed |
+| An id the input does not name | Removed | Kept |
+| A key a row leaves out | Cleared | Kept |
+| Order | From the list order | Kept, unless the row names `siblingIndex` |
+
+Use `syncAll` when your poll returns the whole list. Use `syncChanges` when your server already
+tells you what changed.
+
 ## A sync records no undo step
 
-Unlike a user edit, `sync` commits its one `ChangeSet` with `origin: 'sync'`, and the undo History
+Unlike a user edit, `syncAll` commits its one `ChangeSet` with `origin: 'sync'`, and the undo History
 does not record it. It does not clear Redo either. A user's own earlier edits stay undoable across
 any number of polls:
 
@@ -36,7 +107,7 @@ declare function fetchRowsFromServer(): import('freegantt').FlatEntryInput[];
 ```ts
 dataset.entries.update('t1', { name: 'Renamed by me' }); // origin 'user', canUndo is now true
 
-dataset.entries.sync(fetchRowsFromServer()); // origin 'sync' — records no step
+dataset.entries.syncAll(fetchRowsFromServer()); // origin 'sync' — records no step
 
 dataset.canUndo; // still true — the poll did not touch it
 ```
@@ -53,7 +124,7 @@ server's value for that whole entry:
 ```ts
 dataset.entries.update('t1', { name: 'Renamed locally' }); // the server has not seen this yet
 
-dataset.entries.sync(fetchRowsFromServer()); // the server sends its own name for 't1' — it wins
+dataset.entries.syncAll(fetchRowsFromServer()); // the server sends its own name for 't1' — it wins
 
 dataset.undo(); // 't1' keeps the server's name; the step has nothing left to write
 ```
@@ -141,8 +212,9 @@ brings its plugin store rows back with it.
 
 ## A note on locks
 
-- A `'never'`-locked Field is written anyway by `load` and `sync` — construction-time and poll
-  writes both ignore a lock the same way, since neither runs the edit pipeline a locked cell guards.
+- A `'never'`-locked Field is written anyway by `load`, `syncAll` and `syncChanges` —
+  construction-time and poll writes all ignore a lock the same way, since none of them runs the edit
+  pipeline a locked cell guards.
 - A sync can set a `locked` Field itself. A consumer's own `beforeChange` handler can veto an edit
   to a locked entry, and that veto can catch an `'undo'` or a `'redo'` changeset too — a lock set
   after the edit it undoes still guards it, and the veto fires on every click, not just the first
@@ -157,12 +229,12 @@ declare function startPollTimer(callback: () => void): { stop(): void };
 
 function startPolling(dataset: import('freegantt').Dataset) {
   return startPollTimer(() => {
-    dataset.entries.sync(fetchRowsFromServer());
+    dataset.entries.syncAll(fetchRowsFromServer());
   });
 }
 ```
 
-Stop the timer when the Gantt unmounts. Call `sync` as often as your poll interval allows. The user's
+Stop the timer when the Gantt unmounts. Call `syncAll` as often as your poll interval allows. The user's
 own edits stay undoable across every poll.
 
 A sync does not know which local edits the server has not saved yet. A poll that returns before the
@@ -170,10 +242,11 @@ server saves an edit writes the server's older value over it, under the conflict
 an unsaved edit on screen, do one of these:
 
 - Skip the poll while a save is in flight.
-- Copy the unsaved value into that entry's row in `rows` before you call `sync`.
+- Copy the unsaved value into that entry's row in `rows` before you call `syncAll`.
 
 ## Related
 
 - [Consumer API index](05-consumer-api.md) — undo, redo, and the `change` event.
 - [Plugin authoring guide](06-plugin-authoring.md) — reacting to a sync from inside a plugin.
-- [API reference](../etc/freegantt.api.md) — generated `EntryStore.sync`, `EntryStore.load`.
+- [API reference](../etc/freegantt.api.md) — generated `EntryStore.syncAll`, `EntryStore.syncChanges`,
+  `EntryStore.load`, and `EntryDelta`.

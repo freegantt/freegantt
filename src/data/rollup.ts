@@ -124,7 +124,7 @@ function parentsToRecompute(
   const candidates = new Set<EntryId>();
   if (touched === undefined) {
     for (const id of entries.keys()) {
-      if (isParent(id)) candidates.add(id);
+      if (needsVisit(id)) candidates.add(id);
     }
   } else {
     for (const id of touched) {
@@ -154,6 +154,7 @@ function clearDerivedValues(
   parentId: EntryId,
   updated: FieldUpdated[],
   merged: ProposedEdits,
+  authoredKeys: ReadonlySet<string> | undefined,
 ): StoredEntry {
   let effectiveParent = parent;
 
@@ -162,7 +163,11 @@ function clearDerivedValues(
     // an extension hook's cascade — is an ordinary cell edit now, not a rolled-up value to clear:
     // the write already landed on `parent` and stands (2026-09-24 ruling). A cascade write is a
     // caller-side write like the body's, so this reads the merged edits, which carry both sources.
+    // A delta batch carries no `merged` (it has already landed its own writes on `parent` before
+    // this pass runs), so `authoredKeys` names the same thing for it: a key the delta itself named
+    // for this id.
     if (editProposesField(merged.get(parentId), field)) continue;
+    if (authoredKeys?.has(String(field.key)) === true) continue;
     const from = readField(effectiveParent, field, access);
     if (from === undefined) continue;
     updated.push({ store: 'entries', id: parentId, field: field.key, from, to: undefined });
@@ -202,6 +207,11 @@ const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], overwrittenP
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must.
+ *
+ * `freshBatchAuthoredKeys` is a construction-shape-only concern: a delta batch (`syncChanges`) has
+ * already landed its own writes on `committed` before this pass runs, with no `merged` to carry them
+ * — this is where it names, per id, the keys the delta itself authored, so a demoted parent's own
+ * authored write to a rolling-up Field stands instead of being cleared alongside the rest.
  */
 export function rollUpFields(
   committed: ReadonlyMap<EntryId, StoredEntry>,
@@ -209,6 +219,7 @@ export function rollUpFields(
   registry: FieldRegistry,
   storeAccess: FieldAccess,
   tree: RollUpTree,
+  freshBatchAuthoredKeys?: ReadonlyMap<EntryId, ReadonlySet<string>>,
 ): RollUpResult {
   const rollingFields = registry.rollingUpFields();
   if (rollingFields.length === 0) return NO_ROLLUP_RESULT;
@@ -251,10 +262,14 @@ export function rollUpFields(
   const byParent = committedTreeStillAnswers
     ? tree.committedChildIds
     : childIdsByParent(entries, parentOfEffective);
-  const priorByParent =
-    pending === undefined || committedTreeStillAnswers
-      ? byParent
-      : childIdsByParent(committed, parentOfPrior);
+  let priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>;
+  if (committedTreeStillAnswers) {
+    priorByParent = byParent;
+  } else if (pending === undefined) {
+    priorByParent = tree.committedChildIds;
+  } else {
+    priorByParent = childIdsByParent(committed, parentOfPrior);
+  }
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched, parentOfEffective);
   const computed = new Map<EntryId, StoredEntry>();
   // A `compute` Field inside this pass asks `ctx.children(row)` and must see the pass's own
@@ -285,7 +300,18 @@ export function rollUpFields(
       // stops being a parent in this same transaction keeps the write to that Field (2026-09-24
       // ruling): `clearDerivedValues` leaves alone any field `merged` (body or cascade) proposed,
       // rather than wiping the value that write just landed.
-      computed.set(parentId, clearDerivedValues(parent, registry, access, parentId, updated, merged));
+      computed.set(
+        parentId,
+        clearDerivedValues(
+          parent,
+          registry,
+          access,
+          parentId,
+          updated,
+          merged,
+          freshBatchAuthoredKeys?.get(parentId),
+        ),
+      );
       continue;
     }
 

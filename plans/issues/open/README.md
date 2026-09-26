@@ -17,7 +17,7 @@ issue plans land here as they're opened.
 **Closed:**
 
 - [#517](https://github.com/freegantt/freegantt/issues/517) — no diffing bulk write for a server
-  refresh. Shipped: `dataset.entries.sync(list)` diffs a full list against the live Dataset and
+  refresh. Shipped: `dataset.entries.syncAll(list)` diffs a full list against the live Dataset and
   commits only what changed, origin `'sync'`. A sync records no undo step and erases no Redo — the
   user's own earlier edits stay undoable; replay (undo, redo and `dataset.replay`) writes each row
   onto the current values instead, re-rolls the Rollup and renumbers the sibling groups it touches.

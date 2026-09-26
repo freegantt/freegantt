@@ -1,6 +1,6 @@
-// data/ — entries.sync() (#517): make a live Dataset match a full list, and record no undo step of
+// data/ — entries.syncAll() (#517): make a live Dataset match a full list, and record no undo step of
 // its own — undo of a user edit still lands after a sync, overwriting whatever the sync wrote.
-// Exercised through DatasetState the way a consumer would reach it (`dataset.entries.sync(...)`),
+// Exercised through DatasetState the way a consumer would reach it (`dataset.entries.syncAll(...)`),
 // the same posture entry-store.load.test.ts takes for load.
 
 import { describe, expect, it } from 'vitest';
@@ -35,10 +35,10 @@ function changeSets(state: DatasetState): ChangeSet[] {
   return seen;
 }
 
-describe('entries.sync', () => {
+describe('entries.syncAll', () => {
   it('a child listed before its parent lands, and entries.all walks the tree depth-first', () => {
     const state = dataset();
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'c', parentId: 'a', name: 'Child', start: 0, end: 1 },
       { id: 'a', name: 'Parent', start: 0, end: 1 },
       { id: 'b', name: 'Sibling', start: 0, end: 1 },
@@ -52,10 +52,10 @@ describe('entries.sync', () => {
     const state = dataset([{ id: 'old' }]);
     state.entries.update('old', { name: 'Edited' });
 
-    expect(() => state.entries.sync([{ id: 'a' }, { id: 'a' }])).toThrow(DuplicateEntryIdError);
-    expect(() => state.entries.sync([{ id: 'a', parentId: 'ghost' }])).toThrow(EntryNotFoundError);
+    expect(() => state.entries.syncAll([{ id: 'a' }, { id: 'a' }])).toThrow(DuplicateEntryIdError);
+    expect(() => state.entries.syncAll([{ id: 'a', parentId: 'ghost' }])).toThrow(EntryNotFoundError);
     expect(() =>
-      state.entries.sync([
+      state.entries.syncAll([
         { id: 'a', parentId: 'b' },
         { id: 'b', parentId: 'a' },
       ]),
@@ -70,7 +70,7 @@ describe('entries.sync', () => {
     const state = dataset([{ id: 'old' }]);
     const seen = changeSets(state);
 
-    state.entries.sync([{ id: 'new', name: 'New', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 'new', name: 'New', start: 0, end: 1 }]);
 
     expect(seen).toHaveLength(1);
     expect(seen[0]!.origin).toBe('sync');
@@ -83,7 +83,7 @@ describe('entries.sync', () => {
     state.undo();
     expect(state.canRedo).toBe(true);
 
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'a', name: 'a', start: 0, end: 1 },
       { id: 'b', name: 'b', start: 0, end: 1 },
     ]);
@@ -107,7 +107,7 @@ describe('entries.sync', () => {
       changeFired = true;
     });
 
-    state.entries.sync(state.entries.all.map((e) => e.toInput()));
+    state.entries.syncAll(state.entries.all.map((e) => e.toInput()));
 
     expect(beforeChangeFired).toBe(false);
     expect(changeFired).toBe(false);
@@ -125,7 +125,7 @@ describe('entries.sync', () => {
     // 'b' keeps list position 1, so the derived rank the sync would write already matches the
     // store's own — but the authored siblingIndex here disagrees with it, the same as a server that
     // round-trips a rank of its own that a client-side reorder has since moved past.
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'a', name: 'a', start: 0, end: 1 },
       { id: 'b', name: 'b', start: 0, end: 1, siblingIndex: 5 },
     ]);
@@ -141,7 +141,7 @@ describe('entries.sync', () => {
       return false;
     });
 
-    expect(() => state.entries.sync([{ id: 'new', name: 'New', start: 0, end: 1 }])).toThrow(
+    expect(() => state.entries.syncAll([{ id: 'new', name: 'New', start: 0, end: 1 }])).toThrow(
       MutationCancelledError,
     );
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('old')]);
@@ -155,7 +155,7 @@ describe('entries.sync', () => {
     });
     state.fields.setEditable('name', 'never');
 
-    expect(() => state.entries.sync([{ id: 'a', name: 'renamed', start: 0, end: 1 }])).not.toThrow();
+    expect(() => state.entries.syncAll([{ id: 'a', name: 'renamed', start: 0, end: 1 }])).not.toThrow();
     expect(state.entries.get('a')!.name).toBe('renamed');
   });
 
@@ -171,7 +171,7 @@ describe('entries.sync', () => {
       { id: 'c1', name: 'Child', parentId: 'p1', cost: 100 },
       { id: 'c2', name: 'Child', parentId: 'p1', cost: 200 },
     ];
-    state.entries.sync(inputs);
+    state.entries.syncAll(inputs);
 
     expect(state.entries.get('p1')!.read('cost')).toBe(300);
   });
@@ -187,7 +187,7 @@ describe('entries.sync', () => {
       },
     });
 
-    state.entries.sync([{ id: 't1', name: 'renamed', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 't1', name: 'renamed', start: 0, end: 1 }]);
 
     expect(cascadeCalls).toBe(0);
   });
@@ -198,7 +198,7 @@ describe('entries.sync', () => {
     state.pluginStores.reserve<{ v: number }>('demo.store').set('gone', { v: 2 });
     const canUndoBeforeSync = state.canUndo;
 
-    state.entries.sync([{ id: 'kept', name: 'kept', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 'kept', name: 'kept', start: 0, end: 1 }]);
 
     expect(state.pluginStores.read<{ v: number }>('demo.store')!.get('kept')).toEqual({ v: 1 });
     expect(state.pluginStores.read<{ v: number }>('demo.store')!.get('gone')).toBeUndefined();
@@ -209,7 +209,7 @@ describe('entries.sync', () => {
     const state = dataset([{ id: 'a', name: 'from server v1' }]);
     state.entries.update('a', { name: 'local edit' });
 
-    state.entries.sync([{ id: 'a', name: 'from server v2', start: 0, end: 1 }]);
+    state.entries.syncAll([{ id: 'a', name: 'from server v2', start: 0, end: 1 }]);
     expect(state.entries.get('a')!.name).toBe('from server v2');
 
     state.undo();
@@ -222,7 +222,7 @@ describe('entries.sync', () => {
     const state = dataset([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
     const seen = changeSets(state);
 
-    state.entries.sync(
+    state.entries.syncAll(
       [{ id: 'c' }, { id: 'a' }, { id: 'b' }].map((e) => ({ ...e, name: e.id, start: 0, end: 1 })),
     );
 
@@ -239,7 +239,7 @@ describe('entries.sync', () => {
     state.entries.update('c', { siblingIndex: 0 }); // c moves to the front: c, a, b
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('c'), entryId('a'), entryId('b')]);
 
-    state.entries.sync(
+    state.entries.syncAll(
       [{ id: 'a' }, { id: 'd' }, { id: 'b' }, { id: 'c' }].map((e) => ({
         ...e,
         name: e.id,
@@ -268,18 +268,18 @@ describe('entries.sync', () => {
     const state = dataset([{ id: 'old' }]);
     expect(() =>
       state.transaction(() => {
-        state.entries.sync([{ id: 'new', name: 'New', start: 0, end: 1 }]);
+        state.entries.syncAll([{ id: 'new', name: 'New', start: 0, end: 1 }]);
       }),
     ).toThrow(TransactionAlreadyOpenError);
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('old')]);
   });
 
-  it('an EditExtender that calls entries.sync() throws MutationDuringExtensionHookError, and the user edit is not saved either', () => {
+  it('an EditExtender that calls entries.syncAll() throws MutationDuringExtensionHookError, and the user edit is not saved either', () => {
     const state = new DatasetState({
       entries: [{ id: 't1', name: 't1', start: 0, end: 1 }],
       timeZone: 'UTC',
       editExtender: (): EntryEdits => {
-        state.entries.sync([{ id: 'new', name: 'New', start: 0, end: 1 }]);
+        state.entries.syncAll([{ id: 'new', name: 'New', start: 0, end: 1 }]);
         return new Map();
       },
     });
@@ -295,25 +295,25 @@ describe('entries.sync', () => {
     expect(state.entries.all.map((e) => e.id)).toEqual([entryId('t1')]);
   });
 
-  it('sync called inside a change handler throws MutationDuringNotificationError, naming entries.sync', () => {
+  it('sync called inside a change handler throws MutationDuringNotificationError, naming entries.syncAll', () => {
     const state = dataset([{ id: 'old' }]);
     state.on('change', () => {
-      state.entries.sync([{ id: 'second', name: 'Second', start: 0, end: 1 }]);
+      state.entries.syncAll([{ id: 'second', name: 'Second', start: 0, end: 1 }]);
     });
 
-    expect(() => state.entries.sync([{ id: 'first', name: 'First', start: 0, end: 1 }])).toThrow(
-      'entries.sync: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
+    expect(() => state.entries.syncAll([{ id: 'first', name: 'First', start: 0, end: 1 }])).toThrow(
+      'entries.syncAll: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
     );
   });
 
-  it('sync called inside a beforeChange handler throws MutationDuringNotificationError, naming entries.sync', () => {
+  it('sync called inside a beforeChange handler throws MutationDuringNotificationError, naming entries.syncAll', () => {
     const state = dataset([{ id: 'old' }]);
     state.on('beforeChange', () => {
-      state.entries.sync([{ id: 'second', name: 'Second', start: 0, end: 1 }]);
+      state.entries.syncAll([{ id: 'second', name: 'Second', start: 0, end: 1 }]);
     });
 
-    expect(() => state.entries.sync([{ id: 'first', name: 'First', start: 0, end: 1 }])).toThrow(
-      'entries.sync: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
+    expect(() => state.entries.syncAll([{ id: 'first', name: 'First', start: 0, end: 1 }])).toThrow(
+      'entries.syncAll: you cannot change the Dataset while a beforeChange or change handler runs. Nothing was saved. Make the change after the handler returns.',
     );
   });
 });
@@ -327,7 +327,7 @@ describe('undo and redo across a sync (#517)', () => {
     state.entries.update('b', { name: 'b renamed' });
     state.entries.update('a', { name: 'local edit' });
 
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'a', name: 'server value', start: 0, end: 1 },
       { id: 'b', name: 'b renamed', start: 0, end: 1 },
     ]);
@@ -346,7 +346,7 @@ describe('undo and redo across a sync (#517)', () => {
     const state = dataset([{ id: 'a', name: 'a', start: 0, end: 10 }]);
     state.entries.update('a', { start: 20, end: 30 });
 
-    state.entries.sync([{ id: 'a', name: 'a', start: 20, end: 25 }]);
+    state.entries.syncAll([{ id: 'a', name: 'a', start: 20, end: 25 }]);
 
     state.undo();
     expect(state.entries.get('a')!.start).toBe(20);
@@ -357,7 +357,7 @@ describe('undo and redo across a sync (#517)', () => {
     const state = dataset([{ id: 'a', name: 'a', start: 0, end: 10 }]);
     state.entries.update('a', { start: 20, end: 30 });
 
-    state.entries.sync([{ id: 'a', name: 'renamed by the server', start: 20, end: 30 }]);
+    state.entries.syncAll([{ id: 'a', name: 'renamed by the server', start: 20, end: 30 }]);
 
     state.undo();
     expect(state.entries.get('a')!.start).toBe(0);
@@ -370,7 +370,7 @@ describe('undo and redo across a sync (#517)', () => {
     state.entries.update('a', { name: 'renamed' });
     state.entries.add({ id: 'n1', name: 'n1', start: 0, end: 1 });
 
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'a', name: 'renamed', start: 0, end: 1 },
       { id: 'b', name: 'b', start: 0, end: 1 },
     ]);
@@ -390,7 +390,7 @@ describe('undo and redo across a sync (#517)', () => {
     state.entries.remove('b');
     expect(state.pluginStores.read<{ v: number }>('demo.store')!.get('b')).toBeUndefined();
 
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'a', name: 'a', start: 0, end: 1 },
       { id: 'b', name: 'b from server', start: 0, end: 1 },
     ]);
@@ -407,7 +407,7 @@ describe('undo and redo across a sync (#517)', () => {
     state.entries.update('a', { parentId: undefined });
     expect(state.entries.get('a')!.parent()).toBeUndefined();
 
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'b', name: 'b', parentId: 'a', start: 0, end: 1 },
       { id: 'a', name: 'a', start: 0, end: 1 },
     ]);
@@ -432,7 +432,7 @@ describe('undo and redo across a sync (#517)', () => {
     state.entries.update('c1', { start: 50, end: 60 });
     expect(state.entries.get('p')!.start).toBe(50);
 
-    state.entries.sync([
+    state.entries.syncAll([
       { id: 'p', name: 'p' },
       { id: 'c1', name: 'c1', parentId: 'p', start: 50, end: 60 },
       { id: 'c2', name: 'c2', parentId: 'p', start: 10, end: 20 },
