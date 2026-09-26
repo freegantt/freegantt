@@ -14,6 +14,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Added
 
+- `createGridColumnHelper(dataset)` types a column renderer's `fieldValue` from the column's key. `columnHelper.column('start', { columnRenderer: ({ fieldValue }) => … })` reads `fieldValue` as `Instant | undefined`, with no cast and no annotation. The helper is optional: it returns the plain column object, and a plain column object still reads `fieldValue` as `unknown`. `ColumnRendererContext<TValue>` and `ColumnRenderer<TValue>` take the value type, and both default to `unknown`. See `docs/12-grid-columns.md`. ([#522](https://github.com/freegantt/freegantt/issues/522))
+
 - `EntryDelta<TProps>`, the shape `dataset.entries.syncChanges()` takes: `{ upsert, remove }`. An `upsert` row adds an entry for an unknown id and edits a known one. A key the row leaves out keeps its value. `remove` lists ids to remove, and an unknown id is ignored. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - `DuplicateEntryIdError`'s `kind` gains `'upsert-and-remove'`: an id named in both `EntryDelta.upsert` and `EntryDelta.remove` throws instead of silently picking a winner. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - `dataset.entries.syncChanges(delta)`, which applies a server delta with the same ingest rules as `syncAll`. ([#527](https://github.com/freegantt/freegantt/issues/527))

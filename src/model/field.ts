@@ -33,16 +33,22 @@ export type FieldEditable = 'never' | 'api' | 'anywhere';
  *  branch on, and no `row` either (the sample reads only `value`/`entry`). This also keeps
  *  `GridColumn` a `model/` type with zero dependencies (`model-is-leaf`): the Gantt-wide `GridCellRenderer`
  *  lives in `layout/` because its context names `FrameRow`/`ResolvedColumn`, and `model/` may not
- *  import `layout/`. */
-export interface ColumnRendererContext {
+ *  import `layout/`.
+ *
+ *  `TValue` is the column's own Field value. A renderer from `createGridColumnHelper` reads
+ *  `fieldValue` as that type. A plain column object keeps the default, `unknown`. */
+export interface ColumnRendererContext<TValue = unknown> {
   /** Undefined for a row with no backing Entry — a group or custom row. */
   entry?: Entry | undefined;
   /** What the grid paints: this column's Field value, through the Field's own `formatValue`. */
   value: string;
-  /** The same Field value before formatting — what `entry.read(field)` answers (review H3). One vocabulary with the Gantt-wide `GridCellRendererContext`. */
-  fieldValue: unknown;
+  /** The same Field value before formatting — what `entry.read(field)` answers (review H3). One vocabulary with the Gantt-wide `GridCellRendererContext`.
+   *  Undefined on a row with no Entry, and on an Entry with no value for this Field. */
+  fieldValue: TValue | undefined;
 }
-export type ColumnRenderer = (ctx: ColumnRendererContext) => ElementDescription | undefined;
+export type ColumnRenderer<TValue = unknown> = (
+  ctx: ColumnRendererContext<TValue>,
+) => ElementDescription | undefined;
 
 /** Where a cell's text and header sit within the column's width. Default `'start'`. */
 export type ColumnAlign = 'start' | 'center' | 'end';

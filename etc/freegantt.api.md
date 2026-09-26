@@ -199,12 +199,12 @@ export type CollapseState = 'collapsed' | 'expanded' | 'leaf';
 export type ColumnAlign = 'start' | 'center' | 'end';
 
 // @public (undocumented)
-export type ColumnRenderer = (ctx: ColumnRendererContext) => ElementDescription | undefined;
+export type ColumnRenderer<TValue = unknown> = (ctx: ColumnRendererContext<TValue>) => ElementDescription | undefined;
 
 // @public
-export interface ColumnRendererContext {
+export interface ColumnRendererContext<TValue = unknown> {
     entry?: Entry | undefined;
-    fieldValue: unknown;
+    fieldValue: TValue | undefined;
     value: string;
 }
 
@@ -310,6 +310,9 @@ export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
 
 // @public
 export type CoverPredicate = (start: Instant, time: ZonedTime) => boolean;
+
+// @public
+export function createGridColumnHelper<TProps>(dataset: Dataset<TProps>): GridColumnHelper<TProps>;
 
 // @public
 export function createPopup(view: PopupSurface, registerKeyHandler: RegisterKeyHandler): Popup;
@@ -1416,6 +1419,11 @@ export interface GridColumnBase {
 }
 
 // @public
+export interface GridColumnHelper<TProps> {
+    column<K extends TypedGridColumnKey<TProps>>(field: K, options?: TypedGridColumnOptions<Exclude<FieldValue<TProps, K>, undefined>>): GridColumn;
+}
+
+// @public
 export type GridColumnInput = FieldKey | GridColumn;
 
 // @public
@@ -2391,6 +2399,14 @@ export class TransactionAlreadyOpenError extends FreeGanttError {
     // (undocumented)
     readonly operation: string;
 }
+
+// @public
+export type TypedGridColumnKey<TProps> = keyof CoreFieldValues | (keyof TProps & string);
+
+// @public
+export type TypedGridColumnOptions<TValue> = Omit<GridColumnBase, 'field' | 'columnRenderer'> & {
+    columnRenderer?: ColumnRenderer<TValue>;
+} & GridColumnSizing;
 
 // @public
 export class UnknownAggregatorError extends FreeGanttError {
