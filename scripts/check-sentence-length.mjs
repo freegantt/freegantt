@@ -3,7 +3,7 @@
 // rules is a sentence ceiling — 20 words for an instruction, 25 for a description. This script
 // enforces the 25-word ceiling over comment prose, so the rule holds by CI and not by eye.
 //
-// Why it exists. The pass has been run by hand twice (R6's ST1, then #164). It drifted back both
+// Why it exists. The pass has been run by hand twice (#164). It drifted back both
 // times. A standard nothing measures is a standard nobody keeps.
 //
 // Scope is a declared list, not all of `src/`. `SCOPED_FILES` below holds every file a sentence

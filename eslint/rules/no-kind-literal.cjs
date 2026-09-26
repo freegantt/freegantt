@@ -1,4 +1,4 @@
-// S2's span rollup (D-S2-22) was the first kind-dependent behaviour in data/, and this rule was its
+// The span rollup was the first kind-dependent behaviour in data/, and this rule was its
 // guard: a kind string literal compared against a `.kind` property in src/data/** or src/layout/**,
 // where it must instead go through a lookup (a `Set`/registry), never an inline comparison.
 //

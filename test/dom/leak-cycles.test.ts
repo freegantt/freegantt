@@ -1,6 +1,6 @@
-// S6 acceptance R4 (#403): 100 mount/destroy cycles leak no nodes, listeners, or observables — and
+// Acceptance: 100 mount/destroy cycles leak no nodes, listeners, or observables — and
 // the case that matters is two Gantts on one shared axis, because a shared axis is the one thing
-// that outlives a Gantt and so the one place a dead binding can pile up (D9, D-S6-1).
+// that outlives a Gantt and so the one place a dead binding can pile up (D9).
 //
 // The library is imported through the bare `freegantt` specifier, the door a consumer uses. A leak
 // is a property of the shipped surface, not of an internal.
@@ -246,7 +246,7 @@ describe('[S6-R4] mount/destroy leaks nothing over 100 cycles (#403)', () => {
   });
 
   it('a single Gantt returns every count to its one-cycle baseline', () => {
-    // #403 Q2: the baseline is taken after the first pair, never before the first mount. The base
+    // #403: the baseline is taken after the first pair, never before the first mount. The base
     // stylesheet and the document's own one-time wiring land during cycle 1 and stay for the life
     // of the page — that is shared setup, not a leak.
     mountAndDestroy();
@@ -288,7 +288,7 @@ describe('[S6-R4] mount/destroy leaks nothing over 100 cycles (#403)', () => {
  *  *bound* Gantt needs, so it is a fan-in over the live bindings and nothing else. A binding left
  *  behind by a destroyed Gantt keeps claiming room in it.
  *
- *  D-S6-1 (#405) makes one axis the shared unit, so each axis is asked separately — which is what
+ *  One axis is the shared unit (#405), so each axis is asked separately — which is what
  *  "one binding set, one lifetime" has to mean if it means anything. The pairs below share both
  *  axes, so both get asked; the last test mounts the first consumer's own shape instead, x shared
  *  with y private. */
@@ -354,7 +354,7 @@ describe('[S6-R4] a destroyed Gantt leaves nothing bound to a shared axis (#403,
     expect(scroll.x!.state.position).toBe(boundMax);
 
     // A scroll moves the pane, not the bar — the timeline pane is the native scroller and a bar
-    // keeps its place in content space (D-S1.8-1). A zoom is what re-places the bar, and a repaint
+    // keeps its place in content space. A zoom is what re-places the bar, and a repaint
     // lands on the next animation frame.
     const beforeZoom = firstBarPlacement(survivor.container);
     survivor.gantt.zoomIn();

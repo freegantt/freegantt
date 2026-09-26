@@ -1,6 +1,6 @@
 // I9 (plans/01 §4, §11): grid and timeline rows both position from `frame.rows`, never from a
 // flow-layout measurement of their own. Scoped to `src/view/**` and `src/render/dom/**` (S1.8,
-// D-S1.8-8 — the issue's original scope, `src/view/grid/**`/`src/view/timeline/**`, never existed).
+// the issue's original scope, `src/view/grid/**`/`src/view/timeline/**`, never existed).
 //
 // Exempt: `pane-layout.ts` and `pane-size-attachment.ts`, both of which legitimately read
 // `clientWidth`/`clientHeight` to measure the *pane's own box* — a different concept from *row*

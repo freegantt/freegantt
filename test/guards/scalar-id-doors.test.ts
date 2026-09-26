@@ -1,4 +1,4 @@
-// F19 (`plans/02-public-api.md`) — loose on a scalar, branded on a collection key: every id a
+// `plans/02-public-api.md` — loose on a scalar, branded on a collection key: every id a
 // caller passes one at a time takes `EntryId | string` (etc.), not a bare branded type. #305 found
 // four doors that broke this by review; nothing before this guard caught it by machine. Shaped like
 // `test/guards/retired-words.test.ts`: read the published surface (`etc/freegantt.api.md`, the same
@@ -12,7 +12,7 @@
 //   - the brand helpers `src/model/ids.ts` itself declares (`barId`, `entryIdOfBar`,
 //     `partIndexOfBar`, …) — these convert one already-branded id into another, so their input
 //     was never a loose scalar to begin with.
-// A hit outside both is exactly F19's scalar half breaking again.
+// A hit outside both is exactly the scalar half of the rule breaking again.
 
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
@@ -44,7 +44,7 @@ function parameterListOf(line: string): string | undefined {
 }
 
 /** `true` when `paramList` names one of `BRAND_TYPES` on its own — not loosened with `| string`
- *  (F19's own spelling) and not part of some wider union that already includes it. */
+ *  and not part of some wider union that already includes it. */
 function hasBareBrandParam(paramList: string): boolean {
   return BRAND_TYPES.some((brand) => {
     const pattern = new RegExp(`:\\s*${brand}\\b(?!\\s*\\|)`);

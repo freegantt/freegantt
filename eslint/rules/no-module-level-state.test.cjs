@@ -28,7 +28,7 @@ ruleTester.run('no-module-level-state', rule, {
       code: 'export const registry = Object.freeze(new Map());\nfunction add() { registry.set("a", 1); }',
       errors: [{ messageId: 'mutatedExport' }],
     },
-    // R1 (#250): a module-level WeakMap with no stated reason must still be rejected — the shape
+    // #250: a module-level WeakMap with no stated reason must still be rejected — the shape
     // match alone is not a key check, and was never meant to exempt every WeakMap on sight.
     { code: 'const internals = new WeakMap();', errors: [{ messageId: 'weakMapNeedsReason' }] },
     { code: 'export const internals = new WeakMap();', errors: [{ messageId: 'weakMapNeedsReason' }] },

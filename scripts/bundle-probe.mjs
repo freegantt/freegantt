@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// D-S5-28 (plans/s5-extensibility-and-editing/s5.13-gallery-and-gate.md §1): "unused features are
+// plans/s5-extensibility-and-editing/s5.13-gallery-and-gate.md §1: "unused features are
 // absent from a consumer bundle" ([S5-A6]) is a claim about what a third party's bundler produces, so
 // this probe builds a fixture the way a third party would — against `dist/api/index.js`, never a path
 // inside `src/` — and checks the result for the one string each built-in cannot hide: its plugin `id`.
@@ -32,7 +32,7 @@ const BUILT_IN_MARKERS = {
 
 const workDir = mkdtempSync(path.join(tmpdir(), 'freegantt-bundle-probe-'));
 const entryFile = path.join(workDir, 'entry.js');
-// The fixture entry D-S5-28 asks for: Dataset and Gantt, and nothing else. Both are used (not just
+// The fixture entry the probe asks for: Dataset and Gantt, and nothing else. Both are used (not just
 // imported), so a bundler has a real reason to keep them and every built-in a real reason to drop.
 writeFileSync(
   entryFile,

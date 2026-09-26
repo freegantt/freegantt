@@ -1,7 +1,7 @@
 /**
  * Rename a TypeScript symbol across a project, through the TypeScript language service.
  *
- * This is the call that powers F2-rename in an editor and `textDocument/rename` over LSP. It
+ * This is the call that powers rename in an editor and `textDocument/rename` over LSP. It
  * resolves symbols, so it follows re-exports, import aliases and `paths` mappings, and it never
  * touches a same-named word in a comment, a string or a compound identifier.
  *

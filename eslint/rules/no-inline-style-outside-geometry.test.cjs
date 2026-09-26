@@ -20,7 +20,7 @@ ruleTester.run('no-inline-style-outside-geometry', rule, {
     { code: "node.className = 'fg-row';", filename: '/repo/src/render/dom/index.ts' },
   ],
   invalid: [
-    // The red fixture D-S1.10-6 fixes: pane-layout.ts's structural writes.
+    // The red fixture: pane-layout.ts's structural writes.
     {
       code: "gridPane.style.display = 'flex';",
       filename: '/repo/src/view/pane-layout.ts',
