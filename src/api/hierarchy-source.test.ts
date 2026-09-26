@@ -7,6 +7,7 @@ import { definePlugin } from './define-plugin.js';
 import { entryId, fieldRowsOf } from './index.js';
 import type { ErrorReport } from './index.js';
 import type { EntryInput } from './index.js';
+import { resolveRows } from '../layout/rows/resolve-rows.js';
 
 interface PhaseProps {
   phaseId?: string;
@@ -322,6 +323,27 @@ describe('core refuses an answer it cannot use, and keeps drawing', () => {
     expect(reports.map((report) => [report.code, report.by, report.entryId])).toEqual([
       ['unknown-parent', 'plugin', 'a'],
     ]);
+  });
+
+  it('an Entry with an unknown parent draws as a root row, with its own children under it', () => {
+    const ghost = () =>
+      definePlugin({
+        id: 'demo.ghost',
+        hierarchySource: () => (entry) => (entry.id === 'a' ? 'nobody' : entry.id === 'c' ? 'a' : undefined),
+      });
+    captureWarnings();
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'b', name: 'B' },
+        { id: 'a', name: 'A' },
+        { id: 'c', name: 'C' },
+      ],
+      plugins: [ghost()],
+    });
+
+    const rows = resolveRows({ entries: dataset.entries.all, rows: { source: 'entries', tree: true } });
+    expect(rows.map((row) => `${row.id}:${row.depth}`)).toEqual(['b:0', 'a:0', 'c:1']);
   });
 
   it('an unknown parent warns once, even when the construction Rollup writes rows elsewhere', () => {
