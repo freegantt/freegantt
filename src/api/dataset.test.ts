@@ -1305,6 +1305,38 @@ describe('a plugin Field declared at construction is there before entries are re
   });
 });
 
+describe("harness's lockEntries() lets an undo and a redo through on a locked entry", () => {
+  it('still refuses a plain write on a locked entry', () => {
+    const dataset = new Dataset<{ locked?: boolean }>({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
+      plugins: [lockEntries()],
+    });
+
+    expect(() => dataset.entries.update('a', { name: 'edited' })).toThrow(MutationCancelledError);
+  });
+
+  it('lets an undo reverse a step recorded before a sync locked the entry', () => {
+    const dataset = new Dataset<{ locked?: boolean }>({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'Design', start: '2026-09-01', end: '2026-09-08' }],
+      plugins: [lockEntries()],
+    });
+
+    dataset.entries.update('a', { name: 'edited' });
+    // A sync records no step of its own (#517), so the undo below reverses the rename above, on an
+    // entry the sync's own list has since locked.
+    dataset.entries.sync([{ id: 'a', name: 'edited', start: '2026-09-01', end: '2026-09-08', locked: true }]);
+
+    expect(() => dataset.undo()).not.toThrow();
+    expect(dataset.entries.get('a')?.read('name')).toBe('Design');
+    expect(dataset.entries.get('a')?.read('locked')).toBe(true);
+
+    dataset.redo();
+    expect(dataset.entries.get('a')?.read('name')).toBe('edited');
+  });
+});
+
 /** Every tree answer an extender can read off one `EditRequest`, in one object — so a disagreement
  *  between two callers shows up as one failed comparison rather than six. */
 interface TreeAnswers {
