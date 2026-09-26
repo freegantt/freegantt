@@ -56,16 +56,15 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
 8. **Review.**
    - Default: one ocr run at the end, in the mode the owner chose (Authority). Fix each finding as it lands. A run of 10–30+ minutes is normal.
    - **Delegated, this session.** You run `ocr delegate preview --from origin/main --to HEAD`, then `ocr delegate rule <files>`. You review each file against its rules and fix each finding.
-   - **Delegated, new Cursor session.** A supervised Orca worker runs a Cursor agent in the issue's worktree, and that agent does the review. Use model `cursor-grok-4.6-high` (Grok 4.6, high effort). Never use a `-fast` model. Load the `orchestration` skill first; it owns the loop below.
+   - **Delegated, new Cursor session.** A supervised Orca worker runs a Cursor agent in the issue's worktree, and that agent does the review. Use Grok 4.6 at high effort. Never use a `-fast` model. Run the owner's global `orca-worker` script in the background:
      ```bash
-     orca orchestration run-create --objective "ocr review #<n>" --json          # once per queue
-     orca orchestration worker-start --run <run> --worktree path:<worktreePath> \
-       --agent cursor --model cursor-grok-4.6-high --task-title "ocr #<n>" \
-       --spec "$(cat <scratchpad>/ocr-<n>-prompt.md)" --json
-     # in the background:
-     orca orchestration check --wait --run <run> --types "worker_done,escalation,question" --timeout-ms 2400000 --json
+     orca-worker --worktree <worktreePath> --prompt-file <scratchpad>/ocr-<n>-prompt.md \
+       --model cursor-grok-4.6 --effort high --title "ocr #<n>" --timeout-min 40
      ```
-     Answer a `question` with `orchestration reply`. On `worker_done`, read the findings. Then `worker-release --dispatch <id>` and `check --ack <delivery>`. Release closes the worker's terminal.
+     It starts the worker, waits for it, prints the worker's last message, and releases the worker's terminal. Exit codes:
+     - `0`: done. Read the findings file.
+     - `2`: the worker asks a question and still runs. The script prints the `reply` command and the `--wait` command to go on.
+     - `3`: timeout. `4`: escalation or failure. The script stopped the worker in both cases.
 
      Do not start the agent with `orca terminal create --command` and `terminal wait --for exit`. Orca types `--command` into an interactive shell. The shell stays open after `cursor-agent` exits, so the wait never fires.
 
