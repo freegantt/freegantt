@@ -10,7 +10,7 @@ export interface TimelineToolbarOptions {
   gantt: Gantt;
   container: HTMLElement;
   /** Include a `fit` select (`pane` / `preset`). Default `false` — most pages don't demo the density
-   *  floor (D-S1.12-2), so `pane` is fine left at its default. */
+   *  floor, so `pane` is fine left at its default. */
   showFit?: boolean;
   /** Include a `locale` select. Default `false`. */
   showLocale?: boolean;
@@ -130,7 +130,7 @@ export function mountTimelineToolbar(options: TimelineToolbarOptions): void {
   presetSelect.addEventListener('change', () => {
     gantt.preset = presetSelect.value;
   });
-  // S5.2, D-S5-6: the toolbar's own button is the command, not a second call to `panToToday()` —
+  // S5.2: the toolbar's own button is the command, not a second call to `panToToday()` —
   // the same call `gantt.commands.run(id)` a keybinding or a menu item (S5.5) makes.
   todayBtn.addEventListener('click', () => gantt.commands.run('freegantt.panToToday'));
   fitSelect?.addEventListener('change', () => {

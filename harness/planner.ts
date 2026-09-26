@@ -27,7 +27,7 @@ import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
-// D-S5-29: what this page shows, the config that does it, and the spec section behind it.
+// What this page shows, the config that does it, and the spec section behind it.
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'planner');
 
 const dataset = new Dataset<PlannerEntryProps>({
@@ -194,7 +194,7 @@ function checkpointDiamond({ entry, label }: BarRendererContext): ElementDescrip
 // that is not (`checkpointDiamond`, above). Its box still holds its own size at every zoom.
 //
 // A phase needs no entry at all. Core's own `summary` variant already matches a row with children and
-// paints the rail the design draws, so this page states neither the rule nor the paint (`J40`).
+// paints the rail the design draws, so this page states neither the rule nor the paint.
 const PLANNER_VARIANTS: readonly EntryVariant<PlannerEntryProps>[] = [
   diamond({ when: { checkpoint: true }, paint: checkpointDiamond }),
 ];

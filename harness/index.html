@@ -25,7 +25,7 @@
         height: min(70vh, 760px);
       }
 
-      /* Typography stays harness-owned (D-S1.11-8) — the library sets no font. */
+      /* Typography stays harness-owned — the library sets no font. */
       #gantt .fg-tick,
       #gantt .fg-row-cell,
       #gantt .fg-row-label {
@@ -198,7 +198,7 @@
         pointer-events: none;
       }
 
-      /* A checkpoint's own stroke (DESIGN-FACTS §2.5, F8): `diamond()`'s own `::before` paints
+      /* A checkpoint's own stroke (DESIGN-FACTS §2.5): `diamond()`'s own `::before` paints
          `--fg-bar-fill-painted` and nothing else, so a hollow checkpoint's ring is this page's own
          rule, read off a custom property `checkpointDiamond()` (planner.ts) sets only while not
          done — `border: none` the rest of the time, when the property is unset. `box-sizing:

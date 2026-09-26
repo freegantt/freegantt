@@ -1,4 +1,4 @@
-// S4.11 harness (plans/s4-hierarchy-and-rows/s4.11-harness-and-gate.md, D-S4-34): one Gantt, one fixture,
+// S4.11 harness (plans/s4-hierarchy-and-rows/s4.11-harness-and-gate.md): one Gantt, one fixture,
 // nine toolbar controls, and the S2 changeset log — every acceptance box is easier to believe when the
 // reader sees the rows each edit produced.
 
@@ -28,7 +28,7 @@ declare global {
   }
 }
 
-// S5.8, D-S5-19: `editable` is the Field's own answer now (#142), so no column here restates it.
+// S5.8: `editable` is the Field's own answer now (#142), so no column here restates it.
 // Name, Start, End and Cost stay open on `CORE_FIELDS`'/`hierarchyFieldOptions`'s own defaults.
 // End stays editable here: this page drags the handle pair, and one answer gates the cell editor and
 // that handle alike. `main.ts` shows the refusal instead, on one row (#256).
@@ -97,7 +97,7 @@ window.__gantt = gantt;
 
 /** The fixture's own published `HierarchyEntryProps` (`cost`, `team`, plus the crew-lead row's own
  *  keys, #421 C7) — imported, never hand-copied, so this page cannot drift from the fixture it reads
- *  (J41) — plus the one the hierarchy plugin declares (ADR 0020). */
+ *  — plus the one the hierarchy plugin declares (ADR 0020). */
 type HierarchyProps = HierarchyEntryProps & PhaseProps;
 
 function createDataset(
@@ -191,7 +191,7 @@ function renderSelection(): void {
   selectionReadout.textContent = ids.length === 0 ? 'Selection: (none)' : `Selection: ${ids.join(', ')}`;
 }
 
-/** S5.7, D-S5-18: one status line for every `gridColumnsChange` — a resize drag, a reorder drop, and
+/** S5.7: one status line for every `gridColumnsChange` — a resize drag, a reorder drop, and
  *  the `toggle-cost-col` button's own `gantt.gridColumns = […]` assignment all fire it through the
  *  same commit sequence, so this one line covers all three. */
 function renderGridColumns({ to }: GridColumnsChange): void {
@@ -226,9 +226,9 @@ function bindGantt(): void {
     refreshCostButton();
   });
   gantt.on('gridColumnsChange', renderGridColumns);
-  // S5.8, D-S5-19, U8: with the checkbox on, a Name edit never opens the built-in editor — this
+  // S5.8, U8: with the checkbox on, a Name edit never opens the built-in editor — this
   // opens `window.prompt` instead and writes through the ordinary `dataset.entries.update` path,
-  // so the change log shows one `[change]` row either way (D-S5-19: "there is no second write
+  // so the change log shows one `[change]` row either way ("there is no second write
   // channel"). Only `field === 'name'` is intercepted — Start and Cost keep the built-in editor
   // even with the checkbox on, so the page can show both paths side by side.
   gantt.on('beforeEntryEdit', ({ entry, field }) => {

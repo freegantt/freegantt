@@ -20,7 +20,7 @@ export interface PhaseProps {
  *
  * Two seams, two jobs, both declared on the plugin itself — no `data()` half runs for either:
  * - **the Field** — `phaseId` has to be declared before anything may write it (ADR 0011), so this
- *   plugin declares it on itself, before any entry is read (#496 grill round 3, R1).
+ *   plugin declares it on itself, before any entry is read (#496 grill round 3).
  * - **the hierarchy source** — which Entry is the parent of this one? The phase id when there is
  *   one, otherwise whatever the next source says (ADR 0031). Core's own source answers `parentId`,
  *   so a row with no phase id keeps the tree it was authored with.
