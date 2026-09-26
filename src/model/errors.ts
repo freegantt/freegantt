@@ -373,7 +373,11 @@ export class DuplicateEntryIdError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly operation: string;
 
-  constructor(entryId: EntryId, operation: string, kind: DuplicateEntryIdKind) {
+  constructor(
+    entryId: EntryId,
+    operation: string,
+    kind: 'collision' | 'duplicate-in-list' | 'upsert-and-remove',
+  ) {
     super(
       'duplicate-entry-id' satisfies BuiltInThrownCode,
       DuplicateEntryIdError.#message(kind, entryId, operation),
