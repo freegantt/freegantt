@@ -228,7 +228,7 @@ export function rollUpFreshBatch(
 export function rollUpDeltaBatch(
   data: Pick<TransactionData, 'fields' | 'fieldAccess'>,
   byId: ReadonlyMap<EntryId, StoredEntry>,
-  committedParents: ParentIndex,
+  effectiveParents: ParentIndex,
   priorChildIds: ReadonlyMap<EntryId, readonly EntryId[]>,
   authoredKeys: ReadonlyMap<EntryId, ReadonlySet<string>>,
   source: HierarchySource,
@@ -238,7 +238,7 @@ export function rollUpDeltaBatch(
     undefined,
     data.fields,
     data.fieldAccess,
-    { committedParents, committedChildIds: priorChildIds, source },
+    { committedParents: effectiveParents, committedChildIds: priorChildIds, source },
     authoredKeys,
   ).updated;
 }
