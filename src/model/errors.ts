@@ -360,21 +360,29 @@ export class RevealTargetNotFoundError extends FreeGanttError {
   }
 }
 
-/** `code: 'duplicate-entry-id'` — two different mistakes, two different messages. `kind: 'collision'`
- *  is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind: 'duplicate-in-list'` is
- *  a whole-list write (`entries.load()`, and `entries.syncAll()`, #517) finding one id twice inside the
- *  list itself — `assertEntryBatchIsSound` (`data/entry-batch.ts`) throws this before anything
- *  stages. */
+/** `code: 'duplicate-entry-id'` — three different mistakes, three different messages. `kind:
+ *  'collision'` is `entries.add()` finding an id already in the store (S2.3 §1.3). `kind:
+ *  'duplicate-in-list'` is a whole-list write (`entries.load()`, and `entries.syncAll()`, #517)
+ *  finding one id twice inside the list itself — `assertEntryBatchIsSound` (`data/entry-batch.ts`)
+ *  throws this before anything stages. `kind: 'upsert-and-remove'` is `entries.syncChanges()` finding
+ *  one id in both its `upsert` and its `remove` list — a server that sends both has a bug, and
+ *  picking a winner would hide it. */
 export class DuplicateEntryIdError extends FreeGanttError {
   readonly entryId: EntryId;
   readonly operation: string;
 
-  constructor(entryId: EntryId, operation: string, kind: 'collision' | 'duplicate-in-list') {
+  constructor(
+    entryId: EntryId,
+    operation: string,
+    kind: 'collision' | 'duplicate-in-list' | 'upsert-and-remove',
+  ) {
     super(
       'duplicate-entry-id' satisfies BuiltInThrownCode,
       kind === 'collision'
         ? `entries.add: an entry with id "${entryId}" already exists. Give the new entry a different id, or call entries.update to change the one that is there.`
-        : `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`,
+        : kind === 'duplicate-in-list'
+          ? `${operation}: the list names id "${entryId}" twice. Give each entry its own id.`
+          : `${operation}: the delta both upserts and removes id "${entryId}". Name each id in one list only.`,
     );
     this.name = 'DuplicateEntryIdError';
     this.entryId = entryId;
