@@ -13,7 +13,6 @@ import {
   dayPreset,
   hourPreset,
   instant,
-  formatStartAndEnd,
   weekAndMonthPreset,
   weekPreset,
   yearPreset,
@@ -154,9 +153,7 @@ describe('computeFrame', () => {
     });
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
-    expect(bar?.a11yLabel).toBe(
-      `${entry.name}, ${formatStartAndEnd(entry, { timeZone: scale.timeZone, locale: undefined })}`,
-    );
+    expect(bar?.a11yLabel).toBe('Stakeholder interviews, Sep 1, 2026 – Sep 3, 2026');
   });
 
   it('announces a one-day bar with its date once', () => {

@@ -28,7 +28,9 @@ const DEFAULT_PLACEMENT: PopupPlacement = 'top';
  *
  *  Which start/end text does the tooltip show? Whatever the `start`/`end` Field's own `formatValue`
  *  answers — a consumer's override on either Field reaches this popup with no extra wiring.
- *  A one-day bar shows one date. */
+ *  A one-day bar shows one date only when both texts match. Core's own defaults differ
+ *  (`formatDateTime` on `start`, `formatInclusiveDate` on `end`), so a plain one-day bar still
+ *  reads as a range there. Give `start` a `formatDate` override to collapse it to one date. */
 function defaultContent(
   entry: Entry & TimeSpan,
   ctx: PluginContext,
