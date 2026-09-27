@@ -471,6 +471,7 @@ export {
   joinStartAndEnd,
   lastCoveredInstant,
   formatWeekNumber,
+  formatQuarter,
   formatHour,
   isTimeUnit,
   isCoarserThan,

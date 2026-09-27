@@ -266,6 +266,28 @@ write.
 - `gridResizable: false` — lock the grid pane: the splitter no longer drags and shows no resize cursor, and no column paints a resizer grip, whatever its own `resizable` says. Default `true`. Live. Locks the gesture, not the value — `gantt.gridWidth = 240` and `gantt.gridColumns = […]` still write. Neither `beforeGridWidthChange` nor `beforeGridColumnsChange` fires for a gesture that can no longer arm — this is what keeps a `gridWidth: 'fitColumns'` pane from turning into a fixed px width on a stray drag.
 - `fit` — how dense the time axis is. `'pane'` (default) fills the measured pane with the whole range; `'preset'` uses the showing preset's own density and ignores the pane; `{ unit: 'day', widthPx: 14 }` paints one day 14px wide; a bare `number` is pixels per millisecond, what `zoomTo`/`zoomBy` write. Live, on a `Gantt` and on a `TimeScaleModel` alike.
 - Reach for the `{ unit, widthPx }` form whenever the sentence you have is "a day tile is 14 pixels". Writing that as a number means `14 / 86_400_000`, which claims every day is 24 hours — false in any zone that observes DST, and false for a month or a year in every zone. The library resolves the real length through the dataset's zone, so you never own that arithmetic. `increment` defaults to 1: `{ unit: 'week', increment: 2, widthPx: 90 }` reads "a fortnight is 90 pixels". One density spans the whole scale, so the stated width lands on the unit at the range start and each later unit follows its own calendar length — a 23-hour day paints narrower than the days beside it. The preset's `minTickWidthPx` floor still applies, so a page that wants tiles below the shipped floor brings its own preset (`harness/e2e/bar-label-fit.ts`).
+- `zoomPresets` — the steps `zoomIn` and `zoomOut` move through, finest first. Live. The default
+  has ten steps, from `hour` to `year`, with `quarterAndYear` between `monthAndYear` and `year`.
+  State your own steps by id when you create the Gantt:
+
+  ```ts
+  import { Gantt } from 'freegantt';
+
+  const gantt = new Gantt({
+    container: '#gantt',
+    dataset,
+    zoomPresets: ['day', 'weekAndMonth', 'monthAndYear', 'year'],
+  });
+  ```
+
+  To remove one step later, filter the live list and assign it back:
+
+  ```ts
+  gantt.zoomPresets = gantt.zoomPresets.filter((preset) => preset.id !== 'quarterAndYear');
+  ```
+
+  A preset outside the list still works through `gantt.preset = 'quarterAndYear'`. Zoom in and zoom
+  out do not step into it.
 - `overscan` — the culling buffer around the visible window: `verticalRows` whole rows above and below, `horizontalPx` px left and right. Live. Default `{ verticalRows: 2, horizontalPx: 128 }`.
 - `rowSource` — what rows are (`entries` tree, `group` by value, or `custom` resolve). Reads back
   resolved, and one setting changes by spreading that value — see

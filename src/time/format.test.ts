@@ -11,6 +11,7 @@ import {
   formatHour,
   formatInclusiveDate,
   formatStartAndEnd,
+  formatQuarter,
   formatWeekNumber,
   joinStartAndEnd,
   lastCoveredInstant,
@@ -284,6 +285,21 @@ describe('formatWeekNumber', () => {
   it('is a Formatter: it drops into a Field formatValue as is', () => {
     const field: Field<Instant> = { key: 'start', formatValue: formatWeekNumber };
     expect(field.formatValue!(at, ctx(), {} as never)).toBe(label);
+  });
+});
+
+describe('formatQuarter', () => {
+  it('labels the calendar quarter in the dataset zone, not in UTC', () => {
+    // 2026-04-01T02:00Z is still March 31 in New York, so it reads as the first quarter.
+    expect(formatQuarter(instant('2026-04-01T02:00:00Z'), ctx())).toBe('Q1');
+    expect(formatQuarter(instant('2026-04-01T12:00:00Z'), ctx())).toBe('Q2');
+    expect(formatQuarter(instant('2026-09-30T12:00:00Z'), ctx())).toBe('Q3');
+    expect(formatQuarter(instant('2026-12-31T12:00:00Z'), ctx())).toBe('Q4');
+  });
+
+  it('shows a blank cell for no value', () => {
+    expect(formatQuarter(undefined, ctx())).toBe('');
+    expect(formatQuarter(null, ctx())).toBe('');
   });
 });
 

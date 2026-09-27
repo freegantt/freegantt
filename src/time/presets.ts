@@ -1,11 +1,11 @@
 // time/ owns the shipped view presets and the one way in to them.
 // scale.ts keeps the engine and the shape of a preset; this file is the data — a new zoom level is
 // never a library edit (CONTEXT.md, ViewPreset), just a new entry here. Every shipped band's `format`
-// is an `Intl.DateTimeFormatOptions` object except `formatWeekNumber` and
+// is an `Intl.DateTimeFormatOptions` object except `formatWeekNumber`, `formatQuarter` and
 // `formatHour`, the escape-hatch callbacks Intl has no reliable field for.
 
 import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
-import { formatHour, formatWeekNumber } from './format.js';
+import { formatHour, formatQuarter, formatWeekNumber } from './format.js';
 import { isCoarserStep } from './zone.js';
 import type { ViewPreset } from './scale.js';
 
@@ -262,6 +262,22 @@ export const monthAndYearPreset: ViewPreset = freezePreset({
   minTickWidthPx: 50,
 });
 
+/** Calendar quarters under a year band. A quarter is three months, so it needs no new `TimeUnit`:
+ * a stepped month counts from its year, and the ticks land on Jan, Apr, Jul and Oct. On the zoom
+ * ladder it sits between `monthAndYear` and `year`, so one zoom step never skips from months to years. */
+export const quarterAndYearPreset: ViewPreset = freezePreset({
+  id: 'quarterAndYear',
+  tickUnit: 'month',
+  tickIncrement: 3,
+  headers: [
+    { unit: 'year', increment: 1, format: YEAR_FORMAT },
+    { unit: 'month', increment: 3, format: formatQuarter },
+  ],
+  preferredTickWidthPx: 64,
+  // "Q4" is two characters, so the quarter band stays legible far narrower than a month label.
+  minTickWidthPx: 32,
+});
+
 /** Three-band presets. */
 export const hourDayWeekPreset: ViewPreset = freezePreset({
   id: 'hourDayWeek',
@@ -319,6 +335,7 @@ export type ShippedPresetId =
   | 'dayLetterAndWeek'
   | 'weekAndMonth'
   | 'monthAndYear'
+  | 'quarterAndYear'
   | 'hourDayWeek'
   | 'dayWeekMonth'
   | 'weekMonthYear';
@@ -336,6 +353,7 @@ export const presets: Readonly<Record<ShippedPresetId, ViewPreset>> = Object.fre
   dayLetterAndWeek: dayLetterAndWeekPreset,
   weekAndMonth: weekAndMonthPreset,
   monthAndYear: monthAndYearPreset,
+  quarterAndYear: quarterAndYearPreset,
   hourDayWeek: hourDayWeekPreset,
   dayWeekMonth: dayWeekMonthPreset,
   weekMonthYear: weekMonthYearPreset,
@@ -351,6 +369,7 @@ export const ZOOM_PRESETS: readonly ViewPreset[] = Object.freeze([
   weekAndMonthPreset,
   weekMonthYearPreset,
   monthAndYearPreset,
+  quarterAndYearPreset,
   yearPreset,
 ]);
 

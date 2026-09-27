@@ -16,7 +16,7 @@ export interface TimelineToolbarOptions {
   showLocale?: boolean;
   /** Include the `todayLine` toggle checkbox. Default `false`. */
   showTodayLineToggle?: boolean;
-  /** #101: shipped presets outside `gantt.zoomPresets`' own nine-rung ladder — `minute`,
+  /** #101: shipped presets outside `gantt.zoomPresets`' own ten-rung ladder — `minute`,
    *  `fifteenMinute`, `sixHour`, `dayLetterAndWeek`. Appended to the same picker, after the ladder's
    *  own entries, so `zoomIn`/`zoomOut` still step through only the shipped default. Default `[]`. */
   extraPresetIds?: readonly ShippedPresetId[];
