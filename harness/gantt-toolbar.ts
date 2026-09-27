@@ -15,7 +15,7 @@
 // cached "can undo" would be a second source of truth for something the Dataset already answers.
 
 import type { Gantt, SnapSetting, TimeSpan } from 'freegantt';
-import { diffMs, formatDate, formatInclusiveDate, isTimeUnit, MS, overlap } from 'freegantt';
+import { diffMs, formatStartAndEnd, isTimeUnit, MS, overlap } from 'freegantt';
 
 export interface GanttToolbarOptions {
   gantt: Gantt;
@@ -207,9 +207,8 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
     const snapReadout = snapValue(gantt.snap);
     if (snapSelect && snapReadout !== undefined) snapSelect.value = snapReadout;
     const span = gantt.visibleSpan;
-    const zone = dataset.timeZone;
-    const spanCtx = { timeZone: zone, locale: gantt.locale };
-    spanReadout.textContent = `Showing ${formatDate(span.start, spanCtx)} – ${formatInclusiveDate(span.end, spanCtx, span)}`;
+    const spanCtx = { timeZone: dataset.timeZone, locale: gantt.locale };
+    spanReadout.textContent = `Showing ${formatStartAndEnd(span, spanCtx)}`;
     hoursReadout.textContent = `Visible hours: ${Math.round(visibleHours(span))}`;
   }
 
