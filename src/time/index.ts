@@ -28,6 +28,8 @@ export {
   dateFormatter,
   formatDateTime,
   formatInclusiveDate,
+  formatStartAndEnd,
+  joinStartAndEnd,
   lastCoveredInstant,
   DATE_TIME_FORMAT,
   resolveDateFormat,

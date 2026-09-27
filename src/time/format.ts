@@ -124,6 +124,28 @@ export function formatInclusiveDate(
   return formatDate(covered, ctx);
 }
 
+/** Joins a start text and an end text into one line. An empty text is a missing side: the start
+ *  alone reads `Mar 2, 2026 –`, the end alone `– Mar 4, 2026`, and neither gives `''`, so the caller
+ *  picks its own empty text. Two texts that read the same show once. */
+export function joinStartAndEnd(startText: string, endText: string, separator = ' – '): string {
+  if (startText === '' && endText === '') return '';
+  if (endText === '') return `${startText}${separator.trimEnd()}`;
+  if (startText === '') return `${separator.trimStart()}${endText}`;
+  if (startText === endText) return startText;
+  return `${startText}${separator}${endText}`;
+}
+
+/** A Formatter for a pair of dates, date only: the start's own day, and the last day the pair
+ *  covers. `Mar 2, 2026 – Mar 4, 2026`. `joinStartAndEnd` decides a missing side and a pair that
+ *  reads as one date. Works for an Entry, a Bar, `gantt.visibleSpan` or any `{ start?, end? }`. */
+export function formatStartAndEnd(
+  value: { readonly start?: Instant | undefined; readonly end?: Instant | undefined } | undefined,
+  ctx: FormatContext,
+): string {
+  if (value === undefined || value === null) return '';
+  return joinStartAndEnd(formatDate(value.start, ctx), formatInclusiveDate(value.end, ctx, value));
+}
+
 /** An ISO week label — `W` followed by the week number. The escape-hatch callback shipped as a
  *  named value, because Intl has no week field. `''` for a missing value.
  *  Exported from `api/` — unlike the individual preset constants — because a custom-

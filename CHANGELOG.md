@@ -20,6 +20,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - **Breaking:** `measureDuration` and `DurationMeasure` are removed. A parent's duration is the span of its rolled-up start and end. The gaps between children count. ([#428](https://github.com/freegantt/freegantt/issues/428))
 - **Breaking:** `entry.duration()`, `ComputeContext.duration()` and `RollUpContext.durations()` are removed. Read `entry.read('duration')`, `ctx.read('duration')` or `ctx.values('duration')`. ([#428](https://github.com/freegantt/freegantt/issues/428))
 - `duration` is now a normal computed Field. A consumer `formatValue` override works on it as on any other Field. ([#428](https://github.com/freegantt/freegantt/issues/428))
+- A bar's accessible label names a one-day bar's date once, instead of reading it twice as a start and an end. ([#578](https://github.com/freegantt/freegantt/issues/578))
 
 ### Added
 
@@ -32,6 +33,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - `formatDateTime` and `formatInclusiveDate`, the two shipped date formatters, and `lastCoveredInstant`, the instant `formatInclusiveDate` builds on: `end` stepped back one millisecond, unchanged on a zero-length span. See `docs/05-consumer-api.md`. ([#577](https://github.com/freegantt/freegantt/issues/577))
 - `gantt.formatFieldValue(entry, key)`, the text a Field shows for one Entry, outside the grid — a status line, a CSV row, a tooltip. Reads the same door a grid cell and a bar label read through, and follows `gantt.locale` live. Throws `UnknownFieldError` for a key no Field declares. ([#576](https://github.com/freegantt/freegantt/issues/576))
 - `dateFormatter(options)`, a factory that builds a Formatter for one frozen `Intl.DateTimeFormatOptions` set. `formatDate` and `formatDateTime` are both built on it. See `docs/05-consumer-api.md`. ([#576](https://github.com/freegantt/freegantt/issues/576))
+- `formatStartAndEnd(pair, ctx)`, a Formatter that reads a start and an end as one line, date only; `joinStartAndEnd(startText, endText, separator?)`, which joins two texts a caller already read through each side's own Field `formatValue`. Both keep a missing side's dash and show two equal texts once. See `docs/05-consumer-api.md`. ([#578](https://github.com/freegantt/freegantt/issues/578))
+- `gantt.formatContext`, the `FormatContext` a grid cell, a bar label, and `formatFieldValue` all format through. A caller building its own Formatter call, such as `formatStartAndEnd`, reads this instead of assembling a second `{ timeZone, locale }`. Live: follows `gantt.locale`. ([#578](https://github.com/freegantt/freegantt/issues/578))
 - `RollUpContext.values(key)` types a Field's values from its key. ([#428](https://github.com/freegantt/freegantt/issues/428))
 - `spansTime` is exported. A `duration` Field's `compute` reads a row's own `start` and `end`, and `spansTime` checks both are set. ([#428](https://github.com/freegantt/freegantt/issues/428))
 
