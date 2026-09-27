@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Duration, Entry, FormatContext, Instant } from '../../model/index.js';
-import { DATE_TIME_FORMAT, formatDate, instant, MS } from '../../time/index.js';
+import { formatDateTime, instant, MS } from '../../time/index.js';
 import { currency, date, duration, number, percent, text } from './field-types.js';
 
 function ctx(locale: Intl.LocalesArgument): FormatContext {
@@ -102,12 +102,12 @@ describe('number — the shipped Field type', () => {
 describe('date — the shipped Field type', () => {
   const noon: Instant = instant('2026-06-15T12:00:00Z');
 
-  it('formats an Instant through formatDate and DATE_TIME_FORMAT', () => {
+  it('formats an Instant through formatDateTime', () => {
     expect(date.formatValue!(noon, ctx('en-US'), entry)).toBe(
-      formatDate(noon, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT),
+      formatDateTime(noon, { timeZone: 'UTC', locale: 'en-US' }),
     );
     expect(date.formatValue!(noon, ctx('fr-FR'), entry)).toBe(
-      formatDate(noon, { timeZone: 'UTC', locale: 'fr-FR' }, DATE_TIME_FORMAT),
+      formatDateTime(noon, { timeZone: 'UTC', locale: 'fr-FR' }),
     );
   });
 

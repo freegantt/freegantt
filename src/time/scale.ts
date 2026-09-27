@@ -2,7 +2,7 @@
 // BIND to one; two sharing one scale are x-synced by construction. Arithmetic on Instant is only legal
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
-import type { Duration, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
+import type { Duration, FormatContext, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
 import { stepBy, tickFloor, nextTick } from './zone.js';
 import { instant } from './instant.js';
 import type { SnapRule, TickStep } from './snap.js';
@@ -26,8 +26,8 @@ export interface Tick {
   width: number;
 }
 
-/** Widened with `locale` (S1.12). Adding a parameter is source-compatible with existing callbacks. */
-export type HeaderFormat = (i: Instant, zone: string, locale: Intl.LocalesArgument | undefined) => string;
+/** A Formatter without the entry: a header tick has no row. Zone and locale come only from `ctx`. */
+export type HeaderFormat = (value: Instant, ctx: FormatContext) => string;
 
 /** What a header band states to turn an Instant into its label. Options are
  * resolved through `Intl.DateTimeFormat` in the Gantt's locale and the Dataset's zone; a callback is

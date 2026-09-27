@@ -17,7 +17,6 @@ import type {
   ElementDescription,
   EntryId,
   GridColumnInput,
-  Instant,
   EntryVariant,
   ResolvedBarLabel,
 } from 'freegantt';
@@ -247,21 +246,19 @@ function renderSelection(): void {
     setReadout('Nothing selected — click a bar or a row.');
     return;
   }
-  const ctx = { timeZone: dataset.timeZone, locale: gantt.locale };
-  const startText = (value: Instant): string =>
-    dataset.field('start')?.formatValue?.(value, ctx, first) ?? '';
-  const endText = (value: Instant): string => dataset.field('end')?.formatValue?.(value, ctx, first) ?? '';
+  const startText = gantt.formatFieldValue(first, 'start');
+  const endText = gantt.formatFieldValue(first, 'end');
   // A selected row may hold neither, one, or both dates (ADR 0012) — show whichever it has.
   const span =
     first.start !== undefined && first.end !== undefined
-      ? `${startText(first.start)} → ${endText(first.end)}`
+      ? `${startText} → ${endText}`
       : first.start !== undefined
-        ? `${startText(first.start)} → —`
+        ? `${startText} → —`
         : first.end !== undefined
-          ? `— → ${endText(first.end)}`
+          ? `— → ${endText}`
           : 'No dates';
-  const done = first.read('progress');
-  const percent = typeof done === 'number' ? ` · ${done}%` : '';
+  const done = gantt.formatFieldValue(first, 'progress');
+  const percent = done === '' ? '' : ` · ${done}`;
   const more = entries.length > 1 ? ` · +${entries.length - 1} more` : '';
   setReadout(`${first.name} · ${span}${percent}${more}`);
 }
