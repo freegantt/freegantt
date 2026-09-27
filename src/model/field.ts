@@ -327,8 +327,9 @@ export interface ComputeContext extends FieldContext {
   hierarchyParentId(): EntryId | undefined;
 }
 
-/** FieldContext plus this Gantt's locale. Built only at column-resolve time, and reused
- *  for every cell — which is why it extends the ambient half and never the per-pass one. */
+/** FieldContext plus this Gantt's locale. Built by the Gantt for each column resolve and each
+ *  `formatFieldValue` call — reused for every cell in between, which is why it extends the
+ *  ambient half and never the per-pass one. */
 export interface FormatContext extends FieldContext {
   readonly locale: Intl.LocalesArgument;
 }

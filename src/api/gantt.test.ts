@@ -10,6 +10,7 @@ import {
   RendererAlreadyRegisteredError,
   ScrollAxis,
   UnknownCommandError,
+  UnknownFieldError,
   UnknownGridColumnError,
   UnsupportedUnitError,
   InvalidSnapIncrementError,
@@ -20,6 +21,7 @@ import {
   contextMenu,
   diamond,
   fixedWidthBar,
+  currency,
   CustomRowSourceNotFilterableOrSortableError,
   PluginSetupError,
 } from './index.js';
@@ -2849,6 +2851,82 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     expect(gantt.gridColumns).toEqual(['name', 'start', 'end']);
     const row = container.querySelector('.fg-row')!;
     expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(3);
+    gantt.destroy();
+  });
+});
+
+describe('Gantt.formatFieldValue (#576)', () => {
+  function moneyGantt(container: HTMLElement) {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [
+        { key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' },
+        { key: 'progress', type: 'percent' },
+      ],
+      entries: sampleEntries.map((entry, i) =>
+        i === 0 ? { ...entry.toInput(), props: { cost: 500, progress: 40 } } : entry,
+      ),
+    });
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'] });
+    return { dataset, gantt };
+  }
+
+  it('gives the same text the painted grid cell shows', () => {
+    const container = document.createElement('div');
+    const { dataset, gantt } = moneyGantt(container);
+    const entry = dataset.entries.all[0]!;
+    const cell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe(cell?.textContent);
+    gantt.destroy();
+  });
+
+  it('formats a Field with no column', () => {
+    const container = document.createElement('div');
+    const { dataset, gantt } = moneyGantt(container);
+    const entry = dataset.entries.all[0]!;
+    expect(gantt.formatFieldValue(entry, 'progress')).toBe('40%');
+    gantt.destroy();
+  });
+
+  it('follows gantt.locale live', () => {
+    const container = document.createElement('div');
+    const { dataset, gantt } = moneyGantt(container);
+    const entry = dataset.entries.all[0]!;
+    const before = gantt.formatFieldValue(entry, 'cost');
+    gantt.locale = 'de-DE';
+    expect(gantt.formatFieldValue(entry, 'cost')).not.toBe(before);
+    gantt.destroy();
+  });
+
+  it("gives '' for an Entry with no value", () => {
+    const container = document.createElement('div');
+    const { dataset, gantt } = moneyGantt(container);
+    const entry = dataset.entries.all[1]!;
+    expect(gantt.formatFieldValue(entry, 'progress')).toBe('');
+    gantt.destroy();
+  });
+
+  it('throws UnknownFieldError naming formatFieldValue for an undeclared key', () => {
+    const container = document.createElement('div');
+    const { dataset, gantt } = moneyGantt(container);
+    const entry = dataset.entries.all[0]!;
+    try {
+      gantt.formatFieldValue(entry, 'notAField');
+      expect.unreachable();
+    } catch (error) {
+      expect(error).toBeInstanceOf(UnknownFieldError);
+      expect((error as UnknownFieldError).operation).toBe('formatFieldValue' satisfies string);
+    }
+    gantt.destroy();
+  });
+
+  it("formats a compute Field's own text, the same the Grid paints", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', { field: 'duration' }] });
+    const entry = dataset.entries.all[0]!;
+    const cell = container.querySelector('.fg-row [data-field="duration"]');
+    expect(gantt.formatFieldValue(entry, 'duration')).toBe(cell?.textContent);
     gantt.destroy();
   });
 });
