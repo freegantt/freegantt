@@ -23,6 +23,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Added
 
+- `dataset.formatFieldValue(entry, key, locale?)` gives a Field's text with no Gantt, for an export or
+  a server-side report. It is the text a grid cell shows, in the Dataset's zone. Omit `locale` for the
+  runtime's own locale. `gantt.formatFieldValue(entry, key)` now reads through it with the Gantt's
+  locale. ([#583](https://github.com/freegantt/freegantt/issues/583))
 - `createGridColumnHelper(dataset)` types a column renderer's `fieldValue` from the column's key. `columnHelper.column('start', { columnRenderer: ({ fieldValue }) => … })` reads `fieldValue` as `Instant | undefined`, with no cast and no annotation. The helper is optional: it returns the plain column object, and a plain column object still reads `fieldValue` as `unknown`. `ColumnRendererContext<TValue>` and `ColumnRenderer<TValue>` take the value type, and both default to `unknown`. See `docs/12-grid-columns.md`. ([#522](https://github.com/freegantt/freegantt/issues/522))
 
 - `EntryDelta<TProps>`, the shape `dataset.entries.syncChanges()` takes: `{ upsert, remove }`. An `upsert` row adds an entry for an unknown id and edits a known one. A key the row leaves out keeps its value. `remove` lists ids to remove, and an unknown id is ignored. ([#527](https://github.com/freegantt/freegantt/issues/527))
