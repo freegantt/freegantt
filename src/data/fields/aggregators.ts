@@ -4,7 +4,7 @@
 // On a roll-up parent that clears the stored value instead of keeping it — `rollup.ts` (#270),
 // because nothing but the Rollup may have written that cell in the first place.
 
-import type { Aggregator, RollUpContext } from '../../model/index.js';
+import type { Aggregator, Duration, RollUpContext } from '../../model/index.js';
 
 /** The one place this rule is written: a value counts only when it is a finite number.
  *  `ctx.numericValues` applies the same rule to a whole child list (issue #124). */
@@ -14,7 +14,7 @@ function isFiniteNumber(value: unknown): value is number {
 
 /** A weight of `undefined` drops the child: a non-spanning Entry (ADR 0012) has no duration, and a
  *  zero-length one carries no weight. */
-function weightOf(duration: { value: number } | undefined): number | undefined {
+function weightOf(duration: Duration | undefined): number | undefined {
   if (duration === undefined || !isFiniteNumber(duration.value) || duration.value === 0) return undefined;
   return duration.value;
 }
@@ -41,7 +41,7 @@ const none: Aggregator = () => undefined;
 
 const weightedMeanByDuration: Aggregator<number> = (_parent, ctx) => {
   const values = ctx.values();
-  const durations = ctx.durations();
+  const durations = ctx.values('duration');
   let total = 0;
   let weight = 0;
   values.forEach((value, index) => {

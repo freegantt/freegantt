@@ -1,8 +1,9 @@
 // data/ — core Fields are ordinary declarations. A core key reads and writes the Entry
 // directly, never `props` (ADR 0011). `progress` is not declared (ADR 0008).
 
-import type { Field, FieldKey } from '../../model/index.js';
-import { formatInclusiveDate } from '../../time/index.js';
+import type { Duration, Field, FieldKey } from '../../model/index.js';
+import { spansTime } from '../../model/index.js';
+import { diffMs, formatInclusiveDate } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
 
@@ -62,9 +63,12 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     editable: 'anywhere',
   },
   {
+    // How long does this row run? Its own span, `end - start`, and nothing once a date is missing.
+    // A parent's `start` and `end` roll up, so its span counts the gaps between its children.
     key: 'duration',
     type: 'duration',
-    compute: (_entry, ctx) => ctx.duration(),
+    compute: (entry): Duration | undefined =>
+      spansTime(entry) ? { value: diffMs(entry.end, entry.start), unit: 'millisecond' } : undefined,
     column: { header: 'Duration', align: 'end', width: 100 },
   },
   {

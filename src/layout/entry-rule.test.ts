@@ -19,7 +19,6 @@ function fakeEntry(id: string, props: Record<string, unknown> = {}): Entry {
     id: entryId(id),
     name: '',
     read: ((key: FieldKey) => props[key]) as Entry['read'],
-    duration: () => undefined,
     hasChildren: false,
     children: () => [],
     parent: () => undefined,

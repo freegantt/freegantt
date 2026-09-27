@@ -12,7 +12,6 @@ import type {
   FlatEntryInput,
   Field,
   FieldEditable,
-  DurationMeasure,
   FieldKey,
   FieldLockRule,
   FieldLockRuleWrapper,
@@ -60,8 +59,6 @@ export interface DatasetStateOptions {
   history?: HistoryOptions | false;
   fields?: readonly Field[];
   fieldTypes?: Readonly<Record<string, FieldType>>;
-  /** How core measures a duration (ADR 0017). Defaults to `'span'`. */
-  measureDuration?: DurationMeasure;
   aggregators?: Readonly<Record<string, Aggregator>>;
   /** Frozen `referenceDate` for tests (issue #112) — mirrors `ResolveDateLinesInput.now`
    *  (`layout/date-line.ts`). Defaults to `now()`, the real clock. */
@@ -159,8 +156,8 @@ export class DatasetState implements Dataset {
   runningExtensionHook = false;
   readonly #entryContext: EntryReadContext;
   readonly fields: FieldRegistry;
-  /** `data/`'s own ambient read scope (ADR 0017) — the zone, the registry, the duration
-   *  policy and the tree. A consumer receives `ambientFieldContext(access)`, which is the zone. */
+  /** `data/`'s own ambient read scope (ADR 0017) — the zone, the registry and the tree. A
+   *  consumer receives `ambientFieldContext(access)`, which is the zone. */
   readonly fieldAccess: FieldAccess;
   readonly computedCache = new ComputedFieldCache();
   /** Bumped on every committed changeset — the computed-field cache key. */
@@ -186,7 +183,6 @@ export class DatasetState implements Dataset {
     this.fieldAccess = createFieldAccess({
       fields: this.fields,
       timeZone: this.timeZone,
-      measureDuration: options.measureDuration ?? 'span',
       // A row inside an open transaction is hypothetical, and `#datasetRevision` does not move
       // until the commit lands. A memo there answers a `compute` Field with the committed
       // value for a staged row, so the memo stands down until the transaction closes (ADR 0017).

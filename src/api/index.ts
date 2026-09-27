@@ -320,7 +320,6 @@ export type {
   TimeUnit,
   TimeSpan,
   Duration,
-  DurationMeasure,
   EntryStoreView,
   EntryStore,
 } from '../model/index.js';
@@ -452,8 +451,10 @@ export { currency } from '../data/fields/field-types.js';
 // entry, and subtracting two `Instant`s by hand is exactly the arithmetic I10 exists to stop.
 // `overlap` clips one `TimeSpan` to another, added in #472 for the same reason: a consumer totalling
 // a Field over `gantt.visibleSpan` had no public way to clip an entry's span to the window without
-// the same hand `Math.max`/`Math.min`-and-cast.
+// the same hand `Math.max`/`Math.min`-and-cast. `spansTime` answers whether a row has both dates —
+// the same question the core `duration` Field asks, so a consumer's own computed Field can ask it too.
 // Named preset constants and `resolvePreset` stay internal — resolving a `PresetRef` is core's job.
+export { spansTime } from '../model/index.js';
 export {
   presets,
   instant,

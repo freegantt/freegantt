@@ -134,13 +134,16 @@ describe('the live Entry — one row per id, and every read is live (ADR 0017)',
   });
 });
 
-describe('entry.duration() — one computation, three doors (ADR 0017, #274)', () => {
-  it('agrees with `read("duration")` on both the value and the unit', () => {
+describe("read('duration') — the row's own span", () => {
+  it('has no duration member: a caller reads the duration Field by key', () => {
+    expect('duration' in rowOf(datasetOf(), 'solo')).toBe(false);
+  });
+
+  it('agrees on the value and the unit', () => {
     const solo = rowOf(datasetOf(), 'solo');
 
     // A date-only end always means through that day, so it names the whole of that day.
-    expect(solo.duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
-    expect(solo.read('duration')).toEqual(solo.duration());
+    expect(solo.read('duration')).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
   });
 
   it('always answers the millisecond unit, whatever the span is', () => {
@@ -151,8 +154,8 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
       ],
     });
 
-    expect(rowOf(state, 'hour').duration()?.unit).toBe('millisecond');
-    expect(rowOf(state, 'year').duration()?.unit).toBe('millisecond');
+    expect(rowOf(state, 'hour').read('duration')?.unit).toBe('millisecond');
+    expect(rowOf(state, 'year').read('duration')?.unit).toBe('millisecond');
   });
 
   // ADR 0012: an Entry that does not span states no duration, and never a `NaN`.
@@ -166,36 +169,20 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
     });
 
     for (const id of ['neither', 'startOnly', 'endOnly']) {
-      expect(rowOf(state, id).duration()).toBeUndefined();
+      expect(rowOf(state, id).read('duration')).toBeUndefined();
     }
   });
 
-  // The Dataset says how core measures a duration. A Gantt may not: duration is a Field,
-  // and the Rollup reads it before any Gantt exists. ADR 0026 retired the Segment `'segments'`
-  // measure; `'children'` is its replacement — it sums each direct child's own span instead.
   const withGap: DatasetStateOptions['entries'] = [
     { id: 'gapped', name: 'Gapped', start: 0, end: 4 * MS.DAY },
     { id: 'c1', name: 'Child 1', parentId: 'gapped', start: 0, end: MS.DAY },
     { id: 'c2', name: 'Child 2', parentId: 'gapped', start: 3 * MS.DAY, end: 4 * MS.DAY },
   ];
 
-  it("counts the gap under 'span' and skips it under 'children'", () => {
-    const span = datasetOf({ entries: withGap, measureDuration: 'span' });
-    const children = datasetOf({ entries: withGap, measureDuration: 'children' });
+  it('measures a parent from its own start to its own end, and counts the gap between its children', () => {
+    const state = datasetOf({ entries: withGap });
 
-    expect(rowOf(span, 'gapped').duration()).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
-    expect(rowOf(children, 'gapped').duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
-  });
-
-  it('makes the two settings agree on one child with no gap', () => {
-    const whole: DatasetStateOptions['entries'] = [
-      { id: 'whole', name: 'Whole', start: 0, end: 2 * MS.DAY },
-      { id: 'only', name: 'Only child', parentId: 'whole', start: 0, end: 2 * MS.DAY },
-    ];
-    const span = datasetOf({ entries: whole, measureDuration: 'span' });
-    const children = datasetOf({ entries: whole, measureDuration: 'children' });
-
-    expect(rowOf(span, 'whole').duration()).toEqual(rowOf(children, 'whole').duration());
+    expect(rowOf(state, 'gapped').read('duration')).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
   });
 });
 

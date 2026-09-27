@@ -310,15 +310,11 @@ export function summary(overrides: Partial<EntryVariant> = {}): EntryVariant {
 }
 
 /** `diamond()` — a marker for a zero-duration span (`start === end`), not a core default.
- *  Its default `when` reads `start`/`end` directly rather than `entry.duration()`: this runs on the
- *  hover path (I5, `EntryPredicate`'s
- *  own "keep it cheap"), and `entry.duration()` allocates a fresh `{ value, unit }` on every call
- *  (`measureEntryDuration`) — one object per row per resolve for what is otherwise a plain equality
- *  check. The trade: this spelling answers by structure, never a stored word (ADR 0013's "core does
- *  not ship a diamond" is narrowed by this factory, not spent), but it ignores
- *  `measureDuration: 'children'` — a row with `start === end` and children that net to zero total
- *  time still matches here. An author whose rows need the children-aware zero passes their own
- *  `when: (entry) => entry.duration()?.value === 0`.
+ *  Its default `when` reads `start`/`end` directly rather than `entry.read('duration')`: this runs
+ *  on the hover path (I5, `EntryPredicate`'s own "keep it cheap"), and a Field read goes through
+ *  the registry and hands back a `{ value, unit }` object, for what is a plain equality check here.
+ *  Both spellings give one answer on every row. This one answers by structure, never a stored word
+ *  (ADR 0013's "core does not ship a diamond" is narrowed by this factory, not spent).
  *
  *  **Not in `CORE_VARIANTS`.** No row wears `diamond()` until an author installs it — this
  *  factory's own default rule, or a consumer's own `{ bars: fixedWidthBar(...) }`.

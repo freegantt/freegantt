@@ -10,7 +10,7 @@ export {
   partIndexOfBar,
   changeSetId,
 } from './ids.js';
-export type { Instant, TimeUnit, TimeSpan, Duration, DurationMeasure, PlainParts } from './time.js';
+export type { Instant, TimeUnit, TimeSpan, Duration, PlainParts } from './time.js';
 export type { InstantInput, TimeSpanInput, PlainTimeInput } from './time.js';
 export type { Entry } from './entry.js';
 export type {

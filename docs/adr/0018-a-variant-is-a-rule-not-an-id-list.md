@@ -28,7 +28,7 @@ ctx.interaction.registerLookDefaults(BUFFER_KIND, { resize: false });
 
 - **The set freezes at install.** A row added later never gets the variant.
 - **A plugin often does not know the ids.** The page must keep a parallel list and hand it over.
-- **The question the claim really asks is a question about the row**, and the claim cannot ask it. `(entry) => !entry.hasChildren && entry.duration()?.value === 0` does not compile today. So the author precomputes the answer into a `Set` and hands the `Set` over.
+- **The question the claim really asks is a question about the row**, and the claim cannot ask it. `(entry) => !entry.hasChildren && entry.read('duration')?.value === 0` does not compile today. So the author precomputes the answer into a `Set` and hands the `Set` over.
 
 ## Decision
 
@@ -90,7 +90,7 @@ A plugin ships the same object through `ctx.variants.add(variant)`. One type, tw
 
 **Omitting `when` and writing `when: () => true` are different answers.** Omit it for a last resort, which takes every row no rule claims. Write `when: () => true` for a rule that claims every row outright, core's `parent` included — that one outranks core, because it states a claim.
 
-**A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.duration()?.value === 0` compiles at all. That is the whole reason 0017 lands first. **Read the duration through `duration()`, not through `read('duration')`.** A `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false.
+**A rule reads an `Entry`.** `when` and every `can` predicate receive [0017](0017-the-entry-answers-questions-about-itself.md)'s live row, which is why `!entry.hasChildren && entry.read('duration')?.value === 0` compiles at all. That is the whole reason 0017 lands first. **Compare the duration's `value`, not the `Duration`.** A `Duration` is `{ value, unit }`, so `read('duration') === 0` compares an object to a number and is always false.
 
 **A variant is a function of the row, and it runs per layout pass** (`layout/items/produce-items.ts:248`). Core caches nothing new. The one input core's own rules read is `hasChildren`, which `#byParent` already caches per commit (`data/entry-store.ts:155-163`). Nothing about a variant can cache on the Dataset, because variants are per Gantt (I2, refuted item 5 in [`plans/row-redesign/README.md`](../../plans/row-redesign/README.md)).
 

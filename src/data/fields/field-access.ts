@@ -5,8 +5,6 @@
 import type {
   ComputeContext,
   CoreFieldValue,
-  Duration,
-  DurationMeasure,
   StoredEntry,
   EntryEdit,
   EntryId,
@@ -17,8 +15,6 @@ import type {
   ProposedEdits,
   RollUpContext,
 } from '../../model/index.js';
-import { spansTime } from '../../model/index.js';
-import { diffMs } from '../../time/index.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 import type { ComputedFieldCache } from '../computed-cache.js';
@@ -129,7 +125,6 @@ function storesInProps(field: ResolvedField): boolean {
 export interface FieldAccess {
   readonly fields: FieldLookup;
   readonly timeZone: string;
-  readonly measureDuration: DurationMeasure;
   storedChildrenOf(id: EntryId): readonly StoredEntry[];
   /** Which Entry the checked hierarchy names as `entry`'s parent (ADR 0020) — the same answer
    *  `entry.parent()?.id` gives on a live row, never `entry.parentId`'s stored value (ADR 0024). */
@@ -146,7 +141,6 @@ const NO_PARENT = (): undefined => undefined;
 export interface FieldAccessOptions {
   fields: FieldLookup;
   timeZone: string;
-  measureDuration?: DurationMeasure;
   storedChildrenOf?: (id: EntryId) => readonly StoredEntry[];
   parentIdOf?: (entry: StoredEntry) => EntryId | undefined;
   hasChildren?: (id: EntryId) => boolean;
@@ -161,7 +155,6 @@ export function createFieldAccess(options: FieldAccessOptions): FieldAccess {
   return {
     fields: options.fields,
     timeZone: options.timeZone,
-    measureDuration: options.measureDuration ?? 'span',
     storedChildrenOf,
     parentIdOf: options.parentIdOf ?? NO_PARENT,
     hasChildren: options.hasChildren ?? ((id): boolean => storedChildrenOf(id).length > 0),
@@ -215,38 +208,6 @@ export function readingParentFrom(
 /** What a consumer receives: the zone, and nothing that belongs to one row (ADR 0017). */
 export function ambientFieldContext(access: FieldAccess): FieldContext {
   return { timeZone: access.timeZone };
-}
-
-/**
- * The one duration computation, and three doors reach it: the core `duration` Field's own `compute`,
- * `entry.duration()` on a live row, and `ctx.duration()` inside a pass (ADR 0017). Each door hands
- * it a different row; none of them hands it a Field key, so the circle cannot close.
- *
- * The unit is always `'millisecond'`, which is what makes `formatDuration` and `compareDuration`
- * correct by construction rather than by luck (#274).
- */
-export function measureEntryDuration(
-  entry: Pick<StoredEntry, 'id' | 'start' | 'end'>,
-  access: Pick<FieldAccess, 'measureDuration' | 'storedChildrenOf'>,
-): Duration | undefined {
-  // An Entry that does not span (`spansTime`, ADR 0012) has no duration to state. `diffMs` is plain
-  // subtraction — an absent date yields `NaN`, never a throw — so this asks first.
-  if (!spansTime(entry)) return undefined;
-  if (access.measureDuration === 'span') {
-    return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
-  }
-  // `'children'` (ADR 0026 retired the Segment `measureDuration: 'segments'` named): sum each direct
-  // child's own span. A gap between children goes uncounted, and a childless entry falls back to its
-  // own span — the same number `'span'` above would give it. Nesting through grandchildren, and any
-  // richer notion of "claimed" time, is #428's fix, not this one's.
-  const children = access.storedChildrenOf(entry.id);
-  if (children.length === 0) return { value: diffMs(entry.end, entry.start), unit: 'millisecond' };
-  let total = 0;
-  for (const child of children) {
-    if (child.start === undefined || child.end === undefined) continue;
-    total += diffMs(child.end, child.start);
-  }
-  return { value: total, unit: 'millisecond' };
 }
 
 /**
@@ -309,9 +270,9 @@ export function leavesOf(
   return found;
 }
 
-/** What a `compute` Field runs inside. A value question — `read`, `duration`, `hierarchyParentId` —
- *  stays bound to `entry`. A structure question — `children`, `descendants`, `leaves`,
- *  `hasChildren` — answers about any row the pass hands out (ADR 0017, amended #466). */
+/** What a `compute` Field runs inside. A value question — `read`, `hierarchyParentId` — stays
+ *  bound to `entry`. A structure question — `children`, `descendants`, `leaves`, `hasChildren` —
+ *  answers about any row the pass hands out (ADR 0017, amended #466). */
 export function createComputeContext(access: FieldAccess, entry: StoredEntry): ComputeContext {
   const children = (row: StoredEntry): readonly StoredEntry[] => access.storedChildrenOf(row.id);
   return {
@@ -322,9 +283,6 @@ export function createComputeContext(access: FieldAccess, entry: StoredEntry): C
     // access only in that this one skips the registry round-trip.
     read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined {
       return readFieldByKey(entry, key, access) as CoreFieldValue<K> | undefined;
-    },
-    duration(): Duration | undefined {
-      return measureEntryDuration(entry, access);
     },
     children,
     descendants: (row: StoredEntry): readonly StoredEntry[] => descendantsOf(row, children),
@@ -366,8 +324,10 @@ export function createRollUpContext(
     leaves: (row: StoredEntry): readonly StoredEntry[] => leavesOf(row, children),
     hasChildren: (row: StoredEntry): boolean => children(row).length > 0,
     field,
-    values(key: FieldKey = field): readonly unknown[] {
-      return rollUpChildren.map((child) => readFieldByKey(child, key, access));
+    values<K extends FieldKey>(key?: K): readonly (CoreFieldValue<K> | undefined)[] {
+      return rollUpChildren.map(
+        (child) => readFieldByKey(child, key ?? field, access) as CoreFieldValue<K> | undefined,
+      );
     },
     numericValues(key: FieldKey = field): readonly number[] {
       const out: number[] = [];
@@ -376,9 +336,6 @@ export function createRollUpContext(
         if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
       }
       return out;
-    },
-    durations(): readonly (Duration | undefined)[] {
-      return rollUpChildren.map((child) => measureEntryDuration(child, access));
     },
   };
 }
