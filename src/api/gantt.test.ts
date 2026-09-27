@@ -2970,6 +2970,16 @@ describe('Gantt.formatFieldValue (#576)', () => {
     expect(gantt.formatFieldValue(entry, 'duration')).toBe(cell?.textContent);
     gantt.destroy();
   });
+
+  it("reads through dataset.formatFieldValue with this Gantt's own locale (#583)", () => {
+    const container = document.createElement('div');
+    const { dataset, gantt } = moneyGantt(container);
+    const entry = dataset.entries.all[0]!;
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe(dataset.formatFieldValue(entry, 'cost'));
+    gantt.locale = 'de-DE';
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe(dataset.formatFieldValue(entry, 'cost', 'de-DE'));
+    gantt.destroy();
+  });
 });
 
 describe('Gantt grid columns are fixed-width by default (#139)', () => {

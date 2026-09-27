@@ -98,7 +98,6 @@ import {
   PluginNotInstalledError,
   UnsupportedUnitError,
   InvalidSnapIncrementError,
-  UnknownFieldError,
   entryIdOfBar,
   entryId,
   barId,
@@ -138,7 +137,6 @@ import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
 import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
 import type { ResolveBarLabelPorts } from './bar-labels.js';
-import { createFormatContext, formatFieldValue } from '../data/fields/format-field-value.js';
 
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
@@ -1513,16 +1511,6 @@ export class GanttShell {
       this.#barLabelPorts,
       this.#columnBind(),
     );
-  }
-
-  /** What a Field's text reads outside the grid. The same door `resolveColumns` and `#labelFor`
-   *  read through, so a caller's own read never disagrees with the painted cell. Throws
-   *  `UnknownFieldError` for an undeclared key. */
-  formatFieldValue(entry: Entry, key: FieldKey): string {
-    const field = this.#options.dataset.field(key);
-    if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');
-    const bind = this.#columnBind();
-    return formatFieldValue(field, entry, createFormatContext(bind.timeZone, bind.locale));
   }
 
   get capabilities(): Capabilities {
