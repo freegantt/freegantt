@@ -26,7 +26,8 @@ const EXEMPT_FILES = new Set(['CLAUDE.md', 'AGENTS.md', SELF]);
 
 const SLICE_DECISION = /\bD-S\d[\d.]*-\d+(?:\/\d+)*\b/g;
 const REVIEW_FINDING = /\b[FJRW]\d+\b/g;
-const QUESTION_ID = /\bQ\d+\b/g;
+/** A question id such as `Q3`. A quoted `'Q1'` alone is a calendar quarter label, so it stays legal. */
+const QUESTION_ID = /(?<!['"`])\bQ\d+\b|\bQ\d+\b(?!['"`])/g;
 /** A slice section such as `S1.12`. A bare `S5` stays legal: it also names a sprint or a series. */
 const SLICE_SECTION = /(?<!-)\bS\d+(?:\.\d+)+\b/g;
 
@@ -182,6 +183,13 @@ describe('spec ids stay in plans and ADRs', () => {
     expect(labelsInLine('JSON.stringify(row)')).toEqual([]);
     expect(labelsInLine('owner ruling 2026-09-23')).toEqual([]);
     expect(labelsInLine('one capability resolution (I14)')).toEqual([]);
+  });
+
+  it('does not flag a quarter label alone in quotes, but flags a question id beside it', () => {
+    expect(labelsInLine("expect(label).toBe('Q1');")).toEqual([]);
+    expect(labelsInLine('labels = ["Q1", `Q4`]')).toEqual([]);
+    expect(labelsInLine("it('load origin (Q3)', () => {")).toEqual(['Q3']);
+    expect(labelsInLine("'Q3 says so'")).toEqual(['Q3']);
   });
 
   it('does not flag W3C, because the digit is not a whole word', () => {

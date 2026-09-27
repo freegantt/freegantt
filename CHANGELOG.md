@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Changed
 
+- The default `zoomPresets` has ten steps, not nine. `quarterAndYear` sits between `monthAndYear` and `year`, so one zoom-out step no longer jumps from months to years. To keep the old steps, filter it out of `gantt.zoomPresets`. ([#101](https://github.com/freegantt/freegantt/issues/101))
 - `sum`, `min` and `max` also fold `Duration` values in milliseconds, and answer a `Duration`. `docs/05` shows a computed Field that sums its children. ([#582](https://github.com/freegantt/freegantt/issues/582))
 - **Breaking:** `dataset.entries.sync(rows)` is now `dataset.entries.syncAll(rows)`. The behavior does not change. The new name pairs with `syncChanges`: `syncAll` takes every row, and `syncChanges` takes only the rows that changed. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - `dataset.entries.add()`, `load()`, `syncAll()`, `EntryDelta.upsert`, and the `Dataset` constructor's `entries` option now also take a plain `EntryInput<TProps>` row, not only `FlatEntryInput<TProps>`. A function generic over `TProps` can now pass an `EntryInput<TProps>` value straight through, with no cast. ([#527](https://github.com/freegantt/freegantt/issues/527))
@@ -25,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Added
 
+- The shipped `quarterAndYear` preset: a year band over a calendar quarter band. `formatQuarter` gives its `Q1`–`Q4` label in the dataset zone, for a custom preset too. ([#101](https://github.com/freegantt/freegantt/issues/101))
 - `dataset.formatFieldValue(entry, key, locale?)` gives a Field's text with no Gantt, for an export or
   a server-side report. It is the text a grid cell shows, in the Dataset's zone. `locale` beats this
   Dataset's own `locale`; omit both for the runtime's own locale. `gantt.formatFieldValue(entry, key)`

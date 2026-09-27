@@ -34,6 +34,7 @@ export {
   DATE_TIME_FORMAT,
   resolveDateFormat,
   formatWeekNumber,
+  formatQuarter,
   formatHour,
   dropRepeatedGranularity,
 } from './format.js';
@@ -65,6 +66,7 @@ export {
   dayLetterAndWeekPreset,
   weekAndMonthPreset,
   monthAndYearPreset,
+  quarterAndYearPreset,
   hourDayWeekPreset,
   dayWeekMonthPreset,
   weekMonthYearPreset,
