@@ -1,0 +1,30 @@
+name: Docs deploy
+
+# The docs site in freegantt/docs reads `docs/` and `src/` from this repository at build time.
+# Its deploy workflow runs on a push there, but it cannot see a push here. This sends it the
+# `library-updated` event when a merge to `main` changes what the site reads, so a page goes live
+# when it lands.
+#
+# The token is the secret `DOCS_DISPATCH_TOKEN`: a fine-grained token with `Contents: write` on
+# freegantt/docs only. GitHub needs that permission to accept a repository dispatch.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', 'src/**', 'etc/freegantt.api.md']
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  rebuild-site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send library-updated to freegantt/docs
+        env:
+          GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::DOCS_DISPATCH_TOKEN is not set, so the docs site did not rebuild."
+            exit 0
+          fi
+          gh api repos/freegantt/docs/dispatches -f event_type=library-updated
