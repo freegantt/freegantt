@@ -3,7 +3,7 @@
 // start — are calendar arithmetic, so they live here rather than being reworked at each call site.
 
 import type { Instant } from '../model/index.js';
-import { addMs } from './instant.js';
+import { lastCoveredInstant } from './format.js';
 import { addDays, startOfDay } from './zone.js';
 
 /** The start of the local day after `day`, in `zone`. Walks a calendar day, not 86,400,000 ms, so a
@@ -12,13 +12,12 @@ export function startOfNextDay(zone: string, day: Instant): Instant {
   return startOfDay(zone, addDays(zone, day, 1));
 }
 
-/** The start of the last local day a half-open span `[start, end)` covers, in `zone`. A zero-length
- *  span (`end === start`) covers no day of its own, so it reads `end`'s day unchanged. Otherwise the
- *  last covered moment is one millisecond before `end`, and this reads that moment's day. */
+/** The start of the last local day a half-open span `[start, end)` covers, in `zone`. Reads
+ *  `lastCoveredInstant` for the moment (the zero-length/`end - 1` rule lives there, once), then
+ *  finds that moment's day in `zone`. */
 export function startOfLastCoveredDay(
   zone: string,
   span: { readonly start?: Instant | undefined; readonly end: Instant },
 ): Instant {
-  const lastCoveredMoment = span.start === span.end ? span.end : addMs(span.end, -1);
-  return startOfDay(zone, lastCoveredMoment);
+  return startOfDay(zone, lastCoveredInstant(span));
 }
