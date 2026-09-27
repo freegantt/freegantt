@@ -23,7 +23,8 @@ import {
   UnknownFieldError,
   DuplicatePluginIdError,
 } from './index.js';
-import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput } from './index.js';
+import { diffMs, spansTime } from './index.js';
+import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput, Field } from './index.js';
 import type { EditRequest, ProposedEdit, ProposedEdits, WriteTarget } from '../model/index.js';
 import { lockEntries } from '../../harness/plugins/lock-entries.js';
 
@@ -686,6 +687,51 @@ describe('entry.read — the one value door (ADR 0017)', () => {
     // `duration` computes its value and owns no `Entry` key, and still reads back as a `Duration`.
     const duration: Duration | undefined = dataset.entries.get('t1')?.read('duration');
     expect(duration).toEqual({ value: 1, unit: 'millisecond' });
+  });
+
+  // The consumer pattern for "a parent sums its children": a `compute` Field that walks
+  // `ctx.leaves(entry)` itself, with no `rollUp` (a `compute` Field never gets one).
+  const WORK: Field<Duration> = {
+    key: 'work',
+    type: 'duration',
+    compute: (entry, ctx): Duration | undefined => {
+      const rows = ctx.hasChildren(entry) ? ctx.leaves(entry) : [entry];
+      const spans = rows.filter(spansTime);
+      return spans.length === 0
+        ? undefined
+        : { value: spans.reduce((ms, row) => ms + diffMs(row.end, row.start), 0), unit: 'millisecond' };
+    },
+  };
+
+  it('sums a parent’s leaves’ own spans, so a gap between children does not count', () => {
+    const at = (iso: string): string => `2026-01-${iso}T00:00:00Z`;
+    const dataset = new Dataset<{ work: Duration }>({
+      timeZone: 'UTC',
+      fields: [WORK],
+      entries: [
+        { id: 'parent', name: 'Parent', start: at('01'), end: at('20') },
+        { id: 'c1', name: 'C1', parentId: 'parent', start: at('01'), end: at('03') },
+        { id: 'c2', name: 'C2', parentId: 'parent', start: at('07'), end: at('09') },
+      ],
+    });
+
+    const parent = dataset.entries.get('parent')!;
+    const c1 = dataset.entries.get('c1')!;
+
+    // Two children, two days each, so the gap between them (four days) does not count.
+    expect(parent.read('work')).toEqual({ value: diffMs(c1.end!, c1.start!) * 2, unit: 'millisecond' });
+    expect(diffMs(c1.end!, c1.start!) * 2).toBeLessThan(diffMs(parent.end!, parent.start!));
+    expect(c1.read('work')).toEqual({ value: diffMs(c1.end!, c1.start!), unit: 'millisecond' });
+  });
+
+  it('answers undefined for a row with no dates', () => {
+    const dataset = new Dataset<{ work: Duration }>({
+      timeZone: 'UTC',
+      fields: [WORK],
+      entries: [{ id: 'undated', name: 'Undated' }],
+    });
+
+    expect(dataset.entries.get('undated')!.read('work')).toBeUndefined();
   });
 
   it('throws UnknownFieldError for an unregistered key', () => {
