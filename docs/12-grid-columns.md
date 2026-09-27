@@ -201,6 +201,12 @@ import { meter } from 'freegantt';
 const gridColumns = [{ field: 'scheduling:progress', header: 'Done', columnRenderer: meter() }];
 ```
 
+## A Field's text off the Grid
+
+`gantt.formatFieldValue(entry, key)` gives a Field's text with no column at all — a hidden
+column, a Field that never had one, or a Field you read for a status line or a CSV export. It
+reads through the same door a Grid cell does, so the two texts never disagree.
+
 ## Reading columns back
 
 `gantt.gridColumns` and the `gridColumnsChange` event give back plain column objects. A renderer
