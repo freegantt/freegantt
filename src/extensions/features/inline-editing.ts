@@ -747,7 +747,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
             : raw;
         let dateInput: DateInput;
         if (factory !== undefined) {
-          dateInput = factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.locale });
+          dateInput = factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.formatContext.locale });
         } else {
           // Issue #137: the default `<input type="date">` has no time-of-day control. An
           // Instant that is not local midnight would silently round-trip to midnight on an
