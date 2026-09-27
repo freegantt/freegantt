@@ -80,7 +80,7 @@ Every custom rule spec below is complete enough to implement. All report message
 
 **Why type-aware:** the whole point of the brand is that `entry.end - 1` and `someNumber - 1` look identical syntactically. Uses `parserServices.getTypeAtLocation` and checks for the `__brand: 'Instant'` property on the resolved type.
 
-**Message:** `Arithmetic on Instant/Duration outside time/. Use time/ helpers (add, diff, startOf); inclusive ends go through formatEndInclusive.`
+**Message:** `Arithmetic directly on an Instant is banned outside time/ (plans/01 §5, I10). Use addMs/diffMs/etc. from time/.`
 
 **Subsumes** the "no inline `end - 1`" review rule from `CLAUDE.md`.
 
