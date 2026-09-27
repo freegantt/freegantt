@@ -25,7 +25,6 @@ import { Dataset, Gantt } from 'freegantt';
 // ── Data: headless, works in Node ───────────────────────────────
 const dataset = new Dataset<{ team: string; cost: number }>({
   timeZone: 'America/Chicago',            // optional (#129); omit it to author in the viewer's own zone
-  measureDuration: 'span',                // default; 'children' sums direct children's spans and counts no gap (ADR 0017, #421)
   history: { capacity: 100 },             // default; undo/redo stack depth, or `false` — see "Undo and redo" below
   entries: [
     { id: 'p1', name: 'Sitework' },        // dateless parent; derives when it has children (ADR 0013)
@@ -577,7 +576,7 @@ aggregators: {
 }
 ```
 
-`ctx.values()` is the same read, without the numeric filter — use it when a hole itself is meaningful (e.g. `count`). A multi-field Aggregator like `riskWeighted` above reads each field it needs with `ctx.values(key)` or `ctx.numericValues(key)`, and a child's duration with `ctx.durations()` — never `entry.duration()`, which answers for the store's row and not for the effective child this pass built (ADR 0017).
+`ctx.values()` is the same read, without the numeric filter — use it when a hole itself is meaningful (e.g. `count`). A multi-field Aggregator like `riskWeighted` above reads each field it needs with `ctx.values(key)` or `ctx.numericValues(key)`, and a child's duration with `ctx.values('duration')` — never `entry.read('duration')` on a live row, which answers for the store's row and not for the effective child this pass built (ADR 0017).
 
 **Because a field carries its own column defaults, `gridColumns` is mostly ordering:**
 
@@ -589,15 +588,13 @@ The object form overrides this Gantt's presentation and never the data half — 
 
 **`createGridColumnHelper(dataset)` types a column renderer from its key (#522).** `columnHelper.column('start', { columnRenderer })` gives the renderer `fieldValue: Instant | undefined`, the type `entry.read('start')` answers. It knows the core keys and the Dataset's `TProps` keys. It returns the plain `GridColumn`, so it is optional and mixes with bare keys and plain objects in one list. A plain column object keeps `fieldValue: unknown`, and so do `gantt.gridColumns` and `gridColumnsChange`. **Why a helper, not a typed `GridColumn<TProps>`:** #572 tried a union of one case per known key plus an open case for plugin keys. A known key matches two cases, so TypeScript gives an inline renderer no contextual type, and `({ fieldValue }) => …` fails as an implicit `any`. A call takes the key as a type argument before it reads the renderer, so the helper has no such conflict. TanStack Table's `createColumnHelper` is the same shape. The Dataset is a value argument only to infer `TProps`; the helper does not read it.
 
-`measureDuration` names how core measures a duration (ADR 0017). `'span'`, the default, counts from `start` to `end` and includes every gap — what the library ships. `'children'` (ADR 0026 retired the Segment-named `'segments'` value, #421) sums each direct child's own span and counts no gap between them; a childless entry falls back to its own span. It sits on the `Dataset`, not on a `Field` and not on a `Gantt`: a per-Field setting would let two Fields on one Dataset disagree about what a duration is, and a view may not change what a value **is**. `entry.duration()` reads it, and so does `ctx.duration()` inside a pass.
-
 **A value with no stored home** is a computed field — core's own `duration` is one:
 
 ```ts
-{ key: 'duration', compute: (entry, ctx) => /* Duration | undefined from start/end through time/ */ }
+{ key: 'duration', type: 'duration', compute: (entry) => (spansTime(entry) ? { value: diffMs(entry.end, entry.start), unit: 'millisecond' } : undefined) }
 ```
 
-A stored Field (a core key or a key in `props`) has somewhere to put a parent's aggregate, so it is stored and undoable; a computed field's aggregate is computed on read and is never stored. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field. **An Aggregator reads its children's durations with `ctx.durations()`** ([ADR 0017](../docs/adr/0017-the-entry-answers-questions-about-itself.md)). `FieldContext.read(entry, key)` and `FieldContext.durationOf(entry)` are both gone, and so is `entries.fieldValue(id, key)`: a row answers a Field by key through `entry.read(key)` and its duration through `entry.duration()`. Neither door survives on a row a caller names. The Rollup, the ChangeSet and every `compute` Field hold a row the store does not hold, so they carry stored values and ask the pass, not the row — `ctx.read(key)`, `ctx.duration()` and `ctx.children()`, none of them taking an entry. `entry.duration()` would answer for the store's row instead, so an Aggregator never calls it. A `compute` Field's signature stays `(entry, ctx)`, and `entry` is a `StoredEntry`. **`entry.read('parentId')` answers the stored value, on every door, the same as any other key** ([ADR 0024](../docs/adr/0024-parentid-answers-the-stored-value-on-every-door.md)): the tree's own checked answer is a separate core Field, `hierarchyParentId`, computed like `duration` and equal to `entry.parent()?.id`.
+A stored Field (a core key or a key in `props`) has somewhere to put a parent's aggregate, so it is stored and undoable; a computed field has no home and declares no `rollUp`; it runs on every row, a parent included. Nothing but the Rollup writes a rolling-up parent's cell (ADR 0013). A computed field reads the dataset only — never zoom, visible range or selection. A value that depends on the view is a renderer's business, not a field. **An Aggregator reads its children's durations with `ctx.values('duration')`** ([ADR 0017](../docs/adr/0017-the-entry-answers-questions-about-itself.md)). `FieldContext.read(entry, key)` and `FieldContext.durationOf(entry)` are both gone, and so is `entries.fieldValue(id, key)`: a row answers a Field by key through `entry.read(key)`. Neither door survives on a row a caller names. The Rollup, the ChangeSet and every `compute` Field hold a row the store does not hold, so they carry stored values and ask the pass, not the row — `ctx.read(key)` and `ctx.children(row)`. `entry.read(key)` on a live row would answer for the store's row instead, so an Aggregator never calls it. A `compute` Field's signature stays `(entry, ctx)`, and `entry` is a `StoredEntry`. **`entry.read('parentId')` answers the stored value, on every door, the same as any other key** ([ADR 0024](../docs/adr/0024-parentid-answers-the-stored-value-on-every-door.md)): the tree's own checked answer is a separate core Field, `hierarchyParentId`, computed like `duration` and equal to `entry.parent()?.id`.
 
 **Editing crosses core and consumer fields freely** — one call, one transaction, one undo step:
 
@@ -607,7 +604,6 @@ const t1 = dataset.entries.get('t1')!;
 t1.read('cost');                         // 12_000 — props
 t1.read('start');                        // core key
 t1.read('duration');                     // compute; no Gantt required
-t1.duration();                           // the same value, off the row's own member
 t1.children();                           // the tree, off the row (ADR 0017)
 dataset.field('cost');                   // resolved Field | undefined
 dataset.fields.all;                      // every declared Field, core included
