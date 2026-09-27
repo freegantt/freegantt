@@ -344,8 +344,10 @@ export function createRollUpContext(
     leaves: (row: StoredEntry): readonly StoredEntry[] => leavesOf(row, children),
     hasChildren: (row: StoredEntry): boolean => children(row).length > 0,
     field,
-    values(key: FieldKey = field): readonly unknown[] {
-      return rollUpChildren.map((child) => readFieldByKey(child, key, access));
+    values<K extends FieldKey>(key?: K): readonly (CoreFieldValue<K> | undefined)[] {
+      return rollUpChildren.map(
+        (child) => readFieldByKey(child, key ?? field, access) as CoreFieldValue<K> | undefined,
+      );
     },
     numericValues(key: FieldKey = field): readonly number[] {
       const out: number[] = [];
@@ -354,9 +356,6 @@ export function createRollUpContext(
         if (typeof value === 'number' && Number.isFinite(value)) out.push(value);
       }
       return out;
-    },
-    durations(): readonly (Duration | undefined)[] {
-      return rollUpChildren.map((child) => measureEntryDuration(child));
     },
   };
 }

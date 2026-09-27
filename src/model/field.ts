@@ -342,13 +342,14 @@ export interface FormatContext extends FieldContext {
 export interface RollUpContext extends ComputeContext {
   readonly field: FieldKey;
   /** `key` read off each child, in order, defaulting to `ctx.field`. A child with no value is a
-   *  hole (`undefined`). */
-  values(key?: FieldKey): readonly unknown[];
+   *  hole (`undefined`). With no `key`, a consumer Field's own values stay `unknown`. `key` read
+   *  off each child, typed by the key the way `ctx.read(key)` is — `ctx.values('duration')` is
+   *  `readonly (Duration | undefined)[]`, and a consumer key stays `unknown`. */
+  values(): readonly unknown[];
+  values<K extends FieldKey>(key: K): readonly (CoreFieldValue<K> | undefined)[];
   /** Like `values`, but keeps only finite numbers — holes and non-numeric values drop, same rule
    *  shipped `sum`/`min`/`max` already follow. */
   numericValues(key?: FieldKey): readonly number[];
-  /** Each child's duration, in the same order — what `weightedMeanByDuration` weighs with. */
-  durations(): readonly (Duration | undefined)[];
 }
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */
