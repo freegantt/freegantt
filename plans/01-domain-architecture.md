@@ -336,13 +336,13 @@ interface ComputeContext extends FieldContext {
 }
 
 /** ComputeContext plus the Field currently rolling up. Shipped Aggregators read `ctx.field`.
- *  `values`/`numericValues`/`durations` read the pass's own child list — never `parent.children()` —
+ *  `values`/`numericValues` read the pass's own child list — never `parent.children()` —
  *  so a Rollup child answers with the value this same bottom-up pass just gave it. */
 interface RollUpContext extends ComputeContext {
   readonly field: FieldKey;
-  values(key?: FieldKey): readonly unknown[];
+  values(): readonly unknown[];
+  values<K extends FieldKey>(key: K): readonly (CoreFieldValue<K> | undefined)[];
   numericValues(key?: FieldKey): readonly number[];
-  durations(): readonly (Duration | undefined)[];
 }
 
 /** Built only at Gantt column-resolve time. `formatValue` reads this, never a Dataset locale. */

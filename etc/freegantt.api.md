@@ -2092,11 +2092,12 @@ export class RevealTargetNotFoundError extends FreeGanttError {
 
 // @public
 export interface RollUpContext extends ComputeContext {
-    durations(): readonly (Duration | undefined)[];
     // (undocumented)
     readonly field: FieldKey;
     numericValues(key?: FieldKey): readonly number[];
-    values(key?: FieldKey): readonly unknown[];
+    values(): readonly unknown[];
+    // (undocumented)
+    values<K extends FieldKey>(key: K): readonly (CoreFieldValue<K> | undefined)[];
 }
 
 // @public

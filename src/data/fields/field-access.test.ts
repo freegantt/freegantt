@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { entryId } from '../../model/index.js';
-import type { ChangeSet, Field, StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
+import type { ChangeSet, Duration, Field, StoredEntry, Instant, ProposedEdit } from '../../model/index.js';
 import {
   applyFieldRow,
   createComputeContext,
@@ -297,6 +297,17 @@ describe('createRollUpContext values/numericValues (issue #124)', () => {
     const rollUpCtx = createRollUpContext(access, parent, one, cost.key);
     const childCtx = createRollUpContext(access, children[0]!, [], cost.key);
     expect(rollUpCtx.values()).toEqual([childCtx.read(cost.key)]);
+  });
+
+  it('gives a core Field its own type: values("duration") reads each child\u2019s Duration', () => {
+    const dateless: StoredEntry = { id: entryId('t2'), siblingIndex: 0, name: 't2', props: {} };
+    const durations: readonly (Duration | undefined)[] = createRollUpContext(
+      access,
+      parent,
+      [span(), dateless],
+      cost.key,
+    ).values('duration');
+    expect(durations).toEqual([{ value: 1, unit: 'millisecond' }, undefined]);
   });
 });
 
