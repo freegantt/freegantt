@@ -4,6 +4,8 @@ import { fieldRowsOf } from '../data/change-set.js';
 import {
   changeSetId,
   entryId,
+  formatDateTime,
+  formatInclusiveDate,
   instant,
   invertChangeSet,
   mergeEntryEdits,
@@ -12,6 +14,7 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   FieldNotEditableError,
+  IllegalCoreFieldOverrideError,
   MissingPluginError,
   MutationCancelledError,
   ParentCycleError,
@@ -569,6 +572,91 @@ describe('Dataset fields (S4.1)', () => {
     expect(dataset.entries.all.map((entry) => String(entry.id))).toEqual(order);
     expect(dataset.entries.get('b')?.toInput().props).toEqual({ cost: 60, team: 'B' });
     expect(dataset.entries.get('root')?.toInput().props).toEqual({ cost: 110 });
+  });
+});
+
+describe('Start and End take either formatter (#577)', () => {
+  const formatCtx = { timeZone: 'UTC', locale: 'en-US' as const };
+  const readField = (dataset: Dataset, key: string) => {
+    const entry = first(dataset);
+    return dataset.field(key)!.formatValue!(entry.read(key), formatCtx, entry);
+  };
+
+  it('end only: shows the last day it covers', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', end: '2026-03-04' }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026');
+  });
+
+  it('adding a start later leaves the End cell unchanged', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', end: '2026-03-04' }],
+    });
+    dataset.entries.update('t1', { start: '2026-03-02' });
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026');
+  });
+
+  it('a date-only start and end never show a time of day', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04' }],
+    });
+    expect(readField(dataset, 'end')).not.toContain('11:59');
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026');
+  });
+
+  it('a zero-length span shows its own day', () => {
+    const at = instant('2026-03-05T00:00:00Z');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', start: at, end: at }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 5, 2026');
+  });
+
+  it('a timed end defaults to the last day it covers; formatDateTime shows the stored moment', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'end', formatValue: formatDateTime }],
+      entries: [{ id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04T17:00' }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026, 5:00 PM');
+  });
+
+  it('Start defaults to the stored moment; formatInclusiveDate shows the date only', () => {
+    const entry = { id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04' };
+    const withDefault = new Dataset({ timeZone: 'UTC', entries: [entry] });
+    expect(readField(withDefault, 'start')).toBe('Mar 2, 2026, 12:00 AM');
+
+    const withOverride = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'start', formatValue: formatInclusiveDate }],
+      entries: [entry],
+    });
+    expect(readField(withOverride, 'start')).toBe('Mar 2, 2026');
+  });
+
+  it('formatDateTime on a date-only end shows the stored moment, not the last covered day', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'end', formatValue: formatDateTime }],
+      entries: [{ id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04' }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 5, 2026, 12:00 AM');
+  });
+
+  it('a consumer may not override formatValue with an unrelated key on a core Field', () => {
+    expect(
+      () =>
+        new Dataset({
+          timeZone: 'UTC',
+          fields: [{ key: 'name', column: { header: 'X' } }],
+          entries: [oneEntry()],
+        }),
+    ).toThrow(IllegalCoreFieldOverrideError);
   });
 });
 

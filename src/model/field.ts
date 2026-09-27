@@ -154,7 +154,9 @@ export type Field<TValue = unknown> =
       /** `entry` is the row this value came from. `FormatContext` is built once per `resolveColumns`
        *  and reused for every cell, so a per-entry value cannot live there without rebuilding it per
        *  cell — a formatter that needs the Entry declares this third parameter instead; every other
-       *  formatter still assigns with two, or one (#240). */
+       *  formatter still assigns with two, or one (#240). A consumer declaration naming a core Field's
+       *  key overrides this on any core Field, the same door `editable` uses
+       *  (`field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS`, #577). */
       formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
       /** S5.8, issue #137: reads what the user typed into the inline editor's `<input>`
        *  back into a stored value. `undefined` means the text names no value — the editor stays open in

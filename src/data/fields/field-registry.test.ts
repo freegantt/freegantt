@@ -12,7 +12,7 @@ import {
   UnknownFieldError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
-import { DATE_TIME_FORMAT, formatDate, formatEndInclusive, instant, MS } from '../../time/index.js';
+import { DATE_TIME_FORMAT, formatDate, instant, MS } from '../../time/index.js';
 import { currency } from './field-types.js';
 
 function ctx(registry: FieldRegistry) {
@@ -124,7 +124,7 @@ describe('ADR 0011 — a Field key is the whole address', () => {
   });
 });
 
-describe("#142/#470 a consumer may override a core Field's editable and rollUp, and nothing else", () => {
+describe("#142/#470 a consumer may override a core Field's editable, formatValue and rollUp, and nothing else", () => {
   // ADR 0015: `false` is an input alias, so the stored Field holds the enum and every reader — the
   // write door, the grid, and `dataset.fields.all` — reads one word back.
   it("{ key: start, editable: false } merges onto the core Field, and stores as 'never'", () => {
@@ -138,10 +138,21 @@ describe("#142/#470 a consumer may override a core Field's editable and rollUp, 
     expect(keys.indexOf('start')).toBe(1); // after 'name', ahead of 'end'.
   });
 
-  it('a core-key declaration carrying a key other than editable or rollUp throws IllegalCoreFieldOverrideError', () => {
+  it('a core-key declaration carrying a key other than editable, formatValue or rollUp throws IllegalCoreFieldOverrideError', () => {
     expect(() => new FieldRegistry({ fields: [{ key: 'start', compare: () => 0 }] })).toThrow(
       IllegalCoreFieldOverrideError,
     );
+  });
+
+  it('a consumer overrides formatValue on any core Field, not only start/end', () => {
+    const registry = new FieldRegistry({
+      fields: [{ key: 'name', formatValue: () => 'CUSTOM NAME' }],
+    });
+    expect(
+      registry.get('name')!.formatValue!('Design', { timeZone: 'UTC', locale: 'en-US' }, {} as Entry),
+    ).toBe('CUSTOM NAME');
+    // core's own keys ride along unchanged — only formatValue moved.
+    expect(registry.get('name')?.editable).toBe('anywhere');
   });
 
   it("{ key: start, rollUp: none } is legal and merges onto core's declaration", () => {
@@ -175,7 +186,7 @@ describe("#142/#470 a consumer may override a core Field's editable and rollUp, 
       expect(error).toBeInstanceOf(IllegalCoreFieldOverrideError);
       expect((error as IllegalCoreFieldOverrideError).illegalKey).toBe('rollUp');
       expect((error as IllegalCoreFieldOverrideError).key).toBe('name');
-      expect((error as IllegalCoreFieldOverrideError).overridableKeys).toEqual(['editable']);
+      expect((error as IllegalCoreFieldOverrideError).overridableKeys).toEqual(['editable', 'formatValue']);
     }
   });
 
@@ -479,24 +490,20 @@ describe('core Fields consume the shipped type table', () => {
     expect(registry.get('hierarchyParentId')).not.toHaveProperty('type');
   });
 
-  it('core end still formats inclusive; a start-less end formats as a plain Instant', () => {
+  it('core end formats the last day it covers, with or without a start', () => {
     const registry = new FieldRegistry();
     const start = instant('2026-06-15T00:00:00Z');
     const end = instant('2026-06-20T00:00:00Z');
     const formatCtx = { timeZone: 'UTC', locale: 'en-US' as const };
     const withStart = { start, end } as Entry;
-    const formatted = registry.get('end')!.formatValue!(end, formatCtx, withStart);
-    expect(formatted).toBe(formatEndInclusive('UTC', { start, end }, 'en-US', DATE_TIME_FORMAT));
-    expect(formatted).not.toBe(formatDate(end, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT));
-    expect(registry.get('end')!.formatValue!(end, formatCtx, { end } as Entry)).toBe(
-      formatDate(end, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT),
-    );
+    expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).toBe('Jun 19, 2026');
+    expect(registry.get('end')!.formatValue!(end, formatCtx, { end } as Entry)).toBe('Jun 19, 2026');
   });
 
   // Same constructor spread the percent test already pins. Core Fields name `date`, so the
   // replacement reaches `start` and `end`. mergeField is `{ ...bundle, ...declared }`: `end`
-  // keeps formatEnd and takes only compare.
-  it('overriding date rewrites start formatValue and compare; end keeps formatEnd and takes only compare', () => {
+  // keeps its own `formatValue` and takes only compare.
+  it('overriding date rewrites start formatValue and compare; end keeps its own formatValue and takes only compare', () => {
     const registry = new FieldRegistry({
       fieldTypes: { date: { formatValue: () => 'OVERRIDE', compare: () => 42 } },
     });
@@ -508,9 +515,7 @@ describe('core Fields consume the shipped type table', () => {
     expect(registry.get('start')!.formatValue!(start, formatCtx, withStart)).toBe('OVERRIDE');
     expect(registry.get('start')!.compare!(start, end)).toBe(42);
     expect(registry.get('end')!.compare!(start, end)).toBe(42);
-    expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).toBe(
-      formatEndInclusive('UTC', { start, end }, 'en-US', DATE_TIME_FORMAT),
-    );
+    expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).toBe('Jun 19, 2026');
     expect(registry.get('end')!.formatValue!(end, formatCtx, withStart)).not.toBe('OVERRIDE');
   });
 });
