@@ -191,8 +191,8 @@ export type Field<TValue = unknown> =
       rollUp?: never;
       editable?: never;
       /** Runs on **every** row a read touches, a rolling-up parent included (ADR 0011, decision 10):
-       *  read a stored value off `entry`, and read a Field — a core key, `duration`, or another
-       *  Field's own `compute` arm — through `ctx.read(key)`. A computed value may also depend on
+       *  read a stored value off `entry`, and read a Field — a core key, or another Field's own
+       *  `compute` arm — through `ctx.read(key)`. A computed value may also depend on
        *  the tree: `ctx.children(entry)`, `ctx.descendants(entry)`, `ctx.leaves(entry)` or
        *  `ctx.hasChildren(entry)` (#214, #466). `entry` is a `StoredEntry` because the row may be
        *  hypothetical — a post-edit row, or a Rollup's effective child.
@@ -287,7 +287,7 @@ export interface FieldContext {
  *  value members take no row and still compute, so they carry parentheses for rule 4's own reason.
  *  Each member's own doc states its cost. */
 export interface ComputeContext extends FieldContext {
-  /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. Bound to
+  /** Another Field on this same row — a core key, or another Field's `compute`. Bound to
    *  the row this pass is computing; not a structure question, so it takes no row (ADR 0017 amendment, rule 2). */
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
   /** One step down: `Depot` → Van 1, Van 2. One tree read, no allocation beyond the array returned.
