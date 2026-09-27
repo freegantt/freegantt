@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Changed
 
+- **Breaking:** `DateInput` has a new required member, `showsTimeOfDay`. `inlineEditing()` now applies the date-only end rule to each control that reports `false`, not only to the default control. A consumer date picker on `end` opens on the last covered day, and a typed day stores the start of the next day. A control that reports `true` works as before. ([#579](https://github.com/freegantt/freegantt/issues/579))
 - The default `zoomPresets` has ten steps, not nine. `quarterAndYear` sits between `monthAndYear` and `year`, so one zoom-out step no longer jumps from months to years. To keep the old steps, filter it out of `gantt.zoomPresets`. ([#101](https://github.com/freegantt/freegantt/issues/101))
 - `sum`, `min` and `max` also fold `Duration` values in milliseconds, and answer a `Duration`. `docs/05` shows a computed Field that sums its children. ([#582](https://github.com/freegantt/freegantt/issues/582))
 - **Breaking:** `dataset.entries.sync(rows)` is now `dataset.entries.syncAll(rows)`. The behavior does not change. The new name pairs with `syncChanges`: `syncAll` takes every row, and `syncChanges` takes only the rows that changed. ([#527](https://github.com/freegantt/freegantt/issues/527))

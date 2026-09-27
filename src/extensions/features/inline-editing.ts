@@ -735,16 +735,6 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         // as any other empty cell — it is not broken, so nothing refuses it.
         const raw = entry.read(field.key) as Instant | undefined;
         const factory = options.dateInput;
-        // Which day does the End editor show, and which end does a typed day store? A stored `end`
-        // is the boundary after the entry, not a day a reader typed. So the default control shows
-        // the last day it covers instead, and a typed day commits the day after it. Only the
-        // library's own control makes this trade — a consumer's `dateInput` factory owns its end
-        // field the same as any other date, unchanged.
-        const isDefaultEnd = field.key === 'end' && factory === undefined;
-        const shown =
-          isDefaultEnd && raw !== undefined
-            ? startOfLastCoveredDay(ctx.dataset.timeZone, { start: entry.start, end: raw })
-            : raw;
         let dateInput: DateInput;
         if (factory !== undefined) {
           dateInput = factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.formatContext.locale });
@@ -760,6 +750,15 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
           }
           dateInput = createDefaultDateInput(ctx.dataset.time);
         }
+        // Which day does the End editor show, and which end does a typed day store? A stored `end`
+        // is the boundary after the entry, not a day a reader typed. So a control that shows no
+        // time of day shows the last day the entry covers, and a typed day commits the day after
+        // it. A control that shows a time of day edits the stored boundary as it is.
+        const isDateOnlyEnd = field.key === 'end' && !dateInput.showsTimeOfDay;
+        const shown =
+          isDateOnlyEnd && raw !== undefined
+            ? startOfLastCoveredDay(ctx.dataset.timeZone, { start: entry.start, end: raw })
+            : raw;
         if (shown !== undefined) dateInput.write(shown);
 
         pending.mount({
@@ -767,7 +766,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
           read: (): CellEditorValue => {
             const typed = dateInput.read();
             if (typed === undefined) return { ok: false };
-            if (!isDefaultEnd) return { ok: true, value: typed };
+            if (!isDateOnlyEnd) return { ok: true, value: typed };
             if (raw !== undefined && typed === shown) return { ok: true, value: raw };
             return { ok: true, value: startOfNextDay(ctx.dataset.timeZone, typed) };
           },
