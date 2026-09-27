@@ -84,9 +84,14 @@ Bash(run_in_background: true):
 Keep the pid that Bash returns. You will kill that pid when the wave ends.
 
 It polls every agent transcript in this **project** — from any session, not only yours —
-and exits when one passes 200k or when
-they all finish. A background command that exits re-invokes you, so its exit *is* the
-alert — you get it mid-flight, not after the report lands.
+and exits when one passes its next mark or when they all stop writing. Each agent has two
+marks: 200k (wind down) and 250k (landing window over). A background command that exits
+re-invokes you, so its exit *is* the alert — you get it mid-flight, not after the report
+lands.
+
+**It alerts once per agent per mark.** It writes each alert to a state file in `TMPDIR`.
+A restarted watcher reads that file, so it never repeats an alert. It watches each agent
+for that agent's own next mark, so one watcher serves agents at different stages.
 
 **The watcher reads transcripts. It never stops an agent** — you do that, by message,
 which is what leaves the agent room to land.
@@ -113,9 +118,9 @@ as a crash and the agent runs past its landing window with nobody telling it to 
 
 | Exit | Printed line | What it means |
 |---|---|---|
-| **1** | `... is at N tokens (wind-down M)` | **An agent crossed the mark. Act now.** |
+| **1** | `... is at N tokens (mark M)` | **An agent crossed a mark. Act now.** |
 | | | The line **names the agent** — and it may belong to another session. Read the name before deciding whether it is yours. |
-| 0 | `every agent it watched finished under M tokens.` | All done under budget. The watcher already died with the wave. |
+| 0 | `every agent it watched has stopped writing.` | The wave is over. The watcher already died with it. |
 | 0 | `stopped after Ns` | The watcher timed out (`MAX`, 7200s). You left it running. Restart it only if an agent you started is still running; otherwise the wave is over. |
 
 Both quiet outcomes exit 0, so the printed line is what separates them. Read it.
@@ -123,18 +128,13 @@ Both quiet outcomes exit 0, so the printed line is what separates them. Read it.
 Then act on what it says:
 
 - **An agent passed 200k** — send that agent a message: stop at the next clean point
-  and write a handoff. Then start the watcher again at the far mark, so you hear about
-  an agent that overruns its landing window:
-
-  ```
-  Bash(run_in_background: true):
-    WIND_DOWN=250000 .agents/skills/subagents/watch-agent-context.sh
-  ```
-
-  Keep that new pid. Kill it when that agent reports, the same rule as the first
-  watcher. If that one fires too, the agent is spending the window on new work. Tell
-  it to write the handoff now and report.
-- **They all finished under budget** — the watcher already exited. Do not start
+  and write a handoff.
+- **An agent passed 250k** — it spends the landing window on new work. Tell it to
+  write the handoff now and report.
+- **After either alert** — start the same watcher command again, in the same turn,
+  if any agent you started still runs. Keep the new pid. It skips the alert you just
+  handled and still watches every other agent at 200k.
+- **Every agent stopped writing** — the watcher already exited. Do not start
   another.
 
 One watcher covers a whole wave. Dispatch three agents in one turn, start one watcher.
