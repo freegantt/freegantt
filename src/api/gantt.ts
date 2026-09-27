@@ -615,9 +615,10 @@ export class Gantt<TProps = unknown> {
   /** Call: `gantt.formatFieldValue(entry, 'cost')`. The text a Field shows for one Entry, outside
    *  the grid — a status line, a CSV row, a tooltip. Reads the same door a Grid cell and a bar
    *  label read through, and follows `gantt.locale` live. Works for a Field with no column, a
-   *  hidden column, and a `compute` Field. Throws `UnknownFieldError` for a key no Field declares. */
+   *  hidden column, and a `compute` Field. Throws `UnknownFieldError` for a key no Field declares.
+   *  It reads through `dataset.formatFieldValue` with this Gantt's locale. */
   formatFieldValue(entry: Entry<TProps>, key: FieldKey): string {
-    return this.#shell.formatFieldValue(entry, key);
+    return this.#dataset.formatFieldValue(entry, key, this.locale);
   }
 
   /** Live. `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once
