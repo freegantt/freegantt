@@ -7,6 +7,7 @@ import type {
   EntryFieldEdit,
   EntryInput,
   ErrorReport,
+  Instant,
   GridColumnInput,
   PluginErrorReport,
 } from '../../api/index.js';
@@ -632,6 +633,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
         el.type = 'datetime-local';
         return {
           element: el,
+          showsTimeOfDay: true,
           read: () => undefined,
           write: () => {},
           onCommit: () => () => {},
@@ -656,6 +658,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
           el.type = 'datetime-local';
           return {
             element: el,
+            showsTimeOfDay: true,
             read: () => undefined,
             write: () => {},
             onCommit: () => () => {},
@@ -681,6 +684,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
           el.type = 'datetime-local';
           return {
             element: el,
+            showsTimeOfDay: true,
             read: () => undefined,
             write: () => {},
             onCommit: () => () => {},
@@ -1773,7 +1777,10 @@ describe('parseValue reads the ambient zone and the row it parses into (ADR 0017
 });
 
 describe('the End editor shows the last covered day and stores the next day (#577)', () => {
-  function makeEndGantt(entry: EntryInput): {
+  function makeEndGantt(
+    entry: EntryInput,
+    options?: InlineEditingOptions,
+  ): {
     container: HTMLElement;
     gantt: Gantt;
     dataset: Dataset;
@@ -1785,7 +1792,7 @@ describe('the End editor shows the last covered day and stores the next day (#57
       container,
       dataset,
       gridColumns: ['name', 'start', 'end'],
-      plugins: [inlineEditing()],
+      plugins: [inlineEditing(options)],
     });
     return { container, gantt, dataset };
   }
@@ -1903,5 +1910,83 @@ describe('the End editor shows the last covered day and stores the next day (#57
     expect(cellFor(container2, 'e1', 'end').textContent).toBe('Mar 10, 2026');
     gantt2.destroy();
     container2.remove();
+  });
+  /** A consumer control that keeps its value as an Instant, so a test can read what the editor
+   *  wrote, type a new value, and fire the control's own commit. */
+  function consumerDateInput(showsTimeOfDay: boolean): {
+    options: InlineEditingOptions;
+    written: () => Instant | undefined;
+    type: (at: Instant) => void;
+    commit: () => void;
+  } {
+    let value: Instant | undefined;
+    let onCommit: (() => void) | undefined;
+    return {
+      options: {
+        dateInput: () => ({
+          element: document.createElement('input'),
+          showsTimeOfDay,
+          read: () => value,
+          write: (at) => {
+            value = at;
+          },
+          onCommit: (handler) => {
+            onCommit = handler;
+            return () => {
+              onCommit = undefined;
+            };
+          },
+          destroy: () => {},
+        }),
+      },
+      written: () => value,
+      type: (at) => {
+        value = at;
+      },
+      commit: () => onCommit?.(),
+    };
+  }
+
+  it('a consumer control that shows no time of day opens on the last covered day', () => {
+    const control = consumerDateInput(false);
+    const { container, gantt, dataset } = makeEndGantt(
+      { id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' },
+      control.options,
+    );
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(control.written()).toBe(instant('2026-03-04T00:00:00Z'));
+    control.commit();
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-05T00:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a consumer control that shows no time of day stores the day after the typed day', () => {
+    const control = consumerDateInput(false);
+    const { container, gantt, dataset } = makeEndGantt(
+      { id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' },
+      control.options,
+    );
+    dblclick(cellFor(container, 'e1', 'end'));
+    control.type(instant('2026-03-10T00:00:00Z'));
+    control.commit();
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-11T00:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a consumer control that shows a time of day opens on the stored end and stores the typed value', () => {
+    const control = consumerDateInput(true);
+    const { container, gantt, dataset } = makeEndGantt(
+      { id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' },
+      control.options,
+    );
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(control.written()).toBe(instant('2026-03-05T00:00:00Z'));
+    control.type(instant('2026-03-10T14:00:00Z'));
+    control.commit();
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-10T14:00:00Z'));
+    gantt.destroy();
+    container.remove();
   });
 });

@@ -481,6 +481,7 @@ export interface DateInput {
     readonly element: HTMLElement;
     onCommit(handler: () => void): Disposer;
     read(): Instant | undefined;
+    readonly showsTimeOfDay: boolean;
     write(at: Instant): void;
 }
 
