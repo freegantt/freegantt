@@ -6,7 +6,7 @@ open: none. Closed decisions are in `plans/field-redesign/0011-consumer-values-i
 
 # Consumer values live in `props`
 
-> **One sentence here is retired.** *Decision 13* named a rename of `fieldValue` to `read` and the deletion of `durationOf`. That was ADR 0014's, and the author withdrew ADR 0014 on 2026-09-11 before it was built ([the gap at 0014](README.md#the-gap-at-0014)). `entries.fieldValue` is what `src/` ships. [ADR 0017](0017-the-entry-answers-questions-about-itself.md) now owns the read door, as `entry.read(key)`. **The decisions this ADR took itself all stand**, and the body stays written.
+> **One sentence here is retired.** *Decision 13* named a rename of `fieldValue` to `read`. That was ADR 0014's, and the author withdrew ADR 0014 on 2026-09-11 before it was built ([the gap at 0014](README.md#the-gap-at-0014)). `entries.fieldValue` is what `src/` ships. [ADR 0017](0017-the-entry-answers-questions-about-itself.md) now owns the read door, as `entry.read(key)`. **The decisions this ADR took itself all stand**, and the body stays written.
 
 **This is the ADR that simplifies the API.** It grew to 25 decisions and split into five on 2026-09-09, by question rather than by file. The other four are [0012 — optional dates](0012-dates-are-optional-on-every-kind.md), [0013 — what decides derivation](0013-what-decides-that-a-row-derives-its-values.md), [0014 — the plugin-author surface](README.md#the-gap-at-0014) and [0015 — what the write door refuses](0015-what-the-write-door-refuses.md). The map is [`plans/field-redesign/README.md`](../../plans/field-redesign/README.md).
 
@@ -98,7 +98,7 @@ dataset.entries.read('t1', 'owner')          // any Field key: core, compute, pl
 
 The record door returns storage. The by-key door resolves getters and aggregates. Every comparable library publishes the same pair.
 
-**Two on the app-author surface.** The plugin surface uses the same name: `ctx.read(entry, key)`. [ADR 0014](README.md#the-gap-at-0014) decision 13 renamed `fieldValue` to `read` and deleted `durationOf`. Duration is a compute Field; you read it through `read`.
+**Two on the app-author surface.** The plugin surface uses the same name: `ctx.read(entry, key)`. [ADR 0014](README.md#the-gap-at-0014) decision 13 renamed `fieldValue` to `read`. Duration is a compute Field, like any other; you read it through `read`.
 
 **The by-key door keeps its type.** `FieldValue` maps over the **generic**, never over the registry, so one generic carries `model/dataset.ts:41` across unchanged as `FieldValue<TProps, K>`. Two value classes stay `unknown`, and both own no `TProps` key — a `compute` Field's answer, and a plugin's Field. That residue is [#267](https://github.com/Pawel-IT/FreeGantt/issues/267).
 
