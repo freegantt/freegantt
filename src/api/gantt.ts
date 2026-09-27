@@ -134,8 +134,9 @@ export interface GanttOptionsBase<TProps = unknown> {
   theme?: Theme;
   /** Live (S1.10). Default `'Gantt'`; sets `aria-label` on the container. */
   a11yLabel?: string;
-  /** Live (S1.12). `undefined` = the runtime default. Feeds header labels and
-   *  screen-reader dates alike, with no bar remount. */
+  /** Live. `undefined` = this Gantt names no override. The effective locale is this Gantt's own,
+   *  then the Dataset's, then the runtime's own. Feeds header labels and screen-reader dates alike,
+   *  with no bar remount. */
   locale?: Intl.LocalesArgument;
   /** Live (S1.12/S1.13). Default `true`: reads the clock on each render, so
    *  the line moves on the next render, not on a clock tick. It goes stale on a page left open past
@@ -616,14 +617,17 @@ export class Gantt<TProps = unknown> {
   /** Call: `gantt.formatFieldValue(entry, 'cost')`. The text a Field shows for one Entry, outside
    *  the grid — a status line, a CSV row, a tooltip. Reads the same door a Grid cell and a bar
    *  label read through, and follows `gantt.locale` live. Works for a Field with no column, a
-   *  hidden column, and a `compute` Field. Throws `UnknownFieldError` for a key no Field declares. */
+   *  hidden column, and a `compute` Field. Throws `UnknownFieldError` for a key no Field declares.
+   *  It reads through `dataset.formatFieldValue` with this Gantt's own locale first, then the
+   *  Dataset's (#583), then the runtime's own. */
   formatFieldValue(entry: Entry<TProps>, key: FieldKey): string {
-    return this.#shell.formatFieldValue(entry, key);
+    return this.#dataset.formatFieldValue(entry, key, this.#shell.effectiveLocale);
   }
 
-  /** The `FormatContext` a Grid cell, a bar label, and `formatFieldValue` all format through.
-   *  Live: follows `gantt.locale`. A caller that formats a value with its own Formatter, such as
-   *  `formatStartAndEnd`, takes this instead of assembling a second `{ timeZone, locale }`. */
+  /** Call: `gantt.formatContext`. The `FormatContext` a Grid cell, a bar label, and
+   *  `formatFieldValue` all format through. Live: its locale is this Gantt's own, then the
+   *  Dataset's, then the runtime's own. A caller that formats a value with its own Formatter, such
+   *  as `formatStartAndEnd`, takes this instead of assembling a second `{ timeZone, locale }`. */
   get formatContext(): FormatContext {
     return this.#shell.formatContext;
   }

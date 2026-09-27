@@ -20,6 +20,9 @@ export default defineWorkspace([
         // takes every pixel through an injected reader, so its invalidation table is a plain Node
         // test. Running it here is what proves that, instead of a comment claiming it.
         'src/view/frame-settings.test.ts',
+        // #583: a Dataset formats a Field's text with no DOM; running it here proves that a
+        // server-side export works. The `dom` project also runs it, through `src/api/**`.
+        'src/api/dataset-format-field-value.test.ts',
         'test/pure/**/*.test.ts',
         'fixtures/**/*.test.ts',
       ],

@@ -109,6 +109,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
 function makeGantt(
   options?: InlineEditingOptions,
   ganttOptions?: { locale?: Intl.LocalesArgument },
+  datasetOptions?: { locale?: Intl.LocalesArgument },
 ): {
   container: HTMLElement;
   gantt: Gantt;
@@ -119,6 +120,7 @@ function makeGantt(
   const dataset = new Dataset<Meta>({
     entries: structuredClone([...ENTRIES]),
     timeZone: 'UTC',
+    ...datasetOptions,
     fieldTypes: {
       money: {
         rollUp: 'sum',
@@ -661,6 +663,32 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
           };
         },
       },
+      { locale: 'de-DE' },
+    );
+    dblclick(cellFor(container, 'e2', 'start'));
+    expect(seen).toEqual([{ zone: 'UTC', locale: 'de-DE' }]);
+    gantt.destroy();
+    container.remove();
+  });
+
+  it("a consumer dateInput factory receives the Dataset's own locale when the Gantt names none (#583)", () => {
+    const seen: { zone: string; locale?: Intl.LocalesArgument }[] = [];
+    const { container, gantt } = makeGantt(
+      {
+        dateInput: (dateCtx) => {
+          seen.push(dateCtx);
+          const el = document.createElement('input');
+          el.type = 'datetime-local';
+          return {
+            element: el,
+            read: () => undefined,
+            write: () => {},
+            onCommit: () => () => {},
+            destroy: () => el.remove(),
+          };
+        },
+      },
+      undefined,
       { locale: 'de-DE' },
     );
     dblclick(cellFor(container, 'e2', 'start'));
