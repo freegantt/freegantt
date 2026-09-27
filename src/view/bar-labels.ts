@@ -2,10 +2,11 @@
 // `layout/` and `render/` never resolve a Field on their own: this file is the one door,
 // the same job `grid-columns.ts` already does for a Grid column.
 
-import type { Entry, FieldKey, FieldLookup, FormatContext } from '../model/index.js';
-import { stringifyPrimitive } from '../data/fields/field-types.js';
+import type { Entry, FieldKey, FieldLookup } from '../model/index.js';
+import { formatFieldValue } from '../data/fields/format-field-value.js';
 import type { BarLabelPolicy, BarLabels } from '../layout/index.js';
 import { mergeBarLabels } from '../layout/index.js';
+import { formatContextOf } from './grid-columns.js';
 
 export interface ResolveBarLabelBind {
   timeZone: string;
@@ -46,10 +47,7 @@ export function resolveBarLabelText(
     ports.reportUnknownField(merged.field);
     return '';
   }
-  const value = entry.read(field.key);
-  const formatCtx: FormatContext = { timeZone: bind.timeZone, locale: bind.locale ?? [] };
-  if (field.formatValue) return field.formatValue(value, formatCtx, entry);
-  return stringifyPrimitive(value);
+  return formatFieldValue(field, entry, formatContextOf(bind));
 }
 
 /** Call: `resolveBarLabelPolicy(gantt.barLabels, variantFor(entry).barLabels)` — the placement
