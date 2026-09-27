@@ -248,8 +248,9 @@ function renderSelection(): void {
     return;
   }
   const ctx = { timeZone: dataset.timeZone, locale: gantt.locale };
-  const startText = (value: Instant): string => dataset.field('start')!.formatValue!(value, ctx, first);
-  const endText = (value: Instant): string => dataset.field('end')!.formatValue!(value, ctx, first);
+  const startText = (value: Instant): string =>
+    dataset.field('start')?.formatValue?.(value, ctx, first) ?? '';
+  const endText = (value: Instant): string => dataset.field('end')?.formatValue?.(value, ctx, first) ?? '';
   // A selected row may hold neither, one, or both dates (ADR 0012) — show whichever it has.
   const span =
     first.start !== undefined && first.end !== undefined
