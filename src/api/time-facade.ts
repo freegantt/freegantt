@@ -5,7 +5,6 @@
 // `api/plugin-context.ts` directly instead of the barrel that re-exports it.
 export {
   formatDate,
-  formatEndInclusive,
   isCoarserThan,
   readPlainTime,
   startOfLastCoveredDay,

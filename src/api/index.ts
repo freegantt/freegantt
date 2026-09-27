@@ -464,7 +464,6 @@ export {
   MS,
   formatDate,
   formatDateTime,
-  formatEndInclusive,
   formatInclusiveDate,
   lastCoveredInstant,
   formatWeekNumber,

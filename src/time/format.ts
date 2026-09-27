@@ -1,9 +1,9 @@
-// time/ — human-readable date display (plans/01 §5, S1.10, S1.12). `formatEndInclusive` is the one
-// place half-open `end` becomes an inclusive display value — no `end - 1` anywhere else in the
-// codebase. Formatting goes through `Intl.DateTimeFormat` directly, in the dataset zone and a
-// caller-chosen locale; `weekOfYear` (zone.ts) is the one thing Intl has no field for.
+// time/ — human-readable date display (plans/01 §5, S1.10, S1.12). `lastCoveredInstant` is the one
+// place half-open `end` becomes an inclusive moment — no `end - 1` anywhere else in the codebase.
+// Formatting goes through `Intl.DateTimeFormat` directly, in the dataset zone and a caller-chosen
+// locale; `weekOfYear` (zone.ts) is the one thing Intl has no field for.
 
-import type { FormatContext, Instant, TimeSpan } from '../model/index.js';
+import type { FormatContext, Instant } from '../model/index.js';
 import { toPlain, weekOfYear } from './zone.js';
 import { addMs } from './instant.js';
 import type { DateFormat, HeaderFormat, ViewPresetHeader } from './scale.js';
@@ -83,23 +83,6 @@ export function formatDate(
   options: Intl.DateTimeFormatOptions = DEFAULT_DATE_FORMAT,
 ): string {
   return intlFormatter(ctx.timeZone, ctx.locale, options).format(toJsDate(value));
-}
-
-/** The one place half-open `end` becomes an inclusive display value: the last millisecond the span
- * actually covers, read back through the dataset zone. No `end - 1` anywhere else in the codebase
- * (plans/01 §5, promised since S0).
- *
- * Takes the whole span, not `end` alone, because a zero-length span (`end === start`) has no
- * millisecond before its own start to display — `end - 1` there reads as one minute
- * earlier than `start` (#240). A zero-length span displays its own `end` unchanged instead. */
-export function formatEndInclusive(
-  zone: string,
-  span: TimeSpan,
-  locale?: Intl.LocalesArgument,
-  options?: Intl.DateTimeFormatOptions,
-): string {
-  const displayed = span.end === span.start ? span.end : addMs(span.end, -1);
-  return formatDate(displayed, { timeZone: zone, locale }, options);
 }
 
 /** The last moment a half-open span `[start, end)` actually covers — `end` itself is the boundary

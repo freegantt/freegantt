@@ -7,7 +7,7 @@ import {
   contextMenu,
   inlineEditing,
   formatDate,
-  formatEndInclusive,
+  lastCoveredInstant,
   diamond,
   meter,
   timeShading,
@@ -92,29 +92,30 @@ function ownerCell({ entry, value }: ColumnRendererContext): ElementDescription 
 }
 
 // The design's compact Start/Finish format: two-digit day, three-letter month, no year, no time —
-// `02 Mar`, not the core Field's own `Jun 29, 2026, 12:00 AM`. Both `formatDate` and
-// `formatEndInclusive` already take an `Intl.DateTimeFormatOptions` override; this page just picks
-// a narrower one than their shared default.
+// `02 Mar`, not the core Field's own `Jun 29, 2026, 12:00 AM`. `formatDate` already takes an
+// `Intl.DateTimeFormatOptions` override; this page just picks a narrower one than its default.
 const COMPACT_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
 
 /** The Start cell: `formatDate` alone, in the compact format — a start needs no inclusive-end
- *  conversion (that is `formatEndInclusive`'s job, below). */
+ *  conversion (that is `finishCell`'s job, below). */
 function startCell({ fieldValue }: ColumnRendererContext<Instant>): ElementDescription | undefined {
   if (fieldValue === undefined) return { text: '' };
   return { text: formatDate(fieldValue, { timeZone: dataset.timeZone }, COMPACT_DATE_FORMAT) };
 }
 
-/** The Finish cell: `formatEndInclusive`, the one place storage's half-open `end` becomes the
+/** The Finish cell: `lastCoveredInstant`, the one place storage's half-open `end` becomes the
  *  inclusive date a reader expects, in the same compact format as Start. */
 function finishCell({ entry, fieldValue }: ColumnRendererContext<Instant>): ElementDescription | undefined {
   if (entry === undefined || fieldValue === undefined) return { text: '' };
   // End with no start (ADR 0012) shows the stored end as a plain instant — same rule the core
-  // `end` Field's own `formatEnd` follows in `src/data/fields/core-fields.ts`.
+  // `end` Field's own `formatValue` follows in `src/data/fields/core-fields.ts`.
   if (entry.start === undefined) {
     return { text: formatDate(fieldValue, { timeZone: dataset.timeZone }, COMPACT_DATE_FORMAT) };
   }
   const span = { start: entry.start, end: fieldValue };
-  return { text: formatEndInclusive(dataset.timeZone, span, undefined, COMPACT_DATE_FORMAT) };
+  return {
+    text: formatDate(lastCoveredInstant(span), { timeZone: dataset.timeZone }, COMPACT_DATE_FORMAT),
+  };
 }
 
 /** The Dur cell: the design's `12d` — no space, lowercase `d`. The core `duration` Field already
@@ -263,7 +264,7 @@ function setReadout(text: string): void {
 }
 
 /** The design's status line: what is picked, when it runs, and how far along it is. The finish date
- *  goes through `formatEndInclusive` — storage is half-open `[start, end)` and display is inclusive,
+ *  goes through `lastCoveredInstant` — storage is half-open `[start, end)` and display is inclusive,
  *  and that helper is the one place the library does the conversion. */
 function renderSelection(): void {
   const entries = gantt.selectedEntries;
@@ -274,10 +275,10 @@ function renderSelection(): void {
   }
   const zone = dataset.timeZone;
   // A selected row may hold neither, one, or both dates (ADR 0012) — show whichever it has,
-  // instead of assuming the pair `formatEndInclusive` needs.
+  // instead of assuming the pair `lastCoveredInstant` needs.
   const span =
     first.start !== undefined && first.end !== undefined
-      ? `${formatDate(first.start, { timeZone: zone })} → ${formatEndInclusive(zone, { start: first.start, end: first.end })}`
+      ? `${formatDate(first.start, { timeZone: zone })} → ${formatDate(lastCoveredInstant({ start: first.start, end: first.end }), { timeZone: zone })}`
       : first.start !== undefined
         ? `${formatDate(first.start, { timeZone: zone })} → —`
         : first.end !== undefined

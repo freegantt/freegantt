@@ -1067,9 +1067,6 @@ export function formatDate(value: Instant, ctx: {
 export function formatDateTime(value: unknown, ctx: FormatContext): string;
 
 // @public
-export function formatEndInclusive(zone: string, span: TimeSpan, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
-
-// @public
 export const formatHour: HeaderFormat;
 
 // @public
