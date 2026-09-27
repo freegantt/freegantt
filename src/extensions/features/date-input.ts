@@ -18,6 +18,9 @@ import type { Disposer, Instant, PlainParts } from '../../model/index.js';
 export interface DateInput {
   /** The control to mount in the cell. */
   readonly element: HTMLElement;
+  /** Does the control show a time of day? A control that shows none gets the date-only end rule on
+   *  `end`. It opens on the last covered day. A typed day stores the start of the next day. */
+  readonly showsTimeOfDay: boolean;
   /** Reads what the user entered, in the dataset's zone. `undefined` means "not a date". */
   read(): Instant | undefined;
   /** Called when the editor opens. */
@@ -47,8 +50,9 @@ function pad(value: number, width: number): string {
 
 /** `<input type="date">`'s own value shape (`YYYY-MM-DD`), read and written through `time`'s zone
  *  math. Never `Date` parsing, and never an inline `end - 1`. The inclusive-display rule
- *  (`plans/01` §5) stays out of scope here. `inlineEditing()` decides which day an `end` shows and
- *  which day a typed value stores. It hands this control an already-resolved Instant either way.
+ *  (`plans/01` §5) stays out of scope here. The control shows no time of day, so `inlineEditing()`
+ *  decides which day an `end` shows and which day a typed value stores. It hands this control an
+ *  already-resolved Instant either way.
  *
  *  Callable only for an Instant already known to fall at local midnight. `inlineEditing()` checks
  *  that before it ever calls `write` (issue #137). So this control assumes a valid date-only
@@ -59,6 +63,7 @@ export function createDefaultDateInput(time: ZoneDateMath): DateInput {
 
   return {
     element: input,
+    showsTimeOfDay: false,
     read(): Instant | undefined {
       if (input.value === '') return undefined;
       const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.value);

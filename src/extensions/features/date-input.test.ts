@@ -11,6 +11,10 @@ function zoneMath(timeZone: string): Dataset['time'] {
 }
 
 describe('createDefaultDateInput (S5.8, D-S5-20)', () => {
+  it('the default control shows no time of day', () => {
+    expect(createDefaultDateInput(zoneMath('UTC')).showsTimeOfDay).toBe(false);
+  });
+
   it('write() sets the <input type="date"> value from a zoned instant', () => {
     const control = createDefaultDateInput(zoneMath('UTC'));
     control.write(instant('2026-09-08T00:00:00Z'));
