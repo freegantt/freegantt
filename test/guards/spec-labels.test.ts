@@ -27,6 +27,8 @@ const EXEMPT_FILES = new Set(['CLAUDE.md', 'AGENTS.md', SELF]);
 const SLICE_DECISION = /\bD-S\d[\d.]*-\d+(?:\/\d+)*\b/g;
 const REVIEW_FINDING = /\b[FJRW]\d+\b/g;
 const QUESTION_ID = /\bQ\d+\b/g;
+/** A slice section such as `S1.12`. A bare `S5` stays legal: it also names a sprint or a series. */
+const SLICE_SECTION = /(?<!-)\bS\d+(?:\.\d+)+\b/g;
 
 interface LabelHit {
   readonly file: string;
@@ -56,6 +58,7 @@ function labelsInLine(line: string): string[] {
     ...(line.match(SLICE_DECISION) ?? []),
     ...(line.match(REVIEW_FINDING) ?? []),
     ...(line.match(QUESTION_ID) ?? []),
+    ...(line.match(SLICE_SECTION) ?? []),
   ];
   return [...new Set(ids)];
 }
@@ -163,6 +166,16 @@ describe('spec ids stay in plans and ADRs', () => {
     expect(labelsInLine('the write door (F4)')).toEqual(['F4']);
     expect(labelsInLine('load origin (Q3)')).toEqual(['Q3']);
     expect(labelsInLine('R2 and W8 in one comment')).toEqual(['R2', 'W8']);
+  });
+
+  it('flags a slice section id, but not the slice inside a decision id', () => {
+    expect(labelsInLine('the locale option (S1.12)')).toEqual(['S1.12']);
+    expect(labelsInLine('the error bus S5.12.3')).toEqual(['S5.12.3']);
+    expect(labelsInLine('the row-geometry rule D-S1.11-6')).toEqual(['D-S1.11-6']);
+  });
+
+  it('does not flag a bare slice or sprint number', () => {
+    expect(labelsInLine('bars S1 to S7 in the chart')).toEqual([]);
   });
 
   it('does not flag JSON, an ISO date, or an invariant id', () => {
