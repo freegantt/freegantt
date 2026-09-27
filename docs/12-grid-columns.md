@@ -154,7 +154,7 @@ import { Dataset, formatDateTime } from 'freegantt';
 new Dataset({
   timeZone: 'Europe/Warsaw',
   entries: [ /* … */ ],
-  fields: [{ key: 'start', formatValue: formatDateTime }], // Start now matches End's date+time
+  fields: [{ key: 'end', formatValue: formatDateTime }], // End shows the stored moment with clock time
 });
 ```
 

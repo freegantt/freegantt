@@ -461,7 +461,7 @@ interface GeometryFrame {
      *  S1.10 so the field names double as the `data-flag` CSS vocabulary directly, D-S1.10-3) —
      *  never hover/selection. */
     flags: BarFlags;
-    /** What a screen reader announces: `${entry.name}, ${formatDate(zone, start)} – ${formatEndInclusive(zone, end)}`
+    /** What a screen reader announces: `${entry.name}, ${formatDate(start, ctx)} – ${formatInclusiveDate(end, ctx, entry)}`
      *  (S1.10, D-S1.10-5). Library-derived text, not consumer render output — same precedent as `label`. */
     a11yLabel: string;
   }>;

@@ -513,7 +513,7 @@ orient="auto-start-reverse"
 <rect class="bx pure" x="508" y="182" width="238" height="106" />
 <text class="t" x="520" y="200">time/input.ts</text>
 <text class="s" x="520" y="216">toInstant(zone, input)</text>
-<text class="s" x="520" y="230">toEndInstant(zone, input, rule)</text>
+<text class="s" x="520" y="230">toEndInstant(zone, input)</text>
 <text class="xs" x="520" y="250">Every date decision lives here —</text>
 <text class="xs" x="520" y="262">it is the only layer allowed the</text>
 <text class="xs" x="520" y="274">zone lookup and the day arithmetic.</text>
