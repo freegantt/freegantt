@@ -62,7 +62,7 @@ Each takes `Partial<EntryVariant>` and returns a complete one. Every key overrid
 
 #### `diamond()` claims rows without learning a word
 
-`diamond()`'s default `when` is `(entry) => entry.duration()?.value === 0` — the predicate `variants.ts:36` already publishes as its worked example.
+`diamond()`'s default `when` is `(entry) => entry.start !== undefined && entry.start === entry.end` — a zero-length span, read off the row.
 
 This is the same principle core's other claim already uses. `summary` claims `entry.hasChildren`. Both are **structure**, not a stored word. Core still never learns that your row is a checkpoint, a handover or a changeover — ADR 0018's whole argument — and an author who has a zero-duration row that is *not* a glyph passes their own `when`.
 

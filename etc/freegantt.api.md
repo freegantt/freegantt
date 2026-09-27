@@ -258,7 +258,6 @@ export interface CommandTarget extends ActedOn {
 export interface ComputeContext extends FieldContext {
     children(row: StoredEntry): readonly StoredEntry[];
     descendants(row: StoredEntry): readonly StoredEntry[];
-    duration(): Duration | undefined;
     hasChildren(row: StoredEntry): boolean;
     hierarchyParentId(): EntryId | undefined;
     leaves(row: StoredEntry): readonly StoredEntry[];
@@ -439,7 +438,6 @@ export interface DatasetOptions<TProps = unknown> {
     history?: false | {
         capacity?: number;
     };
-    measureDuration?: DurationMeasure;
     plugins?: readonly PluginOf<unknown, unknown>[];
     timeZone?: string;
 }
@@ -648,9 +646,6 @@ export interface Duration {
 }
 
 // @public
-export type DurationMeasure = 'span' | 'children';
-
-// @public
 export type EditExtender = (request: EditRequest) => EntryEdits;
 
 // @public
@@ -721,7 +716,6 @@ export interface Entry<TProps = Record<string, unknown>> {
     children(): readonly Entry<TProps>[];
     readonly depth: number;
     descendants(): readonly Entry<TProps>[];
-    duration(): Duration | undefined;
     readonly end?: Instant | undefined;
     readonly hasChildren: boolean;
     // (undocumented)
@@ -2096,11 +2090,12 @@ export class RevealTargetNotFoundError extends FreeGanttError {
 
 // @public
 export interface RollUpContext extends ComputeContext {
-    durations(): readonly (Duration | undefined)[];
     // (undocumented)
     readonly field: FieldKey;
     numericValues(key?: FieldKey): readonly number[];
-    values(key?: FieldKey): readonly unknown[];
+    values(): readonly unknown[];
+    // (undocumented)
+    values<K extends FieldKey>(key: K): readonly (CoreFieldValue<K> | undefined)[];
 }
 
 // @public
@@ -2226,6 +2221,12 @@ export type SnapUnit = TickStep | 'none' | SnapRule;
 
 // @public
 export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover;
+
+// @public
+export function spansTime<T extends {
+    start?: Instant | undefined;
+    end?: Instant | undefined;
+}>(dated: T): dated is T & TimeSpan;
 
 // @public
 export interface StoredEntry<TProps = Record<string, unknown>> {

@@ -8,8 +8,8 @@
 
 import type { CoreFieldValues, Entry, Field, FieldKey } from '../model/index.js';
 
-/** A rule that reads the whole row. Call: `when: (entry) => entry.duration()?.value === 0`. It runs
- *  on the hover path, so keep it cheap: it answers a question and draws nothing. */
+/** A rule that reads the whole row. Call: `when: (entry) => entry.read('duration')?.value === 0`.
+ *  It runs on the hover path, so keep it cheap: it answers a question and draws nothing. */
 export type EntryPredicate<TProps = Record<string, unknown>> = (entry: Entry<TProps>) => boolean;
 
 /** Every named Field equals the value beside it, and several keys are AND.

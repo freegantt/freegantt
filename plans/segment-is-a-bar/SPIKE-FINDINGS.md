@@ -300,10 +300,6 @@ placeholder. Q24 rules the key `childrenAsSegments` and rejects the placeholder 
 
 These left the coordinator's handoff when that file was deleted on 2026-09-18. Each one is owed.
 
-- **`measureEntryDuration` sums `entry.segments`** (`data/fields/field-access.ts:211-222`), and ingest
-  mints one Segment over every spanning Entry. So `'segments'` measures a childless leaf's **own**
-  span today. A plain rename to `'children'` makes every childless leaf measure `0`. This is why C6
-  ships a stopgap, and why **#428** exists.
 - **`FieldType.inputType` is spelled twice** — `model/field.ts:232` and again at `:177`. A build that
   adds a value to one spelling and not the other typechecks and then fails at run time.
 - **C6 renames `ignoreSegments` → `wholeSpan` (Q26).** After C2 that producer returns `[]` for a

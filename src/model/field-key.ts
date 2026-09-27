@@ -17,14 +17,12 @@ export type CoreFieldKey = keyof Omit<StoredEntry, 'id' | 'props'>;
 export type FieldKey = CoreFieldKey | (string & {});
 
 /** What each shipped Field reads as: the `Entry` keys (minus `props`, ADR 0011's one reserved key),
- *  plus `duration` — the one core Field that computes its value and owns no `Entry` key
+ *  plus `duration` and `hierarchyParentId` — the computed core Fields that own no `StoredEntry` key
  *  (`data/fields/core-fields.ts`). The typed way to a consumer's own `props` is
  *  `entries.get(id)?.props`. */
 export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
-  /** This row's duration under the Dataset's `measureDuration`, computed on read (`CORE_FIELDS`) —
-   *  the one core Field with no `Entry` key. `measureEntryDuration` (`data/fields/field-access.ts`)
-   *  is the one computation all three doors reach: `'span'` measures `end - start`, and
-   *  `'children'` sums the direct children's own spans and counts no gap (ADR 0017, ADR 0026). */
+  /** This row's own span, `end - start`, in milliseconds — the core `duration` Field computes it
+   *  on read (`CORE_FIELDS`). `undefined` until the row spans. */
   duration: Duration;
   /** The tree's answer to "who is this row's parent", by key (ADR 0024) — the same answer
    *  `parent()?.id` gives, computed on read, never stored. `parentId` stays the authored value; a

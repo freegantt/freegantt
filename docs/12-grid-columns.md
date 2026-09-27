@@ -175,6 +175,26 @@ function compactFinish(
 }
 ```
 
+### A duration column
+
+`duration`'s `fieldValue` is a `Duration | undefined`, and `value` is already the formatted text
+(`12 d`). Change that text through `fields` on the `Dataset`, the same as for `start` or `end` —
+not through `columnRenderer`. A renderer reads `fieldValue` for a decision, not to recompute the
+text:
+
+```ts
+import { createGridColumnHelper, MS, type ColumnRendererContext, type Duration } from 'freegantt';
+
+const columnHelper = createGridColumnHelper(dataset);
+
+function durationCell({ value, fieldValue }: ColumnRendererContext<Duration>) {
+  const long = fieldValue !== undefined && fieldValue.value > 5 * MS.DAY;
+  return { text: value, className: long ? 'long-task' : undefined };
+}
+
+const gridColumns = [columnHelper.column('duration', { columnRenderer: durationCell })];
+```
+
 ### What the helper checks
 
 - A renderer for the wrong type does not compile. A `ColumnRendererContext<number>` renderer on the
