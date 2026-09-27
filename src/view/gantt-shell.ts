@@ -110,6 +110,7 @@ import type {
   Entry,
   EntryId,
   FieldKey,
+  FormatContext,
   GridColumnInput,
   BarId,
   Instant,
@@ -1522,6 +1523,12 @@ export class GanttShell {
     const field = this.#options.dataset.field(key);
     if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');
     return formatFieldValue(field, entry, formatContextOf(this.#columnBind()));
+  }
+
+  /** The `FormatContext` a Grid column, a bar label, and `formatFieldValue` all format through.
+   *  A caller building its own Formatter call takes this instead of assembling a second copy. */
+  get formatContext(): FormatContext {
+    return formatContextOf(this.#columnBind());
   }
 
   get capabilities(): Capabilities {
