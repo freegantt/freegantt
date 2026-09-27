@@ -10,13 +10,10 @@
 // It also proves the seam by construction. `layout/` satisfies the whole interface out of `model/`
 // and `time/` alone, so `layout/` never needed `data/` and the boundary rule stays untouched.
 //
-// **`duration()` here states the `'span'` measure, and only that one**. The real answer is
-// `measureEntryDuration`, which lives in `data/` and reads the Dataset's own `measureDuration`, so
-// this double cannot call it. A green layout test therefore says nothing about a `'children'`
-// Dataset: a rule like `when: (entry) => entry.duration()?.value === 0` is exercised under one
-// policy of the two.
+// `read('duration')` here states the row's own span, the same rule the core `duration` Field
+// computes in `data/`. It is written again because `layout/` may not import `data/`.
 
-import { entryId } from '../model/index.js';
+import { entryId, spansTime } from '../model/index.js';
 import type { Duration, Entry, EntryId, EntryInput, FieldKey, FieldValue, Instant } from '../model/index.js';
 import { diffMs } from '../time/index.js';
 
@@ -88,7 +85,7 @@ class EntryDouble implements Entry {
       return this.#values.parentId === undefined ? undefined : entryId(this.#values.parentId);
     }
     if (field === 'hierarchyParentId') return this.parent()?.id;
-    if (field === 'duration') return this.duration();
+    if (field === 'duration') return this.#duration();
     if (field === 'id') return this.id;
     if (field === 'name') return this.name;
     if (field === 'start') return this.start;
@@ -96,9 +93,8 @@ class EntryDouble implements Entry {
     return this.#values.props?.[String(field)];
   }
 
-  duration(): Duration | undefined {
-    if (this.start === undefined || this.end === undefined) return undefined;
-    return { value: diffMs(this.end, this.start), unit: 'millisecond' };
+  #duration(): Duration | undefined {
+    return spansTime(this) ? { value: diffMs(this.end, this.start), unit: 'millisecond' } : undefined;
   }
 
   children(): readonly Entry[] {

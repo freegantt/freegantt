@@ -1,7 +1,6 @@
 // model/ is types + brand/id helpers only — zero runtime beyond this, zero dependencies (plans/01 §1.1).
 // A Field is what a value is; a Grid column is where a Gantt shows it (ADR 0005, plans/01 §2.6).
 
-import type { Duration } from './time.js';
 import type { EntryId } from './ids.js';
 import type { StoredEntry } from './stored-entry.js';
 import type { Entry } from './entry.js';
@@ -250,7 +249,7 @@ export interface FieldContext {
  *  rule 1 is why a structure question takes the row it asks about and a value question does not;
  *  rule 2 is the value/structure split itself.
  *
- *  A value question — `read(key)`, `duration()`, `hierarchyParentId()` — stays bound to the row the
+ *  A value question — `read(key)`, `hierarchyParentId()` — stays bound to the row the
  *  pass is computing: a bottom-up pass has written only what it has reached, so a value asked of any
  *  other row would answer with whatever that row held before this pass touched it.
  *
@@ -291,9 +290,6 @@ export interface ComputeContext extends FieldContext {
   /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. Bound to
    *  the row this pass is computing; not a structure question, so it takes no row (ADR 0017 amendment, rule 2). */
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
-  /** This row's duration, through `time/` and the Dataset's `measureDuration`. Bound to the row this
-   *  pass is computing (ADR 0017 amendment, rule 2). */
-  duration(): Duration | undefined;
   /** One step down: `Depot` → Van 1, Van 2. One tree read, no allocation beyond the array returned.
    *
    *  Exactly one level, and that is load-bearing for a Rollup: a parent's value already aggregates

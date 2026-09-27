@@ -87,12 +87,12 @@ describe('readField / writeField (D-S4-2)', () => {
     expect('cost' in writeOntoEntry(entry, cost, undefined).props).toBe(false);
   });
 
-  it('reads a compute Field through the guarded durationOf', () => {
+  it('reads the duration Field as the row’s own span', () => {
     const entry = span();
     expect(readField(entry, duration, fieldCtx)).toEqual({ value: 1, unit: 'millisecond' });
   });
 
-  it('durationOf reads undefined for a dateless Entry, never NaN (ADR 0012)', () => {
+  it('reads an undefined duration for an Entry with no dates, never NaN', () => {
     const dateless: StoredEntry = { id: entryId('t2'), siblingIndex: 0, name: 't2', props: {} };
     expect(readField(dateless, duration, fieldCtx)).toBeUndefined();
   });
@@ -314,7 +314,7 @@ describe('createRollUpContext values/numericValues (issue #124)', () => {
 // ADR 0017, *What a hypothetical row reads with*: `readField` hands a `compute` Field a row the
 // store does not hold, so every question it asks binds to the pass, not to a row it names.
 describe('the ComputeContext a compute Field runs inside (ADR 0017, #214)', () => {
-  it('reads a sibling Field through ctx.read, and this row’s duration through ctx.duration', () => {
+  it('reads a sibling Field through ctx.read, the duration Field included', () => {
     const state = new DatasetState({
       timeZone: 'UTC',
       entries: [{ id: 't1', name: 'Design', start: 0, end: 5 }],
@@ -322,12 +322,19 @@ describe('the ComputeContext a compute Field runs inside (ADR 0017, #214)', () =
         { key: 'cost' },
         {
           key: 'summary',
-          compute: (_entry, ctx) => `${String(ctx.read('name'))}/${String(ctx.duration()?.value)}`,
+          compute: (_entry, ctx) => `${String(ctx.read('name'))}/${String(ctx.read('duration')?.value)}`,
         },
       ],
     });
 
     expect(state.entries.get('t1')?.read('summary')).toBe('Design/5');
+  });
+
+  it('offers no duration door: a pass reads the duration Field by key', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: [{ id: 't1', name: 'Design' }] });
+    const stored = state.entries.storedValues.get(entryId('t1'))!;
+    expect('duration' in createComputeContext(state.fieldAccess, stored)).toBe(false);
+    expect('durations' in createRollUpContext(state.fieldAccess, stored, [], 'cost')).toBe(false);
   });
 
   it('builds no ComputeContext for a stored-Field read, and one for a compute arm', () => {

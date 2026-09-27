@@ -7,7 +7,6 @@
 // names the type and never the factory, so the import graph stays `layout/ → model/` (ADR 0017,
 // *The seam with `layout/`*).
 
-import type { Duration } from './time.js';
 import type { Instant } from './time.js';
 import type { EntryId } from './ids.js';
 import type { FieldKey, FieldValue } from './field-key.js';
@@ -18,7 +17,7 @@ import type { EntryInput } from './stored-entry.js';
  *
  * **A member that does no work is a property. A member that computes, walks or allocates carries
  * parentheses** (ADR 0017, rule 4). So `hasChildren` and `depth` are properties, and `children()`,
- * `parent()`, `descendants()` and `duration()` are methods — `parent()` answers one value and still
+ * `parent()` and `descendants()` are methods — `parent()` answers one value and still
  * carries parentheses, because it looks the row up.
  *
  * There is no `entry.update()`: the `Entry` reads, and `dataset.entries.update(id, edit)` writes.
@@ -44,11 +43,6 @@ export interface Entry<TProps = Record<string, unknown>> {
    *  its own doors — `parent()` and `read('hierarchyParentId')` — because a plugin-owned hierarchy
    *  (ADR 0020) can make the tree disagree with the stored `parentId`, on purpose. */
   read<K extends FieldKey>(field: K): FieldValue<TProps, K> | undefined;
-
-  /** Core's sixth Field, computed from `start` and `end` through `time/` under the Dataset's own
-   *  `measureDuration` policy. It allocates, so it carries parentheses. `undefined` iff this Entry
-   *  does not span (ADR 0012) — never `NaN`. */
-  duration(): Duration | undefined;
 
   /** Free: a cached index read, no allocation. */
   readonly hasChildren: boolean;
