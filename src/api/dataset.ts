@@ -76,6 +76,12 @@ export interface DatasetOptions<TProps = unknown> {
    * zone. Pass it explicitly whenever the dataset must render identically for every viewer, such
    * as a shared project plan. */
   timeZone?: string;
+  /** Locale for a Field's formatted text (#583) — named once, here, instead of on every
+   * `formatFieldValue` call. Fixed for this Dataset's lifetime, the same as `timeZone`. Omit it
+   * to let each caller name its own, or fall back further still to the runtime's own locale:
+   * `dataset.formatFieldValue(entry, key, locale?)` reads `locale ?? this.locale`, and a Gantt with
+   * no `locale` of its own reads this before the runtime's own. */
+  locale?: Intl.LocalesArgument;
   /** Consumer Field declarations. Core Fields are already in the registry. */
   fields?: readonly Field[];
   /** Named Field type bundles. A Field's own keys win over the bundle. */
@@ -164,10 +170,14 @@ export class Dataset<TProps = unknown> {
   #state: DatasetState;
   /** Bound once, at construction — `timeZone` is fixed for this Dataset's lifetime either way. */
   #time: ZonedTime;
+  /** Fixed at construction, the same as `timeZone` — `undefined` when the consumer named none
+   *  (#583). */
+  readonly #locale: Intl.LocalesArgument | undefined;
   readonly #plugins: readonly PluginOf<unknown, unknown>[];
   readonly #disposePlugins: () => void;
 
   constructor(options: DatasetOptions<TProps>) {
+    this.#locale = options.locale;
     this.#plugins = options.plugins ?? [];
     // Checked before a plugin's Field declarations are merged (#496 grill round 3): that merge
     // throws `DuplicateFieldKeyError` on a repeated Field key, and two plugins sharing an id often
@@ -253,6 +263,13 @@ export class Dataset<TProps = unknown> {
     return this.#state.timeZone;
   }
 
+  /** This Dataset's own locale (#583), fixed at construction — `undefined` when the consumer named
+   *  none. `formatFieldValue`'s own `locale` argument beats it; a Gantt with no `locale` of its own
+   *  reads it before the runtime's own. */
+  get locale(): Intl.LocalesArgument | undefined {
+    return this.#locale;
+  }
+
   /** Zone-aware date math bound to this Dataset's own zone — the one way a plugin author
    *  reaches `time/` (the `exports` map seals it against a direct import). Call:
    *  `dataset.time.eachDay(span).filter((day) => dataset.time.dayOfWeek(day) >= 6)`. */
@@ -268,14 +285,14 @@ export class Dataset<TProps = unknown> {
 
   /** Call: `dataset.formatFieldValue(entry, 'cost', 'de-DE')` — "format this entry's cost value, in
    *  German". The same text a grid cell, a bar label and the tooltip show: the Field's own
-   *  `formatValue`, or the plain text of a primitive value. The zone is this Dataset's. Omit
-   *  `locale` for the runtime's own locale, the same as a Gantt with no `locale`. No Gantt is
-   *  needed, so a server-side export reads the text through this. Throws `UnknownFieldError` for an
-   *  undeclared key. */
+   *  `formatValue`, or the plain text of a primitive value. The zone is this Dataset's. `locale`
+   *  beats this Dataset's own `locale` (#583); omit both for the runtime's own locale, the same as a
+   *  Gantt with no `locale`. No Gantt is needed, so a server-side export reads the text through
+   *  this. Throws `UnknownFieldError` for an undeclared key. */
   formatFieldValue(entry: Entry<TProps>, key: FieldKey, locale?: Intl.LocalesArgument): string {
     const field = this.field(key);
     if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');
-    return formatFieldValue(field, entry, createFormatContext(this.timeZone, locale));
+    return formatFieldValue(field, entry, createFormatContext(this.timeZone, locale ?? this.#locale));
   }
 
   /** Resolved Field declarations this Dataset owns, core Fields included, each after its
