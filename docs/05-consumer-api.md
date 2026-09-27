@@ -200,6 +200,15 @@ dataset.entries.update('roofing', { siblingIndex: 0 });
 - `variants` — the rules this Gantt paints rows with; `bar()`, `summary()`, `diamond()` are core's own shipped looks.
 - `gantt.variantFor(entry): ResolvedVariant` — the whole variant this Gantt resolved for one row, never `entry.variant`: an Entry belongs to a `Dataset`, a variant resolves per Gantt, and two Gantts on one Dataset may answer differently for the same row.
 
+### Formatters
+
+A Formatter is `(value, ctx: FormatContext) => string` — a Field's `formatValue` takes the same
+shape plus the row it came from: `(value, ctx, entry) => string`. `ctx` carries the zone and the
+locale; a Formatter never reads either off the Dataset or the Gantt directly. A missing value
+gives `''`, never `'undefined'` and never a throw. A Formatter that needs options — `dateFormatter`
+below, `currency({ code })` — is built by a factory, so the call site never carries options: build
+it once, then hand the returned function to `formatValue`.
+
 ### Dates: `formatDateTime`, `formatInclusiveDate`, `lastCoveredInstant`
 
 Storage is half-open: `end` is the boundary *after* the span, not its last moment. A date-only
@@ -258,6 +267,25 @@ function compactFinish(
   if (value === undefined || value === null) return '';
   return compactDay(lastCoveredInstant({ start: entry.start, end: value as Instant }), ctx);
 }
+```
+
+### A Field's text outside the grid: `gantt.formatFieldValue`
+
+**`gantt.formatFieldValue(entry, key)`** gives the text a Field shows for one `Entry`, through the
+same door the Grid cell and the bar label read through — a status line, a CSV row, any place a
+Field's own formatted text is useful outside the Grid pane. It follows `gantt.locale` live, works
+for a Field with no column and for a `compute` Field, and throws `UnknownFieldError` for a key no
+Field declares.
+
+<!-- doc-example-setup
+declare const entry: import('freegantt').Entry;
+-->
+
+```ts
+const statusLine = `${entry.name} · ${gantt.formatFieldValue(entry, 'progress')}`;
+const csvRow = gantt.gridColumns
+  .map((column) => gantt.formatFieldValue(entry, typeof column === 'string' ? column : column.field))
+  .join(',');
 ```
 
 ### Naming
