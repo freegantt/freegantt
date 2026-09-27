@@ -257,7 +257,7 @@ export interface FrameBar {
    *  `variant`. `render/` stamps it as `data-span="clipped"`, `"minimum"`, or `"fixed"` (`02` §4) —
    *  `'exact'` alone carries no attribute, since it is the paint a reader assumes by default. */
   span: BarSpanKind;
-  /** What a screen reader announces: `${label}, ${formatDate(zone, start)} – ${formatInclusiveDate(end, zone)}`,
+  /** What a screen reader announces: `${label}, ${formatDate(start, ctx)} – ${formatInclusiveDate(end, ctx, entry)}`,
    * or the dates alone when `label` is `''` (#421 C5) — a nameless Entry still reads its dates, never
    * a leading ", ". Library-derived text, not consumer render output — same precedent as `label`
    * (plans/01 §4: "no user render output in the frame"). Composed here because it needs the dataset
@@ -469,8 +469,10 @@ function barA11yLabel(
   scale: TimeScale,
   locale: Intl.LocalesArgument | undefined,
 ): string {
-  // Same two formatters a Field's own `formatValue` could use, called directly: `layout/` may not
-  // import `data/`, so it cannot read the `end` Field's formatter and must state the rule itself.
+  // Start reads date only, with the general-purpose `formatDate`: a mixed pair (date+time start,
+  // date-only end) would read worse than a matched one. End reads through `formatInclusiveDate`,
+  // the same formatter a Field's own `formatValue` could use — `layout/` may not import `data/`,
+  // so it cannot read the `end` Field's formatter and must state the rule itself.
   const span = `${formatDate(bar.start, { timeZone: scale.timeZone, locale })} – ${formatInclusiveDate(bar.end, { timeZone: scale.timeZone, locale }, bar)}`;
   // #421 C5: a nameless Entry announces its dates alone, never a leading ", ".
   const prefix = label === '' ? '' : `${label}, `;
