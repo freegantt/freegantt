@@ -439,7 +439,6 @@ export interface DatasetOptions<TProps = unknown> {
     history?: false | {
         capacity?: number;
     };
-    measureDuration?: DurationMeasure;
     plugins?: readonly PluginOf<unknown, unknown>[];
     timeZone?: string;
 }
@@ -646,9 +645,6 @@ export interface Duration {
     // (undocumented)
     value: number;
 }
-
-// @public
-export type DurationMeasure = 'span' | 'children';
 
 // @public
 export type EditExtender = (request: EditRequest) => EntryEdits;

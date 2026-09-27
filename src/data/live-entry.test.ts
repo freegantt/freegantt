@@ -170,32 +170,16 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
     }
   });
 
-  // The Dataset says how core measures a duration. A Gantt may not: duration is a Field,
-  // and the Rollup reads it before any Gantt exists. ADR 0026 retired the Segment `'segments'`
-  // measure; `'children'` is its replacement — it sums each direct child's own span instead.
   const withGap: DatasetStateOptions['entries'] = [
     { id: 'gapped', name: 'Gapped', start: 0, end: 4 * MS.DAY },
     { id: 'c1', name: 'Child 1', parentId: 'gapped', start: 0, end: MS.DAY },
     { id: 'c2', name: 'Child 2', parentId: 'gapped', start: 3 * MS.DAY, end: 4 * MS.DAY },
   ];
 
-  it("counts the gap under 'span' and skips it under 'children'", () => {
-    const span = datasetOf({ entries: withGap, measureDuration: 'span' });
-    const children = datasetOf({ entries: withGap, measureDuration: 'children' });
+  it('measures a parent from its own start to its own end, and counts the gap between its children', () => {
+    const state = datasetOf({ entries: withGap });
 
-    expect(rowOf(span, 'gapped').duration()).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
-    expect(rowOf(children, 'gapped').duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
-  });
-
-  it('makes the two settings agree on one child with no gap', () => {
-    const whole: DatasetStateOptions['entries'] = [
-      { id: 'whole', name: 'Whole', start: 0, end: 2 * MS.DAY },
-      { id: 'only', name: 'Only child', parentId: 'whole', start: 0, end: 2 * MS.DAY },
-    ];
-    const span = datasetOf({ entries: whole, measureDuration: 'span' });
-    const children = datasetOf({ entries: whole, measureDuration: 'children' });
-
-    expect(rowOf(span, 'whole').duration()).toEqual(rowOf(children, 'whole').duration());
+    expect(rowOf(state, 'gapped').duration()).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
   });
 });
 
