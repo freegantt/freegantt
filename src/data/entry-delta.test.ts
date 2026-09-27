@@ -14,7 +14,7 @@ import { FieldRegistry } from './fields/field-registry.js';
 import { storedParentSource } from './hierarchy-source.js';
 import type { SiblingGroupKey } from './sibling-order.js';
 
-const context: EntryReadContext = { timeZone: 'UTC', dateOnlyEnd: 'inclusive' };
+const context: EntryReadContext = { timeZone: 'UTC' };
 
 function committedFrom(inputs: readonly FlatEntryInput[], registry: FieldRegistry): CommittedEntries {
   const { entries, parents } = readEntryBatch(inputs, context, registry, storedParentSource, 'test');

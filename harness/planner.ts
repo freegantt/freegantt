@@ -6,8 +6,6 @@ import {
   tooltips,
   contextMenu,
   inlineEditing,
-  formatDate,
-  formatEndInclusive,
   diamond,
   meter,
   timeShading,
@@ -37,7 +35,8 @@ const dataset = new Dataset<PlannerEntryProps>({
   ...plannerFieldOptions,
 });
 
-// Types each column's renderer from this Dataset's props, so the Start and Finish cells read an Instant.
+// Types each column's renderer from this Dataset's props, so the Task, Own, Dur and Done cells
+// below read the value their own columnRenderer expects.
 const columnHelper = createGridColumnHelper(dataset);
 
 // The design's own column set, left to right. Each one names a Field and carries presentation only —
@@ -48,8 +47,10 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   columnHelper.column('name', { header: 'Task', width: 210, columnRenderer: taskCell }),
   columnHelper.column('owner', { width: 48, columnRenderer: ownerCell }),
   columnHelper.column('duration', { header: 'Dur', align: 'end', width: 52, columnRenderer: durationCell }),
-  columnHelper.column('start', { align: 'end', width: 72, columnRenderer: startCell }),
-  columnHelper.column('end', { header: 'Finish', align: 'end', width: 72, columnRenderer: finishCell }),
+  // Start and Finish paint no columnRenderer of their own — the compact "02 Mar" text comes off
+  // each Field's own `formatValue` (`fixtures/planner-dataset.ts`).
+  columnHelper.column('start', { align: 'end', width: 72 }),
+  columnHelper.column('end', { header: 'Finish', align: 'end', width: 72 }),
   // The Done cell is core's meter. This page does not re-implement it.
   columnHelper.column('progress', { header: 'Done', width: 82, columnRenderer: meter() }),
 ];
@@ -89,32 +90,6 @@ function ownerCell({ entry, value }: ColumnRendererContext): ElementDescription 
     attrs: { title: `Owner ${value}` },
     text: value,
   };
-}
-
-// The design's compact Start/Finish format: two-digit day, three-letter month, no year, no time —
-// `02 Mar`, not the core Field's own `Jun 29, 2026, 12:00 AM`. Both `formatDate` and
-// `formatEndInclusive` already take an `Intl.DateTimeFormatOptions` override; this page just picks
-// a narrower one than their shared default.
-const COMPACT_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
-
-/** The Start cell: `formatDate` alone, in the compact format — a start needs no inclusive-end
- *  conversion (that is `formatEndInclusive`'s job, below). */
-function startCell({ fieldValue }: ColumnRendererContext<Instant>): ElementDescription | undefined {
-  if (fieldValue === undefined) return { text: '' };
-  return { text: formatDate(dataset.timeZone, fieldValue, undefined, COMPACT_DATE_FORMAT) };
-}
-
-/** The Finish cell: `formatEndInclusive`, the one place storage's half-open `end` becomes the
- *  inclusive date a reader expects, in the same compact format as Start. */
-function finishCell({ entry, fieldValue }: ColumnRendererContext<Instant>): ElementDescription | undefined {
-  if (entry === undefined || fieldValue === undefined) return { text: '' };
-  // End with no start (ADR 0012) shows the stored end as a plain instant — same rule the core
-  // `end` Field's own `formatEnd` follows in `src/data/fields/core-fields.ts`.
-  if (entry.start === undefined) {
-    return { text: formatDate(dataset.timeZone, fieldValue, undefined, COMPACT_DATE_FORMAT) };
-  }
-  const span = { start: entry.start, end: fieldValue };
-  return { text: formatEndInclusive(dataset.timeZone, span, undefined, COMPACT_DATE_FORMAT) };
 }
 
 /** The Dur cell: the design's `12d` — no space, lowercase `d`. The core `duration` Field already
@@ -263,8 +238,8 @@ function setReadout(text: string): void {
 }
 
 /** The design's status line: what is picked, when it runs, and how far along it is. The finish date
- *  goes through `formatEndInclusive` — storage is half-open `[start, end)` and display is inclusive,
- *  and that helper is the one place the library does the conversion. */
+ *  goes through the `end` Field's own `formatValue` — storage is half-open `[start, end)` and
+ *  display is inclusive, and that Field is the one place this page does the conversion. */
 function renderSelection(): void {
   const entries = gantt.selectedEntries;
   const first = entries[0];
@@ -272,16 +247,18 @@ function renderSelection(): void {
     setReadout('Nothing selected — click a bar or a row.');
     return;
   }
-  const zone = dataset.timeZone;
-  // A selected row may hold neither, one, or both dates (ADR 0012) — show whichever it has,
-  // instead of assuming the pair `formatEndInclusive` needs.
+  const ctx = { timeZone: dataset.timeZone, locale: gantt.locale };
+  const startText = (value: Instant): string =>
+    dataset.field('start')?.formatValue?.(value, ctx, first) ?? '';
+  const endText = (value: Instant): string => dataset.field('end')?.formatValue?.(value, ctx, first) ?? '';
+  // A selected row may hold neither, one, or both dates (ADR 0012) — show whichever it has.
   const span =
     first.start !== undefined && first.end !== undefined
-      ? `${formatDate(zone, first.start)} → ${formatEndInclusive(zone, { start: first.start, end: first.end })}`
+      ? `${startText(first.start)} → ${endText(first.end)}`
       : first.start !== undefined
-        ? `${formatDate(zone, first.start)} → —`
+        ? `${startText(first.start)} → —`
         : first.end !== undefined
-          ? `— → ${formatDate(zone, first.end)}`
+          ? `— → ${endText(first.end)}`
           : 'No dates';
   const done = first.read('progress');
   const percent = typeof done === 'number' ? ` · ${done}%` : '';

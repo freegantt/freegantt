@@ -138,7 +138,7 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
   it('agrees with `read("duration")` on both the value and the unit', () => {
     const solo = rowOf(datasetOf(), 'solo');
 
-    // `dateOnlyEnd` defaults to `'inclusive'`, so a date-only end names the whole of that day.
+    // A date-only end always means through that day, so it names the whole of that day.
     expect(solo.duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
     expect(solo.read('duration')).toEqual(solo.duration());
   });

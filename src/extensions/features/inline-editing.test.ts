@@ -1743,3 +1743,137 @@ describe('parseValue reads the ambient zone and the row it parses into (ADR 0017
     container.remove();
   });
 });
+
+describe('the End editor shows the last covered day and stores the next day (#577)', () => {
+  function makeEndGantt(entry: EntryInput): {
+    container: HTMLElement;
+    gantt: Gantt;
+    dataset: Dataset;
+  } {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({ entries: [entry], timeZone: 'UTC' });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'start', 'end'],
+      plugins: [inlineEditing()],
+    });
+    return { container, gantt, dataset };
+  }
+
+  it('opens on the last covered day, and an unchanged Enter leaves the stored end untouched', () => {
+    const { container, gantt, dataset } = makeEndGantt({
+      id: 'e1',
+      name: 'Task',
+      start: '2026-03-02',
+      end: '2026-03-04',
+    });
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(input(container).value).toBe('2026-03-04');
+    enter(input(container));
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-05T00:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('typing a day stores the day after it', async () => {
+    const { container, gantt, dataset } = makeEndGantt({
+      id: 'e1',
+      name: 'Task',
+      start: '2026-03-02',
+      end: '2026-03-04',
+    });
+    dblclick(cellFor(container, 'e1', 'end'));
+    const el = input(container);
+    el.value = '2026-03-10';
+    enter(el);
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-11T00:00:00Z'));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(cellFor(container, 'e1', 'end').textContent).toBe('Mar 10, 2026');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('an end with no start opens on its own last covered day', () => {
+    const { container, gantt } = makeEndGantt({ id: 'e1', name: 'Task', end: '2026-03-04' });
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(input(container).value).toBe('2026-03-04');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a zero-length span opens on its own day, and an unchanged Enter keeps it zero-length', () => {
+    // A date-only `end` always ingests to the next day's start (ruling 2), so a genuine
+    // zero-length span needs its own end written as an already-resolved instant, matching start.
+    const { container, gantt, dataset } = makeEndGantt({
+      id: 'e1',
+      name: 'Task',
+      start: '2026-03-05',
+      end: '2026-03-05T00:00:00Z',
+    });
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(input(container).value).toBe('2026-03-05');
+    enter(input(container));
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-05T00:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a blank End commits the typed day as the next day, and the cell shows the typed day', async () => {
+    const { container, gantt, dataset } = makeEndGantt({
+      id: 'e1',
+      name: 'Task',
+      start: '2026-03-02',
+    });
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(input(container).value).toBe('');
+    const el = input(container);
+    el.value = '2026-03-04';
+    enter(el);
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-05T00:00:00Z'));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(cellFor(container, 'e1', 'end').textContent).toBe('Mar 4, 2026');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a timed end still refuses the default editor with the time-of-day reason (#137)', () => {
+    const { container, gantt } = makeEndGantt({
+      id: 'e1',
+      name: 'Task',
+      start: '2026-03-02',
+      end: '2026-03-04T14:00:00Z',
+    });
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(refusal(container)!.dataset['reason']).toBe('time-of-day');
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('an edited end, saved as an Instant, loads back unchanged', () => {
+    const { container, gantt, dataset } = makeEndGantt({
+      id: 'e1',
+      name: 'Task',
+      start: '2026-03-02',
+      end: '2026-03-04',
+    });
+    dblclick(cellFor(container, 'e1', 'end'));
+    const el = input(container);
+    el.value = '2026-03-10';
+    enter(el);
+    const edited = dataset.entries.get('e1')!;
+    gantt.destroy();
+    container.remove();
+
+    const {
+      container: container2,
+      gantt: gantt2,
+      dataset: dataset2,
+    } = makeEndGantt({ id: 'e1', name: 'Task', start: edited.start, end: edited.end });
+    expect(dataset2.entries.get('e1')!.end).toBe(edited.end);
+    expect(cellFor(container2, 'e1', 'end').textContent).toBe('Mar 10, 2026');
+    gantt2.destroy();
+    container2.remove();
+  });
+});

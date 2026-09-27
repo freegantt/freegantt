@@ -541,7 +541,8 @@ export class DuplicatePropsKeyError extends FreeGanttError {
  *  `name`, ...) and carries a key the library does not let a consumer override there. A core Field
  *  cannot be redeclared (`DuplicateFieldKeyError` is for two ordinary declarations sharing a key),
  *  but `field-registry.ts`'s `CORE_FIELD_OVERRIDABLE_KEYS` lets one declaration merge a narrow,
- *  named set of keys onto a core Field instead — `editable` today (#142). Naming any other key
+ *  named set of keys onto a core Field instead — `editable` and `formatValue` on every core Field
+ *  (#142, #577), `rollUp` only where the core Field declares one of its own. Naming any other key
  *  (`source`, `column`, ...) throws this. */
 export class IllegalCoreFieldOverrideError extends FreeGanttError {
   readonly key: string;

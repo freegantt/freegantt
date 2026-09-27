@@ -163,9 +163,10 @@ test('generic demo shows Budget column, deep tree indent, and grouped rows', asy
   await expect
     .poll(async () => page.locator('#gantt .fg-row [data-field="start"]').first().textContent())
     .toMatch(/\d{1,2}:\d{2}/);
+  // End shows the last covered day, date only, by design: no clock time.
   await expect
     .poll(async () => page.locator('#gantt .fg-row [data-field="end"]').first().textContent())
-    .toMatch(/\d{1,2}:\d{2}/);
+    .not.toMatch(/\d{1,2}:\d{2}/);
 
   const maxDepth = () =>
     page

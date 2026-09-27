@@ -1,5 +1,6 @@
 export { instant, now, toISO, addMs, diffMs, overlap, MS } from './instant.js';
 export { toInstant, toEndInstant, readPlainTime } from './input.js';
+export { startOfNextDay, startOfLastCoveredDay } from './date-only-end.js';
 export {
   toPlain,
   fromPlain,
@@ -24,7 +25,9 @@ export { createZonedTime } from './zoned-time.js';
 export type { ZonedTime } from './zoned-time.js';
 export {
   formatDate,
-  formatEndInclusive,
+  formatDateTime,
+  formatInclusiveDate,
+  lastCoveredInstant,
   DATE_TIME_FORMAT,
   resolveDateFormat,
   formatWeekNumber,

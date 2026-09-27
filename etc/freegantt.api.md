@@ -373,8 +373,6 @@ export class Dataset<TProps = unknown> {
     get canRedo(): boolean;
     get canUndo(): boolean;
     get datasetRevision(): number;
-    // (undocumented)
-    get dateOnlyEnd(): DateOnlyEndRule;
     destroy(): void;
     editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     // (undocumented)
@@ -435,7 +433,6 @@ export interface DatasetEvents {
 // @public (undocumented)
 export interface DatasetOptions<TProps = unknown> {
     aggregators?: Readonly<Record<string, Aggregator>>;
-    dateOnlyEnd?: DateOnlyEndRule;
     entries: readonly EntryIngestInput<TProps>[];
     fields?: readonly Field[];
     fieldTypes?: Readonly<Record<string, FieldType>>;
@@ -511,9 +508,6 @@ export interface DateLineInput {
 
 // @public
 export type DateLineLabelPlacement = 'inHeader' | 'belowHeader' | number;
-
-// @public
-export type DateOnlyEndRule = 'inclusive' | 'exclusive';
 
 // @public
 export function dates(at: InstantInput, ...moreAt: readonly InstantInput[]): TimeCover;
@@ -1064,13 +1058,21 @@ export interface FormatContext extends FieldContext {
 }
 
 // @public
-export function formatDate(zone: string, i: Instant, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
+export function formatDate(value: Instant, ctx: {
+    readonly timeZone: string;
+    readonly locale?: Intl.LocalesArgument;
+}, options?: Intl.DateTimeFormatOptions): string;
 
 // @public
-export function formatEndInclusive(zone: string, span: TimeSpan, locale?: Intl.LocalesArgument, options?: Intl.DateTimeFormatOptions): string;
+export function formatDateTime(value: unknown, ctx: FormatContext): string;
 
 // @public
 export const formatHour: HeaderFormat;
+
+// @public
+export function formatInclusiveDate(value: unknown, ctx: FormatContext, entry: {
+    readonly start?: Instant | undefined;
+}): string;
 
 // @public
 export const formatWeekNumber: HeaderFormat;
@@ -1620,6 +1622,12 @@ export interface KeyEventLike {
     // (undocumented)
     target: EventTarget | null;
 }
+
+// @public
+export function lastCoveredInstant(span: {
+    readonly start?: Instant | undefined;
+    readonly end: Instant;
+}): Instant;
 
 // @public (undocumented)
 export type MenuEntry = MenuItem | {
@@ -2549,7 +2557,7 @@ export interface ZonedTime {
     // (undocumented)
     startOfDay(at: Instant): Instant;
     step(at: Instant, unit: TimeUnit, increment?: number): Instant;
-    toEndInstant(input: InstantInput, rule?: DateOnlyEndRule): Instant;
+    toEndInstant(input: InstantInput): Instant;
     toInstant(input: InstantInput): Instant;
     // (undocumented)
     toPlain(at: Instant): PlainParts;

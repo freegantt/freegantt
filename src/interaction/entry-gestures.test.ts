@@ -26,7 +26,7 @@ function toInstant(ms: number): Instant {
  *  (`.dependency-cruiser.cjs`), and the store is the one place a live `Entry` is built (ADR 0017),
  *  so nothing here stands one in. */
 function storeOf(rows: readonly StoredEntry[]): EntryStore {
-  return new EntryStore(rows, { timeZone: 'UTC', dateOnlyEnd: 'inclusive' });
+  return new EntryStore(rows, { timeZone: 'UTC' });
 }
 
 function storedFor(id: EntryId, siblingIndex: number): StoredEntry {

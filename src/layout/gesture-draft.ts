@@ -234,5 +234,5 @@ export function cursorLabelForX(
   locale?: Intl.LocalesArgument,
 ): string {
   const snapped = snapInstant(scale.timeZone, scale.instantForX(x), snap);
-  return formatDate(scale.timeZone, snapped, locale);
+  return formatDate(snapped, { timeZone: scale.timeZone, locale });
 }

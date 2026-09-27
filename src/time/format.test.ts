@@ -5,56 +5,107 @@ import {
   DATE_TIME_FORMAT,
   dropRepeatedGranularity,
   formatDate,
-  formatEndInclusive,
+  formatDateTime,
+  formatInclusiveDate,
   formatWeekNumber,
+  lastCoveredInstant,
 } from './format.js';
 import type { ViewPresetHeader } from './scale.js';
+import type { FormatContext } from '../model/index.js';
 
 const ZONE = 'America/New_York';
+const ctx = (locale: Intl.LocalesArgument = 'en-US'): FormatContext => ({ timeZone: ZONE, locale });
 
 describe('formatDate', () => {
   it('formats a start with no conversion', () => {
     const start = instant('2026-08-26T14:30:00Z'); // 10:30 EDT
-    expect(formatDate(ZONE, start)).toBe('Aug 26, 2026');
+    expect(formatDate(start, ctx())).toBe('Aug 26, 2026');
   });
 
   it('includes clock time when DATE_TIME_FORMAT is passed', () => {
     const start = instant('2026-08-26T14:30:00Z'); // 10:30 EDT
-    const text = formatDate(ZONE, start, 'en-US', DATE_TIME_FORMAT);
+    const text = formatDate(start, ctx(), DATE_TIME_FORMAT);
     expect(text).toContain('Aug 26, 2026');
     expect(text).toMatch(/10:30/);
   });
+
+  it('takes a locale-less ctx: locale is optional', () => {
+    const start = instant('2026-08-26T14:30:00Z');
+    expect(formatDate(start, { timeZone: ZONE })).toBe('Aug 26, 2026');
+  });
 });
 
-describe('formatEndInclusive', () => {
-  // A start well before every `end` below, so none of these spans is the zero-length case.
-  const start = instant('2000-01-01T00:00:00Z');
+describe('lastCoveredInstant', () => {
+  it('steps back one millisecond from end', () => {
+    const start = instant('2026-03-02T00:00:00Z');
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(lastCoveredInstant({ start, end })).toBe(instant('2026-03-04T23:59:59.999Z'));
+  });
 
-  it('converts a half-open end to the last day the span actually covers', () => {
-    // A span stored as [2026-08-26, 2026-08-27) displays as ending Aug 26, not Aug 27.
-    const end = startOfDay(ZONE, instant('2026-08-27T12:00:00Z'));
-    expect(formatEndInclusive(ZONE, { start, end })).toBe('Aug 26, 2026');
+  it('leaves a zero-length span at its own end, never one millisecond earlier (#240)', () => {
+    const at = instant('2026-01-05T10:00:00Z');
+    expect(lastCoveredInstant({ start: at, end: at })).toBe(at);
+  });
+
+  it('works with no start at all', () => {
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(lastCoveredInstant({ end })).toBe(instant('2026-03-04T23:59:59.999Z'));
+  });
+
+  it('takes no time zone: the millisecond step is the same in every zone', () => {
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(lastCoveredInstant({ end })).toBe(instant('2026-03-04T23:59:59.999Z'));
+  });
+});
+
+describe('formatDateTime', () => {
+  it('shows the stored moment, date and clock time', () => {
+    const at = instant('2026-03-05T00:00:00Z');
+    expect(formatDateTime(at, ctx())).toBe('Mar 4, 2026, 7:00 PM');
+  });
+
+  it('shows a blank cell for no value', () => {
+    expect(formatDateTime(undefined, ctx())).toBe('');
+    expect(formatDateTime(null, ctx())).toBe('');
+  });
+});
+
+describe('formatInclusiveDate', () => {
+  const start = instant('2026-03-02T00:00:00Z');
+
+  it('shows the last day a span covers, date only', () => {
+    const end = instant('2026-03-05T00:00:00Z'); // boundary: covers through Mar 4 EST
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Mar 4, 2026');
+  });
+
+  it('works with no start at all', () => {
+    const end = instant('2026-03-05T00:00:00Z');
+    expect(formatInclusiveDate(end, ctx(), {})).toBe('Mar 4, 2026');
+  });
+
+  it('shows a zero-length span at its own end, unchanged', () => {
+    const at = instant('2026-01-05T10:00:00Z');
+    expect(formatInclusiveDate(at, ctx(), { start: at })).toBe(formatDate(at, ctx()));
+  });
+
+  it('shows a timed end at its own day, never the day before', () => {
+    const end = instant('2026-03-05T00:00:01Z'); // one second after midnight EST
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Mar 4, 2026');
+  });
+
+  it('shows a blank cell for no value', () => {
+    expect(formatInclusiveDate(undefined, ctx(), { start })).toBe('');
+    expect(formatInclusiveDate(null, ctx(), { start })).toBe('');
   });
 
   it('is correct across a spring-forward DST boundary', () => {
-    // 2026-03-08 is the US spring-forward transition in America/New_York; a span ending at that
-    // day's local midnight displays as ending March 7, not March 8.
     const end = startOfDay(ZONE, instant('2026-03-08T12:00:00Z'));
-    expect(formatEndInclusive(ZONE, { start, end })).toBe('Mar 7, 2026');
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Mar 7, 2026');
   });
 
   it('is correct across a fall-back DST boundary and a month end', () => {
-    // 2026-11-01 is the US fall-back transition; a span ending at that day's local midnight
-    // displays as ending Oct 31, crossing both a DST fold and a month boundary correctly.
     const end = startOfDay(ZONE, instant('2026-11-01T12:00:00Z'));
-    expect(formatEndInclusive(ZONE, { start, end })).toBe('Oct 31, 2026');
-  });
-
-  it('displays a zero-length span at its own end, instead of one millisecond earlier (#240)', () => {
-    const at = instant('2026-01-05T10:00:00Z');
-    expect(formatEndInclusive(ZONE, { start: at, end: at }, 'en-US', DATE_TIME_FORMAT)).toBe(
-      formatDate(ZONE, at, 'en-US', DATE_TIME_FORMAT),
-    );
+    expect(formatInclusiveDate(end, ctx(), { start })).toBe('Oct 31, 2026');
   });
 });
 

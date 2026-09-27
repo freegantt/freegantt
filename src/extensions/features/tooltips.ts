@@ -10,7 +10,6 @@ import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
 import type { DomTarget } from '../../api/plugin-context.js';
 import type { ElementDescription, Entry, TimeSpan, TooltipColumn } from '../../model/index.js';
 import { spansTime } from '../../model/index.js';
-import { formatDate, formatEndInclusive } from '../../api/time-facade.js';
 
 export interface TooltipsOptions {
   /** Milliseconds of hover before the tooltip opens. Default `400`. */
@@ -24,15 +23,18 @@ const DEFAULT_PLACEMENT: PopupPlacement = 'top';
 
 /** A tooltip belongs to a bar, so the Entry it describes always spans (`spansTime`, ADR 0012).
  *  The parameter type says so, and `openFor` is where the question is asked. Three casts used to
- *  say it instead, and nothing tested them. */
+ *  say it instead, and nothing tested them.
+ *
+ *  Which start/end text does the tooltip show? Whatever the `start`/`end` Field's own `formatValue`
+ *  answers — a consumer's override on either Field reaches this popup with no extra wiring. */
 function defaultContent(
   entry: Entry & TimeSpan,
-  timeZone: string,
-  locale: Intl.LocalesArgument | undefined,
+  ctx: PluginContext,
   columns: readonly TooltipColumn[],
 ): ElementDescription {
-  const start = formatDate(timeZone, entry.start, locale);
-  const end = formatEndInclusive(timeZone, { start: entry.start, end: entry.end }, locale);
+  const formatCtx = { timeZone: ctx.dataset.timeZone, locale: ctx.gantt.locale };
+  const start = ctx.dataset.field('start')?.formatValue?.(entry.start, formatCtx, entry) ?? '';
+  const end = ctx.dataset.field('end')?.formatValue?.(entry.end, formatCtx, entry) ?? '';
   const dates = start === end ? start : `${start} – ${end}`;
   return {
     class: { 'fg-tooltip': true },
@@ -92,14 +94,7 @@ export function tooltips(options: TooltipsOptions = {}): ChromePlugin {
         // path. Consumer content is unaffected: it names its own fields and needs no date.
         const content =
           ctx.view.resolveTooltipContent(entry.id) ??
-          (spansTime(entry)
-            ? defaultContent(
-                entry,
-                ctx.dataset.timeZone,
-                ctx.gantt.locale,
-                ctx.view.resolveTooltipColumns(entry),
-              )
-            : undefined);
+          (spansTime(entry) ? defaultContent(entry, ctx, ctx.view.resolveTooltipColumns(entry)) : undefined);
         if (content === undefined) return;
         openTarget = target;
         popup.open({ anchor: target.element, placement, focus: 'none', content });

@@ -4,6 +4,8 @@ import { fieldRowsOf } from '../data/change-set.js';
 import {
   changeSetId,
   entryId,
+  formatDateTime,
+  formatInclusiveDate,
   instant,
   invertChangeSet,
   mergeEntryEdits,
@@ -12,6 +14,7 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   FieldNotEditableError,
+  IllegalCoreFieldOverrideError,
   MissingPluginError,
   MutationCancelledError,
   ParentCycleError,
@@ -81,32 +84,29 @@ describe('new Dataset()', () => {
     expect(dataset.entries.all[1]?.start).toBe(utc('2026-09-01T00:00:00Z'));
   });
 
-  it('reads a date-only end as inclusive by default', () => {
-    const dataset = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+  it('reads a date-only end as through that day, with or without a start', () => {
     // 'through the 8th' — the half-open boundary is the start of the 9th.
-    expect(first(dataset).end).toBe(utc('2026-09-09T00:00:00Z'));
-    expect(dataset.dateOnlyEnd).toBe('inclusive');
+    const withStart = new Dataset({ timeZone: 'UTC', entries: [oneEntry()] });
+    expect(first(withStart).end).toBe(utc('2026-09-09T00:00:00Z'));
+
+    const noStart = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'A', end: '2026-03-04' }],
+    });
+    expect(first(noStart).end).toBe(utc('2026-03-05T00:00:00Z'));
   });
 
-  it("reads a date-only end literally under dateOnlyEnd: 'exclusive'", () => {
+  it('offers no dateOnlyEnd option: a date-only end always means through that day', () => {
+    // @ts-expect-error — dateOnlyEnd is not a DatasetOptions key.
+    new Dataset({ timeZone: 'UTC', dateOnlyEnd: 'exclusive', entries: [oneEntry()] });
+  });
+
+  it('leaves an end that carries a time of day alone, stored as is', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
-      dateOnlyEnd: 'exclusive',
-      entries: [oneEntry()],
+      entries: [oneEntry({ end: '2026-09-08T17:00:00Z' })],
     });
-    expect(first(dataset).end).toBe(utc('2026-09-08T00:00:00Z'));
-    expect(dataset.dateOnlyEnd).toBe('exclusive');
-  });
-
-  it('leaves an end that carries a time of day alone under either rule', () => {
-    for (const dateOnlyEnd of ['inclusive', 'exclusive'] as const) {
-      const dataset = new Dataset({
-        timeZone: 'UTC',
-        dateOnlyEnd,
-        entries: [oneEntry({ end: '2026-09-08T00:00:00Z' })],
-      });
-      expect(first(dataset).end).toBe(utc('2026-09-08T00:00:00Z'));
-    }
+    expect(first(dataset).end).toBe(utc('2026-09-08T17:00:00Z'));
   });
 
   // Retired (ADR 0026, #421): 'reads segment spans by the same rules as the entry span' pinned a
@@ -575,6 +575,91 @@ describe('Dataset fields (S4.1)', () => {
   });
 });
 
+describe('Start and End take either formatter (#577)', () => {
+  const formatCtx = { timeZone: 'UTC', locale: 'en-US' as const };
+  const readField = (dataset: Dataset, key: string) => {
+    const entry = first(dataset);
+    return dataset.field(key)!.formatValue!(entry.read(key), formatCtx, entry);
+  };
+
+  it('end only: shows the last day it covers', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', end: '2026-03-04' }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026');
+  });
+
+  it('adding a start later leaves the End cell unchanged', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', end: '2026-03-04' }],
+    });
+    dataset.entries.update('t1', { start: '2026-03-02' });
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026');
+  });
+
+  it('a date-only start and end never show a time of day', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04' }],
+    });
+    expect(readField(dataset, 'end')).not.toContain('11:59');
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026');
+  });
+
+  it('a zero-length span shows its own day', () => {
+    const at = instant('2026-03-05T00:00:00Z');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Design', start: at, end: at }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 5, 2026');
+  });
+
+  it('a timed end defaults to the last day it covers; formatDateTime shows the stored moment', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'end', formatValue: formatDateTime }],
+      entries: [{ id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04T17:00' }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 4, 2026, 5:00 PM');
+  });
+
+  it('Start defaults to the stored moment; formatInclusiveDate shows the date only', () => {
+    const entry = { id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04' };
+    const withDefault = new Dataset({ timeZone: 'UTC', entries: [entry] });
+    expect(readField(withDefault, 'start')).toBe('Mar 2, 2026, 12:00 AM');
+
+    const withOverride = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'start', formatValue: formatInclusiveDate }],
+      entries: [entry],
+    });
+    expect(readField(withOverride, 'start')).toBe('Mar 2, 2026');
+  });
+
+  it('formatDateTime on a date-only end shows the stored moment, not the last covered day', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'end', formatValue: formatDateTime }],
+      entries: [{ id: 't1', name: 'Design', start: '2026-03-02', end: '2026-03-04' }],
+    });
+    expect(readField(dataset, 'end')).toBe('Mar 5, 2026, 12:00 AM');
+  });
+
+  it('a consumer may not override formatValue with an unrelated key on a core Field', () => {
+    expect(
+      () =>
+        new Dataset({
+          timeZone: 'UTC',
+          fields: [{ key: 'name', column: { header: 'X' } }],
+          entries: [oneEntry()],
+        }),
+    ).toThrow(IllegalCoreFieldOverrideError);
+  });
+});
+
 describe('entry.read — the one value door (ADR 0017)', () => {
   it('reads a props-addressed Field without going through entry.props directly', () => {
     const dataset = new Dataset({
@@ -596,7 +681,6 @@ describe('entry.read — the one value door (ADR 0017)', () => {
   it('reads duration on a headless Dataset before any Gantt exists', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
-      dateOnlyEnd: 'exclusive',
       entries: [oneEntry({ start: 0, end: 1 })],
     });
     // `duration` computes its value and owns no `Entry` key, and still reads back as a `Duration`.
