@@ -392,7 +392,7 @@ Any value a consumer may write where an Instant is stored: an Instant, a `Date`,
 _Avoid_: Date input, raw date, loose instant
 
 **Date-only end**:
-An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date always means the last day it wants included: it stores the start of the next day. It applies to nothing else: an end that already carries a time of day is a boundary already. `lastCoveredInstant` reads a stored `end` back as the last moment it covers; `formatInclusiveDate` and `formatDateTime` are the two shipped display formatters built on it.
+An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date always means the last day it wants included: it stores the start of the next day. It applies to nothing else: an end that already carries a time of day is a boundary already. `lastCoveredInstant` reads a stored `end` back as the last moment it covers; `formatInclusiveDate` builds on it. `formatDateTime` shows the stored moment as-is, with clock time.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
 **Duration measure**:

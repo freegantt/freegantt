@@ -206,19 +206,23 @@ Storage is half-open: `end` is the boundary *after* the span, not its last momen
 `end` you write — `'2026-09-08'` — always means "through that day": it stores the start of the
 9th. Pass a timed string, such as `'2026-09-09T00:00:00'`, for an exclusive end instead.
 
-Two formatters ship for display, both plain `formatValue` functions with the signature
+Two Field formatters ship for display, both plain `formatValue` functions with the signature
 `(value, ctx, entry) => string`:
 
-- **`formatDate(value, ctx, options?)`** — the general-purpose formatter. `ctx` is `{ timeZone,
-  locale? }`. `options` is any `Intl.DateTimeFormatOptions`; omitted, it shows a date only.
 - **`formatDateTime`** — a Field's `formatValue`: the stored moment, date and clock time. This is
   the `date` type's default formatter.
 - **`formatInclusiveDate`** — a Field's `formatValue`: the last day a span covers, date only. It
   reads `entry.start` and the value it is given for `end`, so it works on `start` too. Core `end`
   sets this as its default formatter.
-- **`lastCoveredInstant({ start?, end })`** — the instant the two formatters above build on: `end`
-  stepped back one millisecond, unless the span is zero-length (`end === start`), which answers its
-  own `end` unchanged. Reach for it directly when you format an end yourself, outside a Field.
+
+`formatDate(value, ctx, options?)` is the general-purpose helper the two formatters above build
+on. `ctx` is `{ timeZone, locale? }`. `options` is any `Intl.DateTimeFormatOptions`; omitted, it
+shows a date only. It is not itself a `formatValue`: a Field passes it a third argument, the
+`Entry`, not `Intl.DateTimeFormatOptions`.
+
+**`lastCoveredInstant({ start?, end })`** — the instant `formatInclusiveDate` builds on: `end`
+stepped back one millisecond, unless the span is zero-length (`end === start`), which answers its
+own `end` unchanged. Reach for it directly when you format an end yourself, outside a Field.
 
 A zero-length span (a milestone, `end === start`) shows its own moment unchanged — `end` names no
 day to step back from. `formatInclusiveDate` and `lastCoveredInstant` both take a missing `start`;
@@ -232,7 +236,7 @@ import { Dataset, formatDateTime } from 'freegantt';
 new Dataset({
   timeZone: 'Europe/Warsaw',
   entries: [ /* … */ ],
-  fields: [{ key: 'start', formatValue: formatDateTime }], // matches end's date+time, on start too
+  fields: [{ key: 'end', formatValue: formatDateTime }], // End shows the stored moment with clock time
 });
 ```
 
