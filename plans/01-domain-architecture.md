@@ -344,8 +344,9 @@ interface RollUpContext extends ComputeContext {
   numericValues(key?: FieldKey): readonly number[];
 }
 
-/** Built by the Gantt at column resolve, or by `dataset.formatFieldValue` from the caller's locale.
- *  `formatValue` reads this, never a Dataset locale. */
+/** Built by the Gantt at column resolve, or by `dataset.formatFieldValue`. The locale is the
+ *  caller's own, then the Dataset's own, then the runtime's own — one fallback chain, read once
+ *  and passed in here; `formatValue` never resolves a locale itself. */
 interface FormatContext extends FieldContext {
   readonly locale: Intl.LocalesArgument;
 }
