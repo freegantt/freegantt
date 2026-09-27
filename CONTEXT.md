@@ -10,6 +10,8 @@ A framework-free TypeScript Gantt library: layout and rendering of dated Entries
 The body of authored data — its Entries, plus whatever scheduling-plugin-owned data (e.g. Dependencies) an installed scheduling plugin contributes — together with the settings that give it meaning, above all the IANA zone in which all zone-aware date arithmetic is performed. "The dataset's zone" and "the dataset's reference date" are properties of this, not of the runtime environment. A Dataset with no scheduling plugin installed has Entries and no Dependencies at all (ADR 0002). Renamed from Project in ADR 0004 — read every historical "Project" as "Dataset". `model/dataset.ts`'s `Dataset` is the structural contract `api/dataset.ts`'s `Dataset` class satisfies (`implements`) — the same structural/façade relationship the Gantt entry states, and the type `layout/` binds against without importing `view/` or `api/` (S1.7 §3.2; formerly `DatasetLike` in `view/gantt-shell.ts`).
 
 `timeZone` is optional on construction (#129). Omitted, the Dataset resolves the environment's own zone once, at construction, and stores that resolved string. The zone is still a property of the Dataset, read from `dataset.timeZone` like any explicit value. Omission is a one-time authoring convenience, not a live link to the runtime environment. The Dataset never re-reads the environment afterward.
+
+`locale` is optional on construction too (#583), fixed the same way — `dataset.locale` reads it back, `undefined` when the consumer named none. Unlike `timeZone` it resolves nothing on its own: a caller's own locale beats it (`formatFieldValue`'s own argument), and it beats only the runtime's own.
 _Avoid_: Project (retired in ADR 0004 — see that ADR for why; the word smuggled scheduling/PM assumptions into a domain-neutral concept the same way `Task` once did for `Entry`), Plan, schedule (a schedule is an output of scheduling a Dataset, not the Dataset itself)
 
 **Document**:
@@ -404,7 +406,7 @@ _Avoid_: date range (Range is the TimeScale's own content span), span text (an E
 both dates)
 
 **Formatter**:
-A function turning one value into display text: `(value, ctx: FormatContext, entry) => string`, declaring only the parameters it reads. Zone and locale come only from `ctx`; a missing value gives `''`, never a throw. No options at the call — a factory builds a tailored one once (`dateFormatter(options)`, `currency({ code })`). A header band callback is a Formatter with no entry (`HeaderFormat`). Every shipped Field `formatValue` is one; `formatFieldValue` is the one path a Field's text takes to the grid, the bar label, and `gantt.formatFieldValue`.
+A function turning one value into display text: `(value, ctx: FormatContext, entry) => string`, declaring only the parameters it reads. Zone and locale come only from `ctx`; a missing value gives `''`, never a throw. No options at the call — a factory builds a tailored one once (`dateFormatter(options)`, `currency({ code })`). A header band callback is a Formatter with no entry (`HeaderFormat`). Every shipped Field `formatValue` is one; `formatFieldValue` is the one path a Field's text takes to the grid, the bar label, and `gantt.formatFieldValue`. The Dataset owns the path (`dataset.formatFieldValue`), and the Dataset can own a locale of its own too; a Gantt's own locale beats it, and either beats the runtime's own.
 _Avoid_: renderer (paints an element, not text), format function
 
 **TimeUnit**:
@@ -503,7 +505,7 @@ The ordered ViewPreset set `zoomIn`/`zoomOut` step through, finest first (`gantt
 _Avoid_: ladder (taken), zoom levels (that is what a ViewPreset expresses)
 
 **Date format**:
-How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours) — a Formatter with no entry, since a header tick has no row. Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dropRepeatedGranularity`).
+How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours) — a Formatter with no entry, since a header tick has no row. Resolved through `Intl.DateTimeFormat` in the Dataset's zone and this Gantt's effective locale (its own, then the Dataset's, then the runtime's own) — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dropRepeatedGranularity`).
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
 **Date line**:

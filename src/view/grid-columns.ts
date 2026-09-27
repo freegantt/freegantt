@@ -1,9 +1,9 @@
 // view/ — binds this Gantt's locale to declared Fields. layout/ never learns where a Field's value lives.
 
-import type { Dataset, Entry, Field, FormatContext, GridColumn, GridColumnInput } from '../model/index.js';
+import type { Dataset, Entry, Field, GridColumn, GridColumnInput } from '../model/index.js';
 import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
 
-import { formatFieldValue } from '../data/fields/format-field-value.js';
+import { createFormatContext, formatFieldValue } from '../data/fields/format-field-value.js';
 import { sizingOfColumn } from '../data/fields/column-sizing.js';
 import type { FieldLookup } from '../model/index.js';
 import type { FieldCompare, ResolvedColumn } from '../layout/index.js';
@@ -102,13 +102,6 @@ function lookupOf(dataset: Pick<Dataset, 'field'>): FieldLookup {
   return { get: (key) => dataset.field(key) };
 }
 
-/** Call: `formatContextOf({ timeZone, locale })`. The one `FormatContext` builder a Gantt's own
- *  zone and locale go through — a Grid column, a bar label and `gantt.formatFieldValue` all build
- *  theirs here, so a missing `locale` reads the same everywhere. */
-export function formatContextOf(bind: { timeZone: string; locale?: Intl.LocalesArgument }): FormatContext {
-  return { timeZone: bind.timeZone, locale: bind.locale ?? [] };
-}
-
 /** Call: `resolveColumns(gantt.gridColumns, { get: (key) => dataset.field(key) }, { timeZone, locale })`.
  *  What comes back is what the Gantt paints. A column that declares `hidden: true` stays
  *  out of the result. It therefore stays out of everything downstream — the frame, the pane width,
@@ -120,7 +113,7 @@ export function resolveColumns(
   lookup: FieldLookup,
   bind: ResolveColumnsBind,
 ): readonly ResolvedColumn[] {
-  const formatCtx = formatContextOf(bind);
+  const formatCtx = createFormatContext(bind.timeZone, bind.locale);
   const defaultWidthPx = bind.defaultColumnWidth ?? DEFAULT_COLUMN_WIDTH_PX;
 
   return gridColumns.flatMap((item) => {

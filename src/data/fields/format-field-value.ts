@@ -12,3 +12,12 @@ export function formatFieldValue(field: Field, entry: Entry, ctx: FormatContext)
   if (field.formatValue) return field.formatValue(value, ctx, entry);
   return stringifyPrimitive(value);
 }
+
+/** Call: `createFormatContext(dataset.timeZone, locale)`, where `locale` is already the resolved
+ *  argument (this Gantt's effective locale, or the Dataset's `locale ?? this.locale`). The one
+ *  place a `FormatContext` is built, so a Grid cell, a bar label and a direct
+ *  `dataset.formatFieldValue` call never format with two contexts. A missing `locale` reads as the
+ *  runtime's own. */
+export function createFormatContext(timeZone: string, locale?: Intl.LocalesArgument): FormatContext {
+  return { timeZone, locale: locale ?? [] };
+}

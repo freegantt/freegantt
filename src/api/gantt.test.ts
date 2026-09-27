@@ -2970,6 +2970,66 @@ describe('Gantt.formatFieldValue (#576)', () => {
     expect(gantt.formatFieldValue(entry, 'duration')).toBe(cell?.textContent);
     gantt.destroy();
   });
+
+  it("reads through dataset.formatFieldValue with this Gantt's own locale (#583)", () => {
+    const container = document.createElement('div');
+    const { dataset, gantt } = moneyGantt(container);
+    const entry = dataset.entries.all[0]!;
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe(dataset.formatFieldValue(entry, 'cost'));
+    gantt.locale = 'de-DE';
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe(dataset.formatFieldValue(entry, 'cost', 'de-DE'));
+    gantt.destroy();
+  });
+});
+
+describe("Gantt falls back to the Dataset's own locale (#583)", () => {
+  function moneyGanttWithDatasetLocale(container: HTMLElement, locale: Intl.LocalesArgument) {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      locale,
+      fields: [{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }],
+      entries: sampleEntries.map((entry, i) =>
+        i === 0 ? { ...entry.toInput(), props: { cost: 500 } } : entry,
+      ),
+    });
+    return { dataset };
+  }
+
+  it("with no locale of its own, shows the Dataset's locale in a Grid cell and in formatFieldValue", () => {
+    const container = document.createElement('div');
+    const { dataset } = moneyGanttWithDatasetLocale(container, 'de-DE');
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'] });
+    const entry = dataset.entries.all[0]!;
+    const cell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(cell?.textContent).toBe('500,00 €');
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe(cell?.textContent);
+    gantt.destroy();
+  });
+
+  it("this Gantt's own locale beats the Dataset's", () => {
+    const container = document.createElement('div');
+    const { dataset } = moneyGanttWithDatasetLocale(container, 'de-DE');
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'], locale: 'en-US' });
+    const entry = dataset.entries.all[0]!;
+    const cell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(cell?.textContent).toBe('€500.00');
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe('€500.00');
+    gantt.destroy();
+  });
+
+  it("a live gantt.locale = undefined falls back to the Dataset's own locale", async () => {
+    const container = document.createElement('div');
+    const { dataset } = moneyGanttWithDatasetLocale(container, 'de-DE');
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'], locale: 'en-US' });
+    const entry = dataset.entries.all[0]!;
+    gantt.locale = undefined;
+    expect(gantt.locale).toBeUndefined();
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe('500,00 €');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const cell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(cell?.textContent).toBe('500,00 €');
+    gantt.destroy();
+  });
 });
 
 describe('Gantt.formatContext (#578)', () => {
@@ -2987,6 +3047,15 @@ describe('Gantt.formatContext (#578)', () => {
     const gantt = new Gantt({ container, dataset });
     gantt.locale = 'de-DE';
     expect(gantt.formatContext.locale).toBe('de-DE');
+    gantt.destroy();
+  });
+
+  it("falls back to the Dataset's own locale when the Gantt names none (#583)", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', locale: 'de-DE', entries: sampleEntries });
+    const gantt = new Gantt({ container, dataset });
+    expect(gantt.formatContext.locale).toBe('de-DE');
+    expect(gantt.locale).toBeUndefined();
     gantt.destroy();
   });
 });

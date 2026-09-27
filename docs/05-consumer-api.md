@@ -178,6 +178,8 @@ dataset.entries.update('roofing', { siblingIndex: 0 });
 - `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. A core Field's key cannot be redeclared (`IllegalCoreFieldOverrideError`) — but every core Field takes a consumer override on `editable` and `formatValue`, and on `rollUp` too where the core Field declares one of its own (`start`, `end`). Type name `date` is replaceable at construction via `fieldTypes` — that door is construction-only.
 - A parent rolls up because it has children. An Entry carries no stored classification, so nothing opts a row in or out by kind.
 - `entries.get(id)?.read(key)`, `dataset.field(key)`, `dataset.fields.all` — `read` is the one value door
+- `locale` — this Dataset's own locale (#583), fixed at construction, the same as `timeZone`. `dataset.locale` reads it back. Omit it to let each caller name its own, or fall back further to the runtime's own.
+- `dataset.formatFieldValue(entry, key, locale?)` — a Field's shown text, with no Gantt. See "A Field's text outside the grid" below.
 - `plugins` — a plugin with a `data` half installs here
 
 ### The duration Field
@@ -382,9 +384,10 @@ new Dataset({
 
 **`gantt.formatFieldValue(entry, key)`** gives the text a Field shows for one `Entry`, through the
 same door the Grid cell and the bar label read through — a status line, a CSV row, any place a
-Field's own formatted text is useful outside the Grid pane. It follows `gantt.locale` live, works
-for a Field with no column and for a `compute` Field, and throws `UnknownFieldError` for a key no
-Field declares.
+Field's own formatted text is useful outside the Grid pane. It follows this Gantt's own locale
+first, then its Dataset's own locale (#583), then the runtime's own, live. It works for a Field
+with no column and for a `compute` Field, and throws `UnknownFieldError` for a key no Field
+declares.
 
 <!-- doc-example-setup
 declare const entry: import('freegantt').Entry;
@@ -395,6 +398,17 @@ const statusLine = `${entry.name} · ${gantt.formatFieldValue(entry, 'progress')
 const csvRow = gantt.gridColumns
   .map((column) => gantt.formatFieldValue(entry, typeof column === 'string' ? column : column.field))
   .join(',');
+```
+
+**`dataset.formatFieldValue(entry, key, locale?)`** gives the same text with no Gantt at all, for a
+server-side export or a report. The zone is this Dataset's own; a missing `locale` reads as this
+Dataset's own `locale` (#583), then the runtime's own. `gantt.formatFieldValue` reads through this
+method with its own effective locale — its own `locale` first, then its Dataset's.
+
+```ts
+const csvRows = dataset.entries.all.map((entry) =>
+  ['name', 'start', 'end', 'cost'].map((key) => dataset.formatFieldValue(entry, key, 'de-DE')).join(';'),
+);
 ```
 
 ### Naming

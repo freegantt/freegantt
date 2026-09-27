@@ -115,6 +115,9 @@ export interface EntryStore<TProps = Record<string, unknown>> extends EntryStore
 export interface Dataset<TProps = Record<string, unknown>> {
   readonly entries: EntryStore<TProps>;
   readonly timeZone: string;
+  /** This Dataset's own locale (#583), fixed at construction — `undefined` when the consumer named
+   *  none. A Gantt with no `locale` of its own falls back to this before the runtime's own. */
+  readonly locale?: Intl.LocalesArgument;
   /** Resolved Field declarations this Dataset owns, core Fields included. */
   readonly fields: { readonly all: readonly Field[] };
   /** Resolved declaration for this key, or `undefined` when the key is not declared. */

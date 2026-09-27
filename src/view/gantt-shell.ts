@@ -58,6 +58,7 @@ import { GridPaneWidth } from './grid-pane-width.js';
 import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
+import { createFormatContext } from '../data/fields/format-field-value.js';
 import type {
   AsyncCancelableEvent,
   EntryActivate,
@@ -98,7 +99,6 @@ import {
   PluginNotInstalledError,
   UnsupportedUnitError,
   InvalidSnapIncrementError,
-  UnknownFieldError,
   entryIdOfBar,
   entryId,
   barId,
@@ -135,11 +135,10 @@ import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext, EntryHit } from './entry-gesture-context.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
-import { DEFAULT_GRID_COLUMNS, formatContextOf, resolveGanttFields } from './grid-columns.js';
+import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
 import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
 import type { ResolveBarLabelPorts } from './bar-labels.js';
-import { formatFieldValue } from '../data/fields/format-field-value.js';
 
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
@@ -1024,7 +1023,7 @@ export class GanttShell {
       raiseError: this.#raiseError,
       ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
-      locale: () => this.#frameSettings.locale,
+      locale: () => this.#frameSettings.effectiveLocale,
       applyGestureState: (preview, pendingBarIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
         setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
@@ -1244,6 +1243,13 @@ export class GanttShell {
    *  the same way, which is the whole point of #167. */
   set locale(l: Intl.LocalesArgument | undefined) {
     this.#frameSettings.set({ locale: l });
+  }
+
+  /** This Gantt's own `locale` first, then the Dataset's, then the runtime's own (#583). The one
+   *  read `api/gantt.ts`'s `formatFieldValue` takes, so it never drifts from what a Grid cell and a
+   *  bar label already show. */
+  get effectiveLocale(): Intl.LocalesArgument | undefined {
+    return this.#frameSettings.effectiveLocale;
   }
 
   /** The columns the consumer authored, and only those (#181). A plugin's registered column
@@ -1516,19 +1522,12 @@ export class GanttShell {
     );
   }
 
-  /** What a Field's text reads outside the grid. The same door `resolveColumns` and `#labelFor`
-   *  read through, so a caller's own read never disagrees with the painted cell. Throws
-   *  `UnknownFieldError` for an undeclared key. */
-  formatFieldValue(entry: Entry, key: FieldKey): string {
-    const field = this.#options.dataset.field(key);
-    if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');
-    return formatFieldValue(field, entry, formatContextOf(this.#columnBind()));
-  }
-
-  /** The `FormatContext` a Grid column, a bar label, and `formatFieldValue` all format through.
-   *  A caller building its own Formatter call takes this instead of assembling a second copy. */
+  /** The `FormatContext` a Grid column, a bar label, and `dataset.formatFieldValue` all format
+   *  through. A caller building its own Formatter call takes this instead of assembling a second
+   *  copy. */
   get formatContext(): FormatContext {
-    return formatContextOf(this.#columnBind());
+    const bind = this.#columnBind();
+    return createFormatContext(bind.timeZone, bind.locale);
   }
 
   get capabilities(): Capabilities {
@@ -1842,6 +1841,7 @@ export class GanttShell {
       rebindFields: () => this.#bindColumns(),
       invalidateBars: () => this.#layout.invalidateFrom(0),
       readPixelProperty: (property, policy) => readPixelProperty(this.#container, property, policy),
+      datasetLocale: () => this.#options.dataset.locale,
     };
   }
 
@@ -2653,7 +2653,7 @@ export class GanttShell {
       timeZone: this.#options.dataset.timeZone,
       defaultColumnWidth: this.#columnChrome.defaultWidthPx(),
     };
-    const locale = this.#frameSettings.locale;
+    const locale = this.#frameSettings.effectiveLocale;
     if (locale !== undefined) bind.locale = locale;
     return bind;
   }
