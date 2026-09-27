@@ -14,29 +14,53 @@ import {
   unreportedFailures,
 } from '../../scripts/report-nightly-failures.mjs';
 
-/** A Playwright JSON report with one spec file, shaped like `reporter: json` writes it. */
-function report(tests: { title: string; project: string; status: string; message?: string }[]): unknown {
+/** One test in a fabricated report. A test with a `describe` title sits in a nested suite of that title. */
+interface ReportTest {
+  title: string;
+  project: string;
+  status: string;
+  message?: string;
+  describe?: string;
+}
+
+/** A Playwright JSON spec for one test, shaped like `reporter: json` writes it. */
+function spec(test: ReportTest): unknown {
+  return {
+    title: test.title,
+    file: 'zoom.spec.ts',
+    tests: [
+      {
+        projectName: test.project,
+        status: test.status,
+        results: [
+          {
+            error:
+              test.message === undefined
+                ? undefined
+                : { message: test.message, location: { file: 'zoom.spec.ts', line: 12, column: 3 } },
+          },
+        ],
+      },
+    ],
+  };
+}
+
+/** A Playwright JSON report with one spec file, shaped like `reporter: json` writes it. Each
+ *  `describe` title becomes one nested suite under the file suite. */
+function report(tests: ReportTest[]): unknown {
+  const describeTitles = [
+    ...new Set(tests.flatMap((test) => (test.describe === undefined ? [] : [test.describe]))),
+  ];
   return {
     suites: [
       {
+        title: 'zoom.spec.ts',
         file: 'zoom.spec.ts',
-        specs: tests.map((test) => ({
-          title: test.title,
+        specs: tests.filter((test) => test.describe === undefined).map(spec),
+        suites: describeTitles.map((describeTitle) => ({
+          title: describeTitle,
           file: 'zoom.spec.ts',
-          tests: [
-            {
-              projectName: test.project,
-              status: test.status,
-              results: [
-                {
-                  error:
-                    test.message === undefined
-                      ? undefined
-                      : { message: test.message, location: { file: 'zoom.spec.ts', line: 12, column: 3 } },
-                },
-              ],
-            },
-          ],
+          specs: tests.filter((test) => test.describe === describeTitle).map(spec),
         })),
       },
     ],
@@ -61,6 +85,31 @@ describe('readFailures', () => {
     expect(failures).toEqual([
       { project: 'webkit', file: 'zoom.spec.ts', title: 'zooms', line: 12, error: 'Expected: 8' },
     ]);
+  });
+
+  it('titles a test in a describe block with the describe path, so same-titled tests do not collide', () => {
+    const failures = readFailures(
+      report([
+        {
+          title: 'zooms',
+          project: 'webkit',
+          status: 'unexpected',
+          message: 'Expected: 8',
+          describe: 'toolbar',
+        },
+        {
+          title: 'zooms',
+          project: 'webkit',
+          status: 'unexpected',
+          message: 'Expected: 8',
+          describe: 'wheel',
+        },
+      ]),
+    );
+    expect(failures.map((failure) => failure.title)).toEqual(['toolbar › zooms', 'wheel › zooms']);
+    expect(failureSignature(failures[0]!)).not.toBe(failureSignature(failures[1]!));
+    expect(unreportedFailures(failures, '')).toHaveLength(2);
+    expect(formatFailures(failures)).toContain('`zoom.spec.ts:12` › toolbar › zooms');
   });
 
   it('reads a run-level error as a failure, so a run that fails before any test is still reported', () => {
