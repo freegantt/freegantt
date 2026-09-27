@@ -23,6 +23,7 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
 
 - One implementer per worktree at a time. Parallel work only in separate worktrees on disjoint files.
 - **Retire an implementer when it compacts or reaches its budget.** Start a fresh one with file paths and the exact state. A resumed, compacted agent loses its identity and works in the wrong worktree.
+- **Clean up after each agent you retire.** Its background shells outlive it. Run the orphan check in "Waiting" and kill what it finds, in the same turn.
 - At most one reviewer agent. Let it compact. Do not start a second one.
 - Try to keep a `planner` busy. Its cache lasts 5 minutes; every other agent's lasts 1 hour. Answer its questions and send plan revisions soon after it reports.
 - Put every long input (findings, repro, handoff) in a scratchpad file and pass the path.
@@ -85,12 +86,24 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
 
 - Wait only on agent completion notices and on one-shot background commands that exit on their own. Never sleep-and-poll.
 - Wrap every test run in `timeout`. A foreground tool call stops at 10 minutes, so run long work in the background.
+- Start a long gate once, with `run_in_background`. Its completion notice is the wait. Do not add a second command that waits for it.
+- Never write a loop such as `until ! pgrep -f "verify-full.mjs"; do sleep 5; done`. The pattern matches the loop's own command line, so the loop never ends. Ten such loops once stayed alive after their agents retired.
+- If you must match a process by name, bracket one letter so the pattern cannot match itself: `pgrep -f "[v]erify-full.mjs"`.
+- **Orphan check.** Run it after you retire an agent, after the user reports extra shells, and before the final report:
+  ```bash
+  ps -eo pid,etimes,args | grep -E "[u]ntil |[w]hile |[s]leep [0-9]|[w]atch-agent-context|[v]erify-full|[v]itest|[p]laywright"
+  ```
+  Kill every hit that no live agent owns. Keep only the watcher and the review worker you started on purpose. Leave a process from another project alone (for example, a path outside this repo's worktrees).
 
 ## implementer-rules.md (copy into the scratchpad)
 
 - Work only in the named worktree. Before each commit, check `pwd` and `git branch --show-current` against the identity block.
 - Red test first for every behaviour fix. One atomic commit per step, green on `timeout 900 pnpm verify:full`, pushed.
 - No stash, amend or force-push. No spec labels in code comments, test names or docs outside plans/.
+- Never use `git stash` in any form. The stash stack is shared with every worktree. To set a file aside, write `git diff -- <file>` to a patch in the scratchpad.
+- Run a long gate once, with `run_in_background`, and wait for its completion notice. Never write an `until pgrep …` or `while … sleep` loop. The pattern matches the loop itself, so the loop never ends.
+- Do not edit files while a gate runs. The tests read the live tree and report false failures.
+- Before your final report, kill every background shell you started. List them with `ps -eo pid,args | grep -E "[u]ntil |[s]leep [0-9]|[v]erify-full"`.
 - Property tests (fast-check, Vitest in Node, a few seconds each): before the commit, run the property once with `numRuns: 1000`. Do not commit that value. Then run the file 10 times with fresh seeds. One red run is a real counterexample, never "flaky". Keep the seed and the shrunk case, and make it a unit test.
 - A design question, a public API change, or a conflict with an ADR: STOP and report the options with a recommendation. Never weaken a test to pass.
 - A review finding is a claim. Open the code before you act on it.
@@ -100,4 +113,4 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
 
 ## Final report
 
-Merged PRs, closed and filed issues, every ⚠️ decision. Prove that nothing is left running with `CronList`, `orca worktree list`, the background task list, and `gh pr list --author @me --state open`.
+Merged PRs, closed and filed issues, every ⚠️ decision. Prove that nothing is left running with `CronList`, `orca worktree list`, the background task list, the orphan check in "Waiting" (it must print nothing), and `gh pr list --author @me --state open`.
