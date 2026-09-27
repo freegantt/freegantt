@@ -99,6 +99,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'A row that draws its children as segments, with bar labels that fit or move outside',
       'Presets, zoom in / out, pan to today, and a locale switch for the header',
       'Date lines, the today line, weekend shading, and entries that start or end outside the range',
+      'A computed Field that sums its leaves',
     ],
     config: [
       "gantt.rowSource = { source: 'entries', tree: true }",

@@ -4,13 +4,24 @@
 // cannot share a Dataset with the rows that roll up above.
 
 import './harness-nav.ts';
-import { Dataset, Gantt, attemptMutation, daysOfWeek, inlineEditing, timeShading } from 'freegantt';
+import {
+  Dataset,
+  Gantt,
+  attemptMutation,
+  daysOfWeek,
+  diffMs,
+  inlineEditing,
+  spansTime,
+  timeShading,
+} from 'freegantt';
 import type {
   DatasetEventMap,
   DateLineInput,
+  Duration,
   Entry,
   EntryInput,
   EntryVariant,
+  Field,
   GridColumnInput,
   RowSource,
 } from 'freegantt';
@@ -37,10 +48,27 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'hierarch
  *  cannot drift from either one. */
 type HierarchyProps = HierarchyEntryProps & PhaseProps;
 
+// How long is the work under this row? A leaf's own span; a parent's is the sum of its leaves'
+// spans, so the gaps between them do not count.
+const WORK: Field<Duration> = {
+  key: 'work',
+  type: 'duration',
+  compute: (entry, ctx): Duration | undefined => {
+    const rows = ctx.hasChildren(entry) ? ctx.leaves(entry) : [entry];
+    const spans = rows.filter(spansTime);
+    return spans.length === 0
+      ? undefined
+      : { value: spans.reduce((ms, row) => ms + diffMs(row.end, row.start), 0), unit: 'millisecond' };
+  },
+  column: { header: 'Work', align: 'end', width: 72 },
+};
+
 const GRID_COLUMNS: readonly GridColumnInput[] = [
   'name',
   'start',
   'end',
+  'duration',
+  'work',
   { field: 'cost', header: 'Cost' },
   { field: 'hours', header: 'Hours' },
 ];
@@ -56,6 +84,28 @@ const OUT_OF_RANGE_BEFORE: EntryInput<HierarchyProps> = {
 };
 
 const FIXED_RANGE = { start: '2026-03-01', end: '2026-03-21' };
+
+// A parent with a real gap between its children, for the Work column: every other parent in the
+// fixture has children that overlap in time, so its own Work already exceeds its Duration (the
+// leaves' spans double-count the overlap) — this is the one row that shows the opposite, a gap
+// nobody works through.
+const GAP_DEMO_CHILDREN: EntryInput<HierarchyProps>[] = [
+  { id: 'gap-demo', name: 'Gap demo', parentId: 'program' },
+  {
+    id: 'gap-demo-a',
+    name: 'Early stretch',
+    parentId: 'gap-demo',
+    start: '2026-04-01T00:00:00Z',
+    end: '2026-04-03T00:00:00Z',
+  },
+  {
+    id: 'gap-demo-b',
+    name: 'Late stretch',
+    parentId: 'gap-demo',
+    start: '2026-04-10T00:00:00Z',
+    end: '2026-04-12T00:00:00Z',
+  },
+];
 
 const STATUS_CHECK_LINE: DateLineInput = { placeAt: '2026-03-10', label: 'Status check' };
 
@@ -81,9 +131,10 @@ const crewDayVariant: EntryVariant<HierarchyProps> = {
 };
 
 const dataset = new Dataset<HierarchyProps>({
-  entries: structuredClone([...hierarchyEntryInputs, OUT_OF_RANGE_BEFORE]),
+  entries: structuredClone([...hierarchyEntryInputs, OUT_OF_RANGE_BEFORE, ...GAP_DEMO_CHILDREN]),
   timeZone: 'UTC',
   ...hierarchyFieldOptions,
+  fields: [...hierarchyFieldOptions.fields, WORK],
   // ADR 0020: the tree is whatever the hierarchy source answers. This plugin answers `phaseId`
   // first and `parentId` after it, so the fixture nests exactly as authored until the phase button
   // below writes a phase id.

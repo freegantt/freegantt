@@ -87,3 +87,25 @@ test('the owning parent keeps its own dates while a child moves (#470)', async (
   // Task A's move never touches Phase — `rollUp: 'none'` means nothing recomputes it.
   expect(phaseAfter).toEqual(phaseBefore);
 });
+
+test('a parent’s Work sums its leaves’ spans, so a gap between children shows up as less Work than Duration', async ({
+  page,
+}) => {
+  await gotoHierarchyAndTimeline(page);
+
+  const gapDemo = page.locator('#gantt .fg-row[data-entry-id="gap-demo"]');
+  const durationText = await gapDemo.locator('[data-field="duration"]').textContent();
+  const workText = await gapDemo.locator('[data-field="work"]').textContent();
+  const asDays = (text: string | null): number => Number((text ?? '').replace(/\s*d$/, ''));
+
+  expect(asDays(workText)).toBeLessThan(asDays(durationText));
+
+  // The Work text equals the sum of its two children's Work cells — the gap between them, ten
+  // days wide, never counts.
+  const childWorkTexts = await Promise.all(
+    ['gap-demo-a', 'gap-demo-b'].map((childId) =>
+      page.locator(`#gantt .fg-row[data-entry-id="${childId}"] [data-field="work"]`).textContent(),
+    ),
+  );
+  expect(childWorkTexts.reduce((total, text) => total + asDays(text), 0)).toBe(asDays(workText));
+});
