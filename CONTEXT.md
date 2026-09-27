@@ -25,7 +25,7 @@ The committed, cached `readonly Entry[]` a Store's `all` returns (D-S2-2, D-S2-3
 _Avoid_: View (View is a Row's rendering-facing sense, `plans/01` §2.3 — a different concept), Copy (implies a fresh array per call, which defeats the whole point of the cached identity), List (not a term this codebase uses elsewhere for a collection)
 
 **DatasetState**:
-The `data/` class holding one Dataset's live, private state — its Entry Store, its zone, its `dateOnlyEnd` rule, its Reference date, and (from later S2 steps) its extension hook, undo history and event bus. `api/dataset.ts`'s `Dataset` class is a thin façade that constructs one `DatasetState` and delegates every read to it — the same structural/façade relationship `Gantt`/`GanttShell` already has, one layer up. Named after the naming skill's five checks ruled out the alternatives: `DatasetCore` collides with this slice's own loaded use of "core" (a core step, core behaviour — `plans/s2-data-core` D-S2-22); `DatasetStores` promises less than the class holds (it is not only stores); inverting the pair so `data/` owns the name `Dataset` collides with `model/dataset.ts`'s existing structural `Dataset`.
+The `data/` class holding one Dataset's live, private state — its Entry Store, its zone, its Reference date, and (from later S2 steps) its extension hook, undo history and event bus. `api/dataset.ts`'s `Dataset` class is a thin façade that constructs one `DatasetState` and delegates every read to it — the same structural/façade relationship `Gantt`/`GanttShell` already has, one layer up. Named after the naming skill's five checks ruled out the alternatives: `DatasetCore` collides with this slice's own loaded use of "core" (a core step, core behaviour); `DatasetStores` promises less than the class holds (it is not only stores); inverting the pair so `data/` owns the name `Dataset` collides with `model/dataset.ts`'s existing structural `Dataset`.
 _Avoid_: DatasetData (retired — "Data" already named three things in this codebase: the `data/` layer, this class, and the dataset itself), DatasetCore, DatasetStores (both rejected candidates, see above)
 
 **Reference date**:
@@ -186,7 +186,7 @@ A value a caller passes to change stored data. It is not a control a user types 
 _Avoid_: Editor (that is the Cell editor, a control over one Grid cell), Patch (see EntryEdit)
 
 **EntryEdit**, **EntryEdits**:
-The **write** shape. An `EntryEdit` is what a caller passes to `dataset.entries.update(id, edit)` — dates loose (`InstantInput`), Field keys beside core keys, no `id`. `EntryEdits` is a batch of them keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. An `EditExtender` returns one, `mergeEntryEdits` composes two, and `moveEntryTo` builds a single value of one. **A plugin author names no other type to write a cascade** (#209): the extension hook writes exactly what `update()` takes, and core does the rest — the dataset's zone resolves the dates, the `DateOnlyEndRule` decides what a date-only `end` means, and core derives both `proposedKeys` and the envelope. An extender that hand-builds a storage-shaped literal is an API gap, not a style choice.
+The **write** shape. An `EntryEdit` is what a caller passes to `dataset.entries.update(id, edit)` — dates loose (`InstantInput`), Field keys beside core keys, no `id`. `EntryEdits` is a batch of them keyed by Entry: `ReadonlyMap<EntryId, EntryEdit>`. An `EditExtender` returns one, `mergeEntryEdits` composes two, and `moveEntryTo` builds a single value of one. **A plugin author names no other type to write a cascade** (#209): the extension hook writes exactly what `update()` takes, and core does the rest — the dataset's zone resolves the dates, a date-only `end` always means "through that day", and core derives both `proposedKeys` and the envelope. An extender that hand-builds a storage-shaped literal is an API gap, not a style choice.
 _Avoid_: Patch, FieldPatch (retired 2026-08-27 — `data/` diffs an edit against the store into `FieldUpdated` rows itself, rather than asking every producer of edits to compute a diff)
 
 **ProposedEdit**, **ProposedEdits**:
@@ -392,7 +392,7 @@ Any value a consumer may write where an Instant is stored: an Instant, a `Date`,
 _Avoid_: Date input, raw date, loose instant
 
 **Date-only end**:
-An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date means the last day it wants included. The `dateOnlyEnd` option names which of the two readings applies, and it applies to nothing else: an end that already carries a time of day is a boundary already.
+An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date always means the last day it wants included: it stores the start of the next day. It applies to nothing else: an end that already carries a time of day is a boundary already. `lastCoveredInstant` reads a stored `end` back as the last moment it covers; `formatInclusiveDate` and `formatDateTime` are the two shipped display formatters built on it.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
 **Duration measure**:
@@ -618,7 +618,7 @@ A `data-*` attribute a Part carries so a consumer can select on state without JS
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:
-`FrameBar.a11yLabel` — the library-computed string a screen reader announces for one bar (`${entry.name}, ${formatDate(...)} – ${formatEndInclusive(...)}`), composed in `layout/` from the dataset zone and set as `.fg-bar`'s `aria-label` at sync time (D-S1.10-5). Not the same thing as `Gantt.a11yLabel` — the live option that sets the _container's_ `aria-label` (default `'Gantt'`). Two different things sharing a root word: say "the bar's a11y label" or "`Gantt.a11yLabel`" explicitly, never "a11y label" unqualified where both are in scope (#7's "chart" lesson applies).
+`FrameBar.a11yLabel` — the library-computed string a screen reader announces for one bar (`${entry.name}, ${formatDate(...)} – ${formatInclusiveDate(...)}`), composed in `layout/` from the dataset zone and set as `.fg-bar`'s `aria-label` at sync time. Not the same thing as `Gantt.a11yLabel` — the live option that sets the _container's_ `aria-label` (default `'Gantt'`). Two different things sharing a root word: say "the bar's a11y label" or "`Gantt.a11yLabel`" explicitly, never "a11y label" unqualified where both are in scope (#7's "chart" lesson applies).
 _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a11yLabel` is the backend-neutral field `layout/` produces, same relationship `variant` has to `data-variant`), accessible name (a browser/AT term of art, not this project's field name)
 
 ### Extension

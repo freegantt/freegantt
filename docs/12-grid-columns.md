@@ -134,6 +134,47 @@ const gridColumns = [
 
 A renderer for any value, such as the shipped `meter()` and `image()`, fits every key.
 
+### A date column's own formatter
+
+`value` above always comes from the Field's `formatValue`, not the renderer. `start` and `end`
+are ordinary `date` Fields, so either takes any `formatValue` a consumer writes — including the
+two shipped ones:
+
+- **`formatDateTime`** — the stored moment, date and clock time. The `date` type's default.
+- **`formatInclusiveDate`** — the last day a span covers, date only. Reads `end - 1 ms`, unless the
+  span is zero-length (`end === start`), which shows that moment unchanged; works with no `start`
+  too. Core `end` sets this as its default, so a Finish column already shows a date, not a
+  half-open boundary.
+
+Set a formatter through `fields`, on the `Dataset`, not through `columnRenderer`:
+
+```ts
+import { Dataset, formatDateTime } from 'freegantt';
+
+new Dataset({
+  timeZone: 'Europe/Warsaw',
+  entries: [ /* … */ ],
+  fields: [{ key: 'start', formatValue: formatDateTime }], // Start now matches End's date+time
+});
+```
+
+A custom format builds on the public `formatDate` and `lastCoveredInstant`:
+
+```ts
+import { formatDate, lastCoveredInstant, type FormatContext, type Instant } from 'freegantt';
+
+const COMPACT_DAY: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+
+function compactFinish(
+  value: unknown,
+  ctx: FormatContext,
+  entry: { readonly start?: Instant | undefined },
+): string {
+  if (value === undefined || value === null) return '';
+  return formatDate(lastCoveredInstant({ start: entry.start, end: value as Instant }), ctx, COMPACT_DAY);
+}
+```
+
 ### What the helper checks
 
 - A renderer for the wrong type does not compile. A `ColumnRendererContext<number>` renderer on the

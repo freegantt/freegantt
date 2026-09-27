@@ -175,7 +175,7 @@ dataset.entries.update('roofing', { siblingIndex: 0 });
 
 ### Dataset
 
-- `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. Field key `start` cannot be redeclared (`IllegalCoreFieldOverrideError` except `editable`); type name `date` is replaceable at construction via `fieldTypes` — that door is construction-only.
+- `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. A core Field's key cannot be redeclared (`IllegalCoreFieldOverrideError`) — but every core Field takes a consumer override on `editable` and `formatValue`, and on `rollUp` too where the core Field declares one of its own (`start`, `end`). Type name `date` is replaceable at construction via `fieldTypes` — that door is construction-only.
 - A parent rolls up because it has children. An Entry carries no stored classification, so nothing opts a row in or out by kind.
 - `entries.get(id)?.read(key)`, `dataset.field(key)`, `dataset.fields.all` — `read` is the one value door
 - `plugins` — a plugin with a `data` half installs here
@@ -199,6 +199,60 @@ dataset.entries.update('roofing', { siblingIndex: 0 });
 - `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after the app rebuilds the Dataset). Do not copy `scrollTop` off the pane.
 - `variants` — the rules this Gantt paints rows with; `bar()`, `summary()`, `diamond()` are core's own shipped looks.
 - `gantt.variantFor(entry): ResolvedVariant` — the whole variant this Gantt resolved for one row, never `entry.variant`: an Entry belongs to a `Dataset`, a variant resolves per Gantt, and two Gantts on one Dataset may answer differently for the same row.
+
+### Dates: `formatDateTime`, `formatInclusiveDate`, `lastCoveredInstant`
+
+Storage is half-open: `end` is the boundary *after* the span, not its last moment. A date-only
+`end` you write — `'2026-09-08'` — always means "through that day": it stores the start of the
+9th. Pass a timed string, such as `'2026-09-09T00:00:00'`, for an exclusive end instead.
+
+Two formatters ship for display, both plain `formatValue` functions with the signature
+`(value, ctx, entry) => string`:
+
+- **`formatDate(value, ctx, options?)`** — the general-purpose formatter. `ctx` is `{ timeZone,
+  locale? }`. `options` is any `Intl.DateTimeFormatOptions`; omitted, it shows a date only.
+- **`formatDateTime`** — a Field's `formatValue`: the stored moment, date and clock time. This is
+  the `date` type's default formatter.
+- **`formatInclusiveDate`** — a Field's `formatValue`: the last day a span covers, date only. It
+  reads `entry.start` and the value it is given for `end`, so it works on `start` too. Core `end`
+  sets this as its default formatter.
+- **`lastCoveredInstant({ start?, end })`** — the instant the two formatters above build on: `end`
+  stepped back one millisecond, unless the span is zero-length (`end === start`), which answers its
+  own `end` unchanged. Reach for it directly when you format an end yourself, outside a Field.
+
+A zero-length span (a milestone, `end === start`) shows its own moment unchanged — `end` names no
+day to step back from. `formatInclusiveDate` and `lastCoveredInstant` both take a missing `start`;
+they still step `end` back one millisecond and show the day that lands on.
+
+Set either formatter on `start` or `end` like any other Field override:
+
+```ts
+import { Dataset, formatDateTime } from 'freegantt';
+
+new Dataset({
+  timeZone: 'Europe/Warsaw',
+  entries: [ /* … */ ],
+  fields: [{ key: 'start', formatValue: formatDateTime }], // matches end's date+time, on start too
+});
+```
+
+A custom format builds on `formatDate` and `lastCoveredInstant` — the harness planner page's
+compact "02 Mar" Finish column, with no year and no clock time:
+
+```ts
+import { formatDate, lastCoveredInstant, type FormatContext, type Instant } from 'freegantt';
+
+const COMPACT_DAY: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+
+function compactFinish(
+  value: unknown,
+  ctx: FormatContext,
+  entry: { readonly start?: Instant | undefined },
+): string {
+  if (value === undefined || value === null) return '';
+  return formatDate(lastCoveredInstant({ start: entry.start, end: value as Instant }), ctx, COMPACT_DAY);
+}
+```
 
 ### Naming
 

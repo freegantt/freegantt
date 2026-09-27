@@ -25,7 +25,6 @@ import { Dataset, Gantt } from 'freegantt';
 // ── Data: headless, works in Node ───────────────────────────────
 const dataset = new Dataset<{ team: string; cost: number }>({
   timeZone: 'America/Chicago',            // optional (#129); omit it to author in the viewer's own zone
-  dateOnlyEnd: 'inclusive',               // default; see §2.1
   measureDuration: 'span',                // default; 'children' sums direct children's spans and counts no gap (ADR 0017, #421)
   history: { capacity: 100 },             // default; undo/redo stack depth, or `false` — see "Undo and redo" below
   entries: [
@@ -272,7 +271,7 @@ A string with an explicit `Z` or numeric offset is absolute. Every other string 
 
 `timeZone` is optional (#129). Passed explicitly, it is what the paragraph above describes: one zone, so a Plain time in `entries` reads identically for every viewer, in any timezone. Omitted, `Dataset` resolves the current environment's own zone once, at construction (`Intl.DateTimeFormat().resolvedOptions().timeZone`, falling back to `'UTC'` when that reports nothing, e.g. a bare Node process) and stores the resolved IANA string — `dataset.timeZone` is always a concrete zone after construction, never a sentinel. This trades cross-viewer consistency for ergonomics: a dataset built this way authors Plain times in *this* viewer's calendar, so the same entry list can read differently for a viewer in a different zone. Reach for it for single-viewer or demo use; pass `timeZone` explicitly whenever the dataset is shared across viewers, such as a project plan multiple people open.
 
-`dateOnlyEnd` names how a *date-only* `end` is read against half-open `[start, end)` storage. `'inclusive'` (the default) reads `end: '2026-09-08'` as "through the 8th" and stores the start of the 9th; `'exclusive'` reads it literally. It applies to nothing else: an `end` carrying a time of day, a `Date`, epoch milliseconds, or an `Instant` is a boundary already, and `start` is never adjusted.
+A date-only `end` always means "through that day": `end: '2026-09-08'` stores the start of the 9th. This is the only reading — there is no option to read it literally. It applies to nothing else: an `end` carrying a time of day, a `Date`, epoch milliseconds, or an `Instant` is a boundary already, and `start` is never adjusted. A consumer who wants an exclusive end passes a timed string, such as `'2026-09-09T00:00:00'`.
 
 The reading itself lives in `time/` (`toInstant`, `toEndInstant`) — resolving a Plain time needs the zone and the DST fold/gap policy, and advancing a date-only end by one day is zone-aware arithmetic, which I10 confines to that layer. `api/` maps fields and does no date math of its own.
 
