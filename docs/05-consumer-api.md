@@ -180,6 +180,50 @@ dataset.entries.update('roofing', { siblingIndex: 0 });
 - `entries.get(id)?.read(key)`, `dataset.field(key)`, `dataset.fields.all` — `read` is the one value door
 - `plugins` — a plugin with a `data` half installs here
 
+### The duration Field
+
+`duration` is a core computed Field. Its value is a `Duration`, `{ value, unit: 'millisecond' }` —
+the row's own `end - start`. It is `undefined` until the row has both dates.
+
+A parent's `start` and `end` roll up (`min`, `max`), so a parent's duration spans its children, and
+the gaps between them count.
+
+Read it like any Field: `entry.read('duration')` on a row, `ctx.read('duration')` in a computed
+Field, `ctx.values('duration')` in an Aggregator.
+
+Its text comes from the `duration` type: whole calendar days in the Dataset's zone (`12 d`), else
+one decimal. Override `formatValue` as on `start` or `end`. It takes no `editable` and no `rollUp`,
+because a computed Field has no stored home.
+
+Core declares it with the shape you use for your own computed Field:
+
+```ts
+import { diffMs, spansTime, type Duration, type Field } from 'freegantt';
+
+// What core declares. Your own computed Field takes the same shape under your own key.
+const duration: Field = {
+  key: 'duration',
+  type: 'duration',
+  compute: (entry): Duration | undefined =>
+    spansTime(entry) ? { value: diffMs(entry.end, entry.start), unit: 'millisecond' } : undefined,
+  column: { header: 'Duration', align: 'end', width: 100 },
+};
+```
+
+Set a formatter through `fields`, on the `Dataset`, the same way you would on `start` or `end`:
+
+```ts
+import { Dataset, MS, type Duration } from 'freegantt';
+
+new Dataset({
+  entries: [ /* … */ ],
+  fields: [
+    // Duration shows hours, not days.
+    { key: 'duration', formatValue: (value: Duration | undefined) => (value === undefined ? '' : `${value.value / MS.HOUR} h`) },
+  ],
+});
+```
+
 ### Gantt
 
 - `gridColumns` — which Fields this view shows, in order. `columnRenderer` stays on the column. `createGridColumnHelper(dataset)` types a renderer's `fieldValue` from the column's key — see [`docs/12-grid-columns.md`](12-grid-columns.md). `meter()` and `image()` are the shipped column renderers; default alt is the Field's formatted value, and `{ alt: 'Logo' }` is a static override for a column that is one picture. Store a URL; let `formatValue` return the caption so alt (and tooltip) speak the name, not the URL.
