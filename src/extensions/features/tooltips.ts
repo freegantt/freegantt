@@ -8,6 +8,7 @@ import { createPopup } from '../popup.js';
 import type { Popup, PopupPlacement } from '../popup.js';
 import type { ChromePlugin, PluginContext } from '../../api/gantt.js';
 import type { DomTarget } from '../../api/plugin-context.js';
+import { joinStartAndEnd } from '../../api/time-facade.js';
 import type { ElementDescription, Entry, TimeSpan, TooltipColumn } from '../../model/index.js';
 import { spansTime } from '../../model/index.js';
 
@@ -26,16 +27,17 @@ const DEFAULT_PLACEMENT: PopupPlacement = 'top';
  *  say it instead, and nothing tested them.
  *
  *  Which start/end text does the tooltip show? Whatever the `start`/`end` Field's own `formatValue`
- *  answers — a consumer's override on either Field reaches this popup with no extra wiring. */
+ *  answers — a consumer's override on either Field reaches this popup with no extra wiring.
+ *  A one-day bar shows one date. */
 function defaultContent(
   entry: Entry & TimeSpan,
   ctx: PluginContext,
   columns: readonly TooltipColumn[],
 ): ElementDescription {
-  const formatCtx = { timeZone: ctx.dataset.timeZone, locale: ctx.gantt.locale };
-  const start = ctx.dataset.field('start')?.formatValue?.(entry.start, formatCtx, entry) ?? '';
-  const end = ctx.dataset.field('end')?.formatValue?.(entry.end, formatCtx, entry) ?? '';
-  const dates = start === end ? start : `${start} – ${end}`;
+  const dates = joinStartAndEnd(
+    ctx.gantt.formatFieldValue(entry, 'start'),
+    ctx.gantt.formatFieldValue(entry, 'end'),
+  );
   return {
     class: { 'fg-tooltip': true },
     children: [
