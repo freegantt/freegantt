@@ -25,7 +25,10 @@ function instant(iso: string): Instant {
 }
 
 /** Records the ports in call order, so a test asserts the whole answer and not one half of it. */
-function recordingPorts(pixels: Record<string, number> = {}): {
+function recordingPorts(
+  pixels: Record<string, number> = {},
+  datasetLocale: Intl.LocalesArgument | undefined = undefined,
+): {
   ports: FrameSettingsPorts;
   calls: string[];
   reads: string[];
@@ -40,6 +43,7 @@ function recordingPorts(pixels: Record<string, number> = {}): {
       reads.push(property);
       return pixels[property] ?? policy.fallback;
     },
+    datasetLocale: () => datasetLocale,
   };
   return { ports, calls, reads };
 }
@@ -230,6 +234,26 @@ describe('FrameSettings — toLayoutInput', () => {
     const { ports } = recordingPorts();
     const settings = new FrameSettings(ports, { locale: 'de-DE' });
     expect(settings.toLayoutInput(perFrame()).locale).toBe('de-DE');
+  });
+
+  it("falls back to the Dataset's own locale when this Gantt names none (#583)", () => {
+    const { ports } = recordingPorts({}, 'fr-FR');
+    const settings = new FrameSettings(ports);
+    expect(settings.effectiveLocale).toBe('fr-FR');
+    expect(settings.toLayoutInput(perFrame()).locale).toBe('fr-FR');
+  });
+
+  it("this Gantt's own locale beats the Dataset's (#583)", () => {
+    const { ports } = recordingPorts({}, 'fr-FR');
+    const settings = new FrameSettings(ports, { locale: 'de-DE' });
+    expect(settings.effectiveLocale).toBe('de-DE');
+  });
+
+  it("a live locale unset falls back to the Dataset's own locale (#583)", () => {
+    const { ports } = recordingPorts({}, 'fr-FR');
+    const settings = new FrameSettings(ports, { locale: 'de-DE' });
+    settings.set({ locale: undefined });
+    expect(settings.effectiveLocale).toBe('fr-FR');
   });
 
   it('two instances share no settings (I2)', () => {

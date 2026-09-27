@@ -2982,6 +2982,55 @@ describe('Gantt.formatFieldValue (#576)', () => {
   });
 });
 
+describe("Gantt falls back to the Dataset's own locale (#583)", () => {
+  function moneyGanttWithDatasetLocale(container: HTMLElement, locale: Intl.LocalesArgument) {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      locale,
+      fields: [{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }],
+      entries: sampleEntries.map((entry, i) =>
+        i === 0 ? { ...entry.toInput(), props: { cost: 500 } } : entry,
+      ),
+    });
+    return { dataset };
+  }
+
+  it("with no locale of its own, shows the Dataset's locale in a Grid cell and in formatFieldValue", () => {
+    const container = document.createElement('div');
+    const { dataset } = moneyGanttWithDatasetLocale(container, 'de-DE');
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'] });
+    const entry = dataset.entries.all[0]!;
+    const cell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(cell?.textContent).toBe('500,00 €');
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe(cell?.textContent);
+    gantt.destroy();
+  });
+
+  it("this Gantt's own locale beats the Dataset's", () => {
+    const container = document.createElement('div');
+    const { dataset } = moneyGanttWithDatasetLocale(container, 'de-DE');
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'], locale: 'en-US' });
+    const entry = dataset.entries.all[0]!;
+    const cell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(cell?.textContent).toBe('€500.00');
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe('€500.00');
+    gantt.destroy();
+  });
+
+  it("a live gantt.locale = undefined falls back to the Dataset's own locale", async () => {
+    const container = document.createElement('div');
+    const { dataset } = moneyGanttWithDatasetLocale(container, 'de-DE');
+    const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'], locale: 'en-US' });
+    const entry = dataset.entries.all[0]!;
+    gantt.locale = undefined;
+    expect(gantt.formatFieldValue(entry, 'cost')).toBe('500,00 €');
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    const cell = container.querySelector('.fg-row [data-field="cost"]');
+    expect(cell?.textContent).toBe('500,00 €');
+    gantt.destroy();
+  });
+});
+
 describe('Gantt grid columns are fixed-width by default (#139)', () => {
   it('a column nobody sized paints a pixel width and refuses to flex', () => {
     const container = document.createElement('div');

@@ -100,6 +100,10 @@ export interface FrameSettingsPorts {
   /** Read one `--fg-*` property off the Container, in px (`render/dom/pixel-property.ts`). Injected
    *  rather than imported, so this module stays DOM-free. */
   readPixelProperty(property: string, policy: PixelPropertyPolicy): number;
+  /** The Dataset's own locale (#583) — `effectiveLocale` reads it when this Gantt names none of its
+   *  own. Injected rather than imported, so this module never names `api/dataset.ts` (`view/` may
+   *  not import `api/`). */
+  datasetLocale(): Intl.LocalesArgument | undefined;
 }
 
 /** Every setting, with the value it currently holds. Five of them may honestly be unset, and say so
@@ -215,6 +219,15 @@ export class FrameSettings {
     return this.#values.locale;
   }
 
+  /** This Gantt's own `locale` first, then the Dataset's (#583). The one place either fallback
+   *  resolves — `toLayoutInput` below, `GanttShell#columnBind` and the gesture pipeline all read
+   *  through here. A Grid cell, a bar label, a header band and `gantt.formatFieldValue` never
+   *  disagree because of it. `undefined` here reads as the runtime's own locale, downstream, the
+   *  same as an unset `Intl.LocalesArgument` everywhere else. */
+  get effectiveLocale(): Intl.LocalesArgument | undefined {
+    return this.#values.locale ?? this.#ports.datasetLocale();
+  }
+
   get todayLine(): boolean | Instant {
     return this.#values.todayLine;
   }
@@ -312,7 +325,7 @@ export class FrameSettings {
       todayLine: this.#values.todayLine,
       dateLines: this.#values.dateLines,
       ...this.rowPlanSettings(),
-      ...(this.#values.locale !== undefined ? { locale: this.#values.locale } : {}),
+      ...(this.effectiveLocale !== undefined ? { locale: this.effectiveLocale } : {}),
     };
   }
 

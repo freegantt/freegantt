@@ -616,9 +616,10 @@ export class Gantt<TProps = unknown> {
    *  the grid — a status line, a CSV row, a tooltip. Reads the same door a Grid cell and a bar
    *  label read through, and follows `gantt.locale` live. Works for a Field with no column, a
    *  hidden column, and a `compute` Field. Throws `UnknownFieldError` for a key no Field declares.
-   *  It reads through `dataset.formatFieldValue` with this Gantt's locale. */
+   *  It reads through `dataset.formatFieldValue` with this Gantt's own locale first, then the
+   *  Dataset's (#583), then the runtime's own. */
   formatFieldValue(entry: Entry<TProps>, key: FieldKey): string {
-    return this.#dataset.formatFieldValue(entry, key, this.locale);
+    return this.#dataset.formatFieldValue(entry, key, this.#shell.effectiveLocale);
   }
 
   /** Live. `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once

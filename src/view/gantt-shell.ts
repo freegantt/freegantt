@@ -1021,7 +1021,7 @@ export class GanttShell {
       raiseError: this.#raiseError,
       ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
-      locale: () => this.#frameSettings.locale,
+      locale: () => this.#frameSettings.effectiveLocale,
       applyGestureState: (preview, pendingBarIds, cursor) => {
         setOptional(this.#interactionState, 'preview', preview);
         setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
@@ -1241,6 +1241,13 @@ export class GanttShell {
    *  the same way, which is the whole point of #167. */
   set locale(l: Intl.LocalesArgument | undefined) {
     this.#frameSettings.set({ locale: l });
+  }
+
+  /** This Gantt's own `locale` first, then the Dataset's, then the runtime's own (#583). The one
+   *  read `api/gantt.ts`'s `formatFieldValue` takes, so it never drifts from what a Grid cell and a
+   *  bar label already show. */
+  get effectiveLocale(): Intl.LocalesArgument | undefined {
+    return this.#frameSettings.effectiveLocale;
   }
 
   /** The columns the consumer authored, and only those (#181). A plugin's registered column
@@ -1824,6 +1831,7 @@ export class GanttShell {
       rebindFields: () => this.#bindColumns(),
       invalidateBars: () => this.#layout.invalidateFrom(0),
       readPixelProperty: (property, policy) => readPixelProperty(this.#container, property, policy),
+      datasetLocale: () => this.#options.dataset.locale,
     };
   }
 
@@ -2635,7 +2643,7 @@ export class GanttShell {
       timeZone: this.#options.dataset.timeZone,
       defaultColumnWidth: this.#columnChrome.defaultWidthPx(),
     };
-    const locale = this.#frameSettings.locale;
+    const locale = this.#frameSettings.effectiveLocale;
     if (locale !== undefined) bind.locale = locale;
     return bind;
   }
