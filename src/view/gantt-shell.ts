@@ -58,6 +58,7 @@ import { GridPaneWidth } from './grid-pane-width.js';
 import type { GridPaneWidthPorts, GridWidth } from './grid-pane-width.js';
 import { EventBus } from './event-bus.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
+import { createFormatContext, formatFieldValue } from '../data/fields/format-field-value.js';
 import type {
   AsyncCancelableEvent,
   EntryActivate,
@@ -98,6 +99,7 @@ import {
   PluginNotInstalledError,
   UnsupportedUnitError,
   InvalidSnapIncrementError,
+  UnknownFieldError,
   entryIdOfBar,
   entryId,
   barId,
@@ -109,6 +111,7 @@ import type {
   Entry,
   EntryId,
   FieldKey,
+  FormatContext,
   GridColumnInput,
   BarId,
   Instant,
@@ -1518,6 +1521,22 @@ export class GanttShell {
       this.#barLabelPorts,
       this.#columnBind(),
     );
+  }
+
+  /** What a Field's text reads outside the grid. The same door `resolveColumns` and `#labelFor`
+   *  read through, so a caller's own read never disagrees with the painted cell. Throws
+   *  `UnknownFieldError` for an undeclared key. */
+  formatFieldValue(entry: Entry, key: FieldKey): string {
+    const field = this.#options.dataset.field(key);
+    if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');
+    return formatFieldValue(field, entry, this.formatContext);
+  }
+
+  /** The `FormatContext` a Grid column, a bar label, and `formatFieldValue` all format through.
+   *  A caller building its own Formatter call takes this instead of assembling a second copy. */
+  get formatContext(): FormatContext {
+    const bind = this.#columnBind();
+    return createFormatContext(bind.timeZone, bind.locale);
   }
 
   get capabilities(): Capabilities {

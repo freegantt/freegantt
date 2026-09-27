@@ -1072,6 +1072,12 @@ export function formatInclusiveDate(value: unknown, ctx: FormatContext, entry: {
 }): string;
 
 // @public
+export function formatStartAndEnd(value: {
+    readonly start?: Instant | undefined;
+    readonly end?: Instant | undefined;
+} | undefined, ctx: FormatContext): string;
+
+// @public
 export function formatWeekNumber(value: unknown, ctx: FormatContext): string;
 
 // @public (undocumented)
@@ -1190,6 +1196,7 @@ export class Gantt<TProps = unknown> {
     filterRows(filter: RowFilter | undefined): void;
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
+    get formatContext(): FormatContext;
     formatFieldValue(entry: Entry<TProps>, key: FieldKey): string;
     get gridCellRenderer(): GridCellRenderer | undefined;
     set gridCellRenderer(renderer: GridCellRenderer | undefined);
@@ -1584,6 +1591,9 @@ export function isCoarserThan(unit: TimeUnit, than: TimeUnit): boolean;
 
 // @public
 export function isTimeUnit(value: string): value is TimeUnit;
+
+// @public
+export function joinStartAndEnd(startText: string, endText: string, separator?: string): string;
 
 // @public (undocumented)
 export type KeyBinding<TProps = unknown> = KeyBindingOf<Gantt<TProps>, Dataset<TProps>>;
