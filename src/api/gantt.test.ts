@@ -3048,6 +3048,14 @@ describe('Gantt.formatContext (#578)', () => {
     expect(gantt.formatContext.locale).toBe('de-DE');
     gantt.destroy();
   });
+
+  it("falls back to the Dataset's own locale when the Gantt names none (#583)", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', locale: 'de-DE', entries: sampleEntries });
+    const gantt = new Gantt({ container, dataset });
+    expect(gantt.formatContext.locale).toBe('de-DE');
+    gantt.destroy();
+  });
 });
 
 describe('Gantt grid columns are fixed-width by default (#139)', () => {
