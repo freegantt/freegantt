@@ -395,6 +395,14 @@ _Avoid_: Date input, raw date, loose instant
 An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date always means the last day it wants included: it stores the start of the next day. It applies to nothing else: an end that already carries a time of day is a boundary already. `lastCoveredInstant` reads a stored `end` back as the last moment it covers; `formatInclusiveDate` builds on it. `formatDateTime` shows the stored moment as-is, with clock time.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
+**Start and end text**:
+One line naming a pair of dates: `formatStartAndEnd(pair, ctx)` reads a start and an end straight
+from Instants, date only; `joinStartAndEnd(startText, endText)` joins two texts a caller already read
+through each side's own Field `formatValue`. A missing side keeps its dash (`'Mar 2, 2026 –'`); two
+sides that read the same show once.
+_Avoid_: date range (Range is the TimeScale's own content span), span text (an Entry spans only with
+both dates)
+
 **Formatter**:
 A function turning one value into display text: `(value, ctx: FormatContext, entry) => string`, declaring only the parameters it reads. Zone and locale come only from `ctx`; a missing value gives `''`, never a throw. No options at the call — a factory builds a tailored one once (`dateFormatter(options)`, `currency({ code })`). A header band callback is a Formatter with no entry (`HeaderFormat`). Every shipped Field `formatValue` is one; `formatFieldValue` is the one path a Field's text takes to the grid, the bar label, and `gantt.formatFieldValue`.
 _Avoid_: renderer (paints an element, not text), format function
