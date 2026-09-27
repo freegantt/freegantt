@@ -5243,6 +5243,45 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
       gantt.destroy();
       container.remove();
     });
+
+    // #428: duration is an ordinary Field, so its text overrides the same way start's and end's do.
+    it('a formatValue override on duration changes the grid cell, the bar label and every other reader', () => {
+      const container = document.createElement('div');
+      document.body.append(container);
+      const dataset = new Dataset({
+        timeZone: 'UTC',
+        fields: [
+          { key: 'duration', formatValue: (value) => `${(value as { value: number }).value / MS.DAY} d` },
+        ],
+        entries: [{ id: 't1', name: 'Design', start: 0, end: 2 * MS.DAY }],
+      });
+      const gantt = new Gantt({
+        container,
+        dataset,
+        gridColumns: ['name', 'duration'],
+        barLabels: { field: 'duration' },
+      });
+
+      const cell = container.querySelector<HTMLElement>(
+        '.fg-row[data-entry-id="t1"] [data-field="duration"]',
+      )!;
+      const bar = container.querySelector<HTMLElement>(
+        `.fg-bar[data-bar-id="${barId(entryId('t1'), 0)}"] .fg-bar-label`,
+      )!;
+      const entry = dataset.entries.get('t1')!;
+      expect(cell.textContent).toBe('2 d');
+      expect(bar.textContent).toBe('2 d');
+      expect(
+        dataset.field('duration')!.formatValue!(
+          entry.read('duration'),
+          { timeZone: 'UTC', locale: 'en-US' },
+          entry,
+        ),
+      ).toBe('2 d');
+
+      gantt.destroy();
+      container.remove();
+    });
   });
 
   // ADR 0018, *How an app pins one row*: this is the whole of what a stored variant was going to
