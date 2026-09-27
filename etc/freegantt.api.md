@@ -381,6 +381,7 @@ export class Dataset<TProps = unknown> {
         readonly all: readonly Field[];
     };
     formatFieldValue(entry: Entry<TProps>, key: FieldKey, locale?: Intl.LocalesArgument): string;
+    get locale(): Intl.LocalesArgument | undefined;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;
@@ -439,6 +440,7 @@ export interface DatasetOptions<TProps = unknown> {
     history?: false | {
         capacity?: number;
     };
+    locale?: Intl.LocalesArgument;
     plugins?: readonly PluginOf<unknown, unknown>[];
     timeZone?: string;
 }
