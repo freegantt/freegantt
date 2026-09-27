@@ -24,7 +24,7 @@ const treeArb = fc.integer({ min: 1, max: 30 }).chain((rowCount) =>
   }),
 );
 
-describe("reads a row's duration property (issue #428)", () => {
+describe("reads a row's duration Field (issue #428)", () => {
   it("reads a row's duration as its own end minus start, on every row of an arbitrary tree", () => {
     // A parent row can carry its own authored dates in this arbitrary; Rollup then owns them once
     // it gains a child, and reports that on `console.warn`. Expected noise, not the property.

@@ -26,6 +26,7 @@ import {
 import type {
   ChangeSet,
   DataPlugin,
+  Duration,
   EditExtender,
   Entry,
   EntryInput,
@@ -2851,6 +2852,46 @@ describe('Gantt gridColumns (S4.3, D-S4-12, [S4-A1] column half)', () => {
     expect(row.querySelectorAll('.fg-row-label, .fg-row-cell')).toHaveLength(3);
     gantt.destroy();
   });
+
+  // #428: duration is an ordinary Field, so its text overrides the same way start's and end's do.
+  it('a formatValue override on duration changes the grid cell, the bar label and every other reader', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [
+        {
+          key: 'duration',
+          formatValue: (value: Duration | undefined) => `${(value?.value ?? 0) / MS.DAY} d`,
+        },
+      ],
+      entries: [{ id: 't1', name: 'Design', start: 0, end: 2 * MS.DAY }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', 'duration'],
+      barLabels: { field: 'duration' },
+    });
+
+    const cell = container.querySelector<HTMLElement>('.fg-row[data-entry-id="t1"] [data-field="duration"]')!;
+    const bar = container.querySelector<HTMLElement>(
+      `.fg-bar[data-bar-id="${barId(entryId('t1'), 0)}"] .fg-bar-label`,
+    )!;
+    const entry = dataset.entries.get('t1')!;
+    expect(cell.textContent).toBe('2 d');
+    expect(bar.textContent).toBe('2 d');
+    expect(
+      dataset.field('duration')!.formatValue!(
+        entry.read('duration'),
+        { timeZone: 'UTC', locale: 'en-US' },
+        entry,
+      ),
+    ).toBe('2 d');
+
+    gantt.destroy();
+    container.remove();
+  });
 });
 
 describe('Gantt grid columns are fixed-width by default (#139)', () => {
@@ -5239,45 +5280,6 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
         expect(d1Bar.textContent).toBe('8');
         expect(totalCell.textContent).toBe('12');
       }
-
-      gantt.destroy();
-      container.remove();
-    });
-
-    // #428: duration is an ordinary Field, so its text overrides the same way start's and end's do.
-    it('a formatValue override on duration changes the grid cell, the bar label and every other reader', () => {
-      const container = document.createElement('div');
-      document.body.append(container);
-      const dataset = new Dataset({
-        timeZone: 'UTC',
-        fields: [
-          { key: 'duration', formatValue: (value) => `${(value as { value: number }).value / MS.DAY} d` },
-        ],
-        entries: [{ id: 't1', name: 'Design', start: 0, end: 2 * MS.DAY }],
-      });
-      const gantt = new Gantt({
-        container,
-        dataset,
-        gridColumns: ['name', 'duration'],
-        barLabels: { field: 'duration' },
-      });
-
-      const cell = container.querySelector<HTMLElement>(
-        '.fg-row[data-entry-id="t1"] [data-field="duration"]',
-      )!;
-      const bar = container.querySelector<HTMLElement>(
-        `.fg-bar[data-bar-id="${barId(entryId('t1'), 0)}"] .fg-bar-label`,
-      )!;
-      const entry = dataset.entries.get('t1')!;
-      expect(cell.textContent).toBe('2 d');
-      expect(bar.textContent).toBe('2 d');
-      expect(
-        dataset.field('duration')!.formatValue!(
-          entry.read('duration'),
-          { timeZone: 'UTC', locale: 'en-US' },
-          entry,
-        ),
-      ).toBe('2 d');
 
       gantt.destroy();
       container.remove();
