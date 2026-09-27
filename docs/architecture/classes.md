@@ -447,7 +447,6 @@ without depending on each other.
 | `Rect` / `Size` / `Point` / `PixelSpan` | readonly numbers | One geometry vocabulary for four layers. |
 | `InstantInput` | `Instant \| Date \| number \| string` | The input twin of `Instant`: what a consumer may *write* where the library *stores* an `Instant`. A string is either absolute (explicit `Z` or numeric offset) or a Plain time that names no instant until the Dataset's zone resolves it. |
 | `EntryInput` / `TimeSpanInput` | the loose twins | Same fields, looser types: plain-string ids, `InstantInput` dates. Because `EntryId` is `string & brand` and `Instant` is `number & brand`, a stored `Entry` is itself a valid `EntryInput` — the pass-through case costs nothing. |
-| `DateOnlyEndRule` | `'inclusive' \| 'exclusive'` | Reconciles half-open storage with what a consumer means by a bare date on `end`. A consumer writing `end: '2026-09-08'` means "through the 8th"; storage needs the boundary *after* the span. `'inclusive'` (default) advances such an end by one calendar day; `'exclusive'` reads it literally. Only date-only strings are affected — anything carrying a time of day is already a boundary. |
 
 ## `render/` & `api/`
 
@@ -497,9 +496,9 @@ orient="auto-start-reverse"
 <rect class="bx api" x="252" y="24" width="216" height="120" />
 <text class="t" x="264" y="42">api/dataset.ts</text>
 <text class="s" x="264" y="60">new Dataset({ entries,</text>
-<text class="s" x="264" y="74">timeZone, dateOnlyEnd? })</text>
-<text class="xs" x="264" y="94">Resolves dateOnlyEnd to its</text>
-<text class="xs" x="264" y="106">'inclusive' default, then calls</text>
+<text class="s" x="264" y="74">timeZone })</text>
+<text class="xs" x="264" y="94">Resolves each Entry's dates in</text>
+<text class="xs" x="264" y="106">the dataset zone, then calls</text>
 <text class="xs" x="264" y="118">toEntries ONCE at construct,</text>
 <text class="xs" x="264" y="130">and again on every add/update.</text>
 <path class="edge" d="M360,144 V176" marker-end="url(#a8)" style="color: var(--sub)" />
@@ -514,7 +513,7 @@ orient="auto-start-reverse"
 <rect class="bx pure" x="508" y="182" width="238" height="106" />
 <text class="t" x="520" y="200">time/input.ts</text>
 <text class="s" x="520" y="216">toInstant(zone, input)</text>
-<text class="s" x="520" y="230">toEndInstant(zone, input, rule)</text>
+<text class="s" x="520" y="230">toEndInstant(zone, input)</text>
 <text class="xs" x="520" y="250">Every date decision lives here —</text>
 <text class="xs" x="520" y="262">it is the only layer allowed the</text>
 <text class="xs" x="520" y="274">zone lookup and the day arithmetic.</text>

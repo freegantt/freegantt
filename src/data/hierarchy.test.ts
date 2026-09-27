@@ -41,7 +41,7 @@ describe('structure decides derivation (ADR 0013)', () => {
     expect(changeCount).toBe(1);
     expect(rows.some((row) => row.field === 'kind')).toBe(false);
     expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-06-01', 'test'));
-    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-06-05', 'inclusive', 'test'));
+    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-06-05', 'test'));
     expect(rows.some((row) => row.field === 'start')).toBe(true);
     expect(rows.some((row) => row.field === 'end')).toBe(true);
   });
@@ -57,7 +57,7 @@ describe('structure decides derivation (ADR 0013)', () => {
 
     expect(state.entries.get('p1')?.children() ?? []).toHaveLength(1);
     expect(state.entries.get('p1')!.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
-    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive', 'test'));
+    expect(state.entries.get('p1')!.end).toBe(toEndInstant('UTC', '2026-03-05', 'test'));
   });
 
   it('promotion drops the parent’s authored rolling-up value in the same ChangeSet as the parentId write', () => {

@@ -4,7 +4,7 @@
 // so the fixture is written the same way — no date-math helpers, no id branding. A few entries use a
 // `Date` instead of a string, since `InstantInput` accepts either (plans/01 §5) and a real consumer mixes
 // both depending on where the value came from. A `Date` already names a full instant, so its `end` is
-// the half-open boundary itself, not a date-only value `dateOnlyEnd` would read as "through that day".
+// the half-open boundary itself, not a date-only value, which always reads as "through that day".
 
 import { Dataset } from 'freegantt';
 import type { Entry, EntryInput, StoredEntry } from 'freegantt';

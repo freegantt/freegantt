@@ -18,6 +18,14 @@ open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The workin
 
 > **One sentence here is retired.** The paragraph on the duration Field cites ADR 0014 *decision 13* for deleting `FieldContext.durationOf`. The author withdrew ADR 0014 on 2026-09-11 before it was built ([the gap at 0014](README.md#the-gap-at-0014)), so `durationOf` still ships and [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) is still open. [ADR 0017](0017-the-entry-answers-questions-about-itself.md) closes both. **The guard this ADR asked for landed, and the decision stands.**
 
+> **One sentence here is retired.** §Decision's line 63 reads: *"End with no start is allowed.
+> Inclusive-end formatting has no start: show the stored end as a plain instant. Do not guess a
+> day."* [#577](https://github.com/Pawel-IT/FreeGantt/issues/577) ships `formatInclusiveDate`, and
+> its "show the stored end as a plain instant" clause does not survive: with no start, it still
+> steps `end` back one millisecond and shows the day that lands on, the same as it does with a
+> start. Only a zero-length span (`end === start`) shows `end` unchanged — and that check needs a
+> start to fire at all. **The rest of the paragraph — end with no start is allowed — stands.**
+
 **This ADR carries no open decision, and it lands second**, after [ADR 0016](0016-the-library-holds-no-save-format.md). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) demotes an Entry to *a normal Entry with no dates*, and `model/entry.ts:31-33` declares `start: Instant` and `end: Instant` **required** today. That shape is not representable until this lands. **There is no Document**, so this ADR writes no schema number.
 
 The working material is [`plans/field-redesign/0012-optional-dates/`](../../plans/field-redesign/0012-optional-dates/README.md).

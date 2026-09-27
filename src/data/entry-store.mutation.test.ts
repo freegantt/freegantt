@@ -126,7 +126,7 @@ describe('entries.update', () => {
     expect(updated.start).toBe(constructed.start);
     expect(updated.end).toBe(constructed.end);
     expect(updated.start).toBe(toInstant('UTC', '2026-09-08', 'test'));
-    expect(updated.end).toBe(toEndInstant('UTC', '2026-09-09', 'inclusive', 'test'));
+    expect(updated.end).toBe(toEndInstant('UTC', '2026-09-09', 'test'));
   });
 
   it('an unknown id throws EntryNotFoundError', () => {
@@ -605,7 +605,7 @@ describe('rollup (§1.5)', () => {
     const mid = state.entries.get('mid')!;
     const root = state.entries.get('root')!;
     expect(mid.start).toBe(toInstant('UTC', '2026-04-01', 'test'));
-    expect(mid.end).toBe(toEndInstant('UTC', '2026-04-10', 'inclusive', 'test'));
+    expect(mid.end).toBe(toEndInstant('UTC', '2026-04-10', 'test'));
     expect(root.start).toBe(mid.start);
     expect(root.end).toBe(mid.end);
   });
@@ -618,7 +618,7 @@ describe('rollup (§1.5)', () => {
 
     const p1 = state.entries.get('p1')!;
     expect(p1.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
+    expect(p1.end).toBe(toEndInstant('UTC', '2026-01-10', 'test'));
   });
 
   it('an Entry written as a leaf drops its proposed span when the same transaction gives it a child — the Rollup owns it, with one warning', () => {
@@ -639,7 +639,7 @@ describe('rollup (§1.5)', () => {
 
     const x = state.entries.get('x')!;
     expect(x.start).toBe(toInstant('UTC', '2026-12-01', 'test'));
-    expect(x.end).toBe(toEndInstant('UTC', '2026-12-02', 'inclusive', 'test'));
+    expect(x.end).toBe(toEndInstant('UTC', '2026-12-02', 'test'));
     expect(reports).toHaveLength(1);
     expect(reports[0]?.code).toBe('derived-values-dropped');
     expect(reports[0]?.severity).toBe('warning');
@@ -736,7 +736,7 @@ describe('removability (D-S2-23)', () => {
 
     const p1 = state.entries.get('p1')!;
     expect(p1.start).toBe(toInstant('UTC', '2026-05-01', 'test'));
-    expect(p1.end).toBe(toEndInstant('UTC', '2026-05-10', 'inclusive', 'test'));
+    expect(p1.end).toBe(toEndInstant('UTC', '2026-05-10', 'test'));
   });
 });
 
@@ -830,7 +830,7 @@ describe('a lock holds at every caller-facing door (ADR 0015)', () => {
     });
 
     expect(() => state.entries.update('e1', { end: undefined })).toThrow(FieldNotEditableError);
-    expect(state.entries.get('e1')!.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
+    expect(state.entries.get('e1')!.end).toBe(toEndInstant('UTC', '2026-01-05', 'test'));
   });
 
   it('removes a child Entry whose own dates are open, as it always did', () => {

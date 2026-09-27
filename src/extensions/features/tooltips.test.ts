@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { Gantt } from '../../api/gantt.js';
 import { Dataset } from '../../api/dataset.js';
+import { formatDateTime } from '../../api/index.js';
 import { sampleEntries } from '../../../fixtures/sample-dataset.js';
 import { tooltips } from './tooltips.js';
 
@@ -200,6 +201,47 @@ describe('[S5-A1] tooltips() (S5.5, D-S5-13)', () => {
     hover(bars(container)[0]!);
     vi.advanceTimersByTime(100);
     expect(container.querySelector('.fg-tooltip')).toBeNull();
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it("shows the span through the start and end Fields' own formatValue (#577)", () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [{ id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({ container, dataset, plugins: [tooltips({ delayMs: 100 })] });
+
+    hover(bars(container)[0]!);
+    vi.advanceTimersByTime(100);
+
+    expect(container.querySelector('.fg-tooltip-dates')!.textContent).toBe(
+      'Mar 2, 2026, 12:00 AM – Mar 4, 2026',
+    );
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('follows a consumer override of formatValue on end (#577)', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [{ id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' }],
+      fields: [{ key: 'end', formatValue: formatDateTime }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({ container, dataset, plugins: [tooltips({ delayMs: 100 })] });
+
+    hover(bars(container)[0]!);
+    vi.advanceTimersByTime(100);
+
+    expect(container.querySelector('.fg-tooltip-dates')!.textContent).toBe(
+      'Mar 2, 2026, 12:00 AM – Mar 5, 2026, 12:00 AM',
+    );
 
     gantt.destroy();
     container.remove();

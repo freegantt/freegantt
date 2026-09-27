@@ -11,7 +11,7 @@
 // page, not only this toolbar.
 
 import type { Gantt, ShippedPresetId, TimeSpan } from 'freegantt';
-import { formatDate, formatEndInclusive } from 'freegantt';
+import { formatDate, lastCoveredInstant } from 'freegantt';
 
 export interface PlannerToolbarOptions {
   gantt: Gantt;
@@ -91,7 +91,7 @@ export function mountPlannerToolbar(options: PlannerToolbarOptions): PlannerTool
     el(
       'span',
       'demo-toolbar-subtitle',
-      `${formatDate(zone, projectSpan.start, undefined, { month: 'short', day: 'numeric' })} – ${formatEndInclusive(zone, projectSpan, undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      `${formatDate(projectSpan.start, { timeZone: zone }, { month: 'short', day: 'numeric' })} – ${formatDate(lastCoveredInstant(projectSpan), { timeZone: zone }, { month: 'short', day: 'numeric', year: 'numeric' })}`,
     ),
   );
   row1.append(titleGroup, el('div', 'demo-toolbar-spacer'));

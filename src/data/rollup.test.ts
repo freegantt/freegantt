@@ -110,7 +110,7 @@ describe('rollUpFields (S4.2)', () => {
 
     const rolled = state.entries.get('g1')!;
     expect(rolled.start).toBe(toInstant('UTC', '2026-03-01', 'test'));
-    expect(rolled.end).toBe(toEndInstant('UTC', '2026-03-05', 'inclusive', 'test'));
+    expect(rolled.end).toBe(toEndInstant('UTC', '2026-03-05', 'test'));
   });
 
   it('D-S4-9: a throwing Aggregator raises AggregatorFailedError and commits nothing', () => {
@@ -201,7 +201,7 @@ describe('rollUpFields (S4.2)', () => {
 
       const parent = state.entries.get('p1')!;
       expect(parent.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
-      expect(parent.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
+      expect(parent.end).toBe(toEndInstant('UTC', '2026-01-05', 'test'));
       expect(changeSet).toBeDefined();
       const parentWrite = changeSet!.updated.find(
         (row) => row.store === 'entries' && row.id === entryId('p1'),
@@ -223,7 +223,7 @@ describe('rollUpFields (S4.2)', () => {
 
       const promoted = state.entries.get('leaf')!;
       expect(promoted.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
-      expect(promoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
+      expect(promoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'test'));
     });
 
     it('a parent that loses its last child keeps its authored dates (demotion clears nothing)', () => {
@@ -243,7 +243,7 @@ describe('rollUpFields (S4.2)', () => {
 
       const demoted = state.entries.get('p1')!;
       expect(demoted.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
-      expect(demoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
+      expect(demoted.end).toBe(toEndInstant('UTC', '2026-01-05', 'test'));
     });
 
     it('a cascade proposal on a parent that loses its last child in the same transaction lands', () => {
@@ -309,7 +309,7 @@ describe('rollUpFields (S4.2)', () => {
 
     const b = state.entries.get('b')!;
     expect(b.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
-    expect(b.end).toBe(toEndInstant('UTC', '2026-01-10', 'inclusive', 'test'));
+    expect(b.end).toBe(toEndInstant('UTC', '2026-01-10', 'test'));
 
     // `p` keeps only `b` as a child now, and reads `b`'s fresh, rolled-up span — never `b`'s dropped
     // write, and never `b`'s stale pre-transaction span.
@@ -508,13 +508,13 @@ describe('rollUpFields (S4.2)', () => {
       ]);
 
       const before = state.entries.get('p')!;
-      expect(before.end).toBe(toEndInstant('UTC', '2026-06-10', 'inclusive', 'test'));
+      expect(before.end).toBe(toEndInstant('UTC', '2026-06-10', 'test'));
 
       state.entries.remove('b');
 
       const after = state.entries.get('p')!;
       expect(costOf(state, 'p')).toBe(10);
-      expect(after.end).toBe(toEndInstant('UTC', '2026-01-05', 'inclusive', 'test'));
+      expect(after.end).toBe(toEndInstant('UTC', '2026-01-05', 'test'));
       expect(after.start).toBe(toInstant('UTC', '2026-01-01', 'test'));
     });
 

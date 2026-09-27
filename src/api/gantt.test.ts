@@ -486,14 +486,31 @@ describe('Gantt preset/range/fit/zoomTo/zoomBy/reveal (S1.9)', () => {
       const dataset = new Dataset({
         entries: [
           { id: 'split', name: 'Split' },
-          { id: 'split-a', parentId: 'split', name: 'Split A', start: '2026-09-01', end: '2026-09-03' },
-          { id: 'split-b', parentId: 'split', name: 'Split B', start: '2026-09-20', end: '2026-09-23' },
-          { id: 'split-c', parentId: 'split', name: 'Split C', start: '2026-11-01', end: '2026-11-05' },
+          // A timed end (midnight, explicit) stores exactly as written — keeps the geometry in this
+          // test arithmetic, unlike a date-only end, which always means through that day.
+          {
+            id: 'split-a',
+            parentId: 'split',
+            name: 'Split A',
+            start: '2026-09-01',
+            end: '2026-09-03T00:00:00Z',
+          },
+          {
+            id: 'split-b',
+            parentId: 'split',
+            name: 'Split B',
+            start: '2026-09-20',
+            end: '2026-09-23T00:00:00Z',
+          },
+          {
+            id: 'split-c',
+            parentId: 'split',
+            name: 'Split C',
+            start: '2026-11-01',
+            end: '2026-11-05T00:00:00Z',
+          },
         ],
         timeZone: 'UTC',
-        // Exact instants, not "through that day" — keeps the geometry in this test arithmetic
-        // (`dateOnlyEnd`'s default `'inclusive'` would add a day to every bare end date).
-        dateOnlyEnd: 'exclusive',
       });
       const gantt = new Gantt({
         container,
@@ -1453,8 +1470,8 @@ describe('Gantt.visibleSpan (issue #461)', () => {
 
       // `range: 'fitDataset'` reads back as that same word, by its own type (the reader resolves
       // *loose dates* to `Instant`s; the sentinel stays a sentinel), so this compares against the
-      // one entry's own dates directly. A date-only `end` is inclusive by default (`dateOnlyEnd`,
-      // `data/entry-reader.ts`), so the entry's stored half-open end is one day past its authored
+      // one entry's own dates directly. A date-only `end` always means through that day
+      // (`time/toEndInstant`), so the entry's stored half-open end is one day past its authored
       // `'2026-01-02'` — 2026-01-03.
       expect(gantt.visibleSpan).toEqual({
         start: instant('2026-01-01T00:00:00Z'),
@@ -3370,8 +3387,8 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
   });
 
   describe('a variant’s own css (ADR 0022 §5, Q6)', () => {
-    // Date-only strings, not an Instant pair: under this Dataset's default `dateOnlyEnd:
-    // 'inclusive'`, `start === end` here ingests as one calendar day, not a zero-duration point
+    // Date-only strings, not an Instant pair: a date-only `end` always means through that day, so
+    // `start === end` here ingests as one calendar day, not a zero-duration point
     // (`diamond()`'s own default `when` does not match it). Named for what it delivers,
     // because this `describe` only ever asserts stylesheet text and never which row `diamond()`
     // claims — the neighbouring `pointDataset()` above, built from `instant(Date.UTC(...))`, is
@@ -8540,10 +8557,10 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
       const scrollY = new ScrollAxis();
       const dataset = new Dataset({
         timeZone: 'UTC',
-        // Exact instants, not "through that day" (#421-adjacent): keeps this test's geometry exact
-        // arithmetic — the default 'inclusive' would add a day to every bare end date.
-        dateOnlyEnd: 'exclusive',
-        entries: [{ id: 'a', name: 'a', start: '2026-01-01', end: '2026-01-02' }],
+        // A timed end (midnight, explicit) stores exactly as written (#421-adjacent): keeps this
+        // test's geometry exact arithmetic, unlike a date-only end, which always means through
+        // that day.
+        entries: [{ id: 'a', name: 'a', start: '2026-01-01', end: '2026-01-02T00:00:00Z' }],
       });
       const gantt = new Gantt({
         container,
@@ -8564,9 +8581,10 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
       // both — an already-visible target would pass this test whether `#memory` was in step or not.
       FakeResizeObserver.instances[0]!.fire({ width: 300, height: 40 });
 
-      // Two writes, no frame painted between either of them and the read below.
-      dataset.entries.add({ id: 'b', name: 'b', start: '2026-01-03', end: '2026-01-04' });
-      dataset.entries.add({ id: 'c', name: 'c', start: '2026-01-05', end: '2026-01-06' });
+      // Two writes, no frame painted between either of them and the read below. Timed ends, so
+      // both store exactly as written — the geometry below is exact arithmetic on them.
+      dataset.entries.add({ id: 'b', name: 'b', start: '2026-01-03', end: '2026-01-04T00:00:00Z' });
+      dataset.entries.add({ id: 'c', name: 'c', start: '2026-01-05', end: '2026-01-06T00:00:00Z' });
 
       expect(gantt.collapseStateOf('c')).toBe('leaf');
 

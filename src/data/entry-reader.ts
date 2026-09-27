@@ -7,7 +7,6 @@
 
 import { entryId, DuplicatePropsKeyError, InvertedSpanError, spansTime } from '../model/index.js';
 import type {
-  DateOnlyEndRule,
   StoredEntry,
   EntryEdit,
   EntryId,
@@ -31,10 +30,9 @@ import { assertFieldTakesWrite, fieldLockQueryFor } from './write-rule.js';
 import { parentIdFrom } from './hierarchy-source.js';
 import type { UnplacedEntry } from './hierarchy-source.js';
 
-/** The Dataset context every entry is read against: one zone, one end rule, for the whole list. */
+/** The Dataset context every entry is read against: one zone, for the whole list. */
 export interface EntryReadContext {
   timeZone: string;
-  dateOnlyEnd: DateOnlyEndRule;
 }
 
 /** Which Entry a write targets, and which call wrote it — what an error message needs to name the
@@ -63,7 +61,7 @@ function toEntryDates(
   const dates: { start?: Instant; end?: Instant } = {};
   if (input.start !== undefined) dates.start = toInstant(context.timeZone, input.start, owner.operation);
   if (input.end !== undefined) {
-    dates.end = toEndInstant(context.timeZone, input.end, context.dateOnlyEnd, owner.operation);
+    dates.end = toEndInstant(context.timeZone, input.end, owner.operation);
   }
   // Only a pair can invert (`spansTime`, ADR 0012): one date alone has nothing to invert against.
   if (spansTime(dates) && dates.end < dates.start) {
@@ -220,10 +218,7 @@ export function toEditReading(
   if ('start' in edit)
     stored.start = edit.start === undefined ? undefined : toInstant(context.timeZone, edit.start, operation);
   if ('end' in edit) {
-    stored.end =
-      edit.end === undefined
-        ? undefined
-        : toEndInstant(context.timeZone, edit.end, context.dateOnlyEnd, operation);
+    stored.end = edit.end === undefined ? undefined : toEndInstant(context.timeZone, edit.end, operation);
   }
   const effectiveStart = 'start' in stored ? stored.start : entry.start;
   const effectiveEnd = 'end' in stored ? stored.end : entry.end;
@@ -271,7 +266,7 @@ export function toEntryAfterUpsert(
 /**
  * Reads a whole map of `entries.update()` edits — the extension hook's writes (#209). One `toEditReading`
  * per Entry, so a plugin's cascade takes the exact road `dataset.entries.update(id, edit)` takes: the
- * dataset's zone resolves its dates, `DateOnlyEndRule` decides what a date-only `end` means, and core
+ * dataset's zone resolves its dates, a date-only `end` always means through that day, and core
  * derives `proposedKeys` from the edit's own keys. A plugin author writes none of that.
  *
  * Every Field key in every Entry's edit runs `write-rule.ts`'s `assertFieldTakesWrite` — the one check

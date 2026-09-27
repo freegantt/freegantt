@@ -338,7 +338,6 @@ export type {
   EntryDelta,
   InstantInput,
   TimeSpanInput,
-  DateOnlyEndRule,
   PlainTimeInput,
 } from '../model/index.js';
 export type {
@@ -464,7 +463,9 @@ export {
   overlap,
   MS,
   formatDate,
-  formatEndInclusive,
+  formatDateTime,
+  formatInclusiveDate,
+  lastCoveredInstant,
   formatWeekNumber,
   formatHour,
   isTimeUnit,

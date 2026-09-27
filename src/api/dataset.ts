@@ -6,7 +6,6 @@ import type {
   Aggregator,
   ChangeSet,
   DatasetEventMap,
-  DateOnlyEndRule,
   Disposer,
   DurationMeasure,
   EntryId,
@@ -75,10 +74,6 @@ export interface DatasetOptions<TProps = unknown> {
    * zone. Pass it explicitly whenever the dataset must render identically for every viewer, such
    * as a shared project plan. */
   timeZone?: string;
-  /** How a date-only `end` such as `'2026-09-08'` is read. Defaults to `'inclusive'`: the entry
-   * covers through the 8th. `'exclusive'` reads it literally as the start of the 8th, matching
-   * half-open storage exactly. Only date-only strings are affected — see `DateOnlyEndRule`. */
-  dateOnlyEnd?: DateOnlyEndRule;
   /** Consumer Field declarations. Core Fields are already in the registry. */
   fields?: readonly Field[];
   /** Named Field type bundles. A Field's own keys win over the bundle. */
@@ -268,10 +263,6 @@ export class Dataset<TProps = unknown> {
    *  `dataset.time.eachDay(span).filter((day) => dataset.time.dayOfWeek(day) >= 6)`. */
   get time(): ZonedTime {
     return this.#time;
-  }
-
-  get dateOnlyEnd(): DateOnlyEndRule {
-    return this.#state.dateOnlyEnd;
   }
 
   /** The resolved Field for this key, or `undefined` when the key is not declared. This is the

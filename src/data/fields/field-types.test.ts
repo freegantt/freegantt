@@ -104,10 +104,10 @@ describe('date — the shipped Field type', () => {
 
   it('formats an Instant through formatDate and DATE_TIME_FORMAT', () => {
     expect(date.formatValue!(noon, ctx('en-US'), entry)).toBe(
-      formatDate('UTC', noon, 'en-US', DATE_TIME_FORMAT),
+      formatDate(noon, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT),
     );
     expect(date.formatValue!(noon, ctx('fr-FR'), entry)).toBe(
-      formatDate('UTC', noon, 'fr-FR', DATE_TIME_FORMAT),
+      formatDate(noon, { timeZone: 'UTC', locale: 'fr-FR' }, DATE_TIME_FORMAT),
     );
   });
 

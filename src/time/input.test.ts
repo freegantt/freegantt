@@ -136,35 +136,29 @@ describe('toInstant()', () => {
 });
 
 describe('toEndInstant()', () => {
-  it("advances a date-only end by one day under 'inclusive'", () => {
+  it('advances a date-only end by one day — it always means through that day', () => {
     // 'through the 8th' — the half-open boundary is the start of the 9th.
-    expect(toEndInstant('UTC', '2026-09-08', 'inclusive', 'test')).toBe(utc('2026-09-09T00:00:00Z'));
-    expect(toEndInstant(CHICAGO, '2026-09-08', 'inclusive', 'test')).toBe(utc('2026-09-09T05:00:00Z'));
+    expect(toEndInstant('UTC', '2026-09-08', 'test')).toBe(utc('2026-09-09T00:00:00Z'));
+    expect(toEndInstant(CHICAGO, '2026-09-08', 'test')).toBe(utc('2026-09-09T05:00:00Z'));
   });
 
   it("passes the caller's own name through to a bad end value (#237)", () => {
-    expect(() => toEndInstant(CHICAGO, 'next tuesday', 'inclusive', 'entries.update')).toThrow(
+    expect(() => toEndInstant(CHICAGO, 'next tuesday', 'entries.update')).toThrow(
       'entries.update: "next tuesday" is not a date this library reads.',
     );
   });
 
-  it("reads a date-only end literally under 'exclusive'", () => {
-    expect(toEndInstant('UTC', '2026-09-08', 'exclusive', 'test')).toBe(utc('2026-09-08T00:00:00Z'));
-  });
-
   it('advances across a DST boundary by a calendar day, not by 86,400,000 ms', () => {
-    const end = toEndInstant(CHICAGO, '2026-03-07', 'inclusive', 'test');
+    const end = toEndInstant(CHICAGO, '2026-03-07', 'test');
     expect(end).toBe(utc('2026-03-08T06:00:00Z')); // the spring-forward day is 23 hours long
     expect(end - toInstant(CHICAGO, '2026-03-07', 'test')).toBe(24 * 60 * 60 * 1000);
   });
 
-  it('leaves every input that already carries a time of day literal, under either rule', () => {
-    for (const rule of ['inclusive', 'exclusive'] as const) {
-      expect(toEndInstant(CHICAGO, '2026-09-08T00:00', rule, 'test')).toBe(utc('2026-09-08T05:00:00Z'));
-      expect(toEndInstant(CHICAGO, '2026-09-08T00:00:00Z', rule, 'test')).toBe(utc('2026-09-08T00:00:00Z'));
-      expect(toEndInstant(CHICAGO, 0, rule, 'test')).toBe(0);
-      expect(toEndInstant(CHICAGO, new Date(1234), rule, 'test')).toBe(1234);
-    }
+  it('leaves every input that already carries a time of day literal', () => {
+    expect(toEndInstant(CHICAGO, '2026-09-08T00:00', 'test')).toBe(utc('2026-09-08T05:00:00Z'));
+    expect(toEndInstant(CHICAGO, '2026-09-08T00:00:00Z', 'test')).toBe(utc('2026-09-08T00:00:00Z'));
+    expect(toEndInstant(CHICAGO, 0, 'test')).toBe(0);
+    expect(toEndInstant(CHICAGO, new Date(1234), 'test')).toBe(1234);
   });
 });
 

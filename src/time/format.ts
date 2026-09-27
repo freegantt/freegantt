@@ -1,9 +1,9 @@
-// time/ — human-readable date display (plans/01 §5, S1.10, S1.12). `formatEndInclusive` is the one
-// place half-open `end` becomes an inclusive display value — no `end - 1` anywhere else in the
-// codebase. Formatting goes through `Intl.DateTimeFormat` directly, in the dataset zone and a
-// caller-chosen locale; `weekOfYear` (zone.ts) is the one thing Intl has no field for.
+// time/ — human-readable date display (plans/01 §5, S1.10, S1.12). `lastCoveredInstant` is the one
+// place half-open `end` becomes an inclusive moment — no `end - 1` anywhere else in the codebase.
+// Formatting goes through `Intl.DateTimeFormat` directly, in the dataset zone and a caller-chosen
+// locale; `weekOfYear` (zone.ts) is the one thing Intl has no field for.
 
-import type { Instant, TimeSpan } from '../model/index.js';
+import type { FormatContext, Instant } from '../model/index.js';
 import { toPlain, weekOfYear } from './zone.js';
 import { addMs } from './instant.js';
 import type { DateFormat, HeaderFormat, ViewPresetHeader } from './scale.js';
@@ -74,31 +74,52 @@ export function resolveDateFormat(
 }
 
 /** Plain display formatting for an instant needing no conversion — a start is already inclusive.
- *  Pass `DATE_TIME_FORMAT` (or any `Intl.DateTimeFormatOptions`) to include clock time. */
+ *  `ctx` is a `FormatContext` shape (locale optional here, since a caller with no locale
+ *  preference still has a zone). Pass `DATE_TIME_FORMAT` (or any `Intl.DateTimeFormatOptions`)
+ *  to include clock time. */
 export function formatDate(
-  zone: string,
-  i: Instant,
-  locale?: Intl.LocalesArgument,
+  value: Instant,
+  ctx: { readonly timeZone: string; readonly locale?: Intl.LocalesArgument },
   options: Intl.DateTimeFormatOptions = DEFAULT_DATE_FORMAT,
 ): string {
-  return intlFormatter(zone, locale, options).format(toJsDate(i));
+  return intlFormatter(ctx.timeZone, ctx.locale, options).format(toJsDate(value));
 }
 
-/** The one place half-open `end` becomes an inclusive display value: the last millisecond the span
- * actually covers, read back through the dataset zone. No `end - 1` anywhere else in the codebase
- * (plans/01 §5, promised since S0).
+/** The last moment a half-open span `[start, end)` actually covers — `end` itself is the boundary
+ *  after the span, one millisecond past its last covered moment. Instant arithmetic only, so it
+ *  takes no time zone: `end − 1 ms` is the same subtraction in every zone.
  *
- * Takes the whole span, not `end` alone, because a zero-length span (`end === start`) has no
- * millisecond before its own start to display — `end - 1` there reads as one minute
- * earlier than `start` (#240). A zero-length span displays its own `end` unchanged instead. */
-export function formatEndInclusive(
-  zone: string,
-  span: TimeSpan,
-  locale?: Intl.LocalesArgument,
-  options?: Intl.DateTimeFormatOptions,
+ *  Takes the whole span, not `end` alone, because a zero-length span (`end === start`) has no
+ *  millisecond before its own start to name — `end - 1` there reads as one moment earlier than
+ *  `start` (#240). A zero-length span answers its own `end` unchanged instead. `start` may be
+ *  absent (no paired start Field value yet); the zero-length check then never fires. */
+export function lastCoveredInstant(span: {
+  readonly start?: Instant | undefined;
+  readonly end: Instant;
+}): Instant {
+  return span.end === span.start ? span.end : addMs(span.end, -1);
+}
+
+/** A Field `formatValue`: the stored moment, date and clock time. A blank cell for no value.
+ *  Names the `date` type's default and pairs with `DATE_TIME_FORMAT`. */
+export function formatDateTime(value: unknown, ctx: FormatContext): string {
+  if (value === undefined || value === null) return '';
+  return formatDate(value as Instant, ctx, DATE_TIME_FORMAT);
+}
+
+/** A Field `formatValue`: the last day a span covers, date only. Reads `lastCoveredInstant(entry)`
+ *  with `value` standing in for `end` — so `entry.end` never has to be `value` itself, letting a
+ *  consumer put this formatter on `start` too, where `value === entry.start` shows the start's own
+ *  day. No midnight check and no format sniffing: a timed end still steps back one millisecond and
+ *  shows the day that lands on. A blank cell for no value. */
+export function formatInclusiveDate(
+  value: unknown,
+  ctx: FormatContext,
+  entry: { readonly start?: Instant | undefined },
 ): string {
-  const displayed = span.end === span.start ? span.end : addMs(span.end, -1);
-  return formatDate(zone, displayed, locale, options);
+  if (value === undefined || value === null) return '';
+  const covered = lastCoveredInstant({ start: entry.start, end: value as Instant });
+  return formatDate(covered, ctx);
 }
 
 /** An ISO week label — `W` followed by the week number. The escape-hatch callback shipped as a

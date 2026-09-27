@@ -7,11 +7,12 @@
 // — "a day" is not always 86,400,000 ms — which CLAUDE.md confines to this layer (I10). api/ maps
 // fields; it never does date math of its own.
 
-import type { DateOnlyEndRule, Instant, InstantInput, PlainTimeInput } from '../model/index.js';
+import type { Instant, InstantInput, PlainTimeInput } from '../model/index.js';
 import { InvalidPlainTimeError } from '../model/index.js';
 import { addMs, instant } from './instant.js';
+import { startOfNextDay } from './date-only-end.js';
 import { invalidInstant as invalid } from './instant-fault.js';
-import { addDays, fromPlain, toPlain } from './zone.js';
+import { fromPlain, toPlain } from './zone.js';
 
 /** A calendar date with no time of day — `'2026-09-08'`. */
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -110,22 +111,17 @@ export function toInstant(zone: string, input: InstantInput, operation: string):
 }
 
 /**
- * The Instant an `end` field's `input` names, read in `zone` under `rule`.
+ * The Instant an `end` field's `input` names, read in `zone`.
  *
  * Storage is half-open [start, end) (plans/01 §5), so `end` is the boundary after the span, not the
- * last moment in it. A consumer writing a bare date on `end` means the last day it wants included, so
- * under `'inclusive'` a date-only input advances one day. Everything else — an `Instant`, a `Date`,
- * a string with a time of day — is already a boundary and is read literally, under either rule.
+ * last moment in it. A consumer writing a bare date on `end` always means the last day it wants
+ * included, so a date-only input advances to the next day's start. Everything else — an `Instant`,
+ * a `Date`, a string with a time of day — is already a boundary and is read literally.
  */
-export function toEndInstant(
-  zone: string,
-  input: InstantInput,
-  rule: DateOnlyEndRule,
-  operation: string,
-): Instant {
+export function toEndInstant(zone: string, input: InstantInput, operation: string): Instant {
   const boundary = toInstant(zone, input, operation);
-  if (rule === 'exclusive' || !isDateOnly(input)) return boundary;
-  return addDays(zone, boundary, 1);
+  if (!isDateOnly(input)) return boundary;
+  return startOfNextDay(zone, boundary);
 }
 
 /**

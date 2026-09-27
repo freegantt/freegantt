@@ -11,6 +11,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - **Breaking:** `dataset.entries.sync(rows)` is now `dataset.entries.syncAll(rows)`. The behavior does not change. The new name pairs with `syncChanges`: `syncAll` takes every row, and `syncChanges` takes only the rows that changed. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - `dataset.entries.add()`, `load()`, `syncAll()`, `EntryDelta.upsert`, and the `Dataset` constructor's `entries` option now also take a plain `EntryInput<TProps>` row, not only `FlatEntryInput<TProps>`. A function generic over `TProps` can now pass an `EntryInput<TProps>` value straight through, with no cast. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - The ingest warning for a flat key that no Field declares now says that the value drops. It also names both fixes: declare the key in `fields`, or nest it as `props: { key }`. ([#524](https://github.com/freegantt/freegantt/issues/524))
+- **Breaking:** `formatDate`'s signature is now `formatDate(instant, ctx, options?)`, not `formatDate(zone, instant, locale?, options?)`. `ctx` is `{ timeZone, locale? }`. Migrate by passing the `ctx` a `formatValue` call already receives, or `{ timeZone: dataset.timeZone, locale }` built by hand. ([#577](https://github.com/freegantt/freegantt/issues/577))
+- **Breaking:** The `dateOnlyEnd` Dataset option and the `DateOnlyEndRule` type are removed. A date-only `end` string always means "through that day" now: it stores the start of the next day. Pass a timed string, such as `'2026-09-09T00:00:00'`, for an exclusive end. ([#577](https://github.com/freegantt/freegantt/issues/577))
+- **Breaking:** `formatEndInclusive` is removed. Use `formatInclusiveDate` as a Field's `formatValue`, or call `lastCoveredInstant` and pass its result to `formatDate` directly. ([#577](https://github.com/freegantt/freegantt/issues/577))
+- The core `end` Field now names the shipped `formatInclusiveDate` as its `formatValue`, in place of a private, unexported formatter that did the same job. ([#577](https://github.com/freegantt/freegantt/issues/577))
+- `formatValue` is now a consumer override every core Field accepts, not only `start` and `end`. ([#577](https://github.com/freegantt/freegantt/issues/577))
 
 ### Added
 
@@ -20,3 +25,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - `DuplicateEntryIdError`'s `kind` gains `'upsert-and-remove'`: an id named in both `EntryDelta.upsert` and `EntryDelta.remove` throws instead of silently picking a winner. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - `dataset.entries.syncChanges(delta)`, which applies a server delta with the same ingest rules as `syncAll`. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - A "Sync changes from server" button on the editing-and-data harness page, beside "Sync all from server". It calls `dataset.entries.syncChanges(server.fetchChanges())` against a scripted delta. ([#527](https://github.com/freegantt/freegantt/issues/527))
+- `formatDateTime` and `formatInclusiveDate`, the two shipped date formatters, and `lastCoveredInstant`, the instant `formatInclusiveDate` builds on: `end` stepped back one millisecond, unchanged on a zero-length span. See `docs/05-consumer-api.md`. ([#577](https://github.com/freegantt/freegantt/issues/577))
+
+### Fixed
+
+- A date-only `end` on a DST transition day (`2026-09-06` in `America/Santiago`) now resolves to the correct next-day instant. The old rule stepped a plain calendar day, which could land on the wrong wall-clock time across the transition. ([#577](https://github.com/freegantt/freegantt/issues/577))

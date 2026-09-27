@@ -49,7 +49,6 @@ function fakeDataset(
   const registry = new FieldRegistry({ fields });
   const context = {
     timeZone,
-    dateOnlyEnd: 'inclusive' as const,
   };
   // No changes ever land on this store, so on/off are stubs — none of these tests mutate the
   // dataset, so no handler this file registers is ever called.

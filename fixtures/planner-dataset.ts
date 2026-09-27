@@ -13,8 +13,8 @@
 // "Task", "predecessor" and "the schedule" stay out of core's vocabulary (plans/01 §7) — this fixture
 // is a construction plan because a consumer said so, not because the library knows one.
 
-import { addMs, instant, MS } from 'freegantt';
-import type { StoredEntry, EntryInput, Field, Instant } from 'freegantt';
+import { addMs, formatDate, instant, lastCoveredInstant, MS } from 'freegantt';
+import type { FormatContext, StoredEntry, EntryInput, Field, Instant } from 'freegantt';
 
 /** What the design stores per row, beyond the Entry keys core already owns. */
 export interface PlannerEntryProps {
@@ -169,7 +169,29 @@ const WORK_ROW_NUMBERS = new Map<string, number>(
     .map((entry, index) => [String(entry.id), index + 1]),
 );
 
+// The design's compact Start/Finish format: two-digit day, three-letter month, no year, no time —
+// `02 Mar`, not the core Field's own `Jun 29, 2026, 12:00 AM`. Built on the public `formatDate`
+// and `lastCoveredInstant`, so the "last day covered" rule lives in the library, not here.
+const COMPACT_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+
+function compactStart(value: unknown, ctx: FormatContext): string {
+  if (value === undefined || value === null) return '';
+  return formatDate(value as Instant, ctx, COMPACT_DATE_FORMAT);
+}
+
+function compactFinish(
+  value: unknown,
+  ctx: FormatContext,
+  entry: { readonly start?: Instant | undefined },
+): string {
+  if (value === undefined || value === null) return '';
+  const covered = lastCoveredInstant({ start: entry.start, end: value as Instant });
+  return formatDate(covered, ctx, COMPACT_DATE_FORMAT);
+}
+
 const PLANNER_FIELDS: readonly Field[] = [
+  { key: 'start', formatValue: compactStart },
+  { key: 'end', formatValue: compactFinish },
   { key: 'owner', column: { header: 'Own', align: 'center' } },
   // ADR 0018: the page's own word for a checkpoint row. The Gantt's `variants` rule reads it back,
   // `update(id, { checkpoint: true })` would pin another row, and core never learns the word.

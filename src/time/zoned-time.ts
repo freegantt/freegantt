@@ -2,7 +2,7 @@
 // is bound once, at construction; every method forwards straight to `zone.ts`. No method adds date
 // arithmetic of its own — I10 stays true: all the math still lives in `zone.ts`.
 
-import type { DateOnlyEndRule, Instant, InstantInput, TimeSpan, TimeUnit } from '../model/index.js';
+import type { Instant, InstantInput, TimeSpan, TimeUnit } from '../model/index.js';
 import {
   addDays,
   dayOfWeek,
@@ -46,9 +46,9 @@ export interface ZonedTime {
   /** The Instant a consumer-written `input` names, read in this zone (#404) — `time/toInstant` on
    *  the one facade a plugin author already holds, so a builder never re-derives date reading. */
   toInstant(input: InstantInput): Instant;
-  /** The Instant a consumer-written `end` input names, read in this zone under `rule` (default
-   *  `'inclusive'`) — `time/toEndInstant` on the facade, for the same reason as `toInstant`. */
-  toEndInstant(input: InstantInput, rule?: DateOnlyEndRule): Instant;
+  /** The Instant a consumer-written `end` input names, read in this zone — `time/toEndInstant` on
+   *  the facade, for the same reason as `toInstant`. */
+  toEndInstant(input: InstantInput): Instant;
 }
 
 /** Call: `createZonedTime(dataset.timeZone)`. Binds `zone` once; every method below forwards to the
@@ -67,6 +67,6 @@ export function createZonedTime(zone: string): ZonedTime {
     step: (at, unit, increment = 1) => stepBy(zone, at, unit, increment),
     each: (span, unit) => eachUnit(zone, span, unit),
     toInstant: (input) => toInstant(zone, input, 'dataset.time.toInstant'),
-    toEndInstant: (input, rule = 'inclusive') => toEndInstant(zone, input, rule, 'dataset.time.toEndInstant'),
+    toEndInstant: (input) => toEndInstant(zone, input, 'dataset.time.toEndInstant'),
   };
 }
