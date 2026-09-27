@@ -1,6 +1,6 @@
 ---
 last_update:
-  date: 2026-09-22
+  date: 2026-09-27
 ---
 
 # File inventory
@@ -91,6 +91,7 @@ where they do something beyond re-export.
 | `data/write-rule.ts` | `resolveWriteTarget(), libraryWriteRule(), editableAnswerFor(), resolveFieldEditable(), assertFieldTakesWrite(), WriteTarget` | The one write resolver where three questions meet: does the Field exist, is it editable (the Field's own default, or a plugin's per-entry lock rule, #473), is it derived here. `view/capability.ts` asks before it opens a cell; `entry-store.ts`'s `update()` and an `EditExtender` cascade ask the same resolver before they stage a write. |
 | `data/fields/column-sizing.ts` | `sizingOfColumn(), ColumnSizingCandidate` | The `width`/`flex` pair merges as one pair, never key by key. The Field-column merge and the Gantt-column merge each fixed that bug independently once; this is the one function both now call. |
 | `data/fields/field-types.ts` | `text, number, percent, date, duration, currency(), SHIPPED_FIELD_TYPES` | The shipped Field types: `text`, `number`, `percent`, `date`, `duration`, plus `currency()`. `currency({ code })` is a factory, not a seeded name. `percent` formats through `Intl.NumberFormat`'s own `'percent'` style, so a stored `35` divides by 100 first and locale spacing is right — a hand-rolled `${value}%` gets French and Arabic wrong. |
+| `data/fields/format-field-value.ts` | `formatFieldValue()` | The one read for a Field's displayed text: its own `formatValue`, or `stringifyPrimitive` of a plain value. The Grid, the bar label and `gantt.formatFieldValue` all call it, so none can disagree. |
 | `data/index.ts` | barrel | Re-exports `DatasetState`, `DatasetStateOptions`, `HistoryOptions`, `EntryStore`; everything else internal. |
 
 ### `layout/` — pure — headless geometry — rows, bars, frame
