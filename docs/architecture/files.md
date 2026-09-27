@@ -217,7 +217,7 @@ where they do something beyond re-export.
 | `api/command.ts` | `CommandOf, CommandContextOf, BuiltInCommandId` | The public command and keybinding contract, generic over `TGantt`. |
 | `api/attempt-mutation.ts` | `attemptMutation()` | Runs a mutating body and returns `false` when `beforeChange` refuses, instead of throwing. |
 | `api/watch-all-errors.ts` | `watchAllErrors()` | One handler over the Dataset `error` feed and the Gantt's, de-duplicated. |
-| `api/time-facade.ts` | `formatDate, isCoarserThan, readPlainTime, startOfLastCoveredDay, startOfNextDay` | Narrow slice of `time/` that `extensions/features/tooltips.ts` and `extensions/features/inline-editing.ts` need without importing the public barrel (that barrel re-exports `tooltips`/`inlineEditing`). |
+| `api/time-facade.ts` | `isCoarserThan, readPlainTime, startOfLastCoveredDay, startOfNextDay` | Narrow slice of `time/` that `extensions/features/time-shading.ts`, `extensions/features/time-shading-covers.ts`, and `extensions/features/inline-editing.ts` need without importing the public barrel (that barrel re-exports `tooltips`/`inlineEditing`). |
 | `api/decoration-facade.ts` | `DecorationLayer, DecorationContext, DecorationInput` | Narrow slice of `layout/`'s decoration vocabulary that `extensions/features/time-shading.ts` needs without importing the public barrel (that barrel re-exports `timeShading`). |
 | `api/index.ts` | the public surface | The allow-list with a sealed `exports` map. Re-exports `Gantt`/`Dataset`/the viewport models, the plugin and command contracts, the shipped built-ins, and the `model/` and `time/` types a consumer needs. |
 
