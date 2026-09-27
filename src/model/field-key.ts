@@ -21,10 +21,8 @@ export type FieldKey = CoreFieldKey | (string & {});
  *  (`data/fields/core-fields.ts`). The typed way to a consumer's own `props` is
  *  `entries.get(id)?.props`. */
 export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
-  /** This row's duration under the Dataset's `measureDuration`, computed on read (`CORE_FIELDS`) —
-   *  the one core Field with no `Entry` key. `measureEntryDuration` (`data/fields/field-access.ts`)
-   *  is the one computation all three doors reach: `'span'` measures `end - start`, and
-   *  `'children'` sums the direct children's own spans and counts no gap (ADR 0017, ADR 0026). */
+  /** This row's own span, `end - start`, in milliseconds — the core `duration` Field computes it
+   *  on read (`CORE_FIELDS`). `undefined` until the row spans. */
   duration: Duration;
   /** The tree's answer to "who is this row's parent", by key (ADR 0024) — the same answer
    *  `parent()?.id` gives, computed on read, never stored. `parentId` stays the authored value; a

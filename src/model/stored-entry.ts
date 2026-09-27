@@ -4,8 +4,8 @@ import type { EntryId } from './ids.js';
 import type { Instant, InstantInput, TimeSpan } from './time.js';
 
 /** The values one row stores at one moment (ADR 0017). `Entry` (`entry.ts`) is the other half of
- *  the pair: it answers questions about a row **now** — `read(key)`, `children()`, `duration()`,
- *  `hasChildren`. This type answers none of them, and that is deliberate. A pass may hold a row no
+ *  the pair: it answers questions about a row **now** — `read(key)`, `children()`, `hasChildren`.
+ *  This type answers none of them, and that is deliberate. A pass may hold a row no
  *  store holds — the Rollup's own effective tree is one — so the questions belong to the pass, and
  *  every pass that hands a `StoredEntry` hands the answers beside it: an Aggregator reads
  *  `ctx.read(key)`, `ctx.children(row)`, `ctx.descendants(row)`, `ctx.leaves(row)` and

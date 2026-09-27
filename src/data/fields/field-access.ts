@@ -5,7 +5,6 @@
 import type {
   ComputeContext,
   CoreFieldValue,
-  Duration,
   StoredEntry,
   EntryEdit,
   EntryId,
@@ -16,8 +15,6 @@ import type {
   ProposedEdits,
   RollUpContext,
 } from '../../model/index.js';
-import { spansTime } from '../../model/index.js';
-import { diffMs } from '../../time/index.js';
 import { CORE_FIELDS, isCoreFieldKey } from './core-fields.js';
 import type { FieldRegistry, ResolvedField } from './field-registry.js';
 import type { ComputedFieldCache } from '../computed-cache.js';
@@ -214,20 +211,6 @@ export function ambientFieldContext(access: FieldAccess): FieldContext {
 }
 
 /**
- * The one duration computation, and two doors reach it: `entry.duration()` on a live row, and
- * `ctx.duration()` inside a pass (ADR 0017). Neither hands it a Field key, so the circle cannot
- * close.
- *
- * An Entry that does not span (`spansTime`, ADR 0012) has no duration to state. `diffMs` is plain
- * subtraction — an absent date yields `NaN`, never a throw — so this asks first. The unit is
- * always `'millisecond'`, which is what makes `formatDuration` and `compareDuration` correct by
- * construction rather than by luck (#274).
- */
-export function measureEntryDuration(entry: Pick<StoredEntry, 'start' | 'end'>): Duration | undefined {
-  return spansTime(entry) ? { value: diffMs(entry.end, entry.start), unit: 'millisecond' } : undefined;
-}
-
-/**
  * Every row under `root`, reached through `childrenOf` — a worklist, never recursion
  * (`live-entry.ts:117-135` is the shape copied): how deep a tree goes is the consumer's to author,
  * and a stack overflow answers no question. `seen` visits each row once, so a source that loops
@@ -287,9 +270,9 @@ export function leavesOf(
   return found;
 }
 
-/** What a `compute` Field runs inside. A value question — `read`, `duration`, `hierarchyParentId` —
- *  stays bound to `entry`. A structure question — `children`, `descendants`, `leaves`,
- *  `hasChildren` — answers about any row the pass hands out (ADR 0017, amended #466). */
+/** What a `compute` Field runs inside. A value question — `read`, `hierarchyParentId` — stays
+ *  bound to `entry`. A structure question — `children`, `descendants`, `leaves`, `hasChildren` —
+ *  answers about any row the pass hands out (ADR 0017, amended #466). */
 export function createComputeContext(access: FieldAccess, entry: StoredEntry): ComputeContext {
   const children = (row: StoredEntry): readonly StoredEntry[] => access.storedChildrenOf(row.id);
   return {
@@ -300,9 +283,6 @@ export function createComputeContext(access: FieldAccess, entry: StoredEntry): C
     // access only in that this one skips the registry round-trip.
     read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined {
       return readFieldByKey(entry, key, access) as CoreFieldValue<K> | undefined;
-    },
-    duration(): Duration | undefined {
-      return measureEntryDuration(entry);
     },
     children,
     descendants: (row: StoredEntry): readonly StoredEntry[] => descendantsOf(row, children),

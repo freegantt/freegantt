@@ -7,7 +7,6 @@
 // which is what lets a hover or a drag hold it in a `Set` across frames.
 
 import type {
-  Duration,
   Entry,
   EntryId,
   EntryInput,
@@ -36,7 +35,6 @@ export interface EntrySource {
   entryFor(id: EntryId): Entry;
   /** `key` on this row, through the Field registry. Throws `UnknownFieldError` on an undeclared key. */
   readField(entry: StoredEntry, key: FieldKey): unknown;
-  durationOf(entry: StoredEntry): Duration | undefined;
 }
 
 /**
@@ -95,11 +93,6 @@ class LiveEntry implements Entry {
     const stored = this.#stored();
     if (stored === undefined) return undefined;
     return this.#source.readField(stored, field) as FieldValue<Record<string, unknown>, K> | undefined;
-  }
-
-  duration(): Duration | undefined {
-    const stored = this.#stored();
-    return stored === undefined ? undefined : this.#source.durationOf(stored);
   }
 
   children(): readonly Entry[] {

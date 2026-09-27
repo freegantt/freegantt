@@ -134,13 +134,16 @@ describe('the live Entry — one row per id, and every read is live (ADR 0017)',
   });
 });
 
-describe('entry.duration() — one computation, three doors (ADR 0017, #274)', () => {
-  it('agrees with `read("duration")` on both the value and the unit', () => {
+describe("read('duration') — the row's own span", () => {
+  it('has no duration member: a caller reads the duration Field by key', () => {
+    expect('duration' in rowOf(datasetOf(), 'solo')).toBe(false);
+  });
+
+  it('agrees on the value and the unit', () => {
     const solo = rowOf(datasetOf(), 'solo');
 
     // A date-only end always means through that day, so it names the whole of that day.
-    expect(solo.duration()).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
-    expect(solo.read('duration')).toEqual(solo.duration());
+    expect(solo.read('duration')).toEqual({ value: 2 * MS.DAY, unit: 'millisecond' });
   });
 
   it('always answers the millisecond unit, whatever the span is', () => {
@@ -151,8 +154,8 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
       ],
     });
 
-    expect(rowOf(state, 'hour').duration()?.unit).toBe('millisecond');
-    expect(rowOf(state, 'year').duration()?.unit).toBe('millisecond');
+    expect(rowOf(state, 'hour').read('duration')?.unit).toBe('millisecond');
+    expect(rowOf(state, 'year').read('duration')?.unit).toBe('millisecond');
   });
 
   // ADR 0012: an Entry that does not span states no duration, and never a `NaN`.
@@ -166,7 +169,7 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
     });
 
     for (const id of ['neither', 'startOnly', 'endOnly']) {
-      expect(rowOf(state, id).duration()).toBeUndefined();
+      expect(rowOf(state, id).read('duration')).toBeUndefined();
     }
   });
 
@@ -179,7 +182,7 @@ describe('entry.duration() — one computation, three doors (ADR 0017, #274)', (
   it('measures a parent from its own start to its own end, and counts the gap between its children', () => {
     const state = datasetOf({ entries: withGap });
 
-    expect(rowOf(state, 'gapped').duration()).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
+    expect(rowOf(state, 'gapped').read('duration')).toEqual({ value: 4 * MS.DAY, unit: 'millisecond' });
   });
 });
 

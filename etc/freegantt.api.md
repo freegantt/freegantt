@@ -258,7 +258,6 @@ export interface CommandTarget extends ActedOn {
 export interface ComputeContext extends FieldContext {
     children(row: StoredEntry): readonly StoredEntry[];
     descendants(row: StoredEntry): readonly StoredEntry[];
-    duration(): Duration | undefined;
     hasChildren(row: StoredEntry): boolean;
     hierarchyParentId(): EntryId | undefined;
     leaves(row: StoredEntry): readonly StoredEntry[];
@@ -717,7 +716,6 @@ export interface Entry<TProps = Record<string, unknown>> {
     children(): readonly Entry<TProps>[];
     readonly depth: number;
     descendants(): readonly Entry<TProps>[];
-    duration(): Duration | undefined;
     readonly end?: Instant | undefined;
     readonly hasChildren: boolean;
     // (undocumented)
