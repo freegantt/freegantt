@@ -3023,6 +3023,7 @@ describe("Gantt falls back to the Dataset's own locale (#583)", () => {
     const gantt = new Gantt({ container, dataset, gridColumns: ['name', 'cost'], locale: 'en-US' });
     const entry = dataset.entries.all[0]!;
     gantt.locale = undefined;
+    expect(gantt.locale).toBeUndefined();
     expect(gantt.formatFieldValue(entry, 'cost')).toBe('500,00 €');
     await new Promise((resolve) => requestAnimationFrame(resolve));
     const cell = container.querySelector('.fg-row [data-field="cost"]');
@@ -3054,6 +3055,7 @@ describe('Gantt.formatContext (#578)', () => {
     const dataset = new Dataset({ timeZone: 'UTC', locale: 'de-DE', entries: sampleEntries });
     const gantt = new Gantt({ container, dataset });
     expect(gantt.formatContext.locale).toBe('de-DE');
+    expect(gantt.locale).toBeUndefined();
     gantt.destroy();
   });
 });
