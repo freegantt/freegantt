@@ -37,7 +37,7 @@ function ctx(
 ): RollUpContext {
   const registry = new FieldRegistry({
     fieldTypes: { money: { rollUp: 'sum' } },
-    fields: [{ key: field, type: field === 'money' ? 'money' : type }],
+    fields: [{ key: field, type: field === 'cost' ? 'money' : type }],
   });
   return createRollUpContext(
     createFieldAccess({ fields: registry, timeZone: 'UTC' }),
@@ -104,5 +104,13 @@ describe('shipped Aggregators (D-S4-3)', () => {
     const children = [child('a', { effort: { value: 2, unit: 'day' } }), child('b', { effort: ms(3) })];
     const durationType: FieldType = { rollUp: 'sum' };
     expect(SHIPPED_AGGREGATORS.sum?.(parent, ctx('effort', children, durationType))).toEqual(ms(3));
+  });
+
+  it('a mixed number and Duration set is a data error: the fold keeps the number path and the Duration is a hole', () => {
+    const durationType: FieldType = { rollUp: 'sum' };
+    const numberThenDuration = [child('a', { effort: 2 }), child('b', { effort: ms(3) })];
+    const durationThenNumber = [child('a', { effort: ms(3) }), child('b', { effort: 2 })];
+    expect(SHIPPED_AGGREGATORS.sum?.(parent, ctx('effort', numberThenDuration, durationType))).toBe(2);
+    expect(SHIPPED_AGGREGATORS.sum?.(parent, ctx('effort', durationThenNumber, durationType))).toBe(2);
   });
 });

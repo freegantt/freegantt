@@ -34,27 +34,29 @@ function isMillisecondDuration(value: unknown): value is Duration {
 
 /** `min`, `max` and `sum` are one shape: fold this Field's values across the children, and keep the
  *  stored value (`undefined`) when every child is a hole. A child counts as a number or as a
- *  millisecond Duration; when every counted child is a Duration, the answer is a Duration too. */
-function foldNumbers(
+ *  millisecond Duration; when every counted child is a Duration, the answer is a Duration too.
+ *  A Field has one type, so a set with both a number and a Duration is a data error: the fold
+ *  keeps the plain-number path, and a Duration child is a hole, the same as before this Field
+ *  ever carried a Duration. */
+function foldValues(
   ctx: RollUpContext,
   fold: (found: number, value: number) => number,
 ): number | Duration | undefined {
-  const durations = ctx.values().filter(isMillisecondDuration);
-  if (durations.length > 0) {
-    return { value: durations.map((duration) => duration.value).reduce(fold), unit: 'millisecond' };
+  const counted = ctx.values().filter((value) => isFiniteNumber(value) || isMillisecondDuration(value));
+  if (counted.length > 0 && counted.every(isMillisecondDuration)) {
+    return { value: counted.map((duration) => duration.value).reduce(fold), unit: 'millisecond' };
   }
   const values = ctx.numericValues();
   return values.length === 0 ? undefined : values.reduce(fold);
 }
 
 const min: Aggregator<number | Duration> = (_parent, ctx) =>
-  foldNumbers(ctx, (found, value) => Math.min(found, value));
+  foldValues(ctx, (found, value) => Math.min(found, value));
 
 const max: Aggregator<number | Duration> = (_parent, ctx) =>
-  foldNumbers(ctx, (found, value) => Math.max(found, value));
+  foldValues(ctx, (found, value) => Math.max(found, value));
 
-const sum: Aggregator<number | Duration> = (_parent, ctx) =>
-  foldNumbers(ctx, (found, value) => found + value);
+const sum: Aggregator<number | Duration> = (_parent, ctx) => foldValues(ctx, (found, value) => found + value);
 
 const count: Aggregator<number> = (_parent, ctx) => {
   const n = ctx.values().filter((value) => value !== undefined).length;
