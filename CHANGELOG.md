@@ -33,6 +33,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
   it beats only the runtime's own. A `Gantt` with no `locale` of its own now falls back to its
   Dataset's `locale` before the runtime's, in the Grid, a bar label, the header and
   `gantt.formatFieldValue` alike. ([#583](https://github.com/freegantt/freegantt/issues/583))
+- The default date editor's own consumer `dateInput` factory now also sees the Dataset's `locale`
+  fallback, through `gantt.formatContext`, in place of a raw `gantt.locale` that skipped the Dataset
+  when the Gantt named no locale of its own. ([#583](https://github.com/freegantt/freegantt/issues/583))
 - `createGridColumnHelper(dataset)` types a column renderer's `fieldValue` from the column's key. `columnHelper.column('start', { columnRenderer: ({ fieldValue }) => … })` reads `fieldValue` as `Instant | undefined`, with no cast and no annotation. The helper is optional: it returns the plain column object, and a plain column object still reads `fieldValue` as `unknown`. `ColumnRendererContext<TValue>` and `ColumnRenderer<TValue>` take the value type, and both default to `unknown`. See `docs/12-grid-columns.md`. ([#522](https://github.com/freegantt/freegantt/issues/522))
 
 - `EntryDelta<TProps>`, the shape `dataset.entries.syncChanges()` takes: `{ upsert, remove }`. An `upsert` row adds an entry for an unknown id and edits a known one. A key the row leaves out keeps its value. `remove` lists ids to remove, and an unknown id is ignored. ([#527](https://github.com/freegantt/freegantt/issues/527))
