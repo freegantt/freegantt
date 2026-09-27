@@ -47,8 +47,8 @@ function pad(value: number, width: number): string {
 
 /** `<input type="date">`'s own value shape (`YYYY-MM-DD`), read and written through `time`'s zone
  *  math. Never `Date` parsing, and never an inline `end - 1`. The inclusive-display rule
- *  (`plans/01` §5) stays out of scope here. A date-only field's `end` is already the entry's own
- *  stored value by the time this control opens. That is `inlineEditing()`'s job, not this one's.
+ *  (`plans/01` §5) stays out of scope here. `inlineEditing()` decides which day an `end` shows and
+ *  which day a typed value stores. It hands this control an already-resolved Instant either way.
  *
  *  Callable only for an Instant already known to fall at local midnight. `inlineEditing()` checks
  *  that before it ever calls `write` (issue #137). So this control assumes a valid date-only

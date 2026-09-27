@@ -47,6 +47,7 @@ import type {
 import { DisposableStore } from '../disposables.js';
 import { activateFocusTrap } from '../focus-trap.js';
 import type { FocusTrap } from '../focus-trap.js';
+import { startOfLastCoveredDay, startOfNextDay } from '../../api/time-facade.js';
 import { createDefaultDateInput } from './date-input.js';
 import type { DateInput, DateInputFactory } from './date-input.js';
 
@@ -734,6 +735,16 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         // as any other empty cell — it is not broken, so nothing refuses it.
         const raw = entry.read(field.key) as Instant | undefined;
         const factory = options.dateInput;
+        // Which day does the End editor show, and which end does a typed day store? A stored `end`
+        // is the boundary after the entry, not a day a reader typed. So the default control shows
+        // the last day it covers instead, and a typed day commits the day after it. Only the
+        // library's own control makes this trade — a consumer's `dateInput` factory owns its end
+        // field the same as any other date, unchanged.
+        const isDefaultEnd = field.key === 'end' && factory === undefined;
+        const shown =
+          isDefaultEnd && raw !== undefined
+            ? startOfLastCoveredDay(ctx.dataset.timeZone, { start: entry.start, end: raw })
+            : raw;
         let dateInput: DateInput;
         if (factory !== undefined) {
           dateInput = factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.locale });
@@ -749,13 +760,16 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
           }
           dateInput = createDefaultDateInput(ctx.dataset.time);
         }
-        if (raw !== undefined) dateInput.write(raw);
+        if (shown !== undefined) dateInput.write(shown);
 
         pending.mount({
           element: dateInput.element,
           read: (): CellEditorValue => {
-            const value = dateInput.read();
-            return value === undefined ? { ok: false } : { ok: true, value };
+            const typed = dateInput.read();
+            if (typed === undefined) return { ok: false };
+            if (!isDefaultEnd) return { ok: true, value: typed };
+            if (raw !== undefined && typed === shown) return { ok: true, value: raw };
+            return { ok: true, value: startOfNextDay(ctx.dataset.timeZone, typed) };
           },
           bindCommitTriggers: (fire) => dateInput.onCommit(fire),
           onClosed: () => dateInput.destroy(),
