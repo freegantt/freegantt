@@ -17,7 +17,7 @@ export type CoreFieldKey = keyof Omit<StoredEntry, 'id' | 'props'>;
 export type FieldKey = CoreFieldKey | (string & {});
 
 /** What each shipped Field reads as: the `Entry` keys (minus `props`, ADR 0011's one reserved key),
- *  plus `duration` — the one core Field that computes its value and owns no `Entry` key
+ *  plus `duration` and `hierarchyParentId` — the computed core Fields that own no `StoredEntry` key
  *  (`data/fields/core-fields.ts`). The typed way to a consumer's own `props` is
  *  `entries.get(id)?.props`. */
 export interface CoreFieldValues extends Omit<StoredEntry, 'id' | 'props'> {
