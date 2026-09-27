@@ -395,6 +395,10 @@ _Avoid_: Date input, raw date, loose instant
 An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date always means the last day it wants included: it stores the start of the next day. It applies to nothing else: an end that already carries a time of day is a boundary already. `lastCoveredInstant` reads a stored `end` back as the last moment it covers; `formatInclusiveDate` builds on it. `formatDateTime` shows the stored moment as-is, with clock time.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
+**Formatter**:
+A function turning one value into display text: `(value, ctx: FormatContext, entry) => string`, declaring only the parameters it reads. Zone and locale come only from `ctx`; a missing value gives `''`, never a throw. No options at the call — a factory builds a tailored one once (`dateFormatter(options)`, `currency({ code })`). A header band callback is a Formatter with no entry (`HeaderFormat`). Every shipped Field `formatValue` is one; `formatFieldValue` is the one path a Field's text takes to the grid, the bar label, the tooltip and a direct call.
+_Avoid_: renderer (paints an element, not text), format function
+
 **Duration measure**:
 How core measures a duration: `'span'` counts from `start` to `end`, gaps included, and `'children'`
 sums each direct child's own span and counts no gap between them (ADR 0026 retired the Segment-named

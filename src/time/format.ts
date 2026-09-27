@@ -73,17 +73,25 @@ export function resolveDateFormat(
   return (i) => formatter.format(toJsDate(i));
 }
 
-/** Plain display formatting for an instant needing no conversion — a start is already inclusive.
- *  `ctx` is a `FormatContext` shape (locale optional here, since a caller with no locale
- *  preference still has a zone). Pass `DATE_TIME_FORMAT` (or any `Intl.DateTimeFormatOptions`)
- *  to include clock time. */
-export function formatDate(
-  value: Instant,
-  ctx: { readonly timeZone: string; readonly locale?: Intl.LocalesArgument },
-  options: Intl.DateTimeFormatOptions = DEFAULT_DATE_FORMAT,
-): string {
-  return intlFormatter(ctx.timeZone, ctx.locale, options).format(toJsDate(value));
+/** Builds a Formatter for one fixed set of `Intl.DateTimeFormatOptions` — a date, date only, with no
+ *  option to tailor at the call. Build it once, outside a `formatValue`: the returned function is a
+ *  stable reference, so the `Intl.DateTimeFormat` cache keyed on it (`intlFormatter`) hits every call.
+ *  Copies and freezes `options` once, so a caller mutating the object afterward changes nothing.
+ *  `''` for a missing value; never throws. */
+export function dateFormatter(
+  options: Intl.DateTimeFormatOptions,
+): (value: unknown, ctx: FormatContext) => string {
+  const frozen = Object.freeze({ ...options });
+  return (value, ctx) => {
+    if (value === undefined || value === null) return '';
+    return intlFormatter(ctx.timeZone, ctx.locale, frozen).format(toJsDate(value as Instant));
+  };
 }
+
+/** A Field `formatValue`: the stored instant, date only, in the dataset zone and the Gantt's locale.
+ *  `''` for a missing value. To tailor the shown fields, build a Formatter with `dateFormatter`
+ *  (`dateFormatter({ day: '2-digit', month: 'short' })`) instead of calling this with options. */
+export const formatDate = Object.freeze(dateFormatter(DEFAULT_DATE_FORMAT));
 
 /** The last moment a half-open span `[start, end)` actually covers — `end` itself is the boundary
  *  after the span, one millisecond past its last covered moment. Instant arithmetic only, so it
@@ -102,10 +110,7 @@ export function lastCoveredInstant(span: {
 
 /** A Field `formatValue`: the stored moment, date and clock time. A blank cell for no value.
  *  Names the `date` type's default and pairs with `DATE_TIME_FORMAT`. */
-export function formatDateTime(value: unknown, ctx: FormatContext): string {
-  if (value === undefined || value === null) return '';
-  return formatDate(value as Instant, ctx, DATE_TIME_FORMAT);
-}
+export const formatDateTime = Object.freeze(dateFormatter(DATE_TIME_FORMAT));
 
 /** A Field `formatValue`: the last day a span covers, date only. Reads `lastCoveredInstant(entry)`
  *  with `value` standing in for `end` — so `entry.end` never has to be `value` itself, letting a

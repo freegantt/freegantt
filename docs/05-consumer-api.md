@@ -215,10 +215,12 @@ Two Field formatters ship for display, both plain `formatValue` functions with t
   reads `entry.start` and the value it is given for `end`, so it works on `start` too. Core `end`
   sets this as its default formatter.
 
-`formatDate(value, ctx, options?)` is the general-purpose helper the two formatters above build
-on. `ctx` is `{ timeZone, locale? }`. `options` is any `Intl.DateTimeFormatOptions`; omitted, it
-shows a date only. It is not itself a `formatValue`: a Field passes it a third argument, the
-`Entry`, not `Intl.DateTimeFormatOptions`.
+`formatDate(value, ctx)` is a Formatter itself, date only — `ctx` is a `FormatContext`, the
+`timeZone`/`locale` pair the Gantt builds. `formatDateTime` is built the same way, from
+`dateFormatter(DATE_TIME_FORMAT)`. To show other fields, build a Formatter once with
+**`dateFormatter(options)`**, any `Intl.DateTimeFormatOptions` — it is the general-purpose helper
+`formatDate` and `formatDateTime` both build on. Build it once, outside a `formatValue`: the
+returned function is a stable reference, so the shared `Intl.DateTimeFormat` cache reuses it.
 
 **`lastCoveredInstant({ start?, end })`** — the instant `formatInclusiveDate` builds on: `end`
 stepped back one millisecond, unless the span is zero-length (`end === start`), which answers its
@@ -240,13 +242,13 @@ new Dataset({
 });
 ```
 
-A custom format builds on `formatDate` and `lastCoveredInstant` — the harness planner page's
+A custom format builds on `dateFormatter` and `lastCoveredInstant` — the harness planner page's
 compact "02 Mar" Finish column, with no year and no clock time:
 
 ```ts
-import { formatDate, lastCoveredInstant, type FormatContext, type Instant } from 'freegantt';
+import { dateFormatter, lastCoveredInstant, type FormatContext, type Instant } from 'freegantt';
 
-const COMPACT_DAY: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+const compactDay = dateFormatter({ day: '2-digit', month: 'short' });
 
 function compactFinish(
   value: unknown,
@@ -254,7 +256,7 @@ function compactFinish(
   entry: { readonly start?: Instant | undefined },
 ): string {
   if (value === undefined || value === null) return '';
-  return formatDate(lastCoveredInstant({ start: entry.start, end: value as Instant }), ctx, COMPACT_DAY);
+  return compactDay(lastCoveredInstant({ start: entry.start, end: value as Instant }), ctx);
 }
 ```
 

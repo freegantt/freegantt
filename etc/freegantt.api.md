@@ -471,6 +471,9 @@ export interface DatasetStoreAccess {
 export type DateFormat = Intl.DateTimeFormatOptions | HeaderFormat;
 
 // @public
+export function dateFormatter(options: Intl.DateTimeFormatOptions): (value: unknown, ctx: FormatContext) => string;
+
+// @public
 export interface DateInput {
     // (undocumented)
     destroy(): void;
@@ -1058,13 +1061,10 @@ export interface FormatContext extends FieldContext {
 }
 
 // @public
-export function formatDate(value: Instant, ctx: {
-    readonly timeZone: string;
-    readonly locale?: Intl.LocalesArgument;
-}, options?: Intl.DateTimeFormatOptions): string;
+export const formatDate: (value: unknown, ctx: FormatContext) => string;
 
 // @public
-export function formatDateTime(value: unknown, ctx: FormatContext): string;
+export const formatDateTime: (value: unknown, ctx: FormatContext) => string;
 
 // @public
 export const formatHour: HeaderFormat;

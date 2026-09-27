@@ -13,7 +13,7 @@
 // "Task", "predecessor" and "the schedule" stay out of core's vocabulary (plans/01 §7) — this fixture
 // is a construction plan because a consumer said so, not because the library knows one.
 
-import { addMs, formatDate, instant, lastCoveredInstant, MS } from 'freegantt';
+import { addMs, dateFormatter, instant, lastCoveredInstant, MS } from 'freegantt';
 import type { FormatContext, StoredEntry, EntryInput, Field, Instant } from 'freegantt';
 
 /** What the design stores per row, beyond the Entry keys core already owns. */
@@ -170,14 +170,9 @@ const WORK_ROW_NUMBERS = new Map<string, number>(
 );
 
 // The design's compact Start/Finish format: two-digit day, three-letter month, no year, no time —
-// `02 Mar`, not the core Field's own `Jun 29, 2026, 12:00 AM`. Built on the public `formatDate`
+// `02 Mar`, not the core Field's own `Jun 29, 2026, 12:00 AM`. Built on the public `dateFormatter`
 // and `lastCoveredInstant`, so the "last day covered" rule lives in the library, not here.
-const COMPACT_DATE_FORMAT: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
-
-function compactStart(value: unknown, ctx: FormatContext): string {
-  if (value === undefined || value === null) return '';
-  return formatDate(value as Instant, ctx, COMPACT_DATE_FORMAT);
-}
+const compactStart = dateFormatter({ day: '2-digit', month: 'short' });
 
 function compactFinish(
   value: unknown,
@@ -186,7 +181,7 @@ function compactFinish(
 ): string {
   if (value === undefined || value === null) return '';
   const covered = lastCoveredInstant({ start: entry.start, end: value as Instant });
-  return formatDate(covered, ctx, COMPACT_DATE_FORMAT);
+  return compactStart(covered, ctx);
 }
 
 const PLANNER_FIELDS: readonly Field[] = [

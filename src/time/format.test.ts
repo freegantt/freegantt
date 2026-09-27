@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { instant } from './instant.js';
 import { startOfDay } from './zone.js';
 import {
-  DATE_TIME_FORMAT,
+  dateFormatter,
   dropRepeatedGranularity,
   formatDate,
   formatDateTime,
@@ -11,7 +11,7 @@ import {
   lastCoveredInstant,
 } from './format.js';
 import type { ViewPresetHeader } from './scale.js';
-import type { FormatContext } from '../model/index.js';
+import type { Field, FormatContext, Instant } from '../model/index.js';
 
 const ZONE = 'America/New_York';
 const ctx = (locale: Intl.LocalesArgument = 'en-US'): FormatContext => ({ timeZone: ZONE, locale });
@@ -22,16 +22,49 @@ describe('formatDate', () => {
     expect(formatDate(start, ctx())).toBe('Aug 26, 2026');
   });
 
-  it('includes clock time when DATE_TIME_FORMAT is passed', () => {
-    const start = instant('2026-08-26T14:30:00Z'); // 10:30 EDT
-    const text = formatDate(start, ctx(), DATE_TIME_FORMAT);
-    expect(text).toContain('Aug 26, 2026');
-    expect(text).toMatch(/10:30/);
+  it('shows a blank cell for no value', () => {
+    expect(formatDate(undefined, ctx())).toBe('');
+    expect(formatDate(null, ctx())).toBe('');
   });
 
-  it('takes a locale-less ctx: locale is optional', () => {
+  it('takes a locale-less ctx: locale is optional in value, still a stated property', () => {
     const start = instant('2026-08-26T14:30:00Z');
-    expect(formatDate(start, { timeZone: ZONE })).toBe('Aug 26, 2026');
+    expect(formatDate(start, { timeZone: ZONE, locale: undefined })).toBe('Aug 26, 2026');
+  });
+
+  it('is a Formatter: it drops into a Field formatValue as is', () => {
+    const field: Field<Instant> = { key: 'start', formatValue: formatDate };
+    const start = instant('2026-08-26T14:30:00Z');
+    expect(field.formatValue!(start, ctx(), {} as never)).toBe('Aug 26, 2026');
+  });
+});
+
+describe('dateFormatter', () => {
+  it('builds a Formatter for one fixed set of options', () => {
+    const start = instant('2026-03-02T14:30:00Z'); // 09:30 EST
+    const formatMonthDay = dateFormatter({ day: '2-digit', month: 'short' });
+    expect(formatMonthDay(start, ctx())).toBe('Mar 02');
+  });
+
+  it('shows a blank cell for no value', () => {
+    const formatMonthDay = dateFormatter({ day: '2-digit', month: 'short' });
+    expect(formatMonthDay(undefined, ctx())).toBe('');
+    expect(formatMonthDay(null, ctx())).toBe('');
+  });
+
+  it('freezes its own copy: mutating the caller options object after the call changes nothing', () => {
+    const start = instant('2026-03-02T14:30:00Z');
+    const options: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+    const formatMonthDay = dateFormatter(options);
+    const before = formatMonthDay(start, ctx());
+    options.year = 'numeric';
+    expect(formatMonthDay(start, ctx())).toBe(before);
+  });
+
+  it('is a Formatter: a built one drops into a Field formatValue as is', () => {
+    const field: Field<Instant> = { key: 'start', formatValue: dateFormatter({ day: '2-digit' }) };
+    const start = instant('2026-03-02T14:30:00Z');
+    expect(field.formatValue!(start, ctx(), {} as never)).toBe('02');
   });
 });
 
