@@ -13,8 +13,7 @@ import {
   dayPreset,
   hourPreset,
   instant,
-  formatDate,
-  formatInclusiveDate,
+  formatStartAndEnd,
   weekAndMonthPreset,
   weekPreset,
   yearPreset,
@@ -156,8 +155,30 @@ describe('computeFrame', () => {
     const entry = sampleEntries[1]!; // Stakeholder interviews
     const bar = frame.bars.find((b) => b.entryId === entry.id);
     expect(bar?.a11yLabel).toBe(
-      `${entry.name}, ${formatDate(entry.start as Instant, { timeZone: scale.timeZone, locale: undefined })} – ${formatInclusiveDate(entry.end, { timeZone: scale.timeZone, locale: undefined }, entry)}`,
+      `${entry.name}, ${formatStartAndEnd(entry, { timeZone: scale.timeZone, locale: undefined })}`,
     );
+  });
+
+  it('announces a one-day bar with its date once', () => {
+    const oneDayEntry: Entry = entryDouble({
+      id: entryId('one-day'),
+      name: 'Kickoff',
+      start: instant('2026-09-02T00:00:00Z'),
+      end: instant('2026-09-03T00:00:00Z'),
+    });
+    const frame = computeFrame({
+      entries: [oneDayEntry],
+      scale: wideScale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+      barLabelFor: (entry) => entry.name,
+    });
+    const bar = frame.bars.find((b) => b.entryId === oneDayEntry.id);
+    expect(bar?.a11yLabel).toBe('Kickoff, Sep 2, 2026');
   });
 
   it('produces deterministic Bar.id across repeated passes (I8)', () => {
