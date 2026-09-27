@@ -464,6 +464,7 @@ export {
   overlap,
   MS,
   formatDate,
+  dateFormatter,
   formatDateTime,
   formatInclusiveDate,
   lastCoveredInstant,
