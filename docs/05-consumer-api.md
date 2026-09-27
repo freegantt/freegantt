@@ -226,7 +226,7 @@ Two Field formatters ship for display, both plain `formatValue` functions with t
 
 `formatDate(value, ctx)` is a Formatter itself, date only — `ctx` is a `FormatContext`, the
 `timeZone`/`locale` pair the Gantt builds. `formatDateTime` is built the same way, from
-`dateFormatter(DATE_TIME_FORMAT)`. To show other fields, build a Formatter once with
+`dateFormatter` with date-and-time `Intl.DateTimeFormatOptions`. To show other fields, build a Formatter once with
 **`dateFormatter(options)`**, any `Intl.DateTimeFormatOptions` — it is the general-purpose helper
 `formatDate` and `formatDateTime` both build on. Build it once, outside a `formatValue`: the
 returned function is a stable reference, so the shared `Intl.DateTimeFormat` cache reuses it.

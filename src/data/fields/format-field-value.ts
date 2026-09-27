@@ -5,7 +5,7 @@ import type { Entry, Field, FormatContext } from '../../model/index.js';
 import { stringifyPrimitive } from './field-types.js';
 
 /** Call: `formatFieldValue(field, entry, ctx)`. The text a Field shows for one Entry: its own
- *  `formatValue`, or the plain text of a primitive value. The grid, the bar label, the tooltip and
+ *  `formatValue`, or the plain text of a primitive value. The grid, the bar label, and
  *  `gantt.formatFieldValue` all read through this one function, so they never disagree. */
 export function formatFieldValue(field: Field, entry: Entry, ctx: FormatContext): string {
   const value = entry.read(field.key);
