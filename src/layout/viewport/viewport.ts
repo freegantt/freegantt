@@ -66,7 +66,7 @@ export class Viewport {
   readonly scroll: BoundScrollPair;
   #overscan: Overscan;
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first. Default: the
-   *  shipped nine-rung set. */
+   *  shipped ten-rung set. */
   #zoomPresets: readonly ViewPreset[] = ZOOM_PRESETS;
   #paneSize: Size = ZERO_SIZE;
   #contentSize: Size = ZERO_SIZE;

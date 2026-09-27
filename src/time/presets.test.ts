@@ -6,6 +6,8 @@ import { createTimeScale } from './scale.js';
 import type { ViewPreset } from './scale.js';
 import { resolveDateFormat } from './format.js';
 import { instant } from './instant.js';
+import { toPlain } from './zone.js';
+import type { Instant } from '../model/index.js';
 
 describe('resolvePreset', () => {
   it('resolves every shipped id to its preset', () => {
@@ -459,5 +461,56 @@ describe('#101 new shipped presets', () => {
     const label = resolveDateFormat(dayBand.format, { timeZone, locale: 'en-US' });
     // 2026-09-06 is a Sunday: S M T W T F S.
     expect(ticks.map((t) => label(t.instant))).toEqual(['S', 'M', 'T', 'W', 'T', 'F', 'S']);
+  });
+});
+
+describe('quarterAndYear preset', () => {
+  const quarterBand = presets.quarterAndYear.headers[1]!;
+  const quarterStep = { unit: quarterBand.unit, increment: quarterBand.increment };
+
+  function quarterTicks(timeZone: string, start: string): readonly Instant[] {
+    const scale = createTimeScale({
+      timeZone,
+      range: { start: instant(start), end: instant('2027-12-01T00:00:00Z') },
+      pxPerMs: 1e-9,
+    });
+    return scale.ticks(quarterStep, { x: 0, width: scale.contentWidth }).map((tick) => tick.instant);
+  }
+
+  it('sits on the default zoom ladder between monthAndYear and year', () => {
+    const ladderIds = ZOOM_PRESETS.map((preset) => preset.id);
+    const quarterRung = ladderIds.indexOf('quarterAndYear');
+    expect(ladderIds[quarterRung - 1]).toBe('monthAndYear');
+    expect(ladderIds[quarterRung + 1]).toBe('year');
+  });
+
+  it('carries its year band coarsest-first, quarters finest', () => {
+    expect(presets.quarterAndYear.headers.map((h) => h.unit)).toEqual(['year', 'month']);
+  });
+
+  // A window that opens mid-quarter still draws calendar quarters, never a 3-month walk from its
+  // left edge. Each zone below has a clock change inside the range.
+  it.each(['UTC', 'America/New_York', 'Australia/Sydney'])(
+    'ticks land on Jan 1, Apr 1, Jul 1 and Oct 1 at local midnight in %s',
+    (timeZone) => {
+      for (const start of ['2026-01-01T00:00:00Z', '2026-02-17T00:00:00Z', '2026-05-31T13:00:00Z']) {
+        const starts = quarterTicks(timeZone, start).map((at) => {
+          const { month, day, hour, minute } = toPlain(timeZone, at);
+          return { month, day, hour, minute };
+        });
+        expect(starts.length).toBeGreaterThanOrEqual(7);
+        for (const quarterStart of starts) {
+          expect([1, 4, 7, 10]).toContain(quarterStart.month);
+          expect(quarterStart).toMatchObject({ day: 1, hour: 0, minute: 0 });
+        }
+      }
+    },
+  );
+
+  it('labels the four quarters of a year in order', () => {
+    const timeZone = 'America/New_York';
+    const label = resolveDateFormat(quarterBand.format, { timeZone, locale: 'en-US' });
+    const labels = quarterTicks(timeZone, '2026-01-01T05:00:00Z').map((at) => label(at));
+    expect(labels.slice(0, 5)).toEqual(['Q1', 'Q2', 'Q3', 'Q4', 'Q1']);
   });
 });
