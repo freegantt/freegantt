@@ -467,6 +467,8 @@ export {
   dateFormatter,
   formatDateTime,
   formatInclusiveDate,
+  formatStartAndEnd,
+  joinStartAndEnd,
   lastCoveredInstant,
   formatWeekNumber,
   formatHour,

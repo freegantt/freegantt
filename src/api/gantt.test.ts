@@ -3031,6 +3031,25 @@ describe("Gantt falls back to the Dataset's own locale (#583)", () => {
   });
 });
 
+describe('Gantt.formatContext (#578)', () => {
+  it("carries the Dataset's own time zone", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'America/New_York', entries: sampleEntries });
+    const gantt = new Gantt({ container, dataset });
+    expect(gantt.formatContext.timeZone).toBe('America/New_York');
+    gantt.destroy();
+  });
+
+  it('follows gantt.locale live', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ timeZone: 'UTC', entries: sampleEntries });
+    const gantt = new Gantt({ container, dataset });
+    gantt.locale = 'de-DE';
+    expect(gantt.formatContext.locale).toBe('de-DE');
+    gantt.destroy();
+  });
+});
+
 describe('Gantt grid columns are fixed-width by default (#139)', () => {
   it('a column nobody sized paints a pixel width and refuses to flex', () => {
     const container = document.createElement('div');

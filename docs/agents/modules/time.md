@@ -4,4 +4,5 @@
 - `time/` is the *only* place allowed to use `new Date()`/`Date.now()`, magic time constants (`86400000` etc.), or arithmetic on `Instant`. Everywhere else in `src/` these are forbidden — I10 lints this, scoped to `src/**`.
 - `tickFloor`/`nextTick` count a multi-hour or multi-minute tick's real elapsed time from its day's start, so a DST-transition day's ticks keep even real spacing rather than wall-clock multiples — see [ADR 0030](../../adr/0030-a-multi-hour-tick-counts-real-time-on-a-dst-day.md).
 - **Arithmetic goes through `temporal-polyfill`; display goes through `Intl`.** `time/zone.ts` is the only file that imports the polyfill, and every zone-aware calculation asks it. `time/format.ts` builds the human-readable string with `Intl.DateTimeFormat`, in the dataset zone and a caller-chosen locale, because Temporal has no formatter of its own; `weekOfYear` (`zone.ts`) is the one field `Intl` cannot answer. Do not write a date calculation against `Intl`, and do not add a second formatter.
+- A pair of dates reads through `formatStartAndEnd`/`joinStartAndEnd` — never hand-build a `' – '` join. An open side keeps its dash; two sides that read the same show once.
 
