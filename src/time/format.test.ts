@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { instant } from './instant.js';
-import { startOfDay } from './zone.js';
+import { startOfDay, weekOfYear } from './zone.js';
 import {
   dateFormatter,
   dropRepeatedGranularity,
   formatDate,
   formatDateTime,
+  formatHour,
   formatInclusiveDate,
   formatWeekNumber,
   lastCoveredInstant,
+  resolveDateFormat,
 } from './format.js';
 import type { ViewPresetHeader } from './scale.js';
 import type { Field, FormatContext, Instant } from '../model/index.js';
@@ -139,6 +141,64 @@ describe('formatInclusiveDate', () => {
   it('is correct across a fall-back DST boundary and a month end', () => {
     const end = startOfDay(ZONE, instant('2026-11-01T12:00:00Z'));
     expect(formatInclusiveDate(end, ctx(), { start })).toBe('Oct 31, 2026');
+  });
+});
+
+describe('formatWeekNumber', () => {
+  const at = instant('2026-03-02T12:00:00Z'); // week ten
+  const label = `W${weekOfYear(ZONE, at)}`;
+
+  it('labels the ISO week', () => {
+    expect(formatWeekNumber(at, ctx())).toBe(label);
+  });
+
+  it('shows a blank cell for no value', () => {
+    expect(formatWeekNumber(undefined, ctx())).toBe('');
+    expect(formatWeekNumber(null, ctx())).toBe('');
+  });
+
+  it('is a Formatter: it drops into a Field formatValue as is', () => {
+    const field: Field<Instant> = { key: 'start', formatValue: formatWeekNumber };
+    expect(field.formatValue!(at, ctx(), {} as never)).toBe(label);
+  });
+});
+
+describe('formatHour', () => {
+  it('shows an unpadded hour, never zero-padded', () => {
+    const at = instant('2026-03-02T14:00:00Z'); // 09:00 EST
+    expect(formatHour(at, ctx())).toBe('9:00');
+  });
+
+  it('shows a blank cell for no value', () => {
+    expect(formatHour(undefined, ctx())).toBe('');
+    expect(formatHour(null, ctx())).toBe('');
+  });
+
+  it('is a Formatter: it drops into a Field formatValue as is', () => {
+    const field: Field<Instant> = { key: 'start', formatValue: formatHour };
+    const at = instant('2026-03-02T14:00:00Z');
+    expect(field.formatValue!(at, ctx(), {} as never)).toBe('9:00');
+  });
+});
+
+describe('resolveDateFormat', () => {
+  it('curries a callback DateFormat over ctx, unchanged output', () => {
+    const at = instant('2026-03-02T14:00:00Z');
+    const label = resolveDateFormat(formatHour, ctx());
+    expect(label(at)).toBe(formatHour(at, ctx()));
+  });
+
+  it('resolves options through the same Intl.DateTimeFormat cache as dateFormatter', () => {
+    const at = instant('2026-03-02T14:00:00Z');
+    const format: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+    const label = resolveDateFormat(format, ctx());
+    expect(label(at)).toBe(dateFormatter(format)(at, ctx()));
+  });
+
+  it('a Field Formatter labels a header band the same way it labels a cell', () => {
+    const at = instant('2026-03-05T00:00:00Z');
+    const label = resolveDateFormat(formatDateTime, ctx());
+    expect(label(at)).toBe(formatDateTime(at, ctx()));
   });
 });
 

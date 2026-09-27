@@ -1067,7 +1067,7 @@ export const formatDate: (value: unknown, ctx: FormatContext) => string;
 export const formatDateTime: (value: unknown, ctx: FormatContext) => string;
 
 // @public
-export const formatHour: HeaderFormat;
+export function formatHour(value: unknown, ctx: FormatContext): string;
 
 // @public
 export function formatInclusiveDate(value: unknown, ctx: FormatContext, entry: {
@@ -1075,7 +1075,7 @@ export function formatInclusiveDate(value: unknown, ctx: FormatContext, entry: {
 }): string;
 
 // @public
-export const formatWeekNumber: HeaderFormat;
+export function formatWeekNumber(value: unknown, ctx: FormatContext): string;
 
 // @public (undocumented)
 export interface FrameBar {
@@ -1464,7 +1464,7 @@ export interface GroupRowSource extends RowSourceCommon {
 }
 
 // @public
-export type HeaderFormat = (i: Instant, zone: string, locale: Intl.LocalesArgument | undefined) => string;
+export type HeaderFormat = (value: Instant, ctx: FormatContext) => string;
 
 // @public (undocumented)
 export type HeaderRenderer = (ctx: HeaderRendererContext) => ElementDescription | undefined;
