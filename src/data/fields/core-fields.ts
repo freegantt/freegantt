@@ -1,25 +1,10 @@
 // data/ — core Fields are ordinary declarations. A core key reads and writes the Entry
 // directly, never `props` (ADR 0011). `progress` is not declared (ADR 0008).
 
-import type { Entry, Field, FieldKey, Instant } from '../../model/index.js';
-import { DATE_TIME_FORMAT, formatEndInclusive } from '../../time/index.js';
-import { formatInstant } from './field-types.js';
+import type { Field, FieldKey } from '../../model/index.js';
+import { formatInclusiveDate } from '../../time/index.js';
 
 const byReference = (from: unknown, to: unknown): boolean => from === to;
-
-function formatEnd(
-  value: unknown,
-  ctx: { timeZone: string; locale: Intl.LocalesArgument },
-  entry: Entry,
-): string {
-  if (value === undefined || value === null) return '';
-  // End with no start (ADR 0012) shows the stored end as a plain instant — no inclusive-display
-  // adjustment, because there is no paired start to be inclusive against. Guessing one is not this
-  // Field's job.
-  if (entry.start === undefined) return formatInstant(value, ctx);
-  const span = { start: entry.start, end: value as Instant };
-  return formatEndInclusive(ctx.timeZone, span, ctx.locale, DATE_TIME_FORMAT);
-}
 
 export const CORE_FIELDS: readonly Field[] = Object.freeze([
   {
@@ -50,9 +35,10 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     type: 'date',
     rollUp: 'max',
     equals: byReference,
-    // Inclusive display is this Field's job, not every Instant's. The `date` type still supplies
-    // compare, and `formatInstant` as the default that this override replaces.
-    formatValue: formatEnd,
+    // A stored `end` is the boundary after the entry, not its last covered day — `end` shows the
+    // last day it covers instead. The `date` type still supplies compare. A consumer replaces this
+    // with any `formatValue` of its own (`CORE_FIELD_OVERRIDABLE_KEYS`).
+    formatValue: formatInclusiveDate,
     // #142: see `start` above — the same one answer, the same reason.
     editable: 'anywhere',
     column: { header: 'End', width: 120 },

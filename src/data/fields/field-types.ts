@@ -31,14 +31,6 @@ function compareNumber(a: number | undefined, b: number | undefined): number {
   return a - b;
 }
 
-/** Formats an Instant the way a date Field (and core `start`) shows it — zone-aware, with clock
- *  time. An absent value is a blank cell, not a guessed epoch. A thin re-use of `formatDateTime`
- *  under its old name, kept for the one caller left that needs a plain instant with no paired
- *  span (`core-fields.ts`'s no-start branch). */
-export function formatInstant(value: unknown, ctx: FormatContext): string {
-  return formatDateTime(value, ctx);
-}
-
 function compareInstant(a: Instant | undefined, b: Instant | undefined): number {
   if (a === undefined || a === null) return 1;
   if (b === undefined || b === null) return -1;
