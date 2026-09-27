@@ -207,8 +207,7 @@ export function mountGanttToolbar(options: GanttToolbarOptions): void {
     const snapReadout = snapValue(gantt.snap);
     if (snapSelect && snapReadout !== undefined) snapSelect.value = snapReadout;
     const span = gantt.visibleSpan;
-    const spanCtx = { timeZone: dataset.timeZone, locale: gantt.locale };
-    spanReadout.textContent = `Showing ${formatStartAndEnd(span, spanCtx)}`;
+    spanReadout.textContent = `Showing ${formatStartAndEnd(span, gantt.formatContext)}`;
     hoursReadout.textContent = `Visible hours: ${Math.round(visibleHours(span))}`;
   }
 
