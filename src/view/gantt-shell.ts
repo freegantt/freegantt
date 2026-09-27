@@ -134,11 +134,11 @@ import { projectAffordances } from './affordance-projection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext, EntryHit } from './entry-gesture-context.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
-import { DEFAULT_GRID_COLUMNS, formatContextOf, resolveGanttFields } from './grid-columns.js';
+import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
 import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
 import type { ResolveBarLabelPorts } from './bar-labels.js';
-import { formatFieldValue } from '../data/fields/format-field-value.js';
+import { createFormatContext, formatFieldValue } from '../data/fields/format-field-value.js';
 
 import { ColumnChrome } from './column-chrome.js';
 import type { ColumnChromePorts } from './column-chrome.js';
@@ -1521,7 +1521,8 @@ export class GanttShell {
   formatFieldValue(entry: Entry, key: FieldKey): string {
     const field = this.#options.dataset.field(key);
     if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');
-    return formatFieldValue(field, entry, formatContextOf(this.#columnBind()));
+    const bind = this.#columnBind();
+    return formatFieldValue(field, entry, createFormatContext(bind.timeZone, bind.locale));
   }
 
   get capabilities(): Capabilities {

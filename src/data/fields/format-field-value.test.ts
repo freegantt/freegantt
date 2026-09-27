@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Entry, Field, FormatContext } from '../../model/index.js';
-import { formatFieldValue } from './format-field-value.js';
+import { createFormatContext, formatFieldValue } from './format-field-value.js';
 
 const ctx: FormatContext = { timeZone: 'UTC', locale: 'en-US' };
 
@@ -31,5 +31,15 @@ describe("formatFieldValue — the one read for a Field's displayed text", () =>
   it('gives "" for a Field with no formatValue and an object value', () => {
     const field: Field = { key: 'tags' };
     expect(formatFieldValue(field, entryWith({ tags: ['a', 'b'] }), ctx)).toBe('');
+  });
+});
+
+describe('createFormatContext — the one FormatContext builder', () => {
+  it('reads a missing locale as the runtime default', () => {
+    expect(createFormatContext('UTC', undefined)).toEqual({ timeZone: 'UTC', locale: [] });
+  });
+
+  it('carries an explicit locale through', () => {
+    expect(createFormatContext('UTC', 'de-DE').locale).toBe('de-DE');
   });
 });
