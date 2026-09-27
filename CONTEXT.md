@@ -396,7 +396,7 @@ An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Sto
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
 **Formatter**:
-A function turning one value into display text: `(value, ctx: FormatContext, entry) => string`, declaring only the parameters it reads. Zone and locale come only from `ctx`; a missing value gives `''`, never a throw. No options at the call — a factory builds a tailored one once (`dateFormatter(options)`, `currency({ code })`). A header band callback is a Formatter with no entry (`HeaderFormat`). Every shipped Field `formatValue` is one; `formatFieldValue` is the one path a Field's text takes to the grid, the bar label, and `gantt.formatFieldValue`.
+A function turning one value into display text: `(value, ctx: FormatContext, entry) => string`, declaring only the parameters it reads. Zone and locale come only from `ctx`; a missing value gives `''`, never a throw. No options at the call — a factory builds a tailored one once (`dateFormatter(options)`, `currency({ code })`). A header band callback is a Formatter with no entry (`HeaderFormat`). Every shipped Field `formatValue` is one; `formatFieldValue` is the one path a Field's text takes to the grid, the bar label, and `gantt.formatFieldValue`. The Dataset owns the path (`dataset.formatFieldValue`); a Gantt adds only its own locale.
 _Avoid_: renderer (paints an element, not text), format function
 
 **TimeUnit**:

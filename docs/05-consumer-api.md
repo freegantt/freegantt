@@ -178,6 +178,7 @@ dataset.entries.update('roofing', { siblingIndex: 0 });
 - `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. A core Field's key cannot be redeclared (`IllegalCoreFieldOverrideError`) — but every core Field takes a consumer override on `editable` and `formatValue`, and on `rollUp` too where the core Field declares one of its own (`start`, `end`). Type name `date` is replaceable at construction via `fieldTypes` — that door is construction-only.
 - A parent rolls up because it has children. An Entry carries no stored classification, so nothing opts a row in or out by kind.
 - `entries.get(id)?.read(key)`, `dataset.field(key)`, `dataset.fields.all` — `read` is the one value door
+- `dataset.formatFieldValue(entry, key, locale?)` — a Field's shown text, with no Gantt. See "A Field's text outside the grid" below.
 - `plugins` — a plugin with a `data` half installs here
 
 ### The duration Field
@@ -330,6 +331,17 @@ const statusLine = `${entry.name} · ${gantt.formatFieldValue(entry, 'progress')
 const csvRow = gantt.gridColumns
   .map((column) => gantt.formatFieldValue(entry, typeof column === 'string' ? column : column.field))
   .join(',');
+```
+
+**`dataset.formatFieldValue(entry, key, locale?)`** gives the same text with no Gantt at all, for a
+server-side export or a report. The zone is this Dataset's own; a missing `locale` reads as the
+runtime's own, the same default `gantt.formatFieldValue` gives. `gantt.formatFieldValue` reads
+through this method with the Gantt's own locale.
+
+```ts
+const csvRows = dataset.entries.all.map((entry) =>
+  ['name', 'start', 'end', 'cost'].map((key) => dataset.formatFieldValue(entry, key, 'de-DE')).join(';'),
+);
 ```
 
 ### Naming
