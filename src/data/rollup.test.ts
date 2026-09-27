@@ -990,3 +990,29 @@ describe('a pass reads the leaves of any row it hands you (#466 cases 3 and 4)',
     expect(levelsRead).toBe(2);
   });
 });
+
+describe('sum folds a stored Duration Field (#582)', () => {
+  it('sums the leaves’ Durations and answers a Duration in milliseconds', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'depot', name: 'Depot' },
+        {
+          id: 'van-1',
+          name: 'Van 1',
+          parentId: 'depot',
+          props: { effort: { value: 2 * MS.DAY, unit: 'millisecond' } },
+        },
+        {
+          id: 'van-2',
+          name: 'Van 2',
+          parentId: 'depot',
+          props: { effort: { value: 3 * MS.DAY, unit: 'millisecond' } },
+        },
+      ],
+      fields: [{ key: 'effort', type: 'duration', rollUp: 'sum' }],
+    });
+
+    expect(state.entries.get('depot')!.read('effort')).toEqual({ value: 5 * MS.DAY, unit: 'millisecond' });
+  });
+});

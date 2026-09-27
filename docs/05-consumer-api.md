@@ -226,6 +226,37 @@ new Dataset({
 });
 ```
 
+### A Field that sums its children
+
+`compute` runs on every row, a parent included. `ctx.hasChildren` and `ctx.leaves` read the tree. A
+`compute` Field can use them to sum its children's own values:
+
+```ts
+import { diffMs, spansTime, type Duration, type Field } from 'freegantt';
+
+const work: Field<Duration> = {
+  key: 'work',
+  type: 'duration',
+  compute: (entry, ctx): Duration | undefined => {
+    const rows = ctx.hasChildren(entry) ? ctx.leaves(entry) : [entry];
+    const spans = rows.filter(spansTime);
+    return spans.length === 0
+      ? undefined
+      : { value: spans.reduce((ms, row) => ms + diffMs(row.end, row.start), 0), unit: 'millisecond' };
+  },
+};
+```
+
+A leaf answers its own span. A parent answers the sum of its leaves' spans, so the gaps between them
+do not count. `duration` answers a different question: its parent value spans the whole envelope of
+its children, gaps included. The value is never stored. There is no `ChangeSet` row for it, and
+`editable` is refused — the same rule every computed Field follows.
+
+A stored Field takes a shorter route to the same shape. `sum`, `min` and `max` also fold `Duration`
+values, so a stored Field takes `rollUp: 'sum' | 'min' | 'max'`. `{ key: 'effort', type: 'duration',
+rollUp: 'sum' }` fills a parent's cell from its children's stored `effort`, with no `compute` to
+write.
+
 ### Gantt
 
 - `gridColumns` — which Fields this view shows, in order. `columnRenderer` stays on the column. `createGridColumnHelper(dataset)` types a renderer's `fieldValue` from the column's key — see [`docs/12-grid-columns.md`](12-grid-columns.md). `meter()` and `image()` are the shipped column renderers; default alt is the Field's formatted value, and `{ alt: 'Logo' }` is a static override for a column that is one picture. Store a URL; let `formatValue` return the caption so alt (and tooltip) speak the name, not the URL.
