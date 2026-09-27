@@ -380,6 +380,7 @@ export class Dataset<TProps = unknown> {
     get fields(): {
         readonly all: readonly Field[];
     };
+    formatFieldValue(entry: Entry<TProps>, key: FieldKey, locale?: Intl.LocalesArgument): string;
     // (undocumented)
     off<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): void;
     on<K extends keyof DatasetEventMap>(name: K, handler: (payload: DatasetEventMap[K]) => void | false): Disposer;

@@ -7,6 +7,7 @@ import type {
   ChangeSet,
   DatasetEventMap,
   Disposer,
+  Entry,
   EntryId,
   ProposedEdits,
   EntryIngestInput,
@@ -18,9 +19,11 @@ import type {
   PluginStoreView,
   ReplayOptions,
 } from '../model/index.js';
+import { UnknownFieldError } from '../model/index.js';
 import { DatasetState } from '../data/index.js';
 import type { FieldDeclarationSource } from '../data/index.js';
 import { createEditRequest } from '../data/edit-request.js';
+import { createFormatContext, formatFieldValue } from '../data/fields/format-field-value.js';
 import { installDatasetPlugins } from '../extensions/install-dataset-plugins.js';
 import { assertNoDuplicateIds, resolveSetupOrder } from '../extensions/plugin-order.js';
 import { createErrorRaiser } from '../data/error-reporting.js';
@@ -261,6 +264,18 @@ export class Dataset<TProps = unknown> {
    *  declaration, not an Entry value; `entry.read(key)` reads the value. */
   field(key: FieldKey): Field | undefined {
     return this.#state.fields.get(key);
+  }
+
+  /** Call: `dataset.formatFieldValue(entry, 'cost', 'de-DE')` — "format this entry's cost value, in
+   *  German". The same text a grid cell, a bar label and the tooltip show: the Field's own
+   *  `formatValue`, or the plain text of a primitive value. The zone is this Dataset's. Omit
+   *  `locale` for the runtime's own locale, the same as a Gantt with no `locale`. No Gantt is
+   *  needed, so a server-side export reads the text through this. Throws `UnknownFieldError` for an
+   *  undeclared key. */
+  formatFieldValue(entry: Entry<TProps>, key: FieldKey, locale?: Intl.LocalesArgument): string {
+    const field = this.field(key);
+    if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');
+    return formatFieldValue(field, entry, createFormatContext(this.timeZone, locale));
   }
 
   /** Resolved Field declarations this Dataset owns, core Fields included, each after its
