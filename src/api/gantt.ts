@@ -43,6 +43,7 @@ import type {
   EntryEdit,
   EntryId,
   FieldKey,
+  FormatContext,
   GridColumnInput,
   Instant,
   InstantInput,
@@ -618,6 +619,13 @@ export class Gantt<TProps = unknown> {
    *  hidden column, and a `compute` Field. Throws `UnknownFieldError` for a key no Field declares. */
   formatFieldValue(entry: Entry<TProps>, key: FieldKey): string {
     return this.#shell.formatFieldValue(entry, key);
+  }
+
+  /** The `FormatContext` a Grid cell, a bar label, and `formatFieldValue` all format through.
+   *  Live: follows `gantt.locale`. A caller that formats a value with its own Formatter, such as
+   *  `formatStartAndEnd`, takes this instead of assembling a second `{ timeZone, locale }`. */
+  get formatContext(): FormatContext {
+    return this.#shell.formatContext;
   }
 
   /** Live. `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once

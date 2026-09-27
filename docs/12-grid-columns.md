@@ -177,6 +177,9 @@ function compactFinish(
 }
 ```
 
+A `formatValue` set on `start` or `end` this way reaches the row's tooltip too, not only the grid
+cell — both read through the same Field text.
+
 ### A duration column
 
 `duration`'s `fieldValue` is a `Duration | undefined`, and `value` is already the formatted text
