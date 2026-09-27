@@ -501,7 +501,7 @@ The density mode a TimeScale resolves `pxPerMs` from: `'pane'` (the default — 
 _Avoid_: Zoom, TimeScaleZoom (retired names — see above), Scale (Scale is the resolved `TimeScale` object, not this mode), density (fine in prose, but the type and field name are `fit`/`TimeScaleFit`)
 
 **Zoom presets**:
-The ordered ViewPreset set `zoomIn`/`zoomOut` step through, finest first (`gantt.zoomPresets`). Default is the nine-rung shipped set. Live. Distinct from Preset reference (the _current_ labels) and from Fit (density). "ladder" already names the Customization ladder (Token / Part / renderer).
+The ordered ViewPreset set `zoomIn`/`zoomOut` step through, finest first (`gantt.zoomPresets`). Default is the ten-rung shipped set. Live. Distinct from Preset reference (the _current_ labels) and from Fit (density). "ladder" already names the Customization ladder (Token / Part / renderer).
 _Avoid_: ladder (taken), zoom levels (that is what a ViewPreset expresses)
 
 **Date format**:

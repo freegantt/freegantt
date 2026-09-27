@@ -1072,6 +1072,9 @@ export function formatInclusiveDate(value: unknown, ctx: FormatContext, entry: {
 }): string;
 
 // @public
+export function formatQuarter(value: unknown, ctx: FormatContext): string;
+
+// @public
 export function formatStartAndEnd(value: {
     readonly start?: Instant | undefined;
     readonly end?: Instant | undefined;
@@ -2198,7 +2201,7 @@ export type ShadingRule = {
 };
 
 // @public (undocumented)
-export type ShippedPresetId = 'minute' | 'fifteenMinute' | 'hour' | 'sixHour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'dayLetterAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
+export type ShippedPresetId = 'minute' | 'fifteenMinute' | 'hour' | 'sixHour' | 'day' | 'week' | 'month' | 'year' | 'dayAndWeek' | 'dayLetterAndWeek' | 'weekAndMonth' | 'monthAndYear' | 'quarterAndYear' | 'hourDayWeek' | 'dayWeekMonth' | 'weekMonthYear';
 
 // @public
 export class SiblingIndexOutOfRangeError extends FreeGanttError {

@@ -162,7 +162,7 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  Default `2`; `0` restores the old flush landing. No effect on `align: 'center'`. */
   todayLineMarginTicks?: number;
   /** The ordered set `zoomIn`/`zoomOut` step through, finest first (S1.12). Live.
-   *  Default: the shipped nine-rung set. */
+   *  Default: the shipped ten-rung set. */
   zoomPresets?: readonly PresetRef[];
   /** Live (S3; ADR 0010, ADR 0025, #212, #421). Entry ids, loose on the way in;
    *  assignment runs the same cancelable sequence a click runs. Default `[]`. */

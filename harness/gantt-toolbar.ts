@@ -35,6 +35,7 @@ const PRESET_LABELS: Readonly<Record<string, string>> = {
   dayAndWeek: 'Day / Week',
   weekAndMonth: 'Week / Month',
   monthAndYear: 'Month / Year',
+  quarterAndYear: 'Quarter / Year',
   hourDayWeek: 'Hour / Day / Week',
   dayWeekMonth: 'Day / Week / Month',
   weekMonthYear: 'Week / Month / Year',
