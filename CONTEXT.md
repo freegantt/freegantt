@@ -508,7 +508,7 @@ The ordered ViewPreset set `zoomIn`/`zoomOut` step through, finest first (`gantt
 _Avoid_: ladder (taken), zoom levels (that is what a ViewPreset expresses)
 
 **Date format**:
-How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours). Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dropRepeatedGranularity`).
+How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours) — a Formatter with no entry, since a header tick has no row. Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dropRepeatedGranularity`).
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
 **Date line**:

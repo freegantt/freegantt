@@ -688,7 +688,7 @@ export function placeFrame(
     scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan),
   );
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
-    const format = resolveDateFormat(headerFormats[i]!, scale.timeZone, locale);
+    const format = resolveDateFormat(headerFormats[i]!, { timeZone: scale.timeZone, locale });
     return {
       unit: header.unit,
       increment: header.increment,

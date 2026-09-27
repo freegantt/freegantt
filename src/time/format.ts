@@ -6,7 +6,7 @@
 import type { FormatContext, Instant } from '../model/index.js';
 import { toPlain, weekOfYear } from './zone.js';
 import { addMs } from './instant.js';
-import type { DateFormat, HeaderFormat, ViewPresetHeader } from './scale.js';
+import type { DateFormat, ViewPresetHeader } from './scale.js';
 
 const DEFAULT_DATE_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
   year: 'numeric',
@@ -61,15 +61,12 @@ function intlFormatter(
 }
 
 /** An `Intl.DateTimeFormat` per (locale, zone, options), memoized — constructing one per tick per
- *  frame is the allocation this cache exists to prevent. A `HeaderFormat` callback passes straight
- *  through, curried over `zone`/`locale`, so both `DateFormat` shapes resolve to the same call shape. */
-export function resolveDateFormat(
-  format: DateFormat,
-  zone: string,
-  locale: Intl.LocalesArgument | undefined,
-): (i: Instant) => string {
-  if (typeof format === 'function') return (i) => format(i, zone, locale);
-  const formatter = intlFormatter(zone, locale, format);
+ *  frame is the allocation this cache exists to prevent. A callback `DateFormat` is a Formatter
+ *  without the entry, so it passes straight through, curried over `ctx` — a Field's own Formatter
+ *  (`formatDateTime`, a custom `dateFormatter(...)`) labels a header band the same way. */
+export function resolveDateFormat(format: DateFormat, ctx: FormatContext): (i: Instant) => string {
+  if (typeof format === 'function') return (i) => format(i, ctx);
+  const formatter = intlFormatter(ctx.timeZone, ctx.locale, format);
   return (i) => formatter.format(toJsDate(i));
 }
 
@@ -128,20 +125,25 @@ export function formatInclusiveDate(
 }
 
 /** An ISO week label — `W` followed by the week number. The escape-hatch callback shipped as a
- *  named value, because Intl has no week field.
+ *  named value, because Intl has no week field. `''` for a missing value.
  *  Exported from `api/` — unlike the individual preset constants — because a custom-
  *  preset author cannot produce a week number any other way. */
-export const formatWeekNumber: HeaderFormat = (i, zone) => `W${weekOfYear(zone, i)}`;
+export function formatWeekNumber(value: unknown, ctx: FormatContext): string {
+  if (value === undefined || value === null) return '';
+  return `W${weekOfYear(ctx.timeZone, value as Instant)}`;
+}
 
 /** `9:00`, never `09:00`. The escape-hatch callback for the hour header band: `Intl.DateTimeFormat`
  *  has an `hour` field, but en-US's own CLDR data zero-pads its 24-hour ("h23") numeric pattern —
  *  `{ hour: 'numeric', hour12: false }` still renders "09:00" in that locale, so no combination of
  *  `Intl.DateTimeFormatOptions` gets an unpadded 24-hour clock everywhere (header readability
- *  follow-up to S1.12). Same manual-string-building precedent as `formatWeekNumber` above. */
-export const formatHour: HeaderFormat = (i, zone) => {
-  const { hour, minute } = toPlain(zone, i);
+ *  follow-up to S1.12). Same manual-string-building precedent as `formatWeekNumber` above. `''` for
+ *  a missing value. */
+export function formatHour(value: unknown, ctx: FormatContext): string {
+  if (value === undefined || value === null) return '';
+  const { hour, minute } = toPlain(ctx.timeZone, value as Instant);
   return `${hour}:${String(minute).padStart(2, '0')}`;
-};
+}
 
 /** Per-`headers`-array memo of `dropRepeatedGranularity`'s result (below) — the stripped
  *  `Intl.DateTimeFormatOptions` objects need one stable identity across frames, or `intlFormatter`'s
