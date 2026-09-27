@@ -16,8 +16,6 @@ open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The workin
 > left to count. The optional-dates decision itself — one date without the other is legal — stands
 > as written. **Do not rewrite the body.**
 
-> **One sentence here is retired.** The paragraph on the duration Field cites ADR 0014 *decision 13* for deleting `FieldContext.durationOf`. The author withdrew ADR 0014 on 2026-09-11 before it was built ([the gap at 0014](README.md#the-gap-at-0014)), so `durationOf` still ships and [#274](https://github.com/Pawel-IT/FreeGantt/issues/274) is still open. [ADR 0017](0017-the-entry-answers-questions-about-itself.md) closes both. **The guard this ADR asked for landed, and the decision stands.**
-
 > **One sentence here is retired.** §Decision's line 63 reads: *"End with no start is allowed.
 > Inclusive-end formatting has no start: show the stored end as a plain instant. Do not guess a
 > day."* [#577](https://github.com/Pawel-IT/FreeGantt/issues/577) ships `formatInclusiveDate`, and
@@ -64,7 +62,7 @@ Four consequences are visible to a consumer, so each gets an answer here rather 
 - `range: 'fitDataset'` includes a one-date instant. The window may jump when someone types a start with no bar. Accepted. Over a dataset where nothing has any date, it shows the range an empty dataset already shows.
 - An S7 link naming an endpoint that does not span raises a diagnostic and draws nothing.
 
-The duration **compute Field** returns `Duration | undefined` until both dates exist, and the cell is **blank**. That needs a guard, not nothing: `field-access.ts:92` computes `diffMs(entry.end, entry.start)` with no guard, and `diffMs` is `a - b`, so an absent date yields **`NaN`, not a throw**. The cell then renders `"NaN d"` and `weightedMeanByDuration` poisons the parent's aggregate. Guard the calculation first. [ADR 0014](README.md#the-gap-at-0014) decision 13 deletes `FieldContext.durationOf` — duration is that compute Field, not a fourth door. The full call-site list is in [ADR 0012's work](../../plans/field-redesign/0012-optional-dates/README.md#the-work) — **do not re-derive it**.
+The duration **compute Field** returns `Duration | undefined` until both dates exist, and the cell is **blank**. That needs a guard, not nothing: `diffMs(entry.end, entry.start)` with no guard, and `diffMs` is `a - b`, so an absent date yields **`NaN`, not a throw**. The cell then renders `"NaN d"` and `weightedMeanByDuration` poisons the parent's aggregate. Guard the calculation first. Duration is a computed Field like any other — a caller reads it through `entry.read('duration')`, not a fourth door. The full call-site list is in [ADR 0012's work](../../plans/field-redesign/0012-optional-dates/README.md#the-work) — **do not re-derive it**.
 
 **A zero-length span stays legal, and D-S5-46 needs no rewrite.** Its two stated reasons are the half-open interval `[start, end)` and `layout/gesture-draft.ts`'s resize clamp. Neither is the `referenceDate` fill. `start === end` is an authored shape. **Core does not paint a diamond.** The bar has no width.
 

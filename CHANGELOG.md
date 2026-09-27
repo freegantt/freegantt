@@ -16,6 +16,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - **Breaking:** `formatEndInclusive` is removed. Use `formatInclusiveDate` as a Field's `formatValue`, or call `lastCoveredInstant` and pass its result to `formatDate` directly. ([#577](https://github.com/freegantt/freegantt/issues/577))
 - The core `end` Field now names the shipped `formatInclusiveDate` as its `formatValue`, in place of a private, unexported formatter that did the same job. ([#577](https://github.com/freegantt/freegantt/issues/577))
 - `formatValue` is now a consumer override every core Field accepts, not only `start` and `end`. ([#577](https://github.com/freegantt/freegantt/issues/577))
+- **Breaking:** `measureDuration` and `DurationMeasure` are removed. A parent's duration is the span of its rolled-up start and end. The gaps between children count. ([#428](https://github.com/freegantt/freegantt/issues/428))
+- **Breaking:** `entry.duration()`, `ComputeContext.duration()` and `RollUpContext.durations()` are removed. Read `entry.read('duration')`, `ctx.read('duration')` or `ctx.values('duration')`. ([#428](https://github.com/freegantt/freegantt/issues/428))
+- `duration` is now a normal computed Field. A consumer `formatValue` override works on it as on any other Field. ([#428](https://github.com/freegantt/freegantt/issues/428))
 
 ### Added
 
@@ -26,6 +29,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - `dataset.entries.syncChanges(delta)`, which applies a server delta with the same ingest rules as `syncAll`. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - A "Sync changes from server" button on the editing-and-data harness page, beside "Sync all from server". It calls `dataset.entries.syncChanges(server.fetchChanges())` against a scripted delta. ([#527](https://github.com/freegantt/freegantt/issues/527))
 - `formatDateTime` and `formatInclusiveDate`, the two shipped date formatters, and `lastCoveredInstant`, the instant `formatInclusiveDate` builds on: `end` stepped back one millisecond, unchanged on a zero-length span. See `docs/05-consumer-api.md`. ([#577](https://github.com/freegantt/freegantt/issues/577))
+- `RollUpContext.values(key)` types a Field's values from its key. ([#428](https://github.com/freegantt/freegantt/issues/428))
+- `spansTime` is exported. A `duration` Field's `compute` reads a row's own `start` and `end`, and `spansTime` checks both are set. ([#428](https://github.com/freegantt/freegantt/issues/428))
 
 ### Fixed
 

@@ -1,7 +1,6 @@
 // model/ is types + brand/id helpers only — zero runtime beyond this, zero dependencies (plans/01 §1.1).
 // A Field is what a value is; a Grid column is where a Gantt shows it (ADR 0005, plans/01 §2.6).
 
-import type { Duration } from './time.js';
 import type { EntryId } from './ids.js';
 import type { StoredEntry } from './stored-entry.js';
 import type { Entry } from './entry.js';
@@ -192,8 +191,8 @@ export type Field<TValue = unknown> =
       rollUp?: never;
       editable?: never;
       /** Runs on **every** row a read touches, a rolling-up parent included (ADR 0011, decision 10):
-       *  read a stored value off `entry`, and read a Field — a core key, `duration`, or another
-       *  Field's own `compute` arm — through `ctx.read(key)`. A computed value may also depend on
+       *  read a stored value off `entry`, and read a Field — a core key, or another Field's own
+       *  `compute` arm — through `ctx.read(key)`. A computed value may also depend on
        *  the tree: `ctx.children(entry)`, `ctx.descendants(entry)`, `ctx.leaves(entry)` or
        *  `ctx.hasChildren(entry)` (#214, #466). `entry` is a `StoredEntry` because the row may be
        *  hypothetical — a post-edit row, or a Rollup's effective child.
@@ -250,7 +249,7 @@ export interface FieldContext {
  *  rule 1 is why a structure question takes the row it asks about and a value question does not;
  *  rule 2 is the value/structure split itself.
  *
- *  A value question — `read(key)`, `duration()`, `hierarchyParentId()` — stays bound to the row the
+ *  A value question — `read(key)`, `hierarchyParentId()` — stays bound to the row the
  *  pass is computing: a bottom-up pass has written only what it has reached, so a value asked of any
  *  other row would answer with whatever that row held before this pass touched it.
  *
@@ -288,12 +287,9 @@ export interface FieldContext {
  *  value members take no row and still compute, so they carry parentheses for rule 4's own reason.
  *  Each member's own doc states its cost. */
 export interface ComputeContext extends FieldContext {
-  /** Another Field on this same row — a core key, `duration`, or another Field's `compute`. Bound to
+  /** Another Field on this same row — a core key, or another Field's `compute`. Bound to
    *  the row this pass is computing; not a structure question, so it takes no row (ADR 0017 amendment, rule 2). */
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
-  /** This row's duration, through `time/` and the Dataset's `measureDuration`. Bound to the row this
-   *  pass is computing (ADR 0017 amendment, rule 2). */
-  duration(): Duration | undefined;
   /** One step down: `Depot` → Van 1, Van 2. One tree read, no allocation beyond the array returned.
    *
    *  Exactly one level, and that is load-bearing for a Rollup: a parent's value already aggregates
@@ -342,13 +338,14 @@ export interface FormatContext extends FieldContext {
 export interface RollUpContext extends ComputeContext {
   readonly field: FieldKey;
   /** `key` read off each child, in order, defaulting to `ctx.field`. A child with no value is a
-   *  hole (`undefined`). */
-  values(key?: FieldKey): readonly unknown[];
+   *  hole (`undefined`). With no `key`, a consumer Field's own values stay `unknown`. `key` read
+   *  off each child, typed by the key the way `ctx.read(key)` is — `ctx.values('duration')` is
+   *  `readonly (Duration | undefined)[]`, and a consumer key stays `unknown`. */
+  values(): readonly unknown[];
+  values<K extends FieldKey>(key: K): readonly (CoreFieldValue<K> | undefined)[];
   /** Like `values`, but keeps only finite numbers — holes and non-numeric values drop, same rule
    *  shipped `sum`/`min`/`max` already follow. */
   numericValues(key?: FieldKey): readonly number[];
-  /** Each child's duration, in the same order — what `weightedMeanByDuration` weighs with. */
-  durations(): readonly (Duration | undefined)[];
 }
 
 /** Registered by name, never passed inline. `undefined` means no opinion — keep the stored value. */
