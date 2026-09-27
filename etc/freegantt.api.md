@@ -2223,6 +2223,12 @@ export type SnapUnit = TickStep | 'none' | SnapRule;
 export function spans(at: TimeSpanInput, ...moreAt: readonly TimeSpanInput[]): TimeCover;
 
 // @public
+export function spansTime<T extends {
+    start?: Instant | undefined;
+    end?: Instant | undefined;
+}>(dated: T): dated is T & TimeSpan;
+
+// @public
 export interface StoredEntry<TProps = Record<string, unknown>> {
     end?: Instant;
     // (undocumented)
