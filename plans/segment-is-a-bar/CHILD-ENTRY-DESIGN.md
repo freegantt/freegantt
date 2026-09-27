@@ -193,7 +193,7 @@ Three rows: `site-a` (rail, collapses through the chevron), `req-1` and `req-2` 
 ## What it deletes
 
 - Types: `Segment`, `StoredSegment`, `SegmentId`, `SegmentInput`, `SegmentEdit`, `SegmentEdits`, `DatasetEdits`.
-- Doors: `updateSegment`, `addSegment`, `removeSegments`, `whenSegment`, `segment.entry()`, `formatValue`'s `owner`, `BarRendererContext.segments`, `moveEntryTo`'s Segment branch, `measureDuration: 'segments'`.
+- Doors: `updateSegment`, `addSegment`, `removeSegments`, `whenSegment`, `segment.entry()`, `formatValue`'s `owner`, `BarRendererContext.segments`, `moveEntryTo`'s Segment branch.
 - Errors: `SegmentNotFoundError`, `EmptySegmentsError`, `SegmentsOutOfSyncError`, `DuplicateSegmentIdError`.
 - Mechanisms: the minted plain-bar id, the `store: 'segments'` apply path, `envelopeOfSegments`, `reconcileEnvelope`, `fitSegmentsToEnvelope`, `widenSegmentsToEnvelope`, the positional id match.
 - Selection: `selectedSegmentIds` and the `segmentIds` half of `DomTarget` and `CommandTarget`. The Selection holds Entry ids.
@@ -266,12 +266,12 @@ Two left the plan rather than closing inside it, and both are issues of their ow
 | # | Where it went | What #421 does meanwhile |
 | --- | --- | --- |
 | **Q23** | **#426** — a custom hierarchy source declares the Field keys it reads | C4 ships the fast path for core's own source alone. A consumer's source keeps today's behaviour: correct, and slower |
-| **Q32** | **#428** — `duration` is a Field and aggregates through a named Aggregator; `measureDuration` retires | C6 renames `'segments'` to `'children'` and falls back to the Entry's own span when it has no children. Limited and inconsistent, by the author's own word |
+| **Q32** | **#428** — `duration` is an ordinary computed Field, the row's own span | Closed by #428 |
 | — | **#425** — a vertical drag moves a bar to another row | The write ships in C1–C6. The gesture does not |
 
 Two more were raised on the same day and the author ruled both the same day. They are in ADR 0026's rulings appendix:
 
-- **Q25, corrected by Q32** — `measureDuration: 'segments'` becomes `measureDuration: 'children'`. Overlap has no rule of its own: core adds the children, and never reads them for overlap. **It is not a rename.** Ingest mints one Segment over every spanning Entry, so a childless leaf measures its own span today and would measure `0` under `'children'`. C6 sums the direct children's spans and falls back to the Entry's own `end - start` when it has no children. The author called that stopgap limited and inconsistent, and **#428 removes it**: `duration` is a Field and should aggregate through a named Aggregator, which `data/fields/field-registry.ts:230` refuses on a `compute` Field today.
+- **Q25, corrected by Q32** — overlap has no rule of its own. #428 closed the rest: `duration` is an ordinary computed Field, the row's own span.
 - **Q26** — a claimed parent draws no bar of its own, and **core ships nothing else**: no rail key, no rail concept, no helper. A consumer may put a band back on a variant of their own.
 - **Q28** — the layout unit is a `Bar`, not an `Item`. `Item` named three things in `src/**`, and everything downstream of it already said bar. C6 renames, with `pk-rename-symbol`.
 - **Q27** — the mechanism for both, because core's shipped `summary()` also names an `items` producer. `produceItemsForRow` skips the row's subject when the row claims, and the producer seam takes one more fact, **per Entry**, under the key's own name: `childrenAsSegments`. One fact, not two, and no `global` prefix.

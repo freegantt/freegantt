@@ -320,14 +320,13 @@ interface FieldContext {
   readonly timeZone: string;
 }
 
-/** What a `compute` Field runs inside (ADR 0017, amended 2026-09-21 — #466). `read`, `duration()`
+/** What a `compute` Field runs inside (ADR 0017, amended 2026-09-21 — #466). `read`
  *  and `hierarchyParentId()` are value questions, bound to the row this pass is computing and taking
  *  no argument. `children`, `descendants`, `leaves` and `hasChildren` are structure questions,
  *  answered about *any* row the pass hands out — a Rollup's effective child, a post-edit row, or the
  *  bound row itself — because structure is the same fact at every depth. */
 interface ComputeContext extends FieldContext {
   read<K extends FieldKey>(key: K): CoreFieldValue<K> | undefined;
-  duration(): Duration | undefined;
   hierarchyParentId(): EntryId | undefined;
   children(row: StoredEntry): readonly StoredEntry[];      // one step down
   descendants(row: StoredEntry): readonly StoredEntry[];   // all the way down; never includes `row`
@@ -336,13 +335,13 @@ interface ComputeContext extends FieldContext {
 }
 
 /** ComputeContext plus the Field currently rolling up. Shipped Aggregators read `ctx.field`.
- *  `values`/`numericValues`/`durations` read the pass's own child list — never `parent.children()` —
+ *  `values`/`numericValues` read the pass's own child list — never `parent.children()` —
  *  so a Rollup child answers with the value this same bottom-up pass just gave it. */
 interface RollUpContext extends ComputeContext {
   readonly field: FieldKey;
-  values(key?: FieldKey): readonly unknown[];
+  values(): readonly unknown[];
+  values<K extends FieldKey>(key: K): readonly (CoreFieldValue<K> | undefined)[];
   numericValues(key?: FieldKey): readonly number[];
-  durations(): readonly (Duration | undefined)[];
 }
 
 /** Built by the Gantt for each column resolve and each `formatFieldValue` call. `formatValue` reads
