@@ -157,3 +157,26 @@ test('a barRenderer that places a child outside the bar is not clipped by the li
   await expect.poll(() => isPaintedAtItsOwnBox(false)).toBe(true);
   await expect.poll(() => isPaintedAtItsOwnBox(true)).toBe(false);
 });
+
+// #577: Start and Finish paint no columnRenderer of their own on this page — the compact "02 Mar"
+// text comes off each Field's own `formatValue` (`fixtures/planner-dataset.ts`).
+test('Finish shows the last covered day: equal to Start on a checkpoint, later on a normal row', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const cellText = (entryId: string, field: string) =>
+    page.locator(`#gantt .fg-row[data-entry-id="${entryId}"] [data-field="${field}"]`).textContent();
+
+  // A checkpoint is one instant — zero duration (ADR 0022) — so Finish reads the same day as Start.
+  const checkpointStart = await cellText('foundation-complete', 'start');
+  const checkpointFinish = await cellText('foundation-complete', 'end');
+  expect(checkpointFinish).toBe(checkpointStart);
+
+  // A normal, multi-day row's Finish is the last day it covers, not the boundary after it —
+  // a different day from Start.
+  const rowStart = await cellText('steel-columns', 'start');
+  const rowFinish = await cellText('steel-columns', 'end');
+  expect(rowFinish).not.toBe(rowStart);
+});
