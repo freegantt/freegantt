@@ -313,6 +313,40 @@ function compactFinish(
 }
 ```
 
+### A pair of dates: `formatStartAndEnd`, `joinStartAndEnd`
+
+A start and an end read as one line through two public functions, never a hand-built `' – '`:
+
+- **`formatStartAndEnd(pair, ctx)`** — a Formatter for a `{ start?, end? }` value: the start's own
+  day and the last day the pair covers, both date only. Takes an `Entry`, a `Bar`,
+  `gantt.visibleSpan`, or any object shaped that way.
+- **`joinStartAndEnd(startText, endText, separator?)`** — joins two texts a caller already read
+  through each side's own Field `formatValue`. Use this when start and end may carry different
+  formatters (a tooltip, a status line); use `formatStartAndEnd` when a plain date pair is enough.
+
+Both agree on the same cases:
+
+| Start | End | Result |
+| --- | --- | --- |
+| both | both | `'Mar 2, 2026 – Mar 4, 2026'` |
+| set | missing | `'Mar 2, 2026 –'` |
+| missing | set | `'– Mar 4, 2026'` |
+| missing | missing | `''` |
+| equal text | equal text | shown once: `'Mar 2, 2026'` |
+
+A row's tooltip reads each side through its own Field, so setting `formatValue: formatDate` on
+`start` matches its date-only `end` — a one-day bar's tooltip then names its date once instead of
+reading `'Mar 2, 2026, 12:00 AM – Mar 2, 2026'`:
+
+```ts
+import { Dataset, formatDate } from 'freegantt';
+
+new Dataset({
+  entries: [ /* … */ ],
+  fields: [{ key: 'start', formatValue: formatDate }], // date only, matching end's own default
+});
+```
+
 ### A Field's text outside the grid: `gantt.formatFieldValue`
 
 **`gantt.formatFieldValue(entry, key)`** gives the text a Field shows for one `Entry`, through the

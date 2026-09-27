@@ -1,6 +1,8 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { instant } from './instant.js';
 import { startOfDay, weekOfYear } from './zone.js';
+import { startOfNextDay } from './date-only-end.js';
 import {
   dateFormatter,
   dropRepeatedGranularity,
@@ -8,7 +10,9 @@ import {
   formatDateTime,
   formatHour,
   formatInclusiveDate,
+  formatStartAndEnd,
   formatWeekNumber,
+  joinStartAndEnd,
   lastCoveredInstant,
   resolveDateFormat,
 } from './format.js';
@@ -141,6 +145,126 @@ describe('formatInclusiveDate', () => {
   it('is correct across a fall-back DST boundary and a month end', () => {
     const end = startOfDay(ZONE, instant('2026-11-01T12:00:00Z'));
     expect(formatInclusiveDate(end, ctx(), { start })).toBe('Oct 31, 2026');
+  });
+});
+
+describe('joinStartAndEnd', () => {
+  it('joins both texts with the separator', () => {
+    expect(joinStartAndEnd('Mar 2, 2026', 'Mar 4, 2026', ' → ')).toBe('Mar 2, 2026 → Mar 4, 2026');
+  });
+
+  it('reads a start-only text with a trailing separator', () => {
+    expect(joinStartAndEnd('Mar 2, 2026', '', ' → ')).toBe('Mar 2, 2026 →');
+  });
+
+  it('reads an end-only text with a leading separator', () => {
+    expect(joinStartAndEnd('', 'Mar 4, 2026', ' → ')).toBe('→ Mar 4, 2026');
+  });
+
+  it('shows two equal texts once', () => {
+    expect(joinStartAndEnd('Mar 2, 2026', 'Mar 2, 2026', ' → ')).toBe('Mar 2, 2026');
+  });
+
+  it('gives an empty text for two missing sides', () => {
+    expect(joinStartAndEnd('', '', ' → ')).toBe('');
+  });
+
+  it('defaults to an en dash', () => {
+    expect(joinStartAndEnd('Mar 2, 2026', 'Mar 4, 2026')).toBe('Mar 2, 2026 – Mar 4, 2026');
+  });
+});
+
+describe('formatStartAndEnd', () => {
+  it('joins a start day and the last day the pair covers', () => {
+    const start = instant('2026-03-02T05:00:00Z'); // 2026-03-02 local midnight EST
+    const end = instant('2026-03-05T05:00:00Z'); // boundary: covers through the 4th
+    expect(formatStartAndEnd({ start, end }, ctx())).toBe('Mar 2, 2026 – Mar 4, 2026');
+  });
+
+  it('reads a start-only pair with a trailing dash', () => {
+    const start = instant('2026-03-02T05:00:00Z');
+    expect(formatStartAndEnd({ start }, ctx())).toBe('Mar 2, 2026 –');
+  });
+
+  it('reads an end-only pair with a leading dash', () => {
+    const end = instant('2026-03-05T05:00:00Z');
+    expect(formatStartAndEnd({ end }, ctx())).toBe('– Mar 4, 2026');
+  });
+
+  it('gives an empty text for a pair with neither side', () => {
+    expect(formatStartAndEnd({}, ctx())).toBe('');
+  });
+
+  it('gives an empty text for a missing value', () => {
+    expect(formatStartAndEnd(undefined, ctx())).toBe('');
+  });
+
+  it('names a one-day span once', () => {
+    const start = instant('2026-03-02T05:00:00Z');
+    const end = instant('2026-03-03T05:00:00Z'); // boundary: covers through the 2nd
+    expect(formatStartAndEnd({ start, end }, ctx())).toBe('Mar 2, 2026');
+  });
+
+  it('names a timed span inside one day once', () => {
+    const start = instant('2026-03-02T13:00:00Z'); // 08:00 EST
+    const end = instant('2026-03-02T20:00:00Z'); // 15:00 EST
+    expect(formatStartAndEnd({ start, end }, ctx())).toBe('Mar 2, 2026');
+  });
+
+  it('names a zero-length span once', () => {
+    const at = instant('2026-03-02T15:00:00Z');
+    expect(formatStartAndEnd({ start: at, end: at }, ctx())).toBe('Mar 2, 2026');
+  });
+
+  it('reads a timed end at its own day, never the day before', () => {
+    const start = instant('2026-03-02T05:00:00Z');
+    const end = instant('2026-03-04T20:00:00Z'); // 15:00 EST on the 4th
+    expect(formatStartAndEnd({ start, end }, ctx())).toBe('Mar 2, 2026 – Mar 4, 2026');
+  });
+
+  it('reads a midnight end at the day before it, never the boundary day', () => {
+    const start = instant('2026-03-02T05:00:00Z');
+    const end = instant('2026-03-04T05:00:00Z'); // local midnight EST on the 4th, boundary
+    expect(formatStartAndEnd({ start, end }, ctx())).toBe('Mar 2, 2026 – Mar 3, 2026');
+  });
+
+  it('follows a caller locale', () => {
+    const start = instant('2026-03-02T05:00:00Z');
+    const end = instant('2026-03-05T05:00:00Z');
+    expect(formatStartAndEnd({ start, end }, ctx('de-DE'))).toBe('2. März 2026 – 4. März 2026');
+  });
+
+  it('is a Formatter: it drops into a Field formatValue as is', () => {
+    const field: Field<{ start?: Instant; end?: Instant }> = {
+      key: 'dates',
+      formatValue: formatStartAndEnd,
+    };
+    const start = instant('2026-03-02T05:00:00Z');
+    const end = instant('2026-03-05T05:00:00Z');
+    expect(field.formatValue!({ start, end }, ctx(), {} as never)).toBe('Mar 2, 2026 – Mar 4, 2026');
+  });
+
+  it('reads a span within one local day as its own date, for any zone/day (property)', () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom('UTC', 'America/New_York', 'Europe/London', 'Australia/Lord_Howe'),
+        fc.date({ min: new Date('2020-01-01'), max: new Date('2029-12-31') }),
+        fc.integer({ min: 0, max: 23 * 60 * 60 * 1000 }),
+        fc.integer({ min: 0, max: 23 * 60 * 60 * 1000 }),
+        (zone, date, offsetA, offsetB) => {
+          const dayStart = startOfDay(zone, date.getTime() as Instant);
+          const dayEnd = startOfNextDay(zone, dayStart);
+          const span = (dayEnd as number) - (dayStart as number);
+          const a = ((dayStart as number) + Math.min(offsetA, span)) as Instant;
+          const b = ((dayStart as number) + Math.min(offsetB, span)) as Instant;
+          const start = a < b ? a : b;
+          const end = a < b ? b : a;
+          const zoneCtx: FormatContext = { timeZone: zone, locale: 'en-US' };
+          expect(formatStartAndEnd({ start, end }, zoneCtx)).toBe(formatDate(start, zoneCtx));
+        },
+      ),
+      { numRuns: 100 },
+    );
   });
 });
 

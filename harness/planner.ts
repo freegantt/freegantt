@@ -10,6 +10,7 @@ import {
   meter,
   timeShading,
   daysOfWeek,
+  joinStartAndEnd,
 } from 'freegantt';
 import type {
   BarRendererContext,
@@ -246,17 +247,10 @@ function renderSelection(): void {
     setReadout('Nothing selected — click a bar or a row.');
     return;
   }
-  const startText = gantt.formatFieldValue(first, 'start');
-  const endText = gantt.formatFieldValue(first, 'end');
   // A selected row may hold neither, one, or both dates (ADR 0012) — show whichever it has.
   const span =
-    first.start !== undefined && first.end !== undefined
-      ? `${startText} → ${endText}`
-      : first.start !== undefined
-        ? `${startText} → —`
-        : first.end !== undefined
-          ? `— → ${endText}`
-          : 'No dates';
+    joinStartAndEnd(gantt.formatFieldValue(first, 'start'), gantt.formatFieldValue(first, 'end'), ' → ') ||
+    'No dates';
   const done = gantt.formatFieldValue(first, 'progress');
   const percent = done === '' ? '' : ` · ${done}`;
   const more = entries.length > 1 ? ` · +${entries.length - 1} more` : '';
