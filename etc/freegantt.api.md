@@ -1193,6 +1193,7 @@ export class Gantt<TProps = unknown> {
     filterRows(filter: RowFilter | undefined): void;
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
+    get formatContext(): FormatContext;
     formatFieldValue(entry: Entry<TProps>, key: FieldKey): string;
     get gridCellRenderer(): GridCellRenderer | undefined;
     set gridCellRenderer(renderer: GridCellRenderer | undefined);
