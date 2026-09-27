@@ -617,7 +617,7 @@ A `data-*` attribute a Part carries so a consumer can select on state without JS
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:
-`FrameBar.a11yLabel` — the library-computed string a screen reader announces for one bar (`${entry.name}, ${formatDate(...)} – ${formatInclusiveDate(...)}`), composed in `layout/` from the dataset zone and set as `.fg-bar`'s `aria-label` at sync time. Not the same thing as `Gantt.a11yLabel` — the live option that sets the _container's_ `aria-label` (default `'Gantt'`). Two different things sharing a root word: say "the bar's a11y label" or "`Gantt.a11yLabel`" explicitly, never "a11y label" unqualified where both are in scope (#7's "chart" lesson applies).
+`FrameBar.a11yLabel` — the library-computed string a screen reader announces for one bar (`` `${label}, ${formatStartAndEnd(bar, ctx)}` ``, so a one-day bar names its date once), composed in `layout/` from the dataset zone and set as `.fg-bar`'s `aria-label` at sync time. Not the same thing as `Gantt.a11yLabel` — the live option that sets the _container's_ `aria-label` (default `'Gantt'`). Two different things sharing a root word: say "the bar's a11y label" or "`Gantt.a11yLabel`" explicitly, never "a11y label" unqualified where both are in scope (#7's "chart" lesson applies).
 _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a11yLabel` is the backend-neutral field `layout/` produces, same relationship `variant` has to `data-variant`), accessible name (a browser/AT term of art, not this project's field name)
 
 ### Extension
