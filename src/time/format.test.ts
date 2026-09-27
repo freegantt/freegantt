@@ -6,7 +6,6 @@ import {
   dropRepeatedGranularity,
   formatDate,
   formatDateTime,
-  formatEndInclusive,
   formatInclusiveDate,
   formatWeekNumber,
   lastCoveredInstant,
@@ -33,38 +32,6 @@ describe('formatDate', () => {
   it('takes a locale-less ctx: locale is optional', () => {
     const start = instant('2026-08-26T14:30:00Z');
     expect(formatDate(start, { timeZone: ZONE })).toBe('Aug 26, 2026');
-  });
-});
-
-describe('formatEndInclusive', () => {
-  // A start well before every `end` below, so none of these spans is the zero-length case.
-  const start = instant('2000-01-01T00:00:00Z');
-
-  it('converts a half-open end to the last day the span actually covers', () => {
-    // A span stored as [2026-08-26, 2026-08-27) displays as ending Aug 26, not Aug 27.
-    const end = startOfDay(ZONE, instant('2026-08-27T12:00:00Z'));
-    expect(formatEndInclusive(ZONE, { start, end })).toBe('Aug 26, 2026');
-  });
-
-  it('is correct across a spring-forward DST boundary', () => {
-    // 2026-03-08 is the US spring-forward transition in America/New_York; a span ending at that
-    // day's local midnight displays as ending March 7, not March 8.
-    const end = startOfDay(ZONE, instant('2026-03-08T12:00:00Z'));
-    expect(formatEndInclusive(ZONE, { start, end })).toBe('Mar 7, 2026');
-  });
-
-  it('is correct across a fall-back DST boundary and a month end', () => {
-    // 2026-11-01 is the US fall-back transition; a span ending at that day's local midnight
-    // displays as ending Oct 31, crossing both a DST fold and a month boundary correctly.
-    const end = startOfDay(ZONE, instant('2026-11-01T12:00:00Z'));
-    expect(formatEndInclusive(ZONE, { start, end })).toBe('Oct 31, 2026');
-  });
-
-  it('displays a zero-length span at its own end, instead of one millisecond earlier (#240)', () => {
-    const at = instant('2026-01-05T10:00:00Z');
-    expect(formatEndInclusive(ZONE, { start: at, end: at }, 'en-US', DATE_TIME_FORMAT)).toBe(
-      formatDate(at, ctx(), DATE_TIME_FORMAT),
-    );
   });
 });
 

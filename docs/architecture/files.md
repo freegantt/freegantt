@@ -49,7 +49,7 @@ where they do something beyond re-export.
 | `time/date-only-end.ts` | `startOfNextDay(), startOfLastCoveredDay()` | The calendar arithmetic behind a date-only `end`: where the next local day starts, and where the last day a span covers starts. Both walk a calendar day through `zone.ts`, never a fixed millisecond count, so a DST-shortened or -lengthened day still lands correctly. |
 | `time/zoned-time.ts` | `ZonedTime, createZonedTime()` | The zone-bound façade a plugin author reaches through `Dataset.time`. Every method forwards to `zone.ts`; no extra arithmetic. |
 | `time/scale.ts` | `createTimeScale(), TimeScale, ViewPreset, pxPerMsForPreset(), pxPerMsForUnitWidth()` | Instants ⇄ pixels, plus the shipped zoom presets as frozen config objects. `ticks()` walks calendar boundaries; `MAX_TICKS` guards a misconfigured step from looping forever. |
-| `time/format.ts` | `formatDate(), formatEndInclusive(), dropRepeatedGranularity()` | The display-side formatting helpers — inclusive ends, locale-bound labels. Kept small and pure so any consumer-facing text goes through one path. |
+| `time/format.ts` | `formatDate(), formatDateTime(), formatInclusiveDate(), lastCoveredInstant(), dropRepeatedGranularity()` | The display-side formatting helpers — inclusive ends, locale-bound labels. Kept small and pure so any consumer-facing text goes through one path. |
 | `time/presets.ts` | the shipped view presets, `ZOOM_PRESETS` | Deep-frozen preset ladder from finest hour to coarsest year, plus single-band ids. A preset is a value, never a shared mutable singleton. |
 | `time/snap.ts` | `snapInstant(), SnapUnit, stepsBetween()` | Snap resolution for gestures: where a drag's committed value lands. Pure — the gesture pipeline calls this, never arithmetic of its own. A preset's `'tick'` is resolved to a unit and increment before this file sees it. |
 | `time/index.ts` | barrel | Public entry points; the façade that keeps the deps confined. |
@@ -217,7 +217,7 @@ where they do something beyond re-export.
 | `api/command.ts` | `CommandOf, CommandContextOf, BuiltInCommandId` | The public command and keybinding contract, generic over `TGantt`. |
 | `api/attempt-mutation.ts` | `attemptMutation()` | Runs a mutating body and returns `false` when `beforeChange` refuses, instead of throwing. |
 | `api/watch-all-errors.ts` | `watchAllErrors()` | One handler over the Dataset `error` feed and the Gantt's, de-duplicated. |
-| `api/time-facade.ts` | `formatDate, formatEndInclusive` | Narrow slice of `time/` that `extensions/features/tooltips.ts` needs without importing the public barrel (that barrel re-exports `tooltips`). |
+| `api/time-facade.ts` | `formatDate, isCoarserThan, readPlainTime, startOfLastCoveredDay, startOfNextDay` | Narrow slice of `time/` that `extensions/features/tooltips.ts` and `extensions/features/inline-editing.ts` need without importing the public barrel (that barrel re-exports `tooltips`/`inlineEditing`). |
 | `api/decoration-facade.ts` | `DecorationLayer, DecorationContext, DecorationInput` | Narrow slice of `layout/`'s decoration vocabulary that `extensions/features/time-shading.ts` needs without importing the public barrel (that barrel re-exports `timeShading`). |
 | `api/index.ts` | the public surface | The allow-list with a sealed `exports` map. Re-exports `Gantt`/`Dataset`/the viewport models, the plugin and command contracts, the shipped built-ins, and the `model/` and `time/` types a consumer needs. |
 

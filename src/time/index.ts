@@ -26,7 +26,6 @@ export type { ZonedTime } from './zoned-time.js';
 export {
   formatDate,
   formatDateTime,
-  formatEndInclusive,
   formatInclusiveDate,
   lastCoveredInstant,
   DATE_TIME_FORMAT,
