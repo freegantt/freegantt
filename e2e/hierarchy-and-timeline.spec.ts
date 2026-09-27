@@ -100,7 +100,7 @@ test('a parent’s Work sums its leaves’ spans, so a gap between children show
 
   expect(asDays(workText)).toBeLessThan(asDays(durationText));
 
-  // The Work text equals the sum of its two children's Work cells — the gap between them, ten
+  // The Work text equals the sum of its two children's Work cells — the gap between them, seven
   // days wide, never counts.
   const childWorkTexts = await Promise.all(
     ['gap-demo-a', 'gap-demo-b'].map((childId) =>

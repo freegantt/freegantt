@@ -88,22 +88,23 @@ const FIXED_RANGE = { start: '2026-03-01', end: '2026-03-21' };
 // A parent with a real gap between its children, for the Work column: every other parent in the
 // fixture has children that overlap in time, so its own Work already exceeds its Duration (the
 // leaves' spans double-count the overlap) — this is the one row that shows the opposite, a gap
-// nobody works through.
-const GAP_DEMO_CHILDREN: EntryInput<HierarchyProps>[] = [
+// nobody works through. Both children sit inside the March fixture window, so Program's own
+// envelope, and the fitDataset range built from it, stay on the existing story.
+const GAP_DEMO_ENTRIES: EntryInput<HierarchyProps>[] = [
   { id: 'gap-demo', name: 'Gap demo', parentId: 'program' },
   {
     id: 'gap-demo-a',
     name: 'Early stretch',
     parentId: 'gap-demo',
-    start: '2026-04-01T00:00:00Z',
-    end: '2026-04-03T00:00:00Z',
+    start: '2026-03-01T00:00:00Z',
+    end: '2026-03-03T00:00:00Z',
   },
   {
     id: 'gap-demo-b',
     name: 'Late stretch',
     parentId: 'gap-demo',
-    start: '2026-04-10T00:00:00Z',
-    end: '2026-04-12T00:00:00Z',
+    start: '2026-03-10T00:00:00Z',
+    end: '2026-03-12T00:00:00Z',
   },
 ];
 
@@ -131,7 +132,7 @@ const crewDayVariant: EntryVariant<HierarchyProps> = {
 };
 
 const dataset = new Dataset<HierarchyProps>({
-  entries: structuredClone([...hierarchyEntryInputs, OUT_OF_RANGE_BEFORE, ...GAP_DEMO_CHILDREN]),
+  entries: structuredClone([...hierarchyEntryInputs, OUT_OF_RANGE_BEFORE, ...GAP_DEMO_ENTRIES]),
   timeZone: 'UTC',
   ...hierarchyFieldOptions,
   fields: [...hierarchyFieldOptions.fields, WORK],
