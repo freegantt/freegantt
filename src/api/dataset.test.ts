@@ -705,7 +705,7 @@ describe('entry.read — the one value door (ADR 0017)', () => {
 
   it('sums a parent’s leaves’ own spans, so a gap between children does not count', () => {
     const at = (iso: string): string => `2026-01-${iso}T00:00:00Z`;
-    const dataset = new Dataset({
+    const dataset = new Dataset<{ work: Duration }>({
       timeZone: 'UTC',
       fields: [WORK],
       entries: [
@@ -720,12 +720,12 @@ describe('entry.read — the one value door (ADR 0017)', () => {
 
     // Two children, two days each, so the gap between them (four days) does not count.
     expect(parent.read('work')).toEqual({ value: diffMs(c1.end!, c1.start!) * 2, unit: 'millisecond' });
-    expect((parent.read('work') as Duration).value).toBeLessThan(diffMs(parent.end!, parent.start!));
+    expect(diffMs(c1.end!, c1.start!) * 2).toBeLessThan(diffMs(parent.end!, parent.start!));
     expect(c1.read('work')).toEqual({ value: diffMs(c1.end!, c1.start!), unit: 'millisecond' });
   });
 
   it('answers undefined for a row with no dates', () => {
-    const dataset = new Dataset({
+    const dataset = new Dataset<{ work: Duration }>({
       timeZone: 'UTC',
       fields: [WORK],
       entries: [{ id: 'undated', name: 'Undated' }],
