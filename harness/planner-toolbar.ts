@@ -11,7 +11,7 @@
 // page, not only this toolbar.
 
 import type { Gantt, ShippedPresetId, TimeSpan } from 'freegantt';
-import { formatDate, lastCoveredInstant } from 'freegantt';
+import { dateFormatter, lastCoveredInstant } from 'freegantt';
 
 export interface PlannerToolbarOptions {
   gantt: Gantt;
@@ -77,6 +77,11 @@ function separator(): HTMLSpanElement {
   return el('span', 'demo-toolbar-sep');
 }
 
+// Row 1's project window (design lines 90-100): the start reads month and day only, the end also
+// names the year — built once, outside the mount, so every re-render shares one cached formatter.
+const formatWindowStart = dateFormatter({ month: 'short', day: 'numeric' });
+const formatWindowEnd = dateFormatter({ month: 'short', day: 'numeric', year: 'numeric' });
+
 /** Builds the toolbar and binds it to the `Gantt`. Every button runs a registered command; the zoom
  *  picker writes a published property (`gantt.preset`). */
 export function mountPlannerToolbar(options: PlannerToolbarOptions): PlannerToolbar {
@@ -91,7 +96,7 @@ export function mountPlannerToolbar(options: PlannerToolbarOptions): PlannerTool
     el(
       'span',
       'demo-toolbar-subtitle',
-      `${formatDate(projectSpan.start, { timeZone: zone }, { month: 'short', day: 'numeric' })} – ${formatDate(lastCoveredInstant(projectSpan), { timeZone: zone }, { month: 'short', day: 'numeric', year: 'numeric' })}`,
+      `${formatWindowStart(projectSpan.start, { timeZone: zone, locale: gantt.locale })} – ${formatWindowEnd(lastCoveredInstant(projectSpan), { timeZone: zone, locale: gantt.locale })}`,
     ),
   );
   row1.append(titleGroup, el('div', 'demo-toolbar-spacer'));

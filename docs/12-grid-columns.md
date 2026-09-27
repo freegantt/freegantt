@@ -123,7 +123,9 @@ import { createGridColumnHelper, formatDate, type ColumnRendererContext, type In
 const columnHelper = createGridColumnHelper(dataset);
 
 function dateCell({ fieldValue }: ColumnRendererContext<Instant>) {
-  return { text: fieldValue === undefined ? '' : formatDate(fieldValue, { timeZone: dataset.timeZone }) };
+  return {
+    text: fieldValue === undefined ? '' : formatDate(fieldValue, { timeZone: dataset.timeZone, locale: 'en-US' }),
+  };
 }
 
 const gridColumns = [
@@ -158,12 +160,12 @@ new Dataset({
 });
 ```
 
-A custom format builds on the public `formatDate` and `lastCoveredInstant`:
+A custom format builds on the public `dateFormatter` and `lastCoveredInstant`:
 
 ```ts
-import { formatDate, lastCoveredInstant, type FormatContext, type Instant } from 'freegantt';
+import { dateFormatter, lastCoveredInstant, type FormatContext, type Instant } from 'freegantt';
 
-const COMPACT_DAY: Intl.DateTimeFormatOptions = { day: '2-digit', month: 'short' };
+const compactDay = dateFormatter({ day: '2-digit', month: 'short' });
 
 function compactFinish(
   value: unknown,
@@ -171,7 +173,7 @@ function compactFinish(
   entry: { readonly start?: Instant | undefined },
 ): string {
   if (value === undefined || value === null) return '';
-  return formatDate(lastCoveredInstant({ start: entry.start, end: value as Instant }), ctx, COMPACT_DAY);
+  return compactDay(lastCoveredInstant({ start: entry.start, end: value as Instant }), ctx);
 }
 ```
 

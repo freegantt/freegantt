@@ -12,7 +12,7 @@ import {
   UnknownFieldError,
   UnknownFieldTypeError,
 } from '../../model/index.js';
-import { DATE_TIME_FORMAT, formatDate, instant, MS } from '../../time/index.js';
+import { formatDateTime, instant, MS } from '../../time/index.js';
 import { currency } from './field-types.js';
 
 function ctx(registry: FieldRegistry) {
@@ -404,13 +404,13 @@ describe('shipped Field types resolve by name with no local fieldTypes', () => {
     expect(field.rollUp).toBeUndefined();
   });
 
-  it('type: date formats an Instant through formatDate, and has no parseValue', () => {
+  it('type: date formats an Instant through formatDateTime, and has no parseValue', () => {
     const noon: Instant = instant('2026-06-15T12:00:00Z');
     const registry = new FieldRegistry({ fields: [{ key: 'due', type: 'date' }] });
     const field = registry.get('due')!;
     expect(field.type).toBe('date');
     expect(field.formatValue!(noon, { timeZone: 'UTC', locale: 'en-US' }, entry)).toBe(
-      formatDate(noon, { timeZone: 'UTC', locale: 'en-US' }, DATE_TIME_FORMAT),
+      formatDateTime(noon, { timeZone: 'UTC', locale: 'en-US' }),
     );
     expect(field).not.toHaveProperty('parseValue');
   });
