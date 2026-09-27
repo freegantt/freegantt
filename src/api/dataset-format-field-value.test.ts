@@ -15,6 +15,35 @@ describe("Dataset.formatFieldValue — a Field's text with no Gantt (#583)", () 
     expect(dataset.formatFieldValue(entry, 'cost', 'de-DE')).toBe('1.234,50 €');
   });
 
+  it("uses this Dataset's own locale when the call names none (#583)", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      locale: 'de-DE',
+      fields: [{ key: 'cost', type: currency({ code: 'EUR' }) }],
+      entries: [{ id: 't1', name: 'Task', start: '2026-03-02', end: '2026-03-05', props: { cost: 1234.5 } }],
+    });
+    const entry = dataset.entries.all[0]!;
+    expect(dataset.formatFieldValue(entry, 'cost')).toBe('1.234,50\u00a0\u20ac');
+  });
+
+  it("a call's own locale beats this Dataset's own (#583)", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      locale: 'de-DE',
+      fields: [{ key: 'cost', type: currency({ code: 'EUR' }) }],
+      entries: [{ id: 't1', name: 'Task', start: '2026-03-02', end: '2026-03-05', props: { cost: 1234.5 } }],
+    });
+    const entry = dataset.entries.all[0]!;
+    expect(dataset.formatFieldValue(entry, 'cost', 'en-US')).toBe('\u20ac1,234.50');
+  });
+
+  it('reports the locale it was constructed with, and undefined when none was named (#583)', () => {
+    const withLocale = new Dataset({ timeZone: 'UTC', locale: 'fr-FR', entries: [] });
+    const withoutLocale = new Dataset({ timeZone: 'UTC', entries: [] });
+    expect(withLocale.locale).toBe('fr-FR');
+    expect(withoutLocale.locale).toBeUndefined();
+  });
+
   it('falls back to the plain text of a primitive value for a Field with no formatValue', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',
