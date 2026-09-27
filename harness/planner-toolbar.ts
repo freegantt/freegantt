@@ -87,11 +87,7 @@ export function mountPlannerToolbar(options: PlannerToolbarOptions): PlannerTool
   const titleGroup = el('div', 'demo-toolbar-title-group');
   titleGroup.append(
     el('span', 'demo-toolbar-title', projectName),
-    el(
-      'span',
-      'demo-toolbar-subtitle',
-      formatStartAndEnd(projectSpan, { timeZone: gantt.dataset.timeZone, locale: gantt.locale }),
-    ),
+    el('span', 'demo-toolbar-subtitle', formatStartAndEnd(projectSpan, gantt.formatContext)),
   );
   row1.append(titleGroup, el('div', 'demo-toolbar-spacer'));
 
