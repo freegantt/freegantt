@@ -292,7 +292,7 @@ interface Field<TValue = unknown> {
   editable?: 'never' | 'api' | 'anywhere' | boolean;
   equals?(a: TValue | undefined, b: TValue | undefined): boolean;   // default Object.is
   compare?(a: TValue | undefined, b: TValue | undefined): number;   // sort; default is the stored value
-  formatValue?(value: TValue | undefined, ctx: FormatContext): string;   // text for a cell; DOM-free; locale only here
+  formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;   // text for a cell; DOM-free; locale only here
   column?: Omit<GridColumn, 'field' | 'hidden' | 'editable'>;    // presentation defaults, declared once with the field; which columns show is the Gantt's question
 }
 
@@ -344,7 +344,8 @@ interface RollUpContext extends ComputeContext {
   numericValues(key?: FieldKey): readonly number[];
 }
 
-/** Built only at Gantt column-resolve time. `formatValue` reads this, never a Dataset locale. */
+/** Built by the Gantt for each column resolve and each `formatFieldValue` call. `formatValue` reads
+ *  this, never a Dataset locale. */
 interface FormatContext extends FieldContext {
   readonly locale: Intl.LocalesArgument;
 }

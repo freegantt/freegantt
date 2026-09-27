@@ -6,7 +6,7 @@
 import type { FormatContext, Instant } from '../model/index.js';
 import { toPlain, weekOfYear } from './zone.js';
 import { addMs } from './instant.js';
-import type { DateFormat, HeaderFormat, ViewPresetHeader } from './scale.js';
+import type { DateFormat, ViewPresetHeader } from './scale.js';
 
 const DEFAULT_DATE_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
   year: 'numeric',
@@ -61,29 +61,34 @@ function intlFormatter(
 }
 
 /** An `Intl.DateTimeFormat` per (locale, zone, options), memoized — constructing one per tick per
- *  frame is the allocation this cache exists to prevent. A `HeaderFormat` callback passes straight
- *  through, curried over `zone`/`locale`, so both `DateFormat` shapes resolve to the same call shape. */
-export function resolveDateFormat(
-  format: DateFormat,
-  zone: string,
-  locale: Intl.LocalesArgument | undefined,
-): (i: Instant) => string {
-  if (typeof format === 'function') return (i) => format(i, zone, locale);
-  const formatter = intlFormatter(zone, locale, format);
+ *  frame is the allocation this cache exists to prevent. A callback `DateFormat` is a Formatter
+ *  without the entry, so it passes straight through, curried over `ctx` — a Field's own Formatter
+ *  (`formatDateTime`, a custom `dateFormatter(...)`) labels a header band the same way. */
+export function resolveDateFormat(format: DateFormat, ctx: FormatContext): (i: Instant) => string {
+  if (typeof format === 'function') return (i) => format(i, ctx);
+  const formatter = intlFormatter(ctx.timeZone, ctx.locale, format);
   return (i) => formatter.format(toJsDate(i));
 }
 
-/** Plain display formatting for an instant needing no conversion — a start is already inclusive.
- *  `ctx` is a `FormatContext` shape (locale optional here, since a caller with no locale
- *  preference still has a zone). Pass `DATE_TIME_FORMAT` (or any `Intl.DateTimeFormatOptions`)
- *  to include clock time. */
-export function formatDate(
-  value: Instant,
-  ctx: { readonly timeZone: string; readonly locale?: Intl.LocalesArgument },
-  options: Intl.DateTimeFormatOptions = DEFAULT_DATE_FORMAT,
-): string {
-  return intlFormatter(ctx.timeZone, ctx.locale, options).format(toJsDate(value));
+/** Builds a Formatter for one fixed set of `Intl.DateTimeFormatOptions` — a date, date only, with no
+ *  option to tailor at the call. Build it once, outside a `formatValue`: the returned function is a
+ *  stable reference, so the `Intl.DateTimeFormat` cache keyed on it (`intlFormatter`) hits every call.
+ *  Copies and freezes `options` once, so a caller mutating the object afterward changes nothing.
+ *  `''` for a missing value; never throws. */
+export function dateFormatter(
+  options: Intl.DateTimeFormatOptions,
+): (value: unknown, ctx: FormatContext) => string {
+  const frozen = Object.freeze({ ...options });
+  return (value, ctx) => {
+    if (value === undefined || value === null) return '';
+    return intlFormatter(ctx.timeZone, ctx.locale, frozen).format(toJsDate(value as Instant));
+  };
 }
+
+/** A Field `formatValue`: the stored instant, date only, in the dataset zone and the Gantt's locale.
+ *  `''` for a missing value. To tailor the shown fields, build a Formatter with `dateFormatter`
+ *  (`dateFormatter({ day: '2-digit', month: 'short' })`) instead of calling this with options. */
+export const formatDate = Object.freeze(dateFormatter(DEFAULT_DATE_FORMAT));
 
 /** The last moment a half-open span `[start, end)` actually covers — `end` itself is the boundary
  *  after the span, one millisecond past its last covered moment. Instant arithmetic only, so it
@@ -102,10 +107,7 @@ export function lastCoveredInstant(span: {
 
 /** A Field `formatValue`: the stored moment, date and clock time. A blank cell for no value.
  *  Names the `date` type's default and pairs with `DATE_TIME_FORMAT`. */
-export function formatDateTime(value: unknown, ctx: FormatContext): string {
-  if (value === undefined || value === null) return '';
-  return formatDate(value as Instant, ctx, DATE_TIME_FORMAT);
-}
+export const formatDateTime = Object.freeze(dateFormatter(DATE_TIME_FORMAT));
 
 /** A Field `formatValue`: the last day a span covers, date only. Reads `lastCoveredInstant(entry)`
  *  with `value` standing in for `end` — so `entry.end` never has to be `value` itself, letting a
@@ -123,20 +125,24 @@ export function formatInclusiveDate(
 }
 
 /** An ISO week label — `W` followed by the week number. The escape-hatch callback shipped as a
- *  named value, because Intl has no week field.
+ *  named value, because Intl has no week field. `''` for a missing value.
  *  Exported from `api/` — unlike the individual preset constants — because a custom-
  *  preset author cannot produce a week number any other way. */
-export const formatWeekNumber: HeaderFormat = (i, zone) => `W${weekOfYear(zone, i)}`;
+export function formatWeekNumber(value: unknown, ctx: FormatContext): string {
+  if (value === undefined || value === null) return '';
+  return `W${weekOfYear(ctx.timeZone, value as Instant)}`;
+}
 
 /** `9:00`, never `09:00`. The escape-hatch callback for the hour header band: `Intl.DateTimeFormat`
  *  has an `hour` field, but en-US's own CLDR data zero-pads its 24-hour ("h23") numeric pattern —
  *  `{ hour: 'numeric', hour12: false }` still renders "09:00" in that locale, so no combination of
- *  `Intl.DateTimeFormatOptions` gets an unpadded 24-hour clock everywhere (header readability
- *  follow-up to S1.12). Same manual-string-building precedent as `formatWeekNumber` above. */
-export const formatHour: HeaderFormat = (i, zone) => {
-  const { hour, minute } = toPlain(zone, i);
+ *  `Intl.DateTimeFormatOptions` gets an unpadded 24-hour clock everywhere. Same manual-string-building
+ *  precedent as `formatWeekNumber` above. `''` for a missing value. */
+export function formatHour(value: unknown, ctx: FormatContext): string {
+  if (value === undefined || value === null) return '';
+  const { hour, minute } = toPlain(ctx.timeZone, value as Instant);
   return `${hour}:${String(minute).padStart(2, '0')}`;
-};
+}
 
 /** Per-`headers`-array memo of `dropRepeatedGranularity`'s result (below) — the stripped
  *  `Intl.DateTimeFormatOptions` objects need one stable identity across frames, or `intlFormatter`'s

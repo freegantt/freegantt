@@ -395,6 +395,10 @@ _Avoid_: Date input, raw date, loose instant
 An `end` written as a bare calendar date — `'2026-09-08'`, no time of day. Storage is half-open `[start, end)`, so `end` is the boundary after the entry rather than its last moment, but a consumer writing a bare date always means the last day it wants included: it stores the start of the next day. It applies to nothing else: an end that already carries a time of day is a boundary already. `lastCoveredInstant` reads a stored `end` back as the last moment it covers; `formatInclusiveDate` builds on it. `formatDateTime` shows the stored moment as-is, with clock time.
 _Avoid_: Inclusive end, end date (an option named `endDate` should hold a date, not a rule)
 
+**Formatter**:
+A function turning one value into display text: `(value, ctx: FormatContext, entry) => string`, declaring only the parameters it reads. Zone and locale come only from `ctx`; a missing value gives `''`, never a throw. No options at the call — a factory builds a tailored one once (`dateFormatter(options)`, `currency({ code })`). A header band callback is a Formatter with no entry (`HeaderFormat`). Every shipped Field `formatValue` is one; `formatFieldValue` is the one path a Field's text takes to the grid, the bar label, and `gantt.formatFieldValue`.
+_Avoid_: renderer (paints an element, not text), format function
+
 **TimeUnit**:
 The named grain a Duration or a tick step counts in: `'millisecond' | 'minute' | 'hour' | 'day' | 'week' | 'month' | 'year'`. Spelled out in full — the prior single-letter codes (`'m'` minute vs `'M'` month) collapsed two units onto case alone, a typo trap the review behind issue #84 flagged.
 _Avoid_: `'m'`/`'M'`/`'d'`/`'w'`/`'y'`/`'ms'` (the retired short codes)
@@ -491,7 +495,7 @@ The ordered ViewPreset set `zoomIn`/`zoomOut` step through, finest first (`gantt
 _Avoid_: ladder (taken), zoom levels (that is what a ViewPreset expresses)
 
 **Date format**:
-How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours). Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dropRepeatedGranularity`).
+How a header band labels an Instant: an `Intl.DateTimeFormatOptions` object, or a `HeaderFormat` callback as the escape hatch (week numbers, unpadded hours) — a Formatter with no entry, since a header tick has no row. Resolved through `Intl.DateTimeFormat` in the Dataset's zone and the Gantt's locale — not through Temporal's `toLocaleString`. Year and month appear once, on the coarsest band that states them; finer bands drop those fields unless `repeatCoarserUnits` (`dropRepeatedGranularity`).
 _Avoid_: HeaderFormat as the everyday name (that is the callback half only)
 
 **Date line**:

@@ -456,7 +456,7 @@ describe('#101 new shipped presets', () => {
       { x: 0, width: scale.contentWidth },
     );
     expect(ticks).toHaveLength(7);
-    const label = resolveDateFormat(dayBand.format, timeZone, 'en-US');
+    const label = resolveDateFormat(dayBand.format, { timeZone, locale: 'en-US' });
     // 2026-09-06 is a Sunday: S M T W T F S.
     expect(ticks.map((t) => label(t.instant))).toEqual(['S', 'M', 'T', 'W', 'T', 'F', 'S']);
   });
