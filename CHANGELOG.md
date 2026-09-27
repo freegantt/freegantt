@@ -26,9 +26,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 ### Added
 
 - `dataset.formatFieldValue(entry, key, locale?)` gives a Field's text with no Gantt, for an export or
-  a server-side report. It is the text a grid cell shows, in the Dataset's zone. Omit `locale` for the
-  runtime's own locale. `gantt.formatFieldValue(entry, key)` now reads through it with the Gantt's
-  locale. ([#583](https://github.com/freegantt/freegantt/issues/583))
+  a server-side report. It is the text a grid cell shows, in the Dataset's zone. `locale` beats this
+  Dataset's own `locale`; omit both for the runtime's own locale. `gantt.formatFieldValue(entry, key)`
+  now reads through it with this Gantt's own locale first, then its Dataset's, then the runtime's own.
+  ([#583](https://github.com/freegantt/freegantt/issues/583))
 - `new Dataset({ locale })`, a locale a consumer names once instead of on every `formatFieldValue`
   call. `dataset.locale` reads it back. A `formatFieldValue` call's own `locale` still beats it, and
   it beats only the runtime's own. A `Gantt` with no `locale` of its own now falls back to its

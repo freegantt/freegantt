@@ -286,9 +286,9 @@ export class Dataset<TProps = unknown> {
   /** Call: `dataset.formatFieldValue(entry, 'cost', 'de-DE')` — "format this entry's cost value, in
    *  German". The same text a grid cell, a bar label and the tooltip show: the Field's own
    *  `formatValue`, or the plain text of a primitive value. The zone is this Dataset's. `locale`
-   *  beats this Dataset's own `locale` (#583); omit both for the runtime's own locale, the same as a
-   *  Gantt with no `locale`. No Gantt is needed, so a server-side export reads the text through
-   *  this. Throws `UnknownFieldError` for an undeclared key. */
+   *  beats this Dataset's own `locale` (#583); omit both for the runtime's own locale. No Gantt is
+   *  needed, so a server-side export reads the text through this. Throws `UnknownFieldError` for an
+   *  undeclared key. */
   formatFieldValue(entry: Entry<TProps>, key: FieldKey, locale?: Intl.LocalesArgument): string {
     const field = this.field(key);
     if (field === undefined) throw new UnknownFieldError(String(key), 'formatFieldValue');

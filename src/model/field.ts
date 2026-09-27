@@ -323,7 +323,7 @@ export interface ComputeContext extends FieldContext {
   hierarchyParentId(): EntryId | undefined;
 }
 
-/** FieldContext plus a locale: the Gantt's, or the one a caller passes to
+/** FieldContext plus a locale: this Gantt's, this Dataset's, or the one a caller passes to
  *  `dataset.formatFieldValue`. Built by `createFormatContext` — reused for every cell in between,
  *  which is why it extends the ambient half and never the per-pass one. */
 export interface FormatContext extends FieldContext {
