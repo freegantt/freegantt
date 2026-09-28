@@ -731,19 +731,6 @@ function dateLineDecorationsOf(input: LayoutInput, scale: TimeScale): FrameDecor
   });
 }
 
-/** Call: `tickStepOf(finestBand, preset)`. What one tick column on screen stands for — the finest
- *  Header band's own unit, because that is the band tick lines draw the pane's grid from. A preset
- *  with no header bands states its own `tickUnit` instead. */
-function tickStepOf(
-  finestBand: FrameHeaderBand | undefined,
-  preset: ViewPreset,
-): { unit: TimeUnit; increment: number } {
-  return {
-    unit: finestBand?.unit ?? preset.tickUnit,
-    increment: finestBand?.increment ?? preset.tickIncrement,
-  };
-}
-
 /** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
  *  resolved rows. */
 export function placeFrame(
@@ -800,15 +787,15 @@ export function placeFrame(
     };
   });
 
-  const tickStep = tickStepOf(bands[bands.length - 1], preset);
+  const finestBand = bands[bands.length - 1];
   const runner = decorations ?? new DecorationRunner();
   const { underBars, overBars } = runner.run({
     providers: input.decorationProviders ?? [],
     span: scale.spanForPixels(horizontalSpan),
     rows,
     timeZone: scale.timeZone,
-    tickUnit: tickStep.unit,
-    tickIncrement: tickStep.increment,
+    tickUnit: finestBand?.unit ?? preset.tickUnit,
+    tickIncrement: finestBand?.increment ?? preset.tickIncrement,
     xForInstant: (at) => scale.xForInstant(at),
   });
 
