@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { entryId, SiblingIndexOutOfRangeError } from '../model/index.js';
 import {
   renumberSiblingGroups,
+  siblingBlockMove,
   siblingIndexesAfterDelta,
   siblingIndexesInListOrder,
 } from './sibling-order.js';
@@ -276,5 +277,89 @@ describe('siblingIndexesAfterDelta', () => {
     );
 
     expect(ranks.has(entryId('b'))).toBe(false);
+  });
+});
+
+describe('siblingBlockMove', () => {
+  function move(movedIds: readonly string[], targetSiblings: readonly string[], index: number) {
+    const result = siblingBlockMove({
+      movedIds: movedIds.map(entryId),
+      targetSiblings: targetSiblings.map(entryId),
+      index,
+    });
+    return {
+      calls: result.calls.map((call) => ({ id: String(call.id), at: call.at })),
+      finalRanks: new Map([...result.finalRanks].map(([id, rank]) => [String(id), rank])),
+    };
+  }
+
+  it('moves one id down within its own group', () => {
+    const { calls, finalRanks } = move(['a'], ['a', 'b', 'c'], 2);
+
+    expect(calls).toEqual([{ id: 'a', at: 1 }]);
+    expect(finalRanks.get('b')).toBe(0);
+    expect(finalRanks.get('a')).toBe(1);
+    expect(finalRanks.get('c')).toBe(2);
+  });
+
+  it('moves one id up within its own group', () => {
+    const { calls, finalRanks } = move(['c'], ['a', 'b', 'c'], 0);
+
+    expect(calls).toEqual([{ id: 'c', at: 0 }]);
+    expect(finalRanks.get('c')).toBe(0);
+    expect(finalRanks.get('a')).toBe(1);
+    expect(finalRanks.get('b')).toBe(2);
+  });
+
+  it('moves one id into a group it did not belong to', () => {
+    const { calls, finalRanks } = move(['x'], ['a', 'b'], 1);
+
+    expect(calls).toEqual([{ id: 'x', at: 1 }]);
+    expect(finalRanks.get('a')).toBe(0);
+    expect(finalRanks.get('x')).toBe(1);
+    expect(finalRanks.get('b')).toBe(2);
+  });
+
+  it('moves two ids from two different groups into one, in call order', () => {
+    const { calls, finalRanks } = move(['x', 'y'], ['a', 'b'], 1);
+
+    expect(calls).toEqual([
+      { id: 'x', at: 1 },
+      { id: 'y', at: 2 },
+    ]);
+    expect(finalRanks.get('a')).toBe(0);
+    expect(finalRanks.get('x')).toBe(1);
+    expect(finalRanks.get('y')).toBe(2);
+    expect(finalRanks.get('b')).toBe(3);
+  });
+
+  it('moves two ids where one already sits in the target group before the insertion point', () => {
+    // a is already a member of the target group; x is not.
+    const { calls, finalRanks } = move(['a', 'x'], ['w', 'a', 'b', 'y'], 3);
+
+    expect(calls).toEqual([
+      { id: 'a', at: 2 },
+      { id: 'x', at: 3 },
+    ]);
+    expect(finalRanks.get('w')).toBe(0);
+    expect(finalRanks.get('b')).toBe(1);
+    expect(finalRanks.get('a')).toBe(2);
+    expect(finalRanks.get('x')).toBe(3);
+    expect(finalRanks.get('y')).toBe(4);
+  });
+
+  it('still issues a call for a moved id whose place does not change', () => {
+    const { calls, finalRanks } = move(['a'], ['a', 'b'], 0);
+
+    expect(calls).toEqual([{ id: 'a', at: 0 }]);
+    expect(finalRanks.get('a')).toBe(0);
+    expect(finalRanks.get('b')).toBe(1);
+  });
+
+  it('appends at the end of an empty target group', () => {
+    const { calls, finalRanks } = move(['x'], [], 0);
+
+    expect(calls).toEqual([{ id: 'x', at: 0 }]);
+    expect(finalRanks.get('x')).toBe(0);
   });
 });
