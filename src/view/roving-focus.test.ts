@@ -385,7 +385,7 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
   });
 });
 
-describe('RovingFocus — horizontal arrows (#onHorizontal)', () => {
+describe('RovingFocus — horizontal arrows step a cell or toggle a row', () => {
   let harness: Harness;
 
   afterEach(() => {
