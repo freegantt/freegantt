@@ -67,6 +67,10 @@ Put the budget in the prompt you send, in these words:
 
 An agent that is close to full reports late, or not at all. So you watch it too.
 
+**Never force-stop a planner.** A planner's whole output is the plan it writes last.
+Stop it and you get nothing. Past any mark, send it a message and let it finish, even
+past 300k. The marks tell a planner to stop research and write, never to quit.
+
 ## Watch it yourself
 
 **Every dispatch starts a watcher.** A subagent runs while your turn is blocked, so
@@ -84,10 +88,23 @@ Bash(run_in_background: true):
 Keep the pid that Bash returns. You will kill that pid when the wave ends.
 
 It polls every agent transcript in this **project** — from any session, not only yours —
-and exits when one passes its next mark or when they all stop writing. Each agent has two
+and exits when one passes its next mark or when they all stop. Each agent has two
 marks: 200k (wind down) and 250k (landing window over). A background command that exits
 re-invokes you, so its exit *is* the alert — you get it mid-flight, not after the report
 lands.
+
+**It counts what the API reports, not what the UI shows.** It reads the usage line of
+the last finished reply: that reply's input plus its output. The UI and the harness's
+`subagent_tokens` count run ahead of it — one planner peaked at 247k in its transcript
+while the harness reported 300k. So a mark the UI passed can still be unreached for the
+watcher. While an agent streams one long reply, the watcher also waits for that reply
+to land. Check with `ps` that it runs before you call it dead.
+
+**It knows when an agent stops.** It reads each transcript's state, not a timer. An
+agent is done when its last reply ended its turn and every background task it started
+has reported. An agent that ended its turn to wait on a gate is still running: the
+gate's notification wakes it. Growth is only the fallback. A working agent whose
+transcript has not grown for 15 minutes counts as stuck, and a waiting one gets 30.
 
 **It alerts once per agent per mark.** It writes each alert to a state file in `TMPDIR`.
 A restarted watcher reads that file, so it never repeats an alert. It watches each agent
@@ -120,7 +137,7 @@ as a crash and the agent runs past its landing window with nobody telling it to 
 |---|---|---|
 | **1** | `... is at N tokens (mark M)` | **An agent crossed a mark. Act now.** |
 | | | The line **names the agent** — and it may belong to another session. Read the name before deciding whether it is yours. |
-| 0 | `every agent it watched has stopped writing.` | The wave is over. The watcher already died with it. |
+| 0 | `every agent it watched has stopped.` | The wave is over. The watcher already died with it. |
 | 0 | `stopped after Ns` | The watcher timed out (`MAX`, 7200s). You left it running. Restart it only if an agent you started is still running; otherwise the wave is over. |
 
 Both quiet outcomes exit 0, so the printed line is what separates them. Read it.
@@ -130,11 +147,12 @@ Then act on what it says:
 - **An agent passed 200k** — send that agent a message: stop at the next clean point
   and write a handoff.
 - **An agent passed 250k** — it spends the landing window on new work. Tell it to
-  write the handoff now and report.
+  write the handoff now and report. A planner gets the same message and no more: let
+  it finish its plan.
 - **After either alert** — start the same watcher command again, in the same turn,
   if any agent you started still runs. Keep the new pid. It skips the alert you just
   handled and still watches every other agent at 200k.
-- **Every agent stopped writing** — the watcher already exited. Do not start
+- **Every agent stopped** — the watcher already exited. Do not start
   another.
 
 One watcher covers a whole wave. Dispatch three agents in one turn, start one watcher.
