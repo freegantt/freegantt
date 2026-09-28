@@ -486,7 +486,7 @@ describe('core Fields consume the shipped type table', () => {
     expect(registry.get('start')?.type).toBe('date');
     expect(registry.get('end')?.type).toBe('date');
     expect(registry.get('duration')?.type).toBe('duration');
-    expect(registry.get('parentId')).not.toHaveProperty('type');
+    expect(registry.get('parentId')?.type).toBe('entryId');
     expect(registry.get('hierarchyParentId')).not.toHaveProperty('type');
   });
 
