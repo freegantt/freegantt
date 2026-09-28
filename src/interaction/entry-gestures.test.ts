@@ -901,6 +901,58 @@ describe('attachEntryGestures — move (S3.3)', () => {
     expect(seenContentY.at(-1)).toBe(90 - 20 + 1000);
   });
 
+  it('a mostly-horizontal arm locks the time axis — content-y is never read (#425)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenContentY: (number | undefined)[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      draftFor: (_gesture, entries, _dxPx, options) => {
+        seenContentY.push(options?.contentY);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly horizontal (dx=20, dy=1), then travels further vertically — the axis stays
+    // locked to time, so `contentY` is never read on `preview()` or `commit()`.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(20, { clientY: 1 }));
+    pane.dispatchEvent(move(25, { clientY: 50 }));
+    pane.dispatchEvent(up(25, { clientY: 50 }));
+
+    expect(seenContentY.every((value) => value === undefined)).toBe(true);
+    expect(seenContentY.length).toBeGreaterThan(0);
+  });
+
+  it('a mostly-vertical arm locks the row axis — dxPx commits as 0, dates hold still (#425)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenDxPx: number[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      draftFor: (_gesture, entries, dxPx) => {
+        seenDxPx.push(dxPx);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly vertical (dx=1, dy=20), then drifts further horizontal — the axis stays locked
+    // to row, so every preview/commit reads `dxPx` as 0, however far the pointer travels sideways.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(1, { clientY: 20 }));
+    pane.dispatchEvent(move(60, { clientY: 25 }));
+    pane.dispatchEvent(up(60, { clientY: 25 }));
+
+    expect(seenDxPx.every((value) => value === 0)).toBe(true);
+    expect(seenDxPx.length).toBeGreaterThan(0);
+  });
+
   it('a drag moves every capable entry `entriesForGesture` returns, grabbed first', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);

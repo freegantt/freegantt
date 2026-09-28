@@ -429,6 +429,66 @@ test('dragging within the source row only shifts dates — no parentId row lands
   expect(addedLines.some((line) => line.includes('· parentId ·'))).toBe(false);
 });
 
+test('a drag that starts vertical ignores later horizontal travel — it still only reparents', async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const rows = (await rowPlan(page)).filter((row) => row.hasOwnBar);
+  const pane = await timelinePaneBox(page);
+  const header = await headerBox(page);
+
+  const {
+    row: leaf,
+    grabX,
+    grabY,
+  } = await firstGrabbableBar(
+    page,
+    rows.filter((row) => row.childCount === 0),
+    pane,
+    header,
+  );
+  const leafParentId = await currentParentId(page, leaf.entryId);
+  const target = rows.find((row) => row.childCount > 0 && row.entryId !== leafParentId)!;
+  const targetBand = (await rowBand(page, target.rowId).boundingBox())!;
+  const targetY = targetBand.y + targetBand.height / 2;
+  const startBefore = await page.evaluate(
+    (id) => Number(window.__gantt.dataset.entries.get(id)!.start),
+    leaf.entryId,
+  );
+  const linesBefore = await page.locator('#log div').count();
+
+  await countChangesFromHere(page);
+
+  // Arms mostly vertical — 2px sideways, 20px toward the target row, well past the 4px threshold
+  // and clearly `|dy| > |dx|`. The owner's ruling ("if you start dragging vertically it only
+  // allows vertical") locks the drag to the row axis right here.
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await page.mouse.move(grabX + 2, grabY + Math.sign(targetY - grabY) * 20, { steps: 1 });
+  // Drifts far sideways on the way to the target row — the axis lock must hold anyway, so this
+  // travel never reaches the bar's own dates.
+  const driftedX = Math.min(grabX + 400, pane.x + pane.width - 10);
+  await page.mouse.move(driftedX, targetY, { steps: 1 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((id) => window.__gantt.dataset.entries.get(id)?.read('parentId'), leaf.entryId),
+    )
+    .toBe(target.entryId);
+
+  // One transaction, and the grabbed entry's own start never moved despite the sideways drift.
+  expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(1);
+  expect(
+    await page.evaluate((id) => Number(window.__gantt.dataset.entries.get(id)!.start), leaf.entryId),
+  ).toBe(startBefore);
+
+  const linesAfter = await page.locator('#log div').count();
+  const addedLines = (await page.locator('#log div').allTextContents()).slice(0, linesAfter - linesBefore);
+  expect(addedLines.some((line) => line.includes(`entries · ${leaf.entryId} · parentId`))).toBe(true);
+  expect(addedLines.some((line) => line.includes(`entries · ${leaf.entryId} · start`))).toBe(false);
+});
+
 test('with "Lock tree" checked, a vertical drag refuses and leaves parentId unchanged', async ({ page }) => {
   await gotoGeneric(page);
   await page.check('#lock-tree-checkbox');

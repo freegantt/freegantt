@@ -6626,6 +6626,17 @@ describe('Gantt entryMove — a vertical drag places the entry under a new paren
     expect(parentIdRow?.to).toBe(entryId('p2'));
     expect(siblingIndexRow).toBeDefined();
 
+    // #425 axis lock: a pure vertical drag (dx=0 above) writes the grabbed entry's own tree place
+    // only — no `start`/`end` row for it, not even an unchanged one. `p1`/`p2` still roll up around
+    // the move (a rolling-up parent's own dates derive from its children), which is a Rollup
+    // question this axis lock leaves untouched.
+    const grabbedDateRows = datasetChanges[0]!.updated.filter(
+      (row): row is Extract<typeof row, { field: string }> =>
+        row.store === 'entries' && row.id === id && (row.field === 'start' || row.field === 'end'),
+    );
+    expect(grabbedDateRows).toEqual([]);
+    expect(move.shiftsTime).toBe(false);
+
     const moved = dataset.entries.get(id)!;
     expect(moved.parent()?.id).toBe(entryId('p2'));
 
@@ -6634,6 +6645,53 @@ describe('Gantt entryMove — a vertical drag places the entry under a new paren
     const reverted = dataset.entries.get(id)!;
     expect(reverted.parent()?.id).toBe(before.parentId);
     expect(datesOf(reverted)).toEqual({ start: before.start, end: before.end });
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('a drag that arms vertical and then drifts horizontal still commits parentId/siblingIndex only (#425 axis lock)', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId('a');
+    const before = datesOf(dataset.entries.get(id)!);
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+    const datasetChanges: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      datasetChanges.push(changeSet);
+    });
+
+    // Arms mostly vertical (dx=1, dy=40) — locks to the row axis. The later move drifts far
+    // sideways (dx=195) on its way to row 2's own middle third; the axis lock must hold anyway.
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 6, clientY: 45, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 200, clientY: 90, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 200, clientY: 90, pointerId: 1 }));
+
+    expect(afterEvents).toHaveLength(1);
+    const move = afterEvents[0]!;
+    expect(move.place?.parentId).toBe(entryId('p2'));
+    expect(move.shiftsTime).toBe(false);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
+
+    // The grabbed entry's own dates never write, whatever the horizontal drift — `p1`/`p2`'s
+    // rollups around the move are a separate question, same as the test above.
+    const grabbedDateRows = datasetChanges[0]!.updated.filter(
+      (row): row is Extract<typeof row, { field: string }> =>
+        row.store === 'entries' && row.id === id && (row.field === 'start' || row.field === 'end'),
+    );
+    expect(grabbedDateRows).toEqual([]);
 
     document.elementFromPoint = original;
     gantt.destroy();

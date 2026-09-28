@@ -151,8 +151,9 @@ export type TreePlaceChange =
   | { readonly place?: never; readonly currentPlace?: never };
 
 /** #425: one Entry's own share of a move's proposed dates, tagged with whether this Entry's tree
- *  place changed and whether its dates did. Both are independent: a diagonal drag can set either,
- *  both, or neither. */
+ *  place changed and whether its dates did. A pointer drag locks to one axis at arm time and holds
+ *  it for the whole gesture (#425 axis lock), so a real drag only ever sets one of the two: `place`
+ *  alone (row axis) or `shiftsTime` alone (time axis), never both together. */
 export type EntryMoveDetail = ProposedDates &
   TreePlaceChange & {
     /** True when this Entry's proposed dates differ from what is stored now — `false` for a
