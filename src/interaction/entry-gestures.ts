@@ -101,76 +101,80 @@ export function attachEntryGestures(
     return grabbedEdge !== undefined ? { kind: 'resize', edge: grabbedEdge } : { kind: 'move' };
   }
 
-  const drag = createPointerGesture(pane, {
-    start(): boolean {
-      if (grabbedId === undefined) return false;
-      // #211/#212: a move drag that just armed on a bar the Selection does not already hold selects
-      // that bar's Entry before asking for the session — so the draft `session()` builds reads the
-      // same Selection this write just made, and the drag moves only the grabbed Entry rather than
-      // every Entry of whatever was selected before (or nothing at all). A resize grab is left
-      // alone: `resizableEntryId` resolves off hover, not the Selection, so a handle grab selects
-      // nothing here.
-      if (grabbedEdge === undefined && grabbedBarId !== undefined) {
-        const grabbedEntryId = entryIdOfBar(grabbedBarId);
-        const selected = ctx.selection.entryIds();
-        if (!selected.includes(grabbedEntryId)) {
-          anchor = grabbedEntryId;
-          ctx.selection.propose([grabbedEntryId]);
+  const drag = createPointerGesture(
+    pane,
+    {
+      start(): boolean {
+        if (grabbedId === undefined) return false;
+        // #211/#212: a move drag that just armed on a bar the Selection does not already hold selects
+        // that bar's Entry before asking for the session — so the draft `session()` builds reads the
+        // same Selection this write just made, and the drag moves only the grabbed Entry rather than
+        // every Entry of whatever was selected before (or nothing at all). A resize grab is left
+        // alone: `resizableEntryId` resolves off hover, not the Selection, so a handle grab selects
+        // nothing here.
+        if (grabbedEdge === undefined && grabbedBarId !== undefined) {
+          const grabbedEntryId = entryIdOfBar(grabbedBarId);
+          const selected = ctx.selection.entryIds();
+          if (!selected.includes(grabbedEntryId)) {
+            anchor = grabbedEntryId;
+            ctx.selection.propose([grabbedEntryId]);
+          }
         }
-      }
-      session = ctx.session(grabbedId, currentGesture());
-      return session !== undefined;
+        session = ctx.session(grabbedId, currentGesture());
+        return session !== undefined;
+      },
+      // `_dyPx`: a row drop reads the pointer's content-y instead — the row under the pointer, not
+      // how far it moved. `elementFromPoint` would read the bar itself, since the bar tracks the
+      // pointer during the drag.
+      //
+      // #425 axis lock: the owner's ruling ("if you start dragging vertically it only allows
+      // vertical, and vice versa") only bears on a move gesture — a resize already reads nothing
+      // but its own edge's horizontal travel, so `grabbedEdge` (set only for a resize) opts it out.
+      // A row-axis move zeroes `dxPx` (the bar's dates hold still) and omits `contentY` when the
+      // axis is time instead (`options.contentY === undefined` is `dropFor`'s own "no row drop" read,
+      // `view/gesture-pipeline.ts`).
+      move(e, dxPx, _dyPx, axis): void {
+        // The live preview always tracks the pointer at full resolution (never quantized to a snap
+        // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
+        // applies to what actually gets written — see commit() below — this only affects what paints
+        // while the gesture is in flight. Cursor line x and row-drop y are both content space: pane-local
+        // offset plus the bound scroll, never element.scrollLeft/scrollTop (I12).
+        const offsetX = e.clientX - pane.getBoundingClientRect().left;
+        const offsetY = e.clientY - pane.getBoundingClientRect().top;
+        const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
+        session!.preview(rowAxisLocked ? 0 : dxPx, {
+          suspendSnap: true,
+          cursorX: ctx.contentXAtPaneOffset(offsetX),
+          ...(rowAxisLocked ? { contentY: ctx.contentYAtPaneOffset(offsetY) } : undefined),
+        });
+      },
+      commit(e, dxPx, _dyPx, axis): void {
+        // The committed value snaps to the preset's tick unit unless Alt held it off for fine
+        // placement — this is the one place snapping actually lands, now that move() above
+        // always previews raw. The row drop itself reads the same content-y move() already resolved,
+        // so a drag that ends over row 3 commits into row 3 even where the pointer never fires
+        // another move first.
+        const offsetY = e.clientY - pane.getBoundingClientRect().top;
+        const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
+        void session!.commit(rowAxisLocked ? 0 : dxPx, {
+          ...(e.altKey ? { suspendSnap: true } : undefined),
+          ...(rowAxisLocked ? { contentY: ctx.contentYAtPaneOffset(offsetY) } : undefined),
+        });
+        session = undefined;
+        grabbedId = undefined;
+        grabbedEdge = undefined;
+        grabbedBarId = undefined;
+      },
+      cancel(): void {
+        session!.cancel();
+        session = undefined;
+        grabbedId = undefined;
+        grabbedEdge = undefined;
+        grabbedBarId = undefined;
+      },
     },
-    // `_dyPx`: a row drop reads the pointer's content-y instead — the row under the pointer, not
-    // how far it moved. `elementFromPoint` would read the bar itself, since the bar tracks the
-    // pointer during the drag.
-    //
-    // #425 axis lock: the owner's ruling ("if you start dragging vertically it only allows
-    // vertical, and vice versa") only bears on a move gesture — a resize already reads nothing
-    // but its own edge's horizontal travel, so `grabbedEdge` (set only for a resize) opts it out.
-    // A row-axis move zeroes `dxPx` (the bar's dates hold still) and omits `contentY` when the
-    // axis is time instead (`options.contentY === undefined` is `dropFor`'s own "no row drop" read,
-    // `view/gesture-pipeline.ts`).
-    move(e, dxPx, _dyPx, axis): void {
-      // The live preview always tracks the pointer at full resolution (never quantized to a snap
-      // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
-      // applies to what actually gets written — see commit() below — this only affects what paints
-      // while the gesture is in flight. Cursor line x and row-drop y are both content space: pane-local
-      // offset plus the bound scroll, never element.scrollLeft/scrollTop (I12).
-      const offsetX = e.clientX - pane.getBoundingClientRect().left;
-      const offsetY = e.clientY - pane.getBoundingClientRect().top;
-      const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
-      session!.preview(rowAxisLocked ? 0 : dxPx, {
-        suspendSnap: true,
-        cursorX: ctx.contentXAtPaneOffset(offsetX),
-        ...(rowAxisLocked ? { contentY: ctx.contentYAtPaneOffset(offsetY) } : undefined),
-      });
-    },
-    commit(e, dxPx, _dyPx, axis): void {
-      // The committed value snaps to the preset's tick unit unless Alt held it off for fine
-      // placement — this is the one place snapping actually lands, now that move() above
-      // always previews raw. The row drop itself reads the same content-y move() already resolved,
-      // so a drag that ends over row 3 commits into row 3 even where the pointer never fires
-      // another move first.
-      const offsetY = e.clientY - pane.getBoundingClientRect().top;
-      const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
-      void session!.commit(rowAxisLocked ? 0 : dxPx, {
-        ...(e.altKey ? { suspendSnap: true } : undefined),
-        ...(rowAxisLocked ? { contentY: ctx.contentYAtPaneOffset(offsetY) } : undefined),
-      });
-      session = undefined;
-      grabbedId = undefined;
-      grabbedEdge = undefined;
-      grabbedBarId = undefined;
-    },
-    cancel(): void {
-      session!.cancel();
-      session = undefined;
-      grabbedId = undefined;
-      grabbedEdge = undefined;
-      grabbedBarId = undefined;
-    },
-  });
+    { arm: 'xy' },
+  ); // #425: a straight-down pull must arm — a bar move can lock to the row axis.
 
   /** The range from the shift-anchor to `to`'s last member (#212, ADR 0010, ADR 0025). The range
    *  steps over Entries in the order the panes draw them: row by row. A row click names every

@@ -37,6 +37,15 @@ export interface PointerGestureCallbacks {
   cancel(): void;
 }
 
+export interface PointerGestureOptions {
+  /** Which travel a mouse/pen drag arms on. `'x'` (the default) — the original single-axis rule,
+   *  still what a column resize/reorder wants: a mostly-vertical move over a header grip must not
+   *  nudge a width or a reorder. `'xy'` arms on travel over either axis, so a row-axis drag (#425)
+   *  can arm on a straight-down pull. Touch's long-press arms on time alone, never on travel, so
+   *  this option has no touch reading. */
+  arm?: 'x' | 'xy';
+}
+
 export interface PointerGestureController {
   /** Feed a pointerdown that might start this gesture. */
   down(e: PointerEvent): void;
@@ -61,7 +70,9 @@ export interface PointerGestureController {
 export function createPointerGesture(
   pane: HTMLElement,
   callbacks: PointerGestureCallbacks,
+  options: PointerGestureOptions = {},
 ): PointerGestureController {
+  const arm2D = options.arm === 'xy';
   let pointerId: number | undefined;
   let originX = 0;
   let originY = 0;
@@ -70,6 +81,11 @@ export function createPointerGesture(
    *  over from the previous drag is harmless because nothing consults it until the next `arm()`
    *  overwrites it. */
   let axis: DragAxis = 'x';
+  /** True from a touch arm with no travel yet (a still long-press) until the first post-arm move
+   *  that has travel picks the real axis. `axisFor(0, 0)` ties to `'x'`, which would wrongly lock a
+   *  later straight-down drag onto the time axis — so a still arm defers the pick instead of
+   *  guessing. */
+  let axisPending = false;
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
   let lastEvent: PointerEvent | undefined;
 
@@ -81,16 +97,20 @@ export function createPointerGesture(
   function reset(): void {
     pointerId = undefined;
     armed = false;
+    axisPending = false;
     lastEvent = undefined;
     clearLongPress();
   }
 
   /** Arms on `e`, locking `axis` to the travel from `origin` to `at` — `at` is `e` itself for a
    *  mouse/pen arm, and the last-known position for a touch arm, which fires off a timer instead of
-   *  a move event. */
+   *  a move event. A touch arm with no travel at all defers the pick to `move()`, below. */
   function arm(e: PointerEvent, at: PointerEvent): boolean {
     if (!callbacks.start(e)) return false;
-    axis = axisFor(at.clientX - originX, at.clientY - originY);
+    const dx = at.clientX - originX;
+    const dy = at.clientY - originY;
+    axisPending = dx === 0 && dy === 0;
+    if (!axisPending) axis = axisFor(dx, dy);
     armed = true;
     pane.setPointerCapture(e.pointerId);
     return true;
@@ -117,11 +137,15 @@ export function createPointerGesture(
       const dyPx = e.clientY - originY;
       if (!armed) {
         if (e.pointerType === 'touch') return; // waits for the long-press timer instead
-        if (Math.hypot(dxPx, dyPx) < DRAG_THRESHOLD_PX) return;
+        const travelPx = arm2D ? Math.hypot(dxPx, dyPx) : Math.abs(dxPx);
+        if (travelPx < DRAG_THRESHOLD_PX) return;
         if (!arm(e, e)) {
           reset();
           return;
         }
+      } else if (axisPending && (dxPx !== 0 || dyPx !== 0)) {
+        axis = axisFor(dxPx, dyPx);
+        axisPending = false;
       }
       callbacks.move(e, dxPx, dyPx, axis);
     },
