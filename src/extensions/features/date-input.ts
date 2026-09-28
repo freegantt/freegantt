@@ -54,9 +54,8 @@ function pad(value: number, width: number): string {
  *  decides which day an `end` shows and which day a typed value stores. It hands this control an
  *  already-resolved Instant either way.
  *
- *  Callable only for an Instant already known to fall at local midnight. `inlineEditing()` checks
- *  that before it ever calls `write` (issue #137). So this control assumes a valid date-only
- *  value throughout. */
+ *  `inlineEditing()` writes only the start of a day here. An unchanged day keeps the stored time of
+ *  day, so this control never sees a time of day. */
 export function createDefaultDateInput(time: ZoneDateMath): DateInput {
   const input = document.createElement('input');
   input.type = 'date';
