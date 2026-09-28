@@ -829,7 +829,10 @@ export class GanttShell {
     // has always said. Every member is either a field already assigned above, or a closure that
     // reads live state at call time. So nothing in it goes stale between two installs, and a page
     // that installs six plugins no longer allocates six copies of it.
-    this.#openPluginRuntime();
+    this.#pluginRuntime = this.#createPluginRuntime();
+    // Registered after the panes and the backend, so it releases before them. A plugin
+    // disposer may still reach for its overlay node.
+    this.#teardown.add(() => this.#pluginRuntime.disposeAll());
 
     // The timeline pane is the single native scroller; the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in),
@@ -897,7 +900,13 @@ export class GanttShell {
     // pan/page/home/end handling only sees it after that. An unmatched chord is left untouched
     // either way: the resolver never calls `preventDefault()` on a miss.
     this.#registerCoreCommands();
-    this.#attachKeymap();
+    this.#keymapListener = (event: KeyboardEvent) => {
+      if (this.#keymap.resolve(event)) {
+        event.preventDefault();
+      }
+    };
+    this.#container.addEventListener('keydown', this.#keymapListener);
+    this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
     // #434: opt-in (`pointerActivation: 'dblclick'`), always attached — the option gates inside the
     // handler, the same shape the wheel handlers gate on `#resolvedViewportGestures`. A grid cell's
     // double-click asks the one decision `Enter`'s own Keymap resolution already asks
@@ -906,7 +915,7 @@ export class GanttShell {
     // and does not also activate here. This listener sits on `#container`, a bubble-phase ancestor
     // of `inlineEditing()`'s document-level one. So a `return` here always reaches that listener
     // next — no explicit ordering needed beyond where each one attaches.
-    this.#attachDblClickActivation();
+    this.#attachDoubleClickActivation();
     // Document-level capture-phase fallback (issue #137,
     // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
     // key event whose target sits inside `#container`. A popup opened from an outside trigger has
@@ -915,7 +924,19 @@ export class GanttShell {
     // second, independent listener. That keeps one newest-first resolution order, instead of a
     // second document-capture stack. Skipped whenever the target is inside
     // `#container`, so an in-container key event is resolved exactly once, by the bubble listener.
-    this.#attachDocumentKeymap();
+    this.#documentKeymapListener = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof Node && this.#container.contains(target)) return;
+      if (this.#keymap.resolve(event)) {
+        event.preventDefault();
+      }
+    };
+    this.#container.ownerDocument.addEventListener('keydown', this.#documentKeymapListener, true);
+    // The one listener that outlives its container: it sits on the document, so nothing removes it
+    // when the container is dropped from the page.
+    this.#teardown.add(() =>
+      this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true),
+    );
 
     // Same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
     // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`. Attached *before*
@@ -923,11 +944,23 @@ export class GanttShell {
     // column drag must reach `column-gestures.ts`'s own handler ahead of `entry-gestures.ts`'s
     // handler. That handler swallows it, through `stopImmediatePropagation()`. In the other order,
     // the column drag's Escape would also clear the entry selection as an unrelated side effect.
-    this.#attachColumnGestures();
-    this.#attachEntryGestures(gestureContext);
+    this.#columnGestures = options.wiring.columnGestures?.(
+      this.#panes.gridHeader,
+      this.#container,
+      this.#columnGestureContext(),
+    );
+    this.#teardown.add(() => this.#columnGestures?.detach());
+    this.#entryGestures = options.wiring.entryGestures?.(
+      this.#panes.timeline,
+      this.#panes.rows,
+      this.#container,
+      gestureContext,
+    );
+    this.#teardown.add(() => this.#entryGestures?.detach());
     // Scoped to the timeline pane, not the whole container. A bar's nudge/resize
     // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
-    this.#attachKeyboardEditing(gestureContext);
+    this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
+    this.#teardown.add(() => this.#keyboardEditing?.detach());
     this.#attachWheelNavigation();
     this.#rowTwistyAttachment = attachRowTwisty(this.#panes.rows, {
       toggleCollapse: (id) => this.toggleCollapse(id),
@@ -1101,16 +1134,13 @@ export class GanttShell {
   }
 
   /** How does a plugin reach this Gantt's registries, overlay, and commands? */
-  #openPluginRuntime(): void {
+  #createPluginRuntime(): PluginRuntime<unknown> {
     const shellPorts = this.#shellPorts();
-    this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
+    return new PluginRuntime<unknown>((pluginId) => {
       const { parts, gate } = buildPluginPorts(shellPorts, pluginId);
       const context = (this.#options.wiring.buildPluginContext ?? (() => ({})))(parts);
       return { context, disposables: parts.disposables, registrationGate: gate };
     }, this.#raiseError);
-    // Registered after the panes and the backend, so it releases before them. A plugin
-    // disposer may still reach for its overlay node.
-    this.#teardown.add(() => this.#pluginRuntime.disposeAll());
   }
 
   /** What pointer, keyboard, and snap options did the consumer name? */
@@ -1220,19 +1250,8 @@ export class GanttShell {
     };
   }
 
-  /** Which key events on this container does the Keymap take? */
-  #attachKeymap(): void {
-    this.#keymapListener = (event: KeyboardEvent) => {
-      if (this.#keymap.resolve(event)) {
-        event.preventDefault();
-      }
-    };
-    this.#container.addEventListener('keydown', this.#keymapListener);
-    this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
-  }
-
   /** Which double-click on this container activates an Entry? */
-  #attachDblClickActivation(): void {
+  #attachDoubleClickActivation(): void {
     this.#dblClickListener = (event: MouseEvent) => {
       if (this.#pointerActivation !== 'dblclick' || !(event.target instanceof Node)) return;
       const domTarget = this.#dom.targetUnder(event.target);
@@ -1244,33 +1263,6 @@ export class GanttShell {
     };
     this.#container.addEventListener('dblclick', this.#dblClickListener);
     this.#teardown.add(() => this.#container.removeEventListener('dblclick', this.#dblClickListener));
-  }
-
-  /** Which key events outside this container still reach the Keymap — a popup's Escape? */
-  #attachDocumentKeymap(): void {
-    this.#documentKeymapListener = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (target instanceof Node && this.#container.contains(target)) return;
-      if (this.#keymap.resolve(event)) {
-        event.preventDefault();
-      }
-    };
-    this.#container.ownerDocument.addEventListener('keydown', this.#documentKeymapListener, true);
-    // The one listener that outlives its container: it sits on the document, so nothing removes it
-    // when the container is dropped from the page.
-    this.#teardown.add(() =>
-      this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true),
-    );
-  }
-
-  /** How does the grid header resize and reorder columns? */
-  #attachColumnGestures(): void {
-    this.#columnGestures = this.#options.wiring.columnGestures?.(
-      this.#panes.gridHeader,
-      this.#container,
-      this.#columnGestureContext(),
-    );
-    this.#teardown.add(() => this.#columnGestures?.detach());
   }
 
   /** What does a column-gesture attachment ask this shell? */
@@ -1289,23 +1281,6 @@ export class GanttShell {
       cancelColumnReorder: () => this.#columnChrome.cancelReorder(),
       setFocusedColumn: (columnKey) => this.#columnChrome.setFocusedColumn(columnKey),
     };
-  }
-
-  /** How does the pointer select, move, and resize Entries on the timeline and grid? */
-  #attachEntryGestures(gestureContext: EntryGestureContext): void {
-    this.#entryGestures = this.#options.wiring.entryGestures?.(
-      this.#panes.timeline,
-      this.#panes.rows,
-      this.#container,
-      gestureContext,
-    );
-    this.#teardown.add(() => this.#entryGestures?.detach());
-  }
-
-  /** How does the keyboard nudge and resize a bar on the timeline pane? */
-  #attachKeyboardEditing(gestureContext: EntryGestureContext): void {
-    this.#keyboardEditing = this.#options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
-    this.#teardown.add(() => this.#keyboardEditing?.detach());
   }
 
   /** How do wheel zoom and pan reach both the timeline pane and the grid pane? */

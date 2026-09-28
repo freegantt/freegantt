@@ -246,10 +246,10 @@ export class RovingFocus {
     }
 
     // ArrowLeft/ArrowRight step a cell, or expand/collapse the row.
-    const direction = gridCellDirectionOf(event.key);
+    const direction = valueForKey(GRID_CELL_DIRECTION, event.key);
     if (direction !== undefined) {
       event.preventDefault();
-      this.#onHorizontal(gridKeyRow.row, rows, gridKeyRow.index, direction, gridKeyRow.field);
+      this.#stepCellOrToggleRow(gridKeyRow.row, rows, gridKeyRow.index, direction, gridKeyRow.field);
       return;
     }
 
@@ -262,7 +262,7 @@ export class RovingFocus {
   /** `ArrowRight`/`ArrowLeft`, on either a row or a cell. Going right,
    *  a row expands or steps into its first cell; going left, it collapses or stays put. A cell
    *  steps to its neighbour, clamped, and a cell 0 `ArrowLeft` steps back out to the row. */
-  #onHorizontal(
+  #stepCellOrToggleRow(
     row: RovingFocusRow,
     rows: readonly RovingFocusRow[],
     rowIndex: number,
@@ -452,7 +452,7 @@ export class RovingFocus {
     const currentIndex = timelineBarIndexOf(bars, this.#timelineFocus);
 
     // Which bar does a vertical arrow land on?
-    const direction = adjacentBarDirectionOf(event.key);
+    const direction = valueForKey(ADJACENT_BAR_DIRECTION, event.key);
     if (direction !== undefined) {
       const target = this.#nearestBarInAdjacentRow(bars, currentIndex, direction);
       if (target === undefined) return;
@@ -605,8 +605,8 @@ function gridRowIndexForKey(
   rowCount: number,
   rowsPerPage: () => number,
 ): number | undefined {
-  if (!Object.hasOwn(GRID_ROW_MOVE, key)) return undefined;
-  const move = GRID_ROW_MOVE[key as GridRowNavKey];
+  const move = valueForKey(GRID_ROW_MOVE, key);
+  if (move === undefined) return undefined;
   const from = fromIndex < 0 ? 0 : fromIndex;
   const last = rowCount - 1;
   if ('adjacent' in move) return clamp(from + move.adjacent, 0, last);
@@ -614,24 +614,16 @@ function gridRowIndexForKey(
   return move.jumpTo === 'first' ? 0 : last;
 }
 
-/** Call: `gridCellDirectionOf(event.key)`. ArrowRight is one cell right; ArrowLeft is one cell left. */
-function gridCellDirectionOf(key: string): 1 | -1 | undefined {
-  return Object.hasOwn(GRID_CELL_DIRECTION, key)
-    ? GRID_CELL_DIRECTION[key as 'ArrowRight' | 'ArrowLeft']
-    : undefined;
+/** Call: `valueForKey(GRID_CELL_DIRECTION, event.key)`. What does this key table say for one
+ *  keyboard key? `undefined` for a key the table does not own, `toString` included. */
+function valueForKey<K extends string, V>(table: Readonly<Record<K, V>>, key: string): V | undefined {
+  return Object.hasOwn(table, key) ? table[key as K] : undefined;
 }
 
 /** Call: `timelineBarIndexOf(bars, this.#timelineFocus)`. Which bar the timeline pane remembers,
  *  or -1 when none is focused yet. */
 function timelineBarIndexOf(bars: readonly HTMLElement[], current: BarId | undefined): number {
   return current === undefined ? -1 : bars.findIndex((bar) => bar.dataset['barId'] === current);
-}
-
-/** Call: `adjacentBarDirectionOf(event.key)`. ArrowDown is one row down; ArrowUp is one row up. */
-function adjacentBarDirectionOf(key: string): 1 | -1 | undefined {
-  return Object.hasOwn(ADJACENT_BAR_DIRECTION, key)
-    ? ADJACENT_BAR_DIRECTION[key as 'ArrowDown' | 'ArrowUp']
-    : undefined;
 }
 
 /** Call: `plainHorizontalArrow(event)`. ArrowLeft/ArrowRight with no Shift and no Alt — a nudge,
