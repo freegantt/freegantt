@@ -17,11 +17,11 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `lint:file` | `eslint --max-warnings 0` on `$1` | <2s |
 | `typecheck` | `tsc --noEmit` | ~5s |
 | `boundaries` | `depcruise --config .dependency-cruiser.cjs src harness e2e fixtures` | ~3s |
-| `test:node` | `vitest run --project pure` | seconds |
-| `test:dom` | `vitest run --project dom` | seconds |
+| `test:node` | `vitest run --project pure --coverage` into `coverage/pure` | seconds |
+| `test:dom` | `vitest run --project dom --coverage` into `coverage/dom` | seconds |
 | `guards` | `vitest run test/guards` + `scripts/run-rule-tests.mjs` (the `eslint/rules/*.test.cjs` RuleTester suites) + `scripts/guard-red-test.mjs` | ~10s |
 | `sentence-length` | `scripts/check-sentence-length.mjs` — reads a declared file list, not a glob (§7.4) | <1s |
-| `check-crap` | `scripts/check-crap.mjs` — CRAP (or McCabe only) over production functions in `src/`. `crap.json` holds metric and threshold; `"metric": "complexity"` is the back-off | ~12s on `crap` (a coverage re-run); <1s on `complexity` |
+| `check-crap` | `scripts/check-crap.mjs` — CRAP (or McCabe only) over production functions in `src/`. Reads the JSON `test:node` and `test:dom` already wrote; `"metric": "complexity"` in `crap.json` is the back-off | <1s |
 | `disables` | `scripts/audit-disables.mjs` | <1s |
 | `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating) | ~10s |
 | `check-doc-examples` | `node scripts/check-doc-examples.mjs` — typechecks the docs' code fences against the built `.d.ts`, so `pnpm build` runs first | ~5s |
