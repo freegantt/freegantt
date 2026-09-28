@@ -5,7 +5,14 @@
 // (construction path) name it (`rollup-is-removable`); delete this file and every entry keeps
 // its authored values.
 
-import type { StoredEntry, EntryId, FieldUpdated, HierarchySource } from '../model/index.js';
+import type {
+  Aggregator,
+  StoredEntry,
+  EntryId,
+  FieldUpdated,
+  HierarchySource,
+  RollUpContext,
+} from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import { isNoOpFieldWrite } from './change-set.js';
 import type { ProposedEdits } from './edit-extension.js';
@@ -30,7 +37,7 @@ import {
   writeOntoEntry,
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
-import type { FieldRegistry } from './fields/field-registry.js';
+import type { FieldRegistry, RollingUpField } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
   /** Body plus extension-hook edits. A rolling-up Field proposed on an entry that still has
@@ -204,6 +211,99 @@ export interface RollUpResult {
 
 const NO_ROLLUP_RESULT: RollUpResult = Object.freeze({ updated: [], overwrittenProposals: [] });
 
+/** The Entries, parent lookup, and child indexes one Rollup pass walks. */
+interface RollUpWalk {
+  readonly entries: ReadonlyMap<EntryId, StoredEntry>;
+  readonly parentOfEffective: HierarchySource;
+  readonly byParent: ReadonlyMap<EntryId, readonly EntryId[]>;
+  readonly priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>;
+  readonly touched: ReadonlySet<EntryId> | undefined;
+  readonly merged: ProposedEdits;
+}
+
+/** Call: `committedTreeStillAnswers(pending, tree)`. Does the store's committed index already hold
+ *  the right parent and child answers? True only when this commit cannot have moved a row, so
+ *  re-deriving either half would only recompute what `tree` already carries. */
+function committedTreeStillAnswers(pending: PendingRollUp, tree: RollUpTree): boolean {
+  return (
+    tree.source === storedParentSource &&
+    commitMovesNoRow(pending.added, pending.removed, pending.edits.merged)
+  );
+}
+
+/** Call: `rollUpWalkFrom(committed, pending, tree)`. Construction omits `pending` and walks every
+ *  deriving parent on the committed tree. Commit builds the effective tree — so a parent promoted
+ *  on this commit is already a parent when `parentsToRecompute` asks structure — and walks only the
+ *  ancestors it must. The tree this pass walks is checked: a source that loops would make
+ *  `ancestorsOf` and `depthOf` run forever. Nothing is reported from either half: the effective tree
+ *  is one no commit has landed yet, and the commit raises the committed one's refusals once it
+ *  lands. */
+function rollUpWalkFrom(
+  committed: ReadonlyMap<EntryId, StoredEntry>,
+  pending: PendingRollUp | undefined,
+  tree: RollUpTree,
+): RollUpWalk {
+  const parentOfPrior = parentIdIn(tree.committedParents);
+  if (pending === undefined) {
+    return {
+      entries: committed,
+      parentOfEffective: parentOfPrior,
+      byParent: childIdsByParent(committed, parentOfPrior),
+      priorByParent: tree.committedChildIds,
+      touched: undefined,
+      merged: new Map(),
+    };
+  }
+
+  const { added, removed, edits } = pending;
+  const merged = edits.merged;
+  const entries = buildEffectiveEntries(committed, added, removed, merged);
+  const reuseCommitted = committedTreeStillAnswers(pending, tree);
+  const parentOfEffective = reuseCommitted
+    ? parentOfPrior
+    : parentIdIn(checkHierarchyAnswers(entries, tree.source).parents);
+  return {
+    entries,
+    parentOfEffective,
+    byParent: reuseCommitted ? tree.committedChildIds : childIdsByParent(entries, parentOfEffective),
+    priorByParent: reuseCommitted ? tree.committedChildIds : childIdsByParent(committed, parentOfPrior),
+    touched: collectTouchedIds(committed, added, removed, merged, parentOfPrior),
+    merged,
+  };
+}
+
+/** Call: `effectiveChildrenOf(childIds, entries, merged, computed)`. Each child as this bottom-up
+ *  walk has already written it — a rolled-up parent the pass just settled, else the effective row
+ *  after merged edits. */
+function effectiveChildrenOf(
+  childIds: readonly EntryId[],
+  entries: ReadonlyMap<EntryId, StoredEntry>,
+  merged: ProposedEdits,
+  computed: ReadonlyMap<EntryId, StoredEntry>,
+): StoredEntry[] {
+  const children: StoredEntry[] = [];
+  for (const childId of childIds) {
+    const child = effectiveEntry(childId, entries, merged, computed);
+    if (child !== undefined) children.push(child);
+  }
+  return children;
+}
+
+/** Call: `rolledUpValueFrom(field, parent, context, aggregator)`. One Aggregator's answer for this
+ *  parent. A throw becomes AggregatorFailedError so the commit saves nothing. */
+function rolledUpValueFrom(
+  field: RollingUpField,
+  parent: StoredEntry,
+  context: RollUpContext,
+  aggregator: Aggregator,
+): unknown {
+  try {
+    return aggregator(parent, context);
+  } catch (cause) {
+    throw new AggregatorFailedError(field.key, field.rollUp, parent.id, cause);
+  }
+}
+
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must.
@@ -231,45 +331,11 @@ export function rollUpFields(
   // revision, and an Aggregator reading a child's `compute` Field would fold a stale value into a
   // parent's stored cell.
   const access = readingHypotheticalRows(storeAccess);
-
-  const added = pending?.added ?? [];
-  const removed = pending?.removed ?? [];
-  const emptyEdits: ProposedEdits = new Map();
-  const merged = pending?.edits.merged ?? emptyEdits;
-  // Effective tree includes extender overlays, so a parent promoted on this commit (a `parentId`
-  // write lands its first child) is already a parent when `parentsToRecompute` asks structure.
-  const entries =
-    pending === undefined ? committed : buildEffectiveEntries(committed, added, removed, merged);
-  // The tree this pass walks, checked (ADR 0020): a source that loops would make `ancestorsOf` and
-  // `depthOf` below run forever. The committed half is the store's own index, already checked and
-  // memoized per revision — this pass reads it rather than walking the whole Dataset a
-  // second time to reach the same answer. Nothing is reported from either half: the effective tree
-  // is one no commit has landed yet, and the commit raises the committed one's refusals once it
-  // lands.
-  const parentOfPrior = parentIdIn(tree.committedParents);
-  // The store's committed index already holds the right answer when this commit cannot have moved a
-  // row (#421 C4): `entries` and `committed` then share the same structure, so re-deriving either
-  // half below would only recompute what `tree` already carries.
-  const committedTreeStillAnswers =
-    pending !== undefined && tree.source === storedParentSource && commitMovesNoRow(added, removed, merged);
-  const parentOfEffective =
-    pending === undefined || committedTreeStillAnswers
-      ? parentOfPrior
-      : parentIdIn(checkHierarchyAnswers(entries, tree.source).parents);
-  const touched =
-    pending === undefined ? undefined : collectTouchedIds(committed, added, removed, merged, parentOfPrior);
-
-  const byParent = committedTreeStillAnswers
-    ? tree.committedChildIds
-    : childIdsByParent(entries, parentOfEffective);
-  let priorByParent: ReadonlyMap<EntryId, readonly EntryId[]>;
-  if (committedTreeStillAnswers) {
-    priorByParent = byParent;
-  } else if (pending === undefined) {
-    priorByParent = tree.committedChildIds;
-  } else {
-    priorByParent = childIdsByParent(committed, parentOfPrior);
-  }
+  const { entries, parentOfEffective, byParent, priorByParent, touched, merged } = rollUpWalkFrom(
+    committed,
+    pending,
+    tree,
+  );
   const parents = parentsToRecompute(entries, byParent, priorByParent, touched, parentOfEffective);
   const computed = new Map<EntryId, StoredEntry>();
   // A `compute` Field inside this pass asks `ctx.children(row)` and must see the pass's own
@@ -280,9 +346,7 @@ export function rollUpFields(
   // never the store's committed one, which may not have this edit's hierarchy change yet.
   const passAccess = readingParentFrom(
     readingChildrenFrom(access, (id) =>
-      (byParent.get(id) ?? [])
-        .map((childId) => effectiveEntry(childId, entries, merged, computed))
-        .filter((child): child is StoredEntry => child !== undefined),
+      effectiveChildrenOf(byParent.get(id) ?? [], entries, merged, computed),
     ),
     (entry) => parentIdFrom(parentOfEffective, entry),
   );
@@ -291,15 +355,15 @@ export function rollUpFields(
 
   for (const parentId of parents) {
     const parent = entries.get(parentId);
-    if (!parent) continue;
+    if (parent === undefined) continue;
 
-    const childIds = byParent.get(parentId);
-    if (!childIds || childIds.length === 0) {
+    const childIds = byParent.get(parentId) ?? [];
+    if (childIds.length === 0) {
       // Demoted: `parentsToRecompute` only visits this id with no children left when it had
-      // children before this operation (ADR 0013 — losing the last child demotes). An entry that
-      // stops being a parent in this same transaction keeps the write to that Field (2026-09-24
-      // ruling): `clearDerivedValues` leaves alone any field `merged` (body or cascade) proposed,
-      // rather than wiping the value that write just landed.
+      // children before this operation. Losing the last child demotes. An entry that stops being a
+      // parent in this same transaction keeps the write to that Field: `clearDerivedValues` leaves
+      // alone any field `merged` (body or cascade) proposed, rather than wiping the value that write
+      // just landed.
       computed.set(
         parentId,
         clearDerivedValues(
@@ -315,11 +379,7 @@ export function rollUpFields(
       continue;
     }
 
-    const children: StoredEntry[] = [];
-    for (const childId of childIds) {
-      const child = effectiveEntry(childId, entries, merged, computed);
-      if (child) children.push(child);
-    }
+    const children = effectiveChildrenOf(childIds, entries, merged, computed);
     if (children.length === 0) continue;
 
     let effectiveParent = effectiveEntry(parentId, entries, merged, computed) ?? parent;
@@ -327,40 +387,26 @@ export function rollUpFields(
     for (const field of rollingFields) {
       // The Rollup owns every rolling-up Field of a parent, in a transaction or not: a
       // same-transaction proposal — the body's own, or a cascade's — never wins over it once this
-      // entry has children by the end of this operation (2026-09-24 ruling). `merged` carries both
-      // sources, so this parent+field pair is reported once for the whole commit if the write below
-      // turns out to actually overwrite one of them.
+      // entry has children by the end of this operation. `merged` carries both sources, so this
+      // parent+field pair is reported once for the whole commit if the write below turns out to
+      // actually overwrite one of them.
       const wasProposed = editProposesField(merged.get(parentId), field);
-
       const aggregator = registry.aggregator(field.rollUp);
-      if (!aggregator) continue;
+      if (aggregator === undefined) continue;
 
-      let value: unknown;
-      try {
-        value = aggregator(
-          effectiveParent,
-          createRollUpContext(passAccess, effectiveParent, children, field.key),
-        );
-      } catch (cause) {
-        throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
-      }
-
+      const value = rolledUpValueFrom(
+        field,
+        effectiveParent,
+        createRollUpContext(passAccess, effectiveParent, children, field.key),
+        aggregator,
+      );
       const from = readField(effectiveParent, field, access);
-
-      if (value === undefined) {
-        // ADR 0013, decision 5/6 and #270: an Aggregator with no opinion means *no value* on a
-        // parent — never "keep whatever is stored," which is stale by construction the moment
-        // nothing but the Rollup may write this cell. `from === undefined` is already clear; there
-        // is nothing to drop.
-        if (from === undefined) continue;
-        const row: FieldUpdated = { store: 'entries', id: parentId, field: field.key, from, to: undefined };
-        updated.push(row);
-        if (wasProposed) overwrittenProposals.push(row);
-        effectiveParent = writeOntoEntry(effectiveParent, field, undefined);
+      // An Aggregator with no opinion means *no value* on a parent — never "keep whatever is stored,"
+      // which is stale by construction the moment nothing but the Rollup may write this cell. Skip
+      // only when the cell is already clear, or when a defined answer equals what is stored.
+      if (value === undefined ? from === undefined : isNoOpFieldWrite(field.key, from, value, registry)) {
         continue;
       }
-
-      if (isNoOpFieldWrite(field.key, from, value, registry)) continue;
 
       const row: FieldUpdated = { store: 'entries', id: parentId, field: field.key, from, to: value };
       updated.push(row);
