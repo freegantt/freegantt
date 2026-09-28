@@ -433,13 +433,9 @@ export function main(
   if (result.breaches.length > 0) {
     io.error(`check-crap FAILED: ${result.breaches.length} function(s) over ${unit} ${threshold}.`);
     for (const row of result.breaches) io.error(`  ${formatScore(row, metric)}`);
-    if (metric === 'crap') {
-      io.error(
-        'Split the function, cover its branches, or set metric to "complexity" in crap.json to back off.',
-      );
-    } else {
-      io.error('Split the function, or raise threshold in crap.json.');
-    }
+    io.error(
+      'Read the crap-ceiling skill. Cover the function at its interface, or extract a phase, a mode, or a rule.',
+    );
     io.exit(1);
     return 1;
   }
