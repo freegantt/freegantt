@@ -3,9 +3,12 @@
 // agent-written, so a ceiling on "hard to change and untested" is a machine check, not a review
 // memory. Formula: complexity² × (1 − coverage)³ + complexity.
 //
-// Back-off lives in `crap.json`. `"metric": "crap"` needs a coverage JSON and scores CRAP.
+// Back-off lives in `crap.json`. `"metric": "crap"` scores CRAP from coverage JSON.
 // `"metric": "complexity"` drops coverage and scores McCabe cyclomatic complexity only. One field
 // is the whole switch. Threshold is the number for the active metric, not both at once.
+//
+// The gate already ran `test:node` and `test:dom` with coverage into `coverage/pure` and
+// `coverage/dom`. This script merges those files. It does not run the tests a third time.
 //
 // Complexity matches ESLint's classic `complexity` rule: one path to start, then one more for each
 // `if` / loop / `case` / `catch` / `?:` / `&&` / `||` / `??` / default param / logical assignment /
@@ -228,6 +231,51 @@ function loadCoverageJson(coveragePath) {
   return JSON.parse(readFileSync(coveragePath, 'utf8'));
 }
 
+function addHits(left, right) {
+  if (typeof left === 'number' && typeof right === 'number') return left + right;
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.map((n, i) => n + (right[i] ?? 0));
+  }
+  return right ?? left;
+}
+
+/** Merge Istanbul file maps. Hits add when both reports name the same file. */
+export function mergeCoverageMaps(maps) {
+  const out = {};
+  for (const map of maps) {
+    if (map === null || map === undefined) continue;
+    for (const [file, cov] of Object.entries(map)) {
+      if (out[file] === undefined) {
+        out[file] = structuredClone(cov);
+        continue;
+      }
+      const dest = out[file];
+      for (const key of ['s', 'f']) {
+        if (cov[key] === undefined) continue;
+        dest[key] ??= {};
+        for (const [id, hits] of Object.entries(cov[key])) {
+          dest[key][id] = addHits(dest[key][id] ?? 0, hits);
+        }
+      }
+      if (cov.b !== undefined) {
+        dest.b ??= {};
+        for (const [id, hits] of Object.entries(cov.b)) {
+          dest.b[id] = addHits(dest.b[id], hits);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function loadProjectCoverage(rootDir) {
+  const pure = loadCoverageJson(path.join(rootDir, 'coverage', 'pure', 'coverage-final.json'));
+  const dom = loadCoverageJson(path.join(rootDir, 'coverage', 'dom', 'coverage-final.json'));
+  if (pure === null && dom === null) return null;
+  if (pure === null || dom === null) return null;
+  return mergeCoverageMaps([pure, dom]);
+}
+
 function collectCoverage(rootDir) {
   const result = spawnSync(
     'pnpm',
@@ -268,10 +316,15 @@ export function evaluateTree({
 
   let coverage = injectedCoverage ?? null;
   if (metric === 'crap' && injectedCoverage === undefined) {
-    collectCoverageRun(rootDir);
-    coverage = loadCoverageJson(coveragePath);
-    if (coverage === null) {
-      throw new Error(`check-crap: ${coveragePath} is still missing after the coverage run.`);
+    const fromProjects = loadProjectCoverage(rootDir);
+    if (fromProjects !== null) {
+      coverage = fromProjects;
+    } else {
+      collectCoverageRun(rootDir);
+      coverage = loadCoverageJson(coveragePath);
+      if (coverage === null) {
+        throw new Error(`check-crap: ${coveragePath} is still missing after the coverage run.`);
+      }
     }
   }
   if (metric === 'crap' && coverage === null) {
@@ -359,9 +412,9 @@ export function main(
 
   let injectedCoverage;
   if (metric === 'crap' && options.skipCollect) {
-    const loaded = loadCoverageJson(coveragePath);
+    const loaded = loadProjectCoverage(rootDir) ?? loadCoverageJson(coveragePath);
     if (loaded === null) {
-      throw new Error(`check-crap: ${coveragePath} is missing and coverage collection is off.`);
+      throw new Error(`check-crap: coverage JSON is missing and coverage collection is off.`);
     }
     injectedCoverage = loaded;
   }

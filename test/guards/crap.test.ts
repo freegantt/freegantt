@@ -9,7 +9,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { crapScore, evaluateTree, functionsIn, readConfig } from '../../scripts/check-crap.mjs';
+import {
+  crapScore,
+  evaluateTree,
+  functionsIn,
+  mergeCoverageMaps,
+  readConfig,
+} from '../../scripts/check-crap.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const script = path.join(root, 'scripts/check-crap.mjs');
@@ -46,6 +52,17 @@ describe('crapScore', () => {
 
   it('equals complexity squared plus complexity when coverage is none', () => {
     expect(crapScore(5, 0)).toBe(30);
+  });
+});
+
+describe('mergeCoverageMaps', () => {
+  it('adds statement hits when both reports name the same file', () => {
+    const merged = mergeCoverageMaps([
+      { '/a.ts': { s: { '0': 1 } } },
+      { '/a.ts': { s: { '0': 2 } }, '/b.ts': { s: { '0': 1 } } },
+    ]);
+    expect(merged['/a.ts']?.s?.['0']).toBe(3);
+    expect(merged['/b.ts']?.s?.['0']).toBe(1);
   });
 });
 
@@ -157,6 +174,38 @@ describe('evaluateTree metric switch', () => {
       });
       expect(crap.breaches).toHaveLength(1);
       expect(complexity.breaches).toHaveLength(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reads coverage/pure and coverage/dom and does not spawn a third test run', () => {
+    const source = 'export function f() { return 1; }\n';
+    const dir = fixtureRoot({ 'src/ok.ts': source });
+    const abs = path.join(dir, 'src/ok.ts');
+    const fileCov = {
+      [abs]: {
+        path: abs,
+        statementMap: { '0': { start: { line: 1, column: 0 }, end: { line: 1, column: 40 } } },
+        s: { '0': 1 },
+      },
+    };
+    fs.mkdirSync(path.join(dir, 'coverage/pure'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'coverage/dom'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'coverage/pure/coverage-final.json'), JSON.stringify(fileCov));
+    fs.writeFileSync(path.join(dir, 'coverage/dom/coverage-final.json'), JSON.stringify({}));
+    try {
+      const result = evaluateTree({
+        rootDir: dir,
+        srcDir: path.join(dir, 'src'),
+        metric: 'crap',
+        threshold: 20,
+        coveragePath: path.join(dir, 'coverage/coverage-final.json'),
+        collectCoverageRun: () => {
+          throw new Error('must not re-run tests when project coverage JSON is present');
+        },
+      });
+      expect(result.breaches).toHaveLength(0);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
