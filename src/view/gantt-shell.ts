@@ -912,8 +912,8 @@ export class GanttShell {
     // key event whose target sits inside `#container`. A popup opened from an outside trigger has
     // no path into that listener at all — a toolbar button in the consumer's own page, say. So its
     // Escape dismissal would never fire. So this routes through the same `#keymap.resolve()`, not a
-    // second, independent listener. That keeps one newest-first resolution order, instead of
-    // reintroducing the bespoke document-capture stack C3 removed. Skipped whenever the target is inside
+    // second, independent listener. That keeps one newest-first resolution order, instead of a
+    // second document-capture stack. Skipped whenever the target is inside
     // `#container`, so an in-container key event is resolved exactly once, by the bubble listener.
     this.#attachDocumentKeymap();
 
@@ -1032,7 +1032,7 @@ export class GanttShell {
     return createDomBackend({
       entryById: (id) => this.#options.dataset.entries.get(id),
       raiseError: this.#raiseError,
-      // #421 C5: per-entry, not per-frame. `EntryVariant.barLabels` merges key by key over this
+      // Per-entry, not per-frame. `EntryVariant.barLabels` merges key by key over this
       // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
       resolveBarLabelPolicy: (entry) =>
         resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
