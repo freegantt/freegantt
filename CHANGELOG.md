@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ## [Unreleased]
 
+## [0.0.1] - 2026-09-28
+
+The first release on npm: `npm install freegantt`.
+
 ### Changed
 
 - **Breaking:** The default date editor opens on a date that has a time of day. It no longer refuses it, and the `time-of-day` report code is removed. When the user commits the same day, the stored time of day stays. A new day stores the start of that day. ([#596](https://github.com/freegantt/freegantt/issues/596))
