@@ -236,7 +236,9 @@ export class RovingFocus {
     if (gridKeyRow === undefined) return;
 
     // Which row does Home, End, Page, or a vertical arrow land on?
-    const nextIndex = gridRowIndexForKey(event.key, gridKeyRow.index, rows.length, this.#ports.rowsPerPage());
+    const nextIndex = gridRowIndexForKey(event.key, gridKeyRow.index, rows.length, () =>
+      this.#ports.rowsPerPage(),
+    );
     if (nextIndex !== undefined) {
       event.preventDefault();
       this.#gotoRow(rows, nextIndex, gridKeyRow.field);
@@ -595,20 +597,20 @@ function gridKeyRowOf(rows: readonly RovingFocusRow[], focus: GridFocus | undefi
   return { row, index, field: rowFocus?.field };
 }
 
-/** Call: `gridRowIndexForKey(event.key, gridKeyRow.index, rows.length, this.#ports.rowsPerPage())`.
+/** Call: `gridRowIndexForKey(event.key, gridKeyRow.index, rows.length, () => this.#ports.rowsPerPage())`.
  *  Which row index Home, End, Page, or a vertical arrow lands on — `undefined` for any other key. */
 function gridRowIndexForKey(
   key: string,
   fromIndex: number,
   rowCount: number,
-  rowsPerPage: number,
+  rowsPerPage: () => number,
 ): number | undefined {
   if (!Object.hasOwn(GRID_ROW_MOVE, key)) return undefined;
   const move = GRID_ROW_MOVE[key as GridRowNavKey];
   const from = fromIndex < 0 ? 0 : fromIndex;
   const last = rowCount - 1;
   if ('adjacent' in move) return clamp(from + move.adjacent, 0, last);
-  if ('pages' in move) return clamp(from + move.pages * Math.max(1, rowsPerPage), 0, last);
+  if ('pages' in move) return clamp(from + move.pages * Math.max(1, rowsPerPage()), 0, last);
   return move.jumpTo === 'first' ? 0 : last;
 }
 
