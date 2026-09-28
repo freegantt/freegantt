@@ -816,7 +816,15 @@ export interface EntryInput<TProps = Record<string, unknown>> {
 }
 
 // @public (undocumented)
-export type EntryMove = EntryGestureEvent;
+export type EntryMove = Omit<EntryGestureEvent, 'entries'> & TreePlaceChange & {
+    readonly shiftsTime: boolean;
+    readonly entries: readonly EntryMoveDetail[];
+};
+
+// @public
+export type EntryMoveDetail = ProposedDates & TreePlaceChange & {
+    readonly shiftsTime: boolean;
+};
 
 // @public
 export class EntryNotFoundError extends FreeGanttError {
@@ -2427,6 +2435,23 @@ export class TransactionAlreadyOpenError extends FreeGanttError {
     // (undocumented)
     readonly operation: string;
 }
+
+// @public
+export interface TreePlace {
+    // (undocumented)
+    readonly parentId: EntryId | undefined;
+    // (undocumented)
+    readonly siblingIndex: number;
+}
+
+// @public
+export type TreePlaceChange = {
+    readonly place: TreePlace;
+    readonly currentPlace: TreePlace;
+} | {
+    readonly place?: never;
+    readonly currentPlace?: never;
+};
 
 // @public
 export type TypedGridColumnKey<TProps> = keyof CoreFieldValues | (keyof TProps & string);
