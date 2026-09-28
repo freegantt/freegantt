@@ -1398,8 +1398,8 @@ describe('render/dom backend', () => {
 
     backend.applyState({
       preview: [
-        { barId: a!.id, dx: 10, dWidth: 0, extra: false },
-        { barId: b!.id, dx: 5, dWidth: 0, extra: true },
+        { barId: a!.id, dx: 10, dy: 0, dWidth: 0, extra: false },
+        { barId: b!.id, dx: 5, dy: 0, dWidth: 0, extra: true },
       ],
     });
     expect(nodeA.dataset['state']).toBe('dragging');
@@ -1408,6 +1408,138 @@ describe('render/dom backend', () => {
     backend.applyState({});
     expect(nodeA.dataset['state']).toBe('');
     expect(nodeB.dataset['state']).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('BarPreview.dy offsets the bar node vertically, on top of its committed y (#425)', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+    const [a] = frame.bars;
+    const node = timeline.querySelector<HTMLElement>(`[data-bar-id="${a!.id}"]`)!;
+
+    backend.applyState({ preview: [{ barId: a!.id, dx: 0, dy: 32, dWidth: 0, extra: false }] });
+    expect(node.style.transform).toBe(`translate(${a!.x}px, ${a!.y + 32}px)`);
+
+    backend.applyState({});
+    expect(node.style.transform).toBe(`translate(${a!.x}px, ${a!.y}px)`);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  // #425: a vertical drag's own paint — a "before"/"after" drop shows the Insertion line and no row
+  // outline; "into" shows the row's own outline and no line; a refusal tints the row and sets the
+  // container's cursor state. Clearing parks all three together.
+  it('paints data-drop and the Insertion line for a row drop, and clears both together', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    grid.classList.add('fg-container');
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 100, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+
+    const target = frame.rows[1]!;
+    const row = grid.querySelector<HTMLElement>(`.fg-row[data-row-id="${target.id}"]`)!;
+    const band = timeline.querySelector<HTMLElement>(`.fg-row-band[data-row-id="${target.id}"]`)!;
+    const lineInGrid = grid.querySelector<HTMLElement>('.fg-drop-line')!;
+    const lineInTimeline = timeline.querySelector<HTMLElement>('.fg-drop-line')!;
+    expect(lineInGrid.hidden).toBe(true);
+    expect(lineInTimeline.hidden).toBe(true);
+
+    backend.applyState({ rowDrop: { rowId: target.id, side: 'before', depth: 1, lineY: 64 } });
+    expect(row.dataset['drop']).toBe('before');
+    expect(band.dataset['drop']).toBe('before');
+    expect(lineInGrid.hidden).toBe(false);
+    expect(lineInGrid.style.transform).toBe('translateY(64px)');
+    expect(lineInGrid.style.getPropertyValue('--fg-drop-line-depth')).toBe('1');
+    expect(lineInTimeline.hidden).toBe(false);
+    expect(lineInTimeline.style.transform).toBe('translateY(64px)');
+    expect(grid.dataset['drop']).toBeUndefined();
+
+    // "into" reads on the row's own outline — the target's centre, not a line between two rows.
+    backend.applyState({ rowDrop: { rowId: target.id, side: 'into', depth: 1, lineY: undefined } });
+    expect(row.dataset['drop']).toBe('into');
+    expect(lineInGrid.hidden).toBe(true);
+    expect(lineInTimeline.hidden).toBe(true);
+
+    // A refused drop tints the row and sets the container's own cursor state (CSS reads this).
+    backend.applyState({ rowDrop: { refusedRowId: target.id } });
+    expect(row.dataset['drop']).toBe('refused');
+    expect(band.dataset['drop']).toBe('refused');
+    expect(grid.dataset['drop']).toBe('refused');
+    expect(lineInGrid.hidden).toBe(true);
+
+    backend.applyState({});
+    expect(row.dataset['drop']).toBeUndefined();
+    expect(band.dataset['drop']).toBeUndefined();
+    expect(grid.dataset['drop']).toBeUndefined();
+    expect(lineInGrid.hidden).toBe(true);
+    expect(lineInTimeline.hidden).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  // I5: the same diff-and-touch-only discipline the hover repaint keeps above — a row drop moving
+  // from one row to the next touches only those two rows' `data-drop`, never a scan of every row.
+  it('a rowDrop repaint touches only the row it leaves and the row it reaches (I5, #425)', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 100, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+
+    const first = frame.rows[0]!;
+    const second = frame.rows[1]!;
+    backend.applyState({ rowDrop: { rowId: first.id, side: 'before', depth: 0, lineY: 0 } });
+
+    const observer = new MutationObserver(() => {});
+    observer.observe(grid, { subtree: true, attributes: true, attributeFilter: ['data-drop'] });
+    observer.observe(timeline, { subtree: true, attributes: true, attributeFilter: ['data-drop'] });
+
+    backend.applyState({ rowDrop: { rowId: second.id, side: 'before', depth: 0, lineY: 32 } });
+    const touched = observer.takeRecords().map((record) => (record.target as HTMLElement).dataset['rowId']);
+    observer.disconnect();
+
+    expect(new Set(touched)).toEqual(new Set([first.id, second.id]));
 
     backend.destroy();
     grid.remove();
@@ -2272,7 +2404,7 @@ describe('render/dom backend', () => {
       const measureTextCallsBeforePreview = measureTextCalls;
 
       // Shrinks the bar past the fit line entirely off the hot path — no frame, no canvas call.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: -180, extra: false }] });
+      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }] });
       expect(bar.dataset['label']).toBe('outside');
       observer.disconnect();
       expect(mutations).toBe(0);
@@ -2312,13 +2444,13 @@ describe('render/dom backend', () => {
       // label child survived, so `.fg-bar-label`'s default rule (overflow: hidden; text-overflow:
       // ellipsis) kept painting it, clipped, inside the now-too-narrow bar — the exact 'inside' look
       // #435 exists to avoid.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: -180, extra: false }] });
+      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }] });
       expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
       // Widens it back past the fit line, relative to the committed 200px base (a preview delta is
       // always against `syncBars`'s own geometry, not the previous preview) — 100px still fits.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: -100, extra: false }] });
+      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -100, extra: false }] });
       expect(bar.dataset['label']).toBe('inside');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
@@ -2355,7 +2487,7 @@ describe('render/dom backend', () => {
         for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
       });
       observer.observe(timeline, { childList: true, subtree: true });
-      backend.applyState({ preview: [{ barId: id, dx: 0, dWidth: 180, extra: false }] });
+      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: 180, extra: false }] });
       observer.disconnect();
       expect(mutations).toBe(0);
       expect(bar.dataset['label']).toBe('inside');

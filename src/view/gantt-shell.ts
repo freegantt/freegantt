@@ -1221,11 +1221,12 @@ export class GanttShell {
       ...(this.#options.extraEditsFor ? { extraEditsFor: this.#options.extraEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.effectiveLocale,
-      applyGestureState: (preview, pendingBarIds, cursor) => {
+      applyGestureState: (preview, pendingBarIds, cursor, rowDrop) => {
         setOptional(this.#interactionState, 'preview', preview);
         setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
         setOptional(this.#interactionState, 'cursorX', cursor?.x);
         setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
+        setOptional(this.#interactionState, 'rowDrop', rowDrop);
         this.#backend.applyState(this.#interactionState);
       },
       rowDropZoneAt: (contentY, sourceRowIndex, previous) =>

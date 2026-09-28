@@ -15,6 +15,7 @@ import {
 import type {
   Bar,
   BarPreview,
+  DropPlace,
   RowDropZone,
   RowsForDrop,
   SnapSetting,
@@ -56,6 +57,7 @@ import { resolveRowDrop } from './row-drop.js';
 import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
+import type { InteractionState } from '../render/backend.js';
 
 /** No seam wired means no ghost — one frozen empty map, so a preview frame with no plugin installed
  *  allocates nothing (I5). */
@@ -136,11 +138,13 @@ export interface GesturePipelineDeps {
    *  ids. `undefined` preview parks bars on committed geometry; `undefined` pendingBarIds clears the
    *  `pending` token. There is no arm lock (#272/#273 — `session()` supersedes a held gesture instead
    *  of refusing to arm over it; `#held` is a fingerprint, not a gate). `cursor` is the Cursor
-   *  line; `undefined` parks it. */
+   *  line; `undefined` parks it. `rowDrop` (#425) is the vertical drag's own paint — the row it
+   *  targets or refuses, and the Insertion line; `undefined` outside a drag, or over the source row. */
   applyGestureState(
     preview: readonly BarPreview[] | undefined,
     pendingBarIds: readonly BarId[] | undefined,
     cursor?: { x: number; label: string },
+    rowDrop?: InteractionState['rowDrop'],
   ): void;
   /** #425: resolves a drag's content-y to a row drop zone, hysteresis and the source row both
    *  applied — `layout/row-drop-zone.ts`'s own `rowDropZoneAt`, wired to this Gantt's own row
@@ -241,6 +245,7 @@ export class GesturePipeline {
         this.#computePreview(this.#scheduledProposal),
         this.#held?.barIds,
         this.#computeCursor(),
+        this.#rowDropForPaint(this.#scheduledProposal?.drop),
       );
     });
   }
@@ -857,7 +862,7 @@ export class GesturePipeline {
     };
     for (const id of draft.keys()) pushEntry(id);
     for (const id of extra.keys()) pushEntry(id);
-    return previewOffsets({
+    const offsets = previewOffsets({
       proposed: draft,
       extra,
       entries,
@@ -865,6 +870,37 @@ export class GesturePipeline {
       minBarWidthPx: this.#deps.minBarWidthPx(),
       barForEntry: (id) => this.#deps.barForEntry(id),
     });
+    if (proposal.drop.kind !== 'place') return offsets;
+    // #425: a `place` drop moves the whole rigid block by one and the same pixel offset — the
+    // grabbed bar, any co-selected bar, and the subtree bars a parent's translation carries with it
+    // (ADR 0013) — so every entry `previewOffsets` painted takes the one `dy` the drop computes.
+    const dy = this.#dyForPlace(proposal.drop.place, proposal.grabbed);
+    return dy === 0 ? offsets : offsets.map((offset) => ({ ...offset, dy }));
+  }
+
+  /** #425: the pixel offset a `place` drop's Insertion line (or, for an `into` drop, the target
+   *  row's own centre) sits at, above the grabbed bar's own row centre — what makes the dragged
+   *  block ride to the row the pointer chose instead of trailing the mouse by whatever offset the
+   *  grab started at. `place.parentId` is defined whenever `lineY` is not (`layout/
+   *  row-drop-target.ts`'s own `intoPlace` is the only place that leaves `lineY` undefined) — the
+   *  `undefined` fallback below is defensive, not a case a real drop reaches. */
+  #dyForPlace(place: DropPlace, grabbedId: EntryId): number {
+    const rows = this.#deps.rowsForDrop();
+    const sourceIndex = this.#deps.rowIndexForEntry(grabbedId);
+    const sourceMid = rows.rowTop(sourceIndex) + rows.rowHeightAt(sourceIndex) / 2;
+    if (place.lineY !== undefined) return place.lineY - sourceMid;
+    if (place.parentId === undefined) return 0;
+    const targetIndex = this.#deps.rowIndexForEntry(place.parentId);
+    return rows.rowTop(targetIndex) + rows.rowHeightAt(targetIndex) / 2 - sourceMid;
+  }
+
+  /** #425: `proposal.drop` as the paint layer reads it — `RowDrop`'s own `moves`/`reason` are a
+   *  commit's business, never a backend's. `undefined` for a resize, a nudge, or a time-only drag. */
+  #rowDropForPaint(drop: RowDrop | undefined): InteractionState['rowDrop'] {
+    if (drop === undefined || drop.kind === 'timeOnly') return undefined;
+    if (drop.kind === 'refused') return { refusedRowId: drop.rowId };
+    const { place } = drop;
+    return { rowId: place.rowId, side: place.side, depth: place.depth, lineY: place.lineY };
   }
 
   /** `extra = extraEditsFor(draft)`, run on the pipeline's own rAF (`#preview`'s
