@@ -12,7 +12,16 @@ import {
   previewOffsets,
   spanAfterEdit,
 } from '../layout/index.js';
-import type { Bar, BarPreview, SnapSetting, SnapUnit, TimeScale, ViewPreset } from '../layout/index.js';
+import type {
+  Bar,
+  BarPreview,
+  RowDropZone,
+  RowsForDrop,
+  SnapSetting,
+  SnapUnit,
+  TimeScale,
+  ViewPreset,
+} from '../layout/index.js';
 import type {
   Entry,
   StoredEntry,
@@ -40,7 +49,10 @@ import type {
   EntryResize,
   GanttEventMap,
   ProposedDates,
+  TreePlaceChange,
 } from './event-bus.js';
+import type { RowDrop, PlacedEntry } from './row-drop.js';
+import { resolveRowDrop } from './row-drop.js';
 import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
@@ -50,6 +62,15 @@ import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-ge
 const NO_EXTRA_EDITS: ProposedEdits = Object.freeze(new Map());
 /** Every gesture but a parent bar's drag writes each bar it paints, so this is the usual answer. */
 const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
+
+/** #425: a `paintedOnly` Entry's own translated dates (ADR 0013 — they never write directly), with
+ *  the dates dropped so `#writesWithPlace` can still write its tree place. `undefined` in,
+ *  `undefined` out — a moved id with no paint at all has nothing to place either. */
+function stripDates(edit: ProposedEdit | undefined): ProposedEdit | undefined {
+  if (edit === undefined) return undefined;
+  const { start: _start, end: _end, ...rest } = edit;
+  return rest;
+}
 
 export interface GesturePipelineDeps {
   timeZone(): string;
@@ -121,6 +142,24 @@ export interface GesturePipelineDeps {
     pendingBarIds: readonly BarId[] | undefined,
     cursor?: { x: number; label: string },
   ): void;
+  /** #425: resolves a drag's content-y to a row drop zone, hysteresis and the source row both
+   *  applied — `layout/row-drop-zone.ts`'s own `rowDropZoneAt`, wired to this Gantt's own row
+   *  geometry. `previous` is the last resolved zone this same drag held, so the hysteresis band
+   *  measures against the drag's own history, not a fresh reading every frame. */
+  rowDropZoneAt(contentY: number, sourceRowIndex: number, previous: RowDropZone): RowDropZone;
+  /** #425: the planned rows and the lookups `layout/row-drop-target.ts`'s `dropPlaceFor` and
+   *  `resolveRowDrop` need to turn a row drop zone into a tree place. */
+  rowsForDrop(): RowsForDrop;
+  /** #425: the row a given Entry paints in, for `#movedTopMost`'s row-order sort and for
+   *  `dropFor`'s source row. */
+  rowIndexForEntry(id: EntryId): number;
+  /** #425: `ResolvedCapabilities.canPlace` — may this Entry sit under this parent. Asked once for
+   *  the Entry's own current parent (may it reorder at all) and once for the drop's target parent
+   *  (may it cross into this one), per `resolveRowDrop`'s own two-question rule. */
+  canPlace(entry: Entry, parentId: EntryId | undefined): boolean;
+  /** #425: does this Gantt's row order mirror the tree at all — `false` for a plugin-owned
+   *  hierarchy or a sorted/grouped row source, which offer no vertical drop (coordinator ruling). */
+  verticalDropOffered(): boolean;
 }
 
 /** What one gesture proposes, ready to write and ready to paint.
@@ -135,6 +174,9 @@ interface GestureProposal {
   /** The bar the user grabbed — `event.entry`, and where the payload's own span comes from. It is
    *  always a key of `paints`. */
   readonly grabbed: EntryId;
+  /** #425: where this move lands in the tree, or the proof it never asked — `{ kind: 'timeOnly' }`
+   *  for a resize, a nudge, or a drag whose pointer never left the source row. */
+  readonly drop: RowDrop;
 }
 
 /** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
@@ -217,30 +259,65 @@ export class GesturePipeline {
     if (bars.length === 0) return undefined;
     const anchor = bars[0]!;
     const { entries, paintedOnly } = this.#draftedEntries(bars, capability);
-    const proposalFor = (dxPx: number, options: DraftOptions | undefined): GestureProposal =>
-      this.#proposalFor({
-        gesture,
-        entries,
-        paintedOnly,
-        grabbed: anchor.id,
-        dxPx,
-        options,
+    const movedTopMost = gesture.kind === 'move' ? this.#movedTopMost(anchor.id, bars) : [];
+    const sourceRowIndex = gesture.kind === 'move' ? this.#deps.rowIndexForEntry(anchor.id) : -1;
+    // #425: the last resolved zone for this drag, so `rowDropZoneAt`'s hysteresis measures against
+    // the drag's own history rather than a fresh reading every frame. `dropFor`'s `persist` flag
+    // keeps a `commit()`/`nudge()` call (which never repeats) from advancing it.
+    let zone: RowDropZone = { kind: 'sourceRow' };
+    const dropFor = (options: DraftOptions | undefined, persist: boolean): RowDrop => {
+      if (gesture.kind !== 'move' || options?.contentY === undefined) return { kind: 'timeOnly' };
+      const resolvedZone = this.#deps.rowDropZoneAt(options.contentY, sourceRowIndex, zone);
+      if (persist) zone = resolvedZone;
+      return resolveRowDrop({
+        zone: resolvedZone,
+        movedTopMost,
+        rows: this.#deps.rowsForDrop(),
+        canPlace: (entry, parentId) => this.#deps.canPlace(entry, parentId),
+        verticalDropOffered: this.#deps.verticalDropOffered(),
       });
+    };
+    const proposalFor = (dxPx: number, options: DraftOptions | undefined, drop: RowDrop): GestureProposal =>
+      this.#proposalFor({ gesture, entries, paintedOnly, grabbed: anchor.id, dxPx, options, drop });
     return {
       preview: (dxPx, options) => {
-        this.#preview(proposalFor(dxPx, options), options?.cursorX);
+        this.#preview(proposalFor(dxPx, options, dropFor(options, true)), options?.cursorX);
       },
       commit: (dxPx, options) => {
-        return this.#commit(gesture, proposalFor(dxPx, options));
+        return this.#commit(gesture, proposalFor(dxPx, options, dropFor(options, false)));
       },
       nudge: (direction, options) => {
         const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
-        return this.#commit(gesture, proposalFor(dxPx, options));
+        // `nudge()` bypasses `dropFor` on purpose (`DraftOptions.contentY`'s own doc: "`nudge()`
+        // ignores it") — a keyboard step never reparents, whatever the last preview's zone was.
+        return this.#commit(gesture, proposalFor(dxPx, options, { kind: 'timeOnly' }));
       },
       cancel: () => {
         this.#preview(undefined);
       },
     };
+  }
+
+  /** #425 (ruling 9): grabbed first, then row order, dropping an Entry with a selected ancestor
+   *  already in the set — the list `resolveRowDrop` walks to place a multi-select drag as one
+   *  block. A `resize` gesture never reaches this (`session()` passes `[]`): only a move reparents. */
+  #movedTopMost(grabbedId: EntryId, bars: readonly Entry[]): readonly Entry[] {
+    const ids = new Set(bars.map((entry) => entry.id));
+    const hasSelectedAncestor = (entry: Entry): boolean => {
+      let ancestor = entry.parent();
+      while (ancestor !== undefined) {
+        if (ids.has(ancestor.id)) return true;
+        ancestor = ancestor.parent();
+      }
+      return false;
+    };
+    const topMost = bars.filter((entry) => !hasSelectedAncestor(entry));
+    const grabbedEntry = topMost.find((entry) => entry.id === grabbedId);
+    const rest = topMost
+      .filter((entry) => entry.id !== grabbedId)
+      .slice()
+      .sort((a, b) => this.#deps.rowIndexForEntry(a.id) - this.#deps.rowIndexForEntry(b.id));
+    return grabbedEntry ? [grabbedEntry, ...rest] : rest;
   }
 
   /** Just the grabbed entry when it is not part of a multi-entry selection; else every
@@ -346,8 +423,9 @@ export class GesturePipeline {
     grabbed: EntryId;
     dxPx: number;
     options: DraftOptions | undefined;
+    drop: RowDrop;
   }): GestureProposal {
-    const { gesture, entries, paintedOnly, grabbed, dxPx, options } = input;
+    const { gesture, entries, paintedOnly, grabbed, dxPx, options, drop } = input;
     const base = {
       zone: this.#deps.timeZone(),
       scale: this.#deps.timeScale(),
@@ -357,10 +435,49 @@ export class GesturePipeline {
     };
     const paints =
       gesture.kind === 'resize' ? draftForResize({ ...base, edge: gesture.edge }) : draftForMove(base);
-    if (paintedOnly.size === 0) return { writes: paints, paints, grabbed };
     const writes = new Map(paints);
     for (const id of paintedOnly) writes.delete(id);
-    return { writes, paints, grabbed };
+    if (drop.kind === 'place') {
+      return { writes: this.#writesWithPlace(writes, paints, drop.moves), paints, grabbed, drop };
+    }
+    return { writes, paints, grabbed, drop };
+  }
+
+  /** #425: folds a `place` drop's own tree write into `writes`, on top of whatever `writes` already
+   *  holds for a moved id — merging, never replacing, so a diagonal drag keeps its own dates.
+   *
+   *  A `paintedOnly` id (a deriving parent bar, ADR 0013 — its own dates roll up and never write
+   *  directly) can still be a moved top-most Entry: it can reparent even though its dates never
+   *  write. Such an id has no entry in `writes` (that is what `paintedOnly` means) but does have one
+   *  in `paints`, whose translated `start`/`end` must not carry into the tree-only write —
+   *  `stripDates` drops them.
+   *
+   *  The `moves` loop runs first, so `merged`'s insertion order matches `drop.moves`' own order
+   *  (== `siblingBlockMove`'s own call order). `commitEntryEdits` (`api/gantt.ts`) iterates this map
+   *  in insertion order, which is what makes it call `entries.update` in the order
+   *  `siblingBlockMove` assumed the target group's indices would be written in — do not reorder
+   *  this loop. */
+  #writesWithPlace(
+    writes: ProposedEdits,
+    paints: ProposedEdits,
+    moves: readonly PlacedEntry[],
+  ): ProposedEdits {
+    const merged = new Map<EntryId, ProposedEdit>();
+    for (const move of moves) {
+      const dateEdit = writes.get(move.id);
+      const treeEdit = dateEdit ?? stripDates(paints.get(move.id));
+      if (treeEdit === undefined) continue; // every moved id sits in `paints` — see `#movedTopMost`.
+      merged.set(move.id, {
+        ...treeEdit,
+        parentId: move.place.parentId,
+        siblingIndex: move.at,
+        proposedKeys: new Set([...treeEdit.proposedKeys, 'parentId', 'siblingIndex']),
+      });
+    }
+    for (const [id, edit] of writes) {
+      if (!merged.has(id)) merged.set(id, edit);
+    }
+    return merged;
   }
 
   /** The dates one drafted edit proposes for one entry — what `event.entries` carries, and what
@@ -413,7 +530,16 @@ export class GesturePipeline {
         : {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
-            afterPayload: { ...grabbed, entries: spans } satisfies EntryMove,
+            afterPayload: {
+              ...grabbed,
+              ...this.#treePlaceChangeFor(proposal.grabbed, proposal.drop),
+              shiftsTime: this.#shiftsTime(proposal.grabbed, grabbed),
+              entries: spans.map((span) => ({
+                ...span,
+                ...this.#treePlaceChangeFor(span.entry, proposal.drop),
+                shiftsTime: this.#shiftsTime(span.entry, span),
+              })),
+            } satisfies EntryMove,
           };
     // One payload shape, spelled once. The `before*` copy adds the note; nothing removes it again.
     const beforePayload = { ...event.afterPayload, refuse: note.refuse } satisfies Refusable;
@@ -430,6 +556,27 @@ export class GesturePipeline {
       }
       return committed;
     });
+  }
+
+  /** #425: this Entry's own share of `proposal.drop` — `{}` (no key at all, under
+   *  `exactOptionalPropertyTypes`) for a resize, a nudge, a time-only drag, or an Entry the drop
+   *  never named. `place` is where it lands, `currentPlace` where it sat before. */
+  #treePlaceChangeFor(id: EntryId, drop: RowDrop): TreePlaceChange {
+    if (drop.kind !== 'place') return {};
+    const move = drop.moves.find((moved) => moved.id === id);
+    return move === undefined ? {} : { place: move.place, currentPlace: move.currentPlace };
+  }
+
+  /** #425: did this Entry's own dates change — the question `place`'s absence cannot answer, since
+   *  a vertical-only drag still reports the entry's own unchanged `start`/`end`. An id the store no
+   *  longer holds errs toward `true`: the write is about to report `entry-gone`, and "nothing
+   *  changed" would be the wrong thing to tell a handler about a commit that is failing. */
+  #shiftsTime(id: EntryId, dates: ProposedDates): boolean {
+    const committed = this.#deps.entryById(id);
+    if (committed === undefined) return true;
+    const startChanged = dates.start !== undefined && dates.start !== committed.start;
+    const endChanged = dates.end !== undefined && dates.end !== committed.end;
+    return startChanged || endChanged;
   }
 
   /** Sync `true`/`false` still finish in this tick (same as before async veto). An unsettled Promise
@@ -606,12 +753,32 @@ export class GesturePipeline {
   /** Part 3 (#273): the stored row behind each id `proposal.paints` names, at the moment the hold
    *  begins — `paints`, not `writes`, because a parent bar's drag measures its delta off the
    *  parent's own envelope, which lives only in `paints` (ADR 0013); a child that moved under it
-   *  during the hold makes that delta wrong too. */
+   *  during the hold makes that delta wrong too.
+   *
+   *  #425: a `place` drop also snapshots the target group — its parent (if any) and every sibling
+   *  a held drop landed among. A row that joins or leaves that group during the hold changes the
+   *  indices `siblingBlockMove` assumed, even though no `proposal.paints` id itself was touched. */
   #measuredFrom(proposal: GestureProposal): ReadonlyMap<EntryId, StoredEntry | undefined> {
     const committed = this.#deps.committedEntriesById();
     const measuredFrom = new Map<EntryId, StoredEntry | undefined>();
-    for (const id of proposal.paints.keys()) measuredFrom.set(id, committed.get(id));
+    const snapshot = (id: EntryId): void => {
+      measuredFrom.set(id, committed.get(id));
+    };
+    for (const id of proposal.paints.keys()) snapshot(id);
+    if (proposal.drop.kind === 'place') {
+      const { parentId } = proposal.drop.place;
+      if (parentId !== undefined) snapshot(parentId);
+      for (const id of this.#targetSiblingIds(parentId)) snapshot(id);
+    }
     return measuredFrom;
+  }
+
+  /** #425: the committed ids of the drop's target group — root Entries for `parentId === undefined`,
+   *  else that parent's own children — for `#measuredFrom` to fingerprint. */
+  #targetSiblingIds(parentId: EntryId | undefined): readonly EntryId[] {
+    const rows = this.#deps.rowsForDrop();
+    const group = parentId === undefined ? rows.rootEntries() : rows.entryOf(parentId)?.children();
+    return (group ?? []).map((entry) => entry.id);
   }
 
   /** True once any row `measuredFrom` names is no longer the same object the store holds — a

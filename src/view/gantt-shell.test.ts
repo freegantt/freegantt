@@ -16,6 +16,7 @@ import { createDomBackend } from '../render/dom/index.js';
 import type { RenderBackend } from '../render/backend.js';
 import type { EntryGestureContext } from './entry-gesture-context.js';
 import { DEFAULT_ROW_HEIGHT } from './frame-settings.js';
+import type { EntryMove } from './event-bus.js';
 
 // [S2-A3]: counts `RenderBackend.sync` calls, one test's own instance (§9-I's `GanttShellOptions.backend`
 // injection point) rather than a module-wide mock every other test in this file would otherwise pay for.
@@ -1934,5 +1935,82 @@ describe('a sync leaves the view alone (#517)', () => {
 
     expect(calls.count).toBe(0);
     shell.destroy();
+  });
+});
+
+// #425: `#gesturePipelineDeps().verticalDropOffered` gates a vertical drag on this Gantt's own row
+// order still mirroring the tree — `p1{a}`, `p2{c}`, root order `p1, p2`, rows in that same order.
+describe('verticalDropOffered gates a vertical drag on the row source (#425)', () => {
+  function treeDataset(): DatasetState {
+    return new DatasetState({
+      entries: [
+        { id: 'p1', name: 'p1' },
+        { id: 'a', name: 'a', parentId: 'p1', start: rangeStart, end: rangeStart },
+        { id: 'p2', name: 'p2' },
+        { id: 'c', name: 'c', parentId: 'p2', start: rangeStart, end: rangeStart },
+      ],
+      timeZone,
+    });
+  }
+
+  /** Drags `a` (row 1) with the pointer settled over `p2`'s own row (row 2, middle third — safely
+   *  `into`) and answers whether the committed event named a tree place. `commitEntryEdits` writes
+   *  straight to the dataset — the same shape `api/gantt.ts`'s own wiring resolves a `ProposedEdit`
+   *  into, one call inside one transaction. */
+  async function dragACommitsIntoP2(options: Partial<GanttShellOptions>): Promise<boolean> {
+    const container = document.createElement('div');
+    let ctx: EntryGestureContext | undefined;
+    const moves: EntryMove[] = [];
+    const dataset = treeDataset();
+    const shell = paintedShell({
+      wiring: {
+        entryGestures: (_pane, _rowLayer, _host, gestureCtx) => {
+          ctx = gestureCtx;
+          return { detach() {} };
+        },
+        commitEntryEdits: (edits) => {
+          dataset.transaction(() => {
+            for (const [id, edit] of edits) {
+              const { __brand: _brand, props, proposedKeys: _proposedKeys, ...envelope } = edit;
+              dataset.entries.update(id, { ...envelope, ...props });
+            }
+          });
+          return true;
+        },
+      },
+      container,
+      dataset,
+      rowSource: { source: 'entries', tree: true },
+      ...options,
+    });
+    shell.on('entryMove', (move) => {
+      moves.push(move);
+    });
+
+    const session = ctx!.session(entryId('a'), { kind: 'move' })!;
+    await session.commit(0, { contentY: 2 * DEFAULT_ROW_HEIGHT + DEFAULT_ROW_HEIGHT / 2 });
+
+    shell.destroy();
+    return moves.length > 0 && 'place' in moves[0]!;
+  }
+
+  it('a tree row source with no sort offers the drop (the common case)', async () => {
+    expect(await dragACommitsIntoP2({})).toBe(true);
+  });
+
+  it('a flat row source (tree: false) offers no vertical drop', async () => {
+    expect(await dragACommitsIntoP2({ rowSource: { source: 'entries', tree: false } })).toBe(false);
+  });
+
+  it('a sorted row source offers no vertical drop — row order no longer names sibling rank', async () => {
+    expect(
+      await dragACommitsIntoP2({
+        rowSource: { source: 'entries', tree: true, sort: { field: 'name' } },
+      }),
+    ).toBe(false);
+  });
+
+  it('a plugin-owned hierarchy (hierarchyFollowsParentId: false) offers no vertical drop', async () => {
+    expect(await dragACommitsIntoP2({ hierarchyFollowsParentId: () => false })).toBe(false);
   });
 });
