@@ -21,7 +21,7 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `test:dom` | `vitest run --project dom --coverage` into `coverage/dom` | seconds |
 | `guards` | `vitest run test/guards` + `scripts/run-rule-tests.mjs` (the `eslint/rules/*.test.cjs` RuleTester suites) + `scripts/guard-red-test.mjs` | ~10s |
 | `sentence-length` | `scripts/check-sentence-length.mjs` — reads a declared file list, not a glob (§7.4) | <1s |
-| `check-crap` | `scripts/check-crap.mjs` — CRAP (or McCabe only) over production functions in `src/`. Reads the JSON `test:node` and `test:dom` already wrote; `"metric": "complexity"` in `crap.json` is the back-off | <1s |
+| `check-crap` | `scripts/check-crap.mjs` — CRAP (or McCabe only) over production functions in `src/`. Reads the JSON `test:node` and `test:dom` already wrote; `"metric": "complexity"` in `crap.json` is the back-off. A breach names the `crap-ceiling` skill | <1s |
 | `disables` | `scripts/audit-disables.mjs` | <1s |
 | `api-report` | `node scripts/api-report.mjs` (`api-extractor run`, `--local` when updating) | ~10s |
 | `check-doc-examples` | `node scripts/check-doc-examples.mjs` — typechecks the docs' code fences against the built `.d.ts`, so `pnpm build` runs first | ~5s |
@@ -225,7 +225,7 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | AI tool attribution | `test/guards/refuse-ai-attribution.test.ts` — vendor trailers match, `commit-msg` drops them, `open-pr` refuses them, a human Co-authored-by still passes | a new Cursor or Claude trailer lands in git history, or a person cannot co-author |
 | The gate itself | `test/guards/slice-gate.test.ts` — drives tagged gate checks against a temporary fixture: an id present with a passing runner passes; an id absent from source fails; an id present whose declared runner fails also fails | a gate check stays green after its subject is deleted |
 | Spec ids stay in `plans/` | `test/guards/spec-labels.test.ts` — matcher fixtures plus a canned diff; the live check reads lines added since `main`'s merge-base | a new comment, test name or doc cites a slice decision, a review finding, or a question id |
-| CRAP / complexity ceiling | `test/guards/crap.test.ts` — formula, nested-function isolation, a red fixture over the ceiling, a green fixture at it, and the metric switch that makes an uncovered function fail CRAP and pass complexity | a function over the ceiling in `crap.json` is silent, or backing off to complexity still consults coverage |
+| CRAP / complexity ceiling | `test/guards/crap.test.ts` — formula, nested-function isolation, a red fixture over the ceiling, a green fixture at it, and the metric switch that makes an uncovered function fail CRAP and pass complexity. A live breach tells the agent to read the `crap-ceiling` skill | a function over the ceiling in `crap.json` is silent, or backing off to complexity still consults coverage |
 
 That last one deserves emphasis: it ensures that every invariant has a corresponding job. The table stops being prose and becomes a checked artifact.
 
