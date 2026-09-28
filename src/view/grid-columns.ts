@@ -38,44 +38,79 @@ function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unk
   };
 }
 
+/** Call: `columnHeader(input, field)`. What header does this column show? This Gantt's own column
+ *  wins, then the Field's `column` default, then the Field key. */
+function columnHeader(input: GridColumn, field: Field): string {
+  return input.header ?? field.column?.header ?? String(field.key);
+}
+
+/** Call: `columnAlign(input, field)`. Where do this column's header and cell text sit? This Gantt's
+ *  own column wins, then the Field's `column` default, then `'start'`. */
+function columnAlign(input: GridColumn, field: Field): ResolvedColumn['align'] {
+  return input.align ?? field.column?.align ?? 'start';
+}
+
+/** Call: `columnResizable(input, field)`. May this column take the resize drag? Default `true`.
+ *  This Gantt's own column wins, then the Field's `column` default. */
+function columnResizable(input: GridColumn, field: Field): boolean {
+  return input.resizable ?? field.column?.resizable ?? true;
+}
+
+/** Call: `columnMovable(input, field)`. May this column take the reorder drag? Default `true`.
+ *  This Gantt's own column wins, then the Field's `column` default. */
+function columnMovable(input: GridColumn, field: Field): boolean {
+  return input.movable ?? field.column?.movable ?? true;
+}
+
+/** Call: `columnWidthOrFlex(input, field, defaultWidthPx)`. Does this column flex, or what width
+ *  does it keep? A Grid column is fixed-width by default. `flex` is the one opt-out — a column that
+ *  names one shares the pane's leftover room instead, and never falls back to `defaultWidthPx`.
+ *  `sizingOfColumn` picks the width/flex pair off whichever of `input`/`field.column` sizes itself
+ *  (#249): a Gantt asking for `flex: 1` never silently loses to a `width` the Field happened to
+ *  declare. */
+function columnWidthOrFlex(
+  input: GridColumn,
+  field: Field,
+  defaultWidthPx: number,
+): Pick<ResolvedColumn, 'width' | 'flex'> {
+  const { width: authoredWidth, flex } = sizingOfColumn(input, field.column);
+  return pickDefined(
+    {
+      width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
+      flex,
+    },
+    ['width', 'flex'],
+  );
+}
+
+/** Call: `columnTooltip(input, field)`. Does this column join the default bar tooltip? Absent means
+ *  no. This Gantt's own column wins, then the Field's `column` default. */
+function columnTooltip(input: GridColumn, field: Field): Pick<ResolvedColumn, 'tooltip'> {
+  const tooltip = input.tooltip ?? field.column?.tooltip;
+  return tooltip === undefined ? {} : { tooltip };
+}
+
 function columnFrom(
   item: GridColumnInput,
   field: Field,
   defaultWidthPx: number,
 ): Omit<ResolvedColumn, 'format'> {
   const input: GridColumn = typeof item === 'string' ? { field: item } : item;
-  const defaults = field.column;
   // A bare key needs Field.column defaults. A column object supplies presentation itself.
-  if (defaults === undefined && typeof item === 'string') {
+  if (field.column === undefined && typeof item === 'string') {
     throw new FieldColumnNotDefinedError(String(field.key));
   }
-  const column: Omit<ResolvedColumn, 'format'> = {
-    field: field.key,
-    header: input.header ?? defaults?.header ?? String(field.key),
-    align: input.align ?? defaults?.align ?? 'start',
-    // S5.7: default `true`, same merge order (this Gantt's own column, then the Field's
-    // own `column` default) every other key here already follows.
-    resizable: input.resizable ?? defaults?.resizable ?? true,
-    movable: input.movable ?? defaults?.movable ?? true,
-  };
-  // #139: a Grid column is fixed-width by default. `flex` is the one opt-out — a column that names
-  // one shares the pane's leftover room instead, and never falls back to `defaultWidthPx`.
-  // `sizingOfColumn` picks the width/flex pair off whichever of `input`/`defaults` sizes itself
-  // (#249): a Gantt asking for `flex: 1` never silently loses to a `width` the Field happened to
-  // declare.
-  const { width: authoredWidth, flex } = sizingOfColumn(input, defaults);
-  const tooltip = input.tooltip ?? defaults?.tooltip;
-  const candidates = {
-    width: flex === undefined ? (authoredWidth ?? defaultWidthPx) : authoredWidth,
-    flex,
-    // S5.7: per-column `columnRenderer` comes only from this Gantt's own column —
-    // `Field.column` (`defaults`) cannot carry one (`model/field.ts`'s narrower default set).
-    columnRenderer: input.columnRenderer,
-  };
   return {
-    ...column,
-    ...pickDefined(candidates, ['width', 'flex', 'columnRenderer']),
-    ...(tooltip === undefined ? {} : { tooltip }),
+    field: field.key,
+    header: columnHeader(input, field),
+    align: columnAlign(input, field),
+    resizable: columnResizable(input, field),
+    movable: columnMovable(input, field),
+    ...columnWidthOrFlex(input, field, defaultWidthPx),
+    ...columnTooltip(input, field),
+    // Per-column `columnRenderer` comes only from this Gantt's own column — `Field.column` cannot
+    // carry one (`model/field.ts`'s narrower default set).
+    ...pickDefined({ columnRenderer: input.columnRenderer }, ['columnRenderer']),
   };
 }
 

@@ -337,6 +337,96 @@ function storeRowToReplay(
   return { store: row.store, id: row.id, from, to: row.to };
 }
 
+/** Call: `parentIdRowsToReplay(changeSet.updated, working, data)`. Only a `parentId` row shapes the
+ *  tree the cascade reads, so it lands first. Every other row lands after the cascade has judged who
+ *  survives — a row for an id the cascade carries away then reads as gone, the same skip a row for a
+ *  sync-removed id already gets. Landing it earlier would let a cascaded id's own unrelated Field row
+ *  write onto `working` a moment before the cascade captures that id's entity, and the captured value
+ *  would be this step's own write, not the value the id held before the step touched it.
+ *
+ *  Keeps the first `parentId` row per id: a reverted id's kept value is the value it held before the
+ *  step (`soundUpdated`'s own filter drops every `parentId` row for a reverted id), which is this
+ *  row's `from` — the same first-row rule `mergeUpdatedRows` keeps for every other Field.
+ *  `revertLoopingParentRows`'s first act is a walk of every entry in `working` — skip it outright
+ *  when this step recorded no `parentId` row at all, the common undo/redo path (a rename, a date
+ *  drag, a plugin-store write): with no row to close a loop, the walk could only ever find a loop
+ *  none of this step's rows created. */
+function parentIdRowsToReplay(
+  rows: readonly UpdatedRow[],
+  working: Map<EntryId, StoredEntry>,
+  data: TransactionData,
+): readonly FieldUpdated[] {
+  const parentIdRows = new Map<EntryId, FieldUpdated>();
+  const parentUpdated: FieldUpdated[] = [];
+  for (const row of rows) {
+    if (row.store !== 'entries' || row.field !== 'parentId') continue;
+    const replayed = fieldRowToReplay(row, working, data.fields, data.fieldAccess);
+    if (!replayed) continue;
+    parentUpdated.push(replayed);
+    if (!parentIdRows.has(replayed.id)) parentIdRows.set(replayed.id, replayed);
+  }
+  if (parentIdRows.size === 0) return parentUpdated;
+  const reverted = revertLoopingParentRows(working, data.fields, parentIdRows);
+  if (reverted.size === 0) return parentUpdated;
+  return parentUpdated.filter((row) => !reverted.has(row.id));
+}
+
+/** Call: `keptSiblingIndexRowsOf(changeSet.updated, working)`. A `siblingIndex` row is the renumber
+ *  pass's own to write, never the plain diff's — the same split `buildCommitChangeSet` makes between
+ *  a body-authored row and the renumber pass's rank. `to` is `unknown` on a hand-built `ChangeSet`
+ *  (`dataset.replay()` takes one from a caller, unchecked) — a non-number `to` (an authored clear,
+ *  say) names no rank to keep, so it is skipped the same way an id the cascade carried away already
+ *  is: the renumber pass falls back to `entity.siblingIndex`, its own committed rank. */
+function keptSiblingIndexRowsOf(
+  rows: readonly UpdatedRow[],
+  working: ReadonlyMap<EntryId, StoredEntry>,
+): ReadonlyMap<EntryId, number> {
+  const kept = new Map<EntryId, number>();
+  for (const row of rows) {
+    if (row.store !== 'entries' || row.field !== 'siblingIndex') continue;
+    if (working.has(row.id) && typeof row.to === 'number') kept.set(row.id, row.to);
+  }
+  return kept;
+}
+
+/** Call: `fieldAndStoreRowsToReplay(changeSet.updated, working, data)`. Every remaining row — a
+ *  plain Field or a plugin store row — lands onto the tree the cascade just settled: a row for an
+ *  id the cascade just carried away reads as gone here, the same skip a row for a sync-removed id
+ *  already gets. A `parentId` row already landed, above; a `siblingIndex` row is the renumber pass's
+ *  own. Recorded order is kept: Field and store rows stay interleaved the way `changeSet.updated`
+ *  named them. */
+function fieldAndStoreRowsToReplay(
+  rows: readonly UpdatedRow[],
+  working: Map<EntryId, StoredEntry>,
+  data: TransactionData,
+): readonly UpdatedRow[] {
+  const writtenStoreRows: WrittenStoreRows = new Map();
+  const updated: UpdatedRow[] = [];
+  for (const row of rows) {
+    if (row.store === 'entries' && (row.field === 'parentId' || row.field === 'siblingIndex')) continue;
+    const replayed =
+      row.store === 'entries'
+        ? fieldRowToReplay(row, working, data.fields, data.fieldAccess)
+        : storeRowToReplay(row, working, data.pluginStores, writtenStoreRows);
+    if (replayed) updated.push(replayed);
+  }
+  return updated;
+}
+
+/** Call: `cascadeStoreDeletionRows(cascadeIds, cascadedAddedIds, data.pluginStores)`. A cascaded
+ *  id's own recorded row is stale once the entity itself leaves; it keeps only what the cascade
+ *  itself writes: its removal, and this store-deletion row. An id this same step adds and the
+ *  cascade then carries away was never committed, so it carries no store row of its own. */
+function cascadeStoreDeletionRows(
+  cascadeIds: readonly EntryId[],
+  cascadedAddedIds: ReadonlySet<EntryId>,
+  pluginStores: TransactionalPluginStores,
+): readonly StoreRowUpdated[] {
+  const ids = cascadeIds.filter((id) => !cascadedAddedIds.has(id));
+  if (ids.length === 0) return [];
+  return pluginStores.pendingRows(ids);
+}
+
 /**
  * The changes that replaying `changeSet` still has to write, onto `data`'s current committed rows —
  * "the changes to replay." `undefined` when nothing is left to write, the same as an empty recorded
@@ -370,35 +460,7 @@ export function changesToReplay(
 
   const recordedRemoved = recordedRowsToReplay(changeSet.removed, working);
   const added = addedRowsToReplay(changeSet.added, working);
-
-  // Only a `parentId` row shapes the tree the cascade below reads, so it lands first. Every other
-  // row lands after the cascade has judged who survives — a row for an id the cascade carries away
-  // then reads as gone, the same skip a row for a sync-removed id already gets. Landing it earlier
-  // would let a cascaded id's own unrelated Field row write onto `working` a moment before the
-  // cascade captures that id's entity, and the captured value would be this step's own write, not
-  // the value the id held before the step touched it.
-  const parentIdRows = new Map<EntryId, FieldUpdated>();
-  const parentUpdated: FieldUpdated[] = [];
-  for (const row of changeSet.updated) {
-    if (row.store !== 'entries' || row.field !== 'parentId') continue;
-    const replayed = fieldRowToReplay(row, working, data.fields, data.fieldAccess);
-    if (!replayed) continue;
-    parentUpdated.push(replayed);
-    // Keeps the first `parentId` row per id: a reverted id's kept value is the value it held before
-    // the step (`soundUpdated`'s own filter drops every `parentId` row for a reverted id), which is
-    // this row's `from` — the same first-row rule `mergeUpdatedRows` keeps for every other Field.
-    if (!parentIdRows.has(replayed.id)) parentIdRows.set(replayed.id, replayed);
-  }
-  // `revertLoopingParentRows`'s first act is a walk of every entry in `working` — skip it outright
-  // when this step recorded no `parentId` row at all, the common undo/redo path (a rename, a date
-  // drag, a plugin-store write): with no row to close a loop, the walk could only ever find a loop
-  // none of this step's rows created.
-  const reverted: ReadonlySet<EntryId> =
-    parentIdRows.size === 0
-      ? new Set<EntryId>()
-      : revertLoopingParentRows(working, data.fields, parentIdRows);
-  const soundParentUpdated =
-    reverted.size === 0 ? parentUpdated : parentUpdated.filter((row) => !reverted.has(row.id));
+  const soundParentUpdated = parentIdRowsToReplay(changeSet.updated, working, data);
 
   // The cascade runs next, over the step's finished tree: an id this same step reparented away from
   // a removed ancestor already has its new, sound parent by now, and never cascades with it. Nor does
@@ -415,49 +477,20 @@ export function changesToReplay(
   // held it, so it is not a removal either. It is dropped from `added` instead, below, and carries no
   // Field or store row of its own, the same as any other cascaded id.
   const cascadedAddedIds = new Set(cascadeIds.filter((id) => addedIdsBeforeCascade.has(id)));
-  const survivingAdded =
-    cascadedAddedIds.size === 0 ? added : added.filter((row) => !cascadedAddedIds.has(row.entity.id));
+  const survivingAdded = added.filter((row) => !cascadedAddedIds.has(row.entity.id));
   const removed = [
     ...recordedRemoved,
     ...cascadeRemoved.filter((row) => !cascadedAddedIds.has(row.entity.id)),
   ];
 
-  // Every other row — a plain Field or a plugin store row — lands now, onto the tree the cascade just
-  // settled: a row for an id the cascade just carried away reads as gone here, the same skip a row
-  // for a sync-removed id already gets.
-  const writtenStoreRows: WrittenStoreRows = new Map();
-  // A `siblingIndex` row is the renumber pass's own to write, below, never the plain diff's — the
-  // same split `buildCommitChangeSet` makes between a body-authored row and the renumber pass's rank.
-  const keptSiblingIndexRows = new Map<EntryId, number>();
-  const otherUpdated: UpdatedRow[] = [];
-  for (const row of changeSet.updated) {
-    if (row.store === 'entries' && row.field === 'parentId') continue; // already landed, above
-    if (row.store === 'entries' && row.field === 'siblingIndex') {
-      // `to` is `unknown` on a hand-built `ChangeSet` (`dataset.replay()` takes one from a caller,
-      // unchecked) — a non-number `to` (an authored clear, say) names no rank to keep, so it is
-      // skipped here the same way an id the cascade carried away already is: the renumber pass below
-      // falls back to `entity.siblingIndex`, its own committed rank.
-      if (working.has(row.id) && typeof row.to === 'number') keptSiblingIndexRows.set(row.id, row.to);
-      continue;
-    }
-    const replayed =
-      row.store === 'entries'
-        ? fieldRowToReplay(row, working, data.fields, data.fieldAccess)
-        : storeRowToReplay(row, working, data.pluginStores, writtenStoreRows);
-    if (replayed) otherUpdated.push(replayed);
-  }
+  const keptSiblingIndexRows = keptSiblingIndexRowsOf(changeSet.updated, working);
+  const fieldAndStoreUpdated = fieldAndStoreRowsToReplay(changeSet.updated, working, data);
 
-  // A cascaded id's own recorded row — a rename, a move, a plugin-store write — is stale once the
-  // entity itself leaves, the same way a removed entity carries no Field row of its own. It keeps
-  // only what the cascade itself writes: its removal, above, and its store-deletion row, below.
   const cascadeIdSet = new Set(cascadeIds);
-  const updated = [...soundParentUpdated, ...otherUpdated];
-  const updatedWithoutCascaded =
-    cascadeIdSet.size === 0 ? updated : updated.filter((row) => !cascadeIdSet.has(row.id));
-  const cascadeStoreDeletionIds =
-    cascadedAddedIds.size === 0 ? cascadeIds : cascadeIds.filter((id) => !cascadedAddedIds.has(id));
-  if (cascadeStoreDeletionIds.length > 0)
-    updatedWithoutCascaded.push(...data.pluginStores.pendingRows(cascadeStoreDeletionIds));
+  const updatedWithoutCascaded = [...soundParentUpdated, ...fieldAndStoreUpdated].filter(
+    (row) => !cascadeIdSet.has(row.id),
+  );
+  updatedWithoutCascaded.push(...cascadeStoreDeletionRows(cascadeIds, cascadedAddedIds, data.pluginStores));
 
   // The renumber pass runs last of all, over the same finished tree: an added row, a reparent and the
   // cascade have all settled who is where, so every group this step actually touched can be replayed

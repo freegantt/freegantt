@@ -537,50 +537,87 @@ export function computeFrame(
   return placeFrame(input, plan, memoryFor(input, plan, memory), decorations);
 }
 
-/** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
- *  resolved rows. */
-export function placeFrame(
+/** Pixel sizes this frame paints with, the Overscan that widens the cull window, and that window.
+ *  Overscan is not a size: it is the culling buffer, held apart from the three px fields. */
+interface FramePaintSettings {
+  readonly tickBoxFloorPx: number;
+  readonly minBarWidthPx: number;
+  readonly barHeightPx: number;
+  readonly overscan: Required<Overscan>;
+  readonly horizontalCull: { left: number; right: number } | undefined;
+}
+
+/** Call: `framePaintSettingsOf(input)`. Tick box floor, bar min width, bar height, Overscan, and
+ *  the horizontal cull window. */
+function framePaintSettingsOf(input: LayoutInput): FramePaintSettings {
+  const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
+  return {
+    tickBoxFloorPx: input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX,
+    minBarWidthPx: input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX,
+    barHeightPx: input.barHeightPx ?? DEFAULT_BAR_HEIGHT_PX,
+    overscan: {
+      verticalRows: input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows,
+      horizontalPx,
+    },
+    horizontalCull: horizontalCullWindow(input.visible, horizontalPx),
+  };
+}
+
+/** Call: `horizontalCullWindow(visible, overscan.horizontalPx)`. The horizontal cull window in
+ *  content pixels, or `undefined` when a zero width disables culling entirely. */
+function horizontalCullWindow(
+  visible: Rect,
+  horizontalPx: number,
+): { left: number; right: number } | undefined {
+  if (visible.width <= 0) return undefined;
+  return {
+    left: visible.x - horizontalPx,
+    right: visible.x + visible.width + horizontalPx,
+  };
+}
+
+/** Call: `barLabelOf(producedBar, entry, input.barLabelFor)`. The Bar's own `label` wins when a
+ *  producer set one — the most specific answer available, per-bar and authored. Absent, `barLabelFor`
+ *  (the Gantt's own Field, resolved and formatted) fills it; absent that too (a `layout/` test with
+ *  no `view/`), ''. */
+function barLabelOf(
+  producedBar: Bar,
+  entry: Entry | undefined,
+  barLabelFor: ((entry: Entry) => string) | undefined,
+): string {
+  return producedBar.label ?? (barLabelFor !== undefined && entry !== undefined ? barLabelFor(entry) : '');
+}
+
+/** Call: `placeVisibleRowsAndBars(input, plan, mem, settings)`. Which rows and bars sit in the
+ *  Visible region — a zero height or width disables that axis's cull entirely, not just an infinite
+ *  far edge with the near edge still taken from `visible`. */
+function placeVisibleRowsAndBars(
   input: LayoutInput,
   plan: readonly PlannedRow[],
-  memory?: FrameMemory,
-  decorations?: DecorationRunner,
-): GeometryFrame {
-  const { scale, preset, visible, rowHeight, revision, locale } = input;
-  const mem = memory ?? memoryFor(input, plan);
-  // #414: `mem.sync` (already run, by this call or by `memoryFor` above) keeps one Map of every
-  // Entry, rebuilt only when the `entries` array changes identity — a scroll frame reuses it instead
-  // of paying an O(entries) allocation every frame.
+  mem: FrameMemory,
+  settings: FramePaintSettings,
+): { rows: FrameRow[]; bars: FrameBar[] } {
+  const { scale, visible, rowHeight, locale } = input;
+  // #414: `mem.sync` keeps one Map of every Entry, rebuilt only when the `entries` array changes
+  // identity — a scroll frame reuses it instead of paying an O(entries) allocation every frame.
   const entryById = mem.entryById;
   const index = mem.heights;
-  const tickBoxFloorPx = input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX;
-  const minBarWidthPx = input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX;
-  const barHeightPx = input.barHeightPx ?? DEFAULT_BAR_HEIGHT_PX;
-  const verticalRows = input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows;
-  const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
-
   const rows: FrameRow[] = [];
   const bars: FrameBar[] = [];
-  // A zero height disables vertical culling entirely (conventions §1, D-B) — not just an infinite
-  // bottom with the top still taken from `visible.y`, which would silently drop rows above it.
   const cullVertically = visible.height > 0;
   const windowTop = cullVertically ? visible.y : 0;
   const windowBottom = cullVertically ? visible.y + visible.height : Infinity;
-
-  // Horizontal culling: a zero width disables it — everything renders (matches the shipped
-  // `viewport.height > 0 ? … : Infinity` rule for the vertical axis; conventions §1, D-B).
-  const cullHorizontally = visible.width > 0;
-  const hLeft = visible.x - horizontalPx;
-  const hRight = visible.x + visible.width + horizontalPx;
+  const cull = settings.horizontalCull;
   function intersectsHorizontally(x: number, width: number): boolean {
-    return !cullHorizontally || (x <= hRight && x + width >= hLeft);
+    return cull === undefined || (x <= cull.right && x + width >= cull.left);
   }
 
   // Bound the scan with indexAtY instead of walking every row from 0 (#47): start at the row that
   // actually contains windowTop, expanded by verticalRows in INDEX space (#20's index-space fix).
-  // Rows stay vertical-only (D-B): a row whose bar is off-screen horizontally is still emitted —
-  // the grid pane needs its label.
+  // Rows stay vertical-only: a row whose bar is off-screen horizontally is still emitted — the grid
+  // pane needs its label.
   const baseStart = plan.length > 0 ? index.indexAtY(windowTop) : 0;
-  const startIndex = Math.max(0, baseStart - verticalRows);
+  const startIndex = Math.max(0, baseStart - settings.overscan.verticalRows);
   // Counts rows already emitted past windowBottom; stops once verticalRows of them have gone by, so
   // verticalRows: 0 reduces to the pre-overscan "stop at the first row past the bottom" rule exactly.
   let overflowCount = 0;
@@ -588,7 +625,7 @@ export function placeFrame(
     const planned = plan[rowIndex]!;
     const top = index.topAt(rowIndex);
     if (top >= windowBottom) {
-      if (overflowCount >= verticalRows) break;
+      if (overflowCount >= settings.overscan.verticalRows) break;
       overflowCount++;
     }
 
@@ -612,20 +649,15 @@ export function placeFrame(
     });
 
     for (const producedBar of rowBars) {
-      const { x, width, span } = barSpan(producedBar, scale, minBarWidthPx);
+      const { x, width, span } = barSpan(producedBar, scale, settings.minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
       // An 'exact' box already trimmed to `[0, contentWidth)` (barSpan) reports `width: 0` when the
       // entry's own span has no intersection with the content at all — an entry outside the
       // caller's own `range`, pulled into the culled window only by the overscan buffer. Nothing to
       // paint, so it never becomes a FrameBar (#436).
       if (width <= 0) continue;
-      // #421 C5: the Bar's own `label` wins when a producer set one — the most specific
-      // answer available, per-bar and authored. Absent, `barLabelFor` (the Gantt's own Field,
-      // resolved and formatted) fills it; absent that too (a `layout/` test with no `view/`), ''.
       const entry = entryById.get(producedBar.entryId);
-      const label =
-        producedBar.label ??
-        (input.barLabelFor !== undefined && entry !== undefined ? input.barLabelFor(entry) : '');
+      const label = barLabelOf(producedBar, entry, input.barLabelFor);
       const bar: FrameBar = {
         id: producedBar.id,
         entryId: producedBar.entryId,
@@ -634,9 +666,9 @@ export function placeFrame(
         label,
         x,
         // Every row is one lane (singleLane): the bar centres in the row's own band.
-        y: top + (rowHeight - barHeightPx) / 2,
+        y: top + (rowHeight - settings.barHeightPx) / 2,
         width,
-        height: barHeightPx,
+        height: settings.barHeightPx,
         flags: {},
         span,
         a11yLabel: barA11yLabel(label, producedBar, parts.get(producedBar.entryId) ?? 1, scale, locale),
@@ -644,29 +676,79 @@ export function placeFrame(
       bars.push(bar);
     }
   }
+  return { rows, bars };
+}
 
-  // The overscan buffer widens the cull window past both ends of the dataset's own range, but a
-  // band tick or a tick line only ever has a home inside `[0, contentWidth)` (the
-  // timeline's content is `contentWidth` wide, full stop). Clamping the query span here, not just
-  // the ticks it returns, stops `scale.ticks` from walking cursors the content never needed —
-  // `ticks()` still emits the one cell straddling each bound, so a partial leading or trailing
-  // cell still reaches `bands` below for its own box-intersection clip.
-  const horizontalSpan = cullHorizontally
-    ? {
-        x: Math.max(hLeft, 0),
-        width: Math.max(0, Math.min(hRight, scale.contentWidth) - Math.max(hLeft, 0)),
-      }
-    : { x: 0, width: scale.contentWidth };
+/** Call: `horizontalQuerySpan(cull, scale.contentWidth)`. How wide is the tick query, including
+ *  Overscan, clipped to the content? The overscan buffer widens the cull window past both ends of
+ *  the dataset's own range, but a band tick or a tick line only ever has a home inside
+ *  `[0, contentWidth)` (the timeline's content is `contentWidth` wide, full stop). Clamping the
+ *  query span here, not just the ticks it returns, stops `scale.ticks` from walking cursors the
+ *  content never needed — `ticks()` still emits the one cell straddling each bound, so a partial
+ *  leading or trailing cell still reaches `bands` for its own box-intersection clip. A missing cull
+ *  disables horizontal culling — everything renders. */
+function horizontalQuerySpan(
+  cull: { left: number; right: number } | undefined,
+  contentWidth: number,
+): { x: number; width: number } {
+  if (cull === undefined) return { x: 0, width: contentWidth };
+  return {
+    x: Math.max(cull.left, 0),
+    width: Math.max(0, Math.min(cull.right, contentWidth) - Math.max(cull.left, 0)),
+  };
+}
 
-  // A coarse band's boundary (a year, say) is often well behind the visible pane — the calendar
-  // year started before this dataset's own first entry, or the caller has scrolled past it — so
-  // its true cell left edge sits off-screen. Left un-clamped, the label paints at that off-screen
-  // x and never becomes visible even though most of the cell is on screen (header readability
-  // follow-up: "year never renders at the top level" turned out to be exactly this). Clamping the
-  // *label's* x to the visible pane's own left edge keeps it stuck to the front of its cell while
-  // any part of that cell is in view — the cell's true `x`/`width` (and its `instant`) still drive
-  // ticking and formatting; only where the label paints moves.
-  const labelLeftClamp = cullHorizontally ? Math.max(visible.x, 0) : 0;
+/** Call: `headerLabelLeftClamp(visible, cull)`. Where do header labels stick when a coarse cell
+ *  straddles the visible left edge? A coarse band's boundary (a year, say) is often well behind the
+ *  visible pane — the calendar year started before this dataset's own first entry, or the caller
+ *  has scrolled past it — so its true cell left edge sits off-screen. Left un-clamped, the label
+ *  paints at that off-screen x and never becomes visible even though most of the cell is on screen.
+ *  Clamping the *label's* x to the visible pane's own left edge keeps it stuck to the front of its
+ *  cell while any part of that cell is in view — the cell's true `x`/`width` (and its `instant`)
+ *  still drive ticking and formatting; only where the label paints moves. The clamp does not use
+ *  Overscan, only whether a cull exists. */
+function headerLabelLeftClamp(visible: Rect, cull: { left: number; right: number } | undefined): number {
+  return cull !== undefined ? Math.max(visible.x, 0) : 0;
+}
+
+/** One line per finest-band tick inside the content. A line past `contentWidth` draws nothing a
+ *  reader can scroll to — but it is a painted node in the pane, so the browser widens the pane's
+ *  own scrollable range to reach it. The overscan buffer pulls in ticks on both sides of the visible
+ *  window; this keeps only the lines that have a home. */
+function contentTickLinesOf(
+  rawBandTicks: readonly (readonly Tick[])[],
+  contentWidth: number,
+): FrameTickLine[] {
+  const finestBandTicks = rawBandTicks[rawBandTicks.length - 1] ?? [];
+  return markMajorTickLines(
+    finestBandTicks.filter((tick) => tick.x >= 0 && tick.x < contentWidth),
+    coarserBandStartsOf(rawBandTicks),
+  );
+}
+
+/** What Date line decorations does this frame draw? */
+function dateLineDecorationsOf(input: LayoutInput, scale: TimeScale): FrameDecoration[] {
+  return resolveDateLines({
+    scale,
+    todayLine: input.todayLine ?? true,
+    ...(input.dateLines ? { dateLines: input.dateLines } : {}),
+  });
+}
+
+/** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
+ *  resolved rows. */
+export function placeFrame(
+  input: LayoutInput,
+  plan: readonly PlannedRow[],
+  memory?: FrameMemory,
+  decorations?: DecorationRunner,
+): GeometryFrame {
+  const { scale, preset, visible, revision, locale } = input;
+  const mem = memory ?? memoryFor(input, plan);
+  const settings = framePaintSettingsOf(input);
+  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, settings);
+  const horizontalSpan = horizontalQuerySpan(settings.horizontalCull, scale.contentWidth);
+  const labelLeftClamp = headerLabelLeftClamp(visible, settings.horizontalCull);
 
   // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
   // `--fg-tick-box-floor`). A straddling tick clamped to a thinner remainder would ask for e.g.
@@ -691,7 +773,7 @@ export function placeFrame(
         // buffer) must keep its own true x, or every such tick collapses onto the same clamped
         // column and their labels stack on top of each other (header readability follow-up).
         const remainder = tick.x + tick.width - labelLeftClamp;
-        const straddlesClamp = tick.x < labelLeftClamp && remainder >= tickBoxFloorPx;
+        const straddlesClamp = tick.x < labelLeftClamp && remainder >= settings.tickBoxFloorPx;
         const x = straddlesClamp ? labelLeftClamp : tick.x;
         const width = Math.max(0, tick.width - (x - tick.x));
         // A band cell is a box, not a point (unlike `tickLines` below), so it needs an
@@ -709,40 +791,13 @@ export function placeFrame(
     };
   });
 
-  // One line per finest-band tick — the last raw ticks array, bands run coarsest first.
-  // A line is `major` when the coarser band changes over its own cell: the finest cell that a
-  // coarser cell starts inside opens that coarser cell's run. Under `dayAndWeek` the coarser (week)
-  // start lands exactly on a day tick, so the Monday is major. Under `weekAndMonth` a month almost
-  // never starts on a Monday, so the week that *contains* the 1st carries the month's line — an
-  // equality test would find nothing there and leave the grid flat (#265). Under `monthAndYear` the
-  // coarser band is the year and January always starts a month cell, so a range inside one calendar
-  // year has no major line at all: at the coarsest shipped preset that is the honest answer, and
-  // `frame.test.ts` pins it.
-  const finestBandTicks = rawBandTicks[rawBandTicks.length - 1] ?? [];
-  const coarserBandStartXs = coarserBandStartsOf(rawBandTicks);
-  // Only lines inside the content. The overscan buffer pulls in ticks on both sides of the visible
-  // window, and a line past `contentWidth` draws nothing a reader can scroll to — but it is a
-  // painted node in the pane, so the browser widens the pane's own scrollable range to reach it and
-  // the pane overscrolls past the content sizer (the timeline's content is `contentWidth`
-  // wide, full stop). `e2e/timeline-content-width.spec.ts` is what states that in a real engine.
-  const tickLines: FrameTickLine[] = markMajorTickLines(
-    finestBandTicks.filter((tick) => tick.x >= 0 && tick.x < scale.contentWidth),
-    coarserBandStartXs,
-  );
-
-  const dateLineDecorations: FrameDecoration[] = resolveDateLines({
-    scale,
-    todayLine: input.todayLine ?? true,
-    ...(input.dateLines ? { dateLines: input.dateLines } : {}),
-  });
-
-  // What one tick column on screen stands for: the finest band's own step, because that is the band
-  // `tickLines` draws the pane's grid from and the one a reader counts columns on. A preset with no
-  // header bands draws no columns at all, so it states its own `tickUnit` instead — never coarser
-  // than a band's (`presets.test.ts`).
+  /** One tick column on screen stands for the finest band's own step, because that is the band
+   *  `tickLines` draws the pane's grid from and the one a reader counts columns on. A preset with
+   *  no header bands draws no columns at all, so it states its own `tickUnit` instead — never
+   *  coarser than a band's. */
   const finestBand = bands[bands.length - 1];
-  const decorationRunner = decorations ?? new DecorationRunner();
-  const { underBars, overBars } = decorationRunner.run({
+  const runner = decorations ?? new DecorationRunner();
+  const { underBars, overBars } = runner.run({
     providers: input.decorationProviders ?? [],
     span: scale.spanForPixels(horizontalSpan),
     rows,
@@ -756,15 +811,15 @@ export function placeFrame(
     revision,
     visible,
     header: { bands },
-    tickLines,
+    tickLines: contentTickLinesOf(rawBandTicks, scale.contentWidth),
     rows,
     rowCount: plan.length,
     tree: nestsRows(input.rows ?? DEFAULT_ROW_SOURCE),
-    contentHeight: index.totalHeight,
+    contentHeight: mem.heights.totalHeight,
     contentWidth: scale.contentWidth,
     bars,
     links: [],
-    decorations: dateLineDecorations,
+    decorations: dateLineDecorationsOf(input, scale),
     underBars,
     overBars,
     columns: columnsForFrame(input.columns),
