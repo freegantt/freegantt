@@ -580,7 +580,7 @@ ${DARK_COLOR_TOKENS}
 /* S5.8: inlineEditing()'s own control — mounted through the overlay layer directly (not
    wrapped in .fg-popup: the cell editor has no flip/clamp, it always sits at the cell's own rect,
    Popup's own file header explains why it is built differently). data-state="invalid" is a failed
-   parseValue, a beforeChange veto, or the default dateInput's non-midnight refusal (issue #137). */
+   parseValue or a beforeChange veto. */
 .fg-cell-editor { position: absolute; top: 0; left: 0; pointer-events: auto; box-sizing: border-box; }
 /* The ring is the affordance: a 1px border alone reads as a table cell, and the open editor has to
    read as the one live control on the chart. It uses the Selection token because an open editor IS
