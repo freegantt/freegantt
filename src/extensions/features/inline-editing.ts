@@ -113,7 +113,6 @@ export const REFUSAL_TEXT = {
   'derived-value': 'this value comes from its children; edit a child instead',
   'no-parse-value': 'this field has no parseValue; the default editor cannot read the text back',
   'no-date-value': 'this field holds no date yet; the default date editor needs one',
-  'time-of-day': 'this field carries a time of day; the default date editor cannot show it',
   'unsaved-value': 'another cell still holds a value that did not save; fix it or press Escape',
 } as const;
 
@@ -735,30 +734,23 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         // as any other empty cell — it is not broken, so nothing refuses it.
         const raw = entry.read(field.key) as Instant | undefined;
         const factory = options.dateInput;
-        let dateInput: DateInput;
-        if (factory !== undefined) {
-          dateInput = factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.formatContext.locale });
-        } else {
-          // Issue #137: the default `<input type="date">` has no time-of-day control. An
-          // Instant that is not local midnight would silently round-trip to midnight on an
-          // unchanged Enter. So this refuses to open the *default* editor, rather than lose data. A
-          // consumer's own `dateInput` factory (a `datetime-local` control, say) owns this instead.
-          // A blank cell has no Instant to check, so it never trips this refusal.
-          if (raw !== undefined && ctx.dataset.time.startOfDay(raw) !== raw) {
-            pending.refuse('time-of-day');
-            return;
-          }
-          dateInput = createDefaultDateInput(ctx.dataset.time);
-        }
+        const dateInput: DateInput =
+          factory !== undefined
+            ? factory({ zone: ctx.dataset.timeZone, locale: ctx.gantt.formatContext.locale })
+            : createDefaultDateInput(ctx.dataset.time);
         // Which day does the End editor show, and which end does a typed day store? A stored `end`
         // is the boundary after the entry, not a day a reader typed. So a control that shows no
         // time of day shows the last day the entry covers, and a typed day commits the day after
         // it. A control that shows a time of day edits the stored boundary as it is.
-        const isDateOnlyEnd = field.key === 'end' && !dateInput.showsTimeOfDay;
-        const shown =
-          isDateOnlyEnd && raw !== undefined
-            ? startOfLastCoveredDay(ctx.dataset.timeZone, { start: entry.start, end: raw })
-            : raw;
+        const isDateOnly = !dateInput.showsTimeOfDay;
+        const isDateOnlyEnd = field.key === 'end' && isDateOnly;
+        // A control that shows no time of day opens on the start of the stored day.
+        let shown = raw;
+        if (raw !== undefined && isDateOnlyEnd) {
+          shown = startOfLastCoveredDay(ctx.dataset.timeZone, { start: entry.start, end: raw });
+        } else if (raw !== undefined && isDateOnly) {
+          shown = ctx.dataset.time.startOfDay(raw);
+        }
         if (shown !== undefined) dateInput.write(shown);
 
         pending.mount({
@@ -766,9 +758,12 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
           read: (): CellEditorValue => {
             const typed = dateInput.read();
             if (typed === undefined) return { ok: false };
-            if (!isDateOnlyEnd) return { ok: true, value: typed };
+            // Does an unchanged day keep its time of day? Yes. A control that shows no time of day
+            // reads back the start of the day, so the stored value stays as it is. A new day stores
+            // the start of that day.
             if (raw !== undefined && typed === shown) return { ok: true, value: raw };
-            return { ok: true, value: startOfNextDay(ctx.dataset.timeZone, typed) };
+            if (isDateOnlyEnd) return { ok: true, value: startOfNextDay(ctx.dataset.timeZone, typed) };
+            return { ok: true, value: typed };
           },
           bindCommitTriggers: (fire) => dateInput.onCommit(fire),
           onClosed: () => dateInput.destroy(),
