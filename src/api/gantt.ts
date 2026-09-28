@@ -56,7 +56,7 @@ import type {
 import { CustomRowSourceNotFilterableOrSortableError, PluginSetupError } from '../model/index.js';
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
-import { extraEditsFor, hierarchyFollowsParentId, type Dataset } from './dataset.js';
+import { extraEditsFor, hierarchyFollowsParentId, rolledUpEditsFor, type Dataset } from './dataset.js';
 import type { ChromePluginOf, DataPluginOf, PluginOf } from './plugin.js';
 import type { PluginContextOf } from './plugin-context.js';
 import type {
@@ -423,6 +423,7 @@ export class Gantt<TProps = unknown> {
       // value — it composes a second occupant after the shell exists, which no public route allows,
       // so `api/gantt.test.ts`'s "#186" suite cannot reach that case and does not claim to.
       extraEditsFor: (draft) => extraEditsFor(options.dataset, draft),
+      rolledUpEditsFor: (draft) => rolledUpEditsFor(options.dataset, draft),
       hierarchyFollowsParentId: () => hierarchyFollowsParentId(options.dataset),
       wiring: {
         entryGestures: attachEntryGestures,

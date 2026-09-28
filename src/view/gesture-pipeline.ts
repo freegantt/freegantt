@@ -42,6 +42,7 @@ import {
   buildGestureDroppedReport,
   buildRefusalReport,
 } from '../data/error-reporting.js';
+import { mergeProposedEditsByEntry } from '../data/fields/field-access.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
 import type {
@@ -120,6 +121,12 @@ export interface GesturePipelineDeps {
    *  `EditRequest` there, through `data/edit-request.ts`'s `createEditRequest` — the one place that
    *  object is built (commit path and preview path alike). */
   extraEditsFor?: (draft: ProposedEdits) => ProposedEdits;
+  /** #425: the same door as `extraEditsFor` above, for the Rollup instead of the extension hook.
+   *  `#computePreview` calls it only for a `place` drop (ruling 5's "into a leaf, its dates roll
+   *  up" is a tree drop's own preview, not a time-only drag's — #425 ruling). `undefined` ghosts
+   *  nothing, same as an unwired `extraEditsFor`. `api/gantt.ts` wires this to `api/dataset.ts`'s
+   *  `rolledUpEditsFor`. */
+  rolledUpEditsFor?: (draft: ProposedEdits) => ProposedEdits;
   /** What `#measuredFrom` fingerprints the rows a held draft was built from against — the *committed*
    *  Entries keyed by id, never the in-flight draft.
    *
@@ -849,7 +856,14 @@ export class GesturePipeline {
   #computePreview(proposal: GestureProposal | undefined): readonly BarPreview[] | undefined {
     if (!proposal || proposal.paints.size === 0) return undefined;
     const draft = proposal.paints;
-    const extra = this.#extraFor(proposal.writes);
+    const extenderExtra = this.#extraFor(proposal.writes);
+    // #425 ruling 5: a `place` drop's own Rollup ghost — the new parent's dates rolling up to cover
+    // the entry it just gained — merges in beside whatever the extension hook already ghosted. A
+    // A time-only drag never asks: it keeps today's silence on purpose, a follow-up's job.
+    const extra =
+      proposal.drop.kind === 'place'
+        ? mergeProposedEditsByEntry(extenderExtra, this.#rolledUpFor(proposal.writes))
+        : extenderExtra;
     const entries: Entry[] = [];
     const seen = new Set<EntryId>();
     const pushEntry = (id: EntryId): void => {
@@ -873,9 +887,11 @@ export class GesturePipeline {
     if (proposal.drop.kind !== 'place') return offsets;
     // #425: a `place` drop moves the whole rigid block by one and the same pixel offset — the
     // grabbed bar, any co-selected bar, and the subtree bars a parent's translation carries with it
-    // (ADR 0013) — so every entry `previewOffsets` painted takes the one `dy` the drop computes.
+    // (ADR 0013) — so every entry `draft` painted takes the one `dy` the drop computes. A ghost
+    // offset — the extension hook's own cascade, or ruling 5's Rollup envelope on the target it just
+    // gained — never moves rows: it stays `dy: 0`, painted in place over its own row.
     const dy = this.#dyForPlace(proposal.drop.place, proposal.grabbed);
-    return dy === 0 ? offsets : offsets.map((offset) => ({ ...offset, dy }));
+    return dy === 0 ? offsets : offsets.map((offset) => (offset.extra ? offset : { ...offset, dy }));
   }
 
   /** #425: the pixel offset a `place` drop's Insertion line (or, for an `into` drop, the target
@@ -925,6 +941,15 @@ export class GesturePipeline {
       this.#reportExtenderFault(error);
       return NO_EXTRA_EDITS;
     }
+  }
+
+  /** #425 ruling 5: `rolledUpEditsFor = rolledUpEditsFor(draft)`, `#computePreview`'s door onto the
+   *  Rollup alone — never the extension hook, never a commit. `undefined` (no wiring, or a test-built
+   *  pipeline) ghosts nothing, the same silence an unwired `extraEditsFor` leaves. Nothing here can
+   *  throw a plugin's own bug: the Rollup is core's, not an installed occupant, so this needs no
+   *  `#extraFor`-style recovery. */
+  #rolledUpFor(draft: ProposedEdits): ProposedEdits {
+    return this.#deps.rolledUpEditsFor?.(draft) ?? NO_EXTRA_EDITS;
   }
 
   /** #332: `by: 'plugin'`, not a specific `PluginId` — `setExtender` composes, so the hook

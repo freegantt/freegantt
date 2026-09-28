@@ -1559,6 +1559,42 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     });
   });
 
+  it('[#425 ruling 5] an into-leaf preview paints a ghost offset for the target, in place, not by the dragged block’s own dy', async () => {
+    const requests: ProposedEdits[] = [];
+    const { c, deps, applied } = withTree({
+      // `c` (row index 4, p2's own child) is a leaf: no drop yet lands on it here, so this drop
+      // still names it a target the same way an empty leaf would be — the Rollup ghost this pipeline
+      // asks for cares only that the drop is `into`, not whether the target already has children.
+      rowDropZoneAt: () => ({ kind: 'row', rowIndex: 4, side: 'into' }),
+      rolledUpEditsFor: (draft) => {
+        requests.push(draft);
+        return new Map([[c.id, pe({ start: 200, end: 400 })]]);
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 144 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(requests).toHaveLength(1);
+    const preview = applied.at(-1) as readonly {
+      barId: string;
+      dx: number;
+      dy: number;
+      dWidth: number;
+      extra: boolean;
+    }[];
+    // a's row mid 48; c's row index 4, top 128, mid 144.
+    const dragging = preview.find((bar) => bar.barId === barId(entryId('a')))!;
+    const ghost = preview.find((bar) => bar.barId === barId(c.id))!;
+    expect(dragging.extra).toBe(false);
+    expect(dragging.dy).toBe(96);
+    expect(ghost.extra).toBe(true);
+    expect(ghost.dy).toBe(0); // the target's own bar stays put — only its span changes
+    expect(ghost.dx).not.toBe(0);
+    expect(ghost.dWidth).not.toBe(0);
+  });
+
   it('a refused drop paints dy: 0 and the refused row, never the target place', async () => {
     const { a, p2, deps, applied, appliedRowDrops } = withTree({
       rowDropZoneAt: () => intoP2(),

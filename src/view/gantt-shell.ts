@@ -391,6 +391,11 @@ export interface GanttShellOptions {
    *  itself. `api/dataset.ts`'s `extraEditsFor` builds it, through `data/edit-request.ts`'s
    *  `createEditRequest`, before this ever runs. */
   extraEditsFor?: (draft: ProposedEdits) => ProposedEdits;
+  /** #425: the same door as `extraEditsFor` above, for the Rollup instead of the extension hook.
+   *  It ghosts ruling 5's "into a leaf, its dates roll up" for a `place` drop's own preview.
+   *  `api/gantt.ts` wires this to `api/dataset.ts`'s `rolledUpEditsFor`. `undefined` ghosts nothing,
+   *  the same as an unwired `extraEditsFor`. */
+  rolledUpEditsFor?: (draft: ProposedEdits) => ProposedEdits;
   /** #425: does this Dataset's tree still follow the stored `parentId` (`storedParentSource`), or
    *  does a plugin own the hierarchy (ADR 0020)? `undefined` (a test-built shell with no wiring)
    *  defaults to `true` — the common case. `api/gantt.ts` wires this to `api/dataset.ts`'s
@@ -1219,6 +1224,7 @@ export class GanttShell {
       emit: (name, payload) => this.#emit(name, payload),
       raiseError: this.#raiseError,
       ...(this.#options.extraEditsFor ? { extraEditsFor: this.#options.extraEditsFor } : {}),
+      ...(this.#options.rolledUpEditsFor ? { rolledUpEditsFor: this.#options.rolledUpEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.effectiveLocale,
       applyGestureState: (preview, pendingBarIds, cursor, rowDrop) => {

@@ -29,10 +29,17 @@ import type { CommitReport } from './error-reporting.js';
 import { buildRollUpOverwroteProposalReport, buildDerivedValuesDroppedReport } from './error-reporting.js';
 import type { EditsReading } from './entry-reader.js';
 import { EXTENDER_OPERATION } from './entry-reader.js';
-import { mergeProposedEditsByEntry, entryAfterEdit, proposedKeysOf } from './fields/field-access.js';
+import {
+  emptyProposedEdit,
+  entryAfterEdit,
+  mergeProposedEditsByEntry,
+  proposedKeysOf,
+  writeField,
+} from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import type { FieldRegistry } from './fields/field-registry.js';
 import { rollUpFields } from './rollup.js';
+import type { PendingRollUp, RollUpTree } from './rollup.js';
 import type { ParentIndex } from './hierarchy-source.js';
 import type { SiblingChange, SiblingGroupKey, SiblingPlacement } from './sibling-order.js';
 import { isDevMode } from './dev-mode.js';
@@ -333,4 +340,36 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
     ),
   );
   return { changeSet, reports };
+}
+
+/** What `rolledUpEditsFor` below reads: the committed rows the draft lands on, the tree the Rollup
+ *  walks (ADR 0020), and the Field registry/access every rolling-up Field runs through. */
+export interface RolledUpEditsInput {
+  readonly committed: ReadonlyMap<EntryId, StoredEntry>;
+  /** A vertical drag's own draft, in preview — never a body's real pending edits (#425). */
+  readonly draft: ProposedEdits;
+  readonly fields: FieldRegistry;
+  readonly fieldAccess: FieldAccess;
+  readonly tree: RollUpTree;
+}
+
+/** #425: ruling 5 — dragging an Entry into a leaf must preview that leaf's dates rolling up to
+ *  cover it, the same envelope the commit itself would settle on. Runs the Rollup alone, with no
+ *  extension hook and no sibling renumber to fold in beside it: `pending.edits.merged` carries only
+ *  the draft, so every parent the Rollup revisits is one the draft's own reparenting touched. Each
+ *  rolling-up Field the pass rewrites folds onto one `ProposedEdit` per parent — the same
+ *  `extraEditsFor` shape `gesture-pipeline.ts#computePreview` already ghosts an extension hook's
+ *  writes through (ADR 0007). A time-only drag never calls this: showing no envelope ghost there is
+ *  today's behaviour, kept on purpose (a follow-up covers it). */
+export function rolledUpEditsFor(input: RolledUpEditsInput): ProposedEdits {
+  const pending: PendingRollUp = { added: [], removed: [], edits: { merged: input.draft } };
+  const { updated } = rollUpFields(input.committed, pending, input.fields, input.fieldAccess, input.tree);
+  const edits = new Map<EntryId, ProposedEdit>();
+  for (const row of updated) {
+    const field = input.fields.get(row.field);
+    if (field === undefined) continue;
+    const base = edits.get(row.id) ?? emptyProposedEdit();
+    edits.set(row.id, writeField(base, field, row.to));
+  }
+  return edits;
 }
