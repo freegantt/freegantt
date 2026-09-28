@@ -628,6 +628,19 @@ The row the grabbed bar sits on when a vertical drag starts. The pointer staying
 a time-only move — the drag never reads as a drop onto its own row.
 _Avoid_: `row move` (collides with `move`, the time-move gesture — see **Parent bar drag**, above)
 
+**Drag axis** (#425):
+Which screen direction a move drag commits to, decided once at arm time and held for the whole
+gesture: "if you start dragging vertically it only allows vertical, and vice versa" (owner ruling).
+The larger of horizontal and vertical travel at that instant wins; a tie picks horizontal. Locked to
+horizontal, the bar moves in time only — no row drop resolves, and `shiftsTime` alone reports the
+change. Locked to vertical, the bar moves between rows only — dates hold still, `shiftsTime` is
+`false`, and a refusal there commits nothing at all. `interaction/pointer-gesture.ts`'s own
+`DragAxis` (`'x' | 'y'`) names the screen fact for any future drag over the same primitive; this
+entry names what a move gesture reads it as. A resize gesture ignores it — it already reads nothing
+but its own edge's horizontal travel.
+_Avoid_: diagonal drag (retired — an axis lock rules it out; before this, a drag off the source row
+could reparent and shift time in one gesture)
+
 ### Theming and accessibility
 
 **Base stylesheet**:

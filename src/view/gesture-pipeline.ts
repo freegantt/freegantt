@@ -65,6 +65,10 @@ import type { InteractionState } from '../render/backend.js';
 const NO_EXTRA_EDITS: ProposedEdits = Object.freeze(new Map());
 /** Every gesture but a parent bar's drag writes each bar it paints, so this is the usual answer. */
 const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
+/** #425 axis lock: what a refused drop writes — nothing. A row-axis drag holds every date fixed
+ *  (`interaction/entry-gestures.ts` zeroes its own `dxPx` before this ever runs), so once the row
+ *  target itself refuses, there is no time fallback left to commit either. */
+const NO_WRITES: ProposedEdits = Object.freeze(new Map());
 
 /** #425: a `paintedOnly` Entry's own translated dates (ADR 0013 — they never write directly), with
  *  the dates dropped so `#writesWithPlace` can still write its tree place. `undefined` in,
@@ -452,6 +456,7 @@ export class GesturePipeline {
     if (drop.kind === 'place') {
       return { writes: this.#writesWithPlace(writes, paints, drop.moves), paints, grabbed, drop };
     }
+    if (drop.kind === 'refused') return { writes: NO_WRITES, paints, grabbed, drop };
     return { writes, paints, grabbed, drop };
   }
 

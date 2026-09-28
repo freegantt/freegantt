@@ -1411,6 +1411,10 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
   });
 
   it('a diagonal drag both reparents and shifts time — both report true/present', async () => {
+    // Exercises `#writesWithPlace`'s own merge directly, at the pipeline layer this test calls
+    // into by hand. #425 axis lock: `entry-gestures.ts` never feeds this pipeline a real drag with
+    // both a nonzero `dxPx` and a `contentY` together any more (a row-axis drag always zeroes
+    // `dxPx`), so this combination is a pipeline-level check, not a reachable drag any more.
     const { p2, deps, emitted } = withTree({
       rowDropZoneAt: () => intoP2(),
     });
@@ -1450,7 +1454,11 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     expect(move.end).toBe(150);
   });
 
-  it('a refused target writes time only, and the event carries no place', async () => {
+  it('a refused target commits nothing — no write, no event (#425 axis lock)', async () => {
+    // #425 axis lock: a real refused drop is always row-axis (`entry-gestures.ts` never sends
+    // `contentY` on a time-axis drag), so `dxPx` is always 0 by the time this runs. Before the
+    // axis lock, a refused drop still wrote a `dxPx`-based time shift; ruling 5 closed that gap —
+    // a refusal now commits nothing at all, the same silence any other vetoed gesture keeps.
     const { a, p2, deps, emitted } = withTree({
       rowDropZoneAt: () => intoP2(),
       canPlace: (entry, parentId) => entry.id !== a.id || parentId !== p2.id,
@@ -1464,14 +1472,11 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
       },
     });
 
-    await pipeline.session(entryId('a'), { kind: 'move' })!.commit(50, { contentY: 200 });
+    const committed = await pipeline.session(entryId('a'), { kind: 'move' })!.commit(0, { contentY: 200 });
 
-    const edit = written[0]!.get(entryId('a'))!;
-    expect(edit.parentId).toBeUndefined();
-    expect(edit.start).toBe(50);
-    const move = emitted[1]![1] as EntryMove;
-    expect('place' in move).toBe(false);
-    expect(move.shiftsTime).toBe(true);
+    expect(committed).toBe(false);
+    expect(written).toHaveLength(0);
+    expect(emitted).toHaveLength(0);
   });
 
   it('a held veto whose target reparents during the hold drops as data-changed, and never commits', async () => {
