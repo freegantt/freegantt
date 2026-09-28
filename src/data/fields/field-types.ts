@@ -2,7 +2,7 @@
 // declaration: `{ key: 'progress', type: 'percent' }` resolves on its own. `currency({ code })` is a
 // factory, not a seeded name: pass the bundle inline, or register it under a name of your own.
 
-import type { Duration, Entry, FieldType, FormatContext, Instant } from '../../model/index.js';
+import type { Duration, Entry, EntryId, FieldType, FormatContext, Instant } from '../../model/index.js';
 import { addMs, diffDays, diffMs, formatDateTime, MS } from '../../time/index.js';
 
 /** Stringifies a primitive Field value for display; anything else (undefined, object) renders empty. */
@@ -167,6 +167,20 @@ export function currency(options: { code: string }): FieldType<number> {
   });
 }
 
+function compareEntryId(a: EntryId | undefined, b: EntryId | undefined): number {
+  if (a === undefined || a === null) return 1;
+  if (b === undefined || b === null) return -1;
+  return a.localeCompare(b);
+}
+
+/** A reference to another Entry by id (#425 — `parentId`'s own type). Formats and compares as
+ *  plain text. Ships no `parseValue`: the grid has nothing to type into this cell, because an id
+ *  reference is written by a drag or by `entries.update()`, never by hand. */
+export const entryId: FieldType<EntryId> = Object.freeze<FieldType<EntryId>>({
+  formatValue: (value) => stringifyPrimitive(value),
+  compare: compareEntryId,
+});
+
 /** Every Field type the library ships, keyed by name. `FieldRegistry` seeds itself from this table
  *  before `options.fieldTypes` — a consumer name of the same key silently wins (`{ ...spread }`
  *  order). `currency` is a factory, not a row in this table: a consumer names the returned bundle
@@ -178,4 +192,5 @@ export const SHIPPED_FIELD_TYPES: Readonly<Record<string, FieldType>> = Object.f
   date,
   duration,
   boolean,
+  entryId,
 });
