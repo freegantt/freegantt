@@ -463,8 +463,9 @@ export class RovingFocus {
     if (plainHorizontalArrow(event)) return;
 
     // Home/End focus the first/last bar of the focused row.
-    const target = rowEndBarForKey(event.key, this.#barsInSameRow(bars, currentIndex));
-    if (target !== undefined) {
+    if (event.key === 'Home' || event.key === 'End') {
+      const target = rowEndBarForKey(event.key, this.#barsInSameRow(bars, currentIndex));
+      if (target === undefined) return;
       event.preventDefault();
       this.#focusBar(target);
       return;
@@ -638,9 +639,7 @@ function plainHorizontalArrow(event: KeyboardEvent): boolean {
 }
 
 /** Call: `rowEndBarForKey(event.key, this.#barsInSameRow(bars, currentIndex))`. Which bar Home or
- *  End lands on in the focused row — `undefined` for any other key. */
-function rowEndBarForKey(key: string, rowBars: readonly HTMLElement[]): HTMLElement | undefined {
-  if (key === 'Home') return rowBars[0];
-  if (key === 'End') return rowBars[rowBars.length - 1];
-  return undefined;
+ *  End lands on in the focused row. */
+function rowEndBarForKey(key: 'Home' | 'End', rowBars: readonly HTMLElement[]): HTMLElement | undefined {
+  return key === 'Home' ? rowBars[0] : rowBars[rowBars.length - 1];
 }
