@@ -1014,7 +1014,7 @@ export class GanttShell {
     this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
       readGridWidth: () => this.#gridPaneWidth.width,
       readMinWidth: () => this.#gridPaneWidth.floor,
-      // S5.11: `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
+      // `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
       // names one whenever the columns do. A `flex` column names none, so this falls back to the
       // container's own outer bound (`PaneLayout.bounds()`, the same clamp). The pane
       // physically cannot outgrow the Gantt it sits in, ceiling or not.
@@ -1055,7 +1055,7 @@ export class GanttShell {
         if (column === undefined) return undefined;
         // A per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
         // Gantt-wide one for that column. No `pluginId`, since a `GridColumn` only ever arrives
-        // from the consumer's own config until S5.9's `registerGridColumn` exists.
+        // from the consumer's own config until a plugin can `registerGridColumn`.
         if (column.columnRenderer !== undefined) {
           const perColumnRenderer = column.columnRenderer;
           return {
