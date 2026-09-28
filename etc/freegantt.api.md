@@ -1007,8 +1007,8 @@ export interface FieldType<TValue = unknown> {
     rollUp?: AggregatorName;
 }
 
-// @public (undocumented)
-export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | (string & {});
+// @public
+export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | 'entryId' | (string & {});
 
 // @public (undocumented)
 export interface FieldUpdated {
