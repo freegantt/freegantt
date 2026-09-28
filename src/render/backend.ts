@@ -1,7 +1,15 @@
 // render/ backend contract (plans/01 §8.1). Shared by dom and null backends; DOM types are structural only —
 // this file itself never touches document/window.
 
-import type { EntryId, GeometryFrame, BarId, BarPreview, ClientPoint, RowId } from '../layout/index.js';
+import type {
+  EntryId,
+  GeometryFrame,
+  BarId,
+  BarPreview,
+  ClientPoint,
+  RowId,
+  RowDropSide,
+} from '../layout/index.js';
 
 export interface InteractionState {
   hoveredBarId?: BarId;
@@ -49,6 +57,15 @@ export interface InteractionState {
    *  "at the end"). Undefined outside a reorder drag — a hot-path paint only (one transform, one
    *  attribute), no frame recompute. */
   columnReorderPreview?: { columnKey: string; offsetPx: number; beforeColumnKey: string | null };
+  /** #425: a vertical drag's live target — the row it would land before/into/after, or (`'end'`)
+   *  past the last row; `rowId` is `undefined` only for that past-the-last-row case. `depth` and
+   *  `lineY` are what the Insertion line paints (`lineY` is `undefined` for an `into` drop — the
+   *  target row's own outline is the indicator then, `layout/row-drop-target.ts`'s own `DropPlace`
+   *  doc). `refusedRowId` names the row a drop refuses instead, `undefined` past the last row.
+   *  Undefined outside a vertical drag, or while it sits over the source row. */
+  rowDrop?:
+    | { rowId: RowId | undefined; side: RowDropSide | 'end'; depth: number; lineY: number | undefined }
+    | { refusedRowId: RowId | undefined };
 }
 
 /** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185). A row hit

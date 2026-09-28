@@ -181,6 +181,13 @@ const LIGHT_COLOR_TOKENS = `
      weight. Under a bar (--fg-bar-fill, opaque) the wash is invisible by construction — it only
      shows on the pane a bar does not cover. */
   --fg-time-shading-fill: rgb(26 24 21 / 0.05);
+  /* #425: a vertical drag's Insertion line — the same meaning the column-reorder drop indicator
+     already borrows --fg-selection-color for (see .fg-col-header[data-drop] above), given its own
+     token so a consumer can restyle the row drop line without also restyling selection. */
+  --fg-drop-line-color: oklch(0.55 0.13 245);
+  /* A flat wash in --fg-warn's own hue for a row a drop refuses, translucent so the row's own
+     zebra/hover paint still shows through. */
+  --fg-drop-refused-bg: rgb(180 105 14 / 0.14);
 `.trimEnd();
 
 const DARK_COLOR_TOKENS = `
@@ -221,6 +228,8 @@ const DARK_COLOR_TOKENS = `
   /* Same rule as Light's pair: the theme's own light ink (rgb(236 234 227)), one notch past
      --fg-tick-line-strong-color's own alpha (0.17) for the same separation-from-a-tick-line reason. */
   --fg-time-shading-fill: rgb(236 234 227 / 0.07);
+  --fg-drop-line-color: oklch(0.72 0.13 245);
+  --fg-drop-refused-bg: rgb(224 163 64 / 0.18);
 `.trimEnd();
 
 // #383: every consumer-facing metric this sheet's own rules read as `var(--fg-x, default)`, declared
@@ -400,6 +409,11 @@ ${DARK_COLOR_TOKENS}
    here. */
 .fg-row[data-state~='hovered'], .fg-row-band[data-state~='hovered'] { background: var(--fg-row-hover-bg); }
 .fg-row[data-state~='selected'], .fg-row-band[data-state~='selected'] { background: var(--fg-row-selected-bg); }
+/* #425: a vertical drag's own row paint. "into" outlines the row it would land inside, echoing
+   the column-reorder drop indicator's own colour. "refused" tints the row a drop cannot land on,
+   in the warn family, and pairs with .fg-container[data-drop='refused'] below for the cursor. */
+.fg-row[data-drop='into'], .fg-row-band[data-drop='into'] { outline: 2px solid var(--fg-drop-line-color); outline-offset: -2px; }
+.fg-row[data-drop='refused'], .fg-row-band[data-drop='refused'] { background: var(--fg-drop-refused-bg); }
 .fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 10px); }
 .fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 10px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -505,6 +519,9 @@ ${DARK_COLOR_TOKENS}
 /* movableBarId's cursor is a boolean attribute, not an inline style — cursor is not one of
    the geometry properties no-inline-style-outside-geometry allows inline. */
 .fg-bar[data-movable] { cursor: grab; }
+/* #425: a vertical drag over a row a drop refuses — the whole container takes the cursor, not just
+   the refused row, because the pointer is over a bar mid-drag, never the row underneath it. */
+.fg-container[data-drop='refused'] { cursor: not-allowed; }
 /* One shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */
@@ -545,6 +562,12 @@ ${DARK_COLOR_TOKENS}
    option of its own (it is a hot-path hover readout, never a Frame decoration) — one rule, always
    below the bands. */
 .fg-cursor-line-label { z-index: ${INTERNAL_Z.abovePaneChrome}; pointer-events: none; top: 100%; }
+/* #425: a vertical drag's Insertion line — one painted in the grid pane, inset by the target
+   depth (the same --fg-indent-width the Name column indents by), one full-width in the timeline
+   pane. render/dom/index.ts moves and hides both together; neither paints while the drop is
+   "into" a row (that row's own outline is the indicator then) or refused. */
+.fg-drop-line { position: absolute; left: calc(var(--fg-drop-line-depth, 0) * var(--fg-indent-width, 12px)); width: 100%; height: 2px; background: var(--fg-drop-line-color); pointer-events: none; z-index: ${INTERNAL_Z.abovePaneChrome}; }
+.fg-timeline-pane .fg-drop-line { left: 0; }
 /* S5.3: the one overlay layer, above both panes. DOM order alone does not reach here —
    .fg-container creates no stacking context of its own, so .fg-grid-header, .fg-header, a dragged
    column header, and the cursor line all compete with this layer on z-index alone, not paint order

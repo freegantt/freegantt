@@ -148,11 +148,14 @@ export function spanAfterEdit(
 
 /** What the hot-path paint needs to preview a draft with no frame rebuild: a pixel offset
  *  and width delta per affected bar, read off the bound `TimeScale` against each entry's committed
- *  span. `extra` marks an entry the extension hook added rather than the caller's own selection
- *  (S3.6 — always `false` until the extender is wired in). */
+ *  span. `extra` marks an entry the extension hook added rather than the caller's own selection —
+ *  always `false` until the extender is wired in. `dy` is a vertical drag's own rigid
+ *  offset (#425) — always `0` here; `view/gesture-pipeline.ts`'s `#computePreview` overwrites it on
+ *  every entry a `place` drop paints, since this function knows nothing about rows. */
 export interface BarPreview {
   barId: BarId;
   dx: number;
+  dy: number;
   dWidth: number;
   extra: boolean;
 }
@@ -217,7 +220,13 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly BarPreview[
     // would read `dx = -before.x` and teleport the painted node back to `x ≈ 0`, collapsed to
     // nothing, mid-drag. No painted geometry on either side means no offset to paint.
     if (before.width === 0 || after.width === 0) return;
-    out.push({ barId: id0, dx: after.x - before.x, dWidth: after.width - before.width, extra: isExtra });
+    out.push({
+      barId: id0,
+      dx: after.x - before.x,
+      dy: 0,
+      dWidth: after.width - before.width,
+      extra: isExtra,
+    });
   }
 
   for (const [id, edit] of proposed) pushOffset(id, edit, false);

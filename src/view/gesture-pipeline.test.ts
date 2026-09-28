@@ -82,10 +82,12 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   deps: GesturePipelineDeps;
   emitted: [string, unknown][];
   applied: unknown[];
+  appliedRowDrops: unknown[];
   reported: ErrorReportInput[];
 } {
   const emitted: [string, unknown][] = [];
   const applied: unknown[] = [];
+  const appliedRowDrops: unknown[] = [];
   const reported: ErrorReportInput[] = [];
   const entries = new Map<EntryId, Entry>();
   const deps: GesturePipelineDeps = {
@@ -111,7 +113,10 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
       emitted.push([name, payload]);
       return true;
     },
-    applyGestureState: (preview) => applied.push(preview),
+    applyGestureState: (preview, _pendingBarIds, _cursor, rowDrop) => {
+      applied.push(preview);
+      appliedRowDrops.push(rowDrop);
+    },
     raiseError: (report) => reported.push(report),
     // #425: inert defaults — no row drop offered, no zone but the source row. A test that cares
     // about a vertical drag overrides these with a real roster (see `withRoster` below).
@@ -128,7 +133,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     verticalDropOffered: () => false,
     ...overrides,
   };
-  return { deps, emitted, applied, reported };
+  return { deps, emitted, applied, appliedRowDrops, reported };
 }
 
 /** Wires `entryById` off a fixed roster, the shape most tests below want: one grabbed
@@ -1359,14 +1364,14 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
       entryOf: (id) => [p1, a, b, p2, c].find((row) => row.id === id),
       rootEntries: () => [p1, p2],
     };
-    const { deps, emitted, applied, reported } = withRoster([p1, a, b, p2, c], {
+    const { deps, emitted, applied, appliedRowDrops, reported } = withRoster([p1, a, b, p2, c], {
       rowsForDrop: () => rowsForDrop,
       rowIndexForEntry: (id) => rowIndexOf.get(id) ?? -1,
       verticalDropOffered: () => true,
       canPlace: () => true,
       ...overrides,
     });
-    return { p1, a, b, p2, c, deps, emitted, applied, reported };
+    return { p1, a, b, p2, c, deps, emitted, applied, appliedRowDrops, reported };
   }
 
   /** Every drag in this suite grabs `a` and lets the pointer settle over `p2`'s own row, `into`. */
@@ -1532,5 +1537,54 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     expect([...written[0]!.keys()]).toEqual([a.id, b.id]);
     const move = emitted[1]![1] as EntryMove;
     expect(move.entries.map((detail: EntryMoveDetail) => detail.entry)).toEqual([a.id, b.id]);
+  });
+
+  it("an into drop offsets the preview by the target row's own centre, and paints the row drop", async () => {
+    const { p2, deps, applied, appliedRowDrops } = withTree({
+      rowDropZoneAt: () => intoP2(),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 112 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // a's row index 1, top 32, height 32, mid 48; p2's row index 3, top 96, height 32, mid 112.
+    const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
+    expect(preview.map((bar) => bar.dy)).toEqual([64]);
+    expect(appliedRowDrops.at(-1)).toEqual({
+      rowId: p2.id,
+      side: 'into',
+      depth: 1,
+      lineY: undefined,
+    });
+  });
+
+  it('a refused drop paints dy: 0 and the refused row, never the target place', async () => {
+    const { a, p2, deps, applied, appliedRowDrops } = withTree({
+      rowDropZoneAt: () => intoP2(),
+      canPlace: (entry, parentId) => entry.id !== a.id || parentId !== p2.id,
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 112 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
+    expect(preview.map((bar) => bar.dy)).toEqual([0]);
+    expect(appliedRowDrops.at(-1)).toEqual({ refusedRowId: p2.id });
+  });
+
+  it('a drag over the source row paints dy: 0 and no row drop', async () => {
+    const { deps, applied, appliedRowDrops } = withTree({
+      rowDropZoneAt: () => ({ kind: 'sourceRow' }),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 40 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
+    expect(preview.map((bar) => bar.dy)).toEqual([0]);
+    expect(appliedRowDrops.at(-1)).toBeUndefined();
   });
 });
