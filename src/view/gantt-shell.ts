@@ -132,7 +132,6 @@ import type { PluginRegistrationPorts } from './plugin-registrations.js';
 import { FrameSettings } from './frame-settings.js';
 import type { FrameSettingsPatch, FrameSettingsPorts } from './frame-settings.js';
 import { projectAffordances } from './affordance-projection.js';
-import { GesturePipeline } from './gesture-pipeline.js';
 import type { EntryGestureContext, EntryHit } from './entry-gesture-context.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
@@ -145,9 +144,12 @@ import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
 import { TreeCollapse } from './tree-collapse.js';
+import type { TreeCollapseContext } from './tree-collapse.js';
 import type { CollapseState } from './collapse-state.js';
 import { EntrySelection } from './entry-selection.js';
 import type { EntrySelectionPorts } from './entry-selection.js';
+import { GesturePipeline } from './gesture-pipeline.js';
+import type { GesturePipelineDeps } from './gesture-pipeline.js';
 
 import { RovingFocus } from './roving-focus.js';
 import type { RovingFocusPorts } from './roving-focus.js';
@@ -427,6 +429,48 @@ function resolveContainer(container: HTMLElement | string): HTMLElement {
   return el;
 }
 
+/** Call: `paneLayoutFrom(this.#container, options.gridWidth, options.minGridWidth)`. Pane layout
+ *  from the container and the two grid-width options — a number is px, `'fitColumns'` names none. */
+function paneLayoutFrom(
+  container: HTMLElement,
+  gridWidth: GridWidth | undefined,
+  minGridWidth: number | undefined,
+): PaneLayout {
+  return new PaneLayout({
+    container,
+    ...(typeof gridWidth === 'number' ? { gridWidth } : {}),
+    ...(minGridWidth !== undefined ? { minGridWidth } : {}),
+  });
+}
+
+/** Call: `defaultTimeScale(options.preset, options.range, options.fit)`. The private TimeScale
+ *  this Gantt builds when the consumer named no shared `scale`. */
+function defaultTimeScale(
+  preset: PresetRef | undefined,
+  range: GanttShellOptions['range'],
+  fit: TimeScaleFit | undefined,
+): TimeScaleModel {
+  return new TimeScaleModel({
+    ...(preset !== undefined ? { preset } : {}),
+    ...(range !== undefined ? { range } : {}),
+    ...(fit !== undefined ? { fit } : {}),
+  });
+}
+
+/** Call: `viewportFrom(scale, options.scroll, options.overscan)`. Viewport from the scale the
+ *  consumer shared or the private default, plus optional scroll and Overscan. */
+function viewportFrom(
+  scale: TimeScaleModel,
+  scroll: ScrollAxes | undefined,
+  overscan: Overscan | undefined,
+): Viewport {
+  return new Viewport({
+    scale,
+    ...(scroll ? { scroll } : {}),
+    ...(overscan !== undefined ? { overscan } : {}),
+  });
+}
+
 /** The union `[min x, max(x + width))` of every Bar's own `barSpan` (#295) — every *painted* one.
  *  It is `GanttShell.reveal`'s target when an entry draws several Bars. Revealing the entry then
  *  shows every one of them, not only the first bar. Takes at least one Bar: `#revealEntrySpan`,
@@ -533,7 +577,7 @@ export class GanttShell {
   #pointerActivation: PointerActivation = 'click';
   #convenienceChords: ConvenienceChords = {};
   #resolvedConvenienceChords = resolveConvenienceChords(undefined);
-  #capabilities: ResolvedCapabilities;
+  #capabilities!: ResolvedCapabilities;
   /** The raw hit under the pointer, reported by `EntrySelectionContext.setHovered` — undefined on
    *  pointerleave or when nothing is wired (no `entryGestures` attachment). */
   #hoveredBarId: BarId | undefined;
@@ -683,11 +727,7 @@ export class GanttShell {
     // #157: `'fitColumns'` names no px of its own. So the pane opens at its authored width
     // (`--fg-grid-pane-width`). `#bindColumns` below then sizes it to the columns, the moment there
     // are resolved columns to measure.
-    this.#paneLayout = new PaneLayout({
-      container: this.#container,
-      ...(typeof options.gridWidth === 'number' ? { gridWidth: options.gridWidth } : {}),
-      ...(options.minGridWidth !== undefined ? { minGridWidth: options.minGridWidth } : {}),
-    });
+    this.#paneLayout = paneLayoutFrom(this.#container, options.gridWidth, options.minGridWidth);
     this.#teardown.add(() => this.#paneLayout.destroy());
     // Registered first, released last: every resource below draws into these panes.
     this.#teardown.add(() => this.#frames.cancel());
@@ -714,32 +754,13 @@ export class GanttShell {
       layout: this.#layout,
     });
 
-    const hasOwnOptions =
-      options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
-    if (options.scale && hasOwnOptions) {
-      // No longer behind `isDevMode()`, which resolved to `false` in every consumer's
-      // build and deleted this line from the shipped library. The `console.warn` is now the fallback
-      // for an unsubscribed consumer. Nobody can subscribe this early: the shell is still in its own
-      // constructor. So this always prints in practice, which is the behaviour a misconfigured
-      // `scale` deserves.
-      const message =
-        "GanttOptions.preset/range/fit are ignored when 'scale' is also supplied. " +
-        'The shared TimeScaleModel already carries its own options — set preset/range/fit on it directly.';
-      this.#raiseError({ code: 'scale-options-ignored', message, severity: 'warning', by: 'core' }, () =>
-        console.warn(`FreeGantt: ${message}`),
-      );
-    }
-    this.#viewport = new Viewport({
-      scale:
-        options.scale ??
-        new TimeScaleModel({
-          ...(options.preset !== undefined ? { preset: options.preset } : {}),
-          ...(options.range !== undefined ? { range: options.range } : {}),
-          ...(options.fit !== undefined ? { fit: options.fit } : {}),
-        }),
-      ...(options.scroll ? { scroll: options.scroll } : {}),
-      ...(options.overscan !== undefined ? { overscan: options.overscan } : {}),
-    });
+    // Does a shared `scale` also name preset, range, or fit that this Gantt must ignore?
+    this.#warnWhenScaleIgnoresRangeOptions();
+    this.#viewport = viewportFrom(
+      options.scale ?? defaultTimeScale(options.preset, options.range, options.fit),
+      options.scroll,
+      options.overscan,
+    );
 
     // Constructed with the options, not assigned through the live setters. So the first paint below
     // (`#frames.flush()`) sees what the consumer asked for, and no port fires while half this shell
@@ -752,15 +773,7 @@ export class GanttShell {
       this.#columnChromePorts(),
       options.gridColumns ?? DEFAULT_GRID_COLUMNS,
     );
-    this.#registrations = new PluginRegistrations(
-      this.#pluginRegistrationPorts(),
-      options.variantRegistry ??
-        createVariantRegistry({
-          fieldFor: (key) => this.#options.dataset.field(key),
-          reportDoubleMatch: this.#reportDoubleMatch(),
-          reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
-        }),
-    );
+    this.#registrations = new PluginRegistrations(this.#pluginRegistrationPorts(), this.#variantRegistry());
     this.#entryRulePorts = {
       fieldFor: (key) => this.#options.dataset.field(key),
       reportUnknownKey: this.#reportUnknownRowSourceField(),
@@ -784,100 +797,14 @@ export class GanttShell {
     // decides whether it is enabled, live or at construction — so both paths land in the same DOM.
     // Wired before `#bindColumns()` below: that call's own `syncAria()` needs the attachment to
     // already exist.
-    this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
-      readGridWidth: () => this.#gridPaneWidth.width,
-      readMinWidth: () => this.#gridPaneWidth.floor,
-      // S5.11: `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
-      // names one whenever the columns do. A `flex` column names none, so this falls back to the
-      // container's own outer bound (`PaneLayout.bounds()`, the same clamp). The pane
-      // physically cannot outgrow the Gantt it sits in, ceiling or not.
-      readMaxWidth: () => this.#gridPaneWidth.ceiling ?? this.#paneLayout.bounds().width,
-      previewGridWidth: (px) => {
-        this.#paneLayout.gridWidth = this.#gridPaneWidth.previewDrag(px);
-      },
-      commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
-    });
-    this.#teardown.add(() => this.#splitterAttachment.setEnabled(false));
+    this.#attachSplitter();
     this.#applyGridResizable();
     this.#bindColumns();
 
     // Mount before binding (#22). The render target exists by the time the binding's own onChange
     // fires, and that onChange IS this shell's first render. So there is no construction-order
     // exception to document, and no separate explicit render() call after bind().
-    this.#backend =
-      options.backend ??
-      createDomBackend({
-        entryById: (id) => this.#options.dataset.entries.get(id),
-        raiseError: this.#raiseError,
-        // #421 C5: per-entry, not per-frame. `EntryVariant.barLabels` merges key by key over this
-        // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
-        resolveBarLabelPolicy: (entry) =>
-          resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
-        readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
-        // ADR 0018: a variant's own `paint` first, because it names the rows it covers. Then
-        // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
-        // map's `'*'` entry meant. The consumer's own `barRenderer` beats a plugin's whole-point
-        // `bar` renderer.
-        //
-        // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**.
-        // A consumer who wants to paint a summary row writes a variant that matches it.
-        // Their rule then beats core's by rank, which is what the catch-all ordering asks for.
-        resolveBarRenderer: (entry) => this.#paintFor(entry),
-        // `render/dom` never receives `ResolvedColumn` (`column.format` "never
-        // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
-        // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
-        // string it already threads through `CellItem.key`.
-        resolveGridCellRenderer: (columnKey) => {
-          const column = this.#columnChrome.resolvedColumn(columnKey);
-          if (column === undefined) return undefined;
-          // A per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
-          // Gantt-wide one for that column. No `pluginId`, since a `GridColumn` only ever arrives
-          // from the consumer's own config until S5.9's `registerGridColumn` exists.
-          if (column.columnRenderer !== undefined) {
-            const perColumnRenderer = column.columnRenderer;
-            return {
-              renderer: (ctx) =>
-                perColumnRenderer({
-                  ...(ctx.entry !== undefined ? { entry: ctx.entry } : {}),
-                  value: ctx.value,
-                  fieldValue: this.#fieldValueForCell(ctx.entry, column.field),
-                }),
-            };
-          }
-          const resolved = this.#registrations.renderers.resolve(
-            'gridCell',
-            this.#frameSettings.gridCellRenderer,
-          );
-          if (resolved === undefined) return undefined;
-          const gridCellRenderer = resolved.renderer;
-          return {
-            renderer: (ctx) =>
-              gridCellRenderer({
-                ...ctx,
-                column,
-                fieldValue: this.#fieldValueForCell(ctx.entry, column.field),
-              }),
-            ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
-          };
-        },
-        // Same bind-in-here posture as `resolveGridCellRenderer` just above. A
-        // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`). So this only
-        // ever resolves the Gantt-wide/plugin one, bound to its column.
-        resolveHeaderRenderer: (columnKey) => {
-          const column = this.#columnChrome.resolvedColumn(columnKey);
-          if (column === undefined) return undefined;
-          const resolved = this.#registrations.renderers.resolve(
-            'header',
-            this.#frameSettings.headerRenderer,
-          );
-          if (resolved === undefined) return undefined;
-          const headerRenderer = resolved.renderer;
-          return {
-            renderer: () => headerRenderer({ column }),
-            ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
-          };
-        },
-      });
+    this.#backend = options.backend ?? this.#defaultBackend();
     this.#teardown.add(() => this.#backend.destroy());
     this.#backend.mount({
       grid: this.#panes.rows,
@@ -902,15 +829,7 @@ export class GanttShell {
     // has always said. Every member is either a field already assigned above, or a closure that
     // reads live state at call time. So nothing in it goes stale between two installs, and a page
     // that installs six plugins no longer allocates six copies of it.
-    const shellPorts = this.#shellPorts();
-    this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
-      const { parts, gate } = buildPluginPorts(shellPorts, pluginId);
-      const context = (options.wiring.buildPluginContext ?? (() => ({})))(parts);
-      return { context, disposables: parts.disposables, registrationGate: gate };
-    }, this.#raiseError);
-    // Registered after the panes and the backend, so it releases before them. A plugin
-    // disposer may still reach for its overlay node.
-    this.#teardown.add(() => this.#pluginRuntime.disposeAll());
+    this.#openPluginRuntime();
 
     // The timeline pane is the single native scroller; the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in),
@@ -960,6 +879,238 @@ export class GanttShell {
       this.#applyPaneMeasurement(size),
     );
     this.#teardown.add(() => this.#paneSizeAttachment.detach());
+    this.#applyInteractionOptions();
+    this.#entrySelection = new EntrySelection(this.#entrySelectionPorts());
+    this.#treeCollapse = new TreeCollapse(this.#treeCollapseContext());
+    this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
+    this.#teardown.add(() => this.#rovingFocus.detach());
+    this.#liveRegion = new LiveRegion(this.#container, this);
+    this.#liveRegion.attach();
+    this.#teardown.add(() => this.#liveRegion.detach());
+    this.#gesturePipeline = new GesturePipeline(this.#gesturePipelineDeps());
+    // One `EntryGestureContext`, shared by the pointer attachment and the keyboard one.
+    // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
+    const gestureContext = this.#entryGestureContext();
+    // Core commands first, then the keymap listener. Both attach ahead of
+    // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below. So every plugin binding and
+    // every core command gets first refusal on a key event. This shell's own pointer-editing and
+    // pan/page/home/end handling only sees it after that. An unmatched chord is left untouched
+    // either way: the resolver never calls `preventDefault()` on a miss.
+    this.#registerCoreCommands();
+    this.#attachKeymap();
+    // #434: opt-in (`pointerActivation: 'dblclick'`), always attached — the option gates inside the
+    // handler, the same shape the wheel handlers gate on `#resolvedViewportGestures`. A grid cell's
+    // double-click asks the one decision `Enter`'s own Keymap resolution already asks
+    // (`#editorTakesFocusedCell`): does `freegantt.editFocusedCell` take this cell? A
+    // writable cell's double-click stays the editor's own (`ctx.view.onDomEvent('dblclick', …)`)
+    // and does not also activate here. This listener sits on `#container`, a bubble-phase ancestor
+    // of `inlineEditing()`'s document-level one. So a `return` here always reaches that listener
+    // next — no explicit ordering needed beyond where each one attaches.
+    this.#attachDblClickActivation();
+    // Document-level capture-phase fallback (issue #137,
+    // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
+    // key event whose target sits inside `#container`. A popup opened from an outside trigger has
+    // no path into that listener at all — a toolbar button in the consumer's own page, say. So its
+    // Escape dismissal would never fire. So this routes through the same `#keymap.resolve()`, not a
+    // second, independent listener. That keeps one newest-first resolution order, instead of
+    // reintroducing the bespoke document-capture stack C3 removed. Skipped whenever the target is inside
+    // `#container`, so an in-container key event is resolved exactly once, by the bubble listener.
+    this.#attachDocumentKeymap();
+
+    // Same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
+    // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`. Attached *before*
+    // `entryGestures`. Both listen for `keydown` on this same `#container`. An Escape that cancels a
+    // column drag must reach `column-gestures.ts`'s own handler ahead of `entry-gestures.ts`'s
+    // handler. That handler swallows it, through `stopImmediatePropagation()`. In the other order,
+    // the column drag's Escape would also clear the entry selection as an unrelated side effect.
+    this.#attachColumnGestures();
+    this.#attachEntryGestures(gestureContext);
+    // Scoped to the timeline pane, not the whole container. A bar's nudge/resize
+    // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
+    this.#attachKeyboardEditing(gestureContext);
+    this.#attachWheelNavigation();
+    this.#rowTwistyAttachment = attachRowTwisty(this.#panes.rows, {
+      toggleCollapse: (id) => this.toggleCollapse(id),
+    });
+    this.#teardown.add(() => this.#rowTwistyAttachment.detach());
+    // ADR 0032: every option a plugin's `view()` could read back through `ctx.gantt` — selection,
+    // zoom presets, theme, `a11yLabel` — is applied before this constructor returns. No plugin
+    // installs yet. `paintFirstFrame()`, called once `api/gantt.ts` has installed this Gantt's
+    // plugins, is what turns this finished-but-unpainted shell into the first live frame.
+    //
+    // The Dataset's own plugins are held here, not installed. `set plugins` reads this field and
+    // combines it with this shell's own chrome the first time a caller assigns one. So both sets
+    // resolve under one `requires` order together.
+    this.#hydrateStartState();
+
+    this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
+    this.#darkSchemeQuery.addEventListener('change', this.#darkSchemeQueryListener);
+    this.#teardown.add(() =>
+      this.#darkSchemeQuery.removeEventListener('change', this.#darkSchemeQueryListener),
+    );
+    // #330/#376: the true baseline, resolved before this Gantt writes its own `data-fg-theme` (if
+    // any). The write below then diffs `#syncResolvedTheme` against a real prior answer, never
+    // `undefined`. `#emit` (below) is what keeps construction's own write silent now. This ordering
+    // is a correctness question for the field, not a leak-prevention trick for the event.
+    this.#reportedTheme = resolveTheme(this.#container, this.#matchMedia);
+    if (options.theme !== undefined) this.theme = options.theme;
+    else this.#applyTheme();
+    // #375: an ancestor's own pin (#271) can move this Gantt's resolved theme with no write of its
+    // own. `attributeFilter` wakes this only on a `data-fg-theme` write, anywhere under the watched
+    // root. That includes the library's own write in `#applyTheme`, which re-enters here and emits
+    // nothing, because the computed answer didn't move.
+    // The root to watch: `getRootNode()` answers whatever root `#container` has right now. A
+    // container built inside a detached tree keeps an `Element`/`Document` root today, before the
+    // app ever mounts it. Any ancestor it gains on mount is still an ancestor of that same root.
+    // Watching `ownerDocument` covers both the mounted and the not-yet-mounted case. A `ShadowRoot`
+    // is the one exception: it stays its own boundary (a `DOCUMENT_FRAGMENT_NODE`), matching
+    // `resolveTheme`'s own `closest()` walk, which never crosses it either.
+    this.#themePinObserver = this.#observeThemePin();
+    this.#teardown.add(() => this.#themePinObserver.disconnect());
+    this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
+  }
+
+  /** Does a shared `scale` also name preset, range, or fit — options the shared model already
+   *  carries, so this Gantt must ignore them? */
+  #warnWhenScaleIgnoresRangeOptions(): void {
+    const options = this.#options;
+    const hasOwnOptions =
+      options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
+    if (options.scale && hasOwnOptions) {
+      // No longer behind `isDevMode()`, which resolved to `false` in every consumer's
+      // build and deleted this line from the shipped library. The `console.warn` is now the fallback
+      // for an unsubscribed consumer. Nobody can subscribe this early: the shell is still in its own
+      // constructor. So this always prints in practice, which is the behaviour a misconfigured
+      // `scale` deserves.
+      const message =
+        "GanttOptions.preset/range/fit are ignored when 'scale' is also supplied. " +
+        'The shared TimeScaleModel already carries its own options — set preset/range/fit on it directly.';
+      this.#raiseError({ code: 'scale-options-ignored', message, severity: 'warning', by: 'core' }, () =>
+        console.warn(`FreeGantt: ${message}`),
+      );
+    }
+  }
+
+  /** Which Variant registry does this Gantt use — the consumer's, or core's seeded one? */
+  #variantRegistry(): VariantRegistry {
+    return (
+      this.#options.variantRegistry ??
+      createVariantRegistry({
+        fieldFor: (key) => this.#options.dataset.field(key),
+        reportDoubleMatch: this.#reportDoubleMatch(),
+        reportUnknownFieldMatch: this.#reportUnknownFieldMatch(),
+      })
+    );
+  }
+
+  /** How does the splitter preview and commit a Grid width? */
+  #attachSplitter(): void {
+    this.#splitterAttachment = attachSplitter(this.#panes.splitter, {
+      readGridWidth: () => this.#gridPaneWidth.width,
+      readMinWidth: () => this.#gridPaneWidth.floor,
+      // S5.11: `aria-valuemax` and `End` both want a concrete number. The #139 ceiling already
+      // names one whenever the columns do. A `flex` column names none, so this falls back to the
+      // container's own outer bound (`PaneLayout.bounds()`, the same clamp). The pane
+      // physically cannot outgrow the Gantt it sits in, ceiling or not.
+      readMaxWidth: () => this.#gridPaneWidth.ceiling ?? this.#paneLayout.bounds().width,
+      previewGridWidth: (px) => {
+        this.#paneLayout.gridWidth = this.#gridPaneWidth.previewDrag(px);
+      },
+      commitGridWidth: (px) => this.#gridPaneWidth.commitDrag(px),
+    });
+    this.#teardown.add(() => this.#splitterAttachment.setEnabled(false));
+  }
+
+  /** What paints bars, cells, and headers when the consumer named no backend? */
+  #defaultBackend(): RenderBackend<HTMLElement> {
+    return createDomBackend({
+      entryById: (id) => this.#options.dataset.entries.get(id),
+      raiseError: this.#raiseError,
+      // #421 C5: per-entry, not per-frame. `EntryVariant.barLabels` merges key by key over this
+      // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
+      resolveBarLabelPolicy: (entry) =>
+        resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
+      readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
+      // ADR 0018: a variant's own `paint` first, because it names the rows it covers. Then
+      // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
+      // map's `'*'` entry meant. The consumer's own `barRenderer` beats a plugin's whole-point
+      // `bar` renderer.
+      //
+      // **Core's own `parent` paint is a rule too, so it also answers before the catch-all**.
+      // A consumer who wants to paint a summary row writes a variant that matches it.
+      // Their rule then beats core's by rank, which is what the catch-all ordering asks for.
+      resolveBarRenderer: (entry) => this.#paintFor(entry),
+      // `render/dom` never receives `ResolvedColumn` (`column.format` "never
+      // reaches a backend", `layout/column.ts`). So this binds it in here instead. render/dom
+      // only ever calls an already-column-bound function, keyed by the same `FrameColumn.field`
+      // string it already threads through `CellItem.key`.
+      resolveGridCellRenderer: (columnKey) => {
+        const column = this.#columnChrome.resolvedColumn(columnKey);
+        if (column === undefined) return undefined;
+        // A per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
+        // Gantt-wide one for that column. No `pluginId`, since a `GridColumn` only ever arrives
+        // from the consumer's own config until S5.9's `registerGridColumn` exists.
+        if (column.columnRenderer !== undefined) {
+          const perColumnRenderer = column.columnRenderer;
+          return {
+            renderer: (ctx) =>
+              perColumnRenderer({
+                ...(ctx.entry !== undefined ? { entry: ctx.entry } : {}),
+                value: ctx.value,
+                fieldValue: this.#fieldValueForCell(ctx.entry, column.field),
+              }),
+          };
+        }
+        const resolved = this.#registrations.renderers.resolve(
+          'gridCell',
+          this.#frameSettings.gridCellRenderer,
+        );
+        if (resolved === undefined) return undefined;
+        const gridCellRenderer = resolved.renderer;
+        return {
+          renderer: (ctx) =>
+            gridCellRenderer({
+              ...ctx,
+              column,
+              fieldValue: this.#fieldValueForCell(ctx.entry, column.field),
+            }),
+          ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
+        };
+      },
+      // Same bind-in-here posture as `resolveGridCellRenderer` just above. A
+      // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`). So this only
+      // ever resolves the Gantt-wide/plugin one, bound to its column.
+      resolveHeaderRenderer: (columnKey) => {
+        const column = this.#columnChrome.resolvedColumn(columnKey);
+        if (column === undefined) return undefined;
+        const resolved = this.#registrations.renderers.resolve('header', this.#frameSettings.headerRenderer);
+        if (resolved === undefined) return undefined;
+        const headerRenderer = resolved.renderer;
+        return {
+          renderer: () => headerRenderer({ column }),
+          ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
+        };
+      },
+    });
+  }
+
+  /** How does a plugin reach this Gantt's registries, overlay, and commands? */
+  #openPluginRuntime(): void {
+    const shellPorts = this.#shellPorts();
+    this.#pluginRuntime = new PluginRuntime<unknown>((pluginId) => {
+      const { parts, gate } = buildPluginPorts(shellPorts, pluginId);
+      const context = (this.#options.wiring.buildPluginContext ?? (() => ({})))(parts);
+      return { context, disposables: parts.disposables, registrationGate: gate };
+    }, this.#raiseError);
+    // Registered after the panes and the backend, so it releases before them. A plugin
+    // disposer may still reach for its overlay node.
+    this.#teardown.add(() => this.#pluginRuntime.disposeAll());
+  }
+
+  /** What pointer, keyboard, and snap options did the consumer name? */
+  #applyInteractionOptions(): void {
+    const options = this.#options;
     this.#capabilityRules = options.capabilities ?? {};
     this.#snap = options.snap;
     this.#viewportGestures = options.viewportGestures ?? {};
@@ -968,8 +1119,11 @@ export class GanttShell {
     this.#convenienceChords = options.convenienceChords ?? {};
     this.#resolvedConvenienceChords = resolveConvenienceChords(this.#convenienceChords);
     this.#capabilities = this.#resolveCapabilities();
-    this.#entrySelection = new EntrySelection(this.#entrySelectionPorts());
-    this.#treeCollapse = new TreeCollapse({
+  }
+
+  /** What does TreeCollapse ask this shell — planned rows, selection, and a replan on demand? */
+  #treeCollapseContext(): TreeCollapseContext {
+    return {
       plannedRows: () => this.#layout.plannedRows(),
       entries: () => this.#options.dataset.entries.all,
       entry: (id) => this.#options.dataset.entries.get(id),
@@ -998,13 +1152,12 @@ export class GanttShell {
         });
         return this.#layout.expandableOfRow(id);
       },
-    });
-    this.#rovingFocus = new RovingFocus(this.#panes, this.#rovingFocusPorts());
-    this.#teardown.add(() => this.#rovingFocus.detach());
-    this.#liveRegion = new LiveRegion(this.#container, this);
-    this.#liveRegion.attach();
-    this.#teardown.add(() => this.#liveRegion.detach());
-    this.#gesturePipeline = new GesturePipeline({
+    };
+  }
+
+  /** What does the gesture pipeline borrow from this shell to preview and commit a move? */
+  #gesturePipelineDeps(): GesturePipelineDeps {
+    return {
       timeZone: () => this.#options.dataset.timeZone,
       timeScale: () => this.#viewport.timeScale,
       preset: () => this.#viewport.preset,
@@ -1021,7 +1174,7 @@ export class GanttShell {
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#emit(name, payload),
       raiseError: this.#raiseError,
-      ...(options.extraEditsFor ? { extraEditsFor: options.extraEditsFor } : {}),
+      ...(this.#options.extraEditsFor ? { extraEditsFor: this.#options.extraEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.effectiveLocale,
       applyGestureState: (preview, pendingBarIds, cursor) => {
@@ -1031,10 +1184,12 @@ export class GanttShell {
         setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
         this.#backend.applyState(this.#interactionState);
       },
-    });
-    // One `EntryGestureContext`, shared by the pointer attachment and the keyboard one.
-    // Both drive the same `#gesturePipeline.session()`, so there is no value in building two.
-    const gestureContext: EntryGestureContext = {
+    };
+  }
+
+  /** What does a pointer or keyboard editing attachment ask this shell? */
+  #entryGestureContext(): EntryGestureContext {
+    return {
       hitTest: (at) => this.#backend.hitTest(at) ?? undefined,
       entryFor: (barId) => this.#entryFor(barId),
       can: (capability, entry, edge) => this.#capabilities.can(capability, entry, edge),
@@ -1058,12 +1213,10 @@ export class GanttShell {
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };
-    // Core commands first, then the keymap listener. Both attach ahead of
-    // `entryGestures`/`keyboardEditing`/`keyboardNavigation` below. So every plugin binding and
-    // every core command gets first refusal on a key event. This shell's own pointer-editing and
-    // pan/page/home/end handling only sees it after that. An unmatched chord is left untouched
-    // either way: the resolver never calls `preventDefault()` on a miss.
-    this.#registerCoreCommands();
+  }
+
+  /** Which key events on this container does the Keymap take? */
+  #attachKeymap(): void {
     this.#keymapListener = (event: KeyboardEvent) => {
       if (this.#keymap.resolve(event)) {
         event.preventDefault();
@@ -1071,14 +1224,10 @@ export class GanttShell {
     };
     this.#container.addEventListener('keydown', this.#keymapListener);
     this.#teardown.add(() => this.#container.removeEventListener('keydown', this.#keymapListener));
-    // #434: opt-in (`pointerActivation: 'dblclick'`), always attached — the option gates inside the
-    // handler, the same shape the wheel handlers gate on `#resolvedViewportGestures`. A grid cell's
-    // double-click asks the one decision `Enter`'s own Keymap resolution already asks
-    // (`#editorTakesFocusedCell`): does `freegantt.editFocusedCell` take this cell? A
-    // writable cell's double-click stays the editor's own (`ctx.view.onDomEvent('dblclick', …)`)
-    // and does not also activate here. This listener sits on `#container`, a bubble-phase ancestor
-    // of `inlineEditing()`'s document-level one. So a `return` here always reaches that listener
-    // next — no explicit ordering needed beyond where each one attaches.
+  }
+
+  /** Which double-click on this container activates an Entry? */
+  #attachDblClickActivation(): void {
     this.#dblClickListener = (event: MouseEvent) => {
       if (this.#pointerActivation !== 'dblclick' || !(event.target instanceof Node)) return;
       const domTarget = this.#dom.targetUnder(event.target);
@@ -1090,14 +1239,10 @@ export class GanttShell {
     };
     this.#container.addEventListener('dblclick', this.#dblClickListener);
     this.#teardown.add(() => this.#container.removeEventListener('dblclick', this.#dblClickListener));
-    // Document-level capture-phase fallback (issue #137,
-    // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
-    // key event whose target sits inside `#container`. A popup opened from an outside trigger has
-    // no path into that listener at all — a toolbar button in the consumer's own page, say. So its
-    // Escape dismissal would never fire. So this routes through the same `#keymap.resolve()`, not a
-    // second, independent listener. That keeps one newest-first resolution order, instead of
-    // reintroducing the bespoke document-capture stack C3 removed. Skipped whenever the target is inside
-    // `#container`, so an in-container key event is resolved exactly once, by the bubble listener.
+  }
+
+  /** Which key events outside this container still reach the Keymap — a popup's Escape? */
+  #attachDocumentKeymap(): void {
     this.#documentKeymapListener = (event: KeyboardEvent) => {
       const target = event.target;
       if (target instanceof Node && this.#container.contains(target)) return;
@@ -1111,14 +1256,21 @@ export class GanttShell {
     this.#teardown.add(() =>
       this.#container.ownerDocument.removeEventListener('keydown', this.#documentKeymapListener, true),
     );
+  }
 
-    // Same DI shape as `entryGestures`/`keyboardEditing` below — `view/` cannot import
-    // `interaction/`, so `api/gantt.ts` supplies `attachColumnGestures`. Attached *before*
-    // `entryGestures`. Both listen for `keydown` on this same `#container`. An Escape that cancels a
-    // column drag must reach `column-gestures.ts`'s own handler ahead of `entry-gestures.ts`'s
-    // handler. That handler swallows it, through `stopImmediatePropagation()`. In the other order,
-    // the column drag's Escape would also clear the entry selection as an unrelated side effect.
-    const columnGestureContext: ColumnGestureContext = {
+  /** How does the grid header resize and reorder columns? */
+  #attachColumnGestures(): void {
+    this.#columnGestures = this.#options.wiring.columnGestures?.(
+      this.#panes.gridHeader,
+      this.#container,
+      this.#columnGestureContext(),
+    );
+    this.#teardown.add(() => this.#columnGestures?.detach());
+  }
+
+  /** What does a column-gesture attachment ask this shell? */
+  #columnGestureContext(): ColumnGestureContext {
+    return {
       // The lock gates the read, not the stored resolution — see `#renderedColumns`.
       isResizable: (columnKey) => this.#gridResizable && this.#columnChrome.isResizable(columnKey),
       isMovable: (columnKey) => this.#columnChrome.isMovable(columnKey),
@@ -1132,23 +1284,27 @@ export class GanttShell {
       cancelColumnReorder: () => this.#columnChrome.cancelReorder(),
       setFocusedColumn: (columnKey) => this.#columnChrome.setFocusedColumn(columnKey),
     };
-    this.#columnGestures = options.wiring.columnGestures?.(
-      this.#panes.gridHeader,
-      this.#container,
-      columnGestureContext,
-    );
-    this.#teardown.add(() => this.#columnGestures?.detach());
-    this.#entryGestures = options.wiring.entryGestures?.(
+  }
+
+  /** How does the pointer select, move, and resize Entries on the timeline and grid? */
+  #attachEntryGestures(gestureContext: EntryGestureContext): void {
+    this.#entryGestures = this.#options.wiring.entryGestures?.(
       this.#panes.timeline,
       this.#panes.rows,
       this.#container,
       gestureContext,
     );
     this.#teardown.add(() => this.#entryGestures?.detach());
-    // Scoped to the timeline pane, not the whole container. A bar's nudge/resize
-    // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
-    this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
+  }
+
+  /** How does the keyboard nudge and resize a bar on the timeline pane? */
+  #attachKeyboardEditing(gestureContext: EntryGestureContext): void {
+    this.#keyboardEditing = this.#options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
     this.#teardown.add(() => this.#keyboardEditing?.detach());
+  }
+
+  /** How do wheel zoom and pan reach both the timeline pane and the grid pane? */
+  #attachWheelNavigation(): void {
     const wheelNavigationCtx: WheelNavigationContext = {
       wheelZoomEnabled: () => this.#resolvedViewportGestures.wheelZoom,
       wheelPanEnabled: () => this.#resolvedViewportGestures.wheelPan,
@@ -1166,59 +1322,30 @@ export class GanttShell {
       forwardPlainWheel: true,
     });
     this.#teardown.add(() => this.#wheelNavigationGrid?.detach());
-    this.#rowTwistyAttachment = attachRowTwisty(this.#panes.rows, {
-      toggleCollapse: (id) => this.toggleCollapse(id),
-    });
-    this.#teardown.add(() => this.#rowTwistyAttachment.detach());
-    if (options.collapsed !== undefined) {
-      this.#treeCollapse.hydrate(options.collapsed);
-    }
-    // ADR 0032: every option a plugin's `view()` could read back through `ctx.gantt` — selection,
-    // zoom presets, theme, `a11yLabel` — is applied before this constructor returns. No plugin
-    // installs yet. `paintFirstFrame()`, called once `api/gantt.ts` has installed this Gantt's
-    // plugins, is what turns this finished-but-unpainted shell into the first live frame.
-    //
-    // The Dataset's own plugins are held here, not installed. `set plugins` reads this field and
-    // combines it with this shell's own chrome the first time a caller assigns one. So both sets
-    // resolve under one `requires` order together.
-    this.#datasetPlugins = options.datasetPlugins ?? [];
-    if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
-    if (options.selectedEntryIds !== undefined) this.selection = options.selectedEntryIds;
+  }
 
-    this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
-    this.#darkSchemeQuery.addEventListener('change', this.#darkSchemeQueryListener);
-    this.#teardown.add(() =>
-      this.#darkSchemeQuery.removeEventListener('change', this.#darkSchemeQueryListener),
-    );
-    // #330/#376: the true baseline, resolved before this Gantt writes its own `data-fg-theme` (if
-    // any). The write below then diffs `#syncResolvedTheme` against a real prior answer, never
-    // `undefined`. `#emit` (below) is what keeps construction's own write silent now. This ordering
-    // is a correctness question for the field, not a leak-prevention trick for the event.
-    this.#reportedTheme = resolveTheme(this.#container, this.#matchMedia);
-    if (options.theme !== undefined) this.theme = options.theme;
-    else this.#applyTheme();
-    // #375: an ancestor's own pin (#271) can move this Gantt's resolved theme with no write of its
-    // own. `attributeFilter` wakes this only on a `data-fg-theme` write, anywhere under the watched
-    // root. That includes the library's own write in `#applyTheme`, which re-enters here and emits
-    // nothing, because the computed answer didn't move.
-    // The root to watch: `getRootNode()` answers whatever root `#container` has right now. A
-    // container built inside a detached tree keeps an `Element`/`Document` root today, before the
-    // app ever mounts it. Any ancestor it gains on mount is still an ancestor of that same root.
-    // Watching `ownerDocument` covers both the mounted and the not-yet-mounted case. A `ShadowRoot`
-    // is the one exception: it stays its own boundary (a `DOCUMENT_FRAGMENT_NODE`), matching
-    // `resolveTheme`'s own `closest()` walk, which never crosses it either.
+  /** Which collapse, plugins, zoom presets, and selection does this Gantt start with? */
+  #hydrateStartState(): void {
+    if (this.#options.collapsed !== undefined) {
+      this.#treeCollapse.hydrate(this.#options.collapsed);
+    }
+    this.#datasetPlugins = this.#options.datasetPlugins ?? [];
+    if (this.#options.zoomPresets !== undefined) this.zoomPresets = this.#options.zoomPresets;
+    if (this.#options.selectedEntryIds !== undefined) this.selection = this.#options.selectedEntryIds;
+  }
+
+  /** Which root does an ancestor's `data-fg-theme` pin live on? */
+  #observeThemePin(): MutationObserver {
     const themePinRoot = this.#container.getRootNode();
     const themePinTarget =
       themePinRoot.nodeType === Node.DOCUMENT_FRAGMENT_NODE ? themePinRoot : this.#container.ownerDocument;
-    this.#themePinObserver = new MutationObserver(() => this.#syncResolvedTheme());
-    this.#themePinObserver.observe(themePinTarget, {
+    const observer = new MutationObserver(() => this.#syncResolvedTheme());
+    observer.observe(themePinTarget, {
       attributes: true,
       subtree: true,
       attributeFilter: ['data-fg-theme'],
     });
-    this.#teardown.add(() => this.#themePinObserver.disconnect());
-    this.a11yLabel = options.a11yLabel ?? DEFAULT_A11Y_LABEL;
+    return observer;
   }
 
   /** ADR 0032: the shell's own first paint, run once `api/gantt.ts` has installed this Gantt's
