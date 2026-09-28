@@ -43,6 +43,11 @@ declare global {
 
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'hierarchy-and-timeline');
 
+// A plugin that owns the rows by default is unexpected, so this page mounts the phase-hierarchy
+// plugin only when the URL asks for it. Plugins mount when the Dataset is built, so the "Plugin-owned
+// tree (phase)" checkbox below reloads the page with `?tree=phase` rather than flipping a property.
+const phaseTreeEnabled = new URLSearchParams(window.location.search).get('tree') === 'phase';
+
 /** The fixture's own published shape (`cost`, `team`, the crew-lead row's own keys), plus the
  *  phase-hierarchy plugin's own `phaseId` (ADR 0020) — imported, never hand-copied, so this page
  *  cannot drift from either one. */
@@ -136,10 +141,10 @@ const dataset = new Dataset<HierarchyProps>({
   timeZone: 'UTC',
   ...hierarchyFieldOptions,
   fields: [...hierarchyFieldOptions.fields, WORK],
-  // ADR 0020: the tree is whatever the hierarchy source answers. This plugin answers `phaseId`
-  // first and `parentId` after it, so the fixture nests exactly as authored until the phase button
-  // below writes a phase id.
-  plugins: [phaseHierarchy()],
+  // ADR 0020: the tree is whatever the hierarchy source answers. Off by default: a plugin-owned
+  // tree offers no vertical drop yet (#606), so a vertical drag only reparents a bar while this
+  // plugin stays out of the Dataset. The checkbox below opts back in.
+  plugins: phaseTreeEnabled ? [phaseHierarchy()] : [],
 });
 
 const rowsModeSelect = document.querySelector<HTMLSelectElement>('#rows-mode')!;
@@ -147,6 +152,7 @@ const sortFieldSelect = document.querySelector<HTMLSelectElement>('#sort-field')
 const filterTeamBtn = document.querySelector<HTMLButtonElement>('#filter-team-btn')!;
 const reparentBtn = document.querySelector<HTMLButtonElement>('#reparent-btn')!;
 const phaseBtn = document.querySelector<HTMLButtonElement>('#phase-btn')!;
+const phaseTreeCheckbox = document.querySelector<HTMLInputElement>('#phase-tree-checkbox')!;
 const moveGateTopBtn = document.querySelector<HTMLButtonElement>('#move-gate-top-btn')!;
 const crewDaysBtn = document.querySelector<HTMLButtonElement>('#crew-days-btn')!;
 const localeSelect = document.querySelector<HTMLSelectElement>('#locale-select')!;
@@ -269,6 +275,14 @@ gantt.on('beforeEntryEdit', ({ entry }) => {
   return undefined;
 });
 
+// `#phase-btn` writes `phaseId`, so it only means something once the plugin reads that key. With
+// the plugin off, the button stays disabled and says why.
+phaseTreeCheckbox.checked = phaseTreeEnabled;
+phaseBtn.disabled = !phaseTreeEnabled;
+phaseBtn.title = phaseTreeEnabled
+  ? ''
+  : 'Turn on "Plugin-owned tree (phase)" first. This button writes a phase id, and only the plugin reads it.';
+
 syncRowSourceControls();
 renderSelection();
 syncCrewDaysLabel();
@@ -294,6 +308,15 @@ phaseBtn.addEventListener('click', () => {
   phaseBtn.textContent = nested
     ? 'Nest Gate review under Empty phase (plugin tree)'
     : 'Hand Gate review back to Phase A';
+});
+
+// The Dataset builds its plugin list once, at construction, so turning the plugin on or off needs a
+// fresh page load, not a property flip. The URL carries the choice across that reload.
+phaseTreeCheckbox.addEventListener('change', () => {
+  const url = new URL(window.location.href);
+  if (phaseTreeCheckbox.checked) url.searchParams.set('tree', 'phase');
+  else url.searchParams.delete('tree');
+  window.location.assign(url.toString());
 });
 
 // ADR 0034: siblingIndex is an ordinary Field, so a move is one undo step like any other write —
