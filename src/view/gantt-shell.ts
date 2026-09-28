@@ -1295,7 +1295,11 @@ export class GanttShell {
       setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,
-      contentYAtPaneOffset: (offsetY) => offsetY + this.#viewport.scroll.y.state.position,
+      // The sticky header sits in flow ahead of the rows (`view/styles.ts`'s `.fg-header`), so a
+      // pane-relative offset counts it. A row's own content-y (what `rowTop`/`rowIndexAtY` index)
+      // does not — subtract it here, once, so a caller never re-derives the header's height by hand.
+      contentYAtPaneOffset: (offsetY) =>
+        offsetY + this.#viewport.scroll.y.state.position - this.#paneLayout.measureHeaderHeight(),
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };

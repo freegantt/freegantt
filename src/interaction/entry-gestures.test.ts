@@ -172,6 +172,12 @@ function mockPointerCapture(el: HTMLElement): void {
   el.releasePointerCapture = vi.fn();
 }
 
+/** happy-dom never lays out for real (`column-gestures.test.ts`'s own note) — a pane rect with a
+ *  non-zero `top` is the only way to tell a real pane-relative offset from a raw `clientY` passthrough. */
+function domRect(top: number): DOMRect {
+  return { left: 0, right: 0, width: 0, top, bottom: top, height: 0, x: 0, y: top, toJSON: () => ({}) };
+}
+
 describe('attachEntryGestures — selection (S3.1)', () => {
   it('plain click on a bar replaces the selection', () => {
     const pane = document.createElement('div');
@@ -846,6 +852,53 @@ describe('attachEntryGestures — move (S3.3)', () => {
 
     expect(commit).not.toHaveBeenCalled();
     expect(proposals).toEqual([[A]]);
+  });
+
+  it('preview reads content-y from the pane-relative pointer position, not the raw client y', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    pane.getBoundingClientRect = () => domRect(20);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenContentY: (number | undefined)[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      draftFor: (_gesture, entries, _dxPx, options) => {
+        seenContentY.push(options?.contentY);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(down(0, { clientY: 50 }));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
+
+    expect(seenContentY.at(-1)).toBe(65 - 20 + 1000);
+  });
+
+  it('commit reads content-y the same way, off the pointerup position', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    pane.getBoundingClientRect = () => domRect(20);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenContentY: (number | undefined)[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      draftFor: (_gesture, entries, _dxPx, options) => {
+        seenContentY.push(options?.contentY);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(down(0, { clientY: 50 }));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
+    pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5, { clientY: 90 }));
+
+    expect(seenContentY.at(-1)).toBe(90 - 20 + 1000);
   });
 
   it('a drag moves every capable entry `entriesForGesture` returns, grabbed first', () => {

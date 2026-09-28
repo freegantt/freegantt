@@ -2014,3 +2014,34 @@ describe('verticalDropOffered gates a vertical drag on the row source (#425)', (
     expect(await dragACommitsIntoP2({ hierarchyFollowsParentId: () => false })).toBe(false);
   });
 });
+
+describe('contentYAtPaneOffset excludes the sticky header (#425)', () => {
+  it('subtracts the header height so a pointer offset lands in the same space rowTop indexes', () => {
+    const container = document.createElement('div');
+    const scrollY = new ScrollAxis();
+    let ctx: EntryGestureContext | undefined;
+    const shell = paintedShell({
+      wiring: {
+        entryGestures: (_pane, _rowLayer, _host, gestureCtx) => {
+          ctx = gestureCtx;
+          return { detach() {} };
+        },
+      },
+      container,
+      dataset: fakeDataset(tallEntries(5)),
+      scroll: { y: scrollY },
+    });
+
+    // `.fg-grid-spacer` is the one header-height proxy both panes share (`measureHeaderHeight`) —
+    // happy-dom never lays it out for real, so its own `offsetHeight` stands in for one.
+    const spacer = container.querySelector<HTMLElement>('.fg-grid-spacer')!;
+    Object.defineProperty(spacer, 'offsetHeight', { value: 40, configurable: true });
+
+    expect(ctx!.contentYAtPaneOffset(100)).toBe(60); // unscrolled: pane offset minus the header
+
+    scrollY.panTo(30);
+    expect(ctx!.contentYAtPaneOffset(100)).toBe(90); // scrolled: pane offset plus scroll minus the header
+
+    shell.destroy();
+  });
+});
