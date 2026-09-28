@@ -237,6 +237,24 @@ describe('resolveColumns — columnRenderer/editable/resizable/movable (S5.7, D-
     expect(columns[0]).not.toHaveProperty('editable');
   });
 
+  it('tooltip stays absent when neither this Gantt nor the Field names it', () => {
+    const columns = resolveColumns(['cost'], costRegistry(), { timeZone: zone, locale });
+    expect(columns[0]).not.toHaveProperty('tooltip');
+  });
+
+  it('tooltip: this Gantt beats the Field default, which beats absent', () => {
+    const registry = new FieldRegistry({
+      fieldTypes: {
+        money: { column: { width: 90, tooltip: true } },
+      },
+      fields: [{ key: 'cost', type: 'money' }],
+    });
+    expect(resolveColumns(['cost'], registry, { timeZone: zone, locale })[0]?.tooltip).toBe(true);
+    expect(
+      resolveColumns([{ field: 'cost', tooltip: false }], registry, { timeZone: zone, locale })[0]?.tooltip,
+    ).toBe(false);
+  });
+
   it("a Field's own column default never supplies columnRenderer, even set directly on the object (B5, D-S5-17)", () => {
     const rogueRenderer = () => ({ text: 'x' });
     const registry = new FieldRegistry({
