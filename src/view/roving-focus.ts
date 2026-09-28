@@ -74,6 +74,32 @@ export interface RovingFocusPorts {
 
 type GridFocus = { pane: 'header'; field: FieldKey } | { pane: 'row'; rowId: RowId; field?: FieldKey };
 
+/** The planned row a grid-pane key moves from, and the cell Field it keeps when focus is on a cell. */
+interface GridKeyRow {
+  readonly row: RovingFocusRow;
+  readonly index: number;
+  readonly field: FieldKey | undefined;
+}
+
+type GridRowNavKey = 'ArrowDown' | 'ArrowUp' | 'Home' | 'End' | 'PageDown' | 'PageUp';
+
+type GridRowMove =
+  { readonly adjacent: 1 | -1 } | { readonly jumpTo: 'first' | 'last' } | { readonly pages: 1 | -1 };
+
+const GRID_ROW_MOVE = {
+  ArrowDown: { adjacent: 1 },
+  ArrowUp: { adjacent: -1 },
+  Home: { jumpTo: 'first' },
+  End: { jumpTo: 'last' },
+  PageDown: { pages: 1 },
+  PageUp: { pages: -1 },
+} as const satisfies Record<GridRowNavKey, GridRowMove>;
+
+const GRID_CELL_DIRECTION = {
+  ArrowRight: 1,
+  ArrowLeft: -1,
+} as const satisfies Record<'ArrowRight' | 'ArrowLeft', 1 | -1>;
+
 /** One roving-focus controller per Gantt (I2: no shared state between two instances). Constructed
  *  once `Panes` exist. `syncAfterRender()` then runs after every render, so a recycled node gets
  *  its `tabindex` back, and a vanished one hands focus to its neighbour (I8). */
@@ -198,58 +224,31 @@ export class RovingFocus {
   // ---- grid pane: rows and cells ------------------------------------------------------------
 
   #handleGridKeyDown(event: KeyboardEvent): void {
+    // Ctrl/Meta/Alt chords resize, reorder, or run a whole-Gantt command — they never move a row.
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const rows = this.#ports.plannedRows();
-    if (rows.length === 0) return;
-    const focus = this.#gridFocus?.pane === 'row' ? this.#gridFocus : undefined;
-    const rowIndex = focus === undefined ? -1 : rows.findIndex((row) => row.id === focus.rowId);
-    const row = rowIndex >= 0 ? rows[rowIndex] : rows[0];
-    if (row === undefined) return;
+    const gridKeyRow = gridKeyRowOf(rows, this.#gridFocus);
+    if (gridKeyRow === undefined) return;
 
-    switch (event.key) {
-      case 'ArrowDown':
-      case 'ArrowUp': {
-        const next = clamp(
-          (rowIndex < 0 ? 0 : rowIndex) + (event.key === 'ArrowDown' ? 1 : -1),
-          0,
-          rows.length - 1,
-        );
-        event.preventDefault();
-        this.#gotoRow(rows, next, focus?.field);
-        return;
-      }
-      case 'Home':
-        event.preventDefault();
-        this.#gotoRow(rows, 0, focus?.field);
-        return;
-      case 'End':
-        event.preventDefault();
-        this.#gotoRow(rows, rows.length - 1, focus?.field);
-        return;
-      case 'PageDown':
-      case 'PageUp': {
-        const step = Math.max(1, this.#ports.rowsPerPage()) * (event.key === 'PageDown' ? 1 : -1);
-        const next = clamp((rowIndex < 0 ? 0 : rowIndex) + step, 0, rows.length - 1);
-        event.preventDefault();
-        this.#gotoRow(rows, next, focus?.field);
-        return;
-      }
-      case 'ArrowRight':
-        event.preventDefault();
-        this.#onHorizontal(row, rows, rowIndex, 1, focus?.field);
-        return;
-      case 'ArrowLeft':
-        event.preventDefault();
-        this.#onHorizontal(row, rows, rowIndex, -1, focus?.field);
-        return;
-      case ' ':
-        if (event.shiftKey) {
-          event.preventDefault();
-          this.#selectRow(row);
-        }
-        return;
-      default:
-        return;
+    // Which row does Home, End, Page, or a vertical arrow land on?
+    const nextIndex = gridRowIndexForKey(event.key, gridKeyRow.index, rows.length, this.#ports.rowsPerPage());
+    if (nextIndex !== undefined) {
+      event.preventDefault();
+      this.#gotoRow(rows, nextIndex, gridKeyRow.field);
+      return;
+    }
+
+    // ArrowLeft/ArrowRight step a cell, or expand/collapse the row.
+    const direction = gridCellDirectionOf(event.key);
+    if (direction !== undefined) {
+      event.preventDefault();
+      this.#onHorizontal(gridKeyRow.row, rows, gridKeyRow.index, direction, gridKeyRow.field);
+      return;
+    }
+
+    if (event.key === ' ' && event.shiftKey) {
+      event.preventDefault();
+      this.#selectRow(gridKeyRow.row);
     }
   }
 
@@ -576,4 +575,39 @@ export class RovingFocus {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+/** Call: `gridKeyRowOf(rows, this.#gridFocus)`. Which planned row a grid-pane key moves from.
+ *  Focus on a row names that row. Otherwise the first planned row, with `index` -1 so ArrowDown
+ *  steps to the second. */
+function gridKeyRowOf(rows: readonly RovingFocusRow[], focus: GridFocus | undefined): GridKeyRow | undefined {
+  const rowFocus = focus?.pane === 'row' ? focus : undefined;
+  const index = rowFocus === undefined ? -1 : rows.findIndex((row) => row.id === rowFocus.rowId);
+  const row = index >= 0 ? rows[index] : rows[0];
+  if (row === undefined) return undefined;
+  return { row, index, field: rowFocus?.field };
+}
+
+/** Call: `gridRowIndexForKey(event.key, gridKeyRow.index, rows.length, this.#ports.rowsPerPage())`.
+ *  Which row index Home, End, Page, or a vertical arrow lands on — `undefined` for any other key. */
+function gridRowIndexForKey(
+  key: string,
+  fromIndex: number,
+  rowCount: number,
+  rowsPerPage: number,
+): number | undefined {
+  if (!Object.hasOwn(GRID_ROW_MOVE, key)) return undefined;
+  const move = GRID_ROW_MOVE[key as GridRowNavKey];
+  const from = fromIndex < 0 ? 0 : fromIndex;
+  const last = rowCount - 1;
+  if ('adjacent' in move) return clamp(from + move.adjacent, 0, last);
+  if ('pages' in move) return clamp(from + move.pages * Math.max(1, rowsPerPage), 0, last);
+  return move.jumpTo === 'first' ? 0 : last;
+}
+
+/** Call: `gridCellDirectionOf(event.key)`. ArrowRight is one cell right; ArrowLeft is one cell left. */
+function gridCellDirectionOf(key: string): 1 | -1 | undefined {
+  return Object.hasOwn(GRID_CELL_DIRECTION, key)
+    ? GRID_CELL_DIRECTION[key as 'ArrowRight' | 'ArrowLeft']
+    : undefined;
 }
