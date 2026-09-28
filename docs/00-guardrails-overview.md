@@ -71,7 +71,7 @@ L4 is a *convenience* layer: it runs a fast subset of L2/L3 early, for the agent
 Recording these so nobody later mistakes the gap for an oversight:
 
 - **"Is this the right design?"** Guards enforce the decided architecture; they cannot tell us a decision was wrong. When a guard is fighting the code, the correct first question is "is the code wrong?" and the correct second is "should the spec change?" — never "let me add an eslint-disable."
-- **Coverage as a quality target.** One coverage gate exists (>90% on `scheduling/`) because that module is pure logic with golden fixtures. No global coverage threshold: it drives test-shaped-noise, not correctness.
+- **A global coverage percent as a quality target.** One later gate still waits (>90% on `scheduling/`, slice S7). We do not fail the build on a repo-wide percent: that drives test-shaped noise. We do score each production function with CRAP (complexity mixed with that function's own coverage). `crap.json` holds the ceiling. Set `"metric": "complexity"` there to drop the coverage half and keep only McCabe.
 - **Formatting debates.** Prettier decides, nobody reviews it, `--check` in CI.
 - **Performance budgets before measured spikes.** Budgets that predate a measured spike are guesses. The *jobs* are scaffolded early and non-blocking; they gate after measurement.
 

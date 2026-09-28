@@ -23,6 +23,9 @@ export default defineConfig({
     // entry. Library coverage is `src/**` only (#275).
     coverage: {
       include: ['src/**'],
+      exclude: ['src/**/*.test.ts'],
+      reporter: ['json', 'text-summary'],
+      reportsDirectory: './coverage',
     },
   },
 });
