@@ -63,6 +63,7 @@ The single table a reviewer (human or agent) checks against. Every rule in `CLAU
 | Hot path / structure inline-style split | `freegantt/no-inline-style-outside-geometry` — bans `node.style.<prop> = …` for `prop` outside `{ transform, width, height }`, scoped to `src/render/**` + `src/view/**`; structure moves to `view/styles.ts`'s base stylesheet instead | `lint` | `AUTO` |
 | Published `--fg-*` tokens and `.fg-*` Parts match the sheet | `test/guards/theming-contract.test.ts` — every sheet token and class is in `docs/05-consumer-api.md`, internal names never leak into a consumer table, and documented token defaults match their real source | `guards` | `AUTO` |
 | Spec ids stay in `plans/` | `test/guards/spec-labels.test.ts` — a slice decision id, a review finding id, or a question id on a line added since `main`'s merge-base fails outside `plans/` and `docs/adr/`. **Residue:** citations that already sit in `src/`, `docs/`, `CONTEXT.md` and `harness/` until a sweep rewrites them; invariant ids (`I1`–`I16`) are out of scope on purpose | `guards` | `AUTO-PARTIAL` |
+| Agent-written production functions stay under a CRAP ceiling | `scripts/check-crap.mjs` scores every non-test function under `src/`. Metric `crap` (the default in `crap.json`) is complexity² × (1 − coverage)³ + complexity, from a Vitest coverage JSON. Metric `complexity` drops coverage and scores McCabe only — that one field is the back-off. Threshold 36 is the measured current max (`placeFrame`), so the gate is a ratchet | `check-crap` | `AUTO` |
 
 ---
 
