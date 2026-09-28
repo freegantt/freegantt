@@ -38,28 +38,28 @@ function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unk
   };
 }
 
-/** Call: `columnHeaderAndAlign(input, field)`. What header and alignment does this column show?
- *  This Gantt's own column wins, then the Field's `column` default, then the built-in: the Field
- *  key as header, `'start'` as align. */
-function columnHeaderAndAlign(input: GridColumn, field: Field): Pick<ResolvedColumn, 'header' | 'align'> {
-  const defaults = field.column;
-  return {
-    header: input.header ?? defaults?.header ?? String(field.key),
-    align: input.align ?? defaults?.align ?? 'start',
-  };
+/** Call: `columnHeader(input, field)`. What header does this column show? This Gantt's own column
+ *  wins, then the Field's `column` default, then the Field key. */
+function columnHeader(input: GridColumn, field: Field): string {
+  return input.header ?? field.column?.header ?? String(field.key);
 }
 
-/** Call: `columnResizableAndMovable(input, field)`. May this column resize and move? Default
- *  `true`. Same merge as header: this Gantt's own column, then the Field's `column` default. */
-function columnResizableAndMovable(
-  input: GridColumn,
-  field: Field,
-): Pick<ResolvedColumn, 'resizable' | 'movable'> {
-  const defaults = field.column;
-  return {
-    resizable: input.resizable ?? defaults?.resizable ?? true,
-    movable: input.movable ?? defaults?.movable ?? true,
-  };
+/** Call: `columnAlign(input, field)`. Where do this column's header and cell text sit? This Gantt's
+ *  own column wins, then the Field's `column` default, then `'start'`. */
+function columnAlign(input: GridColumn, field: Field): ResolvedColumn['align'] {
+  return input.align ?? field.column?.align ?? 'start';
+}
+
+/** Call: `columnResizable(input, field)`. May this column take the resize drag? Default `true`.
+ *  This Gantt's own column wins, then the Field's `column` default. */
+function columnResizable(input: GridColumn, field: Field): boolean {
+  return input.resizable ?? field.column?.resizable ?? true;
+}
+
+/** Call: `columnMovable(input, field)`. May this column take the reorder drag? Default `true`.
+ *  This Gantt's own column wins, then the Field's `column` default. */
+function columnMovable(input: GridColumn, field: Field): boolean {
+  return input.movable ?? field.column?.movable ?? true;
 }
 
 /** Call: `columnWidthOrFlex(input, field, defaultWidthPx)`. Does this column flex, or what width
@@ -98,8 +98,10 @@ function columnFrom(
   }
   return {
     field: field.key,
-    ...columnHeaderAndAlign(input, field),
-    ...columnResizableAndMovable(input, field),
+    header: columnHeader(input, field),
+    align: columnAlign(input, field),
+    resizable: columnResizable(input, field),
+    movable: columnMovable(input, field),
     ...columnWidthOrFlex(input, field, defaultWidthPx),
     ...columnTooltip(input, field),
     // Per-column `columnRenderer` comes only from this Gantt's own column — `Field.column` cannot
