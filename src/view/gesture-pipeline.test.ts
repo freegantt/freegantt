@@ -1479,6 +1479,25 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     expect(emitted).toHaveLength(0);
   });
 
+  it('a refused drop clears its preview paint on release, not left for a later gesture', async () => {
+    const { a, p2, deps, applied } = withTree({
+      rowDropZoneAt: () => intoP2(),
+      canPlace: (entry, parentId) => entry.id !== a.id || parentId !== p2.id,
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    session.preview(0, { contentY: 200 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(applied[applied.length - 1]).not.toBeUndefined();
+
+    const committed = await session.commit(0, { contentY: 200 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(committed).toBe(false);
+    expect(applied[applied.length - 1]).toBeUndefined();
+  });
+
   it('a held veto whose target reparents during the hold drops as data-changed, and never commits', async () => {
     let resolveVeto!: (value: boolean) => void;
     const veto = new Promise<boolean>((resolve) => {
