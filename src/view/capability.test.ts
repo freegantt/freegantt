@@ -561,3 +561,60 @@ describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar t
     expect(caps.can('move', parent)).toBe(false);
   });
 });
+
+describe('resolveCapabilities — reorder and canPlace (#425)', () => {
+  it('defaults reorder to true for a leaf entry', () => {
+    const caps = capabilities();
+    expect(caps.can('reorder', entry())).toBe(true);
+  });
+
+  it('a consumer capabilities.reorder: false refuses the gesture', () => {
+    const caps = capabilities({ capabilities: { reorder: false } });
+    expect(caps.can('reorder', entry())).toBe(false);
+  });
+
+  it("a variant's reorder: false refuses the gesture", () => {
+    const caps = capabilities({ variantCapabilitiesFor: variantAllows('locked', { reorder: false }) });
+    expect(caps.can('reorder', entry({ props: { variant: 'locked' } }))).toBe(false);
+  });
+
+  it("the consumer's own reorder: true wins over a variant's reorder: false", () => {
+    const caps = capabilities({
+      capabilities: { reorder: true },
+      variantCapabilitiesFor: variantAllows('locked', { reorder: false }),
+    });
+    expect(caps.can('reorder', entry({ props: { variant: 'locked' } }))).toBe(true);
+  });
+
+  it("siblingIndex editable: 'never' refuses reorder", () => {
+    const caps = capabilities({}, { key: 'siblingIndex', editable: 'never' });
+    expect(caps.can('reorder', entry())).toBe(false);
+  });
+
+  it('a lock rule answering siblingIndex "never" for one id refuses reorder for that id only', () => {
+    const locked = entryId('e1');
+    const caps = capabilities({
+      editableOf: (id, field) => (id === locked && field === 'siblingIndex' ? 'never' : 'anywhere'),
+    });
+    expect(caps.can('reorder', entry({ id: 'e1' }))).toBe(false);
+    expect(caps.can('reorder', entry({ id: 'e2' }))).toBe(true);
+  });
+
+  it('canPlace allows a same-parent drop when parentId is locked to api', () => {
+    const caps = capabilities({}, { key: 'parentId', editable: 'api' });
+    const [parent, child] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.canPlace(child, parent.id)).toBe(true);
+  });
+
+  it('canPlace refuses a cross-parent drop when parentId is locked to api', () => {
+    const caps = capabilities({}, { key: 'parentId', editable: 'api' });
+    const [, child] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.canPlace(child, entryId('other'))).toBe(false);
+  });
+
+  it('canPlace refuses outright when reorder itself is refused', () => {
+    const caps = capabilities({ capabilities: { reorder: false } });
+    const [parent, child] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.canPlace(child, parent.id)).toBe(false);
+  });
+});

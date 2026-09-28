@@ -38,7 +38,7 @@ export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | 
  *  "opening" the Entry. A write is not one of them. It is the thing a gesture, a cell editor, or a
  *  keyboard nudge sets out to do, and `canWrite` decides it. `activate` writes nothing either, so it
  *  reads the same one-resolution ladder (I14) with no `canWrite` question to ask. */
-export type GestureCapability = 'move' | 'resize' | 'select' | 'activate';
+export type GestureCapability = 'move' | 'resize' | 'select' | 'activate' | 'reorder';
 
 /** Live (S3/S5). `linkCreate` stays off this type until S7 (I11: no unimplemented public
  *  key).
@@ -53,6 +53,10 @@ export interface Capabilities {
    *  "opening" it. Default `true`, and resolved independently of `select` (I14): a rollup row with
    *  `{ select: false, activate: true }` still activates though it never selects. */
   activate?: CapabilityRule;
+  /** May the user drag this Entry to another place in the tree — a new parent, a new sibling
+   *  index, or both (#425). Default: yes, when the Entry may write `siblingIndex`; a drop that
+   *  changes the parent also needs `parentId`. */
+  reorder?: CapabilityRule;
   /** #256: the consumer's own answer to "may this cell's value change" — for a cell
    *  `Field.editable` already leaves open. It narrows an `'anywhere'` Field per entry; it never
    *  reopens an `'api'` or a `'never'` Field, no matter what it answers.

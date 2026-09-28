@@ -125,6 +125,7 @@ export interface Capabilities {
     edit?: WriteRule;
     // (undocumented)
     move?: CapabilityRule;
+    reorder?: CapabilityRule;
     // (undocumented)
     resize?: CapabilityRule;
     // (undocumented)
