@@ -16,6 +16,9 @@ function down(target: HTMLElement, clientX: number): void {
 function move(pane: HTMLElement, clientX: number): void {
   pane.dispatchEvent(new PointerEvent('pointermove', { clientX, clientY: 0, pointerId: 1, bubbles: true }));
 }
+function moveXY(pane: HTMLElement, clientX: number, clientY: number): void {
+  pane.dispatchEvent(new PointerEvent('pointermove', { clientX, clientY, pointerId: 1, bubbles: true }));
+}
 function up(target: HTMLElement, clientX: number): void {
   target.dispatchEvent(new PointerEvent('pointerup', { clientX, clientY: 0, pointerId: 1, bubbles: true }));
 }
@@ -124,6 +127,18 @@ describe('attachColumnGestures — resize (S5.7, D-S5-18)', () => {
     // the commit reflects the final dx at pointerup (+40 at clientX 230).
     expect(previews).toEqual([{ columnKey: 'cost', widthPx: 110 }]);
     expect(commits).toEqual([{ columnKey: 'cost', widthPx: 130 }]);
+  });
+
+  it('a mostly-vertical move on the grip does not arm the resize', () => {
+    const { pane, cell } = makeHeaderPane({ cost: { left: 100, width: 90 } });
+    const { ctx, previews } = makeCtx();
+    attachColumnGestures(pane, document.createElement('div'), ctx);
+
+    down(gripOf(cell('cost')), 190);
+    moveXY(pane, 191, 40); // dx=1, dy=40 — well past the 4px hypot arm, under it on |dx| alone
+    up(gripOf(cell('cost')), 191);
+
+    expect(previews).toEqual([]);
   });
 
   it('a veto (commitColumnWidth returns false) cancels the resize preview', () => {

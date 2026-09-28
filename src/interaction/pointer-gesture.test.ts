@@ -123,7 +123,7 @@ describe('createPointerGesture — arms on travel over either axis (#425)', () =
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const { callbacks, calls, moveDeltas } = makeCallbacks();
-    const drag = createPointerGesture(pane, callbacks);
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
     drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
     drag.move(
@@ -138,7 +138,7 @@ describe('createPointerGesture — arms on travel over either axis (#425)', () =
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const { callbacks, calls } = makeCallbacks();
-    const drag = createPointerGesture(pane, callbacks);
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
     drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
     // hypot(2, 2) ≈ 2.83, under the 4px threshold.
@@ -153,7 +153,7 @@ describe('createPointerGesture — arms on travel over either axis (#425)', () =
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const { callbacks, calls, moveDeltas } = makeCallbacks();
-    const drag = createPointerGesture(pane, callbacks);
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
     drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
     // hypot(3, 3) ≈ 4.24, over the 4px threshold.
@@ -171,7 +171,7 @@ describe('createPointerGesture — the drag axis locks at arm time (#425)', () =
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const { callbacks, moveAxes, commitAxes } = makeCallbacks();
-    const drag = createPointerGesture(pane, callbacks);
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
     drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
     drag.move(
@@ -187,7 +187,7 @@ describe('createPointerGesture — the drag axis locks at arm time (#425)', () =
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const { callbacks, moveAxes, commitAxes } = makeCallbacks();
-    const drag = createPointerGesture(pane, callbacks);
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
     drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
     drag.move(
@@ -203,7 +203,7 @@ describe('createPointerGesture — the drag axis locks at arm time (#425)', () =
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const { callbacks, moveAxes } = makeCallbacks();
-    const drag = createPointerGesture(pane, callbacks);
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
     drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
     drag.move(
@@ -217,7 +217,7 @@ describe('createPointerGesture — the drag axis locks at arm time (#425)', () =
     const pane = document.createElement('div');
     mockPointerCapture(pane);
     const { callbacks, moveAxes, commitAxes } = makeCallbacks();
-    const drag = createPointerGesture(pane, callbacks);
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
     drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
     // Arms mostly vertical: hypot(1, 10) crosses the threshold, |dy| > |dx|.
@@ -240,7 +240,7 @@ describe('createPointerGesture — the drag axis locks at arm time (#425)', () =
       const pane = document.createElement('div');
       mockPointerCapture(pane);
       const { callbacks, calls } = makeCallbacks();
-      const drag = createPointerGesture(pane, callbacks);
+      const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
 
       drag.down(down(0, { clientY: 0, pointerType: 'touch' }));
       drag.move(
@@ -249,6 +249,30 @@ describe('createPointerGesture — the drag axis locks at arm time (#425)', () =
       vi.advanceTimersByTime(LONG_PRESS_MS);
 
       expect(calls).toEqual(['start']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a still long-press picks its axis off the first move that has travel', () => {
+    vi.useFakeTimers();
+    try {
+      const pane = document.createElement('div');
+      mockPointerCapture(pane);
+      const { callbacks, moveAxes, commitAxes } = makeCallbacks();
+      const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+      // The finger never moves before the long-press fires — `axisFor(0, 0)` would tie to `'x'`.
+      drag.down(down(0, { clientY: 0, pointerType: 'touch' }));
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+
+      drag.move(
+        new PointerEvent('pointermove', { clientX: 0, clientY: 20, pointerId: 1, pointerType: 'touch' }),
+      );
+      drag.up(up(0, { clientY: 30, pointerType: 'touch' }));
+
+      expect(moveAxes).toEqual(['y']);
+      expect(commitAxes).toEqual(['y']);
     } finally {
       vi.useRealTimers();
     }
