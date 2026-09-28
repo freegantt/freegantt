@@ -584,7 +584,7 @@ function barLabelOf(
   return producedBar.label ?? (barLabelFor !== undefined && entry !== undefined ? barLabelFor(entry) : '');
 }
 
-/** Call: `placeVisibleRowsAndBars(input, plan, mem, paint)`. Which rows and bars sit in the
+/** Call: `placeVisibleRowsAndBars(input, plan, mem, paint, cull)`. Which rows and bars sit in the
  *  Visible region — a zero height or width disables that axis's cull entirely, not just an infinite
  *  far edge with the near edge still taken from `visible`. */
 function placeVisibleRowsAndBars(
@@ -592,6 +592,7 @@ function placeVisibleRowsAndBars(
   plan: readonly PlannedRow[],
   mem: FrameMemory,
   paint: FramePaintSettings,
+  cull: { left: number; right: number } | undefined,
 ): { rows: FrameRow[]; bars: FrameBar[] } {
   const { scale, visible, rowHeight, locale } = input;
   // #414: `mem.sync` keeps one Map of every Entry, rebuilt only when the `entries` array changes
@@ -603,7 +604,6 @@ function placeVisibleRowsAndBars(
   const cullVertically = visible.height > 0;
   const windowTop = cullVertically ? visible.y : 0;
   const windowBottom = cullVertically ? visible.y + visible.height : Infinity;
-  const cull = horizontalCullWindow(visible, paint.overscan.horizontalPx);
   function intersectsHorizontally(x: number, width: number): boolean {
     return cull === undefined || (x <= cull.right && x + width >= cull.left);
   }
@@ -675,19 +675,18 @@ function placeVisibleRowsAndBars(
   return { rows, bars };
 }
 
-/** How wide is the tick query, including Overscan, clipped to the content? The overscan buffer
- *  widens the cull window past both ends of the dataset's own range, but a band tick or a tick line
- *  only ever has a home inside `[0, contentWidth)` (the timeline's content is `contentWidth` wide,
- *  full stop). Clamping the query span here, not just the ticks it returns, stops `scale.ticks` from
- *  walking cursors the content never needed — `ticks()` still emits the one cell straddling each
- *  bound, so a partial leading or trailing cell still reaches `bands` for its own box-intersection
- *  clip. A zero width disables horizontal culling — everything renders. */
+/** Call: `horizontalQuerySpan(cull, scale.contentWidth)`. How wide is the tick query, including
+ *  Overscan, clipped to the content? The overscan buffer widens the cull window past both ends of
+ *  the dataset's own range, but a band tick or a tick line only ever has a home inside
+ *  `[0, contentWidth)` (the timeline's content is `contentWidth` wide, full stop). Clamping the
+ *  query span here, not just the ticks it returns, stops `scale.ticks` from walking cursors the
+ *  content never needed — `ticks()` still emits the one cell straddling each bound, so a partial
+ *  leading or trailing cell still reaches `bands` for its own box-intersection clip. A missing cull
+ *  disables horizontal culling — everything renders. */
 function horizontalQuerySpan(
-  visible: Rect,
+  cull: { left: number; right: number } | undefined,
   contentWidth: number,
-  horizontalPx: number,
 ): { x: number; width: number } {
-  const cull = horizontalCullWindow(visible, horizontalPx);
   if (cull === undefined) return { x: 0, width: contentWidth };
   return {
     x: Math.max(cull.left, 0),
@@ -695,16 +694,17 @@ function horizontalQuerySpan(
   };
 }
 
-/** Where do header labels stick when a coarse cell straddles the visible left edge? A coarse band's
- *  boundary (a year, say) is often well behind the visible pane — the calendar year started before
- *  this dataset's own first entry, or the caller has scrolled past it — so its true cell left edge
- *  sits off-screen. Left un-clamped, the label paints at that off-screen x and never becomes visible
- *  even though most of the cell is on screen. Clamping the *label's* x to the visible pane's own left
- *  edge keeps it stuck to the front of its cell while any part of that cell is in view — the cell's
- *  true `x`/`width` (and its `instant`) still drive ticking and formatting; only where the label
- *  paints moves. A zero width disables the clamp. */
-function headerLabelLeftClamp(visible: Rect): number {
-  return visible.width > 0 ? Math.max(visible.x, 0) : 0;
+/** Call: `headerLabelLeftClamp(visible, cull)`. Where do header labels stick when a coarse cell
+ *  straddles the visible left edge? A coarse band's boundary (a year, say) is often well behind the
+ *  visible pane — the calendar year started before this dataset's own first entry, or the caller
+ *  has scrolled past it — so its true cell left edge sits off-screen. Left un-clamped, the label
+ *  paints at that off-screen x and never becomes visible even though most of the cell is on screen.
+ *  Clamping the *label's* x to the visible pane's own left edge keeps it stuck to the front of its
+ *  cell while any part of that cell is in view — the cell's true `x`/`width` (and its `instant`)
+ *  still drive ticking and formatting; only where the label paints moves. The clamp does not use
+ *  Overscan, only whether a cull exists. */
+function headerLabelLeftClamp(visible: Rect, cull: { left: number; right: number } | undefined): number {
+  return cull !== undefined ? Math.max(visible.x, 0) : 0;
 }
 
 /** One line per finest-band tick inside the content. A line past `contentWidth` draws nothing a
@@ -742,9 +742,10 @@ export function placeFrame(
   const { scale, preset, visible, revision, locale } = input;
   const mem = memory ?? memoryFor(input, plan);
   const paint = framePaintSettingsOf(input);
-  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, paint);
-  const horizontalSpan = horizontalQuerySpan(visible, scale.contentWidth, paint.overscan.horizontalPx);
-  const labelLeftClamp = headerLabelLeftClamp(visible);
+  const cull = horizontalCullWindow(visible, paint.overscan.horizontalPx);
+  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, paint, cull);
+  const horizontalSpan = horizontalQuerySpan(cull, scale.contentWidth);
+  const labelLeftClamp = headerLabelLeftClamp(visible, cull);
 
   // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
   // `--fg-tick-box-floor`). A straddling tick clamped to a thinner remainder would ask for e.g.
