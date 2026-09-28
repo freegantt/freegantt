@@ -4,6 +4,7 @@ import { Dataset } from './dataset.js';
 import {
   DerivedFieldNotWritableError,
   DuplicatePluginIdError,
+  MutationCancelledError,
   RevealTargetNotFoundError,
   PluginNotInstalledError,
   RegistrationClosedError,
@@ -55,6 +56,7 @@ function datesOf(entry: Entry): { start: Entry['start']; end: Entry['end'] } {
 // seams — a regression in bufferKind() must fail this test (issue #153).
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
 import { riskKind } from '../../harness/plugins/risk-kind.js';
+import { lockEntries } from '../../harness/plugins/lock-entries.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (same seam gantt-shell.test.ts
 // stubs globally — Gantt/GanttShell wire attachPaneSize themselves and take no ResizeObserverCtor
@@ -6666,6 +6668,52 @@ describe('Gantt entryMove — a vertical drag places the entry under a new paren
 
     document.elementFromPoint = original;
     gantt.destroy();
+  });
+});
+
+// #425: the acceptance object is the harness plugin itself (issue #153's own rule) — a lock rule
+// gap in `lockEntries()` must fail this test, not a hand-rolled restatement of it.
+describe("a vertical drag respects lockEntries()'s lock, not just its beforeChange veto (#425)", () => {
+  function lockedTree(): { dataset: Dataset<{ locked?: boolean }>; locks: ReturnType<typeof lockEntries> } {
+    const locks = lockEntries();
+    const dataset = new Dataset<{ locked?: boolean }>({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03', locked: true },
+        { id: 'b', name: 'B', parentId: 'p1', start: '2026-01-04', end: '2026-01-06' },
+        // `p2` owns no dates of its own — `d` alone rolls them up, and `d`'s own span already covers
+        // where `b` moves to, so reparenting `b` under `p2` changes no Field of `p2`'s own (only the
+        // reparented `b` and its new sibling rank) — the drop touches no cell the lock below closes.
+        { id: 'p2', name: 'P2' },
+        { id: 'd', name: 'D', parentId: 'p2', start: '2026-01-01', end: '2026-01-10' },
+      ],
+      plugins: [locks],
+    });
+    return { dataset, locks };
+  }
+
+  it('a drop next to a locked sibling commits — the sibling’s own renumber is not an explicit move', () => {
+    const { dataset } = lockedTree();
+
+    expect(() => dataset.entries.update('b', { siblingIndex: 0 })).not.toThrow();
+
+    expect(dataset.entries.get('b')!.read('siblingIndex')).toBe(0);
+    expect(dataset.entries.get('a')!.read('siblingIndex')).toBe(1); // renumbered, not refused
+  });
+
+  it('a drop into a locked parent matches update(child, { parentId: lockedId }) — the lock is on the entry, not the target', () => {
+    const { dataset, locks } = lockedTree();
+    locks.lock('p2');
+
+    expect(() => dataset.entries.update('b', { parentId: 'p2' })).not.toThrow();
+    expect(dataset.entries.get('b')!.parent()?.id).toBe(entryId('p2'));
+  });
+
+  it('an explicit parentId write on the locked entry itself still refuses', () => {
+    const { dataset } = lockedTree();
+
+    expect(() => dataset.entries.update('a', { parentId: 'p2' })).toThrow(MutationCancelledError);
   });
 });
 
