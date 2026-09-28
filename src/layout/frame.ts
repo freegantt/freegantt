@@ -576,18 +576,6 @@ function horizontalCullWindow(
   };
 }
 
-/** Call: `barLabelOf(producedBar, entry, input.barLabelFor)`. The Bar's own `label` wins when a
- *  producer set one — the most specific answer available, per-bar and authored. Absent, `barLabelFor`
- *  (the Gantt's own Field, resolved and formatted) fills it; absent that too (a `layout/` test with
- *  no `view/`), ''. */
-function barLabelOf(
-  producedBar: Bar,
-  entry: Entry | undefined,
-  barLabelFor: ((entry: Entry) => string) | undefined,
-): string {
-  return producedBar.label ?? (barLabelFor !== undefined && entry !== undefined ? barLabelFor(entry) : '');
-}
-
 /** Call: `placeVisibleRowsAndBars(input, plan, mem, settings)`. Which rows and bars sit in the
  *  Visible region — a zero height or width disables that axis's cull entirely, not just an infinite
  *  far edge with the near edge still taken from `visible`. */
@@ -657,7 +645,12 @@ function placeVisibleRowsAndBars(
       // paint, so it never becomes a FrameBar (#436).
       if (width <= 0) continue;
       const entry = entryById.get(producedBar.entryId);
-      const label = barLabelOf(producedBar, entry, input.barLabelFor);
+      // The Bar's own `label` wins when a producer set one — the most specific answer available,
+      // per-bar and authored. Absent, `barLabelFor` (the Gantt's own Field, resolved and formatted)
+      // fills it; absent that too (a `layout/` test with no `view/`), ''.
+      const label =
+        producedBar.label ??
+        (input.barLabelFor !== undefined && entry !== undefined ? input.barLabelFor(entry) : '');
       const bar: FrameBar = {
         id: producedBar.id,
         entryId: producedBar.entryId,
@@ -724,15 +717,6 @@ function contentTickLinesOf(
     finestBandTicks.filter((tick) => tick.x >= 0 && tick.x < contentWidth),
     coarserBandStartsOf(rawBandTicks),
   );
-}
-
-/** What Date line decorations does this frame draw? */
-function dateLineDecorationsOf(input: LayoutInput, scale: TimeScale): FrameDecoration[] {
-  return resolveDateLines({
-    scale,
-    todayLine: input.todayLine ?? true,
-    ...(input.dateLines ? { dateLines: input.dateLines } : {}),
-  });
 }
 
 /** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
@@ -819,7 +803,11 @@ export function placeFrame(
     contentWidth: scale.contentWidth,
     bars,
     links: [],
-    decorations: dateLineDecorationsOf(input, scale),
+    decorations: resolveDateLines({
+      scale,
+      todayLine: input.todayLine ?? true,
+      ...(input.dateLines ? { dateLines: input.dateLines } : {}),
+    }),
     underBars,
     overBars,
     columns: columnsForFrame(input.columns),

@@ -5,14 +5,7 @@
 // (construction path) name it (`rollup-is-removable`); delete this file and every entry keeps
 // its authored values.
 
-import type {
-  Aggregator,
-  StoredEntry,
-  EntryId,
-  FieldUpdated,
-  HierarchySource,
-  RollUpContext,
-} from '../model/index.js';
+import type { StoredEntry, EntryId, FieldUpdated, HierarchySource } from '../model/index.js';
 import { AggregatorFailedError } from '../model/index.js';
 import { isNoOpFieldWrite } from './change-set.js';
 import type { ProposedEdits } from './edit-extension.js';
@@ -37,7 +30,7 @@ import {
   writeOntoEntry,
 } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
-import type { FieldRegistry, RollingUpField } from './fields/field-registry.js';
+import type { FieldRegistry } from './fields/field-registry.js';
 
 export interface RollUpEditSets {
   /** Body plus extension-hook edits. A rolling-up Field proposed on an entry that still has
@@ -289,21 +282,6 @@ function effectiveChildrenOf(
   return children;
 }
 
-/** Call: `rolledUpValueFrom(field, parent, context, aggregator)`. One Aggregator's answer for this
- *  parent. A throw becomes AggregatorFailedError so the commit saves nothing. */
-function rolledUpValueFrom(
-  field: RollingUpField,
-  parent: StoredEntry,
-  context: RollUpContext,
-  aggregator: Aggregator,
-): unknown {
-  try {
-    return aggregator(parent, context);
-  } catch (cause) {
-    throw new AggregatorFailedError(field.key, field.rollUp, parent.id, cause);
-  }
-}
-
 /**
  * Construction omits `pending` and walks every deriving parent. Commit passes adds, removes and
  * edits; the pass then builds the effective tree and walks only the ancestors it must.
@@ -394,12 +372,16 @@ export function rollUpFields(
       const aggregator = registry.aggregator(field.rollUp);
       if (aggregator === undefined) continue;
 
-      const value = rolledUpValueFrom(
-        field,
-        effectiveParent,
-        createRollUpContext(passAccess, effectiveParent, children, field.key),
-        aggregator,
-      );
+      // A throw becomes AggregatorFailedError, so the commit saves nothing.
+      let value: unknown;
+      try {
+        value = aggregator(
+          effectiveParent,
+          createRollUpContext(passAccess, effectiveParent, children, field.key),
+        );
+      } catch (cause) {
+        throw new AggregatorFailedError(field.key, field.rollUp, parentId, cause);
+      }
       const from = readField(effectiveParent, field, access);
       // An Aggregator with no opinion means *no value* on a parent — never "keep whatever is stored,"
       // which is stale by construction the moment nothing but the Rollup may write this cell. Skip
