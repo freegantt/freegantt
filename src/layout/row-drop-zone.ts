@@ -19,8 +19,10 @@ export type RowDropZone =
   | { readonly kind: 'belowLastRow' };
 
 /** A dispatch a `.kind` compare reads through, never a bare string literal (`no-kind-literal`) —
- *  the same convention `rows/row-source.ts`'s `PLANNED_ROW_KIND` sets for this layer. */
-const ROW_DROP_ZONE_KIND = Object.freeze({
+ *  the same convention `rows/row-source.ts`'s `PLANNED_ROW_KIND` sets for this layer. Exported so a
+ *  caller resolving a `RowDropZone` (`row-drop-target.ts`, `view/row-drop.ts`) dispatches on it the
+ *  same way, rather than growing its own literal. */
+export const ROW_DROP_ZONE_KIND = Object.freeze({
   sourceRow: 'sourceRow',
   row: 'row',
   belowLastRow: 'belowLastRow',
