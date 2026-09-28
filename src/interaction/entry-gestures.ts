@@ -121,21 +121,34 @@ export function attachEntryGestures(
       session = ctx.session(grabbedId, currentGesture());
       return session !== undefined;
     },
-    // `_dyPx`: row-drop resolution reads content-y itself (step 13), not this raw pointer delta.
+    // `_dyPx`: a row drop reads the pointer's content-y instead — the row under the pointer, not
+    // how far it moved. `elementFromPoint` would read the bar itself, since the bar tracks the
+    // pointer during the drag.
     move(e, dxPx, _dyPx): void {
       // The live preview always tracks the pointer at full resolution (never quantized to a snap
       // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
       // applies to what actually gets written — see commit() below — this only affects what paints
-      // while the gesture is in flight. Cursor line x is content space: pane-local offset
-      // plus the bound scroll, never element.scrollLeft (I12).
+      // while the gesture is in flight. Cursor line x and row-drop y are both content space: pane-local
+      // offset plus the bound scroll, never element.scrollLeft/scrollTop (I12).
       const offsetX = e.clientX - pane.getBoundingClientRect().left;
-      session!.preview(dxPx, { suspendSnap: true, cursorX: ctx.contentXAtPaneOffset(offsetX) });
+      const offsetY = e.clientY - pane.getBoundingClientRect().top;
+      session!.preview(dxPx, {
+        suspendSnap: true,
+        cursorX: ctx.contentXAtPaneOffset(offsetX),
+        contentY: ctx.contentYAtPaneOffset(offsetY),
+      });
     },
     commit(e, dxPx, _dyPx): void {
       // The committed value snaps to the preset's tick unit unless Alt held it off for fine
       // placement — this is the one place snapping actually lands, now that move() above
-      // always previews raw.
-      void session!.commit(dxPx, e.altKey ? { suspendSnap: true } : undefined);
+      // always previews raw. The row drop itself reads the same content-y move() already resolved,
+      // so a drag that ends over row 3 commits into row 3 even where the pointer never fires
+      // another move first.
+      const offsetY = e.clientY - pane.getBoundingClientRect().top;
+      void session!.commit(dxPx, {
+        ...(e.altKey ? { suspendSnap: true } : undefined),
+        contentY: ctx.contentYAtPaneOffset(offsetY),
+      });
       session = undefined;
       grabbedId = undefined;
       grabbedEdge = undefined;
