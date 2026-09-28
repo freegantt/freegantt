@@ -537,25 +537,29 @@ export function computeFrame(
   return placeFrame(input, plan, memoryFor(input, plan, memory), decorations);
 }
 
-/** Pixel sizes this frame paints with, and the Overscan that widens the cull window. Overscan is
- *  not a size: it is the culling buffer, held apart from the three px fields. */
+/** Pixel sizes this frame paints with, the Overscan that widens the cull window, and that window.
+ *  Overscan is not a size: it is the culling buffer, held apart from the three px fields. */
 interface FramePaintSettings {
   readonly tickBoxFloorPx: number;
   readonly minBarWidthPx: number;
   readonly barHeightPx: number;
   readonly overscan: Required<Overscan>;
+  readonly horizontalCull: { left: number; right: number } | undefined;
 }
 
-/** Call: `framePaintSettingsOf(input)`. Tick box floor, bar min width, bar height, and Overscan. */
+/** Call: `framePaintSettingsOf(input)`. Tick box floor, bar min width, bar height, Overscan, and
+ *  the horizontal cull window. */
 function framePaintSettingsOf(input: LayoutInput): FramePaintSettings {
+  const horizontalPx = input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx;
   return {
     tickBoxFloorPx: input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX,
     minBarWidthPx: input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX,
     barHeightPx: input.barHeightPx ?? DEFAULT_BAR_HEIGHT_PX,
     overscan: {
       verticalRows: input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows,
-      horizontalPx: input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx,
+      horizontalPx,
     },
+    horizontalCull: horizontalCullWindow(input.visible, horizontalPx),
   };
 }
 
@@ -584,15 +588,14 @@ function barLabelOf(
   return producedBar.label ?? (barLabelFor !== undefined && entry !== undefined ? barLabelFor(entry) : '');
 }
 
-/** Call: `placeVisibleRowsAndBars(input, plan, mem, paint, cull)`. Which rows and bars sit in the
+/** Call: `placeVisibleRowsAndBars(input, plan, mem, settings)`. Which rows and bars sit in the
  *  Visible region — a zero height or width disables that axis's cull entirely, not just an infinite
  *  far edge with the near edge still taken from `visible`. */
 function placeVisibleRowsAndBars(
   input: LayoutInput,
   plan: readonly PlannedRow[],
   mem: FrameMemory,
-  paint: FramePaintSettings,
-  cull: { left: number; right: number } | undefined,
+  settings: FramePaintSettings,
 ): { rows: FrameRow[]; bars: FrameBar[] } {
   const { scale, visible, rowHeight, locale } = input;
   // #414: `mem.sync` keeps one Map of every Entry, rebuilt only when the `entries` array changes
@@ -604,6 +607,7 @@ function placeVisibleRowsAndBars(
   const cullVertically = visible.height > 0;
   const windowTop = cullVertically ? visible.y : 0;
   const windowBottom = cullVertically ? visible.y + visible.height : Infinity;
+  const cull = settings.horizontalCull;
   function intersectsHorizontally(x: number, width: number): boolean {
     return cull === undefined || (x <= cull.right && x + width >= cull.left);
   }
@@ -613,7 +617,7 @@ function placeVisibleRowsAndBars(
   // Rows stay vertical-only: a row whose bar is off-screen horizontally is still emitted — the grid
   // pane needs its label.
   const baseStart = plan.length > 0 ? index.indexAtY(windowTop) : 0;
-  const startIndex = Math.max(0, baseStart - paint.overscan.verticalRows);
+  const startIndex = Math.max(0, baseStart - settings.overscan.verticalRows);
   // Counts rows already emitted past windowBottom; stops once verticalRows of them have gone by, so
   // verticalRows: 0 reduces to the pre-overscan "stop at the first row past the bottom" rule exactly.
   let overflowCount = 0;
@@ -621,7 +625,7 @@ function placeVisibleRowsAndBars(
     const planned = plan[rowIndex]!;
     const top = index.topAt(rowIndex);
     if (top >= windowBottom) {
-      if (overflowCount >= paint.overscan.verticalRows) break;
+      if (overflowCount >= settings.overscan.verticalRows) break;
       overflowCount++;
     }
 
@@ -645,7 +649,7 @@ function placeVisibleRowsAndBars(
     });
 
     for (const producedBar of rowBars) {
-      const { x, width, span } = barSpan(producedBar, scale, paint.minBarWidthPx);
+      const { x, width, span } = barSpan(producedBar, scale, settings.minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
       // An 'exact' box already trimmed to `[0, contentWidth)` (barSpan) reports `width: 0` when the
       // entry's own span has no intersection with the content at all — an entry outside the
@@ -662,9 +666,9 @@ function placeVisibleRowsAndBars(
         label,
         x,
         // Every row is one lane (singleLane): the bar centres in the row's own band.
-        y: top + (rowHeight - paint.barHeightPx) / 2,
+        y: top + (rowHeight - settings.barHeightPx) / 2,
         width,
-        height: paint.barHeightPx,
+        height: settings.barHeightPx,
         flags: {},
         span,
         a11yLabel: barA11yLabel(label, producedBar, parts.get(producedBar.entryId) ?? 1, scale, locale),
@@ -741,11 +745,10 @@ export function placeFrame(
 ): GeometryFrame {
   const { scale, preset, visible, revision, locale } = input;
   const mem = memory ?? memoryFor(input, plan);
-  const paint = framePaintSettingsOf(input);
-  const cull = horizontalCullWindow(visible, paint.overscan.horizontalPx);
-  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, paint, cull);
-  const horizontalSpan = horizontalQuerySpan(cull, scale.contentWidth);
-  const labelLeftClamp = headerLabelLeftClamp(visible, cull);
+  const settings = framePaintSettingsOf(input);
+  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, settings);
+  const horizontalSpan = horizontalQuerySpan(settings.horizontalCull, scale.contentWidth);
+  const labelLeftClamp = headerLabelLeftClamp(visible, settings.horizontalCull);
 
   // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
   // `--fg-tick-box-floor`). A straddling tick clamped to a thinner remainder would ask for e.g.
@@ -770,7 +773,7 @@ export function placeFrame(
         // buffer) must keep its own true x, or every such tick collapses onto the same clamped
         // column and their labels stack on top of each other (header readability follow-up).
         const remainder = tick.x + tick.width - labelLeftClamp;
-        const straddlesClamp = tick.x < labelLeftClamp && remainder >= paint.tickBoxFloorPx;
+        const straddlesClamp = tick.x < labelLeftClamp && remainder >= settings.tickBoxFloorPx;
         const x = straddlesClamp ? labelLeftClamp : tick.x;
         const width = Math.max(0, tick.width - (x - tick.x));
         // A band cell is a box, not a point (unlike `tickLines` below), so it needs an
