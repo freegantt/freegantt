@@ -31,19 +31,24 @@ function up(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEvent
 function makeCallbacks(overrides: Partial<PointerGestureCallbacks> = {}): {
   callbacks: PointerGestureCallbacks;
   calls: string[];
+  moveDeltas: readonly [number, number][];
 } {
   const calls: string[] = [];
+  const moveDeltas: [number, number][] = [];
   const callbacks: PointerGestureCallbacks = {
     start: () => {
       calls.push('start');
       return true;
     },
-    move: () => calls.push('move'),
+    move: (_e, dxPx, dyPx) => {
+      calls.push('move');
+      moveDeltas.push([dxPx, dyPx]);
+    },
     commit: () => calls.push('commit'),
     cancel: () => calls.push('cancel'),
     ...overrides,
   };
-  return { callbacks, calls };
+  return { callbacks, calls, moveDeltas };
 }
 
 describe('createPointerGesture — mouse/pen threshold (D-S3-5)', () => {
@@ -102,6 +107,54 @@ describe('createPointerGesture — mouse/pen threshold (D-S3-5)', () => {
     expect(wasDrag).toBe(false);
     expect(calls).toEqual([]);
     expect(setCapture).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPointerGesture — arms on travel over either axis (#425)', () => {
+  it('a pure vertical move past the threshold arms and reports dyPx', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, calls, moveDeltas } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks);
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 0, clientY: 5, pointerId: 1, pointerType: 'mouse' }),
+    );
+
+    expect(calls).toEqual(['start', 'move']);
+    expect(moveDeltas).toEqual([[0, 5]]);
+  });
+
+  it('a 3px diagonal move (hypot below the threshold) does not arm', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, calls } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks);
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    // hypot(2, 2) ≈ 2.83, under the 4px threshold.
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 2, clientY: 2, pointerId: 1, pointerType: 'mouse' }),
+    );
+
+    expect(calls).toEqual([]);
+  });
+
+  it('a diagonal move whose hypot crosses the threshold arms', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, calls, moveDeltas } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks);
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    // hypot(3, 3) ≈ 4.24, over the 4px threshold.
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 3, clientY: 3, pointerId: 1, pointerType: 'mouse' }),
+    );
+
+    expect(calls).toEqual(['start', 'move']);
+    expect(moveDeltas).toEqual([[3, 3]]);
   });
 });
 
