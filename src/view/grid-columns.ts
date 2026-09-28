@@ -38,28 +38,10 @@ function defaultCompareStored(locale: Intl.LocalesArgument): (a: unknown, b: unk
   };
 }
 
-/** Call: `columnHeader(input, field)`. What header does this column show? This Gantt's own column
- *  wins, then the Field's `column` default, then the Field key. */
-function columnHeader(input: GridColumn, field: Field): string {
-  return input.header ?? field.column?.header ?? String(field.key);
-}
-
-/** Call: `columnAlign(input, field)`. Where do this column's header and cell text sit? This Gantt's
- *  own column wins, then the Field's `column` default, then `'start'`. */
-function columnAlign(input: GridColumn, field: Field): ResolvedColumn['align'] {
-  return input.align ?? field.column?.align ?? 'start';
-}
-
-/** Call: `columnResizable(input, field)`. May this column take the resize drag? Default `true`.
- *  This Gantt's own column wins, then the Field's `column` default. */
-function columnResizable(input: GridColumn, field: Field): boolean {
-  return input.resizable ?? field.column?.resizable ?? true;
-}
-
-/** Call: `columnMovable(input, field)`. May this column take the reorder drag? Default `true`.
- *  This Gantt's own column wins, then the Field's `column` default. */
-function columnMovable(input: GridColumn, field: Field): boolean {
-  return input.movable ?? field.column?.movable ?? true;
+/** Call: `columnChoice(input.align, defaults?.align, 'start')`. Which value does one column key take?
+ *  This Gantt's own column wins, then the Field's `column` default, then `fallback`. */
+function columnChoice<T>(fromGantt: T | undefined, fromField: T | undefined, fallback: T): T {
+  return fromGantt ?? fromField ?? fallback;
 }
 
 /** Call: `columnWidthOrFlex(input, field, defaultWidthPx)`. Does this column flex, or what width
@@ -83,31 +65,27 @@ function columnWidthOrFlex(
   );
 }
 
-/** Call: `columnTooltip(input, field)`. Does this column join the default bar tooltip? Absent means
- *  no. This Gantt's own column wins, then the Field's `column` default. */
-function columnTooltip(input: GridColumn, field: Field): Pick<ResolvedColumn, 'tooltip'> {
-  const tooltip = input.tooltip ?? field.column?.tooltip;
-  return tooltip === undefined ? {} : { tooltip };
-}
-
 function columnFrom(
   item: GridColumnInput,
   field: Field,
   defaultWidthPx: number,
 ): Omit<ResolvedColumn, 'format'> {
   const input: GridColumn = typeof item === 'string' ? { field: item } : item;
+  const defaults = field.column;
   // A bare key needs Field.column defaults. A column object supplies presentation itself.
-  if (field.column === undefined && typeof item === 'string') {
+  if (defaults === undefined && typeof item === 'string') {
     throw new FieldColumnNotDefinedError(String(field.key));
   }
+  // A tooltip has no fallback: absent means the column stays out of the default bar tooltip.
+  const tooltip = input.tooltip ?? defaults?.tooltip;
   return {
     field: field.key,
-    header: columnHeader(input, field),
-    align: columnAlign(input, field),
-    resizable: columnResizable(input, field),
-    movable: columnMovable(input, field),
+    header: columnChoice(input.header, defaults?.header, String(field.key)),
+    align: columnChoice(input.align, defaults?.align, 'start'),
+    resizable: columnChoice(input.resizable, defaults?.resizable, true),
+    movable: columnChoice(input.movable, defaults?.movable, true),
     ...columnWidthOrFlex(input, field, defaultWidthPx),
-    ...columnTooltip(input, field),
+    ...(tooltip === undefined ? {} : { tooltip }),
     // Per-column `columnRenderer` comes only from this Gantt's own column — `Field.column` cannot
     // carry one (`model/field.ts`'s narrower default set).
     ...pickDefined({ columnRenderer: input.columnRenderer }, ['columnRenderer']),
