@@ -7,6 +7,7 @@ import type {
   EntryFieldEdit,
   EntryInput,
   ErrorReport,
+  Instant,
   GridColumnInput,
   PluginErrorReport,
 } from '../../api/index.js';
@@ -87,7 +88,7 @@ const ENTRIES: readonly EntryInput<Meta>[] = [
   {
     id: 'e2',
     name: 'Task Two',
-    start: '2026-01-01T14:00:00Z', // not local midnight (issue #137 F11)
+    start: '2026-01-01T14:00:00Z', // not local midnight
     end: '2026-01-02T14:00:00Z',
     props: { cost: 200, budget: 700 },
   },
@@ -542,20 +543,6 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
   // new date writes one transaction' above already proves the surviving question: editing `start`
   // writes it straight to the Entry, no Segment involved.
 
-  it('a non-midnight instant refuses the default date editor with a named reason (issue #137 F11)', () => {
-    const { container, gantt } = makeGantt();
-    dblclick(cellFor(container, 'e2', 'start'));
-    const notice = refusal(container)!;
-    expect(notice).not.toBeNull();
-    expect(notice.dataset['reason']).toBe('time-of-day');
-    expect(notice.textContent).toBe(
-      'this field carries a time of day; the default date editor cannot show it',
-    );
-    expect(container.querySelector('.fg-cell-editor-control')).toBeNull();
-    gantt.destroy();
-    container.remove();
-  });
-
   it('the notice lets the pointer through, and the next pointer press clears it', () => {
     const { container, gantt } = makeGantt();
     const cell = cellFor(container, 'e1', 'cost');
@@ -632,6 +619,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
         el.type = 'datetime-local';
         return {
           element: el,
+          showsTimeOfDay: true,
           read: () => undefined,
           write: () => {},
           onCommit: () => () => {},
@@ -656,6 +644,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
           el.type = 'datetime-local';
           return {
             element: el,
+            showsTimeOfDay: true,
             read: () => undefined,
             write: () => {},
             onCommit: () => () => {},
@@ -681,6 +670,7 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
           el.type = 'datetime-local';
           return {
             element: el,
+            showsTimeOfDay: true,
             read: () => undefined,
             write: () => {},
             onCommit: () => () => {},
@@ -1588,7 +1578,6 @@ describe('CellEditing (S5.8, #169)', () => {
       'derived-value',
       'no-parse-value',
       'no-date-value',
-      'time-of-day',
       'unsaved-value',
     ];
 
@@ -1660,7 +1649,7 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
       dom: { cellFor: () => current },
       bindEscape: () => () => {},
     };
-    const notice = presentRefusal(ports, { entryId: entryId('e1'), field: 'name' }, cell, 'time-of-day');
+    const notice = presentRefusal(ports, { entryId: entryId('e1'), field: 'name' }, cell, 'no-date-value');
     return {
       notice,
       cell,
@@ -1677,7 +1666,7 @@ describe('presentRefusal() (S5.8, review SP1)', () => {
   it('mounts over the cell under its own class, naming the reason', () => {
     const { notice } = mountNotice();
     expect(notice.element.className).toBe('fg-cell-notice');
-    expect(notice.element.dataset['reason']).toBe('time-of-day');
+    expect(notice.element.dataset['reason']).toBe('no-date-value');
     expect(notice.element.getAttribute('role')).toBe('status');
     expect(notice.element.style.transform).toBe('translate(40.00px, 120.00px)');
     expect(notice.element.style.width).toBe('200px');
@@ -1772,8 +1761,47 @@ describe('parseValue reads the ambient zone and the row it parses into (ADR 0017
   });
 });
 
+/** A consumer control that keeps its value as an Instant, so a test can read what the editor
+ *  wrote, type a new value, and fire the control's own commit. */
+function consumerDateInput(showsTimeOfDay: boolean): {
+  options: InlineEditingOptions;
+  written: () => Instant | undefined;
+  type: (at: Instant) => void;
+  commit: () => void;
+} {
+  let value: Instant | undefined;
+  let onCommit: (() => void) | undefined;
+  return {
+    options: {
+      dateInput: () => ({
+        element: document.createElement('input'),
+        showsTimeOfDay,
+        read: () => value,
+        write: (at) => {
+          value = at;
+        },
+        onCommit: (handler) => {
+          onCommit = handler;
+          return () => {
+            onCommit = undefined;
+          };
+        },
+        destroy: () => {},
+      }),
+    },
+    written: () => value,
+    type: (at) => {
+      value = at;
+    },
+    commit: () => onCommit?.(),
+  };
+}
+
 describe('the End editor shows the last covered day and stores the next day (#577)', () => {
-  function makeEndGantt(entry: EntryInput): {
+  function makeEndGantt(
+    entry: EntryInput,
+    options?: InlineEditingOptions,
+  ): {
     container: HTMLElement;
     gantt: Gantt;
     dataset: Dataset;
@@ -1785,7 +1813,7 @@ describe('the End editor shows the last covered day and stores the next day (#57
       container,
       dataset,
       gridColumns: ['name', 'start', 'end'],
-      plugins: [inlineEditing()],
+      plugins: [inlineEditing(options)],
     });
     return { container, gantt, dataset };
   }
@@ -1866,15 +1894,18 @@ describe('the End editor shows the last covered day and stores the next day (#57
     container.remove();
   });
 
-  it('a timed end still refuses the default editor with the time-of-day reason (#137)', () => {
-    const { container, gantt } = makeEndGantt({
+  it('a timed end opens the default editor on its own day, and an unchanged Enter keeps it', () => {
+    const { container, gantt, dataset } = makeEndGantt({
       id: 'e1',
       name: 'Task',
       start: '2026-03-02',
       end: '2026-03-04T14:00:00Z',
     });
     dblclick(cellFor(container, 'e1', 'end'));
-    expect(refusal(container)!.dataset['reason']).toBe('time-of-day');
+    expect(refusal(container)).toBeNull();
+    expect(input(container).value).toBe('2026-03-04');
+    enter(input(container));
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-04T14:00:00Z'));
     gantt.destroy();
     container.remove();
   });
@@ -1903,5 +1934,82 @@ describe('the End editor shows the last covered day and stores the next day (#57
     expect(cellFor(container2, 'e1', 'end').textContent).toBe('Mar 10, 2026');
     gantt2.destroy();
     container2.remove();
+  });
+  it('a consumer control that shows no time of day opens on the last covered day', () => {
+    const control = consumerDateInput(false);
+    const { container, gantt, dataset } = makeEndGantt(
+      { id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' },
+      control.options,
+    );
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(control.written()).toBe(instant('2026-03-04T00:00:00Z'));
+    control.commit();
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-05T00:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a consumer control that shows no time of day stores the day after the typed day', () => {
+    const control = consumerDateInput(false);
+    const { container, gantt, dataset } = makeEndGantt(
+      { id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' },
+      control.options,
+    );
+    dblclick(cellFor(container, 'e1', 'end'));
+    control.type(instant('2026-03-10T00:00:00Z'));
+    control.commit();
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-11T00:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a consumer control that shows a time of day opens on the stored end and stores the typed value', () => {
+    const control = consumerDateInput(true);
+    const { container, gantt, dataset } = makeEndGantt(
+      { id: 'e1', name: 'Task', start: '2026-03-02', end: '2026-03-04' },
+      control.options,
+    );
+    dblclick(cellFor(container, 'e1', 'end'));
+    expect(control.written()).toBe(instant('2026-03-05T00:00:00Z'));
+    control.type(instant('2026-03-10T14:00:00Z'));
+    control.commit();
+    expect(dataset.entries.get('e1')!.end).toBe(instant('2026-03-10T14:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+});
+
+describe('a date control that shows no time of day keeps the time of day of an unchanged day', () => {
+  it('the default date editor opens on a timed start, and an unchanged Enter keeps its time of day', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dblclick(cellFor(container, 'e2', 'start'));
+    expect(refusal(container)).toBeNull();
+    expect(input(container).value).toBe('2026-01-01');
+    enter(input(container));
+    expect(dataset.entries.get('e2')!.start).toBe(instant('2026-01-01T14:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a new day typed over a timed start stores the start of that day', () => {
+    const { container, gantt, dataset } = makeGantt();
+    dblclick(cellFor(container, 'e2', 'start'));
+    const el = input(container);
+    el.value = '2025-12-30';
+    enter(el);
+    expect(dataset.entries.get('e2')!.start).toBe(instant('2025-12-30T00:00:00Z'));
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('a consumer control that shows no time of day keeps the time of day on an unchanged start', () => {
+    const control = consumerDateInput(false);
+    const { container, gantt, dataset } = makeGantt(control.options);
+    dblclick(cellFor(container, 'e2', 'start'));
+    expect(control.written()).toBe(instant('2026-01-01T00:00:00Z'));
+    control.commit();
+    expect(dataset.entries.get('e2')!.start).toBe(instant('2026-01-01T14:00:00Z'));
+    gantt.destroy();
+    container.remove();
   });
 });

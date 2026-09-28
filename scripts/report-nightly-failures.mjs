@@ -5,9 +5,10 @@
 // - No open issue carries the `nightly-e2e-failure` label: open one that lists the failures.
 // - One is open: comment on it with only the failures it does not already list.
 //
-// A failure is new when its signature is new. The signature is the engine, the spec file, the test
-// title, the failing line and the first line of the error. So the same test failing at another
-// assertion, or with another error, counts as new.
+// A failure is new when its signature is new. The signature is the engine, the spec file, the full
+// test title, the failing line and the first line of the error. So the same test failing at another
+// assertion, or with another error, counts as new. The full title starts with each `describe` title
+// above the test, so two same-titled tests in two `describe` blocks do not collide.
 // Each listed failure carries its signature in an HTML comment, which is how the next night reads
 // what the issue already holds.
 //
@@ -31,12 +32,17 @@ export function firstErrorLine(message) {
   return first === undefined ? '(no error message)' : first.replace(/\s+/g, ' ');
 }
 
+/** Separates the titles in a full test title, as Playwright prints them. */
+const TITLE_SEPARATOR = ' › ';
+
 /** Every test that failed on its last try. A flaky test passed on a retry, so it is not a failure.
  *  A run that fails before any test starts (a browser that does not launch, a dev server that does
- *  not start) has no failed test, so its top-level errors count as failures too. */
+ *  not start) has no failed test, so its top-level errors count as failures too.
+ *  A failure's title is the full title: each `describe` title above the test, then the test title.
+ *  A top-level suite is a spec file, and the failure names its file already, so its title stays out. */
 export function readFailures(report) {
   const failures = [];
-  const visit = (suite, file) => {
+  const visit = (suite, file, describeTitles) => {
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
         if (test.status !== 'unexpected') continue;
@@ -46,15 +52,17 @@ export function readFailures(report) {
         failures.push({
           project: test.projectName ?? '(no project)',
           file: spec.file ?? file,
-          title: spec.title,
+          title: [...describeTitles, spec.title].join(TITLE_SEPARATOR),
           line: error?.location?.line ?? 0,
           error: firstErrorLine(error?.message),
         });
       }
     }
-    for (const child of suite.suites ?? []) visit(child, child.file ?? file);
+    for (const child of suite.suites ?? []) {
+      visit(child, child.file ?? file, [...describeTitles, child.title]);
+    }
   };
-  for (const suite of report.suites ?? []) visit(suite, suite.file ?? '(no file)');
+  for (const suite of report.suites ?? []) visit(suite, suite.file ?? '(no file)', []);
   for (const error of report.errors ?? []) {
     failures.push({
       project: '(run)',
@@ -93,7 +101,7 @@ export function formatFailures(failures) {
   return failures
     .map(
       (failure) =>
-        `- **${failure.project}** \`${failure.file}${failure.line > 0 ? `:${failure.line}` : ''}\` › ${failure.title}\n` +
+        `- **${failure.project}** \`${failure.file}${failure.line > 0 ? `:${failure.line}` : ''}\`${TITLE_SEPARATOR}${failure.title}\n` +
         `  \`${failure.error.replaceAll('`', "'")}\`\n` +
         `  ${signatureMarker(failureSignature(failure))}`,
     )
