@@ -941,7 +941,12 @@ export class GanttShell {
     // The Dataset's own plugins are held here, not installed. `set plugins` reads this field and
     // combines it with this shell's own chrome the first time a caller assigns one. So both sets
     // resolve under one `requires` order together.
-    this.#hydrateStartState();
+    if (options.collapsed !== undefined) {
+      this.#treeCollapse.hydrate(options.collapsed);
+    }
+    this.#datasetPlugins = options.datasetPlugins ?? [];
+    if (options.zoomPresets !== undefined) this.zoomPresets = options.zoomPresets;
+    if (options.selectedEntryIds !== undefined) this.selection = options.selectedEntryIds;
 
     this.#darkSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
     this.#darkSchemeQueryListener = () => this.#syncResolvedTheme();
@@ -1322,16 +1327,6 @@ export class GanttShell {
       forwardPlainWheel: true,
     });
     this.#teardown.add(() => this.#wheelNavigationGrid?.detach());
-  }
-
-  /** Which collapse, plugins, zoom presets, and selection does this Gantt start with? */
-  #hydrateStartState(): void {
-    if (this.#options.collapsed !== undefined) {
-      this.#treeCollapse.hydrate(this.#options.collapsed);
-    }
-    this.#datasetPlugins = this.#options.datasetPlugins ?? [];
-    if (this.#options.zoomPresets !== undefined) this.zoomPresets = this.#options.zoomPresets;
-    if (this.#options.selectedEntryIds !== undefined) this.selection = this.#options.selectedEntryIds;
   }
 
   /** Which root does an ancestor's `data-fg-theme` pin live on? */
