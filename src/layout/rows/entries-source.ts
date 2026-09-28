@@ -96,7 +96,7 @@ function childrenOfSegmentedParents(
 
 /** Call: `descendantsOfSegmentedParents(segmentChildrenOf, childRowsOf)`. The flat source's own skip
  *  set: every descendant of a segmented parent, not only its direct children — a grandchild loses
- *  its row the same way tree mode drops it off the walk stack (README's `J-plan-I`). Built off
+ *  its row the same way tree mode drops it off the walk stack. Built off
  *  `childRowsOf`, so no second walk of `entries`. */
 function descendantsOfSegmentedParents(
   segmentChildrenOf: ReadonlyMap<EntryId, readonly Entry[]>,
@@ -145,8 +145,7 @@ function flatEntryRows(
  *  parent's children get no row of their own (they are already on this row via `entryIds`), so the
  *  walk does not push them onto the stack — the same drop `collapse.ts:18-20` already does for a
  *  collapsed parent's descendants. A direct child that has children of its own still loses its row
- *  here; its own bar rolls up over them exactly as a collapsed parent's bar does today (README's
- *  `J-plan-I`). */
+ *  here; its own bar rolls up over them exactly as a collapsed parent's bar does today. */
 function treeEntryRows(
   roots: readonly Entry[],
   childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>,
