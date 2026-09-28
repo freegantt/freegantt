@@ -608,6 +608,188 @@ describe('RovingFocus — grid row Shift+Space (#selectRow, never called before)
   });
 });
 
+describe('RovingFocus — timeline bar keys (#handleTimelineKeyDown)', () => {
+  let harness: Harness;
+
+  afterEach(() => {
+    harness.roving.detach();
+    document.body.replaceChildren();
+  });
+
+  function mountBars(ids: readonly string[], plannedIds: readonly string[] = ids): HTMLElement[] {
+    const planned: RovingFocusRow[] = plannedIds.map((id) => ({
+      id: rowId(id),
+      entryIds: ids.includes(id) ? [entryId(id)] : [],
+      expandable: false,
+      expanded: false,
+    }));
+    const rowByEntry = new Map(ids.map((id) => [entryId(id), rowId(id)] as const));
+    harness = buildHarness({
+      plannedRows: () => planned,
+      rowIdForEntry: (id) => rowByEntry.get(id),
+    });
+    return ids.map((id) => {
+      const node = makeBar(barId(entryId(id)));
+      harness.timeline.append(node);
+      return node;
+    });
+  }
+
+  function mountBarsOnOneRow(ids: readonly string[]): HTMLElement[] {
+    harness = buildHarness({
+      plannedRows: () => [
+        { id: rowId('r1'), entryIds: ids.map(entryId), expandable: false, expanded: false },
+      ],
+      rowIdForEntry: () => rowId('r1'),
+    });
+    return ids.map((id) => {
+      const node = makeBar(barId(entryId(id)));
+      harness.timeline.append(node);
+      return node;
+    });
+  }
+
+  it('ArrowDown and ArrowUp move focus one row and do not move past the ends', () => {
+    const [b1, b2, b3] = mountBars(['e1', 'e2', 'e3']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+
+    expect(harness.dispatchTimelineKey(b2!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b3);
+
+    expect(harness.dispatchTimelineKey(b3!, 'ArrowDown').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b3);
+
+    expect(harness.dispatchTimelineKey(b3!, 'ArrowUp').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+
+    expect(harness.dispatchTimelineKey(b2!, 'ArrowUp').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b1);
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowUp').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('Shift+ArrowDown still moves one row — Shift is not a timeline-bar chord guard', () => {
+    const [b1, b2] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { shiftKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+  });
+
+  it('Alt+ArrowDown still moves one row — Alt is not a timeline-bar chord guard', () => {
+    const [b1, b2] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { altKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+  });
+
+  it('Home and End focus the first and last bar of the focused row', () => {
+    const [first, , last] = mountBarsOnOneRow(['e1', 'e2', 'e3']);
+    first!.focus();
+
+    expect(harness.dispatchTimelineKey(first!, 'End').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+
+    expect(harness.dispatchTimelineKey(last!, 'Home').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('plain ArrowLeft and ArrowRight leave focus where it is — those keys nudge, they do not navigate', () => {
+    const [b1, b2] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowRight').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowLeft').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+    expect(document.activeElement).not.toBe(b2);
+  });
+
+  it('Shift+ArrowLeft and Alt+ArrowLeft are left alone — they are not a nudge and not a bar move', () => {
+    const [b1] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowLeft', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowLeft', { altKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowRight', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowRight', { altKey: true }).defaultPrevented).toBe(false);
+
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('a Ctrl or Meta chord is left alone', () => {
+    const [b1] = mountBars(['e1', 'e2']);
+    b1!.focus();
+    vi.mocked(harness.ports.revealEntry).mockClear();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { metaKey: true }).defaultPrevented).toBe(false);
+
+    expect(document.activeElement).toBe(b1);
+    expect(harness.ports.revealEntry).not.toHaveBeenCalled();
+  });
+
+  it('plain Space selects the focused bar; Shift+Space does not', () => {
+    const [b1] = mountBars(['e1']);
+    b1!.focus();
+    vi.mocked(harness.ports.selectOnFocus).mockClear();
+
+    expect(harness.dispatchTimelineKey(b1!, ' ').defaultPrevented).toBe(true);
+    expect(harness.ports.selectOnFocus).toHaveBeenCalledWith({ kind: 'bar', barId: barId(entryId('e1')) });
+
+    vi.mocked(harness.ports.selectOnFocus).mockClear();
+    expect(harness.dispatchTimelineKey(b1!, ' ', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(harness.ports.selectOnFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('Space with no focused bar is a no-op', () => {
+    const [b1] = mountBars(['e1']);
+
+    expect(harness.dispatchTimelineKey(harness.timeline, ' ').defaultPrevented).toBe(false);
+    expect(harness.ports.selectOnFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(b1);
+  });
+
+  it('an unknown key and an empty pane are no-ops', () => {
+    const [b1] = mountBars(['e1']);
+    b1!.focus();
+    vi.mocked(harness.ports.revealEntry).mockClear();
+
+    expect(harness.dispatchTimelineKey(b1!, 'x').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+    expect(harness.ports.revealEntry).not.toHaveBeenCalled();
+
+    harness.roving.detach();
+    document.body.replaceChildren();
+    harness = buildHarness();
+
+    expect(harness.dispatchTimelineKey(harness.timeline, 'ArrowDown').defaultPrevented).toBe(false);
+    expect(harness.ports.revealEntry).not.toHaveBeenCalled();
+  });
+
+  it('ArrowDown with no bar focused yet lands on the first row that draws a bar', () => {
+    const [b1] = mountBars(['e1', 'e2']);
+
+    expect(harness.dispatchTimelineKey(harness.timeline, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('ArrowDown skips a row that draws no bar', () => {
+    const [b1, b3] = mountBars(['e1', 'e3'], ['e1', 'e2', 'e3']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b3);
+  });
+});
+
 describe('RovingFocus — pointer-vs-keyboard focusin split (regression guard, timeline pane)', () => {
   it('a pointer-caused arrival does not re-propose selection or re-reveal — it already ran on pointerdown/up', () => {
     const harness = buildHarness();
