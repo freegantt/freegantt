@@ -411,6 +411,20 @@ describe('RovingFocus — horizontal arrows (#onHorizontal)', () => {
     return node;
   }
 
+  function mountRowsThenLeaveFirstFromRowPlan(): { r1: HTMLElement; r2: HTMLElement } {
+    let planned = [leaf('r1'), leaf('r2')];
+    harness = buildHarness({
+      plannedRows: () => planned,
+      columnKeys: () => ['name', 'cost'],
+    });
+    const r1 = makeRow(rowId('r1'), ['name', 'cost']);
+    const r2 = makeRow(rowId('r2'), ['name', 'cost']);
+    harness.rows.append(r1, r2);
+    r1.focus();
+    planned = [leaf('r2')];
+    return { r1, r2 };
+  }
+
   it('ArrowRight on a collapsed expandable row expands it and stays on the row', () => {
     const node = mount(expandable('r1', false));
     node.focus();
@@ -511,24 +525,18 @@ describe('RovingFocus — horizontal arrows (#onHorizontal)', () => {
   });
 
   it('ArrowLeft with no row focus yet on an expanded first row collapses it', () => {
-    mount(expandable('r1', true));
+    const node = mount(expandable('r1', true));
+    const before = document.activeElement;
 
     expect(harness.dispatchGridKey(harness.rows, 'ArrowLeft').defaultPrevented).toBe(true);
 
     expect(harness.ports.collapseRow).toHaveBeenCalledWith(rowId('r1'));
+    expect(document.activeElement).toBe(before);
+    expect(document.activeElement).not.toBe(node);
   });
 
   it('ArrowRight from a remembered row that left the plan steps into the first surviving row’s first cell', () => {
-    let planned = [leaf('r1'), leaf('r2')];
-    harness = buildHarness({
-      plannedRows: () => planned,
-      columnKeys: () => ['name', 'cost'],
-    });
-    const r1 = makeRow(rowId('r1'), ['name', 'cost']);
-    const r2 = makeRow(rowId('r2'), ['name', 'cost']);
-    harness.rows.append(r1, r2);
-    r1.focus();
-    planned = [leaf('r2')];
+    const { r1, r2 } = mountRowsThenLeaveFirstFromRowPlan();
 
     expect(harness.dispatchGridKey(r1, 'ArrowRight').defaultPrevented).toBe(true);
 
@@ -536,41 +544,21 @@ describe('RovingFocus — horizontal arrows (#onHorizontal)', () => {
   });
 
   it('ArrowLeft from a cell whose row left the plan steps back out to the first surviving row', () => {
-    let planned = [leaf('r1'), leaf('r2')];
-    harness = buildHarness({
-      plannedRows: () => planned,
-      columnKeys: () => ['name', 'cost'],
-    });
-    const r1 = makeRow(rowId('r1'), ['name', 'cost']);
-    const r2 = makeRow(rowId('r2'), ['name', 'cost']);
-    harness.rows.append(r1, r2);
-    r1.focus();
-    harness.dispatchGridKey(r1, 'ArrowRight');
-    planned = [leaf('r2')];
+    const { r1, r2 } = mountRowsThenLeaveFirstFromRowPlan();
+    const nameCell = r1.querySelector('[data-field="name"]') as HTMLElement;
+    nameCell.focus();
 
-    expect(harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowLeft').defaultPrevented).toBe(
-      true,
-    );
+    expect(harness.dispatchGridKey(nameCell, 'ArrowLeft').defaultPrevented).toBe(true);
 
     expect(document.activeElement).toBe(r2);
   });
 
   it('ArrowRight from a cell whose row left the plan steps to the next cell of the first surviving row', () => {
-    let planned = [leaf('r1'), leaf('r2')];
-    harness = buildHarness({
-      plannedRows: () => planned,
-      columnKeys: () => ['name', 'cost'],
-    });
-    const r1 = makeRow(rowId('r1'), ['name', 'cost']);
-    const r2 = makeRow(rowId('r2'), ['name', 'cost']);
-    harness.rows.append(r1, r2);
-    r1.focus();
-    harness.dispatchGridKey(r1, 'ArrowRight');
-    planned = [leaf('r2')];
+    const { r1, r2 } = mountRowsThenLeaveFirstFromRowPlan();
+    const nameCell = r1.querySelector('[data-field="name"]') as HTMLElement;
+    nameCell.focus();
 
-    expect(
-      harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowRight').defaultPrevented,
-    ).toBe(true);
+    expect(harness.dispatchGridKey(nameCell, 'ArrowRight').defaultPrevented).toBe(true);
 
     expect(document.activeElement).toBe(r2.querySelector('[data-field="cost"]'));
   });
