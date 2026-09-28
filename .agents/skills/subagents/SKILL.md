@@ -67,6 +67,10 @@ Put the budget in the prompt you send, in these words:
 
 An agent that is close to full reports late, or not at all. So you watch it too.
 
+**Never force-stop a planner.** A planner's whole output is the plan it writes last.
+Stop it and you get nothing. Past any mark, send it a message and let it finish, even
+past 300k. The marks tell a planner to stop research and write, never to quit.
+
 ## Watch it yourself
 
 **Every dispatch starts a watcher.** A subagent runs while your turn is blocked, so
@@ -88,6 +92,13 @@ and exits when one passes its next mark or when they all stop writing. Each agen
 marks: 200k (wind down) and 250k (landing window over). A background command that exits
 re-invokes you, so its exit *is* the alert — you get it mid-flight, not after the report
 lands.
+
+**It counts what the API reports, not what the UI shows.** It reads the usage line of
+the last finished reply: that reply's input plus its output. The UI and the harness's
+`subagent_tokens` count run ahead of it — one planner peaked at 247k in its transcript
+while the harness reported 300k. So a mark the UI passed can still be unreached for the
+watcher. While an agent streams one long reply, the watcher also waits for that reply
+to land. Check with `ps` that it runs before you call it dead.
 
 **It alerts once per agent per mark.** It writes each alert to a state file in `TMPDIR`.
 A restarted watcher reads that file, so it never repeats an alert. It watches each agent
@@ -130,7 +141,8 @@ Then act on what it says:
 - **An agent passed 200k** — send that agent a message: stop at the next clean point
   and write a handoff.
 - **An agent passed 250k** — it spends the landing window on new work. Tell it to
-  write the handoff now and report.
+  write the handoff now and report. A planner gets the same message and no more: let
+  it finish its plan.
 - **After either alert** — start the same watcher command again, in the same turn,
   if any agent you started still runs. Keep the new pid. It skips the alert you just
   handled and still watches every other agent at 200k.
