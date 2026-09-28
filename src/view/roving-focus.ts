@@ -100,6 +100,11 @@ const GRID_CELL_DIRECTION = {
   ArrowLeft: -1,
 } as const satisfies Record<'ArrowRight' | 'ArrowLeft', 1 | -1>;
 
+const ADJACENT_BAR_DIRECTION = {
+  ArrowDown: 1,
+  ArrowUp: -1,
+} as const satisfies Record<'ArrowDown' | 'ArrowUp', 1 | -1>;
+
 /** One roving-focus controller per Gantt (I2: no shared state between two instances). Constructed
  *  once `Panes` exist. `syncAfterRender()` then runs after every render, so a recycled node gets
  *  its `tabindex` back, and a vanished one hands focus to its neighbour (I8). */
@@ -442,30 +447,31 @@ export class RovingFocus {
     if (event.ctrlKey || event.metaKey) return;
     const bars = this.#barElements();
     if (bars.length === 0) return;
-    const current = this.#timelineFocus;
-    const currentIndex =
-      current === undefined ? -1 : bars.findIndex((bar) => bar.dataset['barId'] === current);
+    const currentIndex = timelineBarIndexOf(bars, this.#timelineFocus);
 
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      const target = this.#nearestBarInAdjacentRow(bars, currentIndex, event.key === 'ArrowDown' ? 1 : -1);
+    // Which bar does a vertical arrow land on?
+    const direction = adjacentBarDirectionOf(event.key);
+    if (direction !== undefined) {
+      const target = this.#nearestBarInAdjacentRow(bars, currentIndex, direction);
       if (target === undefined) return;
       event.preventDefault();
       this.#focusBar(target);
       return;
     }
-    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.shiftKey && !event.altKey) {
-      // Nudge, not navigation — `keyboard-editing.ts` handles it. Nothing to do here.
-      return;
-    }
-    if (event.key === 'Home' || event.key === 'End') {
-      const rowBars = this.#barsInSameRow(bars, currentIndex);
-      const target = event.key === 'Home' ? rowBars[0] : rowBars[rowBars.length - 1];
-      if (target === undefined) return;
+
+    // Plain ArrowLeft/ArrowRight nudge — `keyboard-editing.ts` handles them.
+    if (plainHorizontalArrow(event)) return;
+
+    // Home/End focus the first/last bar of the focused row.
+    const target = rowEndBarForKey(event.key, this.#barsInSameRow(bars, currentIndex));
+    if (target !== undefined) {
       event.preventDefault();
       this.#focusBar(target);
       return;
     }
+
     if (event.key === ' ' && !event.shiftKey) {
+      const current = this.#timelineFocus;
       if (current === undefined) return;
       event.preventDefault();
       this.#ports.selectOnFocus({ kind: 'bar', barId: current });
@@ -610,4 +616,31 @@ function gridCellDirectionOf(key: string): 1 | -1 | undefined {
   return Object.hasOwn(GRID_CELL_DIRECTION, key)
     ? GRID_CELL_DIRECTION[key as 'ArrowRight' | 'ArrowLeft']
     : undefined;
+}
+
+/** Call: `timelineBarIndexOf(bars, this.#timelineFocus)`. Which bar the timeline pane remembers,
+ *  or -1 when none is focused yet. */
+function timelineBarIndexOf(bars: readonly HTMLElement[], current: BarId | undefined): number {
+  return current === undefined ? -1 : bars.findIndex((bar) => bar.dataset['barId'] === current);
+}
+
+/** Call: `adjacentBarDirectionOf(event.key)`. ArrowDown is one row down; ArrowUp is one row up. */
+function adjacentBarDirectionOf(key: string): 1 | -1 | undefined {
+  return Object.hasOwn(ADJACENT_BAR_DIRECTION, key)
+    ? ADJACENT_BAR_DIRECTION[key as 'ArrowDown' | 'ArrowUp']
+    : undefined;
+}
+
+/** Call: `plainHorizontalArrow(event)`. ArrowLeft/ArrowRight with no Shift and no Alt — a nudge,
+ *  not a bar move. `keyboard-editing.ts` owns those keys. */
+function plainHorizontalArrow(event: KeyboardEvent): boolean {
+  return (event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !event.shiftKey && !event.altKey;
+}
+
+/** Call: `rowEndBarForKey(event.key, this.#barsInSameRow(bars, currentIndex))`. Which bar Home or
+ *  End lands on in the focused row — `undefined` for any other key. */
+function rowEndBarForKey(key: string, rowBars: readonly HTMLElement[]): HTMLElement | undefined {
+  if (key === 'Home') return rowBars[0];
+  if (key === 'End') return rowBars[rowBars.length - 1];
+  return undefined;
 }
