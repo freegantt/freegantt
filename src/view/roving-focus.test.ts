@@ -67,9 +67,9 @@ interface Harness {
   timeline: HTMLElement;
   roving: RovingFocus;
   ports: { [K in keyof RovingFocusPorts]: RovingFocusPorts[K] };
-  dispatchHeaderKey(cell: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): void;
-  dispatchGridKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): void;
-  dispatchTimelineKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): void;
+  dispatchHeaderKey(cell: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): KeyboardEvent;
+  dispatchGridKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): KeyboardEvent;
+  dispatchTimelineKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): KeyboardEvent;
 }
 
 function buildHarness(portOverrides: Partial<RovingFocusPorts> = {}): Harness {
@@ -86,8 +86,10 @@ function buildHarness(portOverrides: Partial<RovingFocusPorts> = {}): Harness {
   const ports = makePorts(portOverrides);
   const roving = new RovingFocus({ grid, rows, gridHeader, timeline, splitter, overlay }, ports);
 
-  const fire = (target: HTMLElement, type: string, init: KeyboardEventInit): void => {
-    target.dispatchEvent(new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init }));
+  const fire = (target: HTMLElement, type: string, init: KeyboardEventInit): KeyboardEvent => {
+    const event = new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(event);
+    return event;
   };
 
   return {
@@ -247,16 +249,24 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     const [r1, r2, r3] = mountRows(['r1', 'r2', 'r3']);
     r1!.focus();
 
-    harness.dispatchGridKey(r1!, 'ArrowDown');
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r2);
 
-    harness.dispatchGridKey(r2!, 'ArrowDown');
+    expect(harness.dispatchGridKey(r2!, 'ArrowDown').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r3);
 
-    harness.dispatchGridKey(r3!, 'ArrowDown');
+    expect(harness.dispatchGridKey(r3!, 'ArrowDown').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r3);
 
-    harness.dispatchGridKey(r3!, 'ArrowUp');
+    expect(harness.dispatchGridKey(r3!, 'ArrowUp').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r2);
+  });
+
+  it('Shift+ArrowDown still moves one row and prevents default — Shift is not a grid-row chord guard', () => {
+    const [r1, r2] = mountRows(['r1', 'r2']);
+    r1!.focus();
+
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { shiftKey: true }).defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r2);
   });
 
@@ -264,10 +274,10 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     const [r1, , r3] = mountRows(['r1', 'r2', 'r3']);
     r1!.focus();
 
-    harness.dispatchGridKey(r1!, 'End');
+    expect(harness.dispatchGridKey(r1!, 'End').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r3);
 
-    harness.dispatchGridKey(r3!, 'Home');
+    expect(harness.dispatchGridKey(r3!, 'Home').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r1);
   });
 
@@ -275,10 +285,10 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     const nodes = mountRows(['r1', 'r2', 'r3', 'r4', 'r5']);
     nodes[0]!.focus();
 
-    harness.dispatchGridKey(nodes[0]!, 'PageDown');
+    expect(harness.dispatchGridKey(nodes[0]!, 'PageDown').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(nodes[2]);
 
-    harness.dispatchGridKey(nodes[2]!, 'PageUp');
+    expect(harness.dispatchGridKey(nodes[2]!, 'PageUp').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(nodes[0]);
   });
 
@@ -290,7 +300,7 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     harness.rows.append(r1, r2);
     r1.focus();
 
-    harness.dispatchGridKey(r1, 'PageDown');
+    expect(harness.dispatchGridKey(r1, 'PageDown').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r2);
   });
 
@@ -298,10 +308,12 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     const [r1] = mountRows(['r1'], ['name', 'cost']);
     r1!.focus();
 
-    harness.dispatchGridKey(r1!, 'ArrowRight');
+    expect(harness.dispatchGridKey(r1!, 'ArrowRight').defaultPrevented).toBe(true);
     expect(document.activeElement).toBe(r1!.querySelector('[data-field="name"]'));
 
-    harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowLeft');
+    expect(harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowLeft').defaultPrevented).toBe(
+      true,
+    );
     expect(document.activeElement).toBe(r1);
   });
 
@@ -309,9 +321,9 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     const [r1] = mountRows(['r1', 'r2']);
     r1!.focus();
 
-    harness.dispatchGridKey(r1!, 'ArrowDown', { ctrlKey: true });
-    harness.dispatchGridKey(r1!, 'ArrowDown', { metaKey: true });
-    harness.dispatchGridKey(r1!, 'ArrowDown', { altKey: true });
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { metaKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { altKey: true }).defaultPrevented).toBe(false);
 
     expect(document.activeElement).toBe(r1);
     expect(harness.ports.revealRow).not.toHaveBeenCalled();
@@ -322,7 +334,7 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     r1!.focus();
     vi.mocked(harness.ports.revealRow).mockClear();
 
-    harness.dispatchGridKey(r1!, 'x');
+    expect(harness.dispatchGridKey(r1!, 'x').defaultPrevented).toBe(false);
     expect(document.activeElement).toBe(r1);
     expect(harness.ports.revealRow).not.toHaveBeenCalled();
 
@@ -333,7 +345,7 @@ describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
     harness.rows.append(empty);
     empty.focus();
 
-    harness.dispatchGridKey(empty, 'ArrowDown');
+    expect(harness.dispatchGridKey(empty, 'ArrowDown').defaultPrevented).toBe(false);
     expect(harness.ports.revealRow).not.toHaveBeenCalled();
   });
 
@@ -387,7 +399,7 @@ describe('RovingFocus — grid row Shift+Space (#selectRow, never called before)
     gridRow.focus();
     vi.mocked(harness.ports.selectOnFocus).mockClear();
 
-    harness.dispatchGridKey(gridRow, ' ', { shiftKey: true });
+    expect(harness.dispatchGridKey(gridRow, ' ', { shiftKey: true }).defaultPrevented).toBe(true);
 
     expect(harness.ports.selectOnFocus).toHaveBeenCalledWith({ kind: 'row', rowId: rowId('r1') });
 
@@ -408,7 +420,7 @@ describe('RovingFocus — grid row Shift+Space (#selectRow, never called before)
     gridRow.focus();
     vi.mocked(harness.ports.selectOnFocus).mockClear();
 
-    harness.dispatchGridKey(gridRow, ' ');
+    expect(harness.dispatchGridKey(gridRow, ' ').defaultPrevented).toBe(false);
 
     expect(harness.ports.selectOnFocus).not.toHaveBeenCalled();
 
