@@ -755,7 +755,7 @@ export class GanttShell {
     });
 
     // Does a shared `scale` also name preset, range, or fit that this Gantt must ignore?
-    this.#warnWhenScaleIgnoresRangeOptions();
+    this.#warnWhenSharedScaleIgnoresOwnOptions();
     this.#viewport = viewportFrom(
       options.scale ?? defaultTimeScale(options.preset, options.range, options.fit),
       options.scroll,
@@ -978,7 +978,7 @@ export class GanttShell {
 
   /** Does a shared `scale` also name preset, range, or fit — options the shared model already
    *  carries, so this Gantt must ignore them? */
-  #warnWhenScaleIgnoresRangeOptions(): void {
+  #warnWhenSharedScaleIgnoresOwnOptions(): void {
     const options = this.#options;
     const hasOwnOptions =
       options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
