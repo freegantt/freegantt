@@ -6727,6 +6727,51 @@ describe('Gantt entryMove — a vertical drag places the entry under a new paren
     document.elementFromPoint = original;
     gantt.destroy();
   });
+
+  // #425: `parentId` locked to `'never'` still leaves a same-parent reorder open — the drop never
+  // asks that cell to accept a write it never proposes. Rows: `p1{a, b}`, `p2{c}` — row 2 (`b`) has
+  // its own bottom third at y in [96, 108).
+  it("a same-parent reorder commits with parentId locked to 'never'", () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      fields: [{ key: 'parentId', editable: 'never' }],
+      entries: [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03' },
+        { id: 'b', name: 'B', parentId: 'p1', start: '2026-01-03', end: '2026-01-05' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p2', start: '2026-01-05', end: '2026-01-08' },
+      ],
+    });
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Drag `a` (row 1) into `b`'s own bottom third (row 2, an `after` drop) — still under `p1`.
+    expect(() => {
+      timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+      timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 102, pointerId: 1 }));
+      timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 102, pointerId: 1 }));
+    }).not.toThrow();
+
+    expect(afterEvents).toHaveLength(1);
+    const move = afterEvents[0]!;
+    expect(move.place?.parentId).toBe(entryId('p1'));
+    expect(dataset.entries.get(entryId('a'))!.parent()?.id).toBe(entryId('p1'));
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
 });
 
 // #425: the acceptance object is the harness plugin itself (issue #153's own rule) — a lock rule

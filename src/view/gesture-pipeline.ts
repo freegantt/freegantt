@@ -484,11 +484,20 @@ export class GesturePipeline {
       const dateEdit = writes.get(move.id);
       const treeEdit = dateEdit ?? stripDates(paints.get(move.id));
       if (treeEdit === undefined) continue; // every moved id sits in `paints` — see `#movedTopMost`.
+      // #425: a same-parent drop writes only `siblingIndex` (`capability.ts`'s `canPlace` advertises
+      // exactly this — same parent needs no open `parentId` cell). Naming `parentId` here whenever
+      // it still equals `move.currentPlace.parentId` would ask a closed cell to accept a write the
+      // drop never makes, and `entries.update` asserts every named key.
+      const reparents = move.place.parentId !== move.currentPlace.parentId;
       merged.set(move.id, {
         ...treeEdit,
-        parentId: move.place.parentId,
+        ...(reparents ? { parentId: move.place.parentId } : {}),
         siblingIndex: move.at,
-        proposedKeys: new Set([...treeEdit.proposedKeys, 'parentId', 'siblingIndex']),
+        proposedKeys: new Set([
+          ...treeEdit.proposedKeys,
+          ...(reparents ? (['parentId'] as const) : []),
+          'siblingIndex',
+        ]),
       });
     }
     for (const [id, edit] of writes) {
