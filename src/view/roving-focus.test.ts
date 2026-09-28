@@ -67,9 +67,9 @@ interface Harness {
   timeline: HTMLElement;
   roving: RovingFocus;
   ports: { [K in keyof RovingFocusPorts]: RovingFocusPorts[K] };
-  dispatchHeaderKey(cell: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): void;
-  dispatchGridKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): void;
-  dispatchTimelineKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): void;
+  dispatchHeaderKey(cell: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): KeyboardEvent;
+  dispatchGridKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): KeyboardEvent;
+  dispatchTimelineKey(target: HTMLElement, key: string, options?: Partial<KeyboardEventInit>): KeyboardEvent;
 }
 
 function buildHarness(portOverrides: Partial<RovingFocusPorts> = {}): Harness {
@@ -86,8 +86,10 @@ function buildHarness(portOverrides: Partial<RovingFocusPorts> = {}): Harness {
   const ports = makePorts(portOverrides);
   const roving = new RovingFocus({ grid, rows, gridHeader, timeline, splitter, overlay }, ports);
 
-  const fire = (target: HTMLElement, type: string, init: KeyboardEventInit): void => {
-    target.dispatchEvent(new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init }));
+  const fire = (target: HTMLElement, type: string, init: KeyboardEventInit): KeyboardEvent => {
+    const event = new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(event);
+    return event;
   };
 
   return {
@@ -217,6 +219,351 @@ describe('RovingFocus — header cell keyboard nav (#handleHeaderKeyDown, D-S5-2
   });
 });
 
+describe('RovingFocus — grid row keys (#handleGridKeyDown)', () => {
+  let harness: Harness;
+
+  afterEach(() => {
+    harness.roving.detach();
+    document.body.replaceChildren();
+  });
+
+  function leaf(id: string): RovingFocusRow {
+    return { id: rowId(id), entryIds: [entryId(id)], expandable: false, expanded: false };
+  }
+
+  function mountRows(ids: readonly string[], columns: readonly string[] = ['name']): HTMLElement[] {
+    const planned = ids.map(leaf);
+    harness = buildHarness({
+      plannedRows: () => planned,
+      columnKeys: () => columns,
+      rowsPerPage: () => 2,
+    });
+    return ids.map((id) => {
+      const node = makeRow(rowId(id), columns);
+      harness.rows.append(node);
+      return node;
+    });
+  }
+
+  it('ArrowDown and ArrowUp move focus one row and clamp at the ends', () => {
+    const [r1, r2, r3] = mountRows(['r1', 'r2', 'r3']);
+    r1!.focus();
+
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r2);
+
+    expect(harness.dispatchGridKey(r2!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r3);
+
+    expect(harness.dispatchGridKey(r3!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r3);
+
+    expect(harness.dispatchGridKey(r3!, 'ArrowUp').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r2);
+  });
+
+  it('Shift+ArrowDown still moves one row and prevents default — Shift is not a grid-row chord guard', () => {
+    const [r1, r2] = mountRows(['r1', 'r2']);
+    r1!.focus();
+
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { shiftKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r2);
+  });
+
+  it('Home and End jump to the first and last row', () => {
+    const [r1, , r3] = mountRows(['r1', 'r2', 'r3']);
+    r1!.focus();
+
+    expect(harness.dispatchGridKey(r1!, 'End').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r3);
+
+    expect(harness.dispatchGridKey(r3!, 'Home').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r1);
+  });
+
+  it('PageDown and PageUp move by rowsPerPage, floored to at least one row', () => {
+    const nodes = mountRows(['r1', 'r2', 'r3', 'r4', 'r5']);
+    nodes[0]!.focus();
+
+    expect(harness.dispatchGridKey(nodes[0]!, 'PageDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(nodes[2]);
+
+    expect(harness.dispatchGridKey(nodes[2]!, 'PageUp').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(nodes[0]);
+  });
+
+  it('PageDown still moves one row when rowsPerPage is zero', () => {
+    const planned = [leaf('r1'), leaf('r2')];
+    harness = buildHarness({ plannedRows: () => planned, rowsPerPage: () => 0 });
+    const r1 = makeRow(rowId('r1'), ['name']);
+    const r2 = makeRow(rowId('r2'), ['name']);
+    harness.rows.append(r1, r2);
+    r1.focus();
+
+    expect(harness.dispatchGridKey(r1, 'PageDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r2);
+  });
+
+  it('ArrowRight on a leaf row steps into the first cell; ArrowLeft steps back to the row', () => {
+    const [r1] = mountRows(['r1'], ['name', 'cost']);
+    r1!.focus();
+
+    expect(harness.dispatchGridKey(r1!, 'ArrowRight').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(r1!.querySelector('[data-field="name"]'));
+
+    expect(harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowLeft').defaultPrevented).toBe(
+      true,
+    );
+    expect(document.activeElement).toBe(r1);
+  });
+
+  it('a Ctrl, Meta, or Alt chord is left alone', () => {
+    const [r1] = mountRows(['r1', 'r2']);
+    r1!.focus();
+
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { metaKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchGridKey(r1!, 'ArrowDown', { altKey: true }).defaultPrevented).toBe(false);
+
+    expect(document.activeElement).toBe(r1);
+    expect(harness.ports.revealRow).not.toHaveBeenCalled();
+  });
+
+  it('an unknown key and an empty pane are no-ops', () => {
+    const [r1] = mountRows(['r1']);
+    r1!.focus();
+    vi.mocked(harness.ports.revealRow).mockClear();
+
+    expect(harness.dispatchGridKey(r1!, 'x').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(r1);
+    expect(harness.ports.revealRow).not.toHaveBeenCalled();
+
+    harness.roving.detach();
+    document.body.replaceChildren();
+    harness = buildHarness({ plannedRows: () => [] });
+    const empty = makeRow(rowId('gone'), ['name']);
+    harness.rows.append(empty);
+    empty.focus();
+
+    expect(harness.dispatchGridKey(empty, 'ArrowDown').defaultPrevented).toBe(false);
+    expect(harness.ports.revealRow).not.toHaveBeenCalled();
+  });
+
+  it('ArrowDown with no row focus yet starts at the first row, then steps to the second', () => {
+    const nodes = mountRows(['r1', 'r2']);
+
+    harness.dispatchGridKey(harness.rows, 'ArrowDown');
+    expect(document.activeElement).toBe(nodes[1]);
+  });
+
+  it('ArrowDown from a header focus still starts at the first planned row, then steps to the second', () => {
+    const planned = [leaf('r1'), leaf('r2')];
+    harness = buildHarness({ plannedRows: () => planned, columnKeys: () => ['name'] });
+    const cost = makeHeaderCell('cost');
+    harness.gridHeader.append(cost);
+    const r1 = makeRow(rowId('r1'), ['name']);
+    const r2 = makeRow(rowId('r2'), ['name']);
+    harness.rows.append(r1, r2);
+    cost.focus();
+
+    harness.dispatchGridKey(harness.rows, 'ArrowDown');
+    expect(document.activeElement).toBe(r2);
+  });
+
+  it('ArrowDown from a remembered row that left the plan falls back, then steps to the next row', () => {
+    let planned = [leaf('r1'), leaf('r2'), leaf('r3')];
+    harness = buildHarness({ plannedRows: () => planned, columnKeys: () => ['name'] });
+    const r1 = makeRow(rowId('r1'), ['name']);
+    const r2 = makeRow(rowId('r2'), ['name']);
+    const r3 = makeRow(rowId('r3'), ['name']);
+    harness.rows.append(r1, r2, r3);
+    r1.focus();
+
+    planned = [leaf('r2'), leaf('r3')];
+    harness.dispatchGridKey(r1, 'ArrowDown');
+    expect(document.activeElement).toBe(r3);
+  });
+});
+
+describe('RovingFocus — horizontal arrows (#onHorizontal)', () => {
+  let harness: Harness;
+
+  afterEach(() => {
+    harness.roving.detach();
+    document.body.replaceChildren();
+  });
+
+  function expandable(id: string, expanded: boolean): RovingFocusRow {
+    return { id: rowId(id), entryIds: [entryId(id)], expandable: true, expanded };
+  }
+
+  function leaf(id: string): RovingFocusRow {
+    return { id: rowId(id), entryIds: [entryId(id)], expandable: false, expanded: false };
+  }
+
+  function mount(row: RovingFocusRow, columns: readonly string[] = ['name', 'cost']): HTMLElement {
+    harness = buildHarness({
+      plannedRows: () => [row],
+      columnKeys: () => columns,
+    });
+    const node = makeRow(row.id, columns);
+    harness.rows.append(node);
+    return node;
+  }
+
+  function mountRowsThenLeaveFirstFromRowPlan(): { r1: HTMLElement; r2: HTMLElement } {
+    let planned = [leaf('r1'), leaf('r2')];
+    harness = buildHarness({
+      plannedRows: () => planned,
+      columnKeys: () => ['name', 'cost'],
+    });
+    const r1 = makeRow(rowId('r1'), ['name', 'cost']);
+    const r2 = makeRow(rowId('r2'), ['name', 'cost']);
+    harness.rows.append(r1, r2);
+    r1.focus();
+    planned = [leaf('r2')];
+    return { r1, r2 };
+  }
+
+  it('ArrowRight on a collapsed expandable row expands it and stays on the row', () => {
+    const node = mount(expandable('r1', false));
+    node.focus();
+
+    expect(harness.dispatchGridKey(node, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(harness.ports.expandRow).toHaveBeenCalledWith(rowId('r1'));
+    expect(harness.ports.collapseRow).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(node);
+  });
+
+  it('ArrowRight on an already-expanded row steps into the first cell', () => {
+    const node = mount(expandable('r1', true));
+    node.focus();
+
+    expect(harness.dispatchGridKey(node, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(harness.ports.expandRow).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(node.querySelector('[data-field="name"]'));
+  });
+
+  it('ArrowRight on a leaf row with no columns stays on the row', () => {
+    const node = mount(leaf('r1'), []);
+    node.focus();
+
+    expect(harness.dispatchGridKey(node, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(document.activeElement).toBe(node);
+    expect(harness.ports.revealRow).not.toHaveBeenCalled();
+  });
+
+  it('ArrowLeft on an expanded row collapses it and stays on the row', () => {
+    const node = mount(expandable('r1', true));
+    node.focus();
+
+    expect(harness.dispatchGridKey(node, 'ArrowLeft').defaultPrevented).toBe(true);
+
+    expect(harness.ports.collapseRow).toHaveBeenCalledWith(rowId('r1'));
+    expect(document.activeElement).toBe(node);
+  });
+
+  it('ArrowLeft on a collapsed expandable row is a no-move', () => {
+    const node = mount(expandable('r1', false));
+    node.focus();
+
+    expect(harness.dispatchGridKey(node, 'ArrowLeft').defaultPrevented).toBe(true);
+
+    expect(harness.ports.collapseRow).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(node);
+  });
+
+  it('ArrowLeft on a leaf row is a no-move', () => {
+    const node = mount(leaf('r1'));
+    node.focus();
+
+    expect(harness.dispatchGridKey(node, 'ArrowLeft').defaultPrevented).toBe(true);
+
+    expect(harness.ports.collapseRow).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(node);
+  });
+
+  it('ArrowRight from a cell steps to the next cell; ArrowLeft steps back', () => {
+    const node = mount(leaf('r1'));
+    node.focus();
+    expect(harness.dispatchGridKey(node, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(
+      harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowRight').defaultPrevented,
+    ).toBe(true);
+    expect(document.activeElement).toBe(node.querySelector('[data-field="cost"]'));
+
+    expect(harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowLeft').defaultPrevented).toBe(
+      true,
+    );
+    expect(document.activeElement).toBe(node.querySelector('[data-field="name"]'));
+  });
+
+  it('ArrowRight on the last cell is a no-move', () => {
+    const node = mount(leaf('r1'));
+    node.focus();
+    harness.dispatchGridKey(node, 'ArrowRight');
+    harness.dispatchGridKey(document.activeElement as HTMLElement, 'ArrowRight');
+    const last = node.querySelector('[data-field="cost"]');
+    vi.mocked(harness.ports.revealRow).mockClear();
+
+    expect(harness.dispatchGridKey(last as HTMLElement, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(document.activeElement).toBe(last);
+    expect(harness.ports.revealRow).not.toHaveBeenCalled();
+  });
+
+  it('ArrowRight with no row focus yet steps into the first cell of the first row', () => {
+    const node = mount(leaf('r1'));
+
+    expect(harness.dispatchGridKey(harness.rows, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(document.activeElement).toBe(node.querySelector('[data-field="name"]'));
+  });
+
+  it('ArrowLeft with no row focus yet on an expanded first row collapses it', () => {
+    const node = mount(expandable('r1', true));
+    const before = document.activeElement;
+
+    expect(harness.dispatchGridKey(harness.rows, 'ArrowLeft').defaultPrevented).toBe(true);
+
+    expect(harness.ports.collapseRow).toHaveBeenCalledWith(rowId('r1'));
+    expect(document.activeElement).toBe(before);
+    expect(document.activeElement).not.toBe(node);
+  });
+
+  it('ArrowRight from a remembered row that left the plan steps into the first surviving row’s first cell', () => {
+    const { r1, r2 } = mountRowsThenLeaveFirstFromRowPlan();
+
+    expect(harness.dispatchGridKey(r1, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(document.activeElement).toBe(r2.querySelector('[data-field="name"]'));
+  });
+
+  it('ArrowLeft from a cell whose row left the plan steps back out to the first surviving row', () => {
+    const { r1, r2 } = mountRowsThenLeaveFirstFromRowPlan();
+    const nameCell = r1.querySelector('[data-field="name"]') as HTMLElement;
+    nameCell.focus();
+
+    expect(harness.dispatchGridKey(nameCell, 'ArrowLeft').defaultPrevented).toBe(true);
+
+    expect(document.activeElement).toBe(r2);
+  });
+
+  it('ArrowRight from a cell whose row left the plan steps to the next cell of the first surviving row', () => {
+    const { r1, r2 } = mountRowsThenLeaveFirstFromRowPlan();
+    const nameCell = r1.querySelector('[data-field="name"]') as HTMLElement;
+    nameCell.focus();
+
+    expect(harness.dispatchGridKey(nameCell, 'ArrowRight').defaultPrevented).toBe(true);
+
+    expect(document.activeElement).toBe(r2.querySelector('[data-field="cost"]'));
+  });
+});
+
 describe('RovingFocus — grid row Shift+Space (#selectRow, never called before)', () => {
   it('proposes the row’s own Selection, distinct from arrow navigation’s own proposal', () => {
     const row1: RovingFocusRow = {
@@ -231,7 +578,7 @@ describe('RovingFocus — grid row Shift+Space (#selectRow, never called before)
     gridRow.focus();
     vi.mocked(harness.ports.selectOnFocus).mockClear();
 
-    harness.dispatchGridKey(gridRow, ' ', { shiftKey: true });
+    expect(harness.dispatchGridKey(gridRow, ' ', { shiftKey: true }).defaultPrevented).toBe(true);
 
     expect(harness.ports.selectOnFocus).toHaveBeenCalledWith({ kind: 'row', rowId: rowId('r1') });
 
@@ -252,12 +599,194 @@ describe('RovingFocus — grid row Shift+Space (#selectRow, never called before)
     gridRow.focus();
     vi.mocked(harness.ports.selectOnFocus).mockClear();
 
-    harness.dispatchGridKey(gridRow, ' ');
+    expect(harness.dispatchGridKey(gridRow, ' ').defaultPrevented).toBe(false);
 
     expect(harness.ports.selectOnFocus).not.toHaveBeenCalled();
 
     harness.roving.detach();
     document.body.replaceChildren();
+  });
+});
+
+describe('RovingFocus — timeline bar keys (#handleTimelineKeyDown)', () => {
+  let harness: Harness;
+
+  afterEach(() => {
+    harness.roving.detach();
+    document.body.replaceChildren();
+  });
+
+  function mountBars(ids: readonly string[], plannedIds: readonly string[] = ids): HTMLElement[] {
+    const planned: RovingFocusRow[] = plannedIds.map((id) => ({
+      id: rowId(id),
+      entryIds: ids.includes(id) ? [entryId(id)] : [],
+      expandable: false,
+      expanded: false,
+    }));
+    const rowByEntry = new Map(ids.map((id) => [entryId(id), rowId(id)] as const));
+    harness = buildHarness({
+      plannedRows: () => planned,
+      rowIdForEntry: (id) => rowByEntry.get(id),
+    });
+    return ids.map((id) => {
+      const node = makeBar(barId(entryId(id)));
+      harness.timeline.append(node);
+      return node;
+    });
+  }
+
+  function mountBarsOnOneRow(ids: readonly string[]): HTMLElement[] {
+    harness = buildHarness({
+      plannedRows: () => [
+        { id: rowId('r1'), entryIds: ids.map(entryId), expandable: false, expanded: false },
+      ],
+      rowIdForEntry: () => rowId('r1'),
+    });
+    return ids.map((id) => {
+      const node = makeBar(barId(entryId(id)));
+      harness.timeline.append(node);
+      return node;
+    });
+  }
+
+  it('ArrowDown and ArrowUp move focus one row and do not move past the ends', () => {
+    const [b1, b2, b3] = mountBars(['e1', 'e2', 'e3']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+
+    expect(harness.dispatchTimelineKey(b2!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b3);
+
+    expect(harness.dispatchTimelineKey(b3!, 'ArrowDown').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b3);
+
+    expect(harness.dispatchTimelineKey(b3!, 'ArrowUp').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+
+    expect(harness.dispatchTimelineKey(b2!, 'ArrowUp').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b1);
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowUp').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('Shift+ArrowDown still moves one row — Shift is not a timeline-bar chord guard', () => {
+    const [b1, b2] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { shiftKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+  });
+
+  it('Alt+ArrowDown still moves one row — Alt is not a timeline-bar chord guard', () => {
+    const [b1, b2] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { altKey: true }).defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b2);
+  });
+
+  it('Home and End focus the first and last bar of the focused row', () => {
+    const [first, , last] = mountBarsOnOneRow(['e1', 'e2', 'e3']);
+    first!.focus();
+
+    expect(harness.dispatchTimelineKey(first!, 'End').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+
+    expect(harness.dispatchTimelineKey(last!, 'Home').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first);
+  });
+
+  it('plain ArrowLeft and ArrowRight leave focus where it is — those keys nudge, they do not navigate', () => {
+    const [b1, b2] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowRight').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowLeft').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+    expect(document.activeElement).not.toBe(b2);
+  });
+
+  it('Shift+ArrowLeft and Alt+ArrowLeft are left alone — they are not a nudge and not a bar move', () => {
+    const [b1] = mountBars(['e1', 'e2']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowLeft', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowLeft', { altKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowRight', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowRight', { altKey: true }).defaultPrevented).toBe(false);
+
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('a Ctrl or Meta chord is left alone', () => {
+    const [b1] = mountBars(['e1', 'e2']);
+    b1!.focus();
+    vi.mocked(harness.ports.revealEntry).mockClear();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { metaKey: true }).defaultPrevented).toBe(false);
+
+    expect(document.activeElement).toBe(b1);
+    expect(harness.ports.revealEntry).not.toHaveBeenCalled();
+  });
+
+  it('plain Space selects the focused bar; Shift+Space does not', () => {
+    const [b1] = mountBars(['e1']);
+    b1!.focus();
+    vi.mocked(harness.ports.selectOnFocus).mockClear();
+
+    expect(harness.dispatchTimelineKey(b1!, ' ').defaultPrevented).toBe(true);
+    expect(harness.ports.selectOnFocus).toHaveBeenCalledWith({ kind: 'bar', barId: barId(entryId('e1')) });
+
+    vi.mocked(harness.ports.selectOnFocus).mockClear();
+    expect(harness.dispatchTimelineKey(b1!, ' ', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(harness.ports.selectOnFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('Space with no focused bar is a no-op', () => {
+    const [b1] = mountBars(['e1']);
+
+    expect(harness.dispatchTimelineKey(harness.timeline, ' ').defaultPrevented).toBe(false);
+    expect(harness.ports.selectOnFocus).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(b1);
+  });
+
+  it('an unknown key and an empty pane are no-ops', () => {
+    const [b1] = mountBars(['e1']);
+    b1!.focus();
+    vi.mocked(harness.ports.revealEntry).mockClear();
+
+    expect(harness.dispatchTimelineKey(b1!, 'x').defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
+    expect(harness.ports.revealEntry).not.toHaveBeenCalled();
+
+    harness.roving.detach();
+    document.body.replaceChildren();
+    harness = buildHarness();
+
+    expect(harness.dispatchTimelineKey(harness.timeline, 'ArrowDown').defaultPrevented).toBe(false);
+    expect(harness.ports.revealEntry).not.toHaveBeenCalled();
+  });
+
+  it('ArrowDown with no bar focused yet lands on the first row that draws a bar', () => {
+    const [b1] = mountBars(['e1', 'e2']);
+
+    expect(harness.dispatchTimelineKey(harness.timeline, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b1);
+  });
+
+  it('ArrowDown skips a row that draws no bar', () => {
+    const [b1, b3] = mountBars(['e1', 'e3'], ['e1', 'e2', 'e3']);
+    b1!.focus();
+
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown').defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(b3);
   });
 });
 

@@ -71,68 +71,86 @@ function entryRow(
   };
 }
 
-export function resolveEntriesSource(
+/** Call: `childrenOfSegmentedParents(entries, childRowsOf, drawsChildrenAsSegments)`. Which parents
+ *  draw their children as segments on their own row? Built in one pass so both row walks answer
+ *  "is this parent segmented?" with `.has` and read the children it takes off the row list from the
+ *  same read. Only a parent can be segmented, and the rule reads a Field — the most expensive
+ *  question this pass asks — so `childRowsOf.get` runs first and the Field read runs once per
+ *  parent, not once per Entry: a childless Entry (most of a real dataset) never asks the rule at
+ *  all. */
+function childrenOfSegmentedParents(
   entries: readonly Entry[],
-  source: EntriesRowSource,
-  ports: EntryRulePorts = NO_ENTRY_RULE_PORTS,
-): UnindexedRow[] {
-  // A flat source with no rule is today's path, and it pays today's cost: no tree index, no rule
-  // pass, no Map. Building all three unconditionally taxed every consumer who never asked for the
-  // feature (measured 0.09 ms -> 0.24 ms on the shipped fixture, #421 C1).
-  if (source.childrenAsSegments === undefined && source.tree !== true) {
-    return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false }));
-  }
-
-  const { roots, childRowsOf } = entryTreeIndex(entries);
-  const drawsChildrenAsSegments = compileChildrenAsSegments(source, ports);
-
-  // Segmented parent -> its children, built in one pass so both branches below answer "is this
-  // parent segmented?" with `.has` and read the children it takes off the row list from the same
-  // read. Only a parent can be segmented, and the rule reads a Field — the most expensive question
-  // this pass asks — so `childRowsOf.get` runs first and the Field read runs once per parent, not
-  // once per Entry: a childless Entry (most of a real dataset) never asks the rule at all.
+  childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>,
+  drawsChildrenAsSegments: EntryPredicate | undefined,
+): ReadonlyMap<EntryId, readonly Entry[]> {
   const segmentChildrenOf = new Map<EntryId, readonly Entry[]>();
-  if (drawsChildrenAsSegments !== undefined) {
-    for (const entry of entries) {
-      const children = childRowsOf.get(entry.id);
-      if (children === undefined || children.length === 0) continue;
-      if (!drawsChildrenAsSegments(entry)) continue;
-      segmentChildrenOf.set(entry.id, children);
+  if (drawsChildrenAsSegments === undefined) return segmentChildrenOf;
+  for (const entry of entries) {
+    const children = childRowsOf.get(entry.id);
+    if (children === undefined || children.length === 0) continue;
+    if (!drawsChildrenAsSegments(entry)) continue;
+    segmentChildrenOf.set(entry.id, children);
+  }
+  return segmentChildrenOf;
+}
+
+/** Call: `descendantsOfSegmentedParents(segmentChildrenOf, childRowsOf)`. The flat source's own skip
+ *  set: every descendant of a segmented parent, not only its direct children — a grandchild loses
+ *  its row the same way tree mode drops it off the walk stack. Built off
+ *  `childRowsOf`, so no second walk of `entries`. */
+function descendantsOfSegmentedParents(
+  segmentChildrenOf: ReadonlyMap<EntryId, readonly Entry[]>,
+  childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>,
+): ReadonlySet<EntryId> {
+  const excludedRows = new Set<EntryId>();
+  for (const segmentedParentId of segmentChildrenOf.keys()) {
+    const stack = [...(childRowsOf.get(segmentedParentId) ?? [])];
+    while (stack.length > 0) {
+      const descendant = stack.pop()!;
+      if (excludedRows.has(descendant.id)) continue;
+      excludedRows.add(descendant.id);
+      const grandchildren = childRowsOf.get(descendant.id);
+      if (grandchildren !== undefined) stack.push(...grandchildren);
     }
   }
+  return excludedRows;
+}
 
-  if (source.tree !== true) {
-    // The flat branch's own skip set: every descendant of a segmented parent, not only its direct
-    // children — a grandchild loses its row the same way tree mode drops it off the walk stack
-    // below (README's `J-plan-I`). Built off `childRowsOf`, so no second walk of `entries`.
-    const excludedRows = new Set<EntryId>();
-    for (const segmentedParentId of segmentChildrenOf.keys()) {
-      const stack = [...(childRowsOf.get(segmentedParentId) ?? [])];
-      while (stack.length > 0) {
-        const descendant = stack.pop()!;
-        if (excludedRows.has(descendant.id)) continue;
-        excludedRows.add(descendant.id);
-        const grandchildren = childRowsOf.get(descendant.id);
-        if (grandchildren !== undefined) stack.push(...grandchildren);
-      }
-    }
-
-    const rows: UnindexedRow[] = [];
-    for (const entry of entries) {
-      if (excludedRows.has(entry.id)) continue;
-      const segmentChildren = segmentChildrenOf.get(entry.id);
-      rows.push(
-        entryRow(entry, {
-          depth: 0,
-          // A segmented parent is never expandable — it has no rows to expand into.
-          expandable: false,
-          ...(segmentChildren !== undefined ? { segmentChildren } : {}),
-        }),
-      );
-    }
-    return rows;
+/** Call: `flatEntryRows(entries, childRowsOf, segmentChildrenOf)`. Insertion order, depth 0. A
+ *  segmented parent is never expandable — it has no rows to expand into. Descendants of a segmented
+ *  parent take no row. */
+function flatEntryRows(
+  entries: readonly Entry[],
+  childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>,
+  segmentChildrenOf: ReadonlyMap<EntryId, readonly Entry[]>,
+): UnindexedRow[] {
+  const excludedRows = descendantsOfSegmentedParents(segmentChildrenOf, childRowsOf);
+  const rows: UnindexedRow[] = [];
+  for (const entry of entries) {
+    if (excludedRows.has(entry.id)) continue;
+    const segmentChildren = segmentChildrenOf.get(entry.id);
+    rows.push(
+      entryRow(entry, {
+        depth: 0,
+        expandable: false,
+        ...(segmentChildren !== undefined ? { segmentChildren } : {}),
+      }),
+    );
   }
+  return rows;
+}
 
+/** Call: `treeEntryRows(roots, childRowsOf, segmentChildrenOf)`. Tree order is depth-first in
+ *  insertion order. A segmented parent is never expandable, in tree mode either. A segmented
+ *  parent's children get no row of their own (they are already on this row via `entryIds`), so the
+ *  walk does not push them onto the stack — the same drop `collapse.ts:18-20` already does for a
+ *  collapsed parent's descendants. A direct child that has children of its own still loses its row
+ *  here; its own bar rolls up over them exactly as a collapsed parent's bar does today. */
+function treeEntryRows(
+  roots: readonly Entry[],
+  childRowsOf: ReadonlyMap<EntryId, readonly Entry[]>,
+  segmentChildrenOf: ReadonlyMap<EntryId, readonly Entry[]>,
+): UnindexedRow[] {
   const rows: UnindexedRow[] = [];
   const stack: { list: readonly Entry[]; index: number; depth: number; parentRowId?: RowId }[] = [
     { list: roots, index: 0, depth: 0 },
@@ -150,20 +168,38 @@ export function resolveEntriesSource(
     rows.push(
       entryRow(entry, {
         depth: frame.depth,
-        // A segmented parent is never expandable, in tree mode either.
         expandable: segmentChildren === undefined && children.length > 0,
         ...(frame.parentRowId !== undefined ? { parentRowId: frame.parentRowId } : {}),
         ...(segmentChildren !== undefined ? { segmentChildren } : {}),
       }),
     );
-    // A segmented parent's children get no row of their own (they are already on this row via
-    // `entryIds`), so the walk does not push them onto the stack — the same drop
-    // `collapse.ts:18-20` already does for a collapsed parent's descendants. A direct child that
-    // has children of its own still loses its row here; its own bar rolls up over them exactly as
-    // a collapsed parent's bar does today (README's `J-plan-I`).
     if (segmentChildren === undefined) {
       stack.push({ list: children, index: 0, depth: frame.depth + 1, parentRowId: rowId(entry.id) });
     }
   }
   return rows;
+}
+
+export function resolveEntriesSource(
+  entries: readonly Entry[],
+  source: EntriesRowSource,
+  ports: EntryRulePorts = NO_ENTRY_RULE_PORTS,
+): UnindexedRow[] {
+  // A flat source with no rule is today's path, and it pays today's cost: no tree index, no rule
+  // pass, no Map. Building all three unconditionally taxed every consumer who never asked for the
+  // feature (measured 0.09 ms -> 0.24 ms on the shipped fixture, #421 C1).
+  if (source.childrenAsSegments === undefined && source.tree !== true) {
+    return entries.map((entry) => entryRow(entry, { depth: 0, expandable: false }));
+  }
+
+  const { roots, childRowsOf } = entryTreeIndex(entries);
+  const segmentChildrenOf = childrenOfSegmentedParents(
+    entries,
+    childRowsOf,
+    compileChildrenAsSegments(source, ports),
+  );
+  if (source.tree !== true) {
+    return flatEntryRows(entries, childRowsOf, segmentChildrenOf);
+  }
+  return treeEntryRows(roots, childRowsOf, segmentChildrenOf);
 }
