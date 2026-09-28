@@ -40,23 +40,28 @@ export interface LockEntriesPlugin extends DataPlugin<LockProps> {
  * `initiallyLocked` list of its own — `data()` runs on the finished Dataset (ADR 0031), so it reads
  * every entry's `locked` Field straight off `ctx.dataset.entries` instead of staging one.
  *
- * Two seams, two jobs:
+ * Three seams, three jobs:
  * - the **extension hook** adds a cascade edit for every locked entry, on every call — a preview call
  *   and the real commit call carry the same `EditRequest`, so an extender can never tell them apart
  *   and must never refuse. This is what makes the locked bar ghost alongside the dragged one. The
  *   cascade is a `moveEntryTo` edit, which is the one shape that holds for an Entry of any Segment
  *   count (#241) — copy that call, not an envelope.
+ * - **the lock rule** closes `parentId` and `siblingIndex` to a locked entry's own drag: a vertical
+ *   drop offers no row for it to grab (`can('reorder')` reads false), instead of offering the drop
+ *   and refusing it after (#425). It answers `'api'`, not `'never'` — `lock()`/`unlock()` below still
+ *   write through `entries.update()`, and so does a drop next to a locked entry that only renumbers
+ *   its `siblingIndex` (ADR 0034: the lock names an explicit move, not a neighbour's own).
  * - **`beforeChange`** refuses the commit, once, on the finished changeset — any write that touches a
- *   locked entry, except a write to `locked` itself, so `unlock()` can still open it. Returning
- *   `false` throws `MutationCancelledError` — the ordinary veto every gesture already handles: no
- *   write, no undo entry, no new error type. A `'load'` changeset steps around this refusal (#496
- *   L1): `load` is a full fresh start that removes every old entry regardless of its lock, and the
- *   `locked` Field on the rows it loads is what the lock reads back once the load lands. A `'sync'`
- *   changeset steps around it too (#517): the list it diffs against carries `locked` the same way a
- *   `load` list does, so the server's own list is what the lock reads back once the sync lands. An
- *   `'undo'` or a `'redo'` changeset steps around it as well: the lock guards a new edit, not the
- *   reversal of a step the user already made, so a lock set after the step still lets the undo
- *   through.
+ *   locked entry, except a write to `locked` itself or a renumbering `siblingIndex` (the lock rule
+ *   above already closed an explicit one), so `unlock()` can still open it. Returning `false` throws
+ *   `MutationCancelledError` — the ordinary veto every gesture already handles: no write, no undo
+ *   entry, no new error type. A `'load'` changeset steps around this refusal (#496 L1): `load` is a
+ *   full fresh start that removes every old entry regardless of its lock, and the `locked` Field on
+ *   the rows it loads is what the lock reads back once the load lands. A `'sync'` changeset steps
+ *   around it too (#517): the list it diffs against carries `locked` the same way a `load` list does,
+ *   so the server's own list is what the lock reads back once the sync lands. An `'undo'` or a
+ *   `'redo'` changeset steps around it as well: the lock guards a new edit, not the reversal of a
+ *   step the user already made, so a lock set after the step still lets the undo through.
  *
  * The lock flag is a Field, so locking is a real dataset write: it commits, it raises `change`, and
  * one undo unlocks (#156).
@@ -125,6 +130,17 @@ export function lockEntries(): LockEntriesPlugin {
         return mergeEntryEdits(next(request), mine);
       });
 
+      // Which cell closes a locked entry's own vertical drag? `parentId` and `siblingIndex`, and no
+      // other — `can('reorder')` reads false for it, so the row layer never offers the drop at all
+      // (#425). `'api'` leaves `entries.update()` open, the same door `lock()`/`unlock()` write
+      // through.
+      ctx.edits.setLockRule(
+        (next) => (query, field) =>
+          (field === 'parentId' || field === 'siblingIndex') && lockedIds.has(query.id)
+            ? 'api'
+            : next(query, field),
+      );
+
       // What refuses the drop? The finished changeset, once, at commit — never the extender above. A
       // load replaces the whole dataset (#496 L1), and a sync's list carries `locked` the way a
       // load's does (#517), so this refusal steps aside for both. An undo or a redo reverses a step
@@ -141,8 +157,12 @@ export function lockEntries(): LockEntriesPlugin {
         ) {
           return undefined;
         }
+        // A `siblingIndex` row on a locked entry is left open here: the lock rule above already
+        // closes an explicit move of the locked entry's own; what lands here instead is a neighbour's
+        // move renumbering it, which the lock never named (ADR 0034).
         const refused = fieldRowsOf(changeSet).find(
-          (row) => row.field !== LOCKED_FIELD_KEY && isLockedEntry(String(row.id)),
+          (row) =>
+            row.field !== LOCKED_FIELD_KEY && row.field !== 'siblingIndex' && isLockedEntry(String(row.id)),
         );
         const removed = changeSet.removed.find((row) => isLockedEntry(String(row.entity.id)));
         const id = refused?.id ?? removed?.entity.id;
