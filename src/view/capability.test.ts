@@ -42,7 +42,7 @@ const variantAllows =
     markedVariant(entry) === variant ? capabilities : undefined;
 
 /** The shipped declarations, so every default below is checked against the Fields the library really
- *  registers — `start`/`end` roll up and are editable, `duration` computes, `parentId` ships `'api'`.
+ *  registers — `start`/`end` roll up and are editable, `duration` computes, `parentId` ships `'anywhere'`.
  *  One `override` re-declares a single key, the way `DatasetOptions.fields` does (#142). */
 function fieldsWith(...overrides: readonly Partial<Field>[]): (key: FieldKey) => Field | undefined {
   const byKey = new Map<FieldKey, Field>(CORE_FIELDS.map((field) => [field.key, field]));
@@ -151,9 +151,16 @@ describe('resolveCapabilities — canWrite is the one answer (#256)', () => {
     expect(caps.canWrite(entry(), 'owner').ok).toBe(true);
   });
 
-  // `parentId` ships `'api'`: a column object may show it, and the cell stays dead.
-  it('refuses the grid for parentId — the app writes it, the user never types it', () => {
+  // `parentId` ships `'anywhere'` (#425): a drag may re-parent. The grid cell still stays dead — the
+  // inline editor declines any Field of type `entryId`, not because of `editable`.
+  it('opens parentId to a write — a drag may re-parent', () => {
     const caps = capabilities();
+    expect(caps.canWrite(entry(), 'parentId').ok).toBe(true);
+  });
+
+  // A consumer that wants a dead parentId cell still locks it the ordinary way.
+  it("refuses the grid for a parentId the consumer locked to 'api'", () => {
+    const caps = capabilities({}, { key: 'parentId', editable: 'api' });
     expect(caps.canWrite(entry(), 'parentId')).toEqual({ ok: false });
   });
 

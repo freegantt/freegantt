@@ -46,10 +46,11 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
   },
   {
     key: 'parentId',
+    type: 'entryId',
     equals: byReference,
-    // A column object may show this Field. The app writes it through `entries.update()`;
-    // the user never types it (ADR 0015 `'api'`).
-    editable: 'api',
+    // A drag may re-parent (#425). The grid shows the id and offers no editor for it (`entryId`
+    // ships no `parseValue`).
+    editable: 'anywhere',
   },
   {
     // An ordinary Field, stored on every Entry (ADR 0034) — no `column` of its own, so the grid never
