@@ -121,7 +121,8 @@ export function attachEntryGestures(
       session = ctx.session(grabbedId, currentGesture());
       return session !== undefined;
     },
-    move(e, dxPx): void {
+    // `_dyPx`: row-drop resolution reads content-y itself (step 13), not this raw pointer delta.
+    move(e, dxPx, _dyPx): void {
       // The live preview always tracks the pointer at full resolution (never quantized to a snap
       // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
       // applies to what actually gets written — see commit() below — this only affects what paints
@@ -130,7 +131,7 @@ export function attachEntryGestures(
       const offsetX = e.clientX - pane.getBoundingClientRect().left;
       session!.preview(dxPx, { suspendSnap: true, cursorX: ctx.contentXAtPaneOffset(offsetX) });
     },
-    commit(e, dxPx): void {
+    commit(e, dxPx, _dyPx): void {
       // The committed value snaps to the preset's tick unit unless Alt held it off for fine
       // placement — this is the one place snapping actually lands, now that move() above
       // always previews raw.

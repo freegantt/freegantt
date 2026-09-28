@@ -16,10 +16,10 @@ export interface PointerGestureCallbacks {
   /** Called once, when the gesture arms. Returning `false` refuses arming — the caller's own
    *  pointerup still runs its click path, exactly as if no drag had been attempted. */
   start(e: PointerEvent): boolean;
-  /** Called on every pointer move once armed, with horizontal travel in px since arming's origin. */
-  move(e: PointerEvent, dxPx: number): void;
+  /** Called on every pointer move once armed, with travel in px since arming's origin, each axis. */
+  move(e: PointerEvent, dxPx: number, dyPx: number): void;
   /** Called once, on pointerup, only when the gesture was armed. */
-  commit(e: PointerEvent, dxPx: number): void;
+  commit(e: PointerEvent, dxPx: number, dyPx: number): void;
   /** Called once, on Escape or pointercancel, only when the gesture was armed. */
   cancel(): void;
 }
@@ -51,6 +51,7 @@ export function createPointerGesture(
 ): PointerGestureController {
   let pointerId: number | undefined;
   let originX = 0;
+  let originY = 0;
   let armed = false;
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
   let lastEvent: PointerEvent | undefined;
@@ -79,6 +80,7 @@ export function createPointerGesture(
       if (pointerId !== undefined) return; // one gesture at a time
       pointerId = e.pointerId;
       originX = e.clientX;
+      originY = e.clientY;
       lastEvent = e;
       if (e.pointerType === 'touch') {
         longPressTimer = setTimeout(() => {
@@ -91,24 +93,26 @@ export function createPointerGesture(
       if (pointerId === undefined || e.pointerId !== pointerId) return;
       lastEvent = e;
       const dxPx = e.clientX - originX;
+      const dyPx = e.clientY - originY;
       if (!armed) {
         if (e.pointerType === 'touch') return; // waits for the long-press timer instead
-        if (Math.abs(dxPx) < DRAG_THRESHOLD_PX) return;
+        if (Math.hypot(dxPx, dyPx) < DRAG_THRESHOLD_PX) return;
         if (!arm(e)) {
           reset();
           return;
         }
       }
-      callbacks.move(e, dxPx);
+      callbacks.move(e, dxPx, dyPx);
     },
 
     up(e: PointerEvent): boolean {
       if (pointerId === undefined || e.pointerId !== pointerId) return false;
       const dxPx = e.clientX - originX;
+      const dyPx = e.clientY - originY;
       const wasArmed = armed;
       if (wasArmed) pane.releasePointerCapture(pointerId);
       reset();
-      if (wasArmed) callbacks.commit(e, dxPx);
+      if (wasArmed) callbacks.commit(e, dxPx, dyPx);
       return wasArmed;
     },
 
