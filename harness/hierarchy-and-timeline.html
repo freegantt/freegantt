@@ -80,7 +80,18 @@
                 <button id="reparent-btn" type="button">Reparent Beta task under Plain parent</button>
               </div>
               <!-- ADR 0020: the same move, through the phase-hierarchy plugin's own key instead of
-                   parentId — "Empty phase" derives a span and a cost the moment it gains a child. -->
+                   parentId — "Empty phase" derives a span and a cost the moment it gains a child.
+                   The plugin mounts only with this box checked (a fresh page load carries the
+                   choice), so the button stays disabled until then. -->
+              <div class="control-row">
+                <label><input id="phase-tree-checkbox" type="checkbox" /> Plugin-owned tree (phase)</label>
+              </div>
+              <p>
+                With this box on, a plugin decides each row's parent from a phase id (ADR 0020). A vertical
+                drag writes <code>parentId</code>, and the plugin would not follow it, so a drop could land
+                where you did not drop it. Vertical drag stays off while the plugin owns the tree. Issue #606
+                tracks a fix.
+              </p>
               <div class="control-row">
                 <button id="phase-btn" type="button">Nest Gate review under Empty phase (plugin tree)</button>
               </div>

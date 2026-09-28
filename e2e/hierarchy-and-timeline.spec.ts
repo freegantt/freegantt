@@ -5,9 +5,32 @@ import { test, expect, type Page } from '@playwright/test';
 // re-resolve live, a fixed range hides entries that fall outside it, and an owning parent's dates
 // hold still while its children move.
 
-async function gotoHierarchyAndTimeline(page: Page): Promise<void> {
-  await page.goto('/hierarchy-and-timeline.html');
+async function gotoHierarchyAndTimeline(page: Page, options?: { phaseTree?: boolean }): Promise<void> {
+  await page.goto(
+    options?.phaseTree ? '/hierarchy-and-timeline.html?tree=phase' : '/hierarchy-and-timeline.html',
+  );
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+}
+
+/** Arms a drag on `entryId`'s own bar and moves it, in several small steps, onto `targetEntryId`'s
+ *  row band — a vertical-only move, the same shape `e2e/row-drag.spec.ts` drags with on
+ *  `generic.html`. Leaves the pointer down; the caller releases it. */
+async function armDragOntoRow(page: Page, entryId: string, targetEntryId: string): Promise<void> {
+  const bar = page.locator(`#gantt .fg-bar[data-bar-id^="${entryId}:"]`).first();
+  await bar.scrollIntoViewIfNeeded();
+  const barBox = (await bar.boundingBox())!;
+  const grabX = barBox.x + 8;
+  const grabY = barBox.y + barBox.height / 2;
+
+  const targetRow = page.locator(`#gantt .fg-row[data-entry-id="${targetEntryId}"]`);
+  const targetRowId = await targetRow.getAttribute('data-row-id');
+  const targetBand = page.locator(`#gantt .fg-row-band[data-row-id="${targetRowId}"]`);
+  await targetBand.scrollIntoViewIfNeeded();
+  const targetBox = (await targetBand.boundingBox())!;
+
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await page.mouse.move(grabX, targetBox.y + targetBox.height / 2, { steps: 5 });
 }
 
 test('switching row source to grouped replaces the tree with team rows', async ({ page }) => {
@@ -108,4 +131,37 @@ test('a parent’s Work sums its leaves’ spans, so a gap between children show
     ),
   );
   expect(childWorkTexts.reduce((total, text) => total + asDays(text), 0)).toBe(asDays(workText));
+});
+
+// #606: a plugin-owned tree offers no vertical drop, so this page turns the plugin off by
+// default — a vertical drag reparents a bar the way it does on `generic.html`. With the plugin on
+// (`?tree=phase`), the same drag changes nothing: `parentId` still moves the tree, but the plugin no
+// longer reads it.
+test('a vertical drag reparents a bar on the default, plugin-off page', async ({ page }) => {
+  await gotoHierarchyAndTimeline(page);
+
+  const parentIdOf = (entryId: string): Promise<string | undefined> =>
+    page.evaluate((id) => window.__dataset.entries.get(id)?.read('parentId'), entryId);
+
+  expect(await parentIdOf('task-beta')).toBe('phase-a');
+
+  await armDragOntoRow(page, 'task-beta', 'phase-empty');
+  await page.mouse.up();
+
+  await expect.poll(() => parentIdOf('task-beta')).toBe('phase-empty');
+});
+
+test('with the plugin-owned tree on, the same drag changes no row', async ({ page }) => {
+  await gotoHierarchyAndTimeline(page, { phaseTree: true });
+
+  const parentIdOf = (entryId: string): Promise<string | undefined> =>
+    page.evaluate((id) => window.__dataset.entries.get(id)?.read('parentId'), entryId);
+
+  const before = await parentIdOf('task-beta');
+
+  // A plugin-owned hierarchy offers no vertical drop (#606): the row source answers `timeOnly`, so
+  // this drag can move nothing but the bar's own dates — and it never travelled sideways to do that.
+  await armDragOntoRow(page, 'task-beta', 'phase-empty');
+  await page.mouse.up();
+  await expect.poll(() => parentIdOf('task-beta')).toBe(before);
 });
