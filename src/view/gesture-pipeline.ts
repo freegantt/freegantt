@@ -533,7 +533,14 @@ export class GesturePipeline {
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles. */
   #commit(gesture: EntryGesture, proposal: GestureProposal): Promise<boolean> {
     this.#scheduledCursorX = undefined;
-    if (proposal.writes.size === 0) return Promise.resolve(false);
+    // A refused drop (or any drag whose draft ended up writing nothing) leaves the pointer up with
+    // no commit to settle — `#settle` never runs, so its own `#preview(undefined)` never fires
+    // either. Clear the paint here instead, or a refused row keeps its highlight until a later
+    // gesture happens to preview over it.
+    if (proposal.writes.size === 0) {
+      this.#preview(undefined);
+      return Promise.resolve(false);
+    }
     // The grabbed bar draws, so it spans (`spansTime`, ADR 0012) — a parent bar included, whose
     // envelope this reads off the paint side because the write side never holds it (ADR 0013).
     const grabbed = this.#proposedDatesOf(proposal.grabbed, proposal.paints.get(proposal.grabbed));
