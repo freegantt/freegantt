@@ -537,20 +537,38 @@ export function computeFrame(
   return placeFrame(input, plan, memoryFor(input, plan, memory), decorations);
 }
 
-/** Tick box floor, bar min width, bar height, and Overscan this frame paints with. */
-function frameSizesOf(input: LayoutInput): {
-  tickBoxFloorPx: number;
-  minBarWidthPx: number;
-  barHeightPx: number;
-  verticalRows: number;
-  horizontalPx: number;
-} {
+/** Pixel sizes this frame paints with, and the Overscan that widens the cull window. Overscan is
+ *  not a size: it is the culling buffer, held apart from the three px fields. */
+interface FramePaintSettings {
+  readonly tickBoxFloorPx: number;
+  readonly minBarWidthPx: number;
+  readonly barHeightPx: number;
+  readonly overscan: Required<Overscan>;
+}
+
+/** Call: `framePaintSettingsOf(input)`. Tick box floor, bar min width, bar height, and Overscan. */
+function framePaintSettingsOf(input: LayoutInput): FramePaintSettings {
   return {
     tickBoxFloorPx: input.tickBoxFloorPx ?? DEFAULT_TICK_BOX_FLOOR_PX,
     minBarWidthPx: input.minBarWidthPx ?? DEFAULT_MIN_BAR_WIDTH_PX,
     barHeightPx: input.barHeightPx ?? DEFAULT_BAR_HEIGHT_PX,
-    verticalRows: input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows,
-    horizontalPx: input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx,
+    overscan: {
+      verticalRows: input.overscan?.verticalRows ?? DEFAULT_OVERSCAN.verticalRows,
+      horizontalPx: input.overscan?.horizontalPx ?? DEFAULT_OVERSCAN.horizontalPx,
+    },
+  };
+}
+
+/** Call: `horizontalCullWindow(visible, overscan.horizontalPx)`. The horizontal cull window in
+ *  content pixels, or `undefined` when a zero width disables culling entirely. */
+function horizontalCullWindow(
+  visible: Rect,
+  horizontalPx: number,
+): { left: number; right: number } | undefined {
+  if (visible.width <= 0) return undefined;
+  return {
+    left: visible.x - horizontalPx,
+    right: visible.x + visible.width + horizontalPx,
   };
 }
 
@@ -566,14 +584,14 @@ function barLabelOf(
   return producedBar.label ?? (barLabelFor !== undefined && entry !== undefined ? barLabelFor(entry) : '');
 }
 
-/** Call: `placeVisibleRowsAndBars(input, plan, mem, sizes)`. Which rows and bars sit in the
- *  visible window — a zero height or width disables that axis's cull entirely, not just an infinite
+/** Call: `placeVisibleRowsAndBars(input, plan, mem, paint)`. Which rows and bars sit in the
+ *  Visible region — a zero height or width disables that axis's cull entirely, not just an infinite
  *  far edge with the near edge still taken from `visible`. */
 function placeVisibleRowsAndBars(
   input: LayoutInput,
   plan: readonly PlannedRow[],
   mem: FrameMemory,
-  sizes: ReturnType<typeof frameSizesOf>,
+  paint: FramePaintSettings,
 ): { rows: FrameRow[]; bars: FrameBar[] } {
   const { scale, visible, rowHeight, locale } = input;
   // #414: `mem.sync` keeps one Map of every Entry, rebuilt only when the `entries` array changes
@@ -585,11 +603,9 @@ function placeVisibleRowsAndBars(
   const cullVertically = visible.height > 0;
   const windowTop = cullVertically ? visible.y : 0;
   const windowBottom = cullVertically ? visible.y + visible.height : Infinity;
-  const cullHorizontally = visible.width > 0;
-  const hLeft = visible.x - sizes.horizontalPx;
-  const hRight = visible.x + visible.width + sizes.horizontalPx;
+  const cull = horizontalCullWindow(visible, paint.overscan.horizontalPx);
   function intersectsHorizontally(x: number, width: number): boolean {
-    return !cullHorizontally || (x <= hRight && x + width >= hLeft);
+    return cull === undefined || (x <= cull.right && x + width >= cull.left);
   }
 
   // Bound the scan with indexAtY instead of walking every row from 0 (#47): start at the row that
@@ -597,7 +613,7 @@ function placeVisibleRowsAndBars(
   // Rows stay vertical-only: a row whose bar is off-screen horizontally is still emitted — the grid
   // pane needs its label.
   const baseStart = plan.length > 0 ? index.indexAtY(windowTop) : 0;
-  const startIndex = Math.max(0, baseStart - sizes.verticalRows);
+  const startIndex = Math.max(0, baseStart - paint.overscan.verticalRows);
   // Counts rows already emitted past windowBottom; stops once verticalRows of them have gone by, so
   // verticalRows: 0 reduces to the pre-overscan "stop at the first row past the bottom" rule exactly.
   let overflowCount = 0;
@@ -605,7 +621,7 @@ function placeVisibleRowsAndBars(
     const planned = plan[rowIndex]!;
     const top = index.topAt(rowIndex);
     if (top >= windowBottom) {
-      if (overflowCount >= sizes.verticalRows) break;
+      if (overflowCount >= paint.overscan.verticalRows) break;
       overflowCount++;
     }
 
@@ -629,7 +645,7 @@ function placeVisibleRowsAndBars(
     });
 
     for (const producedBar of rowBars) {
-      const { x, width, span } = barSpan(producedBar, scale, sizes.minBarWidthPx);
+      const { x, width, span } = barSpan(producedBar, scale, paint.minBarWidthPx);
       if (!intersectsHorizontally(x, width)) continue;
       // An 'exact' box already trimmed to `[0, contentWidth)` (barSpan) reports `width: 0` when the
       // entry's own span has no intersection with the content at all — an entry outside the
@@ -646,9 +662,9 @@ function placeVisibleRowsAndBars(
         label,
         x,
         // Every row is one lane (singleLane): the bar centres in the row's own band.
-        y: top + (rowHeight - sizes.barHeightPx) / 2,
+        y: top + (rowHeight - paint.barHeightPx) / 2,
         width,
-        height: sizes.barHeightPx,
+        height: paint.barHeightPx,
         flags: {},
         span,
         a11yLabel: barA11yLabel(label, producedBar, parts.get(producedBar.entryId) ?? 1, scale, locale),
@@ -671,12 +687,11 @@ function horizontalQuerySpan(
   contentWidth: number,
   horizontalPx: number,
 ): { x: number; width: number } {
-  if (visible.width <= 0) return { x: 0, width: contentWidth };
-  const hLeft = visible.x - horizontalPx;
-  const hRight = visible.x + visible.width + horizontalPx;
+  const cull = horizontalCullWindow(visible, horizontalPx);
+  if (cull === undefined) return { x: 0, width: contentWidth };
   return {
-    x: Math.max(hLeft, 0),
-    width: Math.max(0, Math.min(hRight, contentWidth) - Math.max(hLeft, 0)),
+    x: Math.max(cull.left, 0),
+    width: Math.max(0, Math.min(cull.right, contentWidth) - Math.max(cull.left, 0)),
   };
 }
 
@@ -716,31 +731,17 @@ function dateLineDecorationsOf(input: LayoutInput, scale: TimeScale): FrameDecor
   });
 }
 
-/** What registered decorations sit under and over the bars? One tick column on screen stands for
- *  the finest band's own step, because that is the band `tickLines` draws the pane's grid from and
- *  the one a reader counts columns on. A preset with no header bands draws no columns at all, so it
- *  states its own `tickUnit` instead — never coarser than a band's. */
-function frameDecorationsOf(
-  input: LayoutInput,
-  decorations: DecorationRunner | undefined,
-  args: {
-    scale: TimeScale;
-    horizontalSpan: { x: number; width: number };
-    rows: FrameRow[];
-    finestBand: FrameHeaderBand | undefined;
-    preset: ViewPreset;
-  },
-): { underBars: readonly (RangeBand | RowStripe)[]; overBars: readonly (RangeBand | RowStripe)[] } {
-  const runner = decorations ?? new DecorationRunner();
-  return runner.run({
-    providers: input.decorationProviders ?? [],
-    span: args.scale.spanForPixels(args.horizontalSpan),
-    rows: args.rows,
-    timeZone: args.scale.timeZone,
-    tickUnit: args.finestBand?.unit ?? args.preset.tickUnit,
-    tickIncrement: args.finestBand?.increment ?? args.preset.tickIncrement,
-    xForInstant: (at) => args.scale.xForInstant(at),
-  });
+/** Call: `tickStepOf(finestBand, preset)`. What one tick column on screen stands for — the finest
+ *  Header band's own unit, because that is the band tick lines draw the pane's grid from. A preset
+ *  with no header bands states its own `tickUnit` instead. */
+function tickStepOf(
+  finestBand: FrameHeaderBand | undefined,
+  preset: ViewPreset,
+): { unit: TimeUnit; increment: number } {
+  return {
+    unit: finestBand?.unit ?? preset.tickUnit,
+    increment: finestBand?.increment ?? preset.tickIncrement,
+  };
 }
 
 /** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
@@ -753,9 +754,9 @@ export function placeFrame(
 ): GeometryFrame {
   const { scale, preset, visible, revision, locale } = input;
   const mem = memory ?? memoryFor(input, plan);
-  const sizes = frameSizesOf(input);
-  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, sizes);
-  const horizontalSpan = horizontalQuerySpan(visible, scale.contentWidth, sizes.horizontalPx);
+  const paint = framePaintSettingsOf(input);
+  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, paint);
+  const horizontalSpan = horizontalQuerySpan(visible, scale.contentWidth, paint.overscan.horizontalPx);
   const labelLeftClamp = headerLabelLeftClamp(visible);
 
   // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
@@ -781,7 +782,7 @@ export function placeFrame(
         // buffer) must keep its own true x, or every such tick collapses onto the same clamped
         // column and their labels stack on top of each other (header readability follow-up).
         const remainder = tick.x + tick.width - labelLeftClamp;
-        const straddlesClamp = tick.x < labelLeftClamp && remainder >= sizes.tickBoxFloorPx;
+        const straddlesClamp = tick.x < labelLeftClamp && remainder >= paint.tickBoxFloorPx;
         const x = straddlesClamp ? labelLeftClamp : tick.x;
         const width = Math.max(0, tick.width - (x - tick.x));
         // A band cell is a box, not a point (unlike `tickLines` below), so it needs an
@@ -799,13 +800,16 @@ export function placeFrame(
     };
   });
 
-  const finestBand = bands[bands.length - 1];
-  const { underBars, overBars } = frameDecorationsOf(input, decorations, {
-    scale,
-    horizontalSpan,
+  const tickStep = tickStepOf(bands[bands.length - 1], preset);
+  const runner = decorations ?? new DecorationRunner();
+  const { underBars, overBars } = runner.run({
+    providers: input.decorationProviders ?? [],
+    span: scale.spanForPixels(horizontalSpan),
     rows,
-    finestBand,
-    preset,
+    timeZone: scale.timeZone,
+    tickUnit: tickStep.unit,
+    tickIncrement: tickStep.increment,
+    xForInstant: (at) => scale.xForInstant(at),
   });
 
   return {
