@@ -38,7 +38,6 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'sibling-index-dropped': true,
   'no-parse-value': true,
   'no-date-value': true,
-  'time-of-day': true,
   'unsaved-value': true,
   'unreadable-value': true,
   'refused-write': true,
