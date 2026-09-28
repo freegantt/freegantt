@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Changed
 
+- **Breaking:** The default date editor opens on a date that has a time of day. It no longer refuses it, and the `time-of-day` report code is removed. When the user commits the same day, the stored time of day stays. A new day stores the start of that day. ([#596](https://github.com/freegantt/freegantt/issues/596))
+- **Breaking:** `DateInput` has a new required member, `showsTimeOfDay`. `inlineEditing()` now applies the date-only end rule to each control that reports `false`, not only to the default control. A consumer date picker on `end` opens on the last covered day, and a typed day stores the start of the next day. A control that reports `true` works as before. ([#579](https://github.com/freegantt/freegantt/issues/579))
 - The default `zoomPresets` has ten steps, not nine. `quarterAndYear` sits between `monthAndYear` and `year`, so one zoom-out step no longer jumps from months to years. To keep the old steps, filter it out of `gantt.zoomPresets`. ([#101](https://github.com/freegantt/freegantt/issues/101))
 - `sum`, `min` and `max` also fold `Duration` values in milliseconds, and answer a `Duration`. `docs/05` shows a computed Field that sums its children. ([#582](https://github.com/freegantt/freegantt/issues/582))
 - **Breaking:** `dataset.entries.sync(rows)` is now `dataset.entries.syncAll(rows)`. The behavior does not change. The new name pairs with `syncChanges`: `syncAll` takes every row, and `syncChanges` takes only the rows that changed. ([#527](https://github.com/freegantt/freegantt/issues/527))
@@ -56,4 +58,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Fixed
 
+- A consumer `dateInput` control that shows no time of day no longer drops the time of day of a `start` or a custom date Field when the user presses Enter on an unchanged day. ([#596](https://github.com/freegantt/freegantt/issues/596))
 - A date-only `end` on a DST transition day (`2026-09-06` in `America/Santiago`) now resolves to the correct next-day instant. The old rule stepped a plain calendar day, which could land on the wrong wall-clock time across the transition. ([#577](https://github.com/freegantt/freegantt/issues/577))

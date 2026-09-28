@@ -115,7 +115,6 @@ export type BuiltInReportCode =
   | 'derived-value'
   | 'no-parse-value'
   | 'no-date-value'
-  | 'time-of-day'
   | 'unsaved-value'
   | 'unreadable-value'
   | 'refused-write';

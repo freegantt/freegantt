@@ -317,7 +317,7 @@ A failed run calls `scripts/report-nightly-failures.mjs`:
 - No open issue has the `nightly-e2e-failure` label: the script opens one that lists each failure.
 - One is open: the script comments with only the failures that issue does not list yet.
 
-A failure is new when its engine, spec file, test title, failing line or first error line is new. A flaky test passed on a retry, so the script does not report it. Close the issue when the nightly run is green again.
+A failure is new when its engine, spec file, full test title, failing line or first error line is new. The full title starts with each `describe` title above the test, as Playwright prints it. A flaky test passed on a retry, so the script does not report it. Close the issue when the nightly run is green again.
 
 ---
 
