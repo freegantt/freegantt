@@ -1,9 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { entryId } from '../model/index.js';
-import type { ChangeSet, DatasetEventMap, ErrorReport } from '../model/index.js';
+import type { ChangeSet, DatasetEventMap, ErrorReport, ProposedEdit, ProposedEdits } from '../model/index.js';
 import { toEndInstant, toInstant } from '../time/index.js';
 import type { EntryEdit, EntryEdits } from './edit-extension.js';
+
+/** A `ProposedEdits` fixture: fills the required brand/`props`/`proposedKeys` a raw envelope patch
+ *  no longer carries (ADR 0011). */
+function draftOf(id: string, patch: Record<string, unknown>): ProposedEdits {
+  const edit: ProposedEdit = {
+    __brand: 'ProposedEdit',
+    props: {},
+    proposedKeys: new Set(Object.keys(patch)),
+    ...patch,
+  };
+  return new Map([[entryId(id), edit]]);
+}
 
 // data/build-commit-change-set.ts, guardExtensionHookDoesNotOverwriteBody (#232, I4): the extension
 // hook may not propose a Field the transaction body already proposed on the same Entry. `start`/`end`
@@ -173,5 +185,34 @@ describe('an explicit undefined clears parentId and name (#542)', () => {
     expect(nameRows).toEqual([
       { store: 'entries', id: entryId('t1'), field: 'name', from: 'Design', to: undefined },
     ]);
+  });
+});
+
+describe("rolledUpEditsFor previews the Rollup a place drop's commit would settle on (#425)", () => {
+  it("a draft moving a child under a leaf returns an edit for the leaf with the child's span", () => {
+    const state = new DatasetState({
+      entries: [
+        { id: 'leaf', name: 'leaf' },
+        { id: 'child', name: 'child', start: 100, end: 200 },
+      ],
+      timeZone: 'UTC',
+    });
+
+    const draft = draftOf('child', { parentId: entryId('leaf') });
+    const rolledUp = state.rolledUpEditsFor(draft);
+
+    const leafEdit = rolledUp.get(entryId('leaf'));
+    expect(leafEdit?.start).toBe(100);
+    expect(leafEdit?.end).toBe(200);
+  });
+
+  it('a draft with no reparenting rolls nothing up — an unchanged tree has nothing to recompute', () => {
+    const state = new DatasetState({
+      entries: [{ id: 't1', name: 't1', start: 0, end: 100 }],
+      timeZone: 'UTC',
+    });
+
+    const draft = draftOf('t1', { name: 'renamed' });
+    expect(state.rolledUpEditsFor(draft).size).toBe(0);
   });
 });

@@ -29,6 +29,7 @@ import type {
 } from '../model/index.js';
 import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
 import { now } from '../time/index.js';
+import { rolledUpEditsFor as rolledUpEditsForCommit } from './build-commit-change-set.js';
 import { EntryStore } from './entry-store.js';
 import { readEntryBatch } from './entry-batch.js';
 import { storedParentSource } from './hierarchy-source.js';
@@ -303,6 +304,27 @@ export class DatasetState implements Dataset {
    *  `(entry) => entry.parentId`; the store holds whichever occupant plugins composed onto it. */
   get hierarchySource(): HierarchySource {
     return this.entries.hierarchySource;
+  }
+
+  /** #425: what a vertical drag's own preview ghosts on top of `draft` — the new parent's dates
+   *  rolling up to cover the entry it just gained (ruling 5). Runs the Rollup alone, on the
+   *  committed rows plus `draft`, with no extension hook to call and nothing to commit
+   *  (`build-commit-change-set.ts`'s `rolledUpEditsFor`, mirroring `extraEditsFor`'s own shape,
+   *  ADR 0007). `view/gesture-pipeline.ts#computePreview` is the only caller, and only for a
+   *  `place` drop — a time-only drag ghosts nothing here on purpose (#425 ruling, a follow-up
+   *  covers it). */
+  rolledUpEditsFor(draft: ProposedEdits): ProposedEdits {
+    return rolledUpEditsForCommit({
+      committed: this.entries.committedById(),
+      draft,
+      fields: this.fields,
+      fieldAccess: this.fieldAccess,
+      tree: {
+        committedParents: this.entries.committedParents(),
+        committedChildIds: this.entries.committedChildIds(),
+        source: this.hierarchySource,
+      },
+    });
   }
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.

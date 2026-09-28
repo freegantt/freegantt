@@ -453,6 +453,17 @@ export function extraEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedE
   );
 }
 
+/** #425: the friend function `view/gesture-pipeline.ts#computePreview` ghosts a `place` drop's
+ *  Rollup through — the same friend-map pattern `extraEditsFor` above uses (ADR 0007), for the
+ *  Rollup instead of the extension hook. Exported from `api/` only, never from `api/index.ts`. */
+export function rolledUpEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedEdits): ProposedEdits {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('rolledUpEditsFor: dataset was not constructed through the Dataset constructor');
+  }
+  return state.rolledUpEditsFor(draft);
+}
+
 /** #425: does this Dataset's tree still follow the stored `parentId`, or does a plugin own the
  *  hierarchy (ADR 0020)? `GanttShell` cannot answer this itself — `model/dataset.ts`'s narrow
  *  `Dataset` carries no `hierarchySource` to read. Not public: a consumer never asks this, only
