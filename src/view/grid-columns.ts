@@ -68,7 +68,11 @@ function columnMovable(input: GridColumn, field: Field): boolean {
  *  `sizingOfColumn` picks the width/flex pair off whichever of `input`/`field.column` sizes itself
  *  (#249): a Gantt asking for `flex: 1` never silently loses to a `width` the Field happened to
  *  declare. */
-function columnWidthOrFlex(input: GridColumn, field: Field, defaultWidthPx: number) {
+function columnWidthOrFlex(
+  input: GridColumn,
+  field: Field,
+  defaultWidthPx: number,
+): Pick<ResolvedColumn, 'width' | 'flex'> {
   const { width: authoredWidth, flex } = sizingOfColumn(input, field.column);
   return pickDefined(
     {
@@ -81,7 +85,7 @@ function columnWidthOrFlex(input: GridColumn, field: Field, defaultWidthPx: numb
 
 /** Call: `columnTooltip(input, field)`. Does this column join the default bar tooltip? Absent means
  *  no. This Gantt's own column wins, then the Field's `column` default. */
-function columnTooltip(input: GridColumn, field: Field) {
+function columnTooltip(input: GridColumn, field: Field): Pick<ResolvedColumn, 'tooltip'> {
   const tooltip = input.tooltip ?? field.column?.tooltip;
   return tooltip === undefined ? {} : { tooltip };
 }
