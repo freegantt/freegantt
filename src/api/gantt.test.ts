@@ -32,6 +32,7 @@ import type {
   EditExtender,
   Entry,
   EntryInput,
+  EntryMove,
   ErrorReport,
   ChromePlugin,
   GridColumn,
@@ -6549,6 +6550,119 @@ describe('Gantt entryMove (S3.3, [S3-A1] move half, [S3-A6])', () => {
 
     dataset.entries.update(id, { start: before.start });
     expect(dataset.entries.get(id)!.start).toBe(before.start);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+});
+
+// #425: a vertical drag that lands the bar on another parent's row — the acceptance proof for the
+// tree half of `entryMove`, alongside the horizontal proof above. Rows read in tree order with no
+// sort (the default `rowSource`): `p1`, `a`, `p2`, `c` — rows 0-3, each `DEFAULT_ROW_HEIGHT` (36px)
+// tall in this DOM-less layout, so row 2's middle third (an `into` drop, ADR 0034) sits at y=90.
+describe('Gantt entryMove — a vertical drag places the entry under a new parent (#425)', () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  function treeContainer(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p2', start: '2026-01-05', end: '2026-01-08' },
+      ],
+    });
+    return { container, dataset };
+  }
+
+  it('drops row 1 into row 2’s parent in one transaction, and undo restores the tree place and the dates', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId('a');
+    const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+    const datasetChanges: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      datasetChanges.push(changeSet);
+    });
+
+    // Grab the bar at row 1, drop it at row 2's own middle third — an `into` drop under `p2`.
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 90, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 90, pointerId: 1 }));
+
+    expect(afterEvents).toHaveLength(1);
+    const move = afterEvents[0]!;
+    expect(move.place?.parentId).toBe(entryId('p2'));
+    expect(typeof move.place?.siblingIndex).toBe('number');
+    expect(datasetChanges).toHaveLength(1); // one transaction — the row-drop half too
+
+    const parentIdRow = datasetChanges[0]!.updated.find(
+      (row): row is Extract<typeof row, { field: string }> =>
+        row.store === 'entries' && row.field === 'parentId',
+    );
+    const siblingIndexRow = datasetChanges[0]!.updated.find(
+      (row): row is Extract<typeof row, { field: string }> =>
+        row.store === 'entries' && row.field === 'siblingIndex',
+    );
+    expect(parentIdRow?.to).toBe(entryId('p2'));
+    expect(siblingIndexRow).toBeDefined();
+
+    const moved = dataset.entries.get(id)!;
+    expect(moved.parent()?.id).toBe(entryId('p2'));
+
+    expect(dataset.canUndo).toBe(true);
+    dataset.undo();
+    const reverted = dataset.entries.get(id)!;
+    expect(reverted.parent()?.id).toBe(before.parentId);
+    expect(datesOf(reverted)).toEqual({ start: before.start, end: before.end });
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('Escape mid-row-drag clears the preview and writes nothing', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const id = entryId('a');
+    const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 90, pointerId: 1 }));
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before.parentId);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual({ start: before.start, end: before.end });
+    expect(dataset.canUndo).toBe(false);
 
     document.elementFromPoint = original;
     gantt.destroy();
