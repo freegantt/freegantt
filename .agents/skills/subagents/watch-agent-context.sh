@@ -15,20 +15,24 @@
 #
 #   watch-agent-context.sh [project-transcript-dir]
 #
-# Env: WIND_DOWN (200000) LAND (250000) POLL (30s) IDLE (180s) MAX (7200s)
+# Env: WIND_DOWN (200000) LAND (250000) POLL (30s) IDLE (900s) MAX (7200s)
 #      STATE (a file in TMPDIR, one per transcript dir)
 #
 # Exit 1 is the alert, not a failure. There is no error path here. 1 means an agent
 # crossed a mark and the coordinator must act; 0 means every agent stopped writing,
 # or the watcher timed out. The harness renders 1 as "failed with exit code 1" — that
 # wording is the harness's. Read the printed line, not the code.
+#
+# Blind spot: a transcript gets a usage line only when a reply ends. While an agent
+# streams one long reply (a planner writing its plan), the count stays at the last
+# finished reply. The next alert fires when that reply lands, not before.
 
 set -uo pipefail
 
 WIND_DOWN=${WIND_DOWN:-200000}
 LAND=${LAND:-250000}
 POLL=${POLL:-30}
-IDLE=${IDLE:-180}
+IDLE=${IDLE:-900}
 MAX=${MAX:-7200}
 
 root=${1:-"$HOME/.claude/projects/$(pwd | sed 's#[/._]#-#g')"}
@@ -39,10 +43,18 @@ touch "$STATE"
 
 started=$(date +%s)
 
+# The context the agent's next request sends: the last reply's input plus its output,
+# which joins the context on the next turn.
+# The usage object nests other objects, in no fixed key order, so read each key's first
+# match after the last "usage" instead of cutting the object at its first brace.
 context_tokens() {
-  grep -o '"usage":{[^}]*}' "$1" 2>/dev/null | tail -1 \
-    | grep -oE '"(input_tokens|cache_creation_input_tokens|cache_read_input_tokens)":[0-9]+' \
-    | awk -F: '{ sum += $2 } END { print sum + 0 }'
+  local usage key sum=0 n
+  usage=$(grep '"usage":{' "$1" 2>/dev/null | tail -1 | sed 's/.*"usage":{//')
+  for key in input_tokens cache_creation_input_tokens cache_read_input_tokens output_tokens; do
+    n=$(printf '%s' "$usage" | grep -oE "\"$key\":[0-9]+" | head -1 | cut -d: -f2)
+    sum=$((sum + ${n:-0}))
+  done
+  echo "$sum"
 }
 
 label() {
