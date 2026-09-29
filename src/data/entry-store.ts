@@ -631,12 +631,7 @@ export class EntryStore implements EntryStoreContract {
       // parent is what the edit names, or the parent this Entry already sits under (a same-parent
       // reorder still asks, so the rule decides whether children may reorder under it, §1.1).
       if ('parentId' in edit || 'siblingIndex' in edit) {
-        const landingParentId =
-          'parentId' in edit
-            ? edit.parentId === undefined
-              ? undefined
-              : entryId(edit.parentId)
-            : this.parentIdOf(current);
+        const landingParentId = this.#landingParentIdFor(edit, current);
         if (this.placeableOf(key, landingParentId) === 'never') {
           throw new PlaceRefusedError(key, landingParentId, operation);
         }
@@ -647,6 +642,14 @@ export class EntryStore implements EntryStoreContract {
       if (move) this.#logSiblingPlacement(move);
       return this.get(key)!;
     });
+  }
+
+  /** The parent an edit lands this Entry under — the edit's own `parentId` (a bare `undefined`
+   *  clears it to the root), or, for a `siblingIndex`-only edit, the parent it already sits under
+   *  (`#updateFrom`'s "same-parent reorder still asks"). */
+  #landingParentIdFor(edit: EntryEdit, current: StoredEntry): EntryId | undefined {
+    if (!('parentId' in edit)) return this.parentIdOf(current);
+    return edit.parentId === undefined ? undefined : entryId(edit.parentId);
   }
 
   /** Does the Field this key names take a write from this door, on this Entry, at all? Reads
