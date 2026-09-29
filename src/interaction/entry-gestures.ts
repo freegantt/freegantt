@@ -12,7 +12,7 @@
 
 import type { Entry, EntryId, BarId } from '../model/index.js';
 import { entryIdOfBar } from '../model/index.js';
-import { createPointerGesture } from './pointer-gesture.js';
+import { createPointerGesture, isPrimaryButton } from './pointer-gesture.js';
 import { createRowReorderDrag } from './row-reorder-drag.js';
 import type {
   Detachable,
@@ -23,14 +23,6 @@ import type {
 } from '../view/index.js';
 
 export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '../view/index.js';
-
-/** Is this button event the primary (left-click, touch, pen) one? A right-click and a middle-click
- *  are not (#199/#205). Only a primary button may pick, replace, toggle, or range the Selection. A
- *  right-click instead reaches `context-menu.ts`'s `contextmenu` handler with whatever Selection it
- *  landed on. */
-function isPrimaryButton(e: Pick<PointerEvent, 'button'>): boolean {
-  return e.button === 0;
-}
 
 /** Is this button event a right-click? A right-click still triggers the empty-timeline clear
  *  (#199/#205 follow-up). A background right-click opens a menu. A
