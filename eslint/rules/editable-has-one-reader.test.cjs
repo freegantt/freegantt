@@ -1,7 +1,14 @@
 'use strict';
 
+const assert = require('node:assert/strict');
 const { RuleTester } = require('eslint');
 const rule = require('./editable-has-one-reader.cjs');
+
+// `resolveFieldEditable` was inlined and retired (#473's follow-up); the bottom occupant a caller
+// reaches once existence and `compute` are already checked is `fieldEditableRule` now. A message
+// that still names the retired function sends a reader looking for code that no longer exists.
+assert.doesNotMatch(rule.meta.messages.secondReader, /resolveFieldEditable/);
+assert.match(rule.meta.messages.secondReader, /fieldEditableRule/);
 
 const ruleTester = new RuleTester({
   languageOptions: { ecmaVersion: 2022, sourceType: 'module' },
@@ -15,7 +22,7 @@ ruleTester.run('editable-has-one-reader', rule, {
     // The one shared resolver is what every other file asks.
     { code: 'const open = editableAnswerFor(field, declared, query, lockRule);', filename: OTHER },
     {
-      code: "if (resolveFieldEditable(query, field, declared, lockRule) === 'never') throw new FieldNotEditableError(key, op);",
+      code: "if (fieldEditableRule(fieldFor)(query, field) === 'never') throw new FieldNotEditableError(key, op);",
       filename: OTHER,
     },
     // A declaration is not a read: core Fields and Field types state the key in a literal.
