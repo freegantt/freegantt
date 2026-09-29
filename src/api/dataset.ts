@@ -35,6 +35,7 @@ import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 import { storedParentSource } from '../data/hierarchy-source.js';
+import { lockedEntryLockRule, lockedEntryPlaceRule } from '../data/entry-lock.js';
 
 // I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
 // Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
@@ -203,6 +204,13 @@ export class Dataset<TProps = unknown> {
     // `clearHistory()` right after empties that stack, so `canUndo` still reads `false` once this
     // constructor returns (#137).
     this.#disposePlugins = this.#installPlugins();
+    // What does a locked Entry refuse? Every gesture onto its cells, and any drop into or out of it.
+    // It installs last, so no plugin already installed can reopen a locked cell it closes (ADR 0038).
+    // Built the same way a plugin builds a lock (`data/entry-lock.ts`), through the same
+    // `setLockRule`/`setPlaceRule` doors `ctx.edits` calls above.
+    const isLocked = (id: EntryId): boolean => this.#state.entries.get(id)?.read('locked') === true;
+    this.#state.setLockRule(lockedEntryLockRule(isLocked));
+    this.#state.setPlaceRule(lockedEntryPlaceRule(isLocked));
     this.#state.clearHistory();
   }
 
