@@ -28,6 +28,12 @@ export async function gotoGeneric(page: Page): Promise<void> {
   // This page opens with nothing collapsed, but a summary bar only paints once its dateless
   // parent's own row exists — a readier proof that the whole tree painted than the first bar alone.
   await expect(page.locator('#gantt .fg-bar-summary').first()).toBeVisible();
+  // The page-head copy above #gantt grows over time (most recently for #602's grid drag
+  // sentence), so its own height is not a constant a fixed test viewport can assume. Scrolling
+  // #gantt fully into view first keeps every row and pane geometry a test reads afterwards
+  // inside the browser's real, interactable viewport, not just inside the element's own layout
+  // box.
+  await page.locator('#gantt').scrollIntoViewIfNeeded();
 
   // Past the Mobilization line, so a dragged bar's own start clears the page's veto (see the
   // constant above). Panning moves the timeline pane alone — the row list's own vertical order and
