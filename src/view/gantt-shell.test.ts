@@ -2015,8 +2015,8 @@ describe('verticalDropOffered gates a vertical drag on the row source (#425)', (
   });
 });
 
-describe('contentYAtPaneOffset excludes the sticky header (#425)', () => {
-  it('subtracts the header height so a pointer offset lands in the same space rowTop indexes', () => {
+describe('contentYAtClientY excludes the pane top and the sticky header (#425, #602)', () => {
+  it('subtracts the timeline pane top and the header height, from either pane, so a pointer client-y lands in the same space rowTop indexes', () => {
     const container = document.createElement('div');
     const scrollY = new ScrollAxis();
     let ctx: EntryGestureContext | undefined;
@@ -2037,10 +2037,17 @@ describe('contentYAtPaneOffset excludes the sticky header (#425)', () => {
     const spacer = container.querySelector<HTMLElement>('.fg-grid-spacer')!;
     Object.defineProperty(spacer, 'offsetHeight', { value: 40, configurable: true });
 
-    expect(ctx!.contentYAtPaneOffset(100)).toBe(60); // unscrolled: pane offset minus the header
+    // The timeline pane's own top: a grid-row pointer reads this same pane-top, per D7 — both
+    // panes share one row geometry, so one client-y reading serves both.
+    const timelinePane = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    timelinePane.getBoundingClientRect = () => ({ top: 20 }) as DOMRect;
+
+    // unscrolled: client y, minus the pane top, minus the header
+    expect(ctx!.contentYAtClientY(120)).toBe(60);
 
     scrollY.panTo(30);
-    expect(ctx!.contentYAtPaneOffset(100)).toBe(90); // scrolled: pane offset plus scroll minus the header
+    // scrolled: client y, minus the pane top, plus scroll, minus the header
+    expect(ctx!.contentYAtClientY(120)).toBe(90);
 
     shell.destroy();
   });

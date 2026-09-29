@@ -11,6 +11,10 @@ import { entryId, entryIdOfBar, barId, rowId, partIndexOfBar } from '../model/in
 import type { Entry, EntryEdits, EntryId, Instant, BarId, StoredEntry } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 
+/** `pointer-gesture.ts`'s own touch long-press threshold — this suite reads it only to advance
+ *  fake timers past it, never to restate the rule. */
+const ROW_REORDER_LONG_PRESS_MS = 400;
+
 const A = entryId('a');
 const B = entryId('b');
 const C = entryId('c');
@@ -101,7 +105,7 @@ function makeContext(overrides: ContextOverrides = {}): {
     setHovered: () => {},
     setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
-    contentYAtPaneOffset: (offsetY) => offsetY,
+    contentYAtClientY: (clientY) => clientY,
     discardHeldGesture: () => false,
     session: (grabbed, gesture) => {
       const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');
@@ -148,19 +152,19 @@ function makeContext(overrides: ContextOverrides = {}): {
         return entry !== undefined && ctx.can('select', entry) ? [entry.id] : [];
       },
     },
-    // #434: the fake mirrors `selection.selectableEntriesOf` above — a bar names its own Entry, a
-    // row names the same-named Entry the fake's row ids stand for.
     activation: {
-      subjectEntryOf: (hit) =>
-        hit.kind === 'bar'
-          ? ctx.entryFor(hit.barId)
-          : ORDER.includes(hit.rowId as unknown as EntryId)
-            ? entryFor(hit.rowId as unknown as EntryId)
-            : undefined,
       activateFromClick: (entry, detail, target) => {
         activations.push([entry.id, detail, target]);
       },
     },
+    // #434, #602: the fake mirrors `selection.selectableEntriesOf` above — a bar names its own
+    // Entry, a row names the same-named Entry the fake's row ids stand for.
+    subjectEntryOf: (hit) =>
+      hit.kind === 'bar'
+        ? ctx.entryFor(hit.barId)
+        : ORDER.includes(hit.rowId as unknown as EntryId)
+          ? entryFor(hit.rowId as unknown as EntryId)
+          : undefined,
     ...ctxOverrides,
   };
   Object.assign(ctx.selection, selectionOverrides);
@@ -693,6 +697,232 @@ describe('attachEntryGestures — grid row click', () => {
   });
 });
 
+describe('attachEntryGestures — row reorder drag (#602)', () => {
+  // `hitTest` reports a row over every x `ORDER` covers, the row named after the same Entry
+  // (`makeContext`'s default `subjectEntryOf` already resolves a row id this way).
+  function rowReorderContext(overrides: ContextOverrides = {}) {
+    return makeContext({
+      hitTest: (at) =>
+        at.x >= 0 && at.x < ORDER.length ? { kind: 'row', rowId: rowId(ORDER[at.x]!) } : undefined,
+      ...overrides,
+    });
+  }
+
+  it('a pointerdown on a row plus a 5 px vertical move arms a reorder session, previewing content-y with dxPx zero', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const seenGestures: EntryGesture[] = [];
+    const seenDx: number[] = [];
+    const seenContentY: (number | undefined)[] = [];
+    const { ctx } = rowReorderContext({
+      draftFor: (gesture, entries, dxPx, options) => {
+        seenGestures.push(gesture);
+        seenDx.push(dxPx);
+        seenContentY.push(options?.contentY);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 5 }));
+
+    expect(seenGestures.at(-1)).toEqual({ kind: 'reorder' });
+    expect(seenDx.at(-1)).toBe(0);
+    expect(seenContentY.at(-1)).toBe(5);
+  });
+
+  it('a 3 px move then pointerup never arms — the row click still selects', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const { ctx, proposals } = rowReorderContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 3 })); // under the 4 px threshold
+    rowLayer.dispatchEvent(up(0, { clientY: 3 }));
+
+    expect(proposals).toEqual([[A]]);
+  });
+
+  it('after an armed drag, pointerup proposes nothing further and activates nothing', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const { ctx, proposals, activations } = rowReorderContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 10 })); // arms, and selects the grabbed row's subject
+    expect(proposals).toEqual([[A]]);
+
+    rowLayer.dispatchEvent(up(0, { clientY: 10 }));
+    expect(proposals).toEqual([[A]]);
+    expect(activations).toEqual([]);
+  });
+
+  it('a subject that refuses reorder never arms — the click still selects', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const { ctx, proposals } = rowReorderContext({ can: (capability) => capability !== 'reorder' });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 10 }));
+    rowLayer.dispatchEvent(up(0, { clientY: 10 }));
+
+    expect(proposals).toEqual([[A]]);
+  });
+
+  it('arming on an unselected row proposes its Entries before session() runs', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const order: string[] = [];
+    const { ctx } = rowReorderContext();
+    const spiedCtx: EntryGestureContext = {
+      ...ctx,
+      selection: {
+        ...ctx.selection,
+        propose: (next) => {
+          order.push('propose');
+          ctx.selection.propose(next);
+        },
+      },
+      session: (grabbed, gesture) => {
+        order.push('session');
+        return ctx.session(grabbed, gesture);
+      },
+    };
+    attachEntryGestures(pane, rowLayer, container, spiedCtx);
+
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 10 }));
+
+    expect(order).toEqual(['propose', 'session']);
+  });
+
+  it('a pointerdown on a control inside the row layer never arms (#602)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const input = document.createElement('input');
+    rowLayer.appendChild(input);
+    let sessionCalls = 0;
+    const { ctx } = rowReorderContext();
+    const spiedCtx: EntryGestureContext = {
+      ...ctx,
+      session: (...args) => {
+        sessionCalls++;
+        return ctx.session(...args);
+      },
+    };
+    attachEntryGestures(pane, rowLayer, container, spiedCtx);
+
+    input.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 0, clientY: 0, pointerId: 1, bubbles: true }),
+    );
+    rowLayer.dispatchEvent(move(0, { clientY: 10 }));
+
+    expect(sessionCalls).toBe(0);
+  });
+
+  it('a right-button press claims no pointer slot — a primary drag on its own pointer still arms (#602)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const { ctx } = rowReorderContext();
+    const seenGestures: EntryGesture[] = [];
+    const spiedCtx: EntryGestureContext = {
+      ...ctx,
+      session: (grabbed, gesture) => {
+        seenGestures.push(gesture);
+        return ctx.session(grabbed, gesture);
+      },
+    };
+    attachEntryGestures(pane, rowLayer, container, spiedCtx);
+
+    // A right-button press on another pointer (a second finger, a pen) — held, no matching
+    // pointerup yet.
+    rowLayer.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 0, clientY: 0, pointerId: 2, button: 2 }),
+    );
+    // A primary press on its own pointer must still arm — a stray non-primary press elsewhere
+    // never blocks it.
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 5 }));
+
+    expect(seenGestures.at(-1)).toEqual({ kind: 'reorder' });
+  });
+
+  it('Escape mid-drag cancels the row reorder without clearing the Selection', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const { ctx, previews } = rowReorderContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 10 })); // arms, selects A
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(previews.at(-1)).toBeUndefined(); // cancel() clears the preview
+    expect(ctx.selection.entryIds()).toEqual([A]); // untouched — Escape cancels the drag, not the pick
+  });
+
+  it('pointercancel mid-drag cancels the row reorder session', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const { ctx, previews } = rowReorderContext();
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 10 }));
+    rowLayer.dispatchEvent(new PointerEvent('pointercancel', { clientX: 0, clientY: 10, pointerId: 1 }));
+
+    expect(previews.at(-1)).toBeUndefined();
+  });
+
+  it('a touch long-press arms a reorder, then stops the page pan (#602)', () => {
+    vi.useFakeTimers();
+    try {
+      const pane = document.createElement('div');
+      const container = document.createElement('div');
+      const rowLayer = document.createElement('div');
+      mockPointerCapture(rowLayer);
+      const { ctx } = rowReorderContext();
+      attachEntryGestures(pane, rowLayer, container, ctx);
+
+      rowLayer.dispatchEvent(down(0, { clientY: 0, pointerType: 'touch' }));
+
+      const beforeArming = new Event('touchmove', { cancelable: true });
+      rowLayer.dispatchEvent(beforeArming);
+      expect(beforeArming.defaultPrevented).toBe(false);
+
+      vi.advanceTimersByTime(ROW_REORDER_LONG_PRESS_MS);
+
+      const afterArming = new Event('touchmove', { cancelable: true });
+      rowLayer.dispatchEvent(afterArming);
+      expect(afterArming.defaultPrevented).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('attachEntryGestures — hover (S3.2)', () => {
   it('reports the raw hit under the pointer on pointermove, and undefined on pointerleave', () => {
     const pane = document.createElement('div');
@@ -854,16 +1084,15 @@ describe('attachEntryGestures — move (S3.3)', () => {
     expect(proposals).toEqual([[A]]);
   });
 
-  it('preview reads content-y from the pane-relative pointer position, not the raw client y', () => {
+  it('preview reads content-y straight off the client y — the door subtracts the pane top', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
-    pane.getBoundingClientRect = () => domRect(20);
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     const seenContentY: (number | undefined)[] = [];
     const { ctx } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
-      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      contentYAtClientY: (clientY) => clientY + 1000,
       draftFor: (_gesture, entries, _dxPx, options) => {
         seenContentY.push(options?.contentY);
         return new Map(entries.map((e) => [e.id, {}]));
@@ -874,19 +1103,18 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(down(0, { clientY: 50 }));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
 
-    expect(seenContentY.at(-1)).toBe(65 - 20 + 1000);
+    expect(seenContentY.at(-1)).toBe(65 + 1000);
   });
 
   it('commit reads content-y the same way, off the pointerup position', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
-    pane.getBoundingClientRect = () => domRect(20);
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     const seenContentY: (number | undefined)[] = [];
     const { ctx } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
-      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      contentYAtClientY: (clientY) => clientY + 1000,
       draftFor: (_gesture, entries, _dxPx, options) => {
         seenContentY.push(options?.contentY);
         return new Map(entries.map((e) => [e.id, {}]));
@@ -898,7 +1126,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
     pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5, { clientY: 90 }));
 
-    expect(seenContentY.at(-1)).toBe(90 - 20 + 1000);
+    expect(seenContentY.at(-1)).toBe(90 + 1000);
   });
 
   it('a mostly-horizontal arm locks the time axis — content-y is never read (#425)', () => {

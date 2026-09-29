@@ -99,13 +99,13 @@ watchAllErrors([dataset, gantt], (report) => {
 let releaseHold: ((allow: boolean) => void) | undefined;
 
 gantt.on('selectionChange', renderSelection);
-gantt.on('beforeEntryMove', ({ start, refuse }) => {
-  if (start < mobilization) {
+gantt.on('beforeEntryMove', (move) => {
+  if (move.shiftsTime && move.start < mobilization) {
     releaseHold?.(false);
     releaseHold = undefined;
     // The page says why once, here. Core carries the words to the report, and the one
     // `watchAllErrors` subscription above toasts them (#210).
-    return refuse('Too early — the drop is before mobilization.');
+    return move.refuse('Too early — the drop is before mobilization.');
   }
   hideToast();
   if (!holdDrop.checked) return undefined;
