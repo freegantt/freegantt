@@ -187,9 +187,6 @@ const gantt = new Gantt<HierarchyProps>({
   preset: 'weekAndMonth',
   plugins: [inlineEditing()],
   variants: [crewDayVariant],
-  // A locked crew day withholds one capability from itself alone — every other bar on the page
-  // keeps the library default.
-  capabilities: { resize: (entry) => entry.read('locked') !== true },
   dateLines: [STATUS_CHECK_LINE],
 });
 
@@ -269,13 +266,6 @@ gantt.on('selectionChange', renderSelection);
 // #424 review point 1: a collapse or expand fires `collapseChange` alone, with no `selectionChange`
 // and no dataset `change` — the readout needs this subscription too, or it goes stale.
 gantt.on('collapseChange', renderSelection);
-
-// S5.8: fires before the built-in editor opens. Cy's day is locked the same way its
-// resize is (`capabilities.resize` above) — a double-click on it never opens an editor at all.
-gantt.on('beforeEntryEdit', ({ entry }) => {
-  if (entry.read('locked') === true) return false;
-  return undefined;
-});
 
 // `#phase-btn` writes `phaseId`, so it only means something once the plugin reads that key. With
 // the plugin off, the button stays disabled and says why.
