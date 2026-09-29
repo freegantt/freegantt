@@ -215,4 +215,34 @@ describe("rolledUpEditsFor previews the Rollup a place drop's commit would settl
     const draft = draftOf('t1', { name: 'renamed' });
     expect(state.rolledUpEditsFor(draft).size).toBe(0);
   });
+
+  it('a second frame that repeats the same drop does not copy the committed map again (I5)', () => {
+    // `#writesWithPlace` (`view/gesture-pipeline.ts`) builds a fresh `ProposedEdit` on every rAF
+    // frame, and a row-axis drag holds its own dates still (`dxPx` pinned to 0) — so a drag that
+    // sits over one drop target asks this the same question, with a new object, many frames running.
+    // Answering it by copying the whole committed map every time is what made a `place` drag pay
+    // O(dataset) per frame (review finding 1).
+    const state = new DatasetState({
+      entries: [
+        { id: 'leaf', name: 'leaf' },
+        { id: 'child', name: 'child', start: 100, end: 200 },
+      ],
+      timeZone: 'UTC',
+    });
+
+    const committed = state.entries.committedById() as Map<ReturnType<typeof entryId>, unknown>;
+    let walks = 0;
+    const iterate = committed[Symbol.iterator].bind(committed);
+    committed[Symbol.iterator] = () => {
+      walks += 1;
+      return iterate();
+    };
+
+    state.rolledUpEditsFor(draftOf('child', { parentId: entryId('leaf') }));
+    const walksAfterFirstFrame = walks;
+    expect(walksAfterFirstFrame).toBeGreaterThan(0);
+
+    state.rolledUpEditsFor(draftOf('child', { parentId: entryId('leaf') }));
+    expect(walks).toBe(walksAfterFirstFrame);
+  });
 });
