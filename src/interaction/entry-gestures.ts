@@ -13,6 +13,7 @@
 import type { Entry, EntryId, BarId } from '../model/index.js';
 import { entryIdOfBar } from '../model/index.js';
 import { createPointerGesture } from './pointer-gesture.js';
+import { createRowReorderDrag } from './row-reorder-drag.js';
 import type {
   Detachable,
   EntryGestureContext,
@@ -60,8 +61,12 @@ function isRightClick(e: Pick<PointerEvent, 'button'>): boolean {
  *
  *  Grid row click (bug hunt, "grid row highlight and row click"): `rowLayer` gets its own, narrower
  *  pointerup listener — a row click selects with the same rules as a bar click (plain/ctrl/shift),
- *  but it never arms move or resize (`ctx.hitTest`'s grid-row fallback never grabs `pane`'s own drag
- *  machinery) and a miss on the grid never clears (only an empty *timeline* click does). */
+ *  and a miss on the grid never clears (only an empty *timeline* click does).
+ *
+ *  Row reorder (#602): `rowLayer` also runs its own drag, `row-reorder-drag.ts`'s `RowReorderDrag`
+ *  — a second pointer stream, separate from `drag` above, so a row grab and a bar grab never
+ *  compete for the same one. `rowReorder.up()` runs ahead of the row click path, so an armed drag's
+ *  pointerup skips it, the same way `drag.up()` skips it on the timeline pane. */
 export function attachEntryGestures(
   pane: HTMLElement,
   rowLayer: HTMLElement,
@@ -176,6 +181,19 @@ export function attachEntryGestures(
     },
     { arm: 'xy' },
   ); // #425: a straight-down pull must arm — a bar move can lock to the row axis.
+
+  /** #602: what a row grab that arms selects, when its subject is not already in the Selection —
+   *  the same #211 rule the bar drag's own `start()` runs, spelled out for `row-reorder-drag.ts` to
+   *  call, since it holds no `anchor` of its own. */
+  function selectGrabbedRow(hit: EntryHit): void {
+    const targets = ctx.selection.selectableEntriesOf(hit);
+    if (targets.length > 0) {
+      anchor = targets[0];
+      ctx.selection.propose(targets);
+    }
+  }
+
+  const rowReorder = createRowReorderDrag(rowLayer, ctx, selectGrabbedRow);
 
   /** The range from the shift-anchor to `to`'s last member (#212, ADR 0010, ADR 0025). The range
    *  steps over Entries in the order the panes draw them: row by row. A row click names every
@@ -312,17 +330,21 @@ export function attachEntryGestures(
     selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), true);
   }
 
-  /** The grid pane's own pointerup — never fed through `drag` (the move/resize machinery
-   *  is armed only from a timeline `pointerdown`, `onPointerDown` below), so a row click can only
-   *  ever be a click, never the start of a drag. */
+  /** The grid pane's own pointerup — a row click when `rowReorder` never armed, an armed row
+   *  reorder's commit when it did (#602: `rowReorder.up()` runs `commit`/`cancel` inside its own
+   *  callbacks, the same way `drag.up()` does on the timeline pane, before this ever reaches the
+   *  click path). */
   function onRowLayerPointerUp(e: PointerEvent): void {
+    if (rowReorder.up(e)) return; // was a row drag — already committed
     // The button check lives inside `selectFromHit` (its clearOnMiss=false leaves it a no-op on miss).
     selectFromHit(e, ctx.hitTest({ x: e.clientX, y: e.clientY }), false);
   }
 
   function onKeyDown(e: KeyboardEvent): void {
     if (e.key !== 'Escape') return;
-    if (drag.escape()) return; // was dragging — cancelled, does not also clear the selection
+    const barCancelled = drag.escape();
+    const rowCancelled = rowReorder.escape(); // #602: run both, so neither keeps stale state
+    if (barCancelled || rowCancelled) return; // was dragging — cancelled, does not also clear the selection
     // #272/#273: a held async veto has no live drag left to cancel, so Escape ends the wait instead.
     if (ctx.discardHeldGesture()) return;
     anchor = undefined;
@@ -369,6 +391,7 @@ export function attachEntryGestures(
    *  bar already names its row; this reports the rows the timeline pane never sees — a row hovered
    *  anywhere along its label and cells, including the stretch past the last bar. */
   function onRowLayerPointerMove(e: PointerEvent): void {
+    rowReorder.move(e);
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
     ctx.setHoveredRow(hit?.kind === 'row' ? hit.rowId : undefined);
   }
@@ -386,17 +409,18 @@ export function attachEntryGestures(
     drag.pointercancel(e);
   }
 
-  /** #434: the grid pane's row layer arms no drag of its own (`onPointerDown` above only ever starts
-   *  one on a bar), so it never had a `pointerdown`/`pointercancel` listener at all — and so never
-   *  reached the clears those two give `pane` above. A candidate `onRowLayerPointerUp` named there
-   *  could then outlive a cancelled row-layer sequence and wrongly confirm on a later, unrelated
-   *  click. Same clear, same reason, just for the layer that had neither listener. */
-  function onRowLayerPointerDown(): void {
+  /** #434: a candidate `onRowLayerPointerUp` (through `selectFromHit`) named on an earlier
+   *  pointerup must not outlive a cancelled or superseded row-layer sequence — the same clear
+   *  `onPointerDown`/`onPointerCancel` give `pane` above. #602: this pointerdown also feeds
+   *  `rowReorder`, which grabs the row under it when it may reorder. */
+  function onRowLayerPointerDown(e: PointerEvent): void {
     pendingActivation = undefined;
+    rowReorder.down(e);
   }
 
-  function onRowLayerPointerCancel(): void {
+  function onRowLayerPointerCancel(e: PointerEvent): void {
     pendingActivation = undefined;
+    rowReorder.pointercancel(e);
   }
 
   pane.addEventListener('pointerdown', onPointerDown);
@@ -417,6 +441,7 @@ export function attachEntryGestures(
   return {
     detach(): void {
       drag.detach();
+      rowReorder.detach();
       pane.removeEventListener('pointerdown', onPointerDown);
       pane.removeEventListener('pointerup', onPointerUp);
       pane.removeEventListener('pointermove', onPointerMove);
