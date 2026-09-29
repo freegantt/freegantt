@@ -7049,6 +7049,147 @@ describe('Gantt entryMove — a grid row drag reaches the same switch as a bar d
   });
 });
 
+// ADR 0038: a plugin's place rule refuses a cross-parent drop the same way in both panes — the
+// owner's "a plugin gets the same preview-time refusal" proof. `p2`'s own place rule refuses; `p1`
+// still takes the drop.
+describe("a plugin's place rule refuses a drop at preview, in both panes", () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  /** Refuses any place under `p2`, whatever the rest of the chain would answer. */
+  function refusesP2Plugin(): DataPlugin {
+    return {
+      id: 'test.refuse-p2',
+      data(ctx) {
+        ctx.edits.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'api' : next(place)));
+      },
+    };
+  }
+
+  function treeContainer(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p2', start: '2026-01-05', end: '2026-01-08' },
+        // A root entry, kept out of both parents, so the third case's "still commits" drop crosses
+        // into a fresh parent rather than reordering the entry within a parent it already holds.
+        { id: 'b', name: 'B', start: '2026-01-01', end: '2026-01-03' },
+      ],
+      plugins: [refusesP2Plugin()],
+    });
+    return { container, dataset };
+  }
+
+  function dragRowInto(container: HTMLElement, row: HTMLElement, dropClientY: number): void {
+    const rowsLayer = container.querySelector<HTMLElement>('.fg-rows')!;
+    stubPointerCapture(rowsLayer);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+    rowsLayer.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+
+    document.elementFromPoint = original;
+  }
+
+  function dragBarInto(container: HTMLElement, bar: HTMLElement, dropClientY: number): void {
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: dropClientY, pointerId: 1 }));
+
+    document.elementFromPoint = original;
+  }
+
+  it('a bar drag of "a" into "p2" refuses at preview: no move fires, parentId is unchanged', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+
+    const id = entryId('a');
+    const before = dataset.entries.get(id)!.parent()?.id;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragBarInto(container, bar, 90);
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a grid row drag of "a" into "p2"’s middle refuses at preview: no move fires, no write', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+
+    const id = entryId('a');
+    const before = dataset.entries.get(id)!.parent()?.id;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragRowInto(container, row, 90);
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a bar drag and a grid row drag of "b" into "p1" still commit — the place rule refuses only p2', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('b'), 0)}"]`)!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="b"]')!;
+
+    const id = entryId('b');
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // "b" sits at the root; row 0's ("p1") middle third (y=18) drops it under "p1" instead.
+    dragBarInto(container, bar, 18);
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.place?.parentId).toBe(entryId('p1'));
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(entryId('p1'));
+
+    dataset.undo();
+    afterEvents.length = 0;
+
+    dragRowInto(container, row, 18);
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.place?.parentId).toBe(entryId('p1'));
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(entryId('p1'));
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
   function stubPointerCapture(el: HTMLElement): void {
     el.setPointerCapture = vi.fn();

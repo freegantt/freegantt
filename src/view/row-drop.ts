@@ -16,10 +16,10 @@ import { siblingBlockMove } from '../data/sibling-order.js';
  *  land on or under. `'entryGone'` — the row plan is a stale mid-drag snapshot and its subject is
  *  an id the Dataset no longer holds (`dropPlaceFor`'s own doc). `'ownDescendant'` — the target sits
  *  inside the moved Entry's own subtree, the cycle `EntryStore` would otherwise throw on.
- *  `'capability'` — the moved Entry's own `reorder` capability, or its `siblingIndex` cell, refuses
- *  the gesture outright, a same-parent drop included. `'parentLocked'` — `reorder` is open and a
- *  same-parent drop would land, but this drop crosses into a different parent and the Entry's
- *  `parentId` cell refuses that crossing. */
+ *  `'capability'` — the moved Entry's own `reorder` capability, its `siblingIndex` cell, or a
+ *  plugin's place rule refuses the gesture outright, a same-parent drop included. `'parentLocked'` —
+ *  `reorder` is open and a same-parent drop would land, but this drop crosses into a different
+ *  parent and the Entry's `parentId` cell, or a plugin's place rule, refuses that crossing. */
 export type RowDropRefusal = 'groupHeader' | 'entryGone' | 'ownDescendant' | 'capability' | 'parentLocked';
 
 /** One Entry a `place` drop writes. `at` is the call-time index the pipeline's `entries.update`
@@ -86,6 +86,8 @@ export function resolveRowDrop(input: RowDropInput): RowDrop {
     // Asking `canPlace` with the Entry's own current parent isolates "may it reorder at all" from
     // "may it cross into this parent": a same-parent answer never trips the second half
     // (`ResolvedCapabilities.canPlace`'s own rule), so a `false` here can only be the first half.
+    // ADR 0038: a plugin's place rule also gets a say on this same-parent call — a rule that closes
+    // a parent entirely (not just to a crossing) reads as this same 'capability' refusal.
     if (!input.canPlace(entry, entry.parent()?.id)) {
       return { kind: 'refused', rowId: place.rowId, reason: 'capability' };
     }
