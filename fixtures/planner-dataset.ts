@@ -14,7 +14,7 @@
 // is a construction plan because a consumer said so, not because the library knows one.
 
 import { addMs, dateFormatter, instant, lastCoveredInstant, MS } from 'freegantt';
-import type { FormatContext, StoredEntry, EntryInput, Field, Instant } from 'freegantt';
+import type { ComputeContext, FormatContext, StoredEntry, EntryInput, Field, Instant } from 'freegantt';
 
 /** What the design stores per row, beyond the Entry keys core already owns. */
 export interface PlannerEntryProps {
@@ -201,13 +201,20 @@ const PLANNER_FIELDS: readonly Field[] = [
   { key: 'phase' },
   { key: 'critical' },
   // The design's `#` column: a work row shows its own number, a phase shows nothing, and a
-  // checkpoint shows a diamond instead of a number. It has no stored home and never rolls up, which
-  // is exactly what a `compute` Field is for (ADR 0011) — and it is the one column on this page
-  // that refuses the editor for a reason a reader can see.
+  // checkpoint shows a diamond instead of a number. `hasChildren` decides "phase" live, on every
+  // pass — a row that gains its first child blanks the cell, and a row that loses its last one
+  // shows its number again. Its number never changes: `WORK_ROW_NUMBERS` is the design's fixed row
+  // id, authored order, not a live count. It has no stored home and never rolls up, which is
+  // exactly what a `compute` Field is for (ADR 0011) — and it is the one column on this page that
+  // refuses the editor for a reason a reader can see.
   {
     key: 'ref',
-    compute: (entry: StoredEntry) =>
-      isCheckpointEntry(entry) ? '◆' : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
+    compute: (entry: StoredEntry, ctx: ComputeContext) =>
+      isCheckpointEntry(entry)
+        ? '◆'
+        : ctx.hasChildren(entry)
+          ? ''
+          : (WORK_ROW_NUMBERS.get(entry.id)?.toString() ?? ''),
     // 32px is the design's own width, but its cells carry no padding and ours do — at 32 a
     // two-digit number ellipsises to `1.`. The number is the column's whole point, so the width
     // gives way, not the number.
