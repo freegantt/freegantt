@@ -1289,17 +1289,22 @@ export class GanttShell {
       // #434: independent of `selection` above — a rollup row with `{ select: false, activate: true
       // }` names no selectable Entry there but still names an activation subject here.
       activation: {
-        subjectEntryOf: (hit) => this.#subjectEntryOf(hit),
         activateFromClick: (entry, detail, target) => this.#activateFromClick(entry, detail, target),
       },
+      subjectEntryOf: (hit) => this.#subjectEntryOf(hit),
       setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,
       // The sticky header sits in flow ahead of the rows (`view/styles.ts`'s `.fg-header`), so a
       // pane-relative offset counts it. A row's own content-y (what `rowTop`/`rowIndexAtY` index)
       // does not — subtract it here, once, so a caller never re-derives the header's height by hand.
-      contentYAtPaneOffset: (offsetY) =>
-        offsetY + this.#viewport.scroll.y.state.position - this.#paneLayout.measureHeaderHeight(),
+      // The timeline pane's top stands in for both panes'. The grid pane shares its top and its
+      // header height (`measureHeaderHeight`). So one client-y reading needs no pane argument.
+      contentYAtClientY: (clientY) =>
+        clientY -
+        this.#paneLayout.timelineTop() +
+        this.#viewport.scroll.y.state.position -
+        this.#paneLayout.measureHeaderHeight(),
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };

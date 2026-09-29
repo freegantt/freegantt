@@ -662,7 +662,9 @@ the sentence itself, because that door has no thrown error to quote:
 
 ```
 gantt.on('beforeEntryMove', (move) =>
-  move.start < mobilization ? move.refuse('The drop is before mobilization.') : undefined,
+  move.shiftsTime && move.start < mobilization
+    ? move.refuse('The drop is before mobilization.')
+    : undefined,
 );
 ```
 
