@@ -13,8 +13,8 @@ decided: `locked` is a core Field (§"The public API a consumer meets"). Core in
   chain below it, never widen a Field the rest of the chain already refused. The lock stops only the
   user; `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo, redo, the
   sibling renumber (ADR 0034) and the Rollup all still write past it.
-open: the step-11 door's final name (working name `rulesChanged()`) and `PlaceRefusedError`'s final
-  name (fallback `ParentRefusedError`) both wait on the naming skill. Follow-up issues #610 (a
+open: the step-11 door's final name (working name `rulesChanged()`) waits on the naming skill —
+  `PlaceRefusedError` is settled, the naming skill kept the working name. Follow-up issues #610 (a
   child's time drag can widen a locked parent's Rollup) and #611 (Delete on a locked row, or on its
   child, passes) are filed and out of this record's scope.
 ---

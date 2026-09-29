@@ -24,6 +24,8 @@ import type {
   FieldLockRule,
   FieldLockRuleWrapper,
   HierarchySource,
+  PlaceRule,
+  PlaceRuleWrapper,
   RaiseError,
 } from '../model/index.js';
 import {
@@ -32,6 +34,7 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   ParentCycleError,
+  PlaceRefusedError,
   SiblingIndexOutOfRangeError,
 } from '../model/index.js';
 import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
@@ -75,6 +78,8 @@ import {
   editableAnswerFor,
   fieldEditableRule,
   fieldLockQueryFor,
+  openPlaceRule,
+  placeAnswerFor,
   resolveWriteTarget,
 } from './write-rule.js';
 import type { FieldLockQuery } from '../model/index.js';
@@ -148,6 +153,10 @@ export class EntryStore implements EntryStoreContract {
    *  a query's `isDescendantOf` closure reads the live hierarchy at call time, so a cached query never
    *  goes stale even as the tree it walks changes underneath it. */
   #lockQueries = new Map<EntryId, FieldLockQuery>();
+  /** The place rule's current occupant (ADR 0038), read the same imperative way `#lockRule` is. Core's
+   *  own bottom occupant answers every place `'anywhere'`, until a plugin composes onto it through
+   *  `setPlaceRule`. */
+  #placeRule: PlaceRule = openPlaceRule;
   /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
    *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
    *  never depends on who read first (`F5`). `reportRefusedHierarchyAnswers` raises. */
@@ -424,6 +433,32 @@ export class EntryStore implements EntryStoreContract {
     this.#lockRule = wrap(this.#lockRule);
   }
 
+  /** Call: `ctx.edits.setPlaceRule((next) => (place) => isLocked(place.parentId) ? 'api' : next(place))`.
+   *  Installing composes onto the current occupant rather than evicting it, the same way `setLockRule`
+   *  does (ADR 0038). Not on `EntryStoreView`: this is a plugin-author door, and it reaches a plugin
+   *  through `ctx.edits` alone. */
+  setPlaceRule(wrap: PlaceRuleWrapper): void {
+    this.#placeRule = wrap(this.#placeRule);
+  }
+
+  /** The place rule's own answer for one place (ADR 0038) — the one resolution `#updateFrom`, `add()`
+   *  and `view/capability.ts`'s `canPlace` all ask, so a bar drag, a grid row drag and a programmatic
+   *  move all meet the same answer (I14). `currentParentId` reads the Entry's own parent as the
+   *  hierarchy source answers it now — `undefined` for a root Entry, and for one `add()` has not
+   *  staged yet. */
+  placeableOf(id: EntryId | string, parentId: EntryId | string | undefined): FieldEditable {
+    const key = entryId(id);
+    const stored = this.storedEntry(key);
+    return placeAnswerFor(
+      {
+        entry: this.#lockQueryFor(key),
+        parentId: parentId === undefined ? undefined : entryId(parentId),
+        currentParentId: stored === undefined ? undefined : this.parentIdOf(stored),
+      },
+      this.#placeRule,
+    );
+  }
+
   /** Live rows; *which* rows is committed-only, so this array does not grow inside an open
    *  transaction (D-S2-21, ADR 0017 rule 2). Each row in it reads the write set. */
   get all(): readonly Entry[] {
@@ -548,7 +583,11 @@ export class EntryStore implements EntryStoreContract {
       const id = entryId(input.id);
       if (this.has(id)) throw new DuplicateEntryIdError(id, 'entries.add', 'collision');
       if (input.parentId !== undefined) {
-        this.#assertParentValid(id, entryId(input.parentId), 'entries.add');
+        const parentId = entryId(input.parentId);
+        this.#assertParentValid(id, parentId, 'entries.add');
+        if (this.placeableOf(id, parentId) === 'never') {
+          throw new PlaceRefusedError(id, parentId, 'entries.add');
+        }
       }
       const unplaced = toEntry(input, this.#context, this.#registry, 'entries.add');
       // Placed at `input.siblingIndex`, or at the end of its group with no index named (ADR 0034). The
@@ -586,6 +625,21 @@ export class EntryStore implements EntryStoreContract {
         this.#assertParentValid(key, entryId(edit.parentId), operation);
       }
       const current = this.storedEntry(key)!;
+      // An explicit move — the key is present even when it clears `parentId` to the root, or the
+      // sibling group alone changes (ADR 0034's own word for what makes this a move). The landing
+      // parent is what the edit names, or the parent this Entry already sits under (a same-parent
+      // reorder still asks, so the rule decides whether children may reorder under it, §1.1).
+      if ('parentId' in edit || 'siblingIndex' in edit) {
+        const landingParentId =
+          'parentId' in edit
+            ? edit.parentId === undefined
+              ? undefined
+              : entryId(edit.parentId)
+            : this.parentIdOf(current);
+        if (this.placeableOf(key, landingParentId) === 'never') {
+          throw new PlaceRefusedError(key, landingParentId, operation);
+        }
+      }
       const reading = toEditReading(edit, this.#context, current, this.#registry, operation);
       const move = this.#siblingMoveFor(key, current, reading, edit, operation);
       this.stageUpdate(token, key, reading.stored);

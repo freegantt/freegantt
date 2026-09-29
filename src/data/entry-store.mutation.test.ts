@@ -14,6 +14,7 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   FieldNotEditableError,
+  PlaceRefusedError,
   ParentCycleError,
   UnknownFieldError,
   entryId,
@@ -949,6 +950,100 @@ describe("a plugin's per-entry lock rule opens a locked Field (#473)", () => {
 
     expect(state.editableOf('e1', 'end')).toBe('never');
     expect(() => state.entries.update('e1', { end: undefined })).toThrow(FieldNotEditableError);
+  });
+});
+
+describe("a plugin's place rule gates an explicit move (ADR 0038)", () => {
+  function placeDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1' },
+        { id: 'p2', name: 'p2' },
+        { id: 'c1', parentId: 'p1', name: 'c1' },
+        { id: 'c2', parentId: 'p1', name: 'c2' },
+      ],
+    });
+  }
+
+  it("refuses a move into a parent the rule answers 'never' for, and stages nothing", () => {
+    const state = placeDataset();
+    state.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'never' : next(place)));
+
+    expect(() => state.entries.update('c1', { parentId: 'p2' })).toThrow(PlaceRefusedError);
+    expect(state.entries.get('c1')!.read('parentId')).toBe(entryId('p1'));
+  });
+
+  it("commits a move into a parent the rule answers 'api' for", () => {
+    const state = placeDataset();
+    state.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'api' : next(place)));
+
+    state.entries.update('c1', { parentId: 'p2' });
+    expect(state.entries.get('c1')!.read('parentId')).toBe(entryId('p2'));
+  });
+
+  it('reads currentParentId as the child moves out of a parent, so giving up a child is refusable', () => {
+    const state = placeDataset();
+    const seen: Array<EntryId | undefined> = [];
+    state.setPlaceRule((next) => (place) => {
+      seen.push(place.currentParentId);
+      return place.currentParentId === entryId('p1') ? 'never' : next(place);
+    });
+
+    expect(() => state.entries.update('c1', { parentId: 'p2' })).toThrow(PlaceRefusedError);
+    expect(seen).toContain(entryId('p1'));
+  });
+
+  it('a same-parent siblingIndex move asks with parentId equal to currentParentId', () => {
+    const state = placeDataset();
+    let asked: { parentId: EntryId | undefined; currentParentId: EntryId | undefined } | undefined;
+    state.setPlaceRule((next) => (place) => {
+      asked = { parentId: place.parentId, currentParentId: place.currentParentId };
+      return next(place);
+    });
+
+    state.entries.update('c1', { siblingIndex: 0 });
+    expect(asked).toEqual({ parentId: entryId('p1'), currentParentId: entryId('p1') });
+  });
+
+  it('entries.add() asks with currentParentId undefined — the row has no place yet', () => {
+    const state = placeDataset();
+    let asked: { currentParentId: EntryId | undefined } | undefined;
+    state.setPlaceRule((next) => (place) => {
+      asked = { currentParentId: place.currentParentId };
+      return next(place);
+    });
+
+    state.entries.add({ id: 'c3', parentId: 'p1', name: 'c3' });
+    expect(asked).toEqual({ currentParentId: undefined });
+  });
+
+  it('a write that touches neither parentId nor siblingIndex never asks the place rule', () => {
+    const state = placeDataset();
+    const rule = vi.fn((_next: unknown, place: unknown) => place);
+    state.setPlaceRule((next) => (place) => {
+      rule(next, place);
+      return next(place);
+    });
+
+    state.entries.update('c1', { name: 'c1 (renamed)' });
+    expect(rule).not.toHaveBeenCalled();
+  });
+
+  it('two wraps compose: the second occupant receives the first as next', () => {
+    const state = placeDataset();
+    const calls: string[] = [];
+    state.setPlaceRule((next) => (place) => {
+      calls.push('first');
+      return next(place);
+    });
+    state.setPlaceRule((next) => (place) => {
+      calls.push('second');
+      return next(place);
+    });
+
+    state.entries.update('c1', { parentId: 'p2' });
+    expect(calls).toEqual(['second', 'first']);
   });
 });
 

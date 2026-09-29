@@ -15,6 +15,8 @@ import type {
   FieldKey,
   FieldLockQuery,
   FieldLockRule,
+  PlaceQuery,
+  PlaceRule,
   WriteRefusalReason,
   WriteTarget,
   WriteVerdict,
@@ -80,6 +82,20 @@ export function fieldEditableRule(fieldFor: (key: FieldKey) => Field | undefined
     const declared = fieldFor(field);
     return declared === undefined || 'compute' in declared ? 'never' : editableOf(declared);
   };
+}
+
+/** Core's own place rule (ADR 0038): every place answers `'anywhere'` until a plugin's own rule
+ *  composes onto it. The bottom occupant of `ctx.edits.setPlaceRule`, mirroring `fieldEditableRule`'s
+ *  role for the lock rule — a Dataset with no plugin installed still answers every place, and a
+ *  plugin's narrowing rule always has an answer under it to narrow. */
+export const openPlaceRule: PlaceRule = () => 'anywhere';
+
+/** What `EntryStore.#updateFrom`/`add` and `view/capability.ts`'s `canPlace` both ask for a
+ *  cross-parent move — one resolution, so preview and commit never drift (I14). A same-parent place
+ *  is asked here too: the rule, not this resolver, decides whether children may reorder under a
+ *  locked parent. */
+export function placeAnswerFor(place: PlaceQuery, placeRule: PlaceRule): FieldEditable {
+  return placeRule(place);
 }
 
 /** One cell's address, built from whichever lookup a caller holds — `EntryStore`'s own
