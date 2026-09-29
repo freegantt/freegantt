@@ -138,7 +138,9 @@ export type ReportCode = BuiltInReportCode | (string & {});
  *
  *  ```ts
  *  gantt.on('beforeEntryMove', (move) =>
- *    move.start < mobilization ? move.refuse('The drop is before mobilization.') : undefined,
+ *    move.shiftsTime && move.start < mobilization
+ *      ? move.refuse('The drop is before mobilization.')
+ *      : undefined,
  *  );
  *  ```
  *
