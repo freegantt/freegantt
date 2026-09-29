@@ -953,6 +953,47 @@ describe('attachEntryGestures — move (S3.3)', () => {
     expect(seenDxPx.length).toBeGreaterThan(0);
   });
 
+  it('reads the pane rect once per move, and never on a time-axis move (#425 finding 12)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const rect = vi.fn(() => domRect(20));
+    pane.getBoundingClientRect = rect;
+    const { ctx } = makeContext({ can: (capability) => capability === 'move' || capability === 'select' });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly horizontal — the axis locks to time, so `offsetY` never needs the pane rect.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(20, { clientY: 1 }));
+    rect.mockClear();
+
+    pane.dispatchEvent(move(30, { clientY: 2 }));
+    expect(rect).toHaveBeenCalledTimes(1); // one rect for `offsetX`, none spent on `offsetY`
+
+    pane.dispatchEvent(up(30, { clientY: 2 }));
+    expect(rect).toHaveBeenCalledTimes(1); // commit on a time-axis drag reads no rect at all
+  });
+
+  it('reads the pane rect once, not twice, on a row-axis move (#425 finding 12)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const rect = vi.fn(() => domRect(20));
+    pane.getBoundingClientRect = rect;
+    const { ctx } = makeContext({ can: (capability) => capability === 'move' || capability === 'select' });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly vertical — the axis locks to row, so `offsetY` is read, but off one shared rect.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(1, { clientY: 20 }));
+    rect.mockClear();
+
+    pane.dispatchEvent(move(2, { clientY: 30 }));
+    expect(rect).toHaveBeenCalledTimes(1);
+  });
+
   it('a drag moves every capable entry `entriesForGesture` returns, grabbed first', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
