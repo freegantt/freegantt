@@ -162,15 +162,14 @@ export type EntryMoveDetail = ProposedDates &
     readonly shiftsTime: boolean;
   };
 
-// `Omit<EntryGestureEvent, 'entries'>`, not a bare intersection: `entries` narrows from
-// `readonly ProposedDates[]` to `readonly EntryMoveDetail[]` here, and intersecting two array
-// property types instead of replacing one reads two incompatible shapes at the same key.
-export type EntryMove = Omit<EntryGestureEvent, 'entries'> &
-  TreePlaceChange & {
-    /** The grabbed Entry's own answer to `EntryMoveDetail.shiftsTime` — see that doc. */
-    readonly shiftsTime: boolean;
-    readonly entries: readonly EntryMoveDetail[];
-  };
+/** #425/#602: the grabbed Entry's own proposed dates, plus every entry the gesture moves or
+ *  reorders with it. A move that shifts time always gets `ProposedSpan`: an Entry with a bar to
+ *  grab already spans (ADR 0012). A tree-only move writes no dates — an undated Entry can still
+ *  reorder — so it gets `ProposedDates` instead, with the grabbed Entry's own dates present only
+ *  when it already had them. A handler narrows on `shiftsTime` before it reads `start`/`end`. */
+export type EntryMove = TreePlaceChange & {
+  readonly entries: readonly EntryMoveDetail[];
+} & ((ProposedSpan & { readonly shiftsTime: true }) | (ProposedDates & { readonly shiftsTime: false }));
 
 /** S3.4: which edge was dragged — a `beforeEntryResize` handler reads this alongside the
  *  proposed span to veto or clamp a specific edge placement. */

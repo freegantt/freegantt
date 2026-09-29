@@ -51,6 +51,7 @@ import type {
   EntryResize,
   GanttEventMap,
   ProposedDates,
+  ProposedSpan,
   TreePlaceChange,
 } from './event-bus.js';
 import type { RowDrop, PlacedEntry } from './row-drop.js';
@@ -570,9 +571,8 @@ export class GesturePipeline {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
             afterPayload: {
-              ...grabbed,
+              ...this.#movedDatesOf(proposal.grabbed, grabbed),
               ...this.#treePlaceChangeFor(proposal.grabbed, proposal.drop),
-              shiftsTime: this.#shiftsTime(proposal.grabbed, grabbed),
               entries: spans.map((span) => ({
                 ...span,
                 ...this.#treePlaceChangeFor(span.entry, proposal.drop),
@@ -616,6 +616,19 @@ export class GesturePipeline {
     const startChanged = dates.start !== undefined && dates.start !== committed.start;
     const endChanged = dates.end !== undefined && dates.end !== committed.end;
     return startChanged || endChanged;
+  }
+
+  /** The grabbed Entry's dates, tagged with whether they moved — `EntryMove`'s own discriminated
+   *  union, built in one place so TS sees each member. A tree-only move (`shiftsTime: false`) still
+   *  carries the grabbed Entry's dates when it has them (ADR 0012 lets it, since `#commit` already
+   *  guards the grabbed dates on `spansTime` before this runs). */
+  #movedDatesOf(
+    id: EntryId,
+    dates: ProposedDates,
+  ): (ProposedSpan & { readonly shiftsTime: true }) | (ProposedDates & { readonly shiftsTime: false }) {
+    return this.#shiftsTime(id, dates) && spansTime(dates)
+      ? { ...dates, shiftsTime: true }
+      : { ...dates, shiftsTime: false };
   }
 
   /** Sync `true`/`false` still finish in this tick (same as before async veto). An unsettled Promise

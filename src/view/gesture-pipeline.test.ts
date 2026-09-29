@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { EntryNotFoundError, InvertedSpanError, entryId, barId, rowId } from '../model/index.js';
@@ -1455,6 +1455,27 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     expect(move.place?.parentId).toBe(p2.id);
     expect(move.shiftsTime).toBe(true);
     expect(move.start).toBe(50);
+  });
+
+  it("a time drag's payload narrows on shiftsTime before start/end read as Instant", async () => {
+    const { deps, emitted } = withTree({
+      rowDropZoneAt: () => ({ kind: 'sourceRow' }),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    await pipeline.session(entryId('a'), { kind: 'move' })!.commit(50, { contentY: 10 });
+
+    const move = emitted[1]![1] as EntryMove;
+    // Before narrowing, `start`/`end` read as possibly absent — a handler cannot assume a time
+    // move without asking `shiftsTime` first.
+    expectTypeOf(move.start).toEqualTypeOf<Instant | undefined>();
+    if (move.shiftsTime) {
+      expectTypeOf(move.start).toEqualTypeOf<Instant>();
+      expectTypeOf(move.end).toEqualTypeOf<Instant>();
+      expect(move.start).toBe(50);
+    } else {
+      throw new Error('expected this drag to shift time');
+    }
   });
 
   it('a drag whose pointer stays over the source row writes time only, no place in the event', async () => {
