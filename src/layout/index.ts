@@ -140,6 +140,10 @@ export type {
 } from './viewport/scroll-axis.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
+export { rowDropZoneAt, ROW_CHANGE_THRESHOLD_PX, DROP_ZONE_HYSTERESIS_PX } from './row-drop-zone.js';
+export type { RowDropSide, RowDropZone, RowDropZoneInput } from './row-drop-zone.js';
+export { dropPlaceFor } from './row-drop-target.js';
+export type { RowsForDrop, DropPlace, DropPlaceAnswer } from './row-drop-target.js';
 export type {
   TimeScale,
   ViewPreset,

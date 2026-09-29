@@ -49,6 +49,34 @@ function keysWrittenBy(edit: ProposedEdit | undefined): readonly string[] {
   return [...proposedKeysOf(edit)];
 }
 
+/** The value `edit` itself carries for `key` — a core key reads off the edit's own envelope, the
+ *  same address `writeField` wrote it to; everything else reads off `edit.props`. Every edit this
+ *  module builds keeps a core key's property and its `proposedKeys` entry in lockstep, so this needs
+ *  no separate presence check. */
+function proposedFieldValueAt(edit: ProposedEdit, key: string): unknown {
+  return isCoreFieldKey(key) ? (edit as unknown as Record<string, unknown>)[key] : edit.props[key];
+}
+
+/** True when `a` and `b` write the same value to every Field they name — the same `entryAfterEdit`
+ *  result on any Entry they'd both be applied to, checked in the size of an edit rather than the
+ *  size of the dataset. A vertical drag's preview asks this every frame it re-previews the same drop
+ *  (#425, I5): `#writesWithPlace` builds a fresh `ProposedEdit` each frame, but a row-axis drag holds
+ *  its dates still (`dxPx` pinned to 0) and revisits it while the pointer sits over one drop target. */
+export function proposedEditsEqual(a: ProposedEdits, b: ProposedEdits): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [id, editA] of a) {
+    const editB = b.get(id);
+    if (editB === undefined) return false;
+    if (editA.proposedKeys.size !== editB.proposedKeys.size) return false;
+    for (const key of editA.proposedKeys) {
+      if (!editB.proposedKeys.has(key)) return false;
+      if (proposedFieldValueAt(editA, key) !== proposedFieldValueAt(editB, key)) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Applies a `props` patch's proposed keys onto a copy of `base`, one key at a time — never the whole
  * object (ADR 0011, the two-shallow-spread trap). A key named in `proposedKeys` and present in

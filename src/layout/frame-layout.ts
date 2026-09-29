@@ -207,6 +207,25 @@ export class FrameLayout implements FrameLayoutView {
     return this.#memory.heights.topAt(index);
   }
 
+  /** The row-height index's own `indexAtY`, exposed so a vertical drag can turn a pointer's
+   * content-y into "which planned row is this" without its own binary search over row tops
+   * (`layout/row-drop-zone.ts`). */
+  rowIndexAtY(y: number): number {
+    return this.#memory.heights.indexAtY(y);
+  }
+
+  /** The row-height index's own `heightAt`, exposed the same way `rowIndexAtY` is — a row drop zone
+   * needs a row's own height to place its before/into/after thirds. */
+  rowHeightAt(index: number): number {
+    return this.#memory.heights.heightAt(index);
+  }
+
+  /** How many rows the current plan holds — a row drop zone's "past the last row" check
+   * (`layout/row-drop-zone.ts`) without a caller counting `plannedRows()` itself. */
+  get rowCount(): number {
+    return this.#plan.length;
+  }
+
   /** Index of the first planned row that carries this entry, or `-1` when collapse hid it. */
   rowIndexForEntry(id: EntryId): number {
     return this.#rowIndexOfEntry.get(id) ?? -1;

@@ -23,6 +23,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'renderer-failed': true,
   'disposer-failed': true,
   'extender-preview-failed': true,
+  'rollup-preview-failed': true,
   'gesture-commit-failed': true,
   'scale-options-ignored': true,
   'rollup-corrected': true,

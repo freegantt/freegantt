@@ -213,13 +213,13 @@ describe('previewOffsets', () => {
       [a.id, envelopeEdit(instant('2026-06-15T15:00:00Z'), instant('2026-06-15T17:00:00Z'))],
     ]);
     const [preview] = previewsFor({ proposed, extra: new Map(), entries: [a] });
-    expect(preview).toEqual({ barId: barId(a.id), dx: 60, dWidth: 0, extra: false });
+    expect(preview).toEqual({ barId: barId(a.id), dx: 60, dy: 0, dWidth: 0, extra: false });
   });
 
   it('reports a width delta when the edit changes duration', () => {
     const proposed = new Map([[a.id, envelopeEdit(a.start, instant('2026-06-15T18:00:00Z'))]]);
     const [preview] = previewsFor({ proposed, extra: new Map(), entries: [a] });
-    expect(preview).toEqual({ barId: barId(a.id), dx: 0, dWidth: 120, extra: false });
+    expect(preview).toEqual({ barId: barId(a.id), dx: 0, dy: 0, dWidth: 120, extra: false });
   });
 
   it('marks entries from the extra map as extra: true', () => {
@@ -227,7 +227,7 @@ describe('previewOffsets', () => {
       [b.id, envelopeEdit(instant('2026-06-16T10:00:00Z'), instant('2026-06-16T13:00:00Z'))],
     ]);
     const [preview] = previewsFor({ proposed: new Map(), extra, entries: [b] });
-    expect(preview).toEqual({ barId: barId(b.id), dx: 60, dWidth: 0, extra: true });
+    expect(preview).toEqual({ barId: barId(b.id), dx: 60, dy: 0, dWidth: 0, extra: true });
   });
 
   it("measures the floor the Gantt resolved, not barSpan's own default (#436 branch review F4)", () => {

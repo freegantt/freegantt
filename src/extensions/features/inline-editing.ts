@@ -80,6 +80,13 @@ function canOpenGeneric(field: Field): boolean {
   );
 }
 
+/** An `entryId` Field (#425 — `parentId`'s own type) with no `parseValue` of its own. Nothing a
+ *  consumer could type would make a valid id reference, so this cell offers no editor at all.
+ *  A Field of this type that declares its own `parseValue` opts back in. */
+function offersNoEditor(field: Field): boolean {
+  return field.type === 'entryId' && field.parseValue === undefined;
+}
+
 /** A `boolean` Field's generic editor is a checkbox, keyed off `inputType` — the same
  *  attribute that already decides the native `<input>` shape (`Field.inputType`). A checkbox reads
  *  and writes `.checked`; every other generic editor reads and writes `.value`. */
@@ -776,6 +783,10 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
       function openFor(entry: Entry, field: Field, cell: HTMLElement): void {
         const edited: EditedCell = { entryId: entry.id, field: field.key };
         editing.dismissNotice();
+        // A cell with no editor refuses silently. Asked before `canWrite`, so a writable
+        // `entryId` Field never reaches the "editor it cannot open" refusal below. That refusal
+        // speaks a reason, and this cell never had one to speak.
+        if (offersNoEditor(field)) return;
         // Which refusals speak (`s5.8-inline-editing.md` §1). A cell that offers no editor at all
         // refuses silently. A cell that offers an editor it cannot open names its reason. #256 moved
         // that decision onto the verdict itself, so this file holds no list of which refusal is
@@ -848,6 +859,8 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
       const canEditFocusedCell = (): boolean => {
         const focused = ctx.view.focusedCell();
         if (focused === undefined) return false;
+        const field = ctx.dataset.field(focused.field);
+        if (field === undefined || offersNoEditor(field)) return false;
         const entry = ctx.dataset.entries.get(focused.entryId);
         return entry !== undefined && ctx.interaction.canWrite(entry, focused.field).ok;
       };

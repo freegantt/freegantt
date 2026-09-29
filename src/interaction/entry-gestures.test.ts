@@ -101,6 +101,7 @@ function makeContext(overrides: ContextOverrides = {}): {
     setHovered: () => {},
     setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
+    contentYAtPaneOffset: (offsetY) => offsetY,
     discardHeldGesture: () => false,
     session: (grabbed, gesture) => {
       const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');
@@ -169,6 +170,12 @@ function makeContext(overrides: ContextOverrides = {}): {
 function mockPointerCapture(el: HTMLElement): void {
   el.setPointerCapture = vi.fn();
   el.releasePointerCapture = vi.fn();
+}
+
+/** happy-dom never lays out for real (`column-gestures.test.ts`'s own note) — a pane rect with a
+ *  non-zero `top` is the only way to tell a real pane-relative offset from a raw `clientY` passthrough. */
+function domRect(top: number): DOMRect {
+  return { left: 0, right: 0, width: 0, top, bottom: top, height: 0, x: 0, y: top, toJSON: () => ({}) };
 }
 
 describe('attachEntryGestures — selection (S3.1)', () => {
@@ -845,6 +852,146 @@ describe('attachEntryGestures — move (S3.3)', () => {
 
     expect(commit).not.toHaveBeenCalled();
     expect(proposals).toEqual([[A]]);
+  });
+
+  it('preview reads content-y from the pane-relative pointer position, not the raw client y', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    pane.getBoundingClientRect = () => domRect(20);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenContentY: (number | undefined)[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      draftFor: (_gesture, entries, _dxPx, options) => {
+        seenContentY.push(options?.contentY);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(down(0, { clientY: 50 }));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
+
+    expect(seenContentY.at(-1)).toBe(65 - 20 + 1000);
+  });
+
+  it('commit reads content-y the same way, off the pointerup position', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    pane.getBoundingClientRect = () => domRect(20);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenContentY: (number | undefined)[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      draftFor: (_gesture, entries, _dxPx, options) => {
+        seenContentY.push(options?.contentY);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    pane.dispatchEvent(down(0, { clientY: 50 }));
+    pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
+    pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5, { clientY: 90 }));
+
+    expect(seenContentY.at(-1)).toBe(90 - 20 + 1000);
+  });
+
+  it('a mostly-horizontal arm locks the time axis — content-y is never read (#425)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenContentY: (number | undefined)[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      draftFor: (_gesture, entries, _dxPx, options) => {
+        seenContentY.push(options?.contentY);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly horizontal (dx=20, dy=1), then travels further vertically — the axis stays
+    // locked to time, so `contentY` is never read on `preview()` or `commit()`.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(20, { clientY: 1 }));
+    pane.dispatchEvent(move(25, { clientY: 50 }));
+    pane.dispatchEvent(up(25, { clientY: 50 }));
+
+    expect(seenContentY.every((value) => value === undefined)).toBe(true);
+    expect(seenContentY.length).toBeGreaterThan(0);
+  });
+
+  it('a mostly-vertical arm locks the row axis — dxPx commits as 0, dates hold still (#425)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const seenDxPx: number[] = [];
+    const { ctx } = makeContext({
+      can: (capability) => capability === 'move' || capability === 'select',
+      draftFor: (_gesture, entries, dxPx) => {
+        seenDxPx.push(dxPx);
+        return new Map(entries.map((e) => [e.id, {}]));
+      },
+    });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly vertical (dx=1, dy=20), then drifts further horizontal — the axis stays locked
+    // to row, so every preview/commit reads `dxPx` as 0, however far the pointer travels sideways.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(1, { clientY: 20 }));
+    pane.dispatchEvent(move(60, { clientY: 25 }));
+    pane.dispatchEvent(up(60, { clientY: 25 }));
+
+    expect(seenDxPx.every((value) => value === 0)).toBe(true);
+    expect(seenDxPx.length).toBeGreaterThan(0);
+  });
+
+  it('reads the pane rect once per move, and never on a time-axis move (#425 finding 12)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const rect = vi.fn(() => domRect(20));
+    pane.getBoundingClientRect = rect;
+    const { ctx } = makeContext({ can: (capability) => capability === 'move' || capability === 'select' });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly horizontal — the axis locks to time, so `offsetY` never needs the pane rect.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(20, { clientY: 1 }));
+    rect.mockClear();
+
+    pane.dispatchEvent(move(30, { clientY: 2 }));
+    expect(rect).toHaveBeenCalledTimes(1); // one rect for `offsetX`, none spent on `offsetY`
+
+    pane.dispatchEvent(up(30, { clientY: 2 }));
+    expect(rect).toHaveBeenCalledTimes(1); // commit on a time-axis drag reads no rect at all
+  });
+
+  it('reads the pane rect once, not twice, on a row-axis move (#425 finding 12)', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    const rect = vi.fn(() => domRect(20));
+    pane.getBoundingClientRect = rect;
+    const { ctx } = makeContext({ can: (capability) => capability === 'move' || capability === 'select' });
+    attachEntryGestures(pane, rowLayer, container, ctx);
+
+    // Arms mostly vertical — the axis locks to row, so `offsetY` is read, but off one shared rect.
+    pane.dispatchEvent(down(0, { clientY: 0 }));
+    pane.dispatchEvent(move(1, { clientY: 20 }));
+    rect.mockClear();
+
+    pane.dispatchEvent(move(2, { clientY: 30 }));
+    expect(rect).toHaveBeenCalledTimes(1);
   });
 
   it('a drag moves every capable entry `entriesForGesture` returns, grabbed first', () => {

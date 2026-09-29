@@ -13,7 +13,7 @@
 import { libraryWriteRule, resolveWriteTarget, NOT_WRITABLE, WRITABLE } from '../data/write-rule.js';
 import { editableOf } from '../data/fields/field-registry.js';
 import type { FieldWriteRefusalReason, FieldWriteVerdict } from '../data/write-rule.js';
-import type { Entry, Field, FieldEditable, FieldKey } from '../model/index.js';
+import type { Entry, EntryId, Field, FieldEditable, FieldKey } from '../model/index.js';
 import type { CapabilityRule, GestureCapability, Capabilities, WriteRule } from '../model/index.js';
 
 // ADR 0018: the four vocabulary types moved down to `model/`, so `EntryVariant.can` (a `layout/`
@@ -47,6 +47,10 @@ export interface ResolvedCapabilities {
    *
    *  Empty means the move writes nothing, and that is exactly what `can('move', entry)` refuses. */
   entriesMovedBy(entry: Entry): readonly Entry[];
+  /** May this Entry land under this parent (#425)? A drop within its own current parent needs only
+   *  `reorder`. A drop under a different parent needs `parentId` open too. A locked `parentId` must
+   *  refuse a drag the same way it refuses `update()`. */
+  canPlace(entry: Entry, parentId: EntryId | undefined): boolean;
 }
 
 /** What one Gantt's capability resolution reads. An object, not four positional arguments: the
@@ -105,12 +109,13 @@ function gestureIsOffered(): boolean {
   return true;
 }
 
-/** Which dates does this gesture set, and may it set them? `move` shifts the whole bar. A leaf bar
+/** Which Fields does this gesture set, and may it set them? `move` shifts the whole bar. A leaf bar
  *  sets both dates and needs both. That is the hole #256 found: a locked `start` hid its own handle,
  *  and a move rewrote it anyway. A parent bar sets no date of its own, so it asks what its
  *  move writes instead (`moveWritesSomething`). `resize` sets the dragged edge's own Field. `select`
  *  sets nothing. `activate` (#434) sets nothing either — it opens or fires, and never itself writes
- *  a Field.
+ *  a Field. `reorder` (#425) sets `siblingIndex`, and a drop that also re-parents needs `parentId` too
+ *  — `canPlace` below asks that second half.
  *
  *  A leaf bar is one child Entry (ADR 0026). A drag writes that Entry's own `start`/`end` directly.
  *  There is no separate envelope Field to keep in step with it, the way `segments` once needed
@@ -118,7 +123,7 @@ function gestureIsOffered(): boolean {
  *
  *  `data/` owns what may be written there. A write past the dragged edge's fixed side is refused
  *  before it reaches a changeset. */
-function mayWriteTheDatesItSets(
+function mayWriteWhatItSets(
   capability: GestureCapability,
   entry: Entry,
   edge: 'start' | 'end' | undefined,
@@ -135,6 +140,8 @@ function mayWriteTheDatesItSets(
       // No edge asked means "either handle" — the affordance pass asks each edge by name.
       if (edge !== undefined) return canWrite(entry, edge).ok;
       return canWrite(entry, 'start').ok || canWrite(entry, 'end').ok;
+    case 'reorder':
+      return canWrite(entry, 'siblingIndex').ok;
     default:
       // S7's `linkCreate` must name the cells it writes here, rather than inherit an answer.
       return assertEveryGestureNamesItsWrites(capability);
@@ -272,12 +279,26 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     return gestureIsOffered();
   };
 
+  /** #425: does a drop under `parentId` also need `entry`'s own `parentId` cell open? Not when the
+   *  drop keeps `entry` under its current parent (ADR 0024's own answer, the tree ADR 0034 checks).
+   *  A same-parent reorder writes only `siblingIndex`. */
+  const canPlace = (entry: Entry, parentId: EntryId | undefined): boolean => {
+    if (
+      !isOffered('reorder', entry) ||
+      !mayWriteWhatItSets('reorder', entry, undefined, canWrite, moveWritesSomething)
+    ) {
+      return false;
+    }
+    return entry.parent()?.id === parentId || canWrite(entry, 'parentId').ok;
+  };
+
   return {
     can(capability, entry, edge) {
       if (!isOffered(capability, entry)) return false;
-      return mayWriteTheDatesItSets(capability, entry, edge, canWrite, moveWritesSomething);
+      return mayWriteWhatItSets(capability, entry, edge, canWrite, moveWritesSomething);
     },
     canWrite,
     entriesMovedBy,
+    canPlace,
   };
 }

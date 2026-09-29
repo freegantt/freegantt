@@ -72,6 +72,7 @@ interface Meta {
   budget?: number;
   quantity?: number;
   owner?: string;
+  ownerId?: string;
   showDaysOnRow?: boolean;
 }
 
@@ -330,6 +331,63 @@ describe('[S5-A1] inlineEditing() (S5.8, D-S5-19/D-S5-20)', () => {
 
     dataset.entries.update('e1', { parentId: 'e2' });
     expect(dataset.entries.get('e1')?.read('parentId')).toBe('e2');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  // #425: the shipped `entryId` type offers no editor, whatever `editable` says — a consumer's own
+  // id-reference Field gets the same dead cell `parentId` gets, for free.
+  it('a consumer Field of type entryId keeps its cell dead and silent, while entries.update() writes it', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset<Meta>({
+      entries: structuredClone([...ENTRIES]),
+      timeZone: 'UTC',
+      fields: [{ key: 'ownerId', type: 'entryId' }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', { field: 'ownerId', header: 'Owner id' }],
+      plugins: [inlineEditing()],
+    });
+
+    dblclick(cellFor(container, 'e1', 'ownerId'));
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(refusal(container)).toBeNull();
+
+    dataset.entries.update('e1', { ownerId: 'e2' });
+    expect(dataset.entries.get('e1')?.read('ownerId')).toBe('e2');
+
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('Enter on a focused entryId cell opens nothing and falls through to entryActivate (#425)', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset<Meta>({
+      entries: structuredClone([...ENTRIES]),
+      timeZone: 'UTC',
+      fields: [{ key: 'ownerId', type: 'entryId' }],
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', { field: 'ownerId', header: 'Owner id' }],
+      plugins: [inlineEditing()],
+    });
+    const activations: unknown[] = [];
+    gantt.on('entryActivate', (p) => {
+      activations.push(p);
+    });
+
+    cellFor(container, 'e1', 'ownerId').focus();
+    enter(container);
+
+    expect(container.querySelector('.fg-cell-editor')).toBeNull();
+    expect(activations).toEqual([{ entry: dataset.entries.get('e1'), cause: 'key', target: 'gridCell' }]);
 
     gantt.destroy();
     container.remove();

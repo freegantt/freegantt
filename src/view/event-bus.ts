@@ -18,6 +18,7 @@ import type {
   Refusable,
   TargetKind,
   TimeSpan,
+  TreePlace,
 } from '../model/index.js';
 import type { CollapseChange } from './collapse-state.js';
 import type { ResolvedTheme } from './theme.js';
@@ -141,7 +142,35 @@ export interface EntryGestureEvent extends ProposedSpan {
   readonly entries: readonly ProposedDates[];
 }
 
-export type EntryMove = EntryGestureEvent;
+/** #425: where a vertical drag lands, or the proof it never asked the tree at all. A drop that
+ *  changes the tree states both `place` (where the Entry lands) and `currentPlace` (where it sat
+ *  before the drop); a time-only drag states neither — `move.place === undefined` is how a handler
+ *  tells the two apart, with no third state to guard against under `exactOptionalPropertyTypes`. */
+export type TreePlaceChange =
+  | { readonly place: TreePlace; readonly currentPlace: TreePlace }
+  | { readonly place?: never; readonly currentPlace?: never };
+
+/** #425: one Entry's own share of a move's proposed dates, tagged with whether this Entry's tree
+ *  place changed and whether its dates did. A pointer drag locks to one axis at arm time and holds
+ *  it for the whole gesture (#425 axis lock), so a real drag only ever sets one of the two: `place`
+ *  alone (row axis) or `shiftsTime` alone (time axis), never both together. */
+export type EntryMoveDetail = ProposedDates &
+  TreePlaceChange & {
+    /** True when this Entry's proposed dates differ from what is stored now — `false` for a
+     *  vertical-only drag that only changes the tree. Answers "did time change", the question
+     *  `place`'s absence cannot: a vertical-only drag still reports `start`/`end` equal to today's. */
+    readonly shiftsTime: boolean;
+  };
+
+// `Omit<EntryGestureEvent, 'entries'>`, not a bare intersection: `entries` narrows from
+// `readonly ProposedDates[]` to `readonly EntryMoveDetail[]` here, and intersecting two array
+// property types instead of replacing one reads two incompatible shapes at the same key.
+export type EntryMove = Omit<EntryGestureEvent, 'entries'> &
+  TreePlaceChange & {
+    /** The grabbed Entry's own answer to `EntryMoveDetail.shiftsTime` — see that doc. */
+    readonly shiftsTime: boolean;
+    readonly entries: readonly EntryMoveDetail[];
+  };
 
 /** S3.4: which edge was dragged — a `beforeEntryResize` handler reads this alongside the
  *  proposed span to veto or clamp a specific edge placement. */

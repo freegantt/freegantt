@@ -139,7 +139,7 @@ agrees on a committed row for a declared Field: `toInput()` disagrees with `entr
 ## Out of scope
 
 - The drag-to-reorder gesture and a drop-target vocabulary for it. This record ships the Field a
-  future drag needs; it does not ship the drag.
+  future drag needs; it does not ship the drag. (#425 ships it; see CONTEXT.md **Drop target**.)
 - Fractional order keys.
 - A default grid column for the Field.
 - A dedicated `Entry.siblingIndex` member; `entry.read('siblingIndex')` is the one read door, the

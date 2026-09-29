@@ -1,5 +1,6 @@
 ---
 status: accepted — verdict pending (this build). Amends [ADR 0015](0015-what-the-write-door-refuses.md).
+  Amended by #425 (2026-09-28) — see "Out of scope" bullet 1.
 decided: `canWrite` refuses a cell before it asks the consumer or the variant rule, whenever the
   effective `editable` is not `'anywhere'`. A derived cell refuses the same way, before those rules
   too. Neither `capabilities.edit` nor a variant's own `edit` can reopen an `'api'` or a `'never'`
@@ -87,9 +88,11 @@ code and gestures both.**
 
 ## Out of scope
 
-- **`parentId` ships `'api'`.** After this decision, no gesture may write it. A future drag-to-
-  reparent gesture is refused unless a Field ships `parentId` as `'anywhere'`. That choice is not
-  made here.
+- **`parentId` ships `'anywhere'` (#425).** A vertical drag writes it through the `reorder`
+  capability. The grid cell stays dead because the inline editor offers no editor for an `entryId`
+  Field, not because of `editable`. Root cause: `0abead8c` set `'api'` only to keep a text editor off
+  a `parentId` column; this ADR then made `'api'` mean "no gesture", which locked drag re-parenting
+  as a side effect.
 - `entries.update()`'s own thresholds. `data/write-rule.ts` does not change; only the order
   `view/capability.ts` reads it in changes.
 - Delete on a row, undo/redo, and column gestures. `Field.editable` never governed them, and still

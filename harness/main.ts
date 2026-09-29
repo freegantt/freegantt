@@ -421,6 +421,15 @@ holdDropCheckbox.addEventListener('change', () => {
   hideToast();
 });
 
+// Which moves changed the tree? `place` is present only then.
+gantt.on('entryMove', (move) => {
+  if (move.place === undefined) return;
+  prependLogLine(
+    log,
+    `moved ${move.entry} under ${move.place.parentId ?? 'the root'} at ${move.place.siblingIndex}`,
+  );
+});
+
 // #256: which cells may change? One row's finish date is fixed by contract. Its End cell refuses
 // the editor, and it paints no end handle. The bar refuses a move too, because a move writes both
 // dates. Its start edge still resizes, because that writes `start` alone. Every other row is
@@ -446,6 +455,14 @@ window.__fixedFinishEntryId = FIXED_FINISH_ENTRY;
 lockResizeCheckbox.addEventListener('change', () => {
   if (lockResizeCheckbox.checked) gantt.setCapabilityRule('resize', false);
   else gantt.clearCapabilityRule('resize');
+});
+
+// #425: the same one-rule-at-a-time shape as `lockResizeCheckbox` above — a vertical drag is on by
+// default, and this is the one page-owned rule that turns it off for every row at once.
+const lockTreeCheckbox = document.querySelector<HTMLInputElement>('#lock-tree-checkbox')!;
+lockTreeCheckbox.addEventListener('change', () => {
+  if (lockTreeCheckbox.checked) gantt.setCapabilityRule('reorder', false);
+  else gantt.clearCapabilityRule('reorder');
 });
 
 // ---- Plugins, commands, popups, renderers (S5) — plugins.html's own demo, over this same Gantt ----

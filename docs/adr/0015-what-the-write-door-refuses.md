@@ -80,7 +80,7 @@ This ruling touches only the editable-lock (`'never'`) case. The derived/rollup 
 
 ## Consequences
 
-- **`parentId` and `segments` keep their declarations.** They ship `editable: 'api'`, so a column object may show them and the cell stays dead. `update()` stays legal. Three mechanisms read them out of the registry: `entryAfterEdit` iterates `CORE_FIELDS` as an allow-list, `widenSegmentsToEnvelope` gates on `registry.get('segments')`, and `segmentsEqual` supplies the equality rule ([#212](https://github.com/Pawel-IT/FreeGantt/issues/212), ADR 0010). Undeclaring them is not an available option.
+- **`parentId` keeps its declaration.** It ships `editable: 'anywhere'` (#425): a drag may re-parent through it. The grid cell stays dead because the inline editor offers no editor for an `entryId` Field, not because of `editable`. `update()` stays legal. `entryAfterEdit` iterates `CORE_FIELDS` as an allow-list, so it still reads `parentId` out of the registry. Undeclaring it is not an available option.
 - **A `props` *value* naming a core key is a warning, and the core definition wins** — that half is [ADR 0011](0011-consumer-values-live-in-props.md)'s and is already closed. Decision 23 is the *declaration* half, closed 2026-09-10: the lock is legal; extra keys throw.
 - **`ComputedFieldCannotBeWrittenError` fires at two doors under one name**, and the resolver checks `compute` before `editable`. See [`plans/field-redesign/shared/rulings.md`](../../plans/field-redesign/shared/rulings.md).
 

@@ -34,6 +34,7 @@ import type { PluginOf } from './plugin.js';
 import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
+import { storedParentSource } from '../data/hierarchy-source.js';
 
 // I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
 // Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
@@ -450,4 +451,27 @@ export function extraEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedE
       lockRule: state.lockRule,
     }),
   );
+}
+
+/** #425: the friend function `view/gesture-pipeline.ts#computePreview` ghosts a `place` drop's
+ *  Rollup through — the same friend-map pattern `extraEditsFor` above uses (ADR 0007), for the
+ *  Rollup instead of the extension hook. Exported from `api/` only, never from `api/index.ts`. */
+export function rolledUpEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedEdits): ProposedEdits {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('rolledUpEditsFor: dataset was not constructed through the Dataset constructor');
+  }
+  return state.rolledUpEditsFor(draft);
+}
+
+/** #425: does this Dataset's tree still follow the stored `parentId`, or does a plugin own the
+ *  hierarchy (ADR 0020)? `GanttShell` cannot answer this itself — `model/dataset.ts`'s narrow
+ *  `Dataset` carries no `hierarchySource` to read. Not public: a consumer never asks this, only
+ *  `GanttShell`'s own `verticalDropOffered` gate does, through `api/gantt.ts`'s wiring. */
+export function hierarchyFollowsParentId<TProps>(dataset: Dataset<TProps>): boolean {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('hierarchyFollowsParentId: dataset was not constructed through the Dataset constructor');
+  }
+  return state.hierarchySource === storedParentSource;
 }

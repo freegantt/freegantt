@@ -29,6 +29,7 @@ import type {
 } from '../model/index.js';
 import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
 import { now } from '../time/index.js';
+import { rolledUpEditsFor as rolledUpEditsForCommit } from './build-commit-change-set.js';
 import { EntryStore } from './entry-store.js';
 import { readEntryBatch } from './entry-batch.js';
 import { storedParentSource } from './hierarchy-source.js';
@@ -43,7 +44,7 @@ import { applyConstructionRollUp, runTransaction } from './transaction.js';
 import { replayChangeSet } from './replay.js';
 import { History } from './history.js';
 import type { HistoryOptions } from './history.js';
-import { createFieldAccess } from './fields/field-access.js';
+import { createFieldAccess, proposedEditsEqual } from './fields/field-access.js';
 import type { FieldAccess } from './fields/field-access.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import type { FieldRegistryOptions } from './fields/field-registry.js';
@@ -166,6 +167,11 @@ export class DatasetState implements Dataset {
   #changeSetCounter = 0;
   /** `undefined` when the app owns undo (`history: false`). */
   readonly #history: History | undefined;
+  /** The last frame's `rolledUpEditsFor` answer, so a frame that repeats the same drop reuses it
+   *  instead of paying the Rollup's own walk again (#425, I5). `revision` is `#datasetRevision`, not
+   *  `committedById()`'s own Map identity: `EntryStore` mutates that map in place on commit, so the
+   *  reference alone cannot say a commit has landed since the last frame. */
+  #rolledUpPreview: { revision: number; draft: ProposedEdits; result: ProposedEdits } | undefined;
 
   constructor(options: DatasetStateOptions) {
     this.timeZone = options.timeZone;
@@ -303,6 +309,39 @@ export class DatasetState implements Dataset {
    *  `(entry) => entry.parentId`; the store holds whichever occupant plugins composed onto it. */
   get hierarchySource(): HierarchySource {
     return this.entries.hierarchySource;
+  }
+
+  /** #425: what a vertical drag's own preview ghosts on top of `draft` — the new parent's dates
+   *  rolling up to cover the entry it just gained (ruling 5). Runs the Rollup alone, on the
+   *  committed rows plus `draft`, with no extension hook to call and nothing to commit
+   *  (`build-commit-change-set.ts`'s `rolledUpEditsFor`, mirroring `extraEditsFor`'s own shape,
+   *  ADR 0007). `view/gesture-pipeline.ts#computePreview` is the only caller, and only for a
+   *  `place` drop — a time-only drag ghosts nothing here on purpose (#425 ruling, a follow-up
+   *  covers it).
+   *
+   *  A row-axis drag holds its own dates still and revisits the same drop target for many frames in
+   *  a row (`entry-gestures.ts` pins `dxPx` to 0 there), so `#rolledUpPreview` answers straight from
+   *  the last frame whenever this one names the same revision and the same written values —
+   *  `proposedEditsEqual` costs the size of `draft`, never the size of the dataset, so a cache miss
+   *  is no more expensive than not caching at all. */
+  rolledUpEditsFor(draft: ProposedEdits): ProposedEdits {
+    const cached = this.#rolledUpPreview;
+    if (cached && cached.revision === this.#datasetRevision && proposedEditsEqual(cached.draft, draft)) {
+      return cached.result;
+    }
+    const result = rolledUpEditsForCommit({
+      committed: this.entries.committedById(),
+      draft,
+      fields: this.fields,
+      fieldAccess: this.fieldAccess,
+      tree: {
+        committedParents: this.entries.committedParents(),
+        committedChildIds: this.entries.committedChildIds(),
+        source: this.hierarchySource,
+      },
+    });
+    this.#rolledUpPreview = { revision: this.#datasetRevision, draft, result };
+    return result;
   }
 
   /** Call: `ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), mine(request)))`.

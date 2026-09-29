@@ -2,7 +2,7 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { entryId } from '../model/index.js';
-import { renumberSiblingGroups } from './sibling-order.js';
+import { renumberSiblingGroups, siblingBlockMove } from './sibling-order.js';
 import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
 import type { Entry } from '../model/index.js';
 
@@ -153,6 +153,60 @@ describe('renumberSiblingGroups property', () => {
           expect(ranks.get(last.id)).toBe(Math.min(last.at, groupSize - 1));
         },
       ),
+    );
+  });
+});
+
+// #425: a vertical drag's own block move. `siblingBlockMove` answers two questions about the same
+// write — the final rank each moved id ends up at (`finalRanks`), and the call-time index each
+// `entries.update` must name to get there (`calls`) — and this property checks the two never
+// disagree: replaying `calls` as placements through `renumberSiblingGroups` (the same replay a live
+// commit runs) must land every moved id at its own `finalRanks` answer, and must leave every group a
+// moved id left holding its own remaining members, dense, in their committed relative order (I16).
+describe('siblingBlockMove property', () => {
+  it('replays to the ids finalRanks names, and leaves every touched group dense (I16)', () => {
+    fc.assert(
+      fc.property(
+        initialGroupsArb,
+        fc.uniqueArray(fc.constantFrom(...IDS), { minLength: 1, maxLength: 3 }),
+        fc.constantFrom<SiblingGroupKey>(...GROUPS),
+        fc.nat({ max: IDS.length }),
+        (initial, movedIdStrings, targetGroup, rawIndex) => {
+          const { groupOfId, committedSiblingsOf, committedGroupOf } = committedGroupsFrom(initial);
+          const movedIds = movedIdStrings.map(entryId);
+          const targetSiblings = committedSiblingsOf(targetGroup);
+          const index = Math.min(rawIndex, targetSiblings.length);
+
+          const { calls, finalRanks } = siblingBlockMove({ movedIds, targetSiblings, index });
+
+          const placements: SiblingChange[] = calls.map((call) => ({
+            id: call.id,
+            group: targetGroup,
+            at: call.at,
+          }));
+          const ranks = renumberSiblingGroups(placements, committedSiblingsOf, committedGroupOf);
+
+          // Every id the target group ends up holding — moved or already there — lands at exactly
+          // the rank finalRanks names for it.
+          for (const [id, rank] of finalRanks) {
+            expect(ranks.get(id)).toBe(rank);
+          }
+
+          // A group a moved id departed keeps every remaining member, dense from 0, in the order
+          // it already held them.
+          const movedSet = new Set<string>(movedIdStrings);
+          for (const bucket of ['p', 'q', 'root'] as const) {
+            const group = groupKeyForBucket(bucket);
+            if (group === targetGroup) continue;
+            const departedFromHere = movedIdStrings.some((id) => groupOfId.get(id) === group);
+            if (!departedFromHere) continue;
+            initial[bucket]
+              .filter((id) => !movedSet.has(id))
+              .forEach((id, rank) => expect(ranks.get(entryId(id))).toBe(rank));
+          }
+        },
+      ),
+      { numRuns: 200 },
     );
   });
 });
