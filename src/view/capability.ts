@@ -78,10 +78,10 @@ export interface CapabilityInputs {
    *  unchanged. */
   editableOf?: ((id: string, key: FieldKey) => FieldEditable) | undefined;
   /** From the bound `Dataset` — the friend function `api/dataset.ts`'s `placeableOf` (ADR 0038). The
-   *  effective place rule answer for a cross-parent drop: a plugin's place rule's own answer, or
-   *  `'anywhere'` when the rule has no opinion. `canPlace` refuses outright whenever it is not
-   *  `'anywhere'`. Absent in a hand-built test fixture, `canPlace` keeps today's `parentId`-cell-only
-   *  answer. */
+   *  effective place rule answer for a drop, same-parent and cross-parent alike: a plugin's place
+   *  rule's own answer, or `'anywhere'` when the rule has no opinion. `canPlace` refuses outright
+   *  whenever it is not `'anywhere'`. Absent in a hand-built test fixture, `canPlace` keeps today's
+   *  `parentId`-cell-only answer. */
   placeableOf?: ((id: string, parentId: EntryId | undefined) => FieldEditable) | undefined;
 }
 
