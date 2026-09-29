@@ -55,6 +55,10 @@ export type BuiltInReportCode =
   // preview. Recovered the same way a bad renderer is (`renderer-failed`): that frame paints with
   // no cascade ghost, same as no extender installed, and the drag itself carries on.
   | 'extender-preview-failed'
+  // #425: the Rollup half of `extender-preview-failed` — a plugin's own aggregator (`rollUp: fn`)
+  // threw while `view/gesture-pipeline.ts`'s `#rolledUpFor` computed a `place` drop's Rollup ghost.
+  // Recovered the same way: that frame paints with no Rollup ghost, and the drag carries on.
+  | 'rollup-preview-failed'
   // #341: the commit half of `extender-preview-failed`. Something threw while a gesture's commit
   // ran — an EditExtender's own bug, a `beforeChange` handler that threw instead of refusing, a
   // `change` listener. `view/gesture-pipeline.ts`'s `#settle` catches it, because a throw from

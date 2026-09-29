@@ -1619,6 +1619,27 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     expect(ghost.dWidth).not.toBe(0);
   });
 
+  it('a throwing aggregator reports the fault and previews with no Rollup ghost, not a crashed frame', async () => {
+    const { deps, applied, reported } = withTree({
+      rowDropZoneAt: () => ({ kind: 'row', rowIndex: 4, side: 'into' }),
+      rolledUpEditsFor: () => {
+        throw new Error('boom');
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 144 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; extra: boolean }[];
+    expect(preview.some((bar) => bar.extra)).toBe(false); // no Rollup ghost painted for the fault
+    expect(preview.some((bar) => bar.barId === barId(entryId('a')))).toBe(true); // the drag itself still paints
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatchObject({ code: 'rollup-preview-failed', severity: 'warning', by: 'plugin' });
+    expect(reported[0]?.cause).toBeInstanceOf(Error);
+  });
+
   it('a refused drop paints dy: 0 and the refused row, never the target place', async () => {
     const { a, p2, deps, applied, appliedRowDrops } = withTree({
       rowDropZoneAt: () => intoP2(),
