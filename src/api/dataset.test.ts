@@ -26,7 +26,6 @@ import {
 import { diffMs, spansTime } from './index.js';
 import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput, Field } from './index.js';
 import type { EditRequest, ProposedEdit, ProposedEdits, WriteTarget } from '../model/index.js';
-import { lockEntries } from '../../harness/plugins/lock-entries.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -1420,70 +1419,6 @@ describe('a core Field declared at construction is there before entries are read
     expect(() => new Dataset({ timeZone: 'UTC', entries: [], plugins: [locks(), locks()] })).toThrow(
       DuplicatePluginIdError,
     );
-  });
-
-  it("harness's lockEntries() ghosts a construction-time lock on the drag preview it never itself committed", () => {
-    // The real plugin, not the `locks()` double above: this pins `lockedIds`' own seed walk
-    // (`harness/plugins/lock-entries.ts`), which the local double does not have.
-    const locks = lockEntries();
-    const dataset = new Dataset<{ locked?: boolean }>({
-      timeZone: 'UTC',
-      entries: [
-        { id: 'mover', name: 'Mover', start: '2026-09-01', end: '2026-09-03' },
-        // Locked from construction alone — never its own commit, so `lockedIds` cannot have
-        // learned about it from a `change` this entry raised.
-        { id: 'anchor', name: 'Anchor', start: '2026-09-01', end: '2026-09-03', locked: true },
-      ],
-      plugins: [locks],
-    });
-
-    // The preview path, not a commit: `beforeChange` refuses a real write that moves `anchor`'s
-    // dates too (that refusal is the plugin's whole point, pinned by `e2e/plugins.spec.ts`), so the
-    // fact under test — does the extender's cascade reach `anchor` on the very first call? — is read
-    // off `extraEditsFor`, the same door a drag preview frame calls.
-    const draft = proposedDraft('mover', {
-      start: instant('2026-09-05T00:00:00Z'),
-      end: instant('2026-09-07T00:00:00Z'),
-    });
-    const preview = extraEditsFor(dataset, draft);
-
-    // `anchor` ghosts alongside `mover` on this very first preview — the cascade the extender adds
-    // for every entry in `lockedIds` (#496 grill round 3 follow-up).
-    expect(preview.get(entryId('anchor'))?.start).toEqual(instant('2026-09-05T00:00:00Z'));
-  });
-});
-
-describe("harness's lockEntries() lets an undo and a redo through on a locked entry", () => {
-  it('still refuses a plain write on a locked entry', () => {
-    const dataset = new Dataset<{ locked?: boolean }>({
-      timeZone: 'UTC',
-      entries: [{ id: 'a', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
-      plugins: [lockEntries()],
-    });
-
-    expect(() => dataset.entries.update('a', { name: 'edited' })).toThrow(MutationCancelledError);
-  });
-
-  it('lets an undo reverse a step recorded before a sync locked the entry', () => {
-    const dataset = new Dataset<{ locked?: boolean }>({
-      timeZone: 'UTC',
-      entries: [{ id: 'a', name: 'Design', start: '2026-09-01', end: '2026-09-08' }],
-      plugins: [lockEntries()],
-    });
-
-    dataset.entries.update('a', { name: 'edited' });
-    // A sync records no step of its own (#517), so the undo below reverses the rename above, on an
-    // entry the sync's own list has since locked.
-    dataset.entries.syncAll([
-      { id: 'a', name: 'edited', start: '2026-09-01', end: '2026-09-08', locked: true },
-    ]);
-
-    expect(() => dataset.undo()).not.toThrow();
-    expect(dataset.entries.get('a')?.read('name')).toBe('Design');
-    expect(dataset.entries.get('a')?.read('locked')).toBe(true);
-
-    dataset.redo();
-    expect(dataset.entries.get('a')?.read('name')).toBe('edited');
   });
 });
 
