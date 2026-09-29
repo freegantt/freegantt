@@ -21,7 +21,7 @@ import { instant, toInstant } from '../time/index.js';
 import type { EntryEdits, ProposedEdit } from './edit-extension.js';
 import { FieldRegistry } from './fields/field-registry.js';
 import { storedParentSource } from './hierarchy-source.js';
-import { identityFieldLockRule } from './write-rule.js';
+import { fieldEditableRule } from './write-rule.js';
 
 const registry = new FieldRegistry({ fields: [] });
 
@@ -317,7 +317,7 @@ describe('InvertedSpanError names the caller, the entry id, and both instants', 
         context,
         (id) => (id === entry.id ? entry : undefined),
         registry,
-        identityFieldLockRule,
+        fieldEditableRule((key) => registry.get(key)),
         storedParentSource,
       ),
     );
@@ -363,7 +363,7 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
       context,
       () => entry,
       registry,
-      identityFieldLockRule,
+      fieldEditableRule((key) => registry.get(key)),
       storedParentSource,
     );
 
@@ -381,7 +381,7 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
       context,
       (id) => (id === entry.id ? entry : undefined),
       registry,
-      identityFieldLockRule,
+      fieldEditableRule((key) => registry.get(key)),
       storedParentSource,
     );
 
@@ -394,7 +394,14 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     const edits: EntryEdits = new Map([[entry.id, { notAField: 'x' }]]);
 
     expect(() =>
-      toEditsReading(edits, context, () => entry, registry, identityFieldLockRule, storedParentSource),
+      toEditsReading(
+        edits,
+        context,
+        () => entry,
+        registry,
+        fieldEditableRule((key) => registry.get(key)),
+        storedParentSource,
+      ),
     ).toThrow(UnknownFieldError);
   });
 
@@ -410,7 +417,14 @@ describe('toEditsReading reads a cascade the same way entries.update() reads a b
     const edits: EntryEdits = new Map([[entry.id, { derived: 5 }]]);
 
     expect(() =>
-      toEditsReading(edits, context, () => entry, computeRegistry, identityFieldLockRule, storedParentSource),
+      toEditsReading(
+        edits,
+        context,
+        () => entry,
+        computeRegistry,
+        fieldEditableRule((key) => computeRegistry.get(key)),
+        storedParentSource,
+      ),
     ).toThrow(ComputedFieldCannotBeWrittenError);
   });
 });
@@ -440,7 +454,14 @@ describe('toEditsReading honours the editable lock (#473, ADR 0015)', () => {
     const edits: EntryEdits = new Map([[entry.id, { start: '2026-02-01' }]]);
 
     expect(() =>
-      toEditsReading(edits, context, () => entry, lockedRegistry, identityFieldLockRule, storedParentSource),
+      toEditsReading(
+        edits,
+        context,
+        () => entry,
+        lockedRegistry,
+        fieldEditableRule((key) => lockedRegistry.get(key)),
+        storedParentSource,
+      ),
     ).toThrow(FieldNotEditableError);
   });
 
@@ -454,7 +475,7 @@ describe('toEditsReading honours the editable lock (#473, ADR 0015)', () => {
       context,
       () => entry,
       lockedRegistry,
-      identityFieldLockRule,
+      fieldEditableRule((key) => lockedRegistry.get(key)),
       storedParentSource,
     );
 

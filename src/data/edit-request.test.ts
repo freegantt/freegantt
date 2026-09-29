@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEditRequest } from './edit-request.js';
 import { storedParentSource } from './hierarchy-source.js';
-import { identityFieldLockRule, resolveWriteTarget } from './write-rule.js';
+import { fieldEditableRule, resolveWriteTarget } from './write-rule.js';
 import { entryId } from '../model/index.js';
 import type {
   Field,
@@ -58,7 +58,7 @@ function requestOver(
     hierarchySource: storedParentSource,
     committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
     fields,
-    lockRule: identityFieldLockRule,
+    lockRule: fieldEditableRule(fields.get),
   });
 }
 
@@ -92,7 +92,7 @@ describe('createEditRequest', () => {
       hierarchySource: storedParentSource,
       committedChildIds: new Map(),
       fields: noFields,
-      lockRule: identityFieldLockRule,
+      lockRule: fieldEditableRule(noFields.get),
     });
 
     const seen = request.entryAfterEdits(entryId('a'));
@@ -118,7 +118,7 @@ describe('createEditRequest', () => {
       hierarchySource: storedParentSource,
       committedChildIds: new Map(),
       fields: noFields,
-      lockRule: identityFieldLockRule,
+      lockRule: fieldEditableRule(noFields.get),
     });
 
     const seen = request.entryAfterEdits(entryId('a'));
@@ -186,9 +186,13 @@ describe('createEditRequest writeTarget', () => {
 });
 
 describe('createEditRequest editableOf (#473)', () => {
-  /** Opens `cost` on `van-1` only — the same shape a plugin composes onto `identityFieldLockRule`. */
+  const costEditableFalse = lookupOf({ key: 'cost', editable: false });
+  /** Opens `cost` on `van-1` only, calling `next` for every other cell — the same shape a plugin
+   *  composes onto `fieldEditableRule`. */
   const vanOnly: FieldLockRule = (query, field) =>
-    query.id === entryId('van-1') && field === 'cost' ? 'anywhere' : undefined;
+    query.id === entryId('van-1') && field === 'cost'
+      ? 'anywhere'
+      : fieldEditableRule(costEditableFalse.get)(query, field);
 
   it("answers a plugin's own per-entry lock over the Field's own editable", () => {
     const request = createEditRequest({
@@ -198,7 +202,7 @@ describe('createEditRequest editableOf (#473)', () => {
       removed: [],
       hierarchySource: storedParentSource,
       committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
-      fields: lookupOf({ key: 'cost', editable: false }),
+      fields: costEditableFalse,
       lockRule: vanOnly,
     });
 
@@ -215,9 +219,11 @@ describe('createEditRequest editableOf (#473)', () => {
       removed: [],
       hierarchySource: storedParentSource,
       committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
-      fields: lookupOf({ key: 'cost', editable: false }),
+      fields: costEditableFalse,
       lockRule: ((query, field) =>
-        query.id === entryId('van-2') && field === 'cost' ? 'anywhere' : undefined) satisfies FieldLockRule,
+        query.id === entryId('van-2') && field === 'cost'
+          ? 'anywhere'
+          : fieldEditableRule(costEditableFalse.get)(query, field)) satisfies FieldLockRule,
     });
 
     expect(request.editableOf('van-2', 'cost')).toBe('anywhere');
@@ -250,7 +256,9 @@ describe('createEditRequest editableOf (#473)', () => {
     const entries = depotTree();
     const oldVan1 = entries.get(entryId('van-1'))!;
     const newVan1 = entry('van-1', 0, 100, 'depot');
-    const subtreeLocked: FieldLockRule = (query) => (query.isDescendantOf('depot') ? 'never' : undefined);
+    const costLookup = lookupOf(cost);
+    const subtreeLocked: FieldLockRule = (query, field) =>
+      query.isDescendantOf('depot') ? 'never' : fieldEditableRule(costLookup.get)(query, field);
     const request = createEditRequest({
       entries,
       proposed: new Map() as ProposedEdits,
@@ -258,7 +266,7 @@ describe('createEditRequest editableOf (#473)', () => {
       removed: [oldVan1],
       hierarchySource: storedParentSource,
       committedChildIds: new Map([[entryId('depot'), [entryId('van-1')]]]),
-      fields: lookupOf(cost),
+      fields: costLookup,
       lockRule: subtreeLocked,
     });
 

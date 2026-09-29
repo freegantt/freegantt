@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { identityExtender } from './edit-extension.js';
 import { createEditRequest } from './edit-request.js';
 import { storedParentSource } from './hierarchy-source.js';
-import { identityFieldLockRule } from './write-rule.js';
+import { fieldEditableRule } from './write-rule.js';
 import { DatasetState } from './dataset-state.js';
 import { runTransaction } from './transaction.js';
 import { entryId } from '../model/index.js';
@@ -43,7 +43,7 @@ describe('identityExtender', () => {
         hierarchySource: storedParentSource,
         committedChildIds: new Map(),
         fields: noFields,
-        lockRule: identityFieldLockRule,
+        lockRule: fieldEditableRule(noFields.get),
       }),
     );
     expect(result.size).toBe(0);
@@ -62,7 +62,7 @@ describe('DatasetState.setExtender (D-S5-23)', () => {
     hierarchySource: storedParentSource,
     committedChildIds: new Map(),
     fields: noFields,
-    lockRule: identityFieldLockRule,
+    lockRule: fieldEditableRule(noFields.get),
   });
 
   /** One wrapper that runs the current occupant, then adds a name of its own to the result. */
@@ -140,7 +140,7 @@ describe('composing two extenders that write one Entry (#197)', () => {
       hierarchySource: storedParentSource,
       committedChildIds: new Map(),
       fields: noFields,
-      lockRule: identityFieldLockRule,
+      lockRule: fieldEditableRule(noFields.get),
     });
     return { loose: state.editExtender(request), stored: state.extraEditsFor(request) };
   }
