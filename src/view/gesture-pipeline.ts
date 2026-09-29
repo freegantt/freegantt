@@ -276,7 +276,9 @@ export class GesturePipeline {
     const bars = this.#entriesForGesture(grabbed, capability, edge);
     if (bars.length === 0) return undefined;
     const anchor = bars[0]!;
-    const { entries, paintedOnly } = this.#draftedEntries(bars, capability);
+    // A reorder never drafts a date (D2), so `#proposalFor` — the only reader of this — never runs
+    // for one either (`proposalFor` below). Computing it there anyway would draft dates nothing reads.
+    const draftedEntries = gesture.kind === 'reorder' ? undefined : this.#draftedEntries(bars, capability);
     const reparents = gesture.kind === 'move' || gesture.kind === 'reorder';
     const movedTopMost = reparents ? this.#movedTopMost(anchor.id, bars) : [];
     const sourceRowIndex = reparents ? this.#deps.rowIndexForEntry(anchor.id) : -1;
@@ -299,7 +301,7 @@ export class GesturePipeline {
     const proposalFor = (dxPx: number, options: DraftOptions | undefined, drop: RowDrop): GestureProposal =>
       gesture.kind === 'reorder'
         ? this.#reorderProposal(anchor.id, drop)
-        : this.#proposalFor({ gesture, entries, paintedOnly, grabbed: anchor.id, dxPx, options, drop });
+        : this.#proposalFor({ gesture, ...draftedEntries!, grabbed: anchor.id, dxPx, options, drop });
     return {
       preview: (dxPx, options) => {
         this.#preview(proposalFor(dxPx, options, dropFor(options, true)), options?.cursorX);
