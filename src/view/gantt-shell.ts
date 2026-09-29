@@ -1302,7 +1302,7 @@ export class GanttShell {
       // header height (`measureHeaderHeight`). So one client-y reading needs no pane argument.
       contentYAtClientY: (clientY) =>
         clientY -
-        this.#paneLayout.paneBounds().timeline.top +
+        this.#paneLayout.timelineTop() +
         this.#viewport.scroll.y.state.position -
         this.#paneLayout.measureHeaderHeight(),
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
