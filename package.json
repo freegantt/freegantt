@@ -1,6 +1,6 @@
 {
   "name": "freegantt",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Framework-free TypeScript Gantt and timeline library",
   "type": "module",
   "sideEffects": [
