@@ -1289,9 +1289,9 @@ export class GanttShell {
       // #434: independent of `selection` above — a rollup row with `{ select: false, activate: true
       // }` names no selectable Entry there but still names an activation subject here.
       activation: {
-        subjectEntryOf: (hit) => this.#subjectEntryOf(hit),
         activateFromClick: (entry, detail, target) => this.#activateFromClick(entry, detail, target),
       },
+      subjectEntryOf: (hit) => this.#subjectEntryOf(hit),
       setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,

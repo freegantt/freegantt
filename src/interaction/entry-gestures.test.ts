@@ -148,19 +148,19 @@ function makeContext(overrides: ContextOverrides = {}): {
         return entry !== undefined && ctx.can('select', entry) ? [entry.id] : [];
       },
     },
-    // #434: the fake mirrors `selection.selectableEntriesOf` above — a bar names its own Entry, a
-    // row names the same-named Entry the fake's row ids stand for.
     activation: {
-      subjectEntryOf: (hit) =>
-        hit.kind === 'bar'
-          ? ctx.entryFor(hit.barId)
-          : ORDER.includes(hit.rowId as unknown as EntryId)
-            ? entryFor(hit.rowId as unknown as EntryId)
-            : undefined,
       activateFromClick: (entry, detail, target) => {
         activations.push([entry.id, detail, target]);
       },
     },
+    // #434, #602: the fake mirrors `selection.selectableEntriesOf` above — a bar names its own
+    // Entry, a row names the same-named Entry the fake's row ids stand for.
+    subjectEntryOf: (hit) =>
+      hit.kind === 'bar'
+        ? ctx.entryFor(hit.barId)
+        : ORDER.includes(hit.rowId as unknown as EntryId)
+          ? entryFor(hit.rowId as unknown as EntryId)
+          : undefined,
     ...ctxOverrides,
   };
   Object.assign(ctx.selection, selectionOverrides);

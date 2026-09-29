@@ -79,11 +79,6 @@ export interface SelectionForGestures {
 /** #434: what a click activates, independent of Selection (I14) — the same shape `SelectionForGestures`
  *  takes for `select`, one collaborator answering one hit's worth of questions. */
 export interface ActivationForGestures {
-  /** The Entry a hit stands for — a bar names its own Entry; a row names its subject, the row's
-   *  first Entry (the same subject a `DomTarget` reads for a row). `undefined` when the row owns
-   *  none, or the bar's Entry is gone. Names *which* Entry only; the caller still asks
-   *  `can('activate', entry)` before firing (I14). */
-  subjectEntryOf(hit: EntryHit): Entry | undefined;
   /** Fires `entryActivate` with cause `'click'`, gated by both the pointer trigger
    *  (`GanttShellOptions.pointerActivation`) and `detail`, the click's own click count. Under
    *  `pointerActivation: 'click'` (default) this fires only for a click's first physical press —
@@ -109,6 +104,13 @@ export interface EntryGestureContext {
   selection: SelectionForGestures;
   /** What a hit would activate, and the door to fire it (#434). */
   activation: ActivationForGestures;
+  /** The Entry a hit stands for — a bar names its own Entry; a row names its subject, the row's
+   *  first Entry (the same subject a `DomTarget` reads for a row). `undefined` when the row owns
+   *  none, or the bar's Entry is gone. Names *which* Entry only; the caller still asks
+   *  `can(capability, entry)` before acting on it (I14). Two jobs read this now: activation (#434)
+   *  and a row-reorder grab (#602), so it sits at the top level rather than under one job's own
+   *  `activation` member. */
+  subjectEntryOf(hit: EntryHit): Entry | undefined;
   /** The bar id under the pointer, or undefined on pointerleave. */
   setHovered(barId: BarId | undefined): void;
   /** The grid row under the pointer, or undefined once it leaves the grid pane. The timeline pane
