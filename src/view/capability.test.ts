@@ -617,4 +617,23 @@ describe('resolveCapabilities — reorder and canPlace (#425)', () => {
     const [parent, child] = family(DATED) as readonly [Entry, Entry];
     expect(caps.canPlace(child, parent.id)).toBe(false);
   });
+
+  it("canPlace refuses when the place rule answers 'api', with reorder and the parentId cell open", () => {
+    const caps = capabilities({ placeableOf: () => 'api' });
+    const [, child] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.canPlace(child, entryId('other'))).toBe(false);
+  });
+
+  it("canPlace allows a drop when the place rule answers 'anywhere'", () => {
+    const caps = capabilities({ placeableOf: () => 'anywhere' });
+    const [, child] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.canPlace(child, entryId('other'))).toBe(true);
+  });
+
+  it('canPlace reads today’s answer unchanged when no placeableOf is wired', () => {
+    const caps = capabilities({}, { key: 'parentId', editable: 'api' });
+    const [parent, child] = family(DATED) as readonly [Entry, Entry];
+    expect(caps.canPlace(child, parent.id)).toBe(true);
+    expect(caps.canPlace(child, entryId('other'))).toBe(false);
+  });
 });

@@ -195,6 +195,21 @@ gantt.on('beforeEntryMove', (move) => {
 });
 ```
 
+### Lock an Entry
+
+`locked` is a core Field: the app sets it, and the user cannot edit, move, or reorder that Entry, in
+either pane, or drop another Entry into or out of it.
+
+```ts
+dataset.entries.update('t2', { locked: true }); // lock it
+dataset.entries.update('t2', { locked: undefined }); // unlock it
+dataset.entries.get('t2')?.read('locked'); // read it back
+```
+
+The lock is a UI refusal, not a data one: `entries.update()`, `add()`, an `EditExtender` cascade,
+`load`, `sync`, undo and redo all still write a locked Entry's cells — only a grid edit, a bar drag,
+and a grid row drag refuse.
+
 ### Dataset
 
 - `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. A core Field's key cannot be redeclared (`IllegalCoreFieldOverrideError`) — but every core Field takes a consumer override on `editable` and `formatValue`, and on `rollUp` too where the core Field declares one of its own (`start`, `end`). Type name `date` is replaceable at construction via `fieldTypes` — that door is construction-only.

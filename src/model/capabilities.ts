@@ -11,7 +11,7 @@ import type { Entry } from './entry.js';
 import type { FieldKey } from './field-key.js';
 
 /** A boolean pins every entry the same way; a predicate varies the answer per entry
- *  (`capabilities: { resize: (entry) => entry.read('locked') !== true }`).
+ *  (`capabilities: { resize: (entry) => entry.read('approved') !== true }`).
  *
  *  **`undefined` means "no opinion about this entry"** (ADR 0018). The next answer down then
  *  decides — a variant's own `capabilities` falls to the library rule, and the consumer's own `capabilities`

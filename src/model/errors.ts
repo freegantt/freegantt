@@ -79,7 +79,8 @@ export type BuiltInThrownCode =
   | 'unknown-command'
   | 'empty-covers'
   | 'custom-row-source-not-filterable-or-sortable'
-  | 'sibling-index-out-of-range';
+  | 'sibling-index-out-of-range'
+  | 'place-refused';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -598,6 +599,34 @@ export class FieldNotEditableError extends FreeGanttError {
     );
     this.name = 'FieldNotEditableError';
     this.field = field;
+    this.operation = operation;
+  }
+}
+
+/** `code: 'place-refused'` — a place rule (ADR 0038) answered `'never'` for a cross-parent move: an
+ *  Entry carried into or out of a parent whose place rule refuses it. `entries.update()`'s
+ *  `parentId`/`siblingIndex` and `entries.add()`'s `parentId` are the two doors that reach it; a
+ *  gesture preview reads the same rule through `canPlace` and simply offers no drop, so it never
+ *  throws.
+ *
+ *  A place rule names what a *caller* may write, never what the library may — construction, `load`,
+ *  `syncAll` and History replay all still write past it, the same carve-out `FieldNotEditableError`
+ *  keeps for a locked Field. */
+export class PlaceRefusedError extends FreeGanttError {
+  readonly id: EntryId;
+  readonly parentId: EntryId | undefined;
+  readonly operation: string;
+
+  constructor(id: EntryId, parentId: EntryId | undefined, operation: string) {
+    super(
+      'place-refused' satisfies BuiltInThrownCode,
+      `${operation}: "${id}" may not move ${
+        parentId === undefined ? 'to the root' : `under "${parentId}"`
+      } — a place rule refuses it. Install a place rule that answers 'api' or 'anywhere' for this place to allow it.`,
+    );
+    this.name = 'PlaceRefusedError';
+    this.id = id;
+    this.parentId = parentId;
     this.operation = operation;
   }
 }

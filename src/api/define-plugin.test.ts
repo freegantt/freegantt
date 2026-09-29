@@ -324,8 +324,8 @@ describe('a failed install unwinds what it set up before it', () => {
 });
 
 describe('a plugin names its own keys', () => {
-  interface LockProps {
-    locked?: boolean;
+  interface ApprovedProps {
+    approved?: boolean;
   }
 
   it('installs a plugin typed with its own keys into a Dataset typed with the consumer keys', () => {
@@ -334,23 +334,23 @@ describe('a plugin names its own keys', () => {
     }
 
     const locks = () =>
-      definePlugin<LockProps>({
+      definePlugin<ApprovedProps>({
         id: 'demo.locks',
-        fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+        fields: [{ key: 'approved', type: 'boolean', editable: 'api' }],
         data(ctx) {
-          ctx.dataset.entries.update('t1', { locked: true });
+          ctx.dataset.entries.update('t1', { approved: true });
         },
       });
 
     const dataset = new Dataset<TaskProps>({ timeZone: 'UTC', entries, plugins: [locks()] });
-    expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
+    expect(dataset.entries.get('t1')?.read('approved')).toBe(true);
   });
 
   it('types the plugin write against its own keys, not the consumer keys', () => {
     const locks = () =>
-      definePlugin<LockProps>({
+      definePlugin<ApprovedProps>({
         id: 'demo.locks',
-        fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+        fields: [{ key: 'approved', type: 'boolean', editable: 'api' }],
         data(ctx) {
           // @ts-expect-error `ctx.dataset` sees this plugin's own keys, not the consumer's `cost`.
           ctx.dataset.entries.update('t1', { cost: 1 });
@@ -361,12 +361,12 @@ describe('a plugin names its own keys', () => {
 
   it('refuses a fields key that its type argument does not name', () => {
     // @ts-expect-error a fields key must be a key of the plugin's own props
-    definePlugin<LockProps>({ id: 'demo.typo', fields: [{ key: 'lockd' }] });
+    definePlugin<ApprovedProps>({ id: 'demo.typo', fields: [{ key: 'lockd' }] });
     expect(true).toBe(true);
   });
 
   it('a typed plugin overrides a core Field in its own fields list', () => {
-    const overridesStart = definePlugin<LockProps>({
+    const overridesStart = definePlugin<ApprovedProps>({
       id: 'demo.overrides-start',
       fields: [{ key: 'start', editable: 'api' }],
       data() {},

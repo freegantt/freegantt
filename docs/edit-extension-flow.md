@@ -174,7 +174,7 @@ cascading from `site-survey`), all folded into the one `ChangeSet` the transacti
 The public way to install one is `new Dataset({ entries, plugins: [myPlugin()] })`, with
 the plugin claiming the hook through `ctx.edits.setExtender`. Installing **composes** — the
 wrapper receives the current occupant, so a second plugin adds to the first's writes instead of
-evicting it. `harness/plugins/lock-entries.ts` is the worked example.
+evicting it.
 
 ### Walkthrough
 

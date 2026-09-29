@@ -14,6 +14,7 @@ import type {
   Disposer,
   ExtenderWrapper,
   FieldLockRuleWrapper,
+  PlaceRuleWrapper,
   PluginId,
   PluginStore,
   PluginStoreView,
@@ -31,6 +32,10 @@ export type { HierarchySource, HierarchySourceWrapper } from '../model/index.js'
 // rule reads. Here for the same reason the hierarchy source types are.
 export type { FieldLockQuery, FieldLockRule } from '../model/index.js';
 export type { FieldLockRuleWrapper };
+// A plugin author writing a place rule names both: the wrapper `setPlaceRule` takes, and the query
+// the rule reads (ADR 0038). Here for the same reason the lock rule types are.
+export type { PlaceQuery, PlaceRule } from '../model/index.js';
+export type { PlaceRuleWrapper };
 // The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
@@ -64,11 +69,26 @@ export interface DatasetEvents {
  *
  *  `setLockRule` is the sibling seam a plugin uses to open one locked Field on one Entry, or on a
  *  whole subtree (#473). Installing composes the same way: the wrapper receives the current occupant,
- *  and falls through to it with `undefined` for "no opinion." Every write door — `entries.update()`,
- *  the grid, and an `EditExtender` cascade — reads the composed rule before `Field.editable` (I14). */
+ *  and calls `next(query, field)` for "no opinion" — a rule always answers, never falls through in
+ *  silence. Every write door — `entries.update()`, the grid, and an `EditExtender` cascade — reads
+ *  the composed rule (I14).
+ *
+ *  `setPlaceRule` is the third seam (ADR 0038): it answers whether an Entry may land under a given
+ *  parent, asked once for a cross-parent move and once for a gesture preview, so a bar drag, a grid
+ *  row drag and `entries.update()`/`add()` all meet the same resolution.
+ *
+ *  `rulesChanged` is the fourth seam (ADR 0038): a lock rule or a place rule can close over state
+ *  outside the Entry it reads — a clock, a toggle — so its answer can move with no write the Dataset
+ *  sees. Call it after that outside state moves. Every bound Gantt re-resolves what it currently
+ *  offers, the same re-resolution a Field write already triggers, so an affordance a rule just closed
+ *  clears on the next frame. No gate: unlike the three seams above, a plugin calls this any time
+ *  after its own `data()` returns, because a rule's outside state can move at any time, not only
+ *  during setup. Writes nothing itself (I14 unaffected — no changeset, no undo step). */
 export interface DatasetEditHook {
   setExtender(wrap: ExtenderWrapper): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
+  setPlaceRule(wrap: PlaceRuleWrapper): void;
+  rulesChanged(): void;
 }
 
 /** This plugin's own store, plus a read-only view of anybody else's. */

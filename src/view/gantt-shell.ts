@@ -111,6 +111,7 @@ import type {
   Disposer,
   Entry,
   EntryId,
+  FieldEditable,
   FieldKey,
   FormatContext,
   GridColumnInput,
@@ -403,6 +404,20 @@ export interface GanttShellOptions {
    *  `verticalDropOffered`: row order assumes `siblingIndex` order only when the tree is core's own
    *  (a plugin-owned hierarchy offers no vertical drop, not "same parent only"). */
   hierarchyFollowsParentId?: () => boolean;
+  /** ADR 0038: the friend function `api/dataset.ts`'s `placeableOf` — may this Entry land under this
+   *  parent, past a plugin's own place rule. `resolveCapabilities`'s `canPlace` asks it for the bar
+   *  drag and the grid row drag alike (one seam, I14). `api/gantt.ts` wires this the same
+   *  friend-map way `hierarchyFollowsParentId` above does. `undefined` (a test-built shell with no
+   *  wiring) keeps `canPlace`'s pre-ADR-0038 answer. */
+  placeableOf?: (id: string, parentId: EntryId | undefined) => FieldEditable;
+  /** ADR 0038: the friend function `api/dataset.ts`'s `onRulesChanged`. A plugin calls
+   *  `ctx.edits.rulesChanged()` after a lock rule's or a place rule's outside state moves. This shell
+   *  answers by re-resolving what it currently offers, then it requests a frame. An affordance a rule
+   *  just closed clears with no Field write needed. `api/gantt.ts` wires this the same friend-map way
+   *  `hierarchyFollowsParentId` above does. `undefined` (a test-built shell with no wiring) subscribes
+   *  to nothing. A rule with outside state then needs its own Field write to be noticed — the
+   *  pre-ADR-0038 behaviour. */
+  onRulesChanged?: (listener: () => void) => Disposer;
   /** Internal (ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
    *  inject a replacement. */
   variantRegistry?: VariantRegistry;
@@ -884,9 +899,25 @@ export class GanttShell {
       if (changeSet.origin === 'load') this.#treeCollapse.resetToStartState();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
+      // A write can close a cell a painted affordance already sits on — a lock, for one (I14).
+      // The affordance ids refresh only on hover, Selection, or a capability change otherwise.
+      // A dataset write needs its own refresh here, once per commit, not once per pointer move.
+      this.#refreshAffordances();
       this.#frames.request();
     });
     this.#teardown.add(() => this.#datasetChanges.unsubscribe());
+    // ADR 0038: a lock rule or a place rule can close over outside state — a clock, a toggle. Its
+    // answer can then move with no Field write for the subscription above to see. A plugin calls
+    // `ctx.edits.rulesChanged()` when that happens. This shell re-resolves what it currently offers,
+    // the same way a dataset write above does, so a now-closed affordance clears on the next frame.
+    if (options.onRulesChanged) {
+      this.#teardown.add(
+        options.onRulesChanged(() => {
+          this.#refreshCapabilities();
+          this.#frames.request();
+        }),
+      );
+    }
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. The `attachPaneSize` call below takes over
     // from here. It takes every measurement after this one, live, for as long as the shell lives
@@ -1744,6 +1775,7 @@ export class GanttShell {
       fieldFor: (key) => this.#options.dataset.field(key),
       variantCapabilitiesFor: (entry) => this.#registrations.variants.resolveFor(entry).capabilities,
       editableOf: (id, key) => this.#options.dataset.editableOf(id, key),
+      placeableOf: this.#options.placeableOf,
     });
   }
 

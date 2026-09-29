@@ -108,6 +108,11 @@ dataset.entries.update('t7', { parentId: 'p2', siblingIndex: 2 }); // reparents 
 // both writes renumber the touched sibling group in the same transaction, so each move is one undo step
 ```
 
+- **`locked` is an ordinary core Field: a boolean, `editable: 'api'`, no grid column (ADR 0038).**
+  `dataset.entries.update(id, { locked: true })` sets it; `{ locked: undefined }` clears it. Core's
+  own lock rule and place rule (below) close every other cell of a locked Entry to a gesture, in
+  both panes, and refuse a drop that would cross into or out of a locked parent — `entries.update()`,
+  `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo all still write past the lock.
 - **`siblingIndex` is an ordinary core Field: an integer rank among an entry's siblings (ADR 0034).** A write that names it, or a write that moves an entry to a different sibling group, renumbers every sibling the move displaces in the same transaction — the ChangeSet carries a row for the moved entry and for every shifted sibling, so one call is one undo step. `add()` with no index appends to the end of its group; `add()` with an index places it there. `remove()` closes the gap its group is left with. `editable: 'never'` on the Field refuses an explicit move; a reparent with no requested index still appends, because the lock that governs a reparent is `parentId`'s own, not this Field's. `entries.all` reads each sibling group in this Field's order (`01` §6).
 - **The `Segment` type retired with no legacy; the word did not (ADR 0026, #421, Q17).** A Segment is a Bar on a row that draws more than one Bar — a reading of what a reader sees, never a record (`CONTEXT.md`). What this section used to describe —
   `dataset.entries.update(id, { segments })` moving one Segment by position, `removeSegments(ids)`,
@@ -750,14 +755,15 @@ together with its own chrome under that one graph (D-S5-31), so a chrome plugin 
 whose only half is `data`. There is no ordering knob.
 
 **The `data` half's own doors are namespaced, and every one is expert.** `ctx.store.reserve` takes
-this plugin's store, `ctx.edits.setExtender` claims the extension hook, and `ctx.edits.setLockRule`
-claims the per-entry lock rule (ADR 0015, #473). Each door takes one occupant that composes — a
-plugin receives the current occupant and may call it — so a second plugin adds to the first rather
-than evicting it (D-S5-23). `setExtender` and `setLockRule` are legal while `data()` runs and not
-after (ADR 0031); `ctx.store.reserve` is ungated. A store row belongs to one Entry: `store.set(id,
-row)` throws `EntryNotFoundError` for an id with no Entry, as the open transaction leaves it, the
-rule `entries.update` follows. Removing an Entry removes its rows in the same `ChangeSet`, even a
-row the same transaction wrote first.
+this plugin's store, `ctx.edits.setExtender` claims the extension hook, `ctx.edits.setLockRule`
+claims the per-entry lock rule (ADR 0015, #473), and `ctx.edits.setPlaceRule` claims the place rule —
+whether an Entry may land under a given parent (ADR 0038). Each door takes one occupant that composes
+— a plugin receives the current occupant and may call it — so a second plugin adds to the first
+rather than evicting it (D-S5-23). `setExtender`, `setLockRule` and `setPlaceRule` are legal while
+`data()` runs and not after (ADR 0031); `ctx.store.reserve` is ungated. A store row belongs to one
+Entry: `store.set(id, row)` throws `EntryNotFoundError` for an id with no Entry, as the open
+transaction leaves it, the rule `entries.update` follows. Removing an Entry removes its rows in the
+same `ChangeSet`, even a row the same transaction wrote first.
 
 **A Field, a Field type, an Aggregator and the hierarchy source are not a `ctx` door at all** — a
 plugin declares them on itself, `fields`/`fieldTypes`/`aggregators`/`hierarchySource`, the same shape
@@ -774,12 +780,27 @@ ctx.edits.setLockRule((next) => (entry, field) =>
 
 That reads: open `cost` under one subtree root, otherwise whatever the next rule says. `entry` is a
 `FieldLockQuery` (`id`, and `isDescendantOf(ancestorId)` for the subtree question) — not the live
-`Entry`, so a lock rule reads structure and nothing a Field write could see. The rule answers
-`FieldEditable | undefined`; `undefined` is silence, and the resolver falls to `Field.editable`
-(`data/write-rule.ts`'s `resolveFieldEditable`). Every write door — the grid, `entries.update()`, and
-an `EditExtender` cascade — reads the same resolved answer, and `Dataset.editableOf(id, field)` /
+`Entry`, so a lock rule reads structure and nothing a Field write could see. The rule always answers
+`FieldEditable` (ADR 0038) — no opinion is `return next(entry, field)`, never `undefined`, so a
+narrowing rule always has an answer under it and can only tighten it, never widen a Field the chain
+below already refused. Every write door — the grid, `entries.update()`, and an `EditExtender`
+cascade — reads the same resolved answer, and `Dataset.editableOf(id, field)` /
 `EditRequest.editableOf(id, field)` publish it so a consumer or a plugin can ask before it writes
 (I14).
+
+```ts
+ctx.edits.setPlaceRule((next) => (place) =>
+  isLocked(place.parentId) ? 'api' : next(place));
+```
+
+That reads: set the place rule — a place under a locked parent opens to the API only, else ask the
+next rule. `place` is a `PlaceQuery`: the moved Entry (`entry`, the same `FieldLockQuery` shape a
+lock rule reads), the parent it would land under (`parentId`, `undefined` for the root), and the
+parent it sits under now (`currentParentId`). Answering `'api'` on `currentParentId` refuses giving
+up a child the same way answering it on `parentId` refuses taking one in. Asked once for a
+cross-parent drop and once for `entries.update()`/`add()` alike (ADR 0038), so a bar drag, a grid row
+drag, and a programmatic move all meet the same resolution (I14). A same-parent reorder is not asked
+here — the lock rule already owns whether a child may reorder under its own parent.
 
 ```ts
 definePlugin<PlannerProps>({
@@ -803,8 +824,18 @@ or `entry.parent()` is how a caller reads this source's own answer instead.
 
 Published types: `ChromePlugin`, `DataPlugin`, `Plugin`, `PluginContext`, `DatasetPluginContext`,
 `HierarchySource`, `HierarchySourceWrapper`, `FieldLockQuery`, `FieldLockRule`,
-`FieldLockRuleWrapper`, and the generic `*Of` shapes behind each. The retired pair is
-`GanttPlugin` / `DatasetPlugin`. `DatasetHierarchy` retires with `ctx.hierarchy.setSource` (ADR 0031).
+`FieldLockRuleWrapper`, `PlaceQuery`, `PlaceRule`, `PlaceRuleWrapper` (ADR 0038), and the generic
+`*Of` shapes behind each. The retired pair is `GanttPlugin` / `DatasetPlugin`. `DatasetHierarchy`
+retires with `ctx.hierarchy.setSource` (ADR 0031).
+
+**A plugin tells a bound Gantt its rule's answer changed.** Installing `setLockRule` or
+`setPlaceRule` after setup does not exist (ADR 0031) — but a plugin's own rule can still start
+answering a cell differently, behind a toggle it owns, with no edit for `entries.update()` to see.
+`ctx.edits.rulesChanged()` (working name; the naming skill settles the final one) tells every Gantt
+bound to this Dataset to re-resolve its affordances on the next frame, the same re-resolution a
+dataset change already triggers, with no `ChangeSet` and no undo step of its own. Read aloud:
+`edits.rulesChanged()` — "tell every bound Gantt: a rule's answer changed" — after the harness's
+"past work is frozen" plugin flips its toggle (docs/06).
 
 ### 4.5 Plugin registrations: one collision policy, one lifetime (#155)
 

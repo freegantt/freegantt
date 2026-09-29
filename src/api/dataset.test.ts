@@ -26,7 +26,6 @@ import {
 import { diffMs, spansTime } from './index.js';
 import type { ChangeSet, DataPlugin, Duration, Entry, EntryInput, Field } from './index.js';
 import type { EditRequest, ProposedEdit, ProposedEdits, WriteTarget } from '../model/index.js';
-import { lockEntries } from '../../harness/plugins/lock-entries.js';
 
 const utc = (iso: string): number => Date.parse(iso);
 
@@ -885,7 +884,7 @@ describe('Dataset plugins (S5.10)', () => {
   }
 
   /** Locks one entry: its own store row says which, and `beforeChange` refuses any commit that
-   *  touches it — the same shape harness/plugins/lock-entries.ts ships. */
+   *  touches it. */
   function lockEntries(ids: readonly string[]): DataPlugin {
     return {
       id: 'demo.lock',
@@ -1006,6 +1005,18 @@ describe('Dataset plugins (S5.10)', () => {
     };
     new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [late] });
     expect(setExtenderLate).toThrow(RegistrationClosedError);
+  });
+
+  it('throws RegistrationClosedError when a plugin claims the place rule after setup returned', () => {
+    let setPlaceRuleLate = (): void => undefined;
+    const late: DataPlugin = {
+      id: 'demo.late-place',
+      data(ctx) {
+        setPlaceRuleLate = () => ctx.edits.setPlaceRule((next) => next);
+      },
+    };
+    new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [late] });
+    expect(setPlaceRuleLate).toThrow(RegistrationClosedError);
   });
 
   it('has a Field a plugin declares in the registry, already settled by the construction Rollup (#496)', () => {
@@ -1371,18 +1382,17 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (#
   });
 });
 
-describe('a plugin Field declared at construction is there before entries are read (#496 grill round 3)', () => {
-  /** No `ctx.fields.register` call: the plugin declares `locked` on itself, the same shape
-   *  `DatasetOptions.fields` takes. This is what `harness/plugins/lock-entries.ts` moves to. */
+describe('a core Field declared at construction is there before entries are read (#496 grill round 3)', () => {
+  /** `locked` is a core Field now (ADR 0038); this plugin declares nothing of its own and only
+   *  stands in for the #496 grill scenario the tests below still pin. */
   const locks = () => ({
     id: 'demo.locks',
-    fields: [{ key: 'locked', type: 'boolean', editable: 'api' }] as const,
     data(): void {
-      /* the extension hook and the store are out of scope for this gap — see lock-entries.ts */
+      /* the extension hook and the store are out of scope for this gap */
     },
   });
 
-  it('keeps a flat plugin-Field value new Dataset() is given, the same as entries.load() already does', () => {
+  it('keeps a flat core-Field value new Dataset() is given, the same as entries.load() already does', () => {
     const dataset = new Dataset<{ locked?: boolean }>({
       timeZone: 'UTC',
       entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
@@ -1403,78 +1413,12 @@ describe('a plugin Field declared at construction is there before entries are re
     );
   });
 
-  it('reports a duplicate plugin id, not a shared Field key it also declares (ocr review of #532)', () => {
-    // Two installs of the same factory: same id, same declared Field key. Duplicate-id must win —
-    // that is the error docs/06-plugin-authoring.md documents for two plugins sharing an id — and it
-    // has to win *before* the Field merge below ever sees the shared key, or a factory called twice
-    // throws the wrong error naming a key instead of the plugin id it actually got wrong.
+  it('reports a duplicate plugin id (ocr review of #532)', () => {
+    // Two installs of the same factory: same id. Duplicate-id must win — that is the error
+    // docs/06-plugin-authoring.md documents for two plugins sharing an id.
     expect(() => new Dataset({ timeZone: 'UTC', entries: [], plugins: [locks(), locks()] })).toThrow(
       DuplicatePluginIdError,
     );
-  });
-
-  it("harness's lockEntries() ghosts a construction-time lock on the drag preview it never itself committed", () => {
-    // The real plugin, not the `locks()` double above: this pins `lockedIds`' own seed walk
-    // (`harness/plugins/lock-entries.ts`), which the local double does not have.
-    const locks = lockEntries();
-    const dataset = new Dataset<{ locked?: boolean }>({
-      timeZone: 'UTC',
-      entries: [
-        { id: 'mover', name: 'Mover', start: '2026-09-01', end: '2026-09-03' },
-        // Locked from construction alone — never its own commit, so `lockedIds` cannot have
-        // learned about it from a `change` this entry raised.
-        { id: 'anchor', name: 'Anchor', start: '2026-09-01', end: '2026-09-03', locked: true },
-      ],
-      plugins: [locks],
-    });
-
-    // The preview path, not a commit: `beforeChange` refuses a real write that moves `anchor`'s
-    // dates too (that refusal is the plugin's whole point, pinned by `e2e/plugins.spec.ts`), so the
-    // fact under test — does the extender's cascade reach `anchor` on the very first call? — is read
-    // off `extraEditsFor`, the same door a drag preview frame calls.
-    const draft = proposedDraft('mover', {
-      start: instant('2026-09-05T00:00:00Z'),
-      end: instant('2026-09-07T00:00:00Z'),
-    });
-    const preview = extraEditsFor(dataset, draft);
-
-    // `anchor` ghosts alongside `mover` on this very first preview — the cascade the extender adds
-    // for every entry in `lockedIds` (#496 grill round 3 follow-up).
-    expect(preview.get(entryId('anchor'))?.start).toEqual(instant('2026-09-05T00:00:00Z'));
-  });
-});
-
-describe("harness's lockEntries() lets an undo and a redo through on a locked entry", () => {
-  it('still refuses a plain write on a locked entry', () => {
-    const dataset = new Dataset<{ locked?: boolean }>({
-      timeZone: 'UTC',
-      entries: [{ id: 'a', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
-      plugins: [lockEntries()],
-    });
-
-    expect(() => dataset.entries.update('a', { name: 'edited' })).toThrow(MutationCancelledError);
-  });
-
-  it('lets an undo reverse a step recorded before a sync locked the entry', () => {
-    const dataset = new Dataset<{ locked?: boolean }>({
-      timeZone: 'UTC',
-      entries: [{ id: 'a', name: 'Design', start: '2026-09-01', end: '2026-09-08' }],
-      plugins: [lockEntries()],
-    });
-
-    dataset.entries.update('a', { name: 'edited' });
-    // A sync records no step of its own (#517), so the undo below reverses the rename above, on an
-    // entry the sync's own list has since locked.
-    dataset.entries.syncAll([
-      { id: 'a', name: 'edited', start: '2026-09-01', end: '2026-09-08', locked: true },
-    ]);
-
-    expect(() => dataset.undo()).not.toThrow();
-    expect(dataset.entries.get('a')?.read('name')).toBe('Design');
-    expect(dataset.entries.get('a')?.read('locked')).toBe(true);
-
-    dataset.redo();
-    expect(dataset.entries.get('a')?.read('name')).toBe('edited');
   });
 });
 
