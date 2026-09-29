@@ -9,6 +9,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 ### Changed
 
 - `parentId` is now `editable: 'anywhere'`. A vertical drag may re-parent an Entry; the grid cell still shows no editor for it, because `entryId` ships no `parseValue`. ([#425](https://github.com/freegantt/freegantt/issues/425))
+- **Breaking:** `FieldLockRule` always returns a `FieldEditable` answer; it no longer returns `undefined` for "no opinion". Call `next(query, field)` in place of returning `undefined` to defer to the next rule. ([#612](https://github.com/freegantt/freegantt/issues/612))
 
 ### Added
 
@@ -18,10 +19,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - New report code `rollup-preview-failed`: a plugin aggregator threw while a drag previewed the new parent's Rollup dates. The frame paints with no Rollup ghost, and the drag goes on. ([#425](https://github.com/freegantt/freegantt/issues/425))
 - The hierarchy-and-timeline harness page's phase-plugin tree is now opt-in (`?tree=phase`); by default the page drags like the generic page. The generic harness page gains a "Lock tree" checkbox. ([#425](https://github.com/freegantt/freegantt/issues/425))
 - A drag on a grid row moves its Entry before, after or into another row, with the same drop zones, Insertion line and refusal as a vertical bar drag. `reorder: false` turns off both. ([#602](https://github.com/freegantt/freegantt/issues/602))
+- `locked` is a new core `Entry` Field. Set it through `entries.update(id, { locked: true })` and every user gesture on that row refuses at preview: it cannot move, reorder, take a new child, or give up a child. App code still writes past the lock; only the user-facing doors close. ([#612](https://github.com/freegantt/freegantt/issues/612))
+- New seam `ctx.edits.setPlaceRule(wrap)` on `DatasetEditHook`, with the matching `PlaceRule`, `PlaceQuery` and `PlaceRuleWrapper` types. A plugin's place rule refuses a drop into or out of an Entry, for the bar drag and the grid row drag alike, and `entries.add()`/`entries.update()` throw the new `PlaceRefusedError` (thrown code `place-refused`) when app code crosses it. ([#612](https://github.com/freegantt/freegantt/issues/612))
+- New door `ctx.edits.rulesChanged()` on `DatasetEditHook`. Call it after a lock rule or a place rule's answer changes with no dataset write — a rule that reads the clock, for example — so every bound Gantt re-resolves its affordances. ([#612](https://github.com/freegantt/freegantt/issues/612))
+- The generic, editing-and-data, data, and hierarchy harness pages lock a row through the core `locked` Field, not a hand-built plugin. `harness/plugins/lock-entries.ts` is replaced by `freezePastWork()`: a plugin that locks an Entry once its own work is past, and refuses a drop into a parent whose work is all past, through the public `setLockRule`/`setPlaceRule` seams alone. ([#612](https://github.com/freegantt/freegantt/issues/612))
 
 ### Fixed
 
 - The planner harness page's `#` cell no longer keeps a work row's number after the row becomes a phase. ([#618](https://github.com/freegantt/freegantt/issues/618))
+- A dataset write that closes a row's capabilities with no capability-rule change of its own — locking the only selected Entry, for example — now refreshes its affordances right away. Before, a stale resize handle or drop indicator stayed painted until the next hover, Selection change, or capability change. ([#612](https://github.com/freegantt/freegantt/issues/612))
 
 ## [0.0.1] - 2026-09-28
 
