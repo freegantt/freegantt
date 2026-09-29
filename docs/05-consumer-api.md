@@ -179,8 +179,7 @@ A user drags a bar vertically, or drags a grid row. Both read the same drop: `be
 it, or `after` it, and both write one undo step. Turn the gesture off with one switch, in either pane:
 
 ```ts
-const gantt = new Gantt({ container, dataset, capabilities: { reorder: false } });
-// or, at runtime:
+// at construction: new Gantt({ container, dataset, capabilities: { reorder: false } })
 gantt.setCapabilityRule('reorder', false);
 ```
 
