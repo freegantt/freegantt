@@ -8,8 +8,9 @@
 import type { Entry, EntryId, BarId, RowId, ClientPoint } from '../model/index.js';
 import type { GestureCapability } from './capability.js';
 
-/** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
-export type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
+/** What kind of data gesture is in flight — a bar drag that moves it, a bar drag that resizes one
+ *  edge, or a grid row drag that reorders or re-parents the Entry and writes no date. */
+export type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' } | { kind: 'reorder' };
 
 /** Alt suspends snapping for fine placement during a gesture — `entry-gestures.ts` reads
  *  `e.altKey` off the pointer event and passes it through here; only `GanttShell` knows how a
@@ -19,7 +20,7 @@ export interface DraftOptions {
   /** Content-x under the pointer, already converted by `contentXAtPaneOffset`.
    *  `preview()` paints the Cursor line here; `commit()`/`nudge()` ignore it. */
   cursorX?: number;
-  /** #425: content-y under the pointer, already converted by `contentYAtPaneOffset`. `preview()`
+  /** #425: content-y under the pointer, already converted by `contentYAtClientY`. `preview()`
    *  and `commit()` resolve the vertical drag's row drop from it; `nudge()` ignores it — a keyboard
    *  step never reparents. */
   contentY?: number;
@@ -78,11 +79,6 @@ export interface SelectionForGestures {
 /** #434: what a click activates, independent of Selection (I14) — the same shape `SelectionForGestures`
  *  takes for `select`, one collaborator answering one hit's worth of questions. */
 export interface ActivationForGestures {
-  /** The Entry a hit stands for — a bar names its own Entry; a row names its subject, the row's
-   *  first Entry (the same subject a `DomTarget` reads for a row). `undefined` when the row owns
-   *  none, or the bar's Entry is gone. Names *which* Entry only; the caller still asks
-   *  `can('activate', entry)` before firing (I14). */
-  subjectEntryOf(hit: EntryHit): Entry | undefined;
   /** Fires `entryActivate` with cause `'click'`, gated by both the pointer trigger
    *  (`GanttShellOptions.pointerActivation`) and `detail`, the click's own click count. Under
    *  `pointerActivation: 'click'` (default) this fires only for a click's first physical press —
@@ -108,6 +104,13 @@ export interface EntryGestureContext {
   selection: SelectionForGestures;
   /** What a hit would activate, and the door to fire it (#434). */
   activation: ActivationForGestures;
+  /** The Entry a hit stands for — a bar names its own Entry; a row names its subject, the row's
+   *  first Entry (the same subject a `DomTarget` reads for a row). `undefined` when the row owns
+   *  none, or the bar's Entry is gone. Names *which* Entry only; the caller still asks
+   *  `can(capability, entry)` before acting on it (I14). Two jobs read this now: activation (#434)
+   *  and a row-reorder grab (#602), so it sits at the top level rather than under one job's own
+   *  `activation` member. */
+  subjectEntryOf(hit: EntryHit): Entry | undefined;
   /** The bar id under the pointer, or undefined on pointerleave. */
   setHovered(barId: BarId | undefined): void;
   /** The grid row under the pointer, or undefined once it leaves the grid pane. The timeline pane
@@ -117,9 +120,9 @@ export interface EntryGestureContext {
   /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound x `ScrollAxis`'s position —
    *  content x for the Cursor line. `interaction/` never reads element scroll (I12). */
   contentXAtPaneOffset(offsetX: number): number;
-  /** #425: `contentXAtPaneOffset`'s own twin for the y axis — pane-local `offsetY` plus the bound y
-   *  `ScrollAxis`'s position, for a vertical drag's row drop zone. */
-  contentYAtPaneOffset(offsetY: number): number;
+  /** Content-y under a pointer at `clientY`, read through the bound y `ScrollAxis`. Both panes
+   *  share one row geometry, so it needs no pane. */
+  contentYAtClientY(clientY: number): number;
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */

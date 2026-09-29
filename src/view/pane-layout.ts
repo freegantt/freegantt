@@ -276,6 +276,12 @@ export class PaneLayout {
     };
   }
 
+  /** The timeline pane's top edge, in client coordinates. The grid pane shares this top, so a
+   *  caller converting a client-y to content-y needs only this one reading, not both panes'. */
+  timelineTop(): number {
+    return this.panes.timeline.getBoundingClientRect().top;
+  }
+
   /** `GanttDom.paneOf` (#177): which pane holds `node`, by element identity. `paneBounds` answers
    *  the same question by geometry, which is the right tool for placing a box and the wrong one for
    *  "whose scroll was that". A node outside both panes answers `undefined`. */

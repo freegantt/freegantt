@@ -275,6 +275,7 @@ question, and the next section answers it.
 | Give a bar its own look | `variants: [{ name: 'fullDay', when: { hours: 8 }, paint, css }]` | no |
 | Gate a gesture for every bar | `capabilities: { resize: (entry) => entry.read('locked') !== true }` | no |
 | Gate a gesture for one look's bars | `variants: [{ name: 'fullDay', when: { hours: 8 }, can: { resize: false } }]` | no |
+| Turn off drag to another row, in both panes | `capabilities: { reorder: false }` | no |
 | Read the change | `{ store: 'entries', id: 'd2', field: 'hours', from: 4, to: 6 }` | no |
 | Propose a cascade | an `EditExtender` returns `EntryEdits` | no |
 | Show the same bars as sub-rows | change the rule, or the value it matches | no |
