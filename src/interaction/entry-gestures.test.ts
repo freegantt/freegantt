@@ -11,6 +11,10 @@ import { entryId, entryIdOfBar, barId, rowId, partIndexOfBar } from '../model/in
 import type { Entry, EntryEdits, EntryId, Instant, BarId, StoredEntry } from '../model/index.js';
 import { EntryStore } from '../data/index.js';
 
+/** `pointer-gesture.ts`'s own touch long-press threshold — this suite reads it only to advance
+ *  fake timers past it, never to restate the rule. */
+const ROW_REORDER_LONG_PRESS_MS = 400;
+
 const A = entryId('a');
 const B = entryId('b');
 const C = entryId('c');
@@ -861,6 +865,32 @@ describe('attachEntryGestures — row reorder drag (#602)', () => {
     rowLayer.dispatchEvent(new PointerEvent('pointercancel', { clientX: 0, clientY: 10, pointerId: 1 }));
 
     expect(previews.at(-1)).toBeUndefined();
+  });
+
+  it('a touch long-press arms a reorder, then stops the page pan (#602)', () => {
+    vi.useFakeTimers();
+    try {
+      const pane = document.createElement('div');
+      const container = document.createElement('div');
+      const rowLayer = document.createElement('div');
+      mockPointerCapture(rowLayer);
+      const { ctx } = rowReorderContext();
+      attachEntryGestures(pane, rowLayer, container, ctx);
+
+      rowLayer.dispatchEvent(down(0, { clientY: 0, pointerType: 'touch' }));
+
+      const beforeArming = new Event('touchmove', { cancelable: true });
+      rowLayer.dispatchEvent(beforeArming);
+      expect(beforeArming.defaultPrevented).toBe(false);
+
+      vi.advanceTimersByTime(ROW_REORDER_LONG_PRESS_MS);
+
+      const afterArming = new Event('touchmove', { cancelable: true });
+      rowLayer.dispatchEvent(afterArming);
+      expect(afterArming.defaultPrevented).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
