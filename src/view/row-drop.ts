@@ -13,12 +13,14 @@ import { dropPlaceFor } from '../layout/row-drop-target.js';
 import { siblingBlockMove } from '../data/sibling-order.js';
 
 /** Why a drop refuses. `'groupHeader'` — the zone named a header row, which stands for no Entry to
- *  land on or under. `'ownDescendant'` — the target sits inside the moved Entry's own subtree, the
- *  cycle `EntryStore` would otherwise throw on. `'capability'` — the moved Entry's own `reorder`
- *  capability, or its `siblingIndex` cell, refuses the gesture outright, a same-parent drop
- *  included. `'parentLocked'` — `reorder` is open and a same-parent drop would land, but this drop
- *  crosses into a different parent and the Entry's `parentId` cell refuses that crossing. */
-export type RowDropRefusal = 'groupHeader' | 'ownDescendant' | 'capability' | 'parentLocked';
+ *  land on or under. `'entryGone'` — the row plan is a stale mid-drag snapshot and its subject is
+ *  an id the Dataset no longer holds (`dropPlaceFor`'s own doc). `'ownDescendant'` — the target sits
+ *  inside the moved Entry's own subtree, the cycle `EntryStore` would otherwise throw on.
+ *  `'capability'` — the moved Entry's own `reorder` capability, or its `siblingIndex` cell, refuses
+ *  the gesture outright, a same-parent drop included. `'parentLocked'` — `reorder` is open and a
+ *  same-parent drop would land, but this drop crosses into a different parent and the Entry's
+ *  `parentId` cell refuses that crossing. */
+export type RowDropRefusal = 'groupHeader' | 'entryGone' | 'ownDescendant' | 'capability' | 'parentLocked';
 
 /** One Entry a `place` drop writes. `at` is the call-time index the pipeline's `entries.update`
  *  names for this Entry — a rank into the group as it stood when that call ran, not the final rank
@@ -71,7 +73,7 @@ export function resolveRowDrop(input: RowDropInput): RowDrop {
   if (!verticalDropOffered && !intoChildrenAsSegmentsRow(zone, rows)) return { kind: 'timeOnly' };
 
   const answer = dropPlaceFor(zone, rows);
-  if ('refused' in answer) return { kind: 'refused', rowId: answer.rowId, reason: 'groupHeader' };
+  if ('refused' in answer) return { kind: 'refused', rowId: answer.rowId, reason: answer.refused };
   const place = answer;
 
   for (const entry of movedTopMost) {
