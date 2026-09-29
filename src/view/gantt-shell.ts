@@ -111,6 +111,7 @@ import type {
   Disposer,
   Entry,
   EntryId,
+  FieldEditable,
   FieldKey,
   FormatContext,
   GridColumnInput,
@@ -403,6 +404,12 @@ export interface GanttShellOptions {
    *  `verticalDropOffered`: row order assumes `siblingIndex` order only when the tree is core's own
    *  (a plugin-owned hierarchy offers no vertical drop, not "same parent only"). */
   hierarchyFollowsParentId?: () => boolean;
+  /** ADR 0038: the friend function `api/dataset.ts`'s `placeableOf` — may this Entry land under this
+   *  parent, past a plugin's own place rule. `resolveCapabilities`'s `canPlace` asks it for the bar
+   *  drag and the grid row drag alike (one seam, I14). `api/gantt.ts` wires this the same
+   *  friend-map way `hierarchyFollowsParentId` above does. `undefined` (a test-built shell with no
+   *  wiring) keeps `canPlace`'s pre-ADR-0038 answer. */
+  placeableOf?: (id: string, parentId: EntryId | undefined) => FieldEditable;
   /** Internal (ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
    *  inject a replacement. */
   variantRegistry?: VariantRegistry;
@@ -1744,6 +1751,7 @@ export class GanttShell {
       fieldFor: (key) => this.#options.dataset.field(key),
       variantCapabilitiesFor: (entry) => this.#registrations.variants.resolveFor(entry).capabilities,
       editableOf: (id, key) => this.#options.dataset.editableOf(id, key),
+      placeableOf: this.#options.placeableOf,
     });
   }
 
