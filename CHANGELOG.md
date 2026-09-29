@@ -6,6 +6,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ## [Unreleased]
 
+### Changed
+
+- `parentId` is now `editable: 'anywhere'`. A vertical drag may re-parent an Entry; the grid cell still shows no editor for it, because `entryId` ships no `parseValue`. ([#425](https://github.com/freegantt/freegantt/issues/425))
+
+### Added
+
+- A vertical drag on a bar moves its Entry to another row: before a row, after a row, or into a row as a child. The drag picks a time axis or a row axis after 4 px of travel and holds it for the whole gesture. A tree row splits into three drop zones, an insertion line marks where the bar lands, a refused drop paints `data-drop="refused"` with a `not-allowed` cursor and commits nothing, and one drop is one transaction that one undo reverses. ([#425](https://github.com/freegantt/freegantt/issues/425))
+- New capability `reorder`. `gantt.setCapabilityRule('reorder', false)` turns off vertical drag for every row. ([#425](https://github.com/freegantt/freegantt/issues/425))
+- `entryMove` and `beforeEntryMove` carry `place` and `currentPlace` (a new `TreePlace` type) when a drag changes the tree, and `shiftsTime` when a drag changes the dates. A handler tells a vertical move from a horizontal one. ([#425](https://github.com/freegantt/freegantt/issues/425))
+- New report code `rollup-preview-failed`: a plugin aggregator threw while a drag previewed the new parent's Rollup dates. The frame paints with no Rollup ghost, and the drag goes on. ([#425](https://github.com/freegantt/freegantt/issues/425))
+- The hierarchy-and-timeline harness page's phase-plugin tree is now opt-in (`?tree=phase`); by default the page drags like the generic page. The generic harness page gains a "Lock tree" checkbox. ([#425](https://github.com/freegantt/freegantt/issues/425))
+
 ## [0.0.1] - 2026-09-28
 
 The first release on npm: `npm install freegantt`.
