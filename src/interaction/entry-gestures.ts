@@ -139,15 +139,15 @@ export function attachEntryGestures(
         // applies to what actually gets written — see commit() below — this only affects what paints
         // while the gesture is in flight. Cursor line x and row-drop y are both content space: pane-local
         // offset plus the bound scroll, never element.scrollLeft/scrollTop (I12).
-        // One rect for both reads. `offsetY` only matters on a row-axis move, so it is computed
-        // there and nowhere else — a time-axis or resize move never pays for it.
+        // The rect only serves `offsetX`: content-y goes straight through `clientY` now, since both
+        // panes share one row geometry and the door reads the pane top itself.
         const rect = pane.getBoundingClientRect();
         const offsetX = e.clientX - rect.left;
         const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
         session!.preview(rowAxisLocked ? 0 : dxPx, {
           suspendSnap: true,
           cursorX: ctx.contentXAtPaneOffset(offsetX),
-          ...(rowAxisLocked ? { contentY: ctx.contentYAtPaneOffset(e.clientY - rect.top) } : undefined),
+          ...(rowAxisLocked ? { contentY: ctx.contentYAtClientY(e.clientY) } : undefined),
         });
       },
       commit(e, dxPx, _dyPx, axis): void {
@@ -159,9 +159,7 @@ export function attachEntryGestures(
         const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
         void session!.commit(rowAxisLocked ? 0 : dxPx, {
           ...(e.altKey ? { suspendSnap: true } : undefined),
-          ...(rowAxisLocked
-            ? { contentY: ctx.contentYAtPaneOffset(e.clientY - pane.getBoundingClientRect().top) }
-            : undefined),
+          ...(rowAxisLocked ? { contentY: ctx.contentYAtClientY(e.clientY) } : undefined),
         });
         session = undefined;
         grabbedId = undefined;

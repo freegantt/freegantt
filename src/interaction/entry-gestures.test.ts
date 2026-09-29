@@ -101,7 +101,7 @@ function makeContext(overrides: ContextOverrides = {}): {
     setHovered: () => {},
     setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
-    contentYAtPaneOffset: (offsetY) => offsetY,
+    contentYAtClientY: (clientY) => clientY,
     discardHeldGesture: () => false,
     session: (grabbed, gesture) => {
       const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');
@@ -854,16 +854,15 @@ describe('attachEntryGestures — move (S3.3)', () => {
     expect(proposals).toEqual([[A]]);
   });
 
-  it('preview reads content-y from the pane-relative pointer position, not the raw client y', () => {
+  it('preview reads content-y straight off the client y — the door subtracts the pane top', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
-    pane.getBoundingClientRect = () => domRect(20);
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     const seenContentY: (number | undefined)[] = [];
     const { ctx } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
-      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      contentYAtClientY: (clientY) => clientY + 1000,
       draftFor: (_gesture, entries, _dxPx, options) => {
         seenContentY.push(options?.contentY);
         return new Map(entries.map((e) => [e.id, {}]));
@@ -874,19 +873,18 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(down(0, { clientY: 50 }));
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
 
-    expect(seenContentY.at(-1)).toBe(65 - 20 + 1000);
+    expect(seenContentY.at(-1)).toBe(65 + 1000);
   });
 
   it('commit reads content-y the same way, off the pointerup position', () => {
     const pane = document.createElement('div');
     mockPointerCapture(pane);
-    pane.getBoundingClientRect = () => domRect(20);
     const container = document.createElement('div');
     const rowLayer = document.createElement('div');
     const seenContentY: (number | undefined)[] = [];
     const { ctx } = makeContext({
       can: (capability) => capability === 'move' || capability === 'select',
-      contentYAtPaneOffset: (offsetY) => offsetY + 1000,
+      contentYAtClientY: (clientY) => clientY + 1000,
       draftFor: (_gesture, entries, _dxPx, options) => {
         seenContentY.push(options?.contentY);
         return new Map(entries.map((e) => [e.id, {}]));
@@ -898,7 +896,7 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 65 }));
     pane.dispatchEvent(up(0 + DRAG_THRESHOLD_PX + 5, { clientY: 90 }));
 
-    expect(seenContentY.at(-1)).toBe(90 - 20 + 1000);
+    expect(seenContentY.at(-1)).toBe(90 + 1000);
   });
 
   it('a mostly-horizontal arm locks the time axis — content-y is never read (#425)', () => {
