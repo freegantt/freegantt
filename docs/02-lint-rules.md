@@ -244,11 +244,11 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 **Flags:** in `src/**/*.ts` outside `src/data/fields/field-registry.ts` and outside test files — any read of an `editable` member: `field.editable`, `field['editable']`, and `const { editable } = field`.
 
-**Allowed:** the declaration itself (`{ key: 'start', editable: 'anywhere' }` is a Property, not a read), and `field-registry.ts`, where `editableOf` resolves the boolean aliases and the absent-key default. Every other caller asks `src/data/write-rule.ts`'s shared resolver instead: `editableAnswerFor(field, declared, query, lockRule)` — `'never'` for an undeclared or `compute` Field, the plugin's per-entry lock rule's own answer otherwise (#473) — or `resolveFieldEditable` once existence and `compute` are already checked.
+**Allowed:** the declaration itself (`{ key: 'start', editable: 'anywhere' }` is a Property, not a read), and `field-registry.ts`, where `editableOf` resolves the boolean aliases and the absent-key default. Every other caller asks `src/data/write-rule.ts`'s shared resolver instead: `editableAnswerFor(field, declared, query, lockRule)` — `'never'` for an undeclared or `compute` Field, the lock rule's own answer otherwise (#473), with `fieldEditableRule` as that lock chain's own bottom occupant, answering the Field's declared `editable` when nothing above it has an opinion.
 
 **Why:** this is the check that catches a split reader. `view/capability.ts` read `field.editable === true` while `entries.update()` read nothing at all, so one key had two answers: the grid hid a handle over a write that still landed. A second reader of the raw key is how that split comes back.
 
-**Message:** `` `Field.editable` is read in `data/fields/field-registry.ts` only (I14, ADR 0015). Ask `editableAnswerFor(field, declared, query, lockRule)` (or `resolveFieldEditable` once existence and `compute` are already checked) — one resolver, every reader. ``
+**Message:** `` `Field.editable` is read in `data/fields/field-registry.ts` only (I14, ADR 0015). Ask `editableAnswerFor(field, declared, query, lockRule)` — one resolver, every reader. ``
 
 ---
 
