@@ -182,7 +182,8 @@ export interface GesturePipelineDeps {
  *  The two differ for one gesture only. A parent bar's drag writes the dated descendants below the
  *  bar, and never the bar's own dates, which roll up from them (ADR 0013). So the parent sits in
  *  `paints`, where it follows the pointer, and stays out of `writes`. Every other gesture writes
- *  exactly what it paints, and both fields hold one and the same map. */
+ *  exactly what it paints — `writes` is `paints`' own map whenever nothing needs stripping, and a
+ *  fresh one built to agree with it otherwise (a `place` drop's tree write, a refusal's empty one). */
 interface GestureProposal {
   readonly writes: ProposedEdits;
   readonly paints: ProposedEdits;
@@ -331,7 +332,6 @@ export class GesturePipeline {
     const grabbedEntry = topMost.find((entry) => entry.id === grabbedId);
     const rest = topMost
       .filter((entry) => entry.id !== grabbedId)
-      .slice()
       .sort((a, b) => this.#deps.rowIndexForEntry(a.id) - this.#deps.rowIndexForEntry(b.id));
     return grabbedEntry ? [grabbedEntry, ...rest] : rest;
   }
@@ -451,8 +451,14 @@ export class GesturePipeline {
     };
     const paints =
       gesture.kind === 'resize' ? draftForResize({ ...base, edge: gesture.edge }) : draftForMove(base);
-    const writes = new Map(paints);
-    for (const id of paintedOnly) writes.delete(id);
+    // #425 (finding 16): no `paintedOnly` id means nothing to strip, so `writes` shares `paints`'
+    // own map instead of paying a copy on every frame — the common case, one parent bar aside.
+    let writes: ProposedEdits = paints;
+    if (paintedOnly.size > 0) {
+      const stripped = new Map(paints);
+      for (const id of paintedOnly) stripped.delete(id);
+      writes = stripped;
+    }
     if (drop.kind === 'place') {
       return { writes: this.#writesWithPlace(writes, paints, drop.moves), paints, grabbed, drop };
     }
@@ -879,7 +885,7 @@ export class GesturePipeline {
     const draft = proposal.paints;
     const extenderExtra = this.#extraFor(proposal.writes);
     // #425 ruling 5: a `place` drop's own Rollup ghost — the new parent's dates rolling up to cover
-    // the entry it just gained — merges in beside whatever the extension hook already ghosted. A
+    // the entry it just gained — merges in beside whatever the extension hook already ghosted.
     // A time-only drag never asks: it keeps today's silence on purpose, a follow-up's job.
     const extra =
       proposal.drop.kind === 'place'
