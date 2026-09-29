@@ -1483,6 +1483,15 @@ describe('render/dom backend', () => {
     expect(lineInTimeline.style.transform).toBe('translateY(64px)');
     expect(grid.dataset['drop']).toBeUndefined();
 
+    // #425 finding 10: mounted ahead of the content sizer, the same grid-line trap `date-line.ts`
+    // documents — its own containing block starts right at the top of the timeline pane.
+    const sizer = timeline.querySelector<HTMLElement>('.fg-content-sizer')!;
+    const children = Array.from(timeline.children);
+    expect(children.indexOf(lineInTimeline)).toBeLessThan(children.indexOf(sizer));
+    // #425 finding 8: sized like a row band (`max(contentWidth, paneWidth)`), not left at the CSS
+    // default of the pane's own client width — content 100px, pane 100px here, so both agree.
+    expect(lineInTimeline.style.width).toBe('100px');
+
     // "into" reads on the row's own outline — the target's centre, not a line between two rows.
     backend.applyState({ rowDrop: { rowId: target.id, side: 'into', depth: 1, lineY: undefined } });
     expect(row.dataset['drop']).toBe('into');
@@ -1502,6 +1511,76 @@ describe('render/dom backend', () => {
     expect(grid.dataset['drop']).toBeUndefined();
     expect(lineInGrid.hidden).toBe(true);
     expect(lineInTimeline.hidden).toBe(true);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  // #425 finding 8: `.fg-timeline-pane` clips to its own client width — the CSS default `width: 100%`
+  // sizes the line to that, not to the scrollable content. A pane narrower than the content must
+  // not shrink the line to the pane, the same reasoning `syncRowBands` already carries for a band.
+  it('sizes the Insertion line to the content when the pane is narrower than it (#425 finding 8)', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale, // scale.contentWidth is 100
+      preset,
+      visible: { x: 0, y: 0, width: 20, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+    const lineInTimeline = timeline.querySelector<HTMLElement>('.fg-drop-line')!;
+
+    backend.applyState({ rowDrop: { rowId: frame.rows[1]!.id, side: 'before', depth: 0, lineY: 32 } });
+
+    expect(lineInTimeline.style.width).toBe('100px'); // content (100px), not the 20px pane
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  // #425 finding 9: a wheel scroll can remount a row (and its band) mid-drag with no pointermove in
+  // between — `data-drop` must come back with the node, not wait for the next `applyState`.
+  it('a row remounted mid-drag keeps its data-drop token (#425 finding 9)', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries,
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 100, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+
+    const target = frame.rows[1]!;
+    backend.applyState({ rowDrop: { rowId: target.id, side: 'before', depth: 0, lineY: 32 } });
+    expect(grid.querySelector(`.fg-row[data-row-id="${target.id}"]`)?.getAttribute('data-drop')).toBe(
+      'before',
+    );
+
+    // A wheel scroll culls every row (virtualization), then remounts them — no pointermove, so
+    // `applyState` never runs in between.
+    backend.sync({ ...frame, rows: [] });
+    backend.sync(frame);
+
+    const row = grid.querySelector<HTMLElement>(`.fg-row[data-row-id="${target.id}"]`)!;
+    const band = timeline.querySelector<HTMLElement>(`.fg-row-band[data-row-id="${target.id}"]`)!;
+    expect(row.getAttribute('data-drop')).toBe('before');
+    expect(band.getAttribute('data-drop')).toBe('before');
 
     backend.destroy();
     grid.remove();

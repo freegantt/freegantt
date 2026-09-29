@@ -406,6 +406,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // with each bar) — read by `toGeom` below, so the fit test always runs against the frame that is
   // actually being painted.
   let contentWidthPx = 0;
+  // #425: the last frame's pane width — `paintDropLine` needs it alongside `contentWidthPx` to size
+  // the timeline Insertion line the same way `syncRowBands` sizes a row band.
+  let paneWidthPx = 0;
 
   const bandLayer = new KeyedLayer<FrameHeaderBand, number, BandGeom>();
   // One tick layer per band index — a nested keyed list is still a keyed list (plans/01 §8.1's
@@ -459,6 +462,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   /** #425: the row (grid pane and timeline band both) `applyState`'s vertical-drag paint last
    *  stamped `data-drop` on — a drop's target row, or its refusal row. `undefined` outside a drop. */
   let paintedDropRowId: RowId | undefined;
+  /** #425: the token `paintedDropRowId` carries — `'before' | 'after' | 'into' | 'refused'`. A
+   *  row that remounts mid-drag (a wheel scroll, no pointer move) reads this to restamp
+   *  `data-drop` itself, the same restamp-on-remount rule `syncRows` follows for selection. */
+  let paintedDropToken: string | undefined;
   /** #425: the nearest ancestor `.fg-container` — set once at mount, walked from `gridLayer`
    *  (`view/pane-layout.ts` always mounts both panes inside one). `applyState`'s refusal cursor is
    *  the only reader; every other paint in this file stays inside the two mounted panes. */
@@ -867,6 +874,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       if (token !== undefined) {
         rowLayer.node(rowId)?.setAttribute('data-drop', token);
         rowBandLayerCache.node(rowId)?.setAttribute('data-drop', token);
+        paintedDropToken = token;
       }
       return;
     }
@@ -875,15 +883,21 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       rowBandLayerCache.node(paintedDropRowId)?.removeAttribute('data-drop');
     }
     paintedDropRowId = undefined;
+    paintedDropToken = undefined;
     if (rowId === undefined || token === undefined) return;
     rowLayer.node(rowId)?.setAttribute('data-drop', token);
     rowBandLayerCache.node(rowId)?.setAttribute('data-drop', token);
     paintedDropRowId = rowId;
+    paintedDropToken = token;
   }
 
   /** Parks the Insertion line when `lineY` is undefined — an `into` drop (the target row's own
    *  outline is the indicator then) or no drop at all. `depth * --fg-indent-width` is the grid
-   *  pane's own left inset (`view/styles.ts`); the timeline instance resets it to 0 (full width). */
+   *  pane's own left inset (`view/styles.ts`); the timeline instance resets it to 0 (full width).
+   *
+   *  The timeline instance is a child of `.fg-timeline-pane` (`position: relative; overflow: auto`),
+   *  the same containing block `syncRowBands` sizes a row band against (I5) — `width: 100%` alone
+   *  would size to the pane's client width and vanish past one pane width of horizontal scroll. */
   function paintDropLine(lineY: number | undefined, depth: number): void {
     if (!dropLineGrid || !dropLineTimeline) return;
     if (lineY === undefined) {
@@ -895,6 +909,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     dropLineTimeline.hidden = false;
     dropLineGrid.style.transform = `translateY(${lineY}px)`;
     dropLineGrid.style.setProperty('--fg-drop-line-depth', String(depth));
+    dropLineTimeline.style.width = `${Math.max(contentWidthPx, paneWidthPx)}px`;
     dropLineTimeline.style.transform = `translateY(${lineY}px)`;
   }
 
@@ -1042,6 +1057,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         if (row.entryIds.some((id) => paintedSelectedEntryIds.has(id))) {
           node.dataset['state'] = 'selected';
           paintedSelectedRows = new Set(paintedSelectedRows).add(key);
+        }
+        // #425: a wheel scroll can remount the drag's own target/refused row with no pointermove
+        // in between — restamp `data-drop` here, the same rule `paintedSelectedRows` follows above.
+        if (key === paintedDropRowId && paintedDropToken !== undefined) {
+          node.dataset['drop'] = paintedDropToken;
         }
         return node;
       },
@@ -1308,6 +1328,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         if (paintedHoveredRow === key) tokens.push('hovered');
         if (paintedSelectedRows.has(key)) tokens.push('selected');
         node.dataset['state'] = tokens.join(' ');
+        // #425: same restamp as `syncRows` — a band that remounts mid-drag must not wait for the
+        // next `applyState` to regain its `data-drop` token.
+        if (key === paintedDropRowId && paintedDropToken !== undefined) {
+          node.dataset['drop'] = paintedDropToken;
+        }
         return node;
       },
       toGeom: (row) => ({ top: row.top, height: row.height, parity: rowParity(row.index) }),
@@ -1400,7 +1425,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       dropLineTimeline.className = 'fg-drop-line';
       dropLineTimeline.setAttribute('aria-hidden', 'true');
       dropLineTimeline.hidden = true;
-      timelineHost.append(dropLineTimeline);
+      // Mounted ahead of `.fg-content-sizer`, the same trap `attachDateLines` documents: appended
+      // after the sizer, this line's static origin sits 1px below the grid line it must sit on.
+      timelineHost.insertBefore(dropLineTimeline, contentSizer);
     },
     sync(frame: GeometryFrame) {
       if (headerBandsHost) {
@@ -1420,6 +1447,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // Banked for `applyBarPreview`'s mid-drag flip check, which never receives a `frame` of its
       // own — the "outside" fit test runs against the frame actually on screen, not a stale one.
       contentWidthPx = frame.contentWidth;
+      paneWidthPx = frame.visible.width;
       syncBars(frame.bars);
       // A resize commit repaints the resized bar with new geometry through this same `sync()`, but
       // `applyState`'s handle repaint is gated on `resizableEntryId` actually changing — it stays the
@@ -1644,6 +1672,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       cursorLineLabel = undefined;
       cursorLineHeight = 0;
       paintedDropRowId = undefined;
+      paintedDropToken = undefined;
       fgContainer = undefined;
       dropLineGrid = undefined;
       dropLineTimeline = undefined;
