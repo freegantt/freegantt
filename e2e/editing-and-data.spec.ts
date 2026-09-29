@@ -28,27 +28,32 @@ test('adding an entry is one transaction, and the log shows it as one changeset'
   expect(lines[0]).toMatch(/entries · new-1 · added/);
 });
 
-test('locking the selected entry refuses a rename, and the log names why', async ({ page }) => {
+// #612: the lock is a core Field now, and it stops only the user — the Rename button is app code,
+// so it still writes a locked entry. What a lock closes is the grid editor and the drag.
+test('a locked row opens no Name editor, and its bar does not drag', async ({ page }) => {
   await page.goto('/editing-and-data.html');
   const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
   await expect(bar).toBeVisible();
   await bar.click();
   await expect(page.locator('#lock-checkbox')).toBeEnabled();
 
+  const entryId = await page.evaluate(() => window.__gantt.selectedEntryIds[0]!);
   await page.locator('#lock-checkbox').check();
-  await expect(page.locator('#rename-input')).toBeEnabled();
 
-  const nameBefore = await page.locator('#rename-input').inputValue();
-  await page.locator('#rename-input').fill('Renamed while locked');
-  await page.locator('#rename-btn').click();
+  const nameCell = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"] [data-field="name"]`);
+  await nameCell.click(); // settle the selection reflow before the real double-click
+  await nameCell.dblclick();
+  await expect(page.locator('#gantt .fg-cell-editor')).toHaveCount(0);
 
-  // The write is refused — the log names the refusal, and the Entry's own name is unchanged.
-  await expect(page.locator('#log div').first()).toContainText('is locked');
-  const nameAfter = await page.evaluate(() => {
-    const id = window.__gantt.selectedEntryIds[0]!;
-    return window.__dataset.entries.get(id)!.name;
-  });
-  expect(nameAfter).toBe(nameBefore);
+  const before = await page.evaluate((id) => window.__dataset.entries.get(id)!.start?.toString(), entryId);
+  const box = await bar.boundingBox();
+  if (!box) throw new Error('missing bar bounding box');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 150, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.up();
+  const after = await page.evaluate((id) => window.__dataset.entries.get(id)!.start?.toString(), entryId);
+  expect(after).toBe(before);
 });
 
 test("unlocking Program's subtree opens note inside it, and leaves an outside entry locked", async ({
@@ -143,8 +148,8 @@ test('export writes the document, and import round-trips the entry count', async
 
 // #496: `entries.load()` is order-tolerant — a pasted document may list a child before its parent,
 // and the import still lands in one commit. `load` is a full fresh start (L1), so it clears undo,
-// and a `locked` row the document names stays locked once the load lands (the lock plugin's own
-// `beforeChange` steps aside for `origin: 'load'`, `harness/plugins/lock-entries.ts`).
+// and a `locked` row the document names stays locked once the load lands: `locked` is a core Field
+// (#612), so the loaded row reads it back the same way it reads back `name` or `start`.
 test('with Program gone, the unlock checkbox logs why and stays clear', async ({ page }) => {
   await page.goto('/editing-and-data.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
@@ -199,15 +204,10 @@ test('import tolerates a child before its parent, clears undo, and a lock holds'
 
   await expect(page.getByLabel('Undo')).toBeDisabled();
 
-  const lockRefused = await page.evaluate(() => {
-    try {
-      window.__dataset.entries.update('imported-parent', { name: 'Should stay locked' });
-      return false;
-    } catch {
-      return true;
-    }
-  });
-  expect(lockRefused).toBe(true);
+  // #612: the lock holds against the grid, not against `entries.update()` — it opens the Field to
+  // the API door and closes it to the user's own doors only.
+  const lockedName = await page.evaluate(() => window.__dataset.editableOf('imported-parent', 'name'));
+  expect(lockedName).toBe('api');
 });
 
 // #517: `entries.syncAll()` diffs a fetched list against the live data — unlike Import (`load`), it

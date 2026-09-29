@@ -2,10 +2,8 @@
 // binding, exercised the way an app author would — add/rename/move/remove buttons calling
 // `dataset.entries.add/update/remove`, and a changeset log built from each `ChangeSet`, never a
 // re-read. Rename/move/remove target `gantt.selectedEntryIds` (S3.1), not a parallel entry picker.
-// The lock checkbox is the `beforeChange` veto, made visible: the bar does
-// not move and `attemptMutation` returns `false` instead of throwing. S5.10 moved the veto itself
-// into a Dataset plugin (`plugins/lock-entries.ts`), so the flag lives in that plugin's own `locked`
-// Field (#496), not a store row.
+// The lock checkbox writes the core `locked` Field (#612) directly: an app write always commits, so
+// checking it lands like any other change, and undo lifts it.
 //
 // S2.5 (plans/s2-data-core/s2.5-undo-redo.md §5) adds the undo/redo buttons, `disabled` bound to
 // `dataset.canUndo`/`canRedo`, and the log line's origin tag — a reader watches a cascade go away in
@@ -19,7 +17,6 @@ import { Dataset, Gantt, MS, attemptMutation, addMs, now, watchAllErrors } from 
 import type { DatasetEventMap, Entry, StoredEntry, ComputeContext, GridColumnInput } from 'freegantt';
 import { mountTimelineToolbar } from '../timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from '../change-log.js';
-import { lockEntries } from '../plugins/lock-entries.js';
 
 declare global {
   interface Window {
@@ -100,12 +97,6 @@ const ROLLUP_TREE = [
   },
 ];
 
-// S5.10: the lock checkbox writes this plugin's own `locked` Field instead of the page
-// keeping a flag of its own, and the plugin's `beforeChange` is what refuses the write.
-// `Dataset.plugins` is read-only, so every Dataset this page builds — including the imported one
-// below — installs a fresh one at construction.
-const locks = lockEntries();
-
 /** This page's own Field values (ADR 0011) — `cost` is what `splitCostOverLeaves` below writes,
  *  and `contractId` is read-only here. `leafCount` is not here: it is a `compute` Field with no
  *  stored home, so it never appears in a props type. */
@@ -118,7 +109,6 @@ const dataset = new Dataset<DataPageProps>({
   entries: ROLLUP_TREE,
   timeZone: 'UTC',
   ...COST_FIELDS,
-  plugins: [locks],
 });
 // The library's own default (`name`, `start`, `end`), plus this page's own Fields — `cost` was
 // always readable here; `leafCount` is what #466 step 5 adds a column for.
@@ -205,8 +195,8 @@ function bindDataset(): void {
   dataset.on('historyChange', refreshHistoryButtons);
 }
 
-// Who reports a refusal? The library, on one subscription over both emitters — the lock
-// plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
+// Who reports a refusal? The library, on one subscription over both emitters — this page keeps
+// no refusal callback of its own.
 function bindErrors(): void {
   watchAllErrors([dataset, gantt], (report) => {
     const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
@@ -214,13 +204,13 @@ function bindErrors(): void {
   });
 }
 
-// The lock veto, made visible: checking the box locks the current first entry, and the plugin refuses
-// every later changeset that touches it. The lock itself is a dataset write, so it logs like any
-// other change and one undo lifts it (#156).
+// The lock, made visible: checking the box writes the core `locked` Field (#612) on the current
+// first entry. The write itself is a dataset write, so it logs like any other change and one undo
+// lifts it (#156).
 lockCheckbox.addEventListener('change', () => {
   const id = firstEntryId();
   if (id === undefined) return;
-  attemptMutation(() => (lockCheckbox.checked ? locks.lock(id) : locks.unlock(id)));
+  attemptMutation(() => dataset.entries.update(id, { locked: lockCheckbox.checked ? true : undefined }));
 });
 
 bindDataset();
