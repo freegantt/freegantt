@@ -6,16 +6,12 @@
 // parent with no dated child — still reorders, and one locked dated descendant never refuses it.
 
 import type { Entry } from '../model/index.js';
-import { createPointerGesture } from './pointer-gesture.js';
+import { createPointerGesture, isPrimaryButton } from './pointer-gesture.js';
 import type { EntryGestureContext, EntryGestureSession, EntryHit } from '../view/index.js';
 
 /** A control inside a cell keeps its own pointer — a checkbox, a button, an inline editor's own
  *  input. Grabbing here would steal its click. */
 const CONTROL_SELECTOR = 'input, textarea, select, button, a[href], [contenteditable="true"]';
-
-function isPrimaryButton(e: Pick<PointerEvent, 'button'>): boolean {
-  return e.button === 0;
-}
 
 function startedOnControl(e: PointerEvent): boolean {
   return e.target instanceof Element && e.target.closest(CONTROL_SELECTOR) !== null;
@@ -91,7 +87,10 @@ export function createRowReorderDrag(
   return {
     down(e: PointerEvent): void {
       clearGrab();
-      if (isPrimaryButton(e) && !startedOnControl(e)) {
+      // #199/#205 (mouse path): a right-button pointerdown claims no pointer slot, so a right-click
+      // never steals the stream from a later primary-button drag.
+      if (!isPrimaryButton(e)) return;
+      if (!startedOnControl(e)) {
         const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
         // A header row has no subject, so it grabs nothing; neither does a hit on a bar — a bar
         // drag arms its own gesture, over the timeline pane's own pointer stream.
@@ -101,7 +100,7 @@ export function createRowReorderDrag(
           subject = candidate;
         }
       }
-      drag.down(e); // always, so an unarmed click still resets the pointer machine cleanly.
+      drag.down(e); // resets the pointer machine cleanly, even where this pointerdown grabs nothing.
     },
     move(e: PointerEvent): void {
       drag.move(e);

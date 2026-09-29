@@ -836,6 +836,35 @@ describe('attachEntryGestures — row reorder drag (#602)', () => {
     expect(sessionCalls).toBe(0);
   });
 
+  it('a right-button press claims no pointer slot — a primary drag on its own pointer still arms (#602)', () => {
+    const pane = document.createElement('div');
+    const container = document.createElement('div');
+    const rowLayer = document.createElement('div');
+    mockPointerCapture(rowLayer);
+    const { ctx } = rowReorderContext();
+    const seenGestures: EntryGesture[] = [];
+    const spiedCtx: EntryGestureContext = {
+      ...ctx,
+      session: (grabbed, gesture) => {
+        seenGestures.push(gesture);
+        return ctx.session(grabbed, gesture);
+      },
+    };
+    attachEntryGestures(pane, rowLayer, container, spiedCtx);
+
+    // A right-button press on another pointer (a second finger, a pen) — held, no matching
+    // pointerup yet.
+    rowLayer.dispatchEvent(
+      new PointerEvent('pointerdown', { clientX: 0, clientY: 0, pointerId: 2, button: 2 }),
+    );
+    // A primary press on its own pointer must still arm — a stray non-primary press elsewhere
+    // never blocks it.
+    rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+    rowLayer.dispatchEvent(move(0, { clientY: 5 }));
+
+    expect(seenGestures.at(-1)).toEqual({ kind: 'reorder' });
+  });
+
   it('Escape mid-drag cancels the row reorder without clearing the Selection', () => {
     const pane = document.createElement('div');
     const container = document.createElement('div');
