@@ -1180,6 +1180,35 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 
     expect(walks).toBe(0);
   });
+
+  it('previews from the same map it writes when no bar paints without writing (#425 finding 16)', async () => {
+    // An ordinary move never has a paintedOnly id (that set is ADR 0013's parent-bar case alone),
+    // so `writes` and `paints` are one and the same map — no per-frame copy. `extraEditsFor` is the
+    // one public hook the map itself reaches: mutating what it receives here, in place, must show up
+    // in the preview built from `paints`, or the two are two different maps after all.
+    const a = entry('a', 100, 200);
+    const bystander = entry('bystander', 500, 600);
+    const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = (draft) => {
+      (draft as unknown as Map<EntryId, ReturnType<typeof pe>>).set(
+        bystander.id,
+        pe({ start: 550, end: 650 }),
+      );
+      return new Map(); // no ghost of its own — the bystander must arrive through `draft` alone.
+    };
+    const { deps, applied } = withRoster([a, bystander], {
+      extraEditsFor,
+      committedEntriesById: () => storedMap(storedRow('a', 100, 200), storedRow('bystander', 500, 600)),
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(a.id, { kind: 'move' })!;
+
+    session.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; dx: number }[];
+    const smuggled = preview.find((p) => p.barId === barId(bystander.id));
+    expect(smuggled?.dx).toBe(50); // 500 -> 550, read off the map extraEditsFor mutated in place
+  });
 });
 
 describe('a parent bar drag translates its descendants (ADR 0013)', () => {
