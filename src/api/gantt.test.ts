@@ -4,7 +4,6 @@ import { Dataset } from './dataset.js';
 import {
   DerivedFieldNotWritableError,
   DuplicatePluginIdError,
-  MutationCancelledError,
   RevealTargetNotFoundError,
   PluginNotInstalledError,
   RegistrationClosedError,
@@ -56,7 +55,6 @@ function datesOf(entry: Entry): { start: Entry['start']; end: Entry['end'] } {
 // seams — a regression in bufferKind() must fail this test (issue #153).
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
 import { riskKind } from '../../harness/plugins/risk-kind.js';
-import { lockEntries } from '../../harness/plugins/lock-entries.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (same seam gantt-shell.test.ts
 // stubs globally — Gantt/GanttShell wire attachPaneSize themselves and take no ResizeObserverCtor
@@ -6773,49 +6771,315 @@ describe('Gantt entryMove — a vertical drag places the entry under a new paren
   });
 });
 
-// #425: the acceptance object is the harness plugin itself (issue #153's own rule) — a lock rule
-// gap in `lockEntries()` must fail this test, not a hand-rolled restatement of it.
-describe("a vertical drag respects lockEntries()'s lock, not just its beforeChange veto (#425)", () => {
-  function lockedTree(): { dataset: Dataset<{ locked?: boolean }>; locks: ReturnType<typeof lockEntries> } {
-    const locks = lockEntries();
-    const dataset = new Dataset<{ locked?: boolean }>({
+// ADR 0038: the core lock's own proof at gesture level, both panes — replaces the harness-plugin
+// suite above. `entry-lock.test.ts` already proves the same rule at the data level; these tests
+// prove the drag and the drop paint and refuse the same way, through `new Gantt(...)`.
+describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  /** `p1` (row 0) with children `a` (locked, row 1) and `b` (row 2); `p2` (locked, row 3) with its
+   *  own child `c` (row 4) — tree order, no sort, 36px rows, the convention the suites above use. */
+  function siblingTree(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
       timeZone: 'UTC',
       entries: [
         { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
         { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03', locked: true },
         { id: 'b', name: 'B', parentId: 'p1', start: '2026-01-04', end: '2026-01-06' },
-        // `p2` owns no dates of its own — `d` alone rolls them up, and `d`'s own span already covers
-        // where `b` moves to, so reparenting `b` under `p2` changes no Field of `p2`'s own (only the
-        // reparented `b` and its new sibling rank) — the drop touches no cell the lock below closes.
-        { id: 'p2', name: 'P2' },
-        { id: 'd', name: 'D', parentId: 'p2', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10', locked: true },
+        { id: 'c', name: 'C', parentId: 'p2', start: '2026-01-05', end: '2026-01-08' },
       ],
-      plugins: [locks],
     });
-    return { dataset, locks };
+    return { container, dataset };
   }
 
-  it('a drop next to a locked sibling commits — the sibling’s own renumber is not an explicit move', () => {
-    const { dataset } = lockedTree();
+  /** `p3` (row 0) rolls its dates up from its one locked, dated child `d` (row 1); `p4` (row 2) is a
+   *  plain root, a reorder target for `p3`. */
+  function rollupTree(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p3', name: 'P3' },
+        { id: 'd', name: 'D', parentId: 'p3', start: '2026-01-01', end: '2026-01-05', locked: true },
+        { id: 'p4', name: 'P4', start: '2026-02-01', end: '2026-02-10' },
+      ],
+    });
+    return { container, dataset };
+  }
 
-    expect(() => dataset.entries.update('b', { siblingIndex: 0 })).not.toThrow();
+  function dragRowInto(container: HTMLElement, row: HTMLElement, dropClientY: number): void {
+    const rowsLayer = container.querySelector<HTMLElement>('.fg-rows')!;
+    stubPointerCapture(rowsLayer);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
 
+    rowsLayer.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+
+    document.elementFromPoint = original;
+  }
+
+  function dragBarInto(container: HTMLElement, bar: HTMLElement, dropClientY: number): void {
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: dropClientY, pointerId: 1 }));
+
+    document.elementFromPoint = original;
+  }
+
+  it("a locked Entry's bar arms no move and shows no resize handle", () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    expect(bar.hasAttribute('data-movable')).toBe(false);
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(start.hidden).toBe(true);
+    expect(end.hidden).toBe(true);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('a locked row’s grid drag grabs nothing, and a click still selects it', () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+    const rowsLayer = container.querySelector<HTMLElement>('.fg-rows')!;
+    stubPointerCapture(rowsLayer);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // `can('reorder', …)` already refuses a locked Entry the grab, so a straight-down pull past the
+    // arming threshold never becomes a drag — the pointer sequence falls through to the row's own
+    // click path instead.
+    rowsLayer.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    rowsLayer.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 90, pointerId: 1 }));
+    rowsLayer.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.canUndo).toBe(false);
+    expect(gantt.selectedEntryIds).toEqual([entryId('a')]);
+
+    gantt.destroy();
+  });
+
+  it('a bar drop into a locked row refuses at preview: no move fires, parentId is unchanged', () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('b'), 0)}"]`)!;
+
+    const id = entryId('b');
+    const before = dataset.entries.get(id)!.parent()?.id;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Row 1's ('a', locked) own middle third.
+    dragBarInto(container, bar, 54);
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a grid row drop into a locked row refuses at preview: no move fires, no write', () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="b"]')!;
+
+    const id = entryId('b');
+    const before = dataset.entries.get(id)!.parent()?.id;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragRowInto(container, row, 54);
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a child dragged out of a locked parent refuses — bar drag and grid row drag', () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('c'), 0)}"]`)!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="c"]')!;
+
+    const id = entryId('c');
+    const before = dataset.entries.get(id)!.parent()?.id;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Row 0's ('p1') own middle third — out of the locked 'p2' and into 'p1' instead.
+    dragBarInto(container, bar, 18);
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+
+    dragRowInto(container, row, 18);
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a locked Entry sits out of a multi-select reorder and renumbers as a neighbour', () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    gantt.selectedEntryIds = [entryId('b'), entryId('a')];
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="b"]')!;
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Row 1's ('a') own top third — lands 'b' before 'a', under the same parent 'p1'. 'a' sits out
+    // of the armed multi-selection (it is locked), so only 'b' is a grabbed entry.
+    dragRowInto(container, row, 41);
+
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.entries.map((detail) => detail.entry)).toEqual([entryId('b')]);
     expect(dataset.entries.get('b')!.read('siblingIndex')).toBe(0);
     expect(dataset.entries.get('a')!.read('siblingIndex')).toBe(1); // renumbered, not refused
+
+    gantt.destroy();
   });
 
-  it('a drop into a locked parent matches update(child, { parentId: lockedId }) — the lock is on the entry, not the target', () => {
-    const { dataset, locks } = lockedTree();
-    locks.lock('p2');
+  it('a time drag of an unlocked parent with a locked dated child refuses (existing rule)', () => {
+    const { container, dataset } = rollupTree();
+    const gantt = new Gantt({ container, dataset });
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
 
-    expect(() => dataset.entries.update('b', { parentId: 'p2' })).not.toThrow();
-    expect(dataset.entries.get('b')!.parent()?.id).toBe(entryId('p2'));
+    const id = entryId('p3');
+    const before = datesOf(dataset.entries.get(id)!);
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? summaryBar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5000, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5000, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toEqual([]);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual(before);
+
+    gantt.destroy();
   });
 
-  it('an explicit parentId write on the locked entry itself still refuses', () => {
-    const { dataset } = lockedTree();
+  it('a grid row drag of an unlocked parent with a locked child commits; a bar drag of the same parent does not arm — reorder and move ask different cells', () => {
+    const { container, dataset } = rollupTree();
+    const gantt = new Gantt({ container, dataset });
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="p3"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
 
-    expect(() => dataset.entries.update('a', { parentId: 'p2' })).toThrow(MutationCancelledError);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? summaryBar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    expect(summaryBar.hasAttribute('data-movable')).toBe(false);
+    document.elementFromPoint = original;
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Row 2's ('p4') own middle third — reparents 'p3' under 'p4'. Only the tree place writes; 'd's
+    // own dates, still locked, do not move with it.
+    dragRowInto(container, row, 90);
+
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.place?.parentId).toBe(entryId('p4'));
+    expect(dataset.entries.get('p3')!.parent()?.id).toBe(entryId('p4'));
+
+    gantt.destroy();
+  });
+
+  it("a drop next to a locked sibling commits, and the sibling's siblingIndex renumbers", () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="b"]')!;
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragRowInto(container, row, 41); // row 1's ('a') own top third
+
+    expect(afterEvents).toHaveLength(1);
+    expect(dataset.entries.get('b')!.read('siblingIndex')).toBe(0);
+    expect(dataset.entries.get('a')!.read('siblingIndex')).toBe(1); // renumbered, not refused
+
+    gantt.destroy();
+  });
+
+  it('locking the sole selected Entry clears its resize handles on the next frame', async () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'x', name: 'X', start: '2026-01-01', end: '2026-01-05' }],
+    });
+    const gantt = new Gantt({ container, dataset });
+    gantt.selectedEntryIds = [entryId('x')];
+
+    let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(false);
+
+    dataset.entries.update('x', { locked: true });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+
+    gantt.destroy();
   });
 });
 

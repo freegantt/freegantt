@@ -891,6 +891,10 @@ export class GanttShell {
       if (changeSet.origin === 'load') this.#treeCollapse.resetToStartState();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
+      // A write can close a cell a painted affordance already sits on — a lock, for one (I14).
+      // The affordance ids refresh only on hover, Selection, or a capability change otherwise.
+      // A dataset write needs its own refresh here, once per commit, not once per pointer move.
+      this.#refreshAffordances();
       this.#frames.request();
     });
     this.#teardown.add(() => this.#datasetChanges.unsubscribe());
