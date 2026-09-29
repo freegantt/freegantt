@@ -18,6 +18,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 - New report code `rollup-preview-failed`: a plugin aggregator threw while a drag previewed the new parent's Rollup dates. The frame paints with no Rollup ghost, and the drag goes on. ([#425](https://github.com/freegantt/freegantt/issues/425))
 - The hierarchy-and-timeline harness page's phase-plugin tree is now opt-in (`?tree=phase`); by default the page drags like the generic page. The generic harness page gains a "Lock tree" checkbox. ([#425](https://github.com/freegantt/freegantt/issues/425))
 
+### Fixed
+
+- The planner harness page's `#` cell no longer keeps a work row's number after the row becomes a phase. ([#618](https://github.com/freegantt/freegantt/issues/618))
+
 ## [0.0.1] - 2026-09-28
 
 The first release on npm: `npm install freegantt`.
