@@ -1008,6 +1008,18 @@ describe('Dataset plugins (S5.10)', () => {
     expect(setExtenderLate).toThrow(RegistrationClosedError);
   });
 
+  it('throws RegistrationClosedError when a plugin claims the place rule after setup returned', () => {
+    let setPlaceRuleLate = (): void => undefined;
+    const late: DataPlugin = {
+      id: 'demo.late-place',
+      data(ctx) {
+        setPlaceRuleLate = () => ctx.edits.setPlaceRule((next) => next);
+      },
+    };
+    new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [late] });
+    expect(setPlaceRuleLate).toThrow(RegistrationClosedError);
+  });
+
   it('has a Field a plugin declares in the registry, already settled by the construction Rollup (#496)', () => {
     const declaresCost: DataPlugin = {
       id: 'demo.cost',

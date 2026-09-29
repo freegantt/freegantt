@@ -16,6 +16,7 @@ import type {
   FieldLockRule,
   FieldLockRuleWrapper,
   FieldType,
+  PlaceRuleWrapper,
   Instant,
   Disposer,
   EditExtender,
@@ -366,11 +367,25 @@ export class DatasetState implements Dataset {
     this.entries.setLockRule(wrap);
   }
 
+  /** Call: `ctx.edits.setPlaceRule((next) => (place) => isLocked(place.parentId) ? 'api' : next(place))`.
+   *  Installing composes onto the current occupant rather than evicting it, exactly the way
+   *  `setLockRule` above does. */
+  setPlaceRule(wrap: PlaceRuleWrapper): void {
+    this.entries.setPlaceRule(wrap);
+  }
+
   /** Call: `dataset.editableOf('van-1', 'cost')` — the effective lock on one cell (#473): a plugin's
    *  own per-entry answer, or the Field's own `editable` when the rule has no opinion. The same
    *  resolver `entries.update()` and an `EditExtender` cascade write against (I14). */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
     return this.entries.editableOf(id, field);
+  }
+
+  /** Call: `dataset.placeableOf('t2', 'p1')` — the effective place rule answer for one cross-parent
+   *  (or same-parent) move (ADR 0038). The same resolver a bar drag, a grid row drag and
+   *  `entries.update()`/`add()` all meet (I14). */
+  placeableOf(id: EntryId | string, parentId: EntryId | string | undefined): FieldEditable {
+    return this.entries.placeableOf(id, parentId);
   }
 
   /** `Dataset`'s constructor calls this once, right after the last plugin's `data()` returns
