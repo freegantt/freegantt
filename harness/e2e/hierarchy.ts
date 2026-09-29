@@ -127,9 +127,6 @@ function mountGantt(next: Dataset<HierarchyProps>): Gantt {
     scroll: paneScroll,
     plugins: [inlineEditing()],
     variants: [crewDayVariant],
-    // A locked crew day withholds one capability from itself alone — every other bar on the page
-    // keeps the library default (#421 C7, box: "a bar's own capabilities differ from its siblings").
-    capabilities: { resize: (entry) => entry.read('locked') !== true },
   });
 }
 

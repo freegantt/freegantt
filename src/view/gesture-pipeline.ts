@@ -169,9 +169,10 @@ export interface GesturePipelineDeps {
   /** #425: the row a given Entry paints in, for `#movedTopMost`'s row-order sort and for
    *  `dropFor`'s source row. */
   rowIndexForEntry(id: EntryId): number;
-  /** #425: `ResolvedCapabilities.canPlace` — may this Entry sit under this parent. Asked once for
-   *  the Entry's own current parent (may it reorder at all) and once for the drop's target parent
-   *  (may it cross into this one), per `resolveRowDrop`'s own two-question rule. */
+  /** #425: `ResolvedCapabilities.canPlace` — may this Entry sit under this parent, the place rule
+   *  too (ADR 0038). Asked once for the Entry's own current parent (may it reorder at all) and once
+   *  for the drop's target parent (may it cross into this one), per `resolveRowDrop`'s own
+   *  two-question rule. */
   canPlace(entry: Entry, parentId: EntryId | undefined): boolean;
   /** #425: does this Gantt's row order mirror the tree at all — `false` for a plugin-owned
    *  hierarchy or a sorted/grouped row source, which offer no vertical drop (coordinator ruling). */

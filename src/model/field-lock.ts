@@ -25,10 +25,11 @@ export interface FieldLockQuery {
 
 /**
  * Does a plugin's own rule say this cell is locked, open to `entries.update()` only, or open to the
- * grid too? `undefined` is silence — no opinion on this cell, so the resolver falls to
- * `Field.editable` (`data/write-rule.ts`'s `resolveFieldEditable`).
+ * grid too? A rule always answers — no opinion on this cell calls `next(query, field)` rather than
+ * falling through in silence, so a narrowing rule never gets skipped by a rule above it that has
+ * nothing to say (`data/write-rule.ts`'s `editableAnswerFor`).
  */
-export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEditable | undefined;
+export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEditable;
 
 /**
  * How a plugin claims the seam, composing onto the current occupant the way `ExtenderWrapper` and
@@ -41,5 +42,7 @@ export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEdi
  *
  * That reads: open `cost` on every descendant of one subtree root, otherwise whatever the next
  * rule says. The root itself stays locked — `isDescendantOf` answers `false` for itself (#473).
+ * A rule that narrows rather than opens calls `next` first: `const answer = next(entry, field);
+ * return answer === 'anywhere' ? 'api' : answer;` reads "the API may still write it, nobody else."
  */
 export type FieldLockRuleWrapper = (next: FieldLockRule) => FieldLockRule;

@@ -1,6 +1,6 @@
 // I14 (plans/01 §11, ADR 0015): "may this value change" has one home. `Field.editable` is read in
 // exactly one file — src/data/fields/field-registry.ts, where `editableOf` resolves the aliases and
-// the default. Every other reader asks `editableAnswerFor`/`resolveFieldEditable` instead (#473: a
+// the default. Every other reader asks `editableAnswerFor`/`fieldEditableRule` instead (#473: a
 // plugin's per-entry lock rule is the other input, not a second Field-level threshold), both in
 // src/data/write-rule.ts.
 //
@@ -19,11 +19,11 @@ module.exports = {
     type: 'problem',
     docs: {
       description:
-        'read Field.editable in one file only; every other caller asks editableAnswerFor/resolveFieldEditable (plans/01 §11, invariant I14, ADR 0015)',
+        'read Field.editable in one file only; every other caller asks editableAnswerFor/fieldEditableRule (plans/01 §11, invariant I14, ADR 0015)',
     },
     messages: {
       secondReader:
-        '`Field.editable` is read in `data/fields/field-registry.ts` only (I14, ADR 0015). Ask `editableAnswerFor(field, declared, query, lockRule)` (or `resolveFieldEditable` once existence and `compute` are already checked) — one resolver, every reader. A second reading of the raw key is how the readers start to disagree.',
+        '`Field.editable` is read in `data/fields/field-registry.ts` only (I14, ADR 0015). Ask `editableAnswerFor(field, declared, query, lockRule)` (or `fieldEditableRule` once existence and `compute` are already checked) — one resolver, every reader. A second reading of the raw key is how the readers start to disagree.',
     },
     schema: [],
   },

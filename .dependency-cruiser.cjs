@@ -168,6 +168,19 @@ module.exports = {
       '^src/data/history\\.ts$',
       '^src/data/(dataset-state\\.ts|history\\.(test|property\\.test)\\.ts)$',
     ),
+    // The dogfood proof for ADR 0038's core lock: `src/data/entry-lock.ts` composes the same two
+    // public seams (`FieldLockRuleWrapper`, `PlaceRuleWrapper`) a plugin author reaches through
+    // `ctx.edits`, so this file may import `model/` and nothing else in `src/`. `scripts/guard-red-
+    // test.mjs` proves the rule actually blocks a violation of this one named file.
+    {
+      name: 'entry-lock-uses-public-seams',
+      severity: 'error',
+      comment:
+        'ADR 0038: src/data/entry-lock.ts is the core lock, built on the public plugin seams. It may ' +
+        'import src/model only — anything else is an internal door a plugin author could not reach.',
+      from: { path: '^src/data/entry-lock\\.ts$' },
+      to: { path: '^src/', pathNot: '^src/model/' },
+    },
     {
       name: 'no-circular',
       severity: 'error',

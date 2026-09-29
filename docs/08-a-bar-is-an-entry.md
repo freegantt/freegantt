@@ -223,7 +223,7 @@ declare const wholeEntryBar: typeof import('freegantt').wholeEntryBar;
 type BarProducer = import('freegantt').BarProducer;
 type EntriesRowSource = import('freegantt').EntriesRowSource;
 type EntryRule = import('freegantt').EntryRule;
-type Props = { showDaysOnRow: boolean; hours: number; locked: boolean; team: string };
+type Props = { showDaysOnRow: boolean; hours: number; filled: boolean; team: string };
 declare const container: HTMLElement;
 declare const start: string;
 declare const end: string;
@@ -233,7 +233,7 @@ declare const end: string;
 const entries = [
   { id: 'req-1', name: 'Framing crew', showDaysOnRow: true },          // the row
   { id: 'd1', parentId: 'req-1', start, end, hours: 8 },               // a bar: a plain Entry
-  { id: 'd2', parentId: 'req-1', start, end, hours: 4, locked: true },
+  { id: 'd2', parentId: 'req-1', start, end, hours: 4, filled: true },
   { id: 'hold', name: 'Site hold', start, end },                       // a plain row, as today
 ];
 
@@ -242,7 +242,7 @@ const dataset = new Dataset<Props>({
   fields: [
     { key: 'showDaysOnRow', type: 'boolean' },   // the marker the row rule reads
     { key: 'hours', type: 'number', rollUp: 'sum' },
-    { key: 'locked', type: 'boolean' },
+    { key: 'filled', type: 'boolean' },
   ],
   entries,
 });
@@ -273,7 +273,7 @@ question, and the next section answers it.
 | Remove a bar | `dataset.entries.remove('d1')` | no — several bars are several calls in one `transaction` |
 | Move a bar to another row | `dataset.entries.update('d1', { parentId: 'req-2' })` | no |
 | Give a bar its own look | `variants: [{ name: 'fullDay', when: { hours: 8 }, paint, css }]` | no |
-| Gate a gesture for every bar | `capabilities: { resize: (entry) => entry.read('locked') !== true }` | no |
+| Gate a gesture for every bar | `capabilities: { resize: (entry) => entry.read('filled') !== true }` | no |
 | Gate a gesture for one look's bars | `variants: [{ name: 'fullDay', when: { hours: 8 }, can: { resize: false } }]` | no |
 | Turn off drag to another row, in both panes | `capabilities: { reorder: false }` | no |
 | Read the change | `{ store: 'entries', id: 'd2', field: 'hours', from: 4, to: 6 }` | no |

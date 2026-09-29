@@ -16,6 +16,7 @@ import type {
   FieldLockRule,
   FieldLockRuleWrapper,
   FieldType,
+  PlaceRuleWrapper,
   Instant,
   Disposer,
   EditExtender,
@@ -146,6 +147,11 @@ export class DatasetState implements Dataset {
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
   readonly bus = new EventBus<DatasetEventMap>();
+  /** ADR 0038: who `rulesChanged()` below wakes. Not the `bus` above — a rule answer moving is not
+   *  public event vocabulary (plans/02 §3), it is `GanttShell`'s own cue to re-resolve, through the
+   *  friend-map wiring `api/dataset.ts`'s `onRulesChanged` builds (the `hierarchyFollowsParentId`
+   *  pattern). */
+  readonly #ruleChangeListeners = new Set<() => void>();
   /** 0 = no transaction open. Read and written only by `runTransaction` (the nesting rule). */
   openTransactions = 0;
   /** Set while `beforeChange`/`change` handlers are fanning out. Read and written
@@ -351,8 +357,8 @@ export class DatasetState implements Dataset {
     this.#editExtender = wrap(this.#editExtender);
   }
 
-  /** The per-entry lock rule every write door reads (#473, I14). Core's own occupant is silence
-   *  (`identityFieldLockRule`); the store holds whichever occupant a plugin composed onto it. */
+  /** The per-entry lock rule every write door reads (#473, I14). Core's own bottom occupant answers
+   *  the Field's own `editable`; the store holds whichever occupant a plugin composed onto it. */
   get lockRule(): FieldLockRule {
     return this.entries.lockRule;
   }
@@ -366,11 +372,39 @@ export class DatasetState implements Dataset {
     this.entries.setLockRule(wrap);
   }
 
+  /** Call: `ctx.edits.setPlaceRule((next) => (place) => isLocked(place.parentId) ? 'api' : next(place))`.
+   *  Installing composes onto the current occupant rather than evicting it, exactly the way
+   *  `setLockRule` above does. */
+  setPlaceRule(wrap: PlaceRuleWrapper): void {
+    this.entries.setPlaceRule(wrap);
+  }
+
+  /** Call: `ctx.edits.rulesChanged()`. Wakes every listener `onRulesChanged` below registered — one
+   *  per bound Gantt — so each re-resolves what it currently offers. Writes nothing (I14 unaffected). */
+  rulesChanged(): void {
+    for (const listener of this.#ruleChangeListeners) listener();
+  }
+
+  /** Friend-only subscription `api/dataset.ts`'s `onRulesChanged` wires a bound Gantt's refresh
+   *  through, the same friend-map pattern `hierarchyFollowsParentId` uses for a query instead of a
+   *  subscription. Returns the Disposer that drops exactly this listener. */
+  onRulesChanged(listener: () => void): Disposer {
+    this.#ruleChangeListeners.add(listener);
+    return () => this.#ruleChangeListeners.delete(listener);
+  }
+
   /** Call: `dataset.editableOf('van-1', 'cost')` — the effective lock on one cell (#473): a plugin's
    *  own per-entry answer, or the Field's own `editable` when the rule has no opinion. The same
    *  resolver `entries.update()` and an `EditExtender` cascade write against (I14). */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
     return this.entries.editableOf(id, field);
+  }
+
+  /** Call: `dataset.placeableOf('t2', 'p1')` — the effective place rule answer for one cross-parent
+   *  (or same-parent) move (ADR 0038). The same resolver a bar drag, a grid row drag and
+   *  `entries.update()`/`add()` all meet (I14). */
+  placeableOf(id: EntryId | string, parentId: EntryId | string | undefined): FieldEditable {
+    return this.entries.placeableOf(id, parentId);
   }
 
   /** `Dataset`'s constructor calls this once, right after the last plugin's `data()` returns

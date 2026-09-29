@@ -53,7 +53,25 @@ async function datesOf(page: Page, ids: readonly string[]): Promise<Record<strin
   }, ids);
 }
 
-/** A summary bar the pointer can actually grab, with at least two dated children.
+/** Does any Entry under `parentId` read `locked`? A parent drag proposes every dated descendant
+ *  (ADR 0013), so a locked descendant anywhere in the subtree, not only among the direct children,
+ *  makes the whole gesture refuse (the core lock, `docs/adr/0038`). `grabbableParentBar` skips such
+ *  a parent — it wants a bar the drag actually moves. */
+async function subtreeHasLockedEntry(page: Page, parentId: string): Promise<boolean> {
+  return page.evaluate((id) => {
+    const holdsLock = (entryId: string): boolean => {
+      const entry = window.__gantt.dataset.entries.get(entryId);
+      if (!entry) return false;
+      if (entry.read('locked') === true) return true;
+      return entry.children().some((child) => holdsLock(String(child.id)));
+    };
+    return holdsLock(id);
+  }, parentId);
+}
+
+/** A summary bar the pointer can actually grab, with at least two dated children and no locked
+ *  descendant (a locked descendant refuses the whole drag by design — this picks a bar the test can
+ *  actually move).
  *
  *  Its grab point is not the bar's centre. A parent's bracket spans everything under it, so it can be
  *  wider than the pane and run off both sides of the viewport — the whole box is then never on
@@ -99,8 +117,15 @@ async function grabbableParentBar(page: Page): Promise<DragTarget> {
         .map((child) => String(child.id));
     }, parentId);
 
-    if (childIds.length >= 2) return { parentId, bar, childIds, grabX, grabY };
-    skipped.push(`${parentId}: ${childIds.length} dated children`);
+    if (childIds.length < 2) {
+      skipped.push(`${parentId}: ${childIds.length} dated children`);
+      continue;
+    }
+    if (await subtreeHasLockedEntry(page, parentId)) {
+      skipped.push(`${parentId}: subtree holds a locked entry`);
+      continue;
+    }
+    return { parentId, bar, childIds, grabX, grabY };
   }
   throw new Error(`no grabbable summary bar has two dated children. Skipped: ${skipped.join('; ')}`);
 }

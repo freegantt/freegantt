@@ -35,6 +35,7 @@ import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 import { storedParentSource } from '../data/hierarchy-source.js';
+import { lockedEntryLockRule, lockedEntryPlaceRule } from '../data/entry-lock.js';
 
 // I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
 // Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
@@ -203,6 +204,13 @@ export class Dataset<TProps = unknown> {
     // `clearHistory()` right after empties that stack, so `canUndo` still reads `false` once this
     // constructor returns (#137).
     this.#disposePlugins = this.#installPlugins();
+    // What does a locked Entry refuse? Every gesture onto its cells, and any drop into or out of it.
+    // It installs last, so no plugin already installed can reopen a locked cell it closes (ADR 0038).
+    // Built the same way a plugin builds a lock (`data/entry-lock.ts`), through the same
+    // `setLockRule`/`setPlaceRule` doors `ctx.edits` calls above.
+    const isLocked = (id: EntryId): boolean => this.#state.entries.get(id)?.read('locked') === true;
+    this.#state.setLockRule(lockedEntryLockRule(isLocked));
+    this.#state.setPlaceRule(lockedEntryPlaceRule(isLocked));
     this.#state.clearHistory();
   }
 
@@ -231,6 +239,12 @@ export class Dataset<TProps = unknown> {
             gate.assertOpen();
             this.#state.setLockRule(wrap);
           },
+          setPlaceRule: (wrap) => {
+            gate.assertOpen();
+            this.#state.setPlaceRule(wrap);
+          },
+          // No gate: a rule's outside state can move at any time, not only during setup.
+          rulesChanged: () => this.#state.rulesChanged(),
         },
         store: {
           reserve: <T extends object>() => this.#state.pluginStores.reserve<T>(pluginId),
@@ -474,4 +488,32 @@ export function hierarchyFollowsParentId<TProps>(dataset: Dataset<TProps>): bool
     throw new Error('hierarchyFollowsParentId: dataset was not constructed through the Dataset constructor');
   }
   return state.hierarchySource === storedParentSource;
+}
+
+/** ADR 0038: the friend function `view/capability.ts`'s `canPlace` reads for a drop preview — the
+ *  same friend-map pattern `hierarchyFollowsParentId` above uses. Not public: an app author never
+ *  asks this directly, only through a gesture or `entries.update()`/`add()`, both of which already
+ *  ask the store straight. */
+export function placeableOf<TProps>(
+  dataset: Dataset<TProps>,
+  id: EntryId | string,
+  parentId: EntryId | string | undefined,
+): FieldEditable {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('placeableOf: dataset was not constructed through the Dataset constructor');
+  }
+  return state.placeableOf(id, parentId);
+}
+
+/** ADR 0038: the friend function `GanttShell` subscribes through, the same friend-map pattern
+ *  `hierarchyFollowsParentId` above uses for a query instead of a subscription — wakes on a
+ *  plugin's own `ctx.edits.rulesChanged()`. Not public: an app author never subscribes to this
+ *  directly, only every bound Gantt does, through `api/gantt.ts`'s wiring. */
+export function onRulesChanged<TProps>(dataset: Dataset<TProps>, listener: () => void): Disposer {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('onRulesChanged: dataset was not constructed through the Dataset constructor');
+  }
+  return state.onRulesChanged(listener);
 }

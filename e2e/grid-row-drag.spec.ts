@@ -8,6 +8,7 @@ import {
   firstChildRow,
   dragPointerTo,
   hasDirectLeafChild,
+  lockEntryAt,
 } from './row-drag-support.js';
 
 // A drag on a grid row reorders or re-parents its Entry (#602) — the same one switch (`reorder`),
@@ -183,6 +184,85 @@ test('with "Lock tree" checked, a grid row drag commits nothing, and a plain cli
   await page.mouse.up();
 
   expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(0);
+  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
+});
+
+// #612: the lock is a core Field now, reached through the right-click "Lock" command instead of a
+// harness plugin — the two tests below stand in for the "Lock tree" one above, at the single-row
+// grain a real consumer locks at.
+test("a locked row's grid drag commits nothing, and a plain click still selects", async ({ page }) => {
+  await gotoGeneric(page);
+  const rows = await rowPlan(page);
+  const viewport = await gridRowsViewport(page);
+  const {
+    row: leaf,
+    grabX,
+    grabY,
+  } = await firstVisibleGridRow(
+    page,
+    rows.filter((row) => row.childCount === 0),
+    viewport,
+  );
+
+  await lockEntryAt(page, grabX, grabY);
+
+  // The lock refuses only the reorder grab, not the row's own selection — a plain click still
+  // selects it, the same proof the "Lock tree" test above reads for the whole-tree lock.
+  await gridRow(page, leaf.rowId).click();
+  await expect.poll(() => page.evaluate(() => window.__gantt.selectedEntryIds)).toEqual([leaf.entryId]);
+
+  const leafParentId = await currentParentId(page, leaf.entryId);
+  const target = rows.find((row) => row.childCount > 0 && row.entryId !== leafParentId)!;
+  const targetBox = (await gridRow(page, target.rowId).boundingBox())!;
+
+  await countChangesFromHere(page);
+
+  await dragPointerTo(page, grabX, grabY, grabX, targetBox.y + targetBox.height / 2);
+  await page.mouse.up();
+
+  expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(0);
+  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
+});
+
+test("a grid row dropped into a locked parent's middle refuses, with a not-allowed cursor, and writes nothing", async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const rows = await rowPlan(page);
+  const viewport = await gridRowsViewport(page);
+
+  const {
+    row: leaf,
+    grabX,
+    grabY,
+  } = await firstVisibleGridRow(
+    page,
+    rows.filter((row) => row.childCount === 0),
+    viewport,
+  );
+  const leafParentId = await currentParentId(page, leaf.entryId);
+  const {
+    row: target,
+    grabX: targetGrabX,
+    grabY: targetGrabY,
+  } = await firstVisibleGridRow(
+    page,
+    rows.filter((row) => row.childCount > 0 && row.entryId !== leafParentId),
+    viewport,
+  );
+
+  await lockEntryAt(page, targetGrabX, targetGrabY);
+
+  const targetBox = (await gridRow(page, target.rowId).boundingBox())!;
+
+  await dragPointerTo(page, grabX, grabY, grabX, targetBox.y + targetBox.height / 2);
+
+  await expect(page.locator('#gantt')).toHaveAttribute('data-drop', 'refused');
+  await expect
+    .poll(() => page.locator('#gantt').evaluate((el) => getComputedStyle(el).cursor))
+    .toBe('not-allowed');
+
+  await page.mouse.up();
   await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
 });
 

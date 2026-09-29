@@ -5,8 +5,8 @@ import { createPopup } from 'freegantt';
 import type { ChromePlugin, EntryId, GanttDom, Popup } from 'freegantt';
 
 /** What the page holds after installing: the plugin itself, plus the one call its button makes.
- *  This is the same shape `lock-entries.ts` already publishes, and the library's supported answer to
- *  "how does page scope reach what a plugin built in `view()`". The plugin object is the handle.
+ *  This is the library's supported answer to "how does page scope reach what a plugin built in
+ *  `view()`". The plugin object is the handle.
  *
  *  #178: this used to be a module-level `let demoView`, excused as "one stash serves every page,
  *  because each page mounts one Gantt". The excuse fails the moment a page mounts two (I2, and

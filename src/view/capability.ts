@@ -47,9 +47,10 @@ export interface ResolvedCapabilities {
    *
    *  Empty means the move writes nothing, and that is exactly what `can('move', entry)` refuses. */
   entriesMovedBy(entry: Entry): readonly Entry[];
-  /** May this Entry land under this parent (#425)? A drop within its own current parent needs only
-   *  `reorder`. A drop under a different parent needs `parentId` open too. A locked `parentId` must
-   *  refuse a drag the same way it refuses `update()`. */
+  /** May this Entry land under this parent? A bar drag and a grid row drag both ask this. A drop
+   *  within its own current parent needs only `reorder`. A drop under a different parent also needs
+   *  `parentId` open. A plugin's place rule (ADR 0038) gets the final say either way. A locked
+   *  `parentId` or a place rule's own refusal both refuse a drag the way `entries.update()` refuses. */
   canPlace(entry: Entry, parentId: EntryId | undefined): boolean;
 }
 
@@ -76,6 +77,12 @@ export interface CapabilityInputs {
    *  in a hand-built test fixture, `canWrite` falls back to the declared Field's own `editable`
    *  unchanged. */
   editableOf?: ((id: string, key: FieldKey) => FieldEditable) | undefined;
+  /** From the bound `Dataset` — the friend function `api/dataset.ts`'s `placeableOf` (ADR 0038). The
+   *  effective place rule answer for a drop, same-parent and cross-parent alike. It is a plugin's
+   *  place rule's own answer, or `'anywhere'` when the rule has no opinion. `canPlace` refuses
+   *  outright whenever it is not `'anywhere'`. Absent in a hand-built test fixture, `canPlace` keeps
+   *  today's `parentId`-cell-only answer. */
+  placeableOf?: ((id: string, parentId: EntryId | undefined) => FieldEditable) | undefined;
 }
 
 /** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
@@ -281,7 +288,8 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
 
   /** #425: does a drop under `parentId` also need `entry`'s own `parentId` cell open? Not when the
    *  drop keeps `entry` under its current parent (ADR 0024's own answer, the tree ADR 0034 checks).
-   *  A same-parent reorder writes only `siblingIndex`. */
+   *  A same-parent reorder writes only `siblingIndex`. ADR 0038: the place rule still gets a say on
+   *  a same-parent drop. The rule, not this seam, decides whether it ever narrows one. */
   const canPlace = (entry: Entry, parentId: EntryId | undefined): boolean => {
     if (
       !isOffered('reorder', entry) ||
@@ -289,7 +297,8 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     ) {
       return false;
     }
-    return entry.parent()?.id === parentId || canWrite(entry, 'parentId').ok;
+    if (entry.parent()?.id !== parentId && !canWrite(entry, 'parentId').ok) return false;
+    return (inputs.placeableOf?.(entry.id, parentId) ?? 'anywhere') === 'anywhere';
   };
 
   return {

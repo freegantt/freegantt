@@ -67,9 +67,9 @@ export function addMs(i: Instant, ms: number): Instant {
 }
 
 /** How far `a` sits after `b`, in milliseconds — negative when it sits before. `addMs`'s pair:
- *  `addMs(start, diffMs(proposed, current))` moves a second entry by the same amount as the first
- *  (`harness/plugins/lock-entries.ts`). One of the two places in the library allowed to do
- *  arithmetic on an `Instant` — everywhere else in `src/**` calls this instead (I10). */
+ *  `addMs(start, diffMs(proposed, current))` moves a second entry by the same amount as the first.
+ *  One of the two places in the library allowed to do arithmetic on an `Instant` — everywhere else
+ *  in `src/**` calls this instead (I10). */
 export function diffMs(a: Instant, b: Instant): number {
   return a - b;
 }

@@ -7,7 +7,6 @@ import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import type { EditExtender } from './edit-extension.js';
-import * as writeRule from './write-rule.js';
 import {
   ComputedFieldCannotBeWrittenError,
   SiblingIndexOutOfRangeError,
@@ -15,6 +14,7 @@ import {
   DuplicateEntryIdError,
   EntryNotFoundError,
   FieldNotEditableError,
+  PlaceRefusedError,
   ParentCycleError,
   UnknownFieldError,
   entryId,
@@ -920,18 +920,150 @@ describe("a plugin's per-entry lock rule opens a locked Field (#473)", () => {
     expect(state.editableOf('c2', 'start')).toBe('never');
   });
 
-  it('editableOf builds no FieldLockQuery when no plugin has installed a lock rule (I5, #473 ocr finding)', () => {
+  it('editableOf(id, field) twice hands a lock rule the same FieldLockQuery reference (I5)', () => {
     const state = lockedDataset();
-    const queryFor = vi.spyOn(writeRule, 'fieldLockQueryFor');
+    const seen: unknown[] = [];
+    state.setLockRule((next) => (query, field) => {
+      seen.push(query);
+      return next(query, field);
+    });
 
-    expect(state.editableOf('c1', 'start')).toBe('never');
-    expect(queryFor).not.toHaveBeenCalled();
+    state.editableOf('c1', 'start');
+    state.editableOf('c1', 'end');
 
-    state.setLockRule((next) => (query, field) => (field === 'start' ? 'anywhere' : next(query, field)));
-    expect(state.editableOf('c1', 'start')).toBe('anywhere');
-    expect(queryFor).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBe(seen[1]);
+  });
 
-    queryFor.mockRestore();
+  it('a removed id leaves no cached lock query; an undo of the remove still answers the lock', () => {
+    const state = lockedDataset();
+    const seen: unknown[] = [];
+    state.setLockRule((next) => (query, field) => {
+      seen.push(query);
+      return next(query, field);
+    });
+
+    state.editableOf('c1', 'start');
+    state.entries.remove('c1');
+    state.undo();
+    state.editableOf('c1', 'start');
+
+    // A live id gets one cached query for its whole life (I5). A removed id's cached query must go
+    // with it, so an id that comes back through undo builds a fresh one rather than reusing a query
+    // built for a row that no longer exists in between.
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).not.toBe(seen[1]);
+  });
+
+  // §1.3's ocr finding: a rule always answers now, so a narrowing rule reads the next occupant's own
+  // answer and can only tighten it, never widen a Field the next occupant already refused.
+  it("a narrowing rule cannot widen a Field the next rule already answers 'never' (§1.3)", () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [{ id: 'e1', name: 'e1', start: '2026-01-01', end: '2026-01-05' }],
+      fields: [{ key: 'end', editable: false }],
+    });
+    state.setLockRule((next) => (query, field) => {
+      const answer = next(query, field);
+      return answer === 'anywhere' ? 'api' : answer;
+    });
+
+    expect(state.editableOf('e1', 'end')).toBe('never');
+    expect(() => state.entries.update('e1', { end: undefined })).toThrow(FieldNotEditableError);
+  });
+});
+
+describe("a plugin's place rule gates an explicit move (ADR 0038)", () => {
+  function placeDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'p1' },
+        { id: 'p2', name: 'p2' },
+        { id: 'c1', parentId: 'p1', name: 'c1' },
+        { id: 'c2', parentId: 'p1', name: 'c2' },
+      ],
+    });
+  }
+
+  it("refuses a move into a parent the rule answers 'never' for, and stages nothing", () => {
+    const state = placeDataset();
+    state.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'never' : next(place)));
+
+    expect(() => state.entries.update('c1', { parentId: 'p2' })).toThrow(PlaceRefusedError);
+    expect(state.entries.get('c1')!.read('parentId')).toBe(entryId('p1'));
+  });
+
+  it("commits a move into a parent the rule answers 'api' for", () => {
+    const state = placeDataset();
+    state.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'api' : next(place)));
+
+    state.entries.update('c1', { parentId: 'p2' });
+    expect(state.entries.get('c1')!.read('parentId')).toBe(entryId('p2'));
+  });
+
+  it('reads currentParentId as the child moves out of a parent, so giving up a child is refusable', () => {
+    const state = placeDataset();
+    const seen: Array<EntryId | undefined> = [];
+    state.setPlaceRule((next) => (place) => {
+      seen.push(place.currentParentId);
+      return place.currentParentId === entryId('p1') ? 'never' : next(place);
+    });
+
+    expect(() => state.entries.update('c1', { parentId: 'p2' })).toThrow(PlaceRefusedError);
+    expect(seen).toContain(entryId('p1'));
+  });
+
+  it('a same-parent siblingIndex move asks with parentId equal to currentParentId', () => {
+    const state = placeDataset();
+    let asked: { parentId: EntryId | undefined; currentParentId: EntryId | undefined } | undefined;
+    state.setPlaceRule((next) => (place) => {
+      asked = { parentId: place.parentId, currentParentId: place.currentParentId };
+      return next(place);
+    });
+
+    state.entries.update('c1', { siblingIndex: 0 });
+    expect(asked).toEqual({ parentId: entryId('p1'), currentParentId: entryId('p1') });
+  });
+
+  it('entries.add() asks with currentParentId undefined — the row has no place yet', () => {
+    const state = placeDataset();
+    let asked: { currentParentId: EntryId | undefined } | undefined;
+    state.setPlaceRule((next) => (place) => {
+      asked = { currentParentId: place.currentParentId };
+      return next(place);
+    });
+
+    state.entries.add({ id: 'c3', parentId: 'p1', name: 'c3' });
+    expect(asked).toEqual({ currentParentId: undefined });
+  });
+
+  it('a write that touches neither parentId nor siblingIndex never asks the place rule', () => {
+    const state = placeDataset();
+    const rule = vi.fn((_next: unknown, place: unknown) => place);
+    state.setPlaceRule((next) => (place) => {
+      rule(next, place);
+      return next(place);
+    });
+
+    state.entries.update('c1', { name: 'c1 (renamed)' });
+    expect(rule).not.toHaveBeenCalled();
+  });
+
+  it('two wraps compose: the second occupant receives the first as next', () => {
+    const state = placeDataset();
+    const calls: string[] = [];
+    state.setPlaceRule((next) => (place) => {
+      calls.push('first');
+      return next(place);
+    });
+    state.setPlaceRule((next) => (place) => {
+      calls.push('second');
+      return next(place);
+    });
+
+    state.entries.update('c1', { parentId: 'p2' });
+    expect(calls).toEqual(['second', 'first']);
   });
 });
 

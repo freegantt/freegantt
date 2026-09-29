@@ -14,6 +14,7 @@ import {
   dragPointerTo as dragBarTo,
   firstGrabbableBar,
   hasDirectLeafChild,
+  lockEntryAt,
 } from './row-drag-support.js';
 
 // A vertical drag moves a bar to another row — the pointer end of the seam the unit tests already
@@ -363,6 +364,50 @@ test('with "Lock tree" checked, a vertical drag refuses and leaves parentId unch
   );
   const leafParentId = await currentParentId(page, leaf.entryId);
   const target = rows.find((row) => row.childCount > 0 && row.entryId !== leafParentId)!;
+  const targetBand = (await rowBand(page, target.rowId).boundingBox())!;
+
+  await dragBarTo(page, grabX, grabY, grabX, targetBand.y + targetBand.height / 2);
+
+  await expect(page.locator('#gantt')).toHaveAttribute('data-drop', 'refused');
+
+  await page.mouse.up();
+  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
+});
+
+// #612: the lock is a core Field now, reached through the right-click "Lock" command instead of a
+// harness plugin — locking one parent, not the whole tree, is what a real consumer's lock looks like.
+test("a bar dropped into a locked parent's middle refuses, and leaves parentId unchanged", async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const rows = (await rowPlan(page)).filter((row) => row.hasOwnBar);
+  const pane = await timelinePaneBox(page);
+  const header = await headerBox(page);
+
+  const {
+    row: leaf,
+    grabX,
+    grabY,
+  } = await firstGrabbableBar(
+    page,
+    rows.filter((row) => row.childCount === 0),
+    pane,
+    header,
+  );
+  const leafParentId = await currentParentId(page, leaf.entryId);
+  const {
+    row: target,
+    grabX: targetGrabX,
+    grabY: targetGrabY,
+  } = await firstGrabbableBar(
+    page,
+    rows.filter((row) => row.childCount > 0 && row.entryId !== leafParentId),
+    pane,
+    header,
+  );
+
+  await lockEntryAt(page, targetGrabX, targetGrabY);
+
   const targetBand = (await rowBand(page, target.rowId).boundingBox())!;
 
   await dragBarTo(page, grabX, grabY, grabX, targetBand.y + targetBand.height / 2);

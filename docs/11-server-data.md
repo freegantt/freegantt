@@ -219,8 +219,7 @@ brings its plugin store rows back with it.
   to a locked entry, and that veto can catch an `'undo'` or a `'redo'` changeset too — a lock set
   after the edit it undoes still guards it, and the veto fires on every click, not just the first
   one. An undo reverses the user's own step, not a new edit, so a consumer's lock should let
-  `'undo'` and `'redo'` through the same way the harness lock (`harness/plugins/lock-entries.ts`)
-  does.
+  `'undo'` and `'redo'` through the same way the core lock does.
 
 ## A poll loop
 

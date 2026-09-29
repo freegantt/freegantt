@@ -152,38 +152,40 @@ read and write those keys off `ctx.dataset` with no cast, and to catch a
 import { Dataset, definePlugin } from 'freegantt';
 import type { DataPlugin } from 'freegantt';
 
-export interface LockProps {
-  locked?: boolean;
+export interface ApprovalProps {
+  approved?: boolean;
 }
 
-function locks(): DataPlugin<LockProps> & { lock(id: string): void } {
-  let dataset: Dataset<LockProps> | undefined;
+function approvals(): DataPlugin<ApprovalProps> & { approve(id: string): void } {
+  let dataset: Dataset<ApprovalProps> | undefined;
   return {
-    ...definePlugin<LockProps>({
-      id: 'demo.locks',
-      fields: [{ key: 'locked', type: 'boolean', editable: 'api' }],
+    ...definePlugin<ApprovalProps>({
+      id: 'demo.approvals',
+      fields: [{ key: 'approved', type: 'boolean', editable: 'api' }],
       data(ctx) {
         dataset = ctx.dataset;
       },
     }),
-    lock(id) {
-      dataset?.entries.update(id, { locked: true });
+    approve(id) {
+      dataset?.entries.update(id, { approved: true });
     },
   };
 }
 
-export { locks };
+export { approvals };
 ```
 
-`fields: [{ key: 'lockd' }]` — a typo — fails to compile: `LockProps` names
-`locked`, not `lockd`. `dataset?.entries.update(id, { locked: true })`
-compiles with no cast, because `dataset` is typed `Dataset<LockProps>`.
+`fields: [{ key: 'approvd' }]` — a typo — fails to compile: `ApprovalProps`
+names `approved`, not `approvd`. `dataset?.entries.update(id, { approved: true })`
+compiles with no cast, because `dataset` is typed `Dataset<ApprovalProps>`.
 
-A consumer installs `locks()` on any Dataset, typed with its own props or
-none: `new Dataset({ entries, plugins: [locks()] })`. That Dataset sees
-`locked` as `unknown` on its own `entries.get(id)?.read('locked')` — for a
+A consumer installs `approvals()` on any Dataset, typed with its own props or
+none: `new Dataset({ entries, plugins: [approvals()] })`. That Dataset sees
+`approved` as `unknown` on its own `entries.get(id)?.read('approved')` — for a
 typed read, the consumer writes its own props to include it:
-`new Dataset<TaskProps & LockProps>({ … })`.
+`new Dataset<TaskProps & ApprovalProps>({ … })`. Locking an Entry outright is
+core's own job now — `locked` is a core Field (ADR 0038); see docs/05's "Lock
+an Entry".
 
 A chrome plugin cannot declare a Field (`fields?: never`) — its type argument
 names the keys its `view()` half reads and writes instead, and the page that
@@ -338,8 +340,9 @@ export { unlockCostUnder };
 That reads: open `cost` on every descendant of one subtree root, otherwise
 whatever the next rule says. `entry` is a `FieldLockQuery` — `id`, and
 `isDescendantOf(ancestorId)` for the subtree question — not the live `Entry`.
-`undefined` is silence: the resolver falls back to `Field.editable` when no
-installed rule has an opinion on a cell.
+A rule always answers now (ADR 0038): "no opinion" calls `next(entry, field)`,
+never returns `undefined`, so a narrowing rule can only tighten what the
+chain below it already answered, never widen it.
 
 **The root itself stays locked.** `isDescendantOf(subtreeRootId)` answers
 `false` when `entry.id` is `subtreeRootId` — an Entry is not its own
@@ -380,7 +383,7 @@ Per-entry data a consumer must save and load back goes in a Field instead — th
 it through `entries.update()`, and no gesture writes it — not the cell editor, not a
 drag, not a resize. Give it no `column`, and no grid draws one either.
 
-`harness/plugins/lock-entries.ts` is the model case: `locked` is a Field, not a store
+Core's own `locked` Field is the model case (ADR 0038): it is a Field, not a store
 row, so a saved document that names a locked entry loads locked again.
 
 **Where a Field does not fit:** state a consumer does not save — which subtree is open
@@ -415,8 +418,9 @@ export { resetsOnLoad };
 
 `beforeChange` carries the same `origin`, so a plugin may veto a load too. A veto that
 depends on state a load is about to remove has to let `origin: 'load'` through, or a
-load could never remove that state — `lock-entries.ts`'s "is this entry locked" refusal
-steps aside for a load for exactly this reason.
+load could never remove that state — the core `locked` Field's own refusal steps aside
+for a load for exactly this reason (ADR 0015's write door governs `entries.update()`
+only, not `load`).
 
 ### Reacting to a sync
 
@@ -494,6 +498,7 @@ plugins claim the same key.
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 | `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
+| `edits.setPlaceRule(wrap)` | the one place seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts` (ADR 0038) |
 | `events.on(name, handler)` | none | Additive — every handler runs, in registration order; the returned `Disposer` removes only that one handler | `src/data/event-bus.test.ts` |
 
 A Field, a Field type or an Aggregator is not on this table: a plugin
@@ -573,11 +578,9 @@ import { definePlugin, fieldRowsOf } from 'freegantt';
 function lockAwareReport() {
   return definePlugin({
     id: 'demo.lockAwareReport',
-    requires: ['demo.lockEntries'],
     data(ctx) {
-      // `locked` is `demo.lockEntries`'s own Field (#496 Q8), read the same way any consumer reads
-      // it — not a store, so `requires` names an ordering preference here, not a read that would
-      // otherwise fail: every plugin's Field is registered before the first commit either way.
+      // `locked` is a core Field now (ADR 0038), read the same way any consumer reads it — no
+      // `requires` needed, because core registers it before the first commit either way.
       ctx.events.on('beforeChange', ({ changeSet }) => {
         const touchesLockedEntry = fieldRowsOf(changeSet).some(
           (row) => ctx.dataset.entries.get(row.id)?.read('locked') === true,

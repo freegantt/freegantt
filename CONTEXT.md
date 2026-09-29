@@ -201,6 +201,25 @@ What a transaction hands the extension hook, once per transaction: the current e
 The function type that may occupy the extension hook: `(request: EditRequest) => EntryEdits`. Returns extra writes only — the same shape the caller's own edit takes, not a wrapped or partial record of it. `data/` holds exactly one, calls it once per transaction, and defaults to `identityExtender`, which returns an empty `EntryEdits`. Its writes go in through the same reading `entries.update()` gets, so a Field no Dataset declares is refused (`UnknownFieldError`), a direct `start`/`end` write against a rolling-up parent is refused (`DerivedFieldNotWritableError`, ADR 0013), and `moveEntryTo` is what a cascade writes instead — the same refusal whether the parent draws its children as Segments or not, because `data/` never reads `childrenAsSegments` (#421). **One write is dropped in silence: a cascade onto an Entry this same transaction adds.** `diffEdit` finds no base Entry for that id in the committed store, so the cascade produces no changeset rows and the author gets no error. Ruled deferred to S7, tracked as #235 — a known hole, not an oversight to rediscover.
 _Avoid_: ProposalResolver (superseded); EditAdjustment/`{ patch }` (retired 2026-08-27, along with `FieldPatch` — see EntryEdits. Chosen for a plain, usable API now over matching a scheduling-plugin contract that has not been designed yet; S7 makes its own return-shape call when it exists)
 
+**Locked entry**:
+An Entry whose core `locked` Field reads `true` (`editable: 'api'`, no grid column). The user may not
+edit any of its cells, move it, or reorder it, in the grid pane or the timeline pane alike; a drop
+that would carry another Entry into or out of a locked parent refuses the same way (see **Place
+rule**, below). `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo
+all still write a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
+.update(id, { locked: true })` sets it; `{ locked: undefined }` clears it.
+_Avoid_: Pinned (the scheduling plugin's own whole-Entry state, a separate refusal with a separate
+owner — see **Pinned**, above), Read-only, Frozen, Disabled
+
+**Place rule**:
+The plugin seam that answers whether an Entry may land under a given parent, set with `ctx.edits
+.setPlaceRule` and composed onto the next occupant the way a lock rule composes (see
+**EditExtender**). It answers a cell's `FieldEditable` for a cross-parent drop only — a same-parent
+reorder stays the lock rule's question. A bar drag, a grid row drag, and `entries.update()`/`add()`
+all ask the same resolution, so one answer gates preview and commit alike (I14).
+_Avoid_: Drop rule (the drop target itself is resolved elsewhere — see **Drop target**, below; this
+seam only answers the one question a resolved drop then checks)
+
 ### Scheduling
 
 **Extension hook**:
@@ -221,7 +240,7 @@ _Avoid_: Error, warning
 
 **Pinned**:
 A whole-Entry boolean state, set by the user, that tells the scheduling engine never to move that Entry — an upstream change that would otherwise push it instead produces a Diagnostic reporting what the engine _would_ have done. It lives in the default scheduling plugin's own per-entry storage (exact contract tracked in issue #12), not on `Entry`/`model/`, the same way `Dependency` does — a Dataset with no scheduling plugin installed has no notion of "pinned" at all.
-_Avoid_: Locked, frozen, fixed
+_Avoid_: Locked, frozen, fixed (a lock is the UI refusal — see **Locked entry**)
 
 **Progress**:
 How complete an Entry is, as a fraction `0..1`. Scheduling-plugin data, not a core Field and not a key on `Entry` (ADR 0008) — a Dataset with no scheduling plugin installed has no Progress, the same way it has no pin flag. The plugin declares it as a Field and may roll it up with `weightedMeanByDuration`.
@@ -570,8 +589,8 @@ dates instead of deriving them from its subtree. Its bar moves and resizes like 
 a direct write to its `start`/`end` cell succeeds instead of throwing `DerivedFieldNotWritableError`.
 Its subtree still translates under a drag of its own bar, per **Parent bar drag** above. The opposite
 is a **rolling-up parent**, the default for any row with children.
-_Avoid_: group (there is no stored group — see **Parent bar drag**), locked parent (locking is
-`editable`, a separate question from ownership)
+_Avoid_: group (there is no stored group — see **Parent bar drag**), locked parent (a separate
+question from ownership — see **Locked entry**)
 
 **Draft**:
 Prose for a gesture's in-flight edit while a drag previews — not a type of its own (D-S3-2). A Draft **is** `EntryEdits`, the same shape `dataset.entries.update()` takes; nothing new is declared for it. Distinct from Write set (a Transaction's own in-progress record, once a Draft actually commits).
@@ -597,6 +616,7 @@ May the user drag this Entry to another place in the tree — a new parent, a ne
 siblings, or both. A `Capability` like `move` or `resize` (see **Capability**, above): resolved
 per Entry, offered or refused as a whole. `gantt.setCapabilityRule('reorder', rule)` sets it. A
 vertical bar drag and a grid row drag both ask it. `capabilities: { reorder: false }` turns off both.
+A locked Entry refuses it in both panes (see **Locked entry**).
 _Avoid_: `reparent` for this word (that names only the parent half of the job — see **Tree place**)
 
 **Tree place** (#425):
@@ -616,7 +636,7 @@ _Avoid_: Drop position (reads as the same thing as a bar's time position)
 **Drop target** (#425):
 The **Tree place** a drop would write, resolved from the **Row drop zone** the pointer sits over — or
 a refusal, when no rule lets the drop land there (a group header row, the Entry's own descendant, a
-locked `siblingIndex` or `parentId`).
+locked `siblingIndex` or `parentId`, or a locked parent it would enter or leave — see **Place rule**).
 _Avoid_: Drop position (see **Row drop zone**)
 
 **Insertion line** (#425):

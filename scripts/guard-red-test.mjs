@@ -5,7 +5,7 @@
 // the same way. docs/04-hooks-and-ci.md §4: "a guard with no failing fixture is presumed broken."
 
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, unlinkSync } from 'node:fs';
+import { writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -160,6 +160,33 @@ eslintRedTestFile(
   'e2e/__index_path_type_position_red_test__.ts',
   "// Deliberate boundary violation — the exact shape e2e/variant-styles.spec.ts shipped uncaught:\n// a type-position inline import() naming the index by a relative path (#287, F7).\ndeclare global {\n  interface Window {\n    __redTest: import('../src/api/index.js').Gantt;\n  }\n}\nexport {};\n",
   "e2e/ -> src/api/index.ts by a type-position inline import() (#287 F7's live instance)",
+);
+
+// entry-lock-uses-public-seams (ADR 0038): that rule's `from` names one exact file, not a directory
+// pattern, so a fixture at a new path would never exercise it. This appends a violating import to the
+// real file, asserts depcruise fails, then restores the original bytes exactly — never `unlinkSync`,
+// since the real file must still exist once this script returns.
+function mutatedFileRedTest(relativeFile, appended, description) {
+  const file = path.join(root, relativeFile);
+  const original = readFileSync(file, 'utf8');
+  writeFileSync(file, `${original}\n${appended}`);
+  let ok = false;
+  try {
+    ok = depcruiseFails();
+  } finally {
+    writeFileSync(file, original);
+  }
+  if (!ok) {
+    console.error(`guard-red-test: ${description} — dependency-cruiser did NOT fail. The guard is broken.`);
+    process.exit(1);
+  }
+  console.log(`guard-red-test: ${description} — blocked as expected.`);
+}
+
+mutatedFileRedTest(
+  'src/data/entry-lock.ts',
+  "// Deliberate boundary violation — entry-lock.ts may import model/ only (ADR 0038).\nimport '../view/styles.js';\n",
+  'entry-lock-uses-public-seams: entry-lock.ts -> view/ boundary violation',
 );
 
 console.log('guard-red-test: all boundary and removable-leaf rules correctly blocked their violations.');

@@ -64,6 +64,14 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     editable: 'anywhere',
   },
   {
+    // A lock refuses a gesture on every other cell of this Entry (ADR 0038). No `column`: the grid
+    // never shows a "locked" header unless a consumer lists it in `gridColumns`.
+    key: 'locked',
+    type: 'boolean',
+    equals: byReference,
+    editable: 'api',
+  },
+  {
     // How long does this row run? Its own span, `end - start`, and nothing once a date is missing.
     // A parent's `start` and `end` roll up, so its span counts the gaps between its children.
     key: 'duration',

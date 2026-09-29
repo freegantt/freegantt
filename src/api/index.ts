@@ -16,6 +16,9 @@ export type {
   FieldLockQuery,
   FieldLockRule,
   FieldLockRuleWrapper,
+  PlaceQuery,
+  PlaceRule,
+  PlaceRuleWrapper,
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
 export { mergeEntryEdits } from './dataset-plugin.js';
@@ -276,6 +279,7 @@ export {
   IllegalCoreFieldOverrideError,
   ComputedFieldCannotBeWrittenError,
   FieldNotEditableError,
+  PlaceRefusedError,
   DerivedFieldNotWritableError,
   UnknownAggregatorError,
   AggregatorFailedError,
@@ -451,8 +455,8 @@ export { currency } from '../data/fields/field-types.js';
 // `addMs`/`MS` to shift one by a duration (S2.7 harness-review — `harness/e2e/data.ts`'s move-by-a-day
 // buttons had no public way to do this and were hand-rolling `entry.start + 86400000`; the Add-entry
 // button then used `instant(Date.now())` the same way). `diffMs` is `addMs`'s pair, added in S5.10
-// for the same reason: `harness/plugins/lock-entries.ts` reads how far a proposed edit moved an
-// entry, and subtracting two `Instant`s by hand is exactly the arithmetic I10 exists to stop.
+// so a plugin can read how far a proposed edit moved an entry without subtracting two `Instant`s by
+// hand — exactly the arithmetic I10 exists to stop.
 // `overlap` clips one `TimeSpan` to another, added in #472 for the same reason: a consumer totalling
 // a Field over `gantt.visibleSpan` had no public way to clip an entry's span to the window without
 // the same hand `Math.max`/`Math.min`-and-cast. `spansTime` answers whether a row has both dates —
