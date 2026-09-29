@@ -42,7 +42,6 @@ Minimal example: put a small, fixed set of entries into a `Gantt`.
 import { Gantt, Dataset } from 'freegantt';
 
 const dataset = new Dataset({
-  timeZone: 'America/Chicago', // IANA zone; required — every date below is read through it (D6)
   entries: [
     { id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-07' },
     { id: 't2', name: 'Build', start: '2026-09-08', end: '2026-09-21' },
@@ -57,8 +56,11 @@ const gantt = new Gantt({
 ```
 
 Ids are plain strings and dates are plain strings; nothing has to be constructed first. Wrap the
-entries in a `Dataset` with the IANA `timeZone` they are written in, mount a `Gantt` on a container
-element, and `gantt.destroy()` tears it down.
+entries in a `Dataset`, mount a `Gantt` on a container element, and `gantt.destroy()` tears it down.
+
+The `Dataset` reads each date in the viewer's own time zone. Pass an IANA `timeZone`, such as
+`'America/Chicago'`, when every viewer must see the same day boundaries — a shared project plan,
+for example.
 
 Editing after mount is a plain call on `dataset.entries` — no second render path, no re-mount. Every
 call auto-wraps in its own transaction (D-S2-8), so a bound `Gantt` moves the bar on the next frame:
