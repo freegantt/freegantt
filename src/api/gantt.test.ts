@@ -6873,9 +6873,13 @@ describe('Gantt entryMove — a grid row drag reaches the same switch as a bar d
     const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
 
     const afterEvents: EntryMove[] = [];
-    gantt.on('entryMove', (p) => afterEvents.push(p));
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
     const datasetChanges: ChangeSet[] = [];
-    dataset.on('change', ({ changeSet }) => datasetChanges.push(changeSet));
+    dataset.on('change', ({ changeSet }) => {
+      datasetChanges.push(changeSet);
+    });
 
     dragRowInto(container, row, 90);
 
@@ -6907,7 +6911,9 @@ describe('Gantt entryMove — a grid row drag reaches the same switch as a bar d
     const id = entryId('a');
     const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
     const afterEvents: EntryMove[] = [];
-    gantt.on('entryMove', (p) => afterEvents.push(p));
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
 
     // A vertical bar drag: dx=0, dy lands on row 2's middle.
     const original = document.elementFromPoint.bind(document);
@@ -6956,7 +6962,9 @@ describe('Gantt entryMove — a grid row drag reaches the same switch as a bar d
     const id = entryId('a');
     const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
     const afterEvents: EntryMove[] = [];
-    gantt.on('entryMove', (p) => afterEvents.push(p));
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
 
     const original = document.elementFromPoint.bind(document);
     document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
@@ -6986,7 +6994,9 @@ describe('Gantt entryMove — a grid row drag reaches the same switch as a bar d
 
     const id = entryId('a');
     const afterEvents: EntryMove[] = [];
-    gantt.on('entryMove', (p) => afterEvents.push(p));
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
 
     // The bar never arms at all — `move: false` refuses the gesture before it reaches a drop.
     const original = document.elementFromPoint.bind(document);
@@ -7024,7 +7034,9 @@ describe('Gantt entryMove — a grid row drag reaches the same switch as a bar d
 
     const id = entryId('a');
     const afterEvents: EntryMove[] = [];
-    gantt.on('entryMove', (p) => afterEvents.push(p));
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
 
     dragRowInto(container, row, 90);
 
