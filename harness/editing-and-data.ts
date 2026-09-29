@@ -23,7 +23,6 @@ import { mountGanttToolbar } from './gantt-toolbar.js';
 import { zoomPresetsWithSixHour } from './six-hour-preset.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { fakeServer } from './fake-server.js';
-import { lockEntries } from './plugins/lock-entries.js';
 import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import type { BufferKindProps } from './plugins/buffer-kind.js';
@@ -63,11 +62,6 @@ function withKindProps(entry: EntryInput<DemoEntryProps>): EntryInput<EditingDat
   return entry;
 }
 
-// S5.10: one Dataset plugin owns every lock on this page — the checkbox below writes its
-// `locked` Field (#496), so the page keeps no lock state of its own. `Dataset.plugins` is
-// read-only, so it installs here, at construction.
-const locks = lockEntries();
-
 // #473: `note` is locked (`editable: false`) everywhere, and this plugin's `setLockRule` is the
 // only door that opens it — one subtree at a time, never the whole Field.
 const notes = subtreeUnlock('note');
@@ -83,8 +77,14 @@ const dataset = new Dataset<EditingDataProps>({
     { key: 'accepted' },
     { key: 'note', editable: false },
   ],
-  plugins: [locks, notes],
+  plugins: [notes],
 });
+
+// `locked` is a core Field (#612) — the checkbox below and its readout both write and read it
+// straight through the Field, so the page keeps no lock state of its own.
+function isLocked(id: string): boolean {
+  return dataset.entries.get(id)?.read('locked') === true;
+}
 
 // #517: stands in for a server this page polls. It carries the page's own list from page load, so
 // its scripted revisions build on what the page actually shows.
@@ -181,7 +181,7 @@ function refreshMutationButtons(): void {
 function refreshLockCheckbox(): void {
   const ids = gantt.selectedEntryIds;
   lockCheckbox.disabled = ids.length === 0;
-  lockCheckbox.checked = ids.length > 0 && ids.every((id) => locks.isLocked(id));
+  lockCheckbox.checked = ids.length > 0 && ids.every((id) => isLocked(id));
 }
 
 // #473: undo/redo can close or open the subtree without the checkbox ever firing its own `change`
@@ -204,9 +204,9 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
   syncSelectionUi();
 });
 
-// Who reports a refusal? The library, on one subscription over both emitters — the lock
-// plugin's and the mobilization veto's own `refuse(reason)` words arrive here, so this page keeps
-// no refusal callback of its own.
+// Who reports a refusal? The library, on one subscription over both emitters — the mobilization
+// veto's own `refuse(reason)` words arrive here. The core lock reports nothing: it closes a locked
+// row's cells so no gesture ever arms, and a click never sees a refusal to report.
 const toast = document.querySelector<HTMLDivElement>('#toast')!;
 
 function showToast(message: string): void {
@@ -313,10 +313,7 @@ lockCheckbox.addEventListener('change', () => {
   if (ids.length === 0) return;
   attemptMutation(() => {
     dataset.transaction(() => {
-      for (const id of ids) {
-        if (lockCheckbox.checked) locks.lock(id);
-        else locks.unlock(id);
-      }
+      for (const id of ids) dataset.entries.update(id, { locked: lockCheckbox.checked ? true : undefined });
     });
   });
 });
