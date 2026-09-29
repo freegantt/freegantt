@@ -1,44 +1,45 @@
-import { Gantt, Dataset, attemptMutation, now, watchAllErrors, isTimeUnit } from 'freegantt';
+import { Gantt, Dataset, addMs, attemptMutation, now, watchAllErrors, isTimeUnit, MS } from 'freegantt';
 import type { DatasetEventMap } from 'freegantt';
-import { demoEntryInputs, segmentChildrenOf } from '../../fixtures/demo-dataset.js';
+import { demoEntryInputs } from '../../fixtures/demo-dataset.js';
 import { mountTimelineToolbar } from '../timeline-toolbar.js';
 import { prependChangeSet, prependLogLine } from '../change-log.js';
-import { lockEntries } from '../plugins/lock-entries.js';
+import { freezePastWork } from '../plugins/freeze-past-work.js';
 import { zoomPresetsWithSixHour } from '../six-hour-preset.js';
 
 // S5.10 visible acceptance (s5.10-dataset-plugins.md §4): a Dataset plugin the page installs through
-// the public API alone. Check the box to lock one entry; drag its neighbour and the locked bar ghosts
-// alongside it — the plugin's extender wrote its dates too — then the drop is refused.
-// `entry-15` sits beside `entry-14` in the fixture's own window around today, so both bars are on
-// screen when the page opens and a reader sees the ghost without panning first. The box starts
-// unchecked, so this page's other demos drag against an empty lock store, cascading nothing.
-const LOCKABLE_ENTRY_ID = 'entry-15';
-const locks = lockEntries();
+// the public API alone. Check "Freeze past work" and every bar that already ended shows no resize
+// handle and drags nowhere; a bar dragged into a parent whose own work is past refuses at the drop.
+const pastWork = freezePastWork();
 
-// #241, ADR 0026: the locked row draws three bars on purpose, and each of them is a child Entry the
-// row draws as a segment. That is the hard case for a cascade — three separate spans to translate, not one
-// envelope — and locking it is what makes the demo worth watching: all three bars ghost together
-// when `entry-14` drags, then the drop is refused.
-//
-// The three legs are what the lock holds, not their parent. A parent's dates roll up from its
-// children (ADR 0013), so they are not the parent's to write; `lock-entries.ts` cascades with
-// `moveEntryTo`, which writes the dates an Entry holds itself.
-const LOCKED_BAR_IDS = ['entry-15-a', 'entry-15-b', 'entry-15-c'] as const;
-const lockDemoEntryInputs = demoEntryInputs.flatMap((entry) =>
-  entry.id === LOCKABLE_ENTRY_ID && entry.start !== undefined
-    ? [{ ...entry, start: undefined, end: undefined }, ...segmentChildrenOf(LOCKABLE_ENTRY_ID, entry.start)]
-    : [entry],
-);
+// `entry-1`'s own dates are dropped, so its span rolls up from its one child `entry-4` instead (ADR
+// 0013), well before today — its grid row is what the drop-refusal drag targets, never its bar, so
+// it sits further back with no need to stay on screen. `entry-2` ends only a day before today, close
+// enough that `panToToday`'s own landing margin still keeps its bar on screen, so "Freeze past work"
+// closes its `start`/`end` where a reader can watch it happen. `entry-3` is dated a few days after
+// today, so it stays open while frozen — the bar a reader drags onto `entry-1` to watch the place
+// rule refuse it.
+const PAST_PARENT_ID = 'entry-1';
+const PAST_CHILD_ID = 'entry-4';
+const PAST_BAR_ID = 'entry-2';
+const OPEN_ENTRY_ID = 'entry-3';
+const today = now();
+const daysFromToday = (count: number) => addMs(today, count * MS.DAY);
+const freezeDemoEntryInputs = demoEntryInputs.map((entry) => {
+  if (entry.id === PAST_PARENT_ID) return { ...entry, start: undefined, end: undefined };
+  if (entry.id === PAST_CHILD_ID) {
+    return { ...entry, parentId: PAST_PARENT_ID, start: daysFromToday(-10), end: daysFromToday(-8) };
+  }
+  if (entry.id === PAST_BAR_ID) return { ...entry, start: daysFromToday(-2), end: daysFromToday(-1) };
+  if (entry.id === OPEN_ENTRY_ID) return { ...entry, start: daysFromToday(3), end: daysFromToday(5) };
+  return entry;
+});
 
-const dataset = new Dataset({ entries: lockDemoEntryInputs, timeZone: 'UTC', plugins: [locks] });
+const dataset = new Dataset({ entries: freezeDemoEntryInputs, timeZone: 'UTC', plugins: [pastWork] });
 const mobilization = now();
 
 const gantt = new Gantt({
   container: '#gantt',
   dataset,
-  // What decides which parents draw their children as bars on their own row? This rule (#421). It
-  // names the one parent this page splits, so every other Entry keeps drawing its own single bar.
-  rowSource: { source: 'entries', childrenAsSegments: (entry) => entry.id === LOCKABLE_ENTRY_ID },
   todayLine: false,
   dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
 });
@@ -58,7 +59,7 @@ const selectionReadout = document.querySelector<HTMLParagraphElement>('#selectio
 const log = document.querySelector<HTMLDivElement>('#log')!;
 const toast = document.querySelector<HTMLDivElement>('#toast')!;
 const snapUnitSelect = document.querySelector<HTMLSelectElement>('#snap-unit')!;
-const lockEntryCheckbox = document.querySelector<HTMLInputElement>('#lock-entry')!;
+const freezePastWorkCheckbox = document.querySelector<HTMLInputElement>('#freeze-past-work')!;
 
 function renderSelection(): void {
   const ids = gantt.selectedEntryIds;
@@ -88,8 +89,8 @@ function hideToast(): void {
 // vetoing handler passed to `refuse` (#210), so the page shows the library's own record instead of
 // keeping a second copy of the same sentence. The mobilization veto below is that case.
 //
-// The lock plugin refuses through `refuse(reason)` too, so this page keeps no refusal callback of
-// its own — every refusal, whoever raised it, arrives here.
+// The past-work freeze reports nothing here: it closes a frozen bar's `start`/`end` and a past
+// parent's own border, so no gesture ever arms and no drop ever reaches a refusal to report.
 watchAllErrors([dataset, gantt], (report) => {
   const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
   prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
@@ -122,12 +123,11 @@ holdDrop.addEventListener('change', () => {
   hideToast();
 });
 
-// Locking writes the plugin's `locked` Field (#496) — a real dataset write, so it commits, it
-// logs like every other change, and Ctrl+Z lifts it (#156).
-lockEntryCheckbox.addEventListener('change', () => {
-  attemptMutation(() =>
-    LOCKED_BAR_IDS.forEach((id) => (lockEntryCheckbox.checked ? locks.lock(id) : locks.unlock(id))),
-  );
+// The freeze is a view policy, not a dataset write (#612): flipping it raises no `change` and leaves
+// no undo step, only a fresh resolution `rulesChanged()` announces to the mounted Gantt.
+freezePastWorkCheckbox.addEventListener('change', () => {
+  if (freezePastWorkCheckbox.checked) pastWork.freeze();
+  else pastWork.unfreeze();
 });
 
 dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
