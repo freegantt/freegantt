@@ -73,9 +73,8 @@ import type { ResolvedField } from './fields/field-registry.js';
 import {
   assertFieldTakesWrite,
   editableAnswerFor,
+  fieldEditableRule,
   fieldLockQueryFor,
-  identityFieldLockRule,
-  IGNORED_FIELD_LOCK_QUERY,
   resolveWriteTarget,
 } from './write-rule.js';
 import type { FieldLockQuery } from '../model/index.js';
@@ -142,9 +141,13 @@ export class EntryStore implements EntryStoreContract {
   readonly #hierarchySource: HierarchySource;
   /** The per-entry lock rule's current occupant (#473). A plain field, not a `signal`: unlike
    *  `#hierarchySource`, nothing here is a `computed` derived from it — it is read imperatively, once
-   *  per write, the same way `#registry` is. Silence (`identityFieldLockRule`) until a plugin composes
-   *  onto it through `setLockRule`. */
-  #lockRule: FieldLockRule = identityFieldLockRule;
+   *  per write, the same way `#registry` is. Core's own bottom occupant (`fieldEditableRule`,
+   *  answering the Field's own `editable`) until a plugin composes onto it through `setLockRule`. */
+  #lockRule: FieldLockRule = fieldEditableRule((key) => this.#registry.get(key));
+  /** One `FieldLockQuery` per id, built once and reused (I5) — `#lockQueryFor`'s cache. Safe forever:
+   *  a query's `isDescendantOf` closure reads the live hierarchy at call time, so a cached query never
+   *  goes stale even as the tree it walks changes underneath it. */
+  #lockQueries = new Map<EntryId, FieldLockQuery>();
   /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
    *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
    *  never depends on who read first (`F5`). `reportRefusedHierarchyAnswers` raises. */
@@ -389,28 +392,28 @@ export class EntryStore implements EntryStoreContract {
    *  `EditExtender` cascade reach it through `#assertFieldTakesThisWrite`/`toEditsReading`; a plain
    *  read reaches it here. `api/dataset.ts`'s `Dataset.editableOf` is the published door onto this.
    *  `editableAnswerFor` answers `'never'` for the same undeclared-or-`compute` Field
-   *  `entries.update()` refuses (#473's ocr finding, I14).
-   *
-   *  `view/capability.ts`'s `canWrite` sits behind hover affordance resolution, so this stays
-   *  allocation-free with no plugin installed (I5, #473's ocr finding): `identityFieldLockRule`
-   *  never reads the query it is asked, so a Dataset with no lock rule installed answers through the
-   *  one shared `editableAnswerFor` order without building a fresh `FieldLockQuery` per cell. */
+   *  `entries.update()` refuses (#473's ocr finding, I14). The lock rule always answers now (§1.3),
+   *  so there is one call here, not a call folded onto `Field.editable` as a fallback. */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
     const declared = this.#registry.get(field);
-    if (this.#lockRule === identityFieldLockRule) {
-      return editableAnswerFor(field, declared, IGNORED_FIELD_LOCK_QUERY, this.#lockRule);
-    }
     return editableAnswerFor(field, declared, this.#lockQueryFor(entryId(id)), this.#lockRule);
   }
 
   /** One cell's address for the lock rule (#473) — the same construction `editableOf` and
-   *  `#assertFieldTakesThisWrite` both need, kept in one place so they cannot drift apart. */
+   *  `#assertFieldTakesThisWrite` both need, kept in one place so they cannot drift apart. Cached one
+   *  `FieldLockQuery` per id (I5): a rule asked about the same Entry twice sees the same reference
+   *  both times, and `view/capability.ts`'s `canWrite`, behind hover affordance resolution, never
+   *  rebuilds one per cell it has already asked about once. */
   #lockQueryFor(id: EntryId): FieldLockQuery {
-    return fieldLockQueryFor(
+    const cached = this.#lockQueries.get(id);
+    if (cached !== undefined) return cached;
+    const query = fieldLockQueryFor(
       id,
       (i) => this.storedEntry(i),
       (e) => this.parentIdOf(e),
     );
+    this.#lockQueries.set(id, query);
+    return query;
   }
 
   /** Call: `ctx.edits.setLockRule((next) => (entry, field) => field === 'cost' ? 'anywhere' : next(entry, field))`.

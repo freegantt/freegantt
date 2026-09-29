@@ -64,8 +64,9 @@ export interface DatasetEvents {
  *
  *  `setLockRule` is the sibling seam a plugin uses to open one locked Field on one Entry, or on a
  *  whole subtree (#473). Installing composes the same way: the wrapper receives the current occupant,
- *  and falls through to it with `undefined` for "no opinion." Every write door — `entries.update()`,
- *  the grid, and an `EditExtender` cascade — reads the composed rule before `Field.editable` (I14). */
+ *  and calls `next(query, field)` for "no opinion" — a rule always answers, never falls through in
+ *  silence. Every write door — `entries.update()`, the grid, and an `EditExtender` cascade — reads
+ *  the composed rule (I14). */
 export interface DatasetEditHook {
   setExtender(wrap: ExtenderWrapper): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;

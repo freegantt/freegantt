@@ -977,7 +977,7 @@ export interface FieldLockQuery {
 }
 
 // @public
-export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEditable | undefined;
+export type FieldLockRule = (query: FieldLockQuery, field: FieldKey) => FieldEditable;
 
 // @public
 export type FieldLockRuleWrapper = (next: FieldLockRule) => FieldLockRule;

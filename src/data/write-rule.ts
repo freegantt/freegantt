@@ -65,20 +65,22 @@ export function resolveWriteTarget(hasChildren: boolean, field: Field | undefine
   return 'refused';
 }
 
-/** Core's own lock rule (#473): silence, on every cell. The first occupant of `ctx.edits.setLockRule`
- *  — a plugin composes onto this the way it composes onto `identityExtender`/`storedParentSource`
- *  — so a Dataset with no plugin installed answers every cell with `Field.editable` alone. */
-export const identityFieldLockRule: FieldLockRule = () => undefined;
-
-/** One frozen `FieldLockQuery`, safe to share across every cell for as long as `identityFieldLockRule`
- *  is the occupant: that rule reads neither argument, so no caller of it ever needs a real query.
- *  `EntryStore.editableOf` reads this on the no-plugin-installed path, in place of building a fresh
- *  `fieldLockQueryFor(...)` (and its closures) per cell (#473's ocr finding, I5). It stays paired
- *  with `identityFieldLockRule` here, and must not be handed to any other rule. */
-export const IGNORED_FIELD_LOCK_QUERY: FieldLockQuery = Object.freeze({
-  id: entryId(''),
-  isDescendantOf: () => false,
-});
+/** Core's own lock rule (#473): the Field's own `editable`, on every cell. The bottom occupant of
+ *  `ctx.edits.setLockRule` — a plugin composes onto this the way it composes onto
+ *  `identityExtender`/`storedParentSource` — so a Dataset with no plugin installed still answers
+ *  every cell, and a plugin's narrowing rule always has an answer under it to narrow (§1.3, #473's
+ *  ocr finding: silence let a narrowing rule widen a Field declared `'never'`).
+ *
+ *  An undeclared key or a `compute` Field answers `'never'` here, the same answer `editableAnswerFor`
+ *  gives before it ever asks a rule — this occupant only ever meets a declared, storable Field in
+ *  practice, but it answers the same way if asked directly, so it carries no second rule to drift
+ *  from that one. */
+export function fieldEditableRule(fieldFor: (key: FieldKey) => Field | undefined): FieldLockRule {
+  return (_query, field) => {
+    const declared = fieldFor(field);
+    return declared === undefined || 'compute' in declared ? 'never' : editableOf(declared);
+  };
+}
 
 /** One cell's address, built from whichever lookup a caller holds — `EntryStore`'s own
  *  transaction-aware `parentIdOf`, or an `EditRequest`'s lazy `entryAfterEdits`. The walk itself is
@@ -94,25 +96,17 @@ export function fieldLockQueryFor(
   };
 }
 
-/** The effective lock on one cell (#473): a plugin's own answer, or `Field.editable` when the rule
- *  has no opinion (`undefined`). One function, so `entries.update()`, an `EditExtender` cascade, and
- *  the grid (`view/capability.ts`) read the same answer for the same cell (I14) — a plugin's per-entry
- *  unlock is not a second rule beside `Field.editable`, it is this rule's other input. */
-export function resolveFieldEditable(
-  query: FieldLockQuery,
-  field: FieldKey,
-  declared: Field,
-  lockRule: FieldLockRule,
-): FieldEditable {
-  return lockRule(query, field) ?? editableOf(declared);
-}
-
 /** What `dataset.editableOf`/`EditRequest.editableOf` answer for one cell, in the one order
  *  `assertFieldTakesWrite` below throws in — existence, then `compute`, then the lock (#473's ocr
  *  finding). A query and a door built from two copies of that order can drift; built from one, they
  *  cannot: an undeclared or `compute` Field answers `'never'` here for the same reason
  *  `entries.update()` refuses it there, so a plugin that guards a write with `editableOf(...) !==
- *  'never'` never passes a guard `entries.update()` then throws on. */
+ *  'never'` never passes a guard `entries.update()` then throws on.
+ *
+ *  The lock itself is one call: `lockRule` always answers now (§1.3), so `entries.update()`, an
+ *  `EditExtender` cascade, and the grid (`view/capability.ts`) all read its answer straight, with no
+ *  `Field.editable` fallback to fold in here — `fieldEditableRule` is that fallback's own place in the
+ *  chain, the bottom occupant every lock rule composes onto. */
 export function editableAnswerFor(
   field: FieldKey,
   declared: Field | undefined,
@@ -120,7 +114,7 @@ export function editableAnswerFor(
   lockRule: FieldLockRule,
 ): FieldEditable {
   if (declared === undefined || 'compute' in declared) return 'never';
-  return resolveFieldEditable(query, field, declared, lockRule);
+  return lockRule(query, field);
 }
 
 /** Does this Field, on this Entry, take a write from this door at all? The one check

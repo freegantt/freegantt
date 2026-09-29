@@ -7,7 +7,6 @@ import { DatasetState } from './dataset-state.js';
 import { fieldRowsOf, invertChangeSet } from './change-set.js';
 import { identityExtender } from './edit-extension.js';
 import type { EditExtender } from './edit-extension.js';
-import * as writeRule from './write-rule.js';
 import {
   ComputedFieldCannotBeWrittenError,
   SiblingIndexOutOfRangeError,
@@ -920,18 +919,36 @@ describe("a plugin's per-entry lock rule opens a locked Field (#473)", () => {
     expect(state.editableOf('c2', 'start')).toBe('never');
   });
 
-  it('editableOf builds no FieldLockQuery when no plugin has installed a lock rule (I5, #473 ocr finding)', () => {
+  it('editableOf(id, field) twice hands a lock rule the same FieldLockQuery reference (I5)', () => {
     const state = lockedDataset();
-    const queryFor = vi.spyOn(writeRule, 'fieldLockQueryFor');
+    const seen: unknown[] = [];
+    state.setLockRule((next) => (query, field) => {
+      seen.push(query);
+      return next(query, field);
+    });
 
-    expect(state.editableOf('c1', 'start')).toBe('never');
-    expect(queryFor).not.toHaveBeenCalled();
+    state.editableOf('c1', 'start');
+    state.editableOf('c1', 'end');
 
-    state.setLockRule((next) => (query, field) => (field === 'start' ? 'anywhere' : next(query, field)));
-    expect(state.editableOf('c1', 'start')).toBe('anywhere');
-    expect(queryFor).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).toBe(seen[1]);
+  });
 
-    queryFor.mockRestore();
+  // §1.3's ocr finding: a rule always answers now, so a narrowing rule reads the next occupant's own
+  // answer and can only tighten it, never widen a Field the next occupant already refused.
+  it("a narrowing rule cannot widen a Field the next rule already answers 'never' (§1.3)", () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [{ id: 'e1', name: 'e1', start: '2026-01-01', end: '2026-01-05' }],
+      fields: [{ key: 'end', editable: false }],
+    });
+    state.setLockRule((next) => (query, field) => {
+      const answer = next(query, field);
+      return answer === 'anywhere' ? 'api' : answer;
+    });
+
+    expect(state.editableOf('e1', 'end')).toBe('never');
+    expect(() => state.entries.update('e1', { end: undefined })).toThrow(FieldNotEditableError);
   });
 });
 

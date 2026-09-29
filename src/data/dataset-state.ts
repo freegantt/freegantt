@@ -351,8 +351,8 @@ export class DatasetState implements Dataset {
     this.#editExtender = wrap(this.#editExtender);
   }
 
-  /** The per-entry lock rule every write door reads (#473, I14). Core's own occupant is silence
-   *  (`identityFieldLockRule`); the store holds whichever occupant a plugin composed onto it. */
+  /** The per-entry lock rule every write door reads (#473, I14). Core's own bottom occupant answers
+   *  the Field's own `editable`; the store holds whichever occupant a plugin composed onto it. */
   get lockRule(): FieldLockRule {
     return this.entries.lockRule;
   }
