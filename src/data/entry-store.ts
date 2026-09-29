@@ -149,9 +149,10 @@ export class EntryStore implements EntryStoreContract {
    *  per write, the same way `#registry` is. Core's own bottom occupant (`fieldEditableRule`,
    *  answering the Field's own `editable`) until a plugin composes onto it through `setLockRule`. */
   #lockRule: FieldLockRule = fieldEditableRule((key) => this.#registry.get(key));
-  /** One `FieldLockQuery` per id, built once and reused (I5) — `#lockQueryFor`'s cache. Safe forever:
-   *  a query's `isDescendantOf` closure reads the live hierarchy at call time, so a cached query never
-   *  goes stale even as the tree it walks changes underneath it. */
+  /** One `FieldLockQuery` per live id, built once and reused (I5) — `#lockQueryFor`'s cache. Never
+   *  stale: a query's `isDescendantOf` closure reads the live hierarchy at call time, so a cached
+   *  query answers right even as the tree it walks changes underneath it. `endTransaction` evicts a
+   *  removed id's entry so the Map does not grow with every id a long-lived store has ever touched. */
   #lockQueries = new Map<EntryId, FieldLockQuery>();
   /** The place rule's current occupant (ADR 0038), read the same imperative way `#lockRule` is. Core's
    *  own bottom occupant answers every place `'anywhere'`, until a plugin composes onto it through
@@ -1111,6 +1112,9 @@ export class EntryStore implements EntryStoreContract {
     if (changeSet) {
       for (const { entity } of changeSet.removed) {
         this.#byId.delete(entity.id);
+        // A removed id's cached lock query goes with it (I5's cache, not I5's staleness): the query
+        // is rebuilt lazily on the next ask, so an id an undo brings back still answers the lock.
+        this.#lockQueries.delete(entity.id);
       }
       this.#restoreAdded(changeSet);
       this.#applyUpdatedRows(changeSet.updated);

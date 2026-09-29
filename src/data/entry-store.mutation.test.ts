@@ -935,6 +935,26 @@ describe("a plugin's per-entry lock rule opens a locked Field (#473)", () => {
     expect(seen[0]).toBe(seen[1]);
   });
 
+  it('a removed id leaves no cached lock query; an undo of the remove still answers the lock', () => {
+    const state = lockedDataset();
+    const seen: unknown[] = [];
+    state.setLockRule((next) => (query, field) => {
+      seen.push(query);
+      return next(query, field);
+    });
+
+    state.editableOf('c1', 'start');
+    state.entries.remove('c1');
+    state.undo();
+    state.editableOf('c1', 'start');
+
+    // A live id gets one cached query for its whole life (I5). A removed id's cached query must go
+    // with it, so an id that comes back through undo builds a fresh one rather than reusing a query
+    // built for a row that no longer exists in between.
+    expect(seen).toHaveLength(2);
+    expect(seen[0]).not.toBe(seen[1]);
+  });
+
   // §1.3's ocr finding: a rule always answers now, so a narrowing rule reads the next occupant's own
   // answer and can only tighten it, never widen a Field the next occupant already refused.
   it("a narrowing rule cannot widen a Field the next rule already answers 'never' (§1.3)", () => {
