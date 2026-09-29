@@ -158,6 +158,7 @@ class LiveEntry implements Entry {
     return {
       id: stored.id,
       ...(stored.name !== undefined ? { name: stored.name } : {}),
+      ...(stored.locked !== undefined ? { locked: stored.locked } : {}),
       ...(stored.parentId !== undefined ? { parentId: stored.parentId } : {}),
       ...(stored.start !== undefined ? { start: stored.start } : {}),
       ...(stored.end !== undefined ? { end: stored.end } : {}),

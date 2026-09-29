@@ -5053,7 +5053,6 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
     ) {
       const dataset = new Dataset({
         timeZone: 'UTC',
-        fields: [{ key: 'locked', type: 'boolean' }],
         entries: [
           { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-11-05' },
           {
@@ -5062,7 +5061,7 @@ describe('Gantt plugin variant registrations (S5.9, D-S5-21/D-S5-22, ADR 0018)',
             parentId: 'p1',
             start: '2026-01-01',
             end: '2026-01-05',
-            props: { locked: true },
+            locked: true,
           },
           { id: 'c2', name: 'C2', parentId: 'p1', start: '2026-11-01', end: '2026-11-05' },
         ],

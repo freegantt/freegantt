@@ -31,6 +31,9 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
    *  field: a row with no name still stores, still spans, still draws — core defaults nothing off
    *  it beyond the Grid's `name` column and the default bar label reading the same Field. */
   name?: string;
+  /** A locked Entry refuses a gesture on every cell but this one (ADR 0038). `undefined` and
+   *  `false` both read as unlocked; only app code sets or clears this key (`editable: 'api'`). */
+  locked?: boolean;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if this Entry
    * draws a bar. */
   start?: Instant;
@@ -95,6 +98,9 @@ export interface EntryInput<TProps = Record<string, unknown>> {
    *  Optional (#421 C5): a booking with no title is still a row. Omit it and the Grid's `name`
    *  column, and the default bar label, both read an empty value. */
   name?: string | undefined;
+  /** A locked Entry refuses a gesture on every cell but this one (ADR 0038). Omit it, or set it to
+   *  `undefined`, to leave the Entry unlocked. */
+  locked?: boolean | undefined;
   /** Optional on every kind (ADR 0012, revises this comment's earlier "required for an authored
    * span"): an Entry spans if and only if `start` and `end` are both present, and draws no bar
    * otherwise. One date with no other is legal and stores as written. An unreadable date is still an
@@ -259,14 +265,16 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
   /** Never optional here: every `ProposedEdit` is built through `toEditReading`, which always seeds
    *  this set (`withProposedKeys`). */
   readonly proposedKeys: ReadonlySet<string>;
-} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'parentId' | 'name' | 'props'>> & {
+} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'parentId' | 'name' | 'locked' | 'props'>> & {
     // Same widening as `EntryEdit`, for the same reason: `stored.start = undefined` has to be legal
     // once `toEditReading` reads an explicit clear off the wire (ADR 0012) — and `stored.parentId`/
-    // `stored.name` need the same room to root an entry or clear its name (#542).
+    // `stored.name` need the same room to root an entry or clear its name (#542). `stored.locked`
+    // needs it too, to unlock (ADR 0038).
     start?: Instant | undefined;
     end?: Instant | undefined;
     parentId?: EntryId | undefined;
     name?: string | undefined;
+    locked?: boolean | undefined;
   };
 
 /** A map of `ProposedEdit`s, keyed by the `EntryId` each one targets — what `EditRequest.proposed`
