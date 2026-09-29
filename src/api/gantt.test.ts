@@ -7081,6 +7081,40 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
 
     gantt.destroy();
   });
+
+  it("ADR 0038: a plugin's ctx.edits.rulesChanged() clears the sole selected Entry's resize handles on the next frame", async () => {
+    // The rule closes over `closed`, outside state a Field write never touches — nothing here calls
+    // `entries.update()`, so the subscription `subscribeToDatasetChanges` runs never fires.
+    let closed = false;
+    let announceRulesChanged: (() => void) | undefined;
+    const toggleable: DataPlugin = {
+      id: 'demo.toggleable',
+      data(ctx) {
+        ctx.edits.setLockRule((next) => (query, field) => (closed ? 'api' : next(query, field)));
+        announceRulesChanged = () => ctx.edits.rulesChanged();
+      },
+    };
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'x', name: 'X', start: '2026-01-01', end: '2026-01-05' }],
+      plugins: [toggleable],
+    });
+    const gantt = new Gantt({ container, dataset });
+    gantt.selectedEntryIds = [entryId('x')];
+
+    let start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(false);
+
+    closed = true;
+    announceRulesChanged!();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    expect(start.hidden).toBe(true);
+
+    gantt.destroy();
+  });
 });
 
 // #602: a grid row drag reaches `entryMove` through the same one switch (`reorder`) and the same

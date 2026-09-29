@@ -403,6 +403,8 @@ export class Dataset<TProps = unknown> {
 // @public
 export interface DatasetEditHook {
     // (undocumented)
+    rulesChanged(): void;
+    // (undocumented)
     setExtender(wrap: ExtenderWrapper): void;
     // (undocumented)
     setLockRule(wrap: FieldLockRuleWrapper): void;

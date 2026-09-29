@@ -75,11 +75,20 @@ export interface DatasetEvents {
  *
  *  `setPlaceRule` is the third seam (ADR 0038): it answers whether an Entry may land under a given
  *  parent, asked once for a cross-parent move and once for a gesture preview, so a bar drag, a grid
- *  row drag and `entries.update()`/`add()` all meet the same resolution. */
+ *  row drag and `entries.update()`/`add()` all meet the same resolution.
+ *
+ *  `rulesChanged` is the fourth seam (ADR 0038): a lock rule or a place rule can close over state
+ *  outside the Entry it reads — a clock, a toggle — so its answer can move with no write the Dataset
+ *  sees. Call it after that outside state moves. Every bound Gantt re-resolves what it currently
+ *  offers, the same re-resolution a Field write already triggers, so an affordance a rule just closed
+ *  clears on the next frame. No gate: unlike the three seams above, a plugin calls this any time
+ *  after its own `data()` returns, because a rule's outside state can move at any time, not only
+ *  during setup. Writes nothing itself (I14 unaffected — no changeset, no undo step). */
 export interface DatasetEditHook {
   setExtender(wrap: ExtenderWrapper): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
+  rulesChanged(): void;
 }
 
 /** This plugin's own store, plus a read-only view of anybody else's. */

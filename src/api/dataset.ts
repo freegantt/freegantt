@@ -243,6 +243,8 @@ export class Dataset<TProps = unknown> {
             gate.assertOpen();
             this.#state.setPlaceRule(wrap);
           },
+          // No gate: a rule's outside state can move at any time, not only during setup.
+          rulesChanged: () => this.#state.rulesChanged(),
         },
         store: {
           reserve: <T extends object>() => this.#state.pluginStores.reserve<T>(pluginId),
@@ -502,4 +504,16 @@ export function placeableOf<TProps>(
     throw new Error('placeableOf: dataset was not constructed through the Dataset constructor');
   }
   return state.placeableOf(id, parentId);
+}
+
+/** ADR 0038: the friend function `GanttShell` subscribes through, the same friend-map pattern
+ *  `hierarchyFollowsParentId` above uses for a query instead of a subscription — wakes on a
+ *  plugin's own `ctx.edits.rulesChanged()`. Not public: an app author never subscribes to this
+ *  directly, only every bound Gantt does, through `api/gantt.ts`'s wiring. */
+export function onRulesChanged<TProps>(dataset: Dataset<TProps>, listener: () => void): Disposer {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('onRulesChanged: dataset was not constructed through the Dataset constructor');
+  }
+  return state.onRulesChanged(listener);
 }
