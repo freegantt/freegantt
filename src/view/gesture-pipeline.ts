@@ -966,11 +966,20 @@ export class GesturePipeline {
 
   /** #425 ruling 5: `rolledUpEditsFor = rolledUpEditsFor(draft)`, `#computePreview`'s door onto the
    *  Rollup alone — never the extension hook, never a commit. `undefined` (no wiring, or a test-built
-   *  pipeline) ghosts nothing, the same silence an unwired `extraEditsFor` leaves. Nothing here can
-   *  throw a plugin's own bug: the Rollup is core's, not an installed occupant, so this needs no
-   *  `#extraFor`-style recovery. */
+   *  pipeline) ghosts nothing, the same silence an unwired `extraEditsFor` leaves.
+   *
+   *  A plugin's own `rollUp: fn` aggregator can still throw — it is plugin code, the same as an
+   *  extender, not core's own — so this needs `#extraFor`'s own recovery: catch here, the one place
+   *  on this rAF path that can, and paint no Rollup ghost for that frame. */
   #rolledUpFor(draft: ProposedEdits): ProposedEdits {
-    return this.#deps.rolledUpEditsFor?.(draft) ?? NO_EXTRA_EDITS;
+    const rolledUpEditsFor = this.#deps.rolledUpEditsFor;
+    if (rolledUpEditsFor === undefined) return NO_EXTRA_EDITS;
+    try {
+      return rolledUpEditsFor(draft);
+    } catch (error) {
+      this.#reportRollupFault(error);
+      return NO_EXTRA_EDITS;
+    }
   }
 
   /** #332: `by: 'plugin'`, not a specific `PluginId` — `setExtender` composes, so the hook
@@ -983,6 +992,18 @@ export class GesturePipeline {
       'An edit extender threw while computing the drag preview — this frame paints with no cascade.';
     this.#deps.raiseError(
       { code: 'extender-preview-failed', message, severity: 'warning', by: 'plugin', cause: error },
+      () => console.error(`FreeGantt: ${message}`, error),
+    );
+  }
+
+  /** #425: `#extraFor`'s own report, for the Rollup's aggregator instead of an extender — a plugin's
+   *  `rollUp: fn` is the thing that threw, so this reads the same `by: 'plugin'`, `severity:
+   *  'warning'` shape `#reportExtenderFault` already gives an equivalent preview-only recovery. */
+  #reportRollupFault(error: unknown): void {
+    const message =
+      'A rollUp aggregator threw while computing the drag preview — this frame paints with no Rollup ghost.';
+    this.#deps.raiseError(
+      { code: 'rollup-preview-failed', message, severity: 'warning', by: 'plugin', cause: error },
       () => console.error(`FreeGantt: ${message}`, error),
     );
   }
