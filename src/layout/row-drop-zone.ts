@@ -59,6 +59,12 @@ export function rowDropZoneAt(input: RowDropZoneInput, previous: RowDropZone): R
   const { y, sourceRowIndex, heights, rowCount, takesWholeRowInto } = input;
 
   if (rowCount === 0 || y >= heights.totalHeight) {
+    // The last row's own bottom edge has no row below it to hold a dead zone or a hysteresis band
+    // against — `belowLastRowPlace` needs to fill that role at this one boundary, the same as the
+    // neighbour checks below do at every boundary between two real rows.
+    if (y >= heights.totalHeight && insideLastRowDeadZone(previous, sourceRowIndex, rowCount, y, heights)) {
+      return previous;
+    }
     return sameZone(previous, { kind: 'belowLastRow' });
   }
 
@@ -111,6 +117,29 @@ function insideSourceDeadZone(
 ): boolean {
   if (rowIndex === sourceRowIndex + 1) return offset < ROW_CHANGE_THRESHOLD_PX;
   if (rowIndex === sourceRowIndex - 1) return height - offset < ROW_CHANGE_THRESHOLD_PX;
+  return false;
+}
+
+/** True while the pointer, having just left the last row's own bottom edge, still sits close
+ *  enough to hold the previous zone — the same guard `insideSourceDeadZone` gives every boundary
+ *  between two real rows, applied at the one boundary with no row on its far side. A `sourceRow`
+ *  previous reuses the dead-zone band; a `row` previous on that same last row reuses the ordinary
+ *  hysteresis band, matching `rowDropZoneAt`'s own adjacent-row check above. */
+function insideLastRowDeadZone(
+  previous: RowDropZone,
+  sourceRowIndex: number,
+  rowCount: number,
+  y: number,
+  heights: Pick<RowHeightIndex, 'totalHeight'>,
+): boolean {
+  const lastRowIndex = rowCount - 1;
+  const overflow = y - heights.totalHeight;
+  if (previous.kind === ROW_DROP_ZONE_KIND.sourceRow) {
+    return sourceRowIndex === lastRowIndex && overflow < ROW_CHANGE_THRESHOLD_PX;
+  }
+  if (previous.kind === ROW_DROP_ZONE_KIND.row) {
+    return previous.rowIndex === lastRowIndex && overflow < DROP_ZONE_HYSTERESIS_PX;
+  }
   return false;
 }
 

@@ -75,6 +75,27 @@ describe('rowDropZoneAt', () => {
     });
   });
 
+  it('the source row dead zone also guards its own bottom edge when it is the last row', () => {
+    // The source row is row 9 — the plan's last row, spanning [288, 320). Leaving past its own
+    // bottom edge has no next row to name; without its own dead zone, one pixel of jitter there
+    // flips straight to belowLastRow instead of holding sourceRow.
+    const sourceRowIndex = ROW_COUNT - 1;
+    expect(
+      zoneAt(ROW_HEIGHT * ROW_COUNT + (ROW_CHANGE_THRESHOLD_PX - 1), SOURCE_ROW, { sourceRowIndex }),
+    ).toEqual(SOURCE_ROW);
+    expect(zoneAt(ROW_HEIGHT * ROW_COUNT + ROW_CHANGE_THRESHOLD_PX, SOURCE_ROW, { sourceRowIndex })).toEqual({
+      kind: 'belowLastRow',
+    });
+  });
+
+  it('a row zone on the last row also holds through hysteresis at the belowLastRow boundary', () => {
+    const previous: RowDropZone = { kind: 'row', rowIndex: ROW_COUNT - 1, side: 'after' };
+    expect(zoneAt(ROW_HEIGHT * ROW_COUNT + (DROP_ZONE_HYSTERESIS_PX - 1), previous)).toEqual(previous);
+    expect(zoneAt(ROW_HEIGHT * ROW_COUNT + DROP_ZONE_HYSTERESIS_PX, previous)).toEqual({
+      kind: 'belowLastRow',
+    });
+  });
+
   it('hysteresis: leaving into needs 3px past the boundary, in the direction away from into', () => {
     const previous: RowDropZone = { kind: 'row', rowIndex: 0, side: 'into' };
     // The into/before boundary sits at 8; hysteresis moves it down to 5 while previous is into.
