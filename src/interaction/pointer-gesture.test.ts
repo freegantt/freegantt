@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createPointerGesture } from './pointer-gesture.js';
-import type { PointerGestureCallbacks } from './pointer-gesture.js';
+import type { DragAxis, PointerGestureCallbacks } from './pointer-gesture.js';
 
 const DRAG_THRESHOLD_PX = 4;
 const LONG_PRESS_MS = 400;
@@ -31,19 +31,32 @@ function up(clientX: number, mods: Partial<PointerEventInit> = {}): PointerEvent
 function makeCallbacks(overrides: Partial<PointerGestureCallbacks> = {}): {
   callbacks: PointerGestureCallbacks;
   calls: string[];
+  moveDeltas: readonly [number, number][];
+  moveAxes: readonly DragAxis[];
+  commitAxes: readonly DragAxis[];
 } {
   const calls: string[] = [];
+  const moveDeltas: [number, number][] = [];
+  const moveAxes: DragAxis[] = [];
+  const commitAxes: DragAxis[] = [];
   const callbacks: PointerGestureCallbacks = {
     start: () => {
       calls.push('start');
       return true;
     },
-    move: () => calls.push('move'),
-    commit: () => calls.push('commit'),
+    move: (_e, dxPx, dyPx, axis) => {
+      calls.push('move');
+      moveDeltas.push([dxPx, dyPx]);
+      moveAxes.push(axis);
+    },
+    commit: (_e, _dxPx, _dyPx, axis) => {
+      calls.push('commit');
+      commitAxes.push(axis);
+    },
     cancel: () => calls.push('cancel'),
     ...overrides,
   };
-  return { callbacks, calls };
+  return { callbacks, calls, moveDeltas, moveAxes, commitAxes };
 }
 
 describe('createPointerGesture — mouse/pen threshold (D-S3-5)', () => {
@@ -102,6 +115,167 @@ describe('createPointerGesture — mouse/pen threshold (D-S3-5)', () => {
     expect(wasDrag).toBe(false);
     expect(calls).toEqual([]);
     expect(setCapture).not.toHaveBeenCalled();
+  });
+});
+
+describe('createPointerGesture — arms on travel over either axis (#425)', () => {
+  it('a pure vertical move past the threshold arms and reports dyPx', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, calls, moveDeltas } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 0, clientY: 5, pointerId: 1, pointerType: 'mouse' }),
+    );
+
+    expect(calls).toEqual(['start', 'move']);
+    expect(moveDeltas).toEqual([[0, 5]]);
+  });
+
+  it('a 3px diagonal move (hypot below the threshold) does not arm', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, calls } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    // hypot(2, 2) ≈ 2.83, under the 4px threshold.
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 2, clientY: 2, pointerId: 1, pointerType: 'mouse' }),
+    );
+
+    expect(calls).toEqual([]);
+  });
+
+  it('a diagonal move whose hypot crosses the threshold arms', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, calls, moveDeltas } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    // hypot(3, 3) ≈ 4.24, over the 4px threshold.
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 3, clientY: 3, pointerId: 1, pointerType: 'mouse' }),
+    );
+
+    expect(calls).toEqual(['start', 'move']);
+    expect(moveDeltas).toEqual([[3, 3]]);
+  });
+});
+
+describe('createPointerGesture — the drag axis locks at arm time (#425)', () => {
+  it('a mostly-vertical arm locks the y axis, held through commit', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, moveAxes, commitAxes } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 1, clientY: 10, pointerId: 1, pointerType: 'mouse' }),
+    );
+    drag.up(up(1, { clientY: 10, pointerType: 'mouse' }));
+
+    expect(moveAxes).toEqual(['y']);
+    expect(commitAxes).toEqual(['y']);
+  });
+
+  it('a mostly-horizontal arm locks the x axis, held through commit', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, moveAxes, commitAxes } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 10, clientY: 1, pointerId: 1, pointerType: 'mouse' }),
+    );
+    drag.up(up(10, { clientY: 1, pointerType: 'mouse' }));
+
+    expect(moveAxes).toEqual(['x']);
+    expect(commitAxes).toEqual(['x']);
+  });
+
+  it('an equal-hypot tie at arm time locks the x axis', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, moveAxes } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 5, clientY: 5, pointerId: 1, pointerType: 'mouse' }),
+    );
+
+    expect(moveAxes).toEqual(['x']);
+  });
+
+  it('a drag that arms vertical then travels mostly horizontal stays locked to y', () => {
+    const pane = document.createElement('div');
+    mockPointerCapture(pane);
+    const { callbacks, moveAxes, commitAxes } = makeCallbacks();
+    const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+    drag.down(down(0, { clientY: 0, pointerType: 'mouse' }));
+    // Arms mostly vertical: hypot(1, 10) crosses the threshold, |dy| > |dx|.
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 1, clientY: 10, pointerId: 1, pointerType: 'mouse' }),
+    );
+    // Later travel goes mostly horizontal — the lock must not re-pick.
+    drag.move(
+      new PointerEvent('pointermove', { clientX: 80, clientY: 12, pointerId: 1, pointerType: 'mouse' }),
+    );
+    drag.up(up(80, { clientY: 12, pointerType: 'mouse' }));
+
+    expect(moveAxes).toEqual(['y', 'y']);
+    expect(commitAxes).toEqual(['y']);
+  });
+
+  it("a touch arm locks its axis off the long-press's own last-known position", () => {
+    vi.useFakeTimers();
+    try {
+      const pane = document.createElement('div');
+      mockPointerCapture(pane);
+      const { callbacks, calls } = makeCallbacks();
+      const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+      drag.down(down(0, { clientY: 0, pointerType: 'touch' }));
+      drag.move(
+        new PointerEvent('pointermove', { clientX: 0, clientY: 2, pointerId: 1, pointerType: 'touch' }),
+      );
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+
+      expect(calls).toEqual(['start']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a still long-press picks its axis off the first move that has travel', () => {
+    vi.useFakeTimers();
+    try {
+      const pane = document.createElement('div');
+      mockPointerCapture(pane);
+      const { callbacks, moveAxes, commitAxes } = makeCallbacks();
+      const drag = createPointerGesture(pane, callbacks, { arm: 'xy' });
+
+      // The finger never moves before the long-press fires — `axisFor(0, 0)` would tie to `'x'`.
+      drag.down(down(0, { clientY: 0, pointerType: 'touch' }));
+      vi.advanceTimersByTime(LONG_PRESS_MS);
+
+      drag.move(
+        new PointerEvent('pointermove', { clientX: 0, clientY: 20, pointerId: 1, pointerType: 'touch' }),
+      );
+      drag.up(up(0, { clientY: 30, pointerType: 'touch' }));
+
+      expect(moveAxes).toEqual(['y']);
+      expect(commitAxes).toEqual(['y']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

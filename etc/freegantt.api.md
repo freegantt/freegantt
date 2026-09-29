@@ -114,7 +114,7 @@ export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
 export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range';
@@ -125,6 +125,7 @@ export interface Capabilities {
     edit?: WriteRule;
     // (undocumented)
     move?: CapabilityRule;
+    reorder?: CapabilityRule;
     // (undocumented)
     resize?: CapabilityRule;
     // (undocumented)
@@ -815,7 +816,15 @@ export interface EntryInput<TProps = Record<string, unknown>> {
 }
 
 // @public (undocumented)
-export type EntryMove = EntryGestureEvent;
+export type EntryMove = Omit<EntryGestureEvent, 'entries'> & TreePlaceChange & {
+    readonly shiftsTime: boolean;
+    readonly entries: readonly EntryMoveDetail[];
+};
+
+// @public
+export type EntryMoveDetail = ProposedDates & TreePlaceChange & {
+    readonly shiftsTime: boolean;
+};
 
 // @public
 export class EntryNotFoundError extends FreeGanttError {
@@ -1007,8 +1016,8 @@ export interface FieldType<TValue = unknown> {
     rollUp?: AggregatorName;
 }
 
-// @public (undocumented)
-export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | (string & {});
+// @public
+export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | 'entryId' | (string & {});
 
 // @public (undocumented)
 export interface FieldUpdated {
@@ -2426,6 +2435,23 @@ export class TransactionAlreadyOpenError extends FreeGanttError {
     // (undocumented)
     readonly operation: string;
 }
+
+// @public
+export interface TreePlace {
+    // (undocumented)
+    readonly parentId: EntryId | undefined;
+    // (undocumented)
+    readonly siblingIndex: number;
+}
+
+// @public
+export type TreePlaceChange = {
+    readonly place: TreePlace;
+    readonly currentPlace: TreePlace;
+} | {
+    readonly place?: never;
+    readonly currentPlace?: never;
+};
 
 // @public
 export type TypedGridColumnKey<TProps> = keyof CoreFieldValues | (keyof TProps & string);

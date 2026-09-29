@@ -26,6 +26,8 @@ export type {
   ProposedSpan,
   EntryGestureEvent,
   EntryMove,
+  EntryMoveDetail,
+  TreePlaceChange,
   EntryResize,
   EntryFieldEdit,
   EntryActivate,

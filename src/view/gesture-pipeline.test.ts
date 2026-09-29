@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
-import { EntryNotFoundError, InvertedSpanError, entryId, barId } from '../model/index.js';
+import { EntryNotFoundError, InvertedSpanError, entryId, barId, rowId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
@@ -10,9 +10,11 @@ import type {
   ProposedEdits,
   StoredEntry,
 } from '../model/index.js';
-import { entryDouble } from '../layout/entry-double.js';
-import type { Bar, TimeScale, ViewPreset } from '../layout/index.js';
-import type { EntryMove } from './event-bus.js';
+import { entryDouble, entryDoubles } from '../layout/entry-double.js';
+import { PLANNED_ROW_KIND } from '../layout/rows/row-source.js';
+import type { PlannedRow } from '../layout/rows/row-source.js';
+import type { Bar, RowDropZone, RowsForDrop, TimeScale, ViewPreset } from '../layout/index.js';
+import type { EntryMove, EntryMoveDetail } from './event-bus.js';
 
 /** `view/` may not import `time/` (I1) — a linear px<->ms fake stands in for the bound `TimeScale`;
  *  paired with `snap: () => 'none'` (the default dep below) this is exactly what
@@ -80,10 +82,12 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
   deps: GesturePipelineDeps;
   emitted: [string, unknown][];
   applied: unknown[];
+  appliedRowDrops: unknown[];
   reported: ErrorReportInput[];
 } {
   const emitted: [string, unknown][] = [];
   const applied: unknown[] = [];
+  const appliedRowDrops: unknown[] = [];
   const reported: ErrorReportInput[] = [];
   const entries = new Map<EntryId, Entry>();
   const deps: GesturePipelineDeps = {
@@ -109,11 +113,27 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
       emitted.push([name, payload]);
       return true;
     },
-    applyGestureState: (preview) => applied.push(preview),
+    applyGestureState: (preview, _pendingBarIds, _cursor, rowDrop) => {
+      applied.push(preview);
+      appliedRowDrops.push(rowDrop);
+    },
     raiseError: (report) => reported.push(report),
+    // #425: inert defaults — no row drop offered, no zone but the source row. A test that cares
+    // about a vertical drag overrides these with a real roster (see `withRoster` below).
+    rowDropZoneAt: () => ({ kind: 'sourceRow' }),
+    rowsForDrop: () => ({
+      rows: [],
+      rowTop: () => 0,
+      rowHeightAt: () => 0,
+      entryOf: () => undefined,
+      rootEntries: () => [],
+    }),
+    rowIndexForEntry: () => -1,
+    canPlace: () => true,
+    verticalDropOffered: () => false,
     ...overrides,
   };
-  return { deps, emitted, applied, reported };
+  return { deps, emitted, applied, appliedRowDrops, reported };
 }
 
 /** Wires `entryById` off a fixed roster, the shape most tests below want: one grabbed
@@ -1160,6 +1180,35 @@ describe('GesturePipeline hot path (review finding 9, I5)', () => {
 
     expect(walks).toBe(0);
   });
+
+  it('previews from the same map it writes when no bar paints without writing (#425 finding 16)', async () => {
+    // An ordinary move never has a paintedOnly id (that set is ADR 0013's parent-bar case alone),
+    // so `writes` and `paints` are one and the same map — no per-frame copy. `extraEditsFor` is the
+    // one public hook the map itself reaches: mutating what it receives here, in place, must show up
+    // in the preview built from `paints`, or the two are two different maps after all.
+    const a = entry('a', 100, 200);
+    const bystander = entry('bystander', 500, 600);
+    const extraEditsFor: GesturePipelineDeps['extraEditsFor'] = (draft) => {
+      (draft as unknown as Map<EntryId, ReturnType<typeof pe>>).set(
+        bystander.id,
+        pe({ start: 550, end: 650 }),
+      );
+      return new Map(); // no ghost of its own — the bystander must arrive through `draft` alone.
+    };
+    const { deps, applied } = withRoster([a, bystander], {
+      extraEditsFor,
+      committedEntriesById: () => storedMap(storedRow('a', 100, 200), storedRow('bystander', 500, 600)),
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(a.id, { kind: 'move' })!;
+
+    session.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; dx: number }[];
+    const smuggled = preview.find((p) => p.barId === barId(bystander.id));
+    expect(smuggled?.dx).toBe(50); // 500 -> 550, read off the map extraEditsFor mutated in place
+  });
 });
 
 describe('a parent bar drag translates its descendants (ADR 0013)', () => {
@@ -1201,7 +1250,7 @@ describe('a parent bar drag translates its descendants (ADR 0013)', () => {
     expect(move.entry).toBe(entryId('phase'));
     expect(move.start).toBe(150);
     expect(move.end).toBe(450);
-    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150, end: 250 }]);
+    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150, end: 250, shiftsTime: true }]);
   });
 
   it('moves a child that holds only a start, and proposes no end for it', async () => {
@@ -1223,7 +1272,7 @@ describe('a parent bar drag translates its descendants (ADR 0013)', () => {
     expect(edit.end).toBeUndefined();
     expect([...edit.proposedKeys]).toEqual(['start']);
     const move = emitted[1]![1] as EntryMove;
-    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150 }]);
+    expect(move.entries).toEqual([{ entry: entryId('child'), start: 150, shiftsTime: true }]);
   });
 
   it('previews the parent bar following the pointer, though it writes nothing', async () => {
@@ -1279,8 +1328,8 @@ describe('an owning parent bar drag (#470) — the preview and the commit agree'
     expect(move.end).toBe(450);
     expect(move.entries).toEqual(
       expect.arrayContaining([
-        { entry: entryId('phase'), start: 150, end: 450 },
-        { entry: entryId('child'), start: 150, end: 250 },
+        { entry: entryId('phase'), start: 150, end: 450, shiftsTime: true },
+        { entry: entryId('child'), start: 150, end: 250, shiftsTime: true },
       ]),
     );
   });
@@ -1298,5 +1347,354 @@ describe('an owning parent bar drag (#470) — the preview and the commit agree'
       [barId(entryId('phase')), 50, false],
       [barId(entryId('child')), 50, false],
     ]);
+  });
+});
+
+// #425: a vertical drag reparents the grabbed bar. `p1{a, b}` and `p2{c}` — root order `p1, p2`.
+describe('a vertical drag moves a bar to another row (#425)', () => {
+  function plannedRow(row: Entry, depth: number, index: number): PlannedRow {
+    return {
+      id: rowId(row.id),
+      kind: PLANNED_ROW_KIND.entry,
+      index,
+      depth,
+      entryIds: [row.id],
+      expandable: row.hasChildren,
+      expanded: row.hasChildren,
+    };
+  }
+
+  function withTree(overrides: Partial<GesturePipelineDeps> = {}) {
+    const [p1, a, b, p2, c] = entryDoubles([
+      { id: 'p1', props: { siblingIndex: 0 } },
+      { id: 'a', parentId: 'p1', start: 0, end: 100, props: { siblingIndex: 0 } },
+      { id: 'b', parentId: 'p1', start: 100, end: 200, props: { siblingIndex: 1 } },
+      { id: 'p2', props: { siblingIndex: 1 } },
+      { id: 'c', parentId: 'p2', start: 0, end: 100, props: { siblingIndex: 0 } },
+    ]) as [Entry, Entry, Entry, Entry, Entry];
+    const rows: readonly PlannedRow[] = [
+      plannedRow(p1, 0, 0),
+      plannedRow(a, 1, 1),
+      plannedRow(b, 1, 2),
+      plannedRow(p2, 0, 3),
+      plannedRow(c, 1, 4),
+    ];
+    const rowIndexOf = new Map([
+      [p1.id, 0],
+      [a.id, 1],
+      [b.id, 2],
+      [p2.id, 3],
+      [c.id, 4],
+    ]);
+    const rowsForDrop: RowsForDrop = {
+      rows,
+      rowTop: (index) => index * 32,
+      rowHeightAt: () => 32,
+      entryOf: (id) => [p1, a, b, p2, c].find((row) => row.id === id),
+      rootEntries: () => [p1, p2],
+    };
+    const { deps, emitted, applied, appliedRowDrops, reported } = withRoster([p1, a, b, p2, c], {
+      rowsForDrop: () => rowsForDrop,
+      rowIndexForEntry: (id) => rowIndexOf.get(id) ?? -1,
+      verticalDropOffered: () => true,
+      canPlace: () => true,
+      ...overrides,
+    });
+    return { p1, a, b, p2, c, deps, emitted, applied, appliedRowDrops, reported };
+  }
+
+  /** Every drag in this suite grabs `a` and lets the pointer settle over `p2`'s own row, `into`. */
+  function intoP2(): RowDropZone {
+    return { kind: 'row', rowIndex: 3, side: 'into' };
+  }
+
+  it("a drag whose pointer sits inside p2's row commits a reparent and names the target in the event", async () => {
+    const { p1, p2, deps, emitted } = withTree({
+      rowDropZoneAt: () => intoP2(),
+    });
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(entryId('a'), { kind: 'move' })!.commit(0, { contentY: 200 });
+
+    expect(committed).toBe(true);
+    expect(written).toHaveLength(1);
+    const edit = written[0]!.get(entryId('a'))!;
+    expect(edit.parentId).toBe(p2.id);
+    expect([...edit.proposedKeys]).toEqual(expect.arrayContaining(['parentId', 'siblingIndex']));
+
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.place?.parentId).toBe(p2.id);
+    expect(move.currentPlace).toEqual({ parentId: p1.id, siblingIndex: 0 });
+    expect(edit.siblingIndex).toBe(move.place?.siblingIndex);
+    expect(move.shiftsTime).toBe(false);
+    const span = move.entries.find((detail) => detail.entry === entryId('a'))!;
+    expect(span.place).toEqual(move.place);
+    expect(span.shiftsTime).toBe(false);
+  });
+
+  it('a diagonal drag both reparents and shifts time — both report true/present', async () => {
+    // Exercises `#writesWithPlace`'s own merge directly, at the pipeline layer this test calls
+    // into by hand. #425 axis lock: `entry-gestures.ts` never feeds this pipeline a real drag with
+    // both a nonzero `dxPx` and a `contentY` together any more (a row-axis drag always zeroes
+    // `dxPx`), so this combination is a pipeline-level check, not a reachable drag any more.
+    const { p2, deps, emitted } = withTree({
+      rowDropZoneAt: () => intoP2(),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    await pipeline.session(entryId('a'), { kind: 'move' })!.commit(50, { contentY: 200 });
+
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.place?.parentId).toBe(p2.id);
+    expect(move.shiftsTime).toBe(true);
+    expect(move.start).toBe(50);
+  });
+
+  it('a drag whose pointer stays over the source row writes time only, no place in the event', async () => {
+    const { deps, emitted } = withTree({
+      rowDropZoneAt: () => ({ kind: 'sourceRow' }),
+    });
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(entryId('a'), { kind: 'move' })!.commit(50, { contentY: 10 });
+
+    expect(committed).toBe(true);
+    const edit = written[0]!.get(entryId('a'))!;
+    expect(edit.parentId).toBeUndefined();
+    const move = emitted[1]![1] as EntryMove;
+    expect('place' in move).toBe(false);
+    expect('currentPlace' in move).toBe(false);
+    expect(move.shiftsTime).toBe(true);
+    expect(move.start).toBe(50);
+    expect(move.end).toBe(150);
+  });
+
+  it('a refused target commits nothing — no write, no event (#425 axis lock)', async () => {
+    // #425 axis lock: a real refused drop is always row-axis (`entry-gestures.ts` never sends
+    // `contentY` on a time-axis drag), so `dxPx` is always 0 by the time this runs. Before the
+    // axis lock, a refused drop still wrote a `dxPx`-based time shift; ruling 5 closed that gap —
+    // a refusal now commits nothing at all, the same silence any other vetoed gesture keeps.
+    const { a, p2, deps, emitted } = withTree({
+      rowDropZoneAt: () => intoP2(),
+      canPlace: (entry, parentId) => entry.id !== a.id || parentId !== p2.id,
+    });
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(entryId('a'), { kind: 'move' })!.commit(0, { contentY: 200 });
+
+    expect(committed).toBe(false);
+    expect(written).toHaveLength(0);
+    expect(emitted).toHaveLength(0);
+  });
+
+  it('a refused drop clears its preview paint on release, not left for a later gesture', async () => {
+    const { a, p2, deps, applied } = withTree({
+      rowDropZoneAt: () => intoP2(),
+      canPlace: (entry, parentId) => entry.id !== a.id || parentId !== p2.id,
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    session.preview(0, { contentY: 200 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(applied[applied.length - 1]).not.toBeUndefined();
+
+    const committed = await session.commit(0, { contentY: 200 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(committed).toBe(false);
+    expect(applied[applied.length - 1]).toBeUndefined();
+  });
+
+  it('a held veto whose target reparents during the hold drops as data-changed, and never commits', async () => {
+    let resolveVeto!: (value: boolean) => void;
+    const veto = new Promise<boolean>((resolve) => {
+      resolveVeto = resolve;
+    });
+    const roster = new Map([
+      [entryId('a'), storedRow('a', 0, 100)],
+      [entryId('p2'), storedRow('p2', 0, 0)],
+      [entryId('c'), storedRow('c', 0, 100)],
+    ]);
+    const commitEntryEdits = vi.fn(() => true);
+    const afterEmitted: string[] = [];
+    const { deps, reported } = withTree({
+      rowDropZoneAt: () => intoP2(),
+      emit: ((name: string) => {
+        if (name === 'beforeEntryMove') return veto;
+        afterEmitted.push(name);
+        return true;
+      }) as GesturePipelineDeps['emit'],
+      committedEntriesById: () => roster,
+      commitEntryEdits,
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'move' })!;
+
+    const commitPromise = session.commit(0, { contentY: 200 });
+    // The target's own group changed while the veto was held — the same "row replaced" guard
+    // (#273) now also watches the drop's own parent and siblings (this file's own doc on
+    // `#measuredFrom`).
+    roster.set(entryId('c'), storedRow('c', 500, 600));
+    resolveVeto(true);
+
+    await expect(commitPromise).resolves.toBe(false);
+    expect(commitEntryEdits).not.toHaveBeenCalled();
+    expect(afterEmitted).toEqual([]);
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatchObject({
+      code: 'entry-move-dropped',
+      severity: 'warning',
+      entryId: entryId('a'),
+      droppedReason: 'data-changed',
+    });
+  });
+
+  it("a multi-select drag writes the target group in the moves' own order", async () => {
+    const { a, b, deps, emitted } = withTree({
+      rowDropZoneAt: () => intoP2(),
+      selectedEntryIds: () => [entryId('a'), entryId('b')],
+    });
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    await pipeline.session(entryId('a'), { kind: 'move' })!.commit(0, { contentY: 200 });
+
+    expect([...written[0]!.keys()]).toEqual([a.id, b.id]);
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.entries.map((detail: EntryMoveDetail) => detail.entry)).toEqual([a.id, b.id]);
+  });
+
+  it("an into drop offsets the preview by the target row's own centre, and paints the row drop", async () => {
+    const { p2, deps, applied, appliedRowDrops } = withTree({
+      rowDropZoneAt: () => intoP2(),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 112 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    // a's row index 1, top 32, height 32, mid 48; p2's row index 3, top 96, height 32, mid 112.
+    const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
+    expect(preview.map((bar) => bar.dy)).toEqual([64]);
+    expect(appliedRowDrops.at(-1)).toEqual({
+      rowId: p2.id,
+      side: 'into',
+      depth: 1,
+      lineY: undefined,
+    });
+  });
+
+  it('[#425 ruling 5] an into-leaf preview paints a ghost offset for the target, in place, not by the dragged block’s own dy', async () => {
+    const requests: ProposedEdits[] = [];
+    const { c, deps, applied } = withTree({
+      // `c` (row index 4, p2's own child) is a leaf: no drop yet lands on it here, so this drop
+      // still names it a target the same way an empty leaf would be — the Rollup ghost this pipeline
+      // asks for cares only that the drop is `into`, not whether the target already has children.
+      rowDropZoneAt: () => ({ kind: 'row', rowIndex: 4, side: 'into' }),
+      rolledUpEditsFor: (draft) => {
+        requests.push(draft);
+        return new Map([[c.id, pe({ start: 200, end: 400 })]]);
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 144 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(requests).toHaveLength(1);
+    const preview = applied.at(-1) as readonly {
+      barId: string;
+      dx: number;
+      dy: number;
+      dWidth: number;
+      extra: boolean;
+    }[];
+    // a's row mid 48; c's row index 4, top 128, mid 144.
+    const dragging = preview.find((bar) => bar.barId === barId(entryId('a')))!;
+    const ghost = preview.find((bar) => bar.barId === barId(c.id))!;
+    expect(dragging.extra).toBe(false);
+    expect(dragging.dy).toBe(96);
+    expect(ghost.extra).toBe(true);
+    expect(ghost.dy).toBe(0); // the target's own bar stays put — only its span changes
+    expect(ghost.dx).not.toBe(0);
+    expect(ghost.dWidth).not.toBe(0);
+  });
+
+  it('a throwing aggregator reports the fault and previews with no Rollup ghost, not a crashed frame', async () => {
+    const { deps, applied, reported } = withTree({
+      rowDropZoneAt: () => ({ kind: 'row', rowIndex: 4, side: 'into' }),
+      rolledUpEditsFor: () => {
+        throw new Error('boom');
+      },
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 144 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; extra: boolean }[];
+    expect(preview.some((bar) => bar.extra)).toBe(false); // no Rollup ghost painted for the fault
+    expect(preview.some((bar) => bar.barId === barId(entryId('a')))).toBe(true); // the drag itself still paints
+
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatchObject({ code: 'rollup-preview-failed', severity: 'warning', by: 'plugin' });
+    expect(reported[0]?.cause).toBeInstanceOf(Error);
+  });
+
+  it('a refused drop paints dy: 0 and the refused row, never the target place', async () => {
+    const { a, p2, deps, applied, appliedRowDrops } = withTree({
+      rowDropZoneAt: () => intoP2(),
+      canPlace: (entry, parentId) => entry.id !== a.id || parentId !== p2.id,
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 112 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
+    expect(preview.map((bar) => bar.dy)).toEqual([0]);
+    expect(appliedRowDrops.at(-1)).toEqual({ refusedRowId: p2.id });
+  });
+
+  it('a drag over the source row paints dy: 0 and no row drop', async () => {
+    const { deps, applied, appliedRowDrops } = withTree({
+      rowDropZoneAt: () => ({ kind: 'sourceRow' }),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'move' })!.preview(0, { contentY: 40 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
+    expect(preview.map((bar) => bar.dy)).toEqual([0]);
+    expect(appliedRowDrops.at(-1)).toBeUndefined();
   });
 });

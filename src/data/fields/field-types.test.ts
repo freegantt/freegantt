@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Duration, Entry, FormatContext, Instant } from '../../model/index.js';
 import { formatDateTime, instant, MS } from '../../time/index.js';
-import { currency, date, duration, number, percent, text } from './field-types.js';
+import type { EntryId } from '../../model/index.js';
+import { entryId as entryIdOf } from '../../model/index.js';
+import { currency, date, duration, entryId, number, percent, text } from './field-types.js';
 
 function ctx(locale: Intl.LocalesArgument): FormatContext {
   return { timeZone: 'UTC', locale };
@@ -176,5 +178,28 @@ describe('currency — the factory, not a seeded name', () => {
 
   it('throws at the factory when the ISO code is not a currency', () => {
     expect(() => currency({ code: 'not-a-code' })).toThrow();
+  });
+});
+
+describe('entryId — the shipped Field type (#425)', () => {
+  it('formats the id as plain text', () => {
+    expect(entryId.formatValue!(entryIdOf('e1'), ctx('en-US'), entry)).toBe('e1');
+    expect(entryId.formatValue!(undefined, ctx('en-US'), entry)).toBe('');
+  });
+
+  it('compares by string, undefined last', () => {
+    const a: EntryId = entryIdOf('a');
+    const b: EntryId = entryIdOf('b');
+    expect(entryId.compare!(a, b)).toBeLessThan(0);
+    expect(entryId.compare!(b, a)).toBeGreaterThan(0);
+    expect(entryId.compare!(a, a)).toBe(0);
+    expect(entryId.compare!(a, undefined)).toBeLessThan(0);
+    expect(entryId.compare!(undefined, a)).toBeGreaterThan(0);
+  });
+
+  it('ships no parseValue and no inputType, so no gesture can guess a parse', () => {
+    expect(entryId).not.toHaveProperty('parseValue');
+    expect(entryId.inputType).toBeUndefined();
+    expect(entryId.rollUp).toBeUndefined();
   });
 });

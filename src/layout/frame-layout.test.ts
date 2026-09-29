@@ -118,6 +118,17 @@ describe('FrameLayout', () => {
     }
   });
 
+  it('rowIndexAtY(y) matches the row a y offset falls in, rowHeightAt(index) its height, rowCount its length', () => {
+    const layout = new FrameLayout();
+    const frame = layout.computeFrame(input());
+
+    expect(layout.rowCount).toBe(sampleEntries.length);
+    for (const [index, row] of frame.rows.entries()) {
+      expect(layout.rowIndexAtY(row.top)).toBe(index);
+      expect(layout.rowHeightAt(index)).toBe(row.height);
+    }
+  });
+
   it('barIdsForEntry answers the one bar an ordinary entry draws (#185)', () => {
     const layout = new FrameLayout();
     const entry = sampleEntries[0]!;

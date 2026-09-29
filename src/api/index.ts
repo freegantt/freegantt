@@ -165,6 +165,8 @@ export type {
   ProposedSpan,
   EntryGestureEvent,
   EntryMove,
+  EntryMoveDetail,
+  TreePlaceChange,
   EntryResize,
   EntryFieldEdit,
   EntryActivate,
@@ -322,6 +324,8 @@ export type {
   Duration,
   EntryStoreView,
   EntryStore,
+  // #425: where one Entry sits in the tree — an `entryMove` payload's `place`/`currentPlace`.
+  TreePlace,
 } from '../model/index.js';
 // The input twins of the stored types: what a consumer writes, as opposed to what the library stores.
 // Public because a consumer that types its own entry builder needs to name them. FlatEntryInput is

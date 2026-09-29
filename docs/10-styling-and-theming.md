@@ -105,6 +105,8 @@ not a consumer's to set" below for the four channels.
 | `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |
 | `--fg-ghost-opacity` | `0.4` | — | `.fg-bar[data-state~="ghost"]` |
 | `--fg-pending-opacity` | `0.6` | — | `.fg-bar[data-state~="pending"]` |
+| `--fg-drop-line-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-row[data-drop="into"]`/`.fg-row-band[data-drop="into"]` outline; `.fg-drop-line` background — a vertical drag's target row and its Insertion line |
+| `--fg-drop-refused-bg` | `rgb(180 105 14 / 0.14)` | `rgb(224 163 64 / 0.18)` | `.fg-row[data-drop="refused"]`/`.fg-row-band[data-drop="refused"]` — the row a vertical drag may not land on |
 | `--fg-focus-ring` | `oklch(0.55 0.20 305)` | `oklch(0.76 0.17 305)` | the roving-focus outline shared by both panes, a grid row/cell, a column header cell, a bar, and the splitter (`:focus-visible`) — its own hue, so a keyboard focus never reads as a selection or a conflict |
 | `--fg-popup-bg` | `#FFFFFF` | `#22252B` | `.fg-popup` background — the shared surface `tooltips()`, `contextMenu()`, and the reorder drag wash draw from |
 | `--fg-popup-border` | `#E6E2D9` | `#3A3F48` | `.fg-popup` border |
@@ -186,9 +188,9 @@ and inherits down unchanged, so one setting still covers every bar.
 
 ### Internal tokens — not a consumer's to set
 
-Five `--fg-*` properties are the library's own plumbing, not a consumer's to set. Four are geometry
+Six `--fg-*` properties are the library's own plumbing, not a consumer's to set. Five are geometry
 the library writes inline, per element, because a stylesheet rule alone cannot express it — setting
-one by hand fights the next frame, which overwrites it. The fifth, `--fg-bar-fill-painted`, is
+one by hand fights the next frame, which overwrites it. The sixth, `--fg-bar-fill-painted`, is
 different: the base stylesheet computes it on `.fg-bar` itself, from `--fg-bar-fill` and
 `--fg-bar-opacity` (see the note above) — a consumer sets the two colour tokens that feed it, never
 this one.
@@ -198,6 +200,7 @@ this one.
 | `--fg-col-flex` | `render/dom/index.ts`, per column header/cell — the column's own flex-grow, or removed for a fixed column | `.fg-col-header`, `.fg-row-label`, `.fg-row-cell` `flex` |
 | `--fg-grid-content-width` | `pane-layout.ts`, on the grid pane — how far a fixed-width column set overflows the pane | `.fg-grid-spacer`, `.fg-rows-clip` `width` (falls back to `100%`) |
 | `--fg-row-depth` | `render/dom/index.ts`, per row — the row's hierarchy depth | `.fg-row-label` indent calc (with `--fg-indent-width`, above) |
+| `--fg-drop-line-depth` | `render/dom/index.ts`, on the grid pane's `.fg-drop-line` — the target place's tree depth during a vertical drag | `.fg-drop-line` indent calc (with `--fg-indent-width`, above) — the timeline instance resets it to 0 (full width) |
 | `--fg-popup-max-height` | `popup.ts`, on the popup wrapper — the anchor pane's height minus the popup's 1px top and bottom border | `.fg-popup` `max-height` (falls back to `none`) |
 | `--fg-bar-fill-painted` | `.fg-bar`'s own CSS rule (`styles.ts`), computed from `--fg-bar-fill` and `--fg-bar-opacity` | `.fg-bar` background |
 
@@ -263,6 +266,7 @@ rename.
 | `.fg-date-line-label` | Date line chip. |
 | `.fg-cursor-line` | Hot-path cursor stroke under the pointer. |
 | `.fg-cursor-line-label` | Cursor line chip, always below the header bands. |
+| `.fg-drop-line` | A vertical drag's Insertion line — one in the grid pane, inset by the target depth, one full-width in the timeline pane. |
 | `.fg-decorations-under` | Decoration layer below the bars. |
 | `.fg-decorations-over` | Decoration layer above the bars. |
 | `.fg-range-band` | A range decoration (weekend shading, and the like). |
@@ -308,6 +312,20 @@ none out of the box. See "Date lines and the Today line" below for the worked ex
 | `.fg-link[data-flag~="cycle"]` | the scheduling plugin |
 | `.fg-date-line[data-flag~="today"]` | the library (Today line) |
 | `.fg-date-line-label[data-flag~="today"]` | the library (Today line) |
+
+### `data-drop`
+
+`data-drop` marks a vertical drag's own row target, on `.fg-row` and its timeline `.fg-row-band`
+alike, and on `.fg-container` for the refused cursor. It is present only during a drag whose pointer
+has left the source row, and clears the moment the drag ends or returns to that row.
+
+| Selector | Meaning |
+|---|---|
+| `.fg-row[data-drop="before"]`, `.fg-row-band[data-drop="before"]` | the drop lands as this row's previous sibling — `.fg-drop-line` marks the exact boundary |
+| `.fg-row[data-drop="after"]`, `.fg-row-band[data-drop="after"]` | the drop lands as this row's next sibling — `.fg-drop-line` marks the exact boundary |
+| `.fg-row[data-drop="into"]`, `.fg-row-band[data-drop="into"]` | the drop lands as this row's own child — the row's own outline is the indicator, no `.fg-drop-line` |
+| `.fg-row[data-drop="refused"]`, `.fg-row-band[data-drop="refused"]` | no rule lets the drop land on this row |
+| `.fg-container[data-drop="refused"]` | sets `cursor: not-allowed` over the whole Gantt while the pointer sits over a refused row |
 
 ### Internal Parts
 

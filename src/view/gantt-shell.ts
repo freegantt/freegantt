@@ -11,6 +11,8 @@ import {
   totalColumnWidth,
   isTimeUnit,
   nestsRows,
+  resolveRowSource,
+  rowDropZoneAt,
 } from '../layout/index.js';
 import type {
   DateLine,
@@ -389,6 +391,18 @@ export interface GanttShellOptions {
    *  itself. `api/dataset.ts`'s `extraEditsFor` builds it, through `data/edit-request.ts`'s
    *  `createEditRequest`, before this ever runs. */
   extraEditsFor?: (draft: ProposedEdits) => ProposedEdits;
+  /** #425: the same door as `extraEditsFor` above, for the Rollup instead of the extension hook.
+   *  It ghosts ruling 5's "into a leaf, its dates roll up" for a `place` drop's own preview.
+   *  `api/gantt.ts` wires this to `api/dataset.ts`'s `rolledUpEditsFor`. `undefined` ghosts nothing,
+   *  the same as an unwired `extraEditsFor`. */
+  rolledUpEditsFor?: (draft: ProposedEdits) => ProposedEdits;
+  /** #425: does this Dataset's tree still follow the stored `parentId` (`storedParentSource`), or
+   *  does a plugin own the hierarchy (ADR 0020)? `undefined` (a test-built shell with no wiring)
+   *  defaults to `true` — the common case. `api/gantt.ts` wires this to `api/dataset.ts`'s
+   *  `hierarchyFollowsParentId`, the same friend-map pattern `extraEditsFor` already uses. Gates
+   *  `verticalDropOffered`: row order assumes `siblingIndex` order only when the tree is core's own
+   *  (a plugin-owned hierarchy offers no vertical drop, not "same parent only"). */
+  hierarchyFollowsParentId?: () => boolean;
   /** Internal (ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
    *  inject a replacement. */
   variantRegistry?: VariantRegistry;
@@ -1210,14 +1224,50 @@ export class GanttShell {
       emit: (name, payload) => this.#emit(name, payload),
       raiseError: this.#raiseError,
       ...(this.#options.extraEditsFor ? { extraEditsFor: this.#options.extraEditsFor } : {}),
+      ...(this.#options.rolledUpEditsFor ? { rolledUpEditsFor: this.#options.rolledUpEditsFor } : {}),
       committedEntriesById: () => this.#options.dataset.entries.storedValues,
       locale: () => this.#frameSettings.effectiveLocale,
-      applyGestureState: (preview, pendingBarIds, cursor) => {
+      applyGestureState: (preview, pendingBarIds, cursor, rowDrop) => {
         setOptional(this.#interactionState, 'preview', preview);
         setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
         setOptional(this.#interactionState, 'cursorX', cursor?.x);
         setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
+        setOptional(this.#interactionState, 'rowDrop', rowDrop);
         this.#backend.applyState(this.#interactionState);
+      },
+      rowDropZoneAt: (contentY, sourceRowIndex, previous) =>
+        rowDropZoneAt(
+          {
+            y: contentY,
+            sourceRowIndex,
+            heights: {
+              indexAtY: (y) => this.#layout.rowIndexAtY(y),
+              topAt: (index) => this.#layout.rowTop(index),
+              heightAt: (index) => this.#layout.rowHeightAt(index),
+              totalHeight: this.#contentSize.height,
+            },
+            rowCount: this.#layout.rowCount,
+            takesWholeRowInto: (index) => this.#layout.plannedRows()[index]?.childrenAsSegments === true,
+          },
+          previous,
+        ),
+      rowsForDrop: () => ({
+        rows: this.#layout.plannedRows(),
+        rowTop: (index) => this.#layout.rowTop(index),
+        rowHeightAt: (index) => this.#layout.rowHeightAt(index),
+        entryOf: (id) => this.#options.dataset.entries.get(id),
+        rootEntries: () => this.#options.dataset.entries.all.filter((entry) => entry.depth === 0),
+      }),
+      rowIndexForEntry: (id) => this.#layout.rowIndexForEntry(id),
+      canPlace: (entry, parentId) => this.#capabilities.canPlace(entry, parentId),
+      verticalDropOffered: () => {
+        const resolved = resolveRowSource(this.#frameSettings.rowSource);
+        return (
+          resolved.source === 'entries' &&
+          resolved.tree === true &&
+          resolved.sort === undefined &&
+          (this.#options.hierarchyFollowsParentId?.() ?? true)
+        );
       },
     };
   }
@@ -1245,6 +1295,11 @@ export class GanttShell {
       setHovered: (barId) => this.#setHovered(barId),
       setHoveredRow: (rowId) => this.#setHoveredRow(rowId),
       contentXAtPaneOffset: (offsetX) => offsetX + this.#viewport.scroll.x.state.position,
+      // The sticky header sits in flow ahead of the rows (`view/styles.ts`'s `.fg-header`), so a
+      // pane-relative offset counts it. A row's own content-y (what `rowTop`/`rowIndexAtY` index)
+      // does not — subtract it here, once, so a caller never re-derives the header's height by hand.
+      contentYAtPaneOffset: (offsetY) =>
+        offsetY + this.#viewport.scroll.y.state.position - this.#paneLayout.measureHeaderHeight(),
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };

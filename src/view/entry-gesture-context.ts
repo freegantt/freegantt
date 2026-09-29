@@ -19,6 +19,10 @@ export interface DraftOptions {
   /** Content-x under the pointer, already converted by `contentXAtPaneOffset`.
    *  `preview()` paints the Cursor line here; `commit()`/`nudge()` ignore it. */
   cursorX?: number;
+  /** #425: content-y under the pointer, already converted by `contentYAtPaneOffset`. `preview()`
+   *  and `commit()` resolve the vertical drag's row drop from it; `nudge()` ignores it — a keyboard
+   *  step never reparents. */
+  contentY?: number;
 }
 
 /** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185).
@@ -113,6 +117,9 @@ export interface EntryGestureContext {
   /** S3.8: pane-local `offsetX` (`clientX - pane left`) plus the bound x `ScrollAxis`'s position —
    *  content x for the Cursor line. `interaction/` never reads element scroll (I12). */
   contentXAtPaneOffset(offsetX: number): number;
+  /** #425: `contentXAtPaneOffset`'s own twin for the y axis — pane-local `offsetY` plus the bound y
+   *  `ScrollAxis`'s position, for a vertical drag's row drop zone. */
+  contentYAtPaneOffset(offsetY: number): number;
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */

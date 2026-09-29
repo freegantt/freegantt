@@ -189,3 +189,74 @@ export function siblingIndexesAfterDelta(
 
   return renumberSiblingGroups(log, committedSiblingIds, committedGroupOf);
 }
+
+/** One `entries.update` call a block move issues, in call order, and the rank it names. */
+export interface SiblingBlockMoveCall {
+  readonly id: EntryId;
+  readonly at: number;
+}
+
+/** A vertical drag's whole write: one or more Entries land together in one group, at one drop
+ *  index, keeping their own row order among themselves. */
+export interface SiblingBlockMove {
+  /** One `entries.update` per moved id, in call order — the `siblingIndex` each call names. Every
+   *  moved id gets a call, even one whose place does not change: the renumber pass a no-op write
+   *  still runs makes it a no-op row, not a skipped one. */
+  readonly calls: readonly SiblingBlockMoveCall[];
+  /** The rank each moved id holds once every call above has committed — what the event payload
+   *  reports (`view/row-drop.ts`'s `PlacedEntry.place`). A call's own `at` is a call-time index
+   *  into the group as it stood *when that call ran*, not this final rank. */
+  readonly finalRanks: ReadonlyMap<EntryId, number>;
+}
+
+/**
+ * The index math behind a vertical drag that places one or more Entries — grabbed first, then any
+ * co-selected Entry, in row order — into `targetSiblings` at `index`.
+ *
+ * Call: `siblingBlockMove({ movedIds, targetSiblings, index })`. `targetSiblings` is the target
+ * group's own committed order, moved ids already there included — the same list `DropPlace.index`
+ * was read against. `index` counts among that list.
+ *
+ * Two questions, two passes. Where does each moved id *end up* (`finalRanks`) is a pure
+ * concatenation: drop every moved id out of `targetSiblings`, splice them back in as one block at
+ * `index`'s position among what is left. What `siblingIndex` does each `entries.update` *call*
+ * name (`calls`) is a replay: `EntryStore` writes one moved id at a time, and every write after the
+ * first sees the group as the write before it left it — so the first call's `at` names its place
+ * among the group as committed, and every call after it names one past the id the call before it
+ * just placed. Both passes agree on the final shape; only the reasoning from "we're partway
+ * through this transaction" to "what index does this one call name" differs.
+ */
+export function siblingBlockMove(input: {
+  readonly movedIds: readonly EntryId[];
+  readonly targetSiblings: readonly EntryId[];
+  readonly index: number;
+}): SiblingBlockMove {
+  const { movedIds, targetSiblings, index } = input;
+  const moved = new Set(movedIds);
+  const stays = targetSiblings.filter((id) => !moved.has(id));
+  const keptBeforeIndex = targetSiblings.slice(0, index).filter((id) => !moved.has(id)).length;
+  const finalOrder = [...stays.slice(0, keptBeforeIndex), ...movedIds, ...stays.slice(keptBeforeIndex)];
+  const finalRanks = new Map<EntryId, number>();
+  finalOrder.forEach((id, rank) => finalRanks.set(id, rank));
+
+  // The first id after the whole moved block, in final order — `undefined` when the block lands
+  // last. Always a kept id (every moved id sits inside the block), so its own position in the live
+  // list below never shifts as later moved ids leave or land elsewhere in that same list.
+  const afterBlock = finalOrder[keptBeforeIndex + movedIds.length];
+
+  const live = [...targetSiblings];
+  const calls: SiblingBlockMoveCall[] = movedIds.map((id, position) => {
+    const departingAt = live.indexOf(id);
+    if (departingAt >= 0) live.splice(departingAt, 1);
+    const at =
+      position === 0
+        ? afterBlock !== undefined
+          ? live.indexOf(afterBlock)
+          : live.length
+        : live.indexOf(movedIds[position - 1]!) + 1;
+    live.splice(at, 0, id);
+    return { id, at };
+  });
+
+  return { calls, finalRanks };
+}

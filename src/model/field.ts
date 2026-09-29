@@ -10,7 +10,10 @@ export type { CoreFieldKey, CoreFieldValue, CoreFieldValues, FieldKey, FieldValu
 import type { ElementDescription } from './render.js';
 
 export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string & {});
-export type FieldTypeName = 'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | (string & {});
+/** `'entryId'` (#425) names a reference to another Entry by id — `parentId`'s own type. It ships no
+ *  `parseValue`, so the inline editor declines any Field of this type, whatever `editable` says. */
+export type FieldTypeName =
+  'text' | 'number' | 'percent' | 'date' | 'duration' | 'boolean' | 'entryId' | (string & {});
 
 /** How far a Field's value may change (ADR 0015, amended by ADR 0033). One key, two thresholds: the
  *  grid writes it only at `'anywhere'`, and `entries.update()` writes it at anything but `'never'`.
