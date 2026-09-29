@@ -84,9 +84,9 @@ function makeContext(
     // #434: this file drives keyboard chords, never a pointer hit — `activation` exists only to
     // satisfy the interface, the same reason `selection.selectableEntriesOf` above is inert here.
     activation: {
-      subjectEntryOf: () => undefined,
       activateFromClick: () => {},
     },
+    subjectEntryOf: () => undefined,
     session: (grabbed, gesture): EntryGestureSession | undefined => {
       if (refuseSession.includes(grabbed)) return undefined;
       sessions.push([grabbed, gesture]);

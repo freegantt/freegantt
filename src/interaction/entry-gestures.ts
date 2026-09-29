@@ -260,7 +260,7 @@ export function attachEntryGestures(
     // too, not just leave it for this hit's own `click` to wrongly confirm.
     pendingActivation = undefined;
     if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-      const subject = ctx.activation.subjectEntryOf(hit);
+      const subject = ctx.subjectEntryOf(hit);
       if (subject !== undefined && ctx.can('activate', subject)) {
         pendingActivation = { entry: subject, target: hit.kind };
       }
