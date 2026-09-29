@@ -884,7 +884,7 @@ describe('Dataset plugins (S5.10)', () => {
   }
 
   /** Locks one entry: its own store row says which, and `beforeChange` refuses any commit that
-   *  touches it — the same shape harness/plugins/lock-entries.ts ships. */
+   *  touches it. */
   function lockEntries(ids: readonly string[]): DataPlugin {
     return {
       id: 'demo.lock',
@@ -1388,7 +1388,7 @@ describe('a core Field declared at construction is there before entries are read
   const locks = () => ({
     id: 'demo.locks',
     data(): void {
-      /* the extension hook and the store are out of scope for this gap — see lock-entries.ts */
+      /* the extension hook and the store are out of scope for this gap */
     },
   });
 

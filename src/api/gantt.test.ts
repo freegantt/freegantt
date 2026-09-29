@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Gantt } from './gantt.js';
 import { Dataset } from './dataset.js';
 import {
@@ -55,6 +55,7 @@ function datesOf(entry: Entry): { start: Entry['start']; end: Entry['end'] } {
 // seams — a regression in bufferKind() must fail this test (issue #153).
 import { bufferKind } from '../../harness/plugins/buffer-kind.js';
 import { riskKind } from '../../harness/plugins/risk-kind.js';
+import { freezePastWork } from '../../harness/plugins/freeze-past-work.js';
 
 // happy-dom does no layout, so a real ResizeObserver never fires (same seam gantt-shell.test.ts
 // stubs globally — Gantt/GanttShell wire attachPaneSize themselves and take no ResizeObserverCtor
@@ -7482,6 +7483,160 @@ describe("a plugin's place rule refuses a drop at preview, in both panes", () =>
     expect(afterEvents).toHaveLength(1);
     expect(afterEvents[0]!.place?.parentId).toBe(entryId('p1'));
     expect(dataset.entries.get(id)!.parent()?.id).toBe(entryId('p1'));
+
+    gantt.destroy();
+  });
+});
+
+describe('freezePastWork() refuses at preview the same way the core lock does', () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  const PINNED_NOW = instant('2026-06-15T00:00:00Z');
+
+  /** `pastParent` rolls its span up from `pastChild` (ADR 0013), and both already ended before the
+   *  pinned clock; `past` is a plain root that already ended too; `open` is a root that has not, the
+   *  entry these tests drag into `pastParent`'s row. */
+  function pastWorkContainer(): {
+    container: HTMLDivElement;
+    dataset: Dataset;
+    pastWork: ReturnType<typeof freezePastWork>;
+  } {
+    const container = document.createElement('div');
+    const pastWork = freezePastWork();
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'pastParent', name: 'Past parent' },
+        {
+          id: 'pastChild',
+          name: 'Past child',
+          parentId: 'pastParent',
+          start: '2026-06-01',
+          end: '2026-06-05',
+        },
+        { id: 'past', name: 'Past', start: '2026-06-01', end: '2026-06-10' },
+        { id: 'open', name: 'Open', start: '2026-06-20', end: '2026-06-25' },
+      ],
+      plugins: [pastWork],
+    });
+    return { container, dataset, pastWork };
+  }
+
+  function dragRowInto(container: HTMLElement, row: HTMLElement, dropClientY: number): void {
+    const rowsLayer = container.querySelector<HTMLElement>('.fg-rows')!;
+    stubPointerCapture(rowsLayer);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+    rowsLayer.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+
+    document.elementFromPoint = original;
+  }
+
+  function dragBarInto(container: HTMLElement, bar: HTMLElement, dropClientY: number): void {
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: dropClientY, pointerId: 1 }));
+
+    document.elementFromPoint = original;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(PINNED_NOW);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('a frozen past bar arms no move and shows no resize handle', () => {
+    const { container, dataset, pastWork } = pastWorkContainer();
+    pastWork.freeze();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('past'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    expect(bar.hasAttribute('data-movable')).toBe(false);
+    const start = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="start"]')!;
+    const end = container.querySelector<HTMLElement>('.fg-bar-handle[data-edge="end"]')!;
+    expect(start.hidden).toBe(true);
+    expect(end.hidden).toBe(true);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it('a bar drag and a grid row drag of "open" into "pastParent" refuse at preview while frozen', () => {
+    const { container, dataset, pastWork } = pastWorkContainer();
+    pastWork.freeze();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('open'), 0)}"]`)!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="open"]')!;
+
+    const id = entryId('open');
+    const before = dataset.entries.get(id)!.parent()?.id;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // "pastParent"'s own middle third (row 0, y=18).
+    dragBarInto(container, bar, 18);
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+
+    dragRowInto(container, row, 18);
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('the same drags commit once unfrozen', () => {
+    const { container, dataset, pastWork } = pastWorkContainer();
+    pastWork.freeze();
+    pastWork.unfreeze();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('open'), 0)}"]`)!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="open"]')!;
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragBarInto(container, bar, 18);
+    expect(afterEvents).toHaveLength(1);
+    expect(dataset.entries.get('open')!.parent()?.id).toBe(entryId('pastParent'));
+
+    dataset.undo();
+    afterEvents.length = 0;
+
+    dragRowInto(container, row, 18);
+    expect(afterEvents).toHaveLength(1);
+    expect(dataset.entries.get('open')!.parent()?.id).toBe(entryId('pastParent'));
 
     gantt.destroy();
   });

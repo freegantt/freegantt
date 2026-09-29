@@ -178,66 +178,55 @@ test('[S5.6] over-budget row stripes appear and a checkbox removes the plugin li
 });
 
 // S5.10 visible acceptance (s5.10-dataset-plugins.md §4): harness/e2e/editing.html installs
-// lockEntries() — harness/plugins/lock-entries.ts, written against the public 'freegantt' entry
-// alone — and its checkbox locks entry-15 through the plugin's own store. Two seams, one demo: the
-// extension hook ghosts the locked bars while a neighbour drags, and `beforeChange` refuses the drop.
-//
-// #241, ADR 0026: the locked row draws several bars there, and each one is a child Entry the row
-// draws as a segment (`childrenAsSegments`). Every bar on that row has to ghost, and by the same distance — that
-// is what `moveEntryTo`'s rigid translate promises, applied once per dated child. The count is read
-// off the page, never asserted as a number, so a fixture edit cannot make this test quietly weaker.
-test('every bar of a locked row ghosts alongside a dragged neighbour, and the drop is refused', async ({
+// freezePastWork() — harness/plugins/freeze-past-work.ts, written against the public 'freegantt'
+// entry alone — and its checkbox freezes every Entry whose work is already past. Two seams, one
+// demo: the lock rule closes a past bar's own `start`/`end`, and the place rule refuses a drop into
+// a parent whose own work is past too. Both refuse silently, the same way the core lock does: the
+// gesture never arms, so no toast and no log line ever reports it.
+test('with past work frozen, a past bar does not drag or resize, and a drop into a past parent refuses', async ({
   page,
 }) => {
   await page.goto('/e2e/editing.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  await page.locator('#lock-entry').check();
+  await page.locator('#freeze-past-work').check();
 
-  const dragged = page.locator('#gantt .fg-bar[data-bar-id^="entry-14:"]').first();
-  const lockedBars = page.locator('#gantt .fg-bar[data-bar-id^="entry-15-"]');
-  await expect(dragged).toBeVisible();
-  // More than one bar on one row is the whole point of the case: one bar would pass even if the
-  // cascade moved a single envelope, which is what this test exists to rule out.
-  expect(await lockedBars.count()).toBeGreaterThan(1);
+  // `entry-2` already ended, so the lock rule closes its `start`/`end`: no resize handle paints,
+  // and a drag along the timeline leaves it exactly where it started.
+  const pastBar = page.locator('#gantt .fg-bar[data-bar-id^="entry-2:"]').first();
+  await expect(pastBar).toBeVisible();
+  await expect(pastBar.locator('.fg-bar-handle[data-edge="start"]')).toBeHidden();
+  await expect(pastBar.locator('.fg-bar-handle[data-edge="end"]')).toBeHidden();
 
-  const leftEdges = async (): Promise<number[]> => {
-    const boxes = await Promise.all((await lockedBars.all()).map((bar) => bar.boundingBox()));
-    return boxes.map((box) => box?.x ?? Number.NaN);
-  };
-
-  const draggedBefore = await dragged.boundingBox();
-  const lockedBefore = await leftEdges();
-  if (!draggedBefore) throw new Error('missing bounding box');
-
-  await page.mouse.move(draggedBefore.x + Math.min(draggedBefore.width / 2, 20), draggedBefore.y + 6);
+  const pastBefore = await pastBar.boundingBox();
+  if (!pastBefore) throw new Error('missing bounding box');
+  const pastGrabY = pastBefore.y + pastBefore.height / 2;
+  await page.mouse.move(pastBefore.x + Math.min(pastBefore.width / 2, 20), pastGrabY);
   await page.mouse.down();
-  await page.mouse.move(draggedBefore.x + Math.min(draggedBefore.width / 2, 20) + 120, draggedBefore.y + 6, {
-    steps: 8,
-  });
+  await page.mouse.move(pastBefore.x + Math.min(pastBefore.width / 2, 20) + 120, pastGrabY, { steps: 8 });
+  await page.mouse.up();
+  await expect.poll(async () => (await pastBar.boundingBox())?.x).toBe(pastBefore.x);
+  await expect(page.locator('#undo-btn')).toBeDisabled();
 
-  // The preview is rAF-coalesced, so poll rather than read once: every locked bar moves, because the
-  // plugin's extender cascades a `moveEntryTo` edit for every locked child Entry (ADR 0026 — this row
-  // draws several bars because it has several children, not because one Entry draws several
-  // Segments) into the same draft. The 8px floor clears sub-pixel rounding on a bar that has not
-  // moved at all; the drag itself is 120px.
-  await expect.poll(async () => (await leftEdges()).every((x, i) => x > lockedBefore[i]! + 8)).toBe(true);
-  // Rigid, not stretched: one shared offset for every locked child Entry, so the gaps between the
-  // bars survive the ghost. `moveEntryTo` promises this per Entry; a single envelope write over the
-  // parent could not even name which child moved.
-  const offsets = (await leftEdges()).map((x, i) => Math.round(x - lockedBefore[i]!));
-  expect(new Set(offsets).size).toBe(1);
+  // `entry-1`'s own dates are dropped and roll up from its one child `entry-4` (ADR 0013), both
+  // already past, so its row is a past parent too. `entry-3` is pushed into the future, so the
+  // freeze never touches it — dragging its grid row onto `entry-1`'s row crosses that past border.
+  const openRow = page.locator('#gantt .fg-row[data-entry-id="entry-3"]');
+  const pastParentRow = page.locator('#gantt .fg-row[data-entry-id="entry-1"]');
+  const openBefore = await openRow.boundingBox();
+  const parentBox = await pastParentRow.boundingBox();
+  if (!openBefore || !parentBox) throw new Error('missing bounding box');
 
+  const openGrabX = openBefore.x + openBefore.width - 20;
+  await page.mouse.move(openGrabX, openBefore.y + openBefore.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(openGrabX, parentBox.y + parentBox.height / 2, { steps: 8 });
   await page.mouse.up();
 
-  // The drop is refused, so every bar lands back where it started and the page logs the refusal.
-  // A store-only commit repaints on the next frame (#161), so every post-commit read polls.
-  // The plugin names the locked Entry it found in the changeset, and each bar on this row is its own
-  // Entry now (ADR 0026) — so the refusal names a leg, not the row's parent.
-  await expect(page.locator('#toast')).toContainText('entry-15-a is locked');
-  await expect.poll(leftEdges).toEqual(lockedBefore);
-  await expect.poll(async () => (await dragged.boundingBox())?.x).toBe(draggedBefore.x);
-  await expect(page.locator('#log')).toContainText('entry-15-a is locked');
+  // The drop is refused, so `entry-3` sits at its own row exactly where it started, and nothing
+  // in the dataset ever committed.
+  await expect.poll(async () => (await openRow.boundingBox())?.y).toBe(openBefore.y);
+  await expect(page.locator('#undo-btn')).toBeDisabled();
 });
 
 // #280: harness/e2e/plugins.html's "Buffer + risk kinds" toggle installs contextMenu()
