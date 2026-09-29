@@ -87,10 +87,11 @@
                 <label><input id="phase-tree-checkbox" type="checkbox" /> Plugin-owned tree (phase)</label>
               </div>
               <p>
-                With this box on, a plugin decides each row's parent from a phase id (ADR 0020). A vertical
-                drag writes <code>parentId</code>, and the plugin would not follow it, so a drop could land
-                where you did not drop it. Vertical drag stays off while the plugin owns the tree. Issue #606
-                tracks a fix.
+                With this box on, a plugin decides each row's parent from a phase id (ADR 0020). Vertical drag
+                stays off for an ordinary row, because the plugin would not follow a
+                <code>parentId</code> write. A children-as-segments row, like Framing crew, still takes an
+                <code>into</code> drop, and that drop writes <code>parentId</code> when the row has no phase
+                id. Issue #606 tracks a full fix.
               </p>
               <div class="control-row">
                 <button id="phase-btn" type="button">Nest Gate review under Empty phase (plugin tree)</button>

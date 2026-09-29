@@ -142,8 +142,10 @@ const dataset = new Dataset<HierarchyProps>({
   ...hierarchyFieldOptions,
   fields: [...hierarchyFieldOptions.fields, WORK],
   // ADR 0020: the tree is whatever the hierarchy source answers. Off by default: a plugin-owned
-  // tree offers no vertical drop yet (#606), so a vertical drag only reparents a bar while this
-  // plugin stays out of the Dataset. The checkbox below opts back in.
+  // tree offers no vertical drop yet (#606), so an ordinary row's vertical drag only reparents a
+  // bar while this plugin stays out of the Dataset. A children-as-segments row still takes an
+  // `into` drop, and writes `parentId` when it has no phase id of its own. The checkbox below
+  // opts the plugin back in.
   plugins: phaseTreeEnabled ? [phaseHierarchy()] : [],
 });
 

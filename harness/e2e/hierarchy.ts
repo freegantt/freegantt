@@ -110,7 +110,9 @@ function createDataset(
     // ADR 0020: the tree is whatever the hierarchy source answers. This plugin answers `phaseId`
     // first and `parentId` after it, so the fixture nests exactly as authored until the
     // `phase-btn` below writes a phase id. Stays mounted here for this page's own phase-hierarchy
-    // tests — as a side effect, a vertical drag on this page cannot change a row's parent (#606).
+    // tests — as a side effect, a vertical drag on an ordinary row cannot change its parent (#606).
+    // A children-as-segments row (for example Framing crew) still takes an `into` drop, and that
+    // drop still writes `parentId` when the row has no `phaseId` of its own.
     plugins: [phaseHierarchy()],
   });
 }
