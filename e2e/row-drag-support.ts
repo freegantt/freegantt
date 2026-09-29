@@ -179,6 +179,14 @@ export async function dragPointerTo(
   await page.mouse.move(x, y, { steps: 1 });
 }
 
+/** Locks the entry under `(x, y)` through the right-click "Lock" command — the core `locked` Field
+ *  (#612), the same door the page's checkbox writes. The command reads the acted-on entry, so a
+ *  point on a bar or on a grid row both work; the caller picks whichever grab point it already read. */
+export async function lockEntryAt(page: Page, x: number, y: number): Promise<void> {
+  await page.mouse.click(x, y, { button: 'right' });
+  await page.locator('#gantt .fg-menu-item[data-command="demo.lockEntry"]').click();
+}
+
 /** True when `entryId` has a direct child of its own with no children — a row a pointer can arm a
  *  drag on at all (`view/capability.ts`'s `moveWritesSomething`, which a grandparent whose every
  *  child is itself a rolled-up parent never satisfies, so it takes no gesture, vertical or

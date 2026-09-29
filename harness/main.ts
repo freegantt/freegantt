@@ -29,7 +29,6 @@ import { prependChangeSet, prependLogLine } from './change-log.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
-import { lockEntries } from './plugins/lock-entries.js';
 import { mountPageBrief } from './docs/page-brief.js';
 
 // The block above the Gantt names what this page demonstrates, the config that does it,
@@ -49,19 +48,19 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   { field: 'cost', header: 'Budget' },
 ];
 
-// S5.10: one Dataset plugin owns every lock on this page — the checkbox below and the
-// right-click Lock/Unlock items both write its `locked` Field (#496), so the page keeps no lock
-// state of its own. `Dataset.plugins` is read-only, so it is installed here, at construction.
-const locks = lockEntries();
-
 // `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A
 // hand-written copy here drifted from it the moment ADR 0018 added `milestone`.
 const dataset = new Dataset<DemoEntryProps>({
   entries: demoTreeEntryInputs,
   timeZone: 'UTC',
   ...demoFieldOptions,
-  plugins: [locks],
 });
+
+// `locked` is a core Field (#612) — the checkbox below and the right-click Lock/Unlock items both
+// write it, so the page keeps no lock state of its own.
+function isLocked(id: string): boolean {
+  return dataset.entries.get(id)?.read('locked') === true;
+}
 
 // S3 direct manipulation demo (editing.html's own `mobilization` date line): a hard boundary a
 // `beforeEntryMove` veto below enforces — dropping a bar before it is refused. A week out from
@@ -347,16 +346,16 @@ costBtn.addEventListener('click', () => {
   });
 });
 
-// S5.10: the checkbox locks the dataset's current first entry through the same plugin the
-// right-click menu uses. Locking writes the plugin's `locked` Field — a real dataset write, so it
-// commits, it logs like every other change, and Ctrl+Z unlocks (#156). The refusal itself is the
-// plugin's own `beforeChange`.
+// The checkbox locks the dataset's current first entry through the core `locked` Field (#612), the
+// same door the right-click menu writes. Locking is a real dataset write, so it commits, it logs
+// like every other change, and Ctrl+Z unlocks (#156). A locked row's own refusal — no grid editor,
+// no drag — is the core lock's doing, with no plugin in the way.
 function firstEntryId(): string | undefined {
   return dataset.entries.all[0]?.id;
 }
 
-// Who reports a refusal? The library, on one subscription over both emitters — the lock
-// plugin's `refuse(reason)` words arrive here, so this page keeps no refusal callback of its own.
+// Who reports a refusal? The library, on one subscription over both emitters — this page keeps
+// no refusal callback of its own.
 watchAllErrors([dataset, gantt], (report) => {
   const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
   prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
@@ -365,8 +364,7 @@ watchAllErrors([dataset, gantt], (report) => {
 lockCheckbox.addEventListener('change', () => {
   const id = firstEntryId();
   if (id === undefined) return;
-  if (lockCheckbox.checked) locks.lock(id);
-  else locks.unlock(id);
+  dataset.entries.update(id, { locked: lockCheckbox.checked ? true : undefined });
 });
 
 // A read-only dump — every stored Entry, through the row's own copy door. The library holds no
@@ -487,9 +485,9 @@ toggleLoggingBtn.addEventListener('click', () => {
   }
 });
 
-// #178: the page keeps the plugin object, the same way it keeps `lockEntries()`'s. That handle is
-// how page scope reaches what the plugin built in `setup()` — it replaces a module-level stash the
-// plugin used to keep for its callers, which two Gantts on one page would have shared (I2).
+// #178: the page keeps the plugin object. That handle is how page scope reaches what the plugin
+// built in `setup()` — it replaces a module-level stash the plugin used to keep for its callers,
+// which two Gantts on one page would have shared (I2).
 const demoPopup = popupDemo();
 gantt.installPlugin(selectionShortcuts(writeLog));
 gantt.installPlugin(demoPopup);
@@ -576,8 +574,9 @@ timeShadingToggle.addEventListener('change', () => {
 // `ctx.target.entryIds` and removes every one of those records (`src/view/core-commands.ts` states
 // the dispatch rule).
 //
-// What does the page still own? — Lock and Unlock, because a lock is this demo's own policy, not
-// a library concept. They read `ctx.target.entryIds`: a lock is a property of the whole record.
+// What does the page still own? — Lock and Unlock. `locked` is a core Field (#612), but no
+// command ships to toggle it, so the page defines its own. They read `ctx.target.entryIds`: a
+// lock is a property of the whole record.
 const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
 
 function entryContextActions() {
@@ -590,12 +589,12 @@ function entryContextActions() {
         // #212's second symptom: offer "Lock" exactly when the acted-on set has something left to
         // lock, and lock only those — an already-locked Entry in the same set is left alone rather
         // than re-locked for no reason.
-        when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => !locks.isLocked(id)),
+        when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => !isLocked(id)),
         run: (cmdCtx) => {
           ctx.dataset.transaction(() => {
             for (const id of cmdCtx.target?.entryIds ?? []) {
-              if (locks.isLocked(id)) continue;
-              locks.lock(id);
+              if (isLocked(id)) continue;
+              ctx.dataset.entries.update(id, { locked: true });
               prependLogLine(log, `entries · ${id} · locked (right-click menu)`);
             }
           });
@@ -604,12 +603,12 @@ function entryContextActions() {
       ctx.commands.register({
         id: 'demo.unlockEntry',
         label: 'Unlock',
-        when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => locks.isLocked(id)),
+        when: (cmdCtx) => (cmdCtx.target?.entryIds ?? []).some((id) => isLocked(id)),
         run: (cmdCtx) => {
           ctx.dataset.transaction(() => {
             for (const id of cmdCtx.target?.entryIds ?? []) {
-              if (!locks.isLocked(id)) continue;
-              locks.unlock(id);
+              if (!isLocked(id)) continue;
+              ctx.dataset.entries.update(id, { locked: undefined });
               prependLogLine(log, `entries · ${id} · unlocked (right-click menu)`);
             }
           });
