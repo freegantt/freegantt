@@ -203,6 +203,7 @@ where they do something beyond re-export.
 | file | exports | what it is for |
 | --- | --- | --- |
 | `interaction/entry-gestures.ts` | `attachEntryGestures()` | Wires pointer events on entries into the `EntryGestureContext`'s session lifecycle. |
+| `interaction/row-reorder-drag.ts` | `createRowReorderDrag()` | A grid row drag over its own pointer stream: grabs the row's subject and arms a `{ kind: 'reorder' }` session, tree-only, no date write. |
 | `interaction/column-gestures.ts` | `attachColumnGestures()` | Resize and reorder pointer sequences for grid columns, over the same `createPointerGesture` controller. |
 | `interaction/keyboard-editing.ts` | `attachKeyboardEditing()` | Handles Delete/arrow-key edits on selected entries. |
 | `interaction/pointer-gesture.ts` | `createPointerGesture()` | Low-level pointer capture/release and move/up dispatch. Owns no DOM listeners of its own. |
