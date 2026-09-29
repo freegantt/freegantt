@@ -8,8 +8,9 @@
 import type { Entry, EntryId, BarId, RowId, ClientPoint } from '../model/index.js';
 import type { GestureCapability } from './capability.js';
 
-/** What kind of data gesture is in flight — `'move'` (S3.3) or `'resize'` with the grabbed edge (S3.4). */
-export type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' };
+/** What kind of data gesture is in flight — a bar drag that moves it, a bar drag that resizes one
+ *  edge, or a grid row drag that reorders or re-parents the Entry and writes no date. */
+export type EntryGesture = { kind: 'move' } | { kind: 'resize'; edge: 'start' | 'end' } | { kind: 'reorder' };
 
 /** Alt suspends snapping for fine placement during a gesture — `entry-gestures.ts` reads
  *  `e.altKey` off the pointer event and passes it through here; only `GanttShell` knows how a
