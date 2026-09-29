@@ -59,6 +59,7 @@ import { now, toInstant } from '../time/index.js';
 import {
   extraEditsFor,
   hierarchyFollowsParentId,
+  onRulesChanged,
   placeableOf,
   rolledUpEditsFor,
   type Dataset,
@@ -432,6 +433,7 @@ export class Gantt<TProps = unknown> {
       rolledUpEditsFor: (draft) => rolledUpEditsFor(options.dataset, draft),
       hierarchyFollowsParentId: () => hierarchyFollowsParentId(options.dataset),
       placeableOf: (id, parentId) => placeableOf(options.dataset, id, parentId),
+      onRulesChanged: (listener) => onRulesChanged(options.dataset, listener),
       wiring: {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,

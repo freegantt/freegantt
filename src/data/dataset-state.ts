@@ -147,6 +147,11 @@ export class DatasetState implements Dataset {
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
   readonly bus = new EventBus<DatasetEventMap>();
+  /** ADR 0038: who `rulesChanged()` below wakes. Not the `bus` above — a rule answer moving is not
+   *  public event vocabulary (plans/02 §3), it is `GanttShell`'s own cue to re-resolve, through the
+   *  friend-map wiring `api/dataset.ts`'s `onRulesChanged` builds (the `hierarchyFollowsParentId`
+   *  pattern). */
+  readonly #ruleChangeListeners = new Set<() => void>();
   /** 0 = no transaction open. Read and written only by `runTransaction` (the nesting rule). */
   openTransactions = 0;
   /** Set while `beforeChange`/`change` handlers are fanning out. Read and written
@@ -372,6 +377,20 @@ export class DatasetState implements Dataset {
    *  `setLockRule` above does. */
   setPlaceRule(wrap: PlaceRuleWrapper): void {
     this.entries.setPlaceRule(wrap);
+  }
+
+  /** Call: `ctx.edits.rulesChanged()`. Wakes every listener `onRulesChanged` below registered — one
+   *  per bound Gantt — so each re-resolves what it currently offers. Writes nothing (I14 unaffected). */
+  rulesChanged(): void {
+    for (const listener of this.#ruleChangeListeners) listener();
+  }
+
+  /** Friend-only subscription `api/dataset.ts`'s `onRulesChanged` wires a bound Gantt's refresh
+   *  through, the same friend-map pattern `hierarchyFollowsParentId` uses for a query instead of a
+   *  subscription. Returns the Disposer that drops exactly this listener. */
+  onRulesChanged(listener: () => void): Disposer {
+    this.#ruleChangeListeners.add(listener);
+    return () => this.#ruleChangeListeners.delete(listener);
   }
 
   /** Call: `dataset.editableOf('van-1', 'cost')` — the effective lock on one cell (#473): a plugin's

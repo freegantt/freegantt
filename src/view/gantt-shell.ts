@@ -410,6 +410,14 @@ export interface GanttShellOptions {
    *  friend-map way `hierarchyFollowsParentId` above does. `undefined` (a test-built shell with no
    *  wiring) keeps `canPlace`'s pre-ADR-0038 answer. */
   placeableOf?: (id: string, parentId: EntryId | undefined) => FieldEditable;
+  /** ADR 0038: the friend function `api/dataset.ts`'s `onRulesChanged`. A plugin calls
+   *  `ctx.edits.rulesChanged()` after a lock rule's or a place rule's outside state moves. This shell
+   *  answers by re-resolving what it currently offers, then it requests a frame. An affordance a rule
+   *  just closed clears with no Field write needed. `api/gantt.ts` wires this the same friend-map way
+   *  `hierarchyFollowsParentId` above does. `undefined` (a test-built shell with no wiring) subscribes
+   *  to nothing. A rule with outside state then needs its own Field write to be noticed — the
+   *  pre-ADR-0038 behaviour. */
+  onRulesChanged?: (listener: () => void) => Disposer;
   /** Internal (ADR 0018). One registry per Gantt, seeded with core's two variants. Tests
    *  inject a replacement. */
   variantRegistry?: VariantRegistry;
@@ -898,6 +906,18 @@ export class GanttShell {
       this.#frames.request();
     });
     this.#teardown.add(() => this.#datasetChanges.unsubscribe());
+    // ADR 0038: a lock rule or a place rule can close over outside state — a clock, a toggle. Its
+    // answer can then move with no Field write for the subscription above to see. A plugin calls
+    // `ctx.edits.rulesChanged()` when that happens. This shell re-resolves what it currently offers,
+    // the same way a dataset write above does, so a now-closed affordance clears on the next frame.
+    if (options.onRulesChanged) {
+      this.#teardown.add(
+        options.onRulesChanged(() => {
+          this.#refreshCapabilities();
+          this.#frames.request();
+        }),
+      );
+    }
     // Synchronous first measurement: a real ResizeObserver's own first callback is queued, not
     // immediate, so the first paint cannot wait for it. The `attachPaneSize` call below takes over
     // from here. It takes every measurement after this one, live, for as long as the shell lives
