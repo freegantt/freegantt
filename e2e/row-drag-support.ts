@@ -12,6 +12,9 @@ declare global {
      *  one `change` event no matter how many rows it touches (a rollup recompute on the old and the
      *  new parent's own cost included), so this, not a line count, is what "one ChangeSet" means. */
     __rowDragChangeCount: number;
+    /** The listener `countChangesFromHere` last armed, so a repeat call can drop it before it adds
+     *  another — without this, a second call on the same page would double-count every change. */
+    __rowDragChangeDisposer: (() => void) | undefined;
   }
 }
 
@@ -49,8 +52,9 @@ export async function gotoGeneric(page: Page): Promise<void> {
 /** Counts `Dataset` `change` events from here on — see the `Window.__rowDragChangeCount` doc. */
 export async function countChangesFromHere(page: Page): Promise<void> {
   await page.evaluate(() => {
+    window.__rowDragChangeDisposer?.();
     window.__rowDragChangeCount = 0;
-    window.__gantt.dataset.on('change', () => {
+    window.__rowDragChangeDisposer = window.__gantt.dataset.on('change', () => {
       window.__rowDragChangeCount += 1;
     });
   });
