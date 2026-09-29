@@ -6820,6 +6820,235 @@ describe("a vertical drag respects lockEntries()'s lock, not just its beforeChan
   });
 });
 
+// #602: a grid row drag reaches `entryMove` through the same one switch (`reorder`) and the same
+// resolver as the bar's own vertical drag (#425) above — this suite pins that through `new
+// Gantt(...)`, never through `interaction/`'s own unit tests, so a regression in the wiring shows
+// here even if every module underneath still passes its own tests.
+describe('Gantt entryMove — a grid row drag reaches the same switch as a bar drag (#602)', () => {
+  function stubPointerCapture(el: HTMLElement): void {
+    el.setPointerCapture = vi.fn();
+    el.releasePointerCapture = vi.fn();
+  }
+
+  function treeContainer(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p2', start: '2026-01-05', end: '2026-01-08' },
+      ],
+    });
+    return { container, dataset };
+  }
+
+  /** Grabs `row`'s own pointer stream via `.fg-rows` — `attachEntryGestures`' own row layer — and
+   *  drags it to `dropClientY`, row 2's own middle third (y=90) in every case here (this file's
+   *  #425 suite above already explains the 36px row math). */
+  function dragRowInto(container: HTMLElement, row: HTMLElement, dropClientY: number): void {
+    const rowsLayer = container.querySelector<HTMLElement>('.fg-rows')!;
+    stubPointerCapture(rowsLayer);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : original(x, y));
+
+    rowsLayer.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointermove', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+    rowsLayer.dispatchEvent(
+      new PointerEvent('pointerup', { clientX: 5, clientY: dropClientY, pointerId: 1 }),
+    );
+
+    document.elementFromPoint = original;
+  }
+
+  it('drags row "a" into row 2’s middle: parentId changes, one transaction, no date write, undo restores the tree place', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+
+    const id = entryId('a');
+    const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
+
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+    const datasetChanges: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      datasetChanges.push(changeSet);
+    });
+
+    dragRowInto(container, row, 90);
+
+    expect(afterEvents).toHaveLength(1);
+    const move = afterEvents[0]!;
+    expect(move.place?.parentId).toBe(entryId('p2'));
+    expect(move.shiftsTime).toBe(false);
+    expect(datasetChanges).toHaveLength(1);
+    expect(datesOf(dataset.entries.get(id)!)).toEqual({ start: before.start, end: before.end });
+
+    expect(dataset.canUndo).toBe(true);
+    dataset.undo();
+    const reverted = dataset.entries.get(id)!;
+    expect(reverted.parent()?.id).toBe(before.parentId);
+    expect(datesOf(reverted)).toEqual({ start: before.start, end: before.end });
+
+    gantt.destroy();
+  });
+
+  it('capabilities.reorder: false refuses both panes’ vertical drag; a grid click still selects; the bar still moves time', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset, capabilities: { reorder: false } });
+
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+
+    const id = entryId('a');
+    const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // A vertical bar drag: dx=0, dy lands on row 2's middle.
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 90, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 90, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.canUndo).toBe(false);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before.parentId);
+
+    // A grid row drag never arms — `can('reorder', …)` refuses the grab — so the same pointer
+    // sequence's `up` falls through to the row's own click path and selects it instead.
+    dragRowInto(container, row, 90);
+    expect(afterEvents).toEqual([]);
+    expect(dataset.canUndo).toBe(false);
+    expect(gantt.selectedEntryIds).toEqual([id]);
+
+    // A horizontal bar drag still moves time — `reorder: false` gates a place drop only, not `move`.
+    const beforeHorizontal = datesOf(dataset.entries.get(id)!);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5000, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5000, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.shiftsTime).toBe(true);
+    expect(datesOf(dataset.entries.get(id)!)).not.toEqual(beforeHorizontal);
+
+    gantt.destroy();
+  });
+
+  it('gantt.setCapabilityRule("reorder", false) refuses both panes the same way, after construction', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset });
+    gantt.setCapabilityRule('reorder', false);
+
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+
+    const id = entryId('a');
+    const before = { ...datesOf(dataset.entries.get(id)!), parentId: dataset.entries.get(id)!.parent()?.id };
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 90, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 90, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(before.parentId);
+
+    dragRowInto(container, row, 90);
+    expect(afterEvents).toEqual([]);
+    expect(gantt.selectedEntryIds).toEqual([id]);
+
+    gantt.destroy();
+  });
+
+  it('capabilities.move: false still lets the grid row reorder; the bar never arms', () => {
+    const { container, dataset } = treeContainer();
+    const gantt = new Gantt({ container, dataset, capabilities: { move: false } });
+
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+
+    const id = entryId('a');
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // The bar never arms at all — `move: false` refuses the gesture before it reaches a drop.
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5000, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5000, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+    expect(afterEvents).toEqual([]);
+
+    // The grid row drag still reorders — it arms on `reorder` alone.
+    dragRowInto(container, row, 90);
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.place?.parentId).toBe(entryId('p2'));
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(entryId('p2'));
+
+    gantt.destroy();
+  });
+
+  it('an undated entry (no start/end, no children) still reorders from the grid', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        // No authored dates: `p1` has a child, so the Rollup would own them anyway.
+        { id: 'p1', name: 'P1' },
+        // No dates and no children: ADR 0012 draws it no bar at all, so the grid row is its only
+        // handle — exactly the undated case D2 exists for.
+        { id: 'a', name: 'A', parentId: 'p1' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10' },
+      ],
+    });
+    const gantt = new Gantt({ container, dataset });
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+
+    const id = entryId('a');
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragRowInto(container, row, 90);
+
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.place?.parentId).toBe(entryId('p2'));
+    expect(afterEvents[0]!.shiftsTime).toBe(false);
+    expect(dataset.entries.get(id)!.parent()?.id).toBe(entryId('p2'));
+
+    gantt.destroy();
+  });
+});
+
 describe('Gantt entryResize (S3.4, [S3-A1] resize half)', () => {
   function stubPointerCapture(el: HTMLElement): void {
     el.setPointerCapture = vi.fn();

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { EntryNotFoundError, InvertedSpanError, entryId, barId, rowId } from '../model/index.js';
@@ -1457,6 +1457,27 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     expect(move.start).toBe(50);
   });
 
+  it("a time drag's payload narrows on shiftsTime before start/end read as Instant", async () => {
+    const { deps, emitted } = withTree({
+      rowDropZoneAt: () => ({ kind: 'sourceRow' }),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    await pipeline.session(entryId('a'), { kind: 'move' })!.commit(50, { contentY: 10 });
+
+    const move = emitted[1]![1] as EntryMove;
+    // Before narrowing, `start`/`end` read as possibly absent — a handler cannot assume a time
+    // move without asking `shiftsTime` first.
+    expectTypeOf(move.start).toEqualTypeOf<Instant | undefined>();
+    if (move.shiftsTime) {
+      expectTypeOf(move.start).toEqualTypeOf<Instant>();
+      expectTypeOf(move.end).toEqualTypeOf<Instant>();
+      expect(move.start).toBe(50);
+    } else {
+      throw new Error('expected this drag to shift time');
+    }
+  });
+
   it('a drag whose pointer stays over the source row writes time only, no place in the event', async () => {
     const { deps, emitted } = withTree({
       rowDropZoneAt: () => ({ kind: 'sourceRow' }),
@@ -1696,5 +1717,250 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
     expect(preview.map((bar) => bar.dy)).toEqual([0]);
     expect(appliedRowDrops.at(-1)).toBeUndefined();
+  });
+});
+
+// #602: a grid row drag reorders or re-parents the grabbed row, writing no date. Same tree as the
+// vertical-drag suite above: `p1{a, b}` and `p2{c}`, root order `p1, p2`.
+describe('a grid row drag reorders or re-parents its Entry (#602)', () => {
+  function plannedRow(row: Entry, depth: number, index: number): PlannedRow {
+    return {
+      id: rowId(row.id),
+      kind: PLANNED_ROW_KIND.entry,
+      index,
+      depth,
+      entryIds: [row.id],
+      expandable: row.hasChildren,
+      expanded: row.hasChildren,
+    };
+  }
+
+  function withReorderTree(overrides: Partial<GesturePipelineDeps> = {}) {
+    const [p1, a, b, p2, c] = entryDoubles([
+      { id: 'p1', props: { siblingIndex: 0 } },
+      { id: 'a', parentId: 'p1', start: 0, end: 100, props: { siblingIndex: 0 } },
+      { id: 'b', parentId: 'p1', start: 100, end: 200, props: { siblingIndex: 1 } },
+      { id: 'p2', props: { siblingIndex: 1 } },
+      { id: 'c', parentId: 'p2', start: 0, end: 100, props: { siblingIndex: 0 } },
+    ]) as [Entry, Entry, Entry, Entry, Entry];
+    const rows: readonly PlannedRow[] = [
+      plannedRow(p1, 0, 0),
+      plannedRow(a, 1, 1),
+      plannedRow(b, 1, 2),
+      plannedRow(p2, 0, 3),
+      plannedRow(c, 1, 4),
+    ];
+    const rowIndexOf = new Map([
+      [p1.id, 0],
+      [a.id, 1],
+      [b.id, 2],
+      [p2.id, 3],
+      [c.id, 4],
+    ]);
+    const rowsForDrop: RowsForDrop = {
+      rows,
+      rowTop: (index) => index * 32,
+      rowHeightAt: () => 32,
+      entryOf: (id) => [p1, a, b, p2, c].find((row) => row.id === id),
+      rootEntries: () => [p1, p2],
+    };
+    const { deps, emitted, applied, appliedRowDrops, reported } = withRoster([p1, a, b, p2, c], {
+      rowsForDrop: () => rowsForDrop,
+      rowIndexForEntry: (id) => rowIndexOf.get(id) ?? -1,
+      verticalDropOffered: () => true,
+      canPlace: () => true,
+      ...overrides,
+    });
+    return { p1, a, b, p2, c, deps, emitted, applied, appliedRowDrops, reported };
+  }
+
+  /** Every drag in this suite grabs `a` and lets the pointer settle over `p2`'s own row, `into`. */
+  function intoP2(): RowDropZone {
+    return { kind: 'row', rowIndex: 3, side: 'into' };
+  }
+
+  it("arms on the 'reorder' capability alone — move: false never blocks it", () => {
+    const { deps } = withReorderTree({ canGesture: (capability) => capability === 'reorder' });
+    const pipeline = new GesturePipeline(deps);
+
+    expect(pipeline.session(entryId('a'), { kind: 'move' })).toBeUndefined();
+    expect(pipeline.session(entryId('a'), { kind: 'reorder' })).toBeDefined();
+  });
+
+  it('a reorder refused through canGesture arms nothing', () => {
+    const { deps } = withReorderTree({ canGesture: () => false });
+    const pipeline = new GesturePipeline(deps);
+
+    expect(pipeline.session(entryId('a'), { kind: 'reorder' })).toBeUndefined();
+  });
+
+  it("a preview over p2's row proposes an into drop and rides no bar", async () => {
+    const { p2, deps, applied, appliedRowDrops } = withReorderTree({ rowDropZoneAt: () => intoP2() });
+    const pipeline = new GesturePipeline(deps);
+
+    pipeline.session(entryId('a'), { kind: 'reorder' })!.preview(0, { contentY: 200 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(appliedRowDrops.at(-1)).toEqual({ rowId: p2.id, side: 'into', depth: 1, lineY: undefined });
+    // A reorder drafts no dates (D2), so `previewOffsets` finds no edit to move a bar by — the
+    // paint is the Insertion line and the target row alone, never a translated bar.
+    expect(applied.at(-1)).toEqual([]);
+  });
+
+  it('a commit into p2 writes only the tree place and reports shiftsTime: false', async () => {
+    const { p1, p2, deps, emitted } = withReorderTree({ rowDropZoneAt: () => intoP2() });
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(entryId('a'), { kind: 'reorder' })!.commit(0, { contentY: 200 });
+
+    expect(committed).toBe(true);
+    expect(written).toHaveLength(1);
+    const edit = written[0]!.get(entryId('a'))!;
+    expect(edit.parentId).toBe(p2.id);
+    expect([...edit.proposedKeys]).toEqual(expect.arrayContaining(['parentId', 'siblingIndex']));
+    expect('start' in edit).toBe(false);
+    expect('end' in edit).toBe(false);
+
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.place?.parentId).toBe(p2.id);
+    expect(move.currentPlace).toEqual({ parentId: p1.id, siblingIndex: 0 });
+    expect(move.shiftsTime).toBe(false);
+  });
+
+  it('an undated grabbed Entry reorders — the payload names no start/end at all', async () => {
+    const [p1, a, p2] = entryDoubles([
+      { id: 'p1', props: { siblingIndex: 0 } },
+      { id: 'a', parentId: 'p1', props: { siblingIndex: 0 } }, // no start/end: a new, undated task
+      { id: 'p2', props: { siblingIndex: 1 } },
+    ]) as [Entry, Entry, Entry];
+    const rows: readonly PlannedRow[] = [plannedRow(p1, 0, 0), plannedRow(a, 1, 1), plannedRow(p2, 0, 2)];
+    const rowIndexOf = new Map([
+      [p1.id, 0],
+      [a.id, 1],
+      [p2.id, 2],
+    ]);
+    const rowsForDrop: RowsForDrop = {
+      rows,
+      rowTop: (index) => index * 32,
+      rowHeightAt: () => 32,
+      entryOf: (id) => [p1, a, p2].find((row) => row.id === id),
+      rootEntries: () => [p1, p2],
+    };
+    const { deps, emitted } = withRoster([p1, a, p2], {
+      rowsForDrop: () => rowsForDrop,
+      rowIndexForEntry: (id) => rowIndexOf.get(id) ?? -1,
+      verticalDropOffered: () => true,
+      canPlace: () => true,
+      rowDropZoneAt: () => ({ kind: 'row', rowIndex: 2, side: 'into' }),
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    const committed = await pipeline.session(entryId('a'), { kind: 'reorder' })!.commit(0, { contentY: 64 });
+
+    expect(committed).toBe(true);
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.place?.parentId).toBe(p2.id);
+    expect(move.shiftsTime).toBe(false);
+    expect('start' in move).toBe(false);
+    expect('end' in move).toBe(false);
+  });
+
+  it('a parent whose dated descendant entriesMovedBy refuses still reorders — a reorder drafts no dates to refuse', async () => {
+    const { p2, deps, emitted } = withReorderTree({
+      rowDropZoneAt: () => intoP2(),
+      // A move of `p1` would refuse here (an ordinary move drafts `entriesMovedBy`'s own answer,
+      // and an empty list writes nothing) — a reorder never asks this question at all.
+      entriesMovedBy: () => [],
+    });
+    const pipeline = new GesturePipeline(deps);
+
+    const committed = await pipeline
+      .session(entryId('p1'), { kind: 'reorder' })!
+      .commit(0, { contentY: 200 });
+
+    expect(committed).toBe(true);
+    const move = emitted[1]![1] as EntryMove;
+    expect(move.place?.parentId).toBe(p2.id);
+  });
+
+  it('a pointer over the source row paints nothing and commits nothing', async () => {
+    const { deps, applied, appliedRowDrops } = withReorderTree({
+      rowDropZoneAt: () => ({ kind: 'sourceRow' }),
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'reorder' })!;
+
+    // A reorder drafts no dates, so a drop that names no tree place writes nothing to paint —
+    // unlike a move, which still previews the bar's own pixel offset over the source row.
+    session.preview(0, { contentY: 40 });
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(applied.at(-1)).toBeUndefined();
+    expect(appliedRowDrops.at(-1)).toBeUndefined();
+
+    const committed = await session.commit(0, { contentY: 40 });
+
+    expect(committed).toBe(false);
+  });
+
+  it('nudge() on a reorder session resolves false and writes nothing — a keyboard step has no time to move', async () => {
+    const { deps } = withReorderTree();
+    const commitEntryEdits = vi.fn(() => true);
+    const pipeline = new GesturePipeline({ ...deps, commitEntryEdits });
+    const session = pipeline.session(entryId('a'), { kind: 'reorder' })!;
+
+    const result = await session.nudge(1);
+
+    expect(result).toBe(false);
+    expect(commitEntryEdits).not.toHaveBeenCalled();
+  });
+
+  it('a held veto on a reorder whose target reparents during the hold drops as data-changed, never commits', async () => {
+    let resolveVeto!: (value: boolean) => void;
+    const veto = new Promise<boolean>((resolve) => {
+      resolveVeto = resolve;
+    });
+    const roster = new Map([
+      [entryId('a'), storedRow('a', 0, 100)],
+      [entryId('p2'), storedRow('p2', 0, 0)],
+      [entryId('c'), storedRow('c', 0, 100)],
+    ]);
+    const commitEntryEdits = vi.fn(() => true);
+    const afterEmitted: string[] = [];
+    const { deps, reported } = withReorderTree({
+      rowDropZoneAt: () => intoP2(),
+      emit: ((name: string) => {
+        if (name === 'beforeEntryMove') return veto;
+        afterEmitted.push(name);
+        return true;
+      }) as GesturePipelineDeps['emit'],
+      committedEntriesById: () => roster,
+      commitEntryEdits,
+    });
+    const pipeline = new GesturePipeline(deps);
+    const session = pipeline.session(entryId('a'), { kind: 'reorder' })!;
+
+    const commitPromise = session.commit(0, { contentY: 200 });
+    // The target's own group changed while the veto was held (#273's own guard, reused for a
+    // reorder's tree-only write the same way a diagonal drag's date write already trips it).
+    roster.set(entryId('c'), storedRow('c', 500, 600));
+    resolveVeto(true);
+
+    await expect(commitPromise).resolves.toBe(false);
+    expect(commitEntryEdits).not.toHaveBeenCalled();
+    expect(afterEmitted).toEqual([]);
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatchObject({
+      code: 'entry-move-dropped',
+      severity: 'warning',
+      entryId: entryId('a'),
+      droppedReason: 'data-changed',
+    });
   });
 });

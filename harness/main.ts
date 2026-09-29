@@ -399,8 +399,8 @@ function hideToast(): void {
 
 let releaseHold: ((allow: boolean) => void) | undefined;
 
-gantt.on('beforeEntryMove', ({ start }) => {
-  if (start < mobilization) {
+gantt.on('beforeEntryMove', (move) => {
+  if (move.shiftsTime && move.start < mobilization) {
     showToast('Too early — drop is before mobilization');
     releaseHold?.(false);
     releaseHold = undefined;

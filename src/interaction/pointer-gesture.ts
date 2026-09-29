@@ -24,6 +24,12 @@ function axisFor(dxPx: number, dyPx: number): DragAxis {
   return Math.abs(dyPx) > Math.abs(dxPx) ? 'y' : 'x';
 }
 
+/** Is this button event the primary (left-click, touch, pen) one? A right-click and a middle-click
+ *  are not (#199/#205). Only a primary button may arm a drag. */
+export function isPrimaryButton(e: Pick<PointerEvent, 'button'>): boolean {
+  return e.button === 0;
+}
+
 export interface PointerGestureCallbacks {
   /** Called once, when the gesture arms. Returning `false` refuses arming — the caller's own
    *  pointerup still runs its click path, exactly as if no drag had been attempted. */

@@ -815,11 +815,14 @@ export interface EntryInput<TProps = Record<string, unknown>> {
     start?: InstantInput | undefined;
 }
 
-// @public (undocumented)
-export type EntryMove = Omit<EntryGestureEvent, 'entries'> & TreePlaceChange & {
-    readonly shiftsTime: boolean;
+// @public
+export type EntryMove = TreePlaceChange & {
     readonly entries: readonly EntryMoveDetail[];
-};
+} & ((ProposedSpan & {
+    readonly shiftsTime: true;
+}) | (ProposedDates & {
+    readonly shiftsTime: false;
+}));
 
 // @public
 export type EntryMoveDetail = ProposedDates & TreePlaceChange & {

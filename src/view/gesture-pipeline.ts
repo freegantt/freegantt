@@ -42,7 +42,7 @@ import {
   buildGestureDroppedReport,
   buildRefusalReport,
 } from '../data/error-reporting.js';
-import { mergeProposedEditsByEntry } from '../data/fields/field-access.js';
+import { emptyProposedEdit, mergeProposedEditsByEntry } from '../data/fields/field-access.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
 import type {
@@ -51,6 +51,7 @@ import type {
   EntryResize,
   GanttEventMap,
   ProposedDates,
+  ProposedSpan,
   TreePlaceChange,
 } from './event-bus.js';
 import type { RowDrop, PlacedEntry } from './row-drop.js';
@@ -187,8 +188,8 @@ export interface GesturePipelineDeps {
 interface GestureProposal {
   readonly writes: ProposedEdits;
   readonly paints: ProposedEdits;
-  /** The bar the user grabbed — `event.entry`, and where the payload's own span comes from. It is
-   *  always a key of `paints`. */
+  /** The bar the user grabbed — `event.entry`, and where the payload's own span comes from. Always
+   *  a key of `paints` for a move or a resize, and for a reorder that places. */
   readonly grabbed: EntryId;
   /** #425: where this move lands in the tree, or the proof it never asked — `{ kind: 'timeOnly' }`
    *  for a resize, a nudge, or a drag whose pointer never left the source row. */
@@ -270,20 +271,23 @@ export class GesturePipeline {
     // #272/#273: a new gesture supersedes a held one instead of refusing to arm over it — the old
     // "arm lock" let one hung handler on one bar refuse every gesture in the Gantt, forever.
     this.#dropHeldGesture('superseded');
-    const capability: GestureCapability = gesture.kind === 'resize' ? 'resize' : 'move';
+    const capability = this.#capabilityFor(gesture);
     const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
     const bars = this.#entriesForGesture(grabbed, capability, edge);
     if (bars.length === 0) return undefined;
     const anchor = bars[0]!;
-    const { entries, paintedOnly } = this.#draftedEntries(bars, capability);
-    const movedTopMost = gesture.kind === 'move' ? this.#movedTopMost(anchor.id, bars) : [];
-    const sourceRowIndex = gesture.kind === 'move' ? this.#deps.rowIndexForEntry(anchor.id) : -1;
+    // A reorder never drafts a date (D2), so `#proposalFor` — the only reader of this — never runs
+    // for one either (`proposalFor` below). Computing it there anyway would draft dates nothing reads.
+    const draftedEntries = gesture.kind === 'reorder' ? undefined : this.#draftedEntries(bars, capability);
+    const reparents = gesture.kind === 'move' || gesture.kind === 'reorder';
+    const movedTopMost = reparents ? this.#movedTopMost(anchor.id, bars) : [];
+    const sourceRowIndex = reparents ? this.#deps.rowIndexForEntry(anchor.id) : -1;
     // #425: the last resolved zone for this drag, so `rowDropZoneAt`'s hysteresis measures against
     // the drag's own history rather than a fresh reading every frame. `dropFor`'s `persist` flag
     // keeps a `commit()`/`nudge()` call (which never repeats) from advancing it.
     let zone: RowDropZone = { kind: 'sourceRow' };
     const dropFor = (options: DraftOptions | undefined, persist: boolean): RowDrop => {
-      if (gesture.kind !== 'move' || options?.contentY === undefined) return { kind: 'timeOnly' };
+      if (!reparents || options?.contentY === undefined) return { kind: 'timeOnly' };
       const resolvedZone = this.#deps.rowDropZoneAt(options.contentY, sourceRowIndex, zone);
       if (persist) zone = resolvedZone;
       return resolveRowDrop({
@@ -295,7 +299,9 @@ export class GesturePipeline {
       });
     };
     const proposalFor = (dxPx: number, options: DraftOptions | undefined, drop: RowDrop): GestureProposal =>
-      this.#proposalFor({ gesture, entries, paintedOnly, grabbed: anchor.id, dxPx, options, drop });
+      gesture.kind === 'reorder'
+        ? this.#reorderProposal(anchor.id, drop)
+        : this.#proposalFor({ gesture, ...draftedEntries!, grabbed: anchor.id, dxPx, options, drop });
     return {
       preview: (dxPx, options) => {
         this.#preview(proposalFor(dxPx, options, dropFor(options, true)), options?.cursorX);
@@ -304,6 +310,10 @@ export class GesturePipeline {
         return this.#commit(gesture, proposalFor(dxPx, options, dropFor(options, false)));
       },
       nudge: (direction, options) => {
+        // A reorder has no time axis to step: `nudge()` never reaches a row drag (`interaction/`
+        // wires it to a bar's keyboard path alone), but a session built the same way for both stays
+        // consistent, so this states the rule rather than dividing by zero on `#stepPx`.
+        if (gesture.kind === 'reorder') return Promise.resolve(false);
         const dxPx = this.#stepPx(gesture, anchor, options?.suspendSnap) * direction;
         // `nudge()` bypasses `dropFor` on purpose (`DraftOptions.contentY`'s own doc: "`nudge()`
         // ignores it") — a keyboard step never reparents, whatever the last preview's zone was.
@@ -313,6 +323,25 @@ export class GesturePipeline {
         this.#preview(undefined);
       },
     };
+  }
+
+  /** #602: `session()`'s one small map from gesture kind to the capability that gates it — a
+   *  `reorder` arms on `'reorder'` alone, never `'move'`, so `move: false, reorder: true` still
+   *  reorders from the grid. */
+  #capabilityFor(gesture: EntryGesture): GestureCapability {
+    if (gesture.kind === 'resize') return 'resize';
+    if (gesture.kind === 'reorder') return 'reorder';
+    return 'move';
+  }
+
+  /** #602: a reorder drafts no dates (D2) — nothing for `draftForMove` to translate, so this skips
+   *  `#proposalFor` rather than asking it to draft a time axis a reorder never moves. A `place` drop
+   *  writes the tree place alone; anything else (refused, or the pointer never left the source row)
+   *  writes nothing. */
+  #reorderProposal(grabbed: EntryId, drop: RowDrop): GestureProposal {
+    if (drop.kind !== 'place') return { writes: NO_WRITES, paints: NO_WRITES, grabbed, drop };
+    const placed = this.#writesWithPlace(NO_WRITES, NO_WRITES, drop.moves);
+    return { writes: placed, paints: placed, grabbed, drop };
   }
 
   /** #425 (ruling 9): grabbed first, then row order, dropping an Entry with a selected ancestor
@@ -488,8 +517,9 @@ export class GesturePipeline {
     const merged = new Map<EntryId, ProposedEdit>();
     for (const move of moves) {
       const dateEdit = writes.get(move.id);
-      const treeEdit = dateEdit ?? stripDates(paints.get(move.id));
-      if (treeEdit === undefined) continue; // every moved id sits in `paints` — see `#movedTopMost`.
+      // A reorder drafts no dates, so its tree write starts empty — `paints` holds nothing for it
+      // to strip, unlike a move's own deriving-parent id (which still owes `#movedTopMost` a lookup).
+      const treeEdit = dateEdit ?? stripDates(paints.get(move.id)) ?? emptyProposedEdit();
       // #425: a same-parent drop writes only `siblingIndex` (`capability.ts`'s `canPlace` advertises
       // exactly this — same parent needs no open `parentId` cell). Naming `parentId` here whenever
       // it still equals `move.currentPlace.parentId` would ask a closed cell to accept a write the
@@ -548,9 +578,11 @@ export class GesturePipeline {
       return Promise.resolve(false);
     }
     // The grabbed bar draws, so it spans (`spansTime`, ADR 0012) — a parent bar included, whose
-    // envelope this reads off the paint side because the write side never holds it (ADR 0013).
+    // envelope this reads off the paint side because the write side never holds it (ADR 0013). A
+    // reorder grabs a row, not a bar, so an undated Entry (a new task, an undated parent) still
+    // reorders — the span guard is a bar's own rule (#602).
     const grabbed = this.#proposedDatesOf(proposal.grabbed, proposal.paints.get(proposal.grabbed));
-    if (!spansTime(grabbed)) return Promise.resolve(false);
+    if (gesture.kind !== 'reorder' && !spansTime(grabbed)) return Promise.resolve(false);
     const spans = [...proposal.writes].map(([id, edit]) => this.#proposedDatesOf(id, edit));
     const barIds = [...proposal.paints.keys()].map((id) => barId(id));
     // #210: the same note goes out on the `before*` payload and comes back in the refusal, so a
@@ -559,8 +591,10 @@ export class GesturePipeline {
     // without it) — the after-emit below gets its own payload, built from the same base but never
     // carrying `refuse`.
     const note = new RefusalNote();
+    // `spansTime(grabbed)` restates what the guard above already refused for a resize — this is
+    // the one place `EntryResize`'s required span needs it narrowed through the type checker too.
     const event =
-      gesture.kind === 'resize'
+      gesture.kind === 'resize' && spansTime(grabbed)
         ? {
             before: 'beforeEntryResize' as const,
             after: 'entryResize' as const,
@@ -570,9 +604,8 @@ export class GesturePipeline {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
             afterPayload: {
-              ...grabbed,
+              ...this.#movedDatesOf(proposal.grabbed, grabbed),
               ...this.#treePlaceChangeFor(proposal.grabbed, proposal.drop),
-              shiftsTime: this.#shiftsTime(proposal.grabbed, grabbed),
               entries: spans.map((span) => ({
                 ...span,
                 ...this.#treePlaceChangeFor(span.entry, proposal.drop),
@@ -616,6 +649,19 @@ export class GesturePipeline {
     const startChanged = dates.start !== undefined && dates.start !== committed.start;
     const endChanged = dates.end !== undefined && dates.end !== committed.end;
     return startChanged || endChanged;
+  }
+
+  /** The grabbed Entry's dates, tagged with whether they moved — `EntryMove`'s own discriminated
+   *  union, built in one place so TS sees each member. A tree-only move (`shiftsTime: false`) still
+   *  carries the grabbed Entry's dates when it has them (ADR 0012 lets it, since `#commit` already
+   *  guards the grabbed dates on `spansTime` before this runs). */
+  #movedDatesOf(
+    id: EntryId,
+    dates: ProposedDates,
+  ): (ProposedSpan & { readonly shiftsTime: true }) | (ProposedDates & { readonly shiftsTime: false }) {
+    return this.#shiftsTime(id, dates) && spansTime(dates)
+      ? { ...dates, shiftsTime: true }
+      : { ...dates, shiftsTime: false };
   }
 
   /** Sync `true`/`false` still finish in this tick (same as before async veto). An unsettled Promise
