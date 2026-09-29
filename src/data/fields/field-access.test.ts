@@ -517,6 +517,79 @@ describe('a cross-door invariant: every door agrees on a stored Field (ADR 0024,
   });
 });
 
+describe('locked is a core Field, on the same doors every other core Field meets (ADR 0038)', () => {
+  it('entry.read, editableOf, toInput(), and the ChangeSet all agree on a stored lock (I15)', () => {
+    const state = new DatasetState({
+      timeZone: 'UTC',
+      entries: [{ id: 'a', name: 'A' }],
+    });
+
+    const seen: ChangeSet[] = [];
+    state.on('change', ({ changeSet }) => {
+      seen.push(changeSet);
+    });
+    state.entries.update('a', { locked: true });
+
+    const entry = state.entries.get('a')!;
+    expect(entry.read('locked')).toBe(true);
+    expect(state.editableOf('a', 'locked')).toBe('api');
+    expect(entry.toInput().locked).toBe(true);
+    expect(fieldRowsOf(seen[0]!).find((row) => row.field === 'locked')?.to).toBe(true);
+  });
+
+  it('toInput() round-trips locked: true through entries.add', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: [] });
+    state.entries.add({ id: 'a', name: 'A', locked: true });
+
+    const copy = state.entries.get('a')!.toInput();
+    const other = new DatasetState({ timeZone: 'UTC', entries: [] });
+    other.entries.add(copy);
+
+    expect(other.entries.get('a')?.read('locked')).toBe(true);
+  });
+
+  it('locked: undefined leaves no key on toInput()', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A' }] });
+
+    expect('locked' in state.entries.get('a')!.toInput()).toBe(false);
+
+    state.entries.update('a', { locked: true });
+    state.entries.update('a', { locked: undefined });
+
+    expect('locked' in state.entries.get('a')!.toInput()).toBe(false);
+    expect(state.entries.get('a')?.read('locked')).toBeUndefined();
+  });
+
+  it('a lock is one undo step, and undo/redo both carry it', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A' }] });
+
+    state.entries.update('a', { locked: true });
+    expect(state.entries.get('a')?.read('locked')).toBe(true);
+
+    state.undo();
+    expect(state.entries.get('a')?.read('locked')).toBeUndefined();
+
+    state.redo();
+    expect(state.entries.get('a')?.read('locked')).toBe(true);
+  });
+
+  it('load and syncAll both carry a locked row', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: [] });
+
+    state.entries.load([{ id: 'a', name: 'A', locked: true }]);
+    expect(state.entries.get('a')?.read('locked')).toBe(true);
+
+    state.entries.syncAll([{ id: 'a', name: 'A' }]);
+    expect(state.entries.get('a')?.read('locked')).toBeUndefined();
+  });
+
+  it('editableOf answers api, the door app code writes a lock through', () => {
+    const state = new DatasetState({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A' }] });
+
+    expect(state.editableOf('a', 'locked')).toBe('api');
+  });
+});
+
 describe('applyFieldRow', () => {
   it('writes nothing for a key no Field declares', () => {
     const registry = new FieldRegistry({});

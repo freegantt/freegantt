@@ -73,7 +73,16 @@ function toEntryDates(
 /** Every key `EntryInput` itself declares — the envelope this walk never treats as a `props`
  *  candidate, flat or nested. Frozen, not a `Set`: one array literal, read-only for the module's
  *  whole life, so it carries no state a second Gantt instance could share (I2). */
-const ENTRY_INPUT_KEYS = Object.freeze(['id', 'parentId', 'siblingIndex', 'name', 'start', 'end', 'props']);
+const ENTRY_INPUT_KEYS = Object.freeze([
+  'id',
+  'parentId',
+  'siblingIndex',
+  'name',
+  'locked',
+  'start',
+  'end',
+  'props',
+]);
 
 function warnIngest(message: string): void {
   console.warn(`FreeGantt: ${message}`);
@@ -138,6 +147,7 @@ export function toEntry(
     props: propsFromInput(input, registry, id),
   };
   if (input.name !== undefined) entry.name = input.name;
+  if (input.locked !== undefined) entry.locked = input.locked;
   if (dates.start !== undefined) entry.start = dates.start;
   if (dates.end !== undefined) entry.end = dates.end;
   if (input.parentId !== undefined) entry.parentId = entryId(input.parentId);
@@ -213,6 +223,7 @@ export function toEditReading(
   if ('parentId' in edit) stored.parentId = edit.parentId === undefined ? undefined : entryId(edit.parentId);
   if (edit.siblingIndex !== undefined) stored.siblingIndex = edit.siblingIndex;
   if ('name' in edit) stored.name = edit.name;
+  if ('locked' in edit) stored.locked = edit.locked;
   // `'start' in edit` — not `edit.start !== undefined` — so `update(id, { start: undefined })` (the
   // un-date verb, ADR 0012) reaches `stored.start = undefined` rather than being read as "untouched".
   if ('start' in edit)
@@ -254,6 +265,7 @@ export function toEntryAfterUpsert(
   const edit: Record<string, unknown> = {};
   if ('parentId' in input) edit['parentId'] = input['parentId'];
   if ('name' in input) edit['name'] = input['name'];
+  if ('locked' in input) edit['locked'] = input['locked'];
   if ('start' in input) edit['start'] = input['start'];
   if ('end' in input) edit['end'] = input['end'];
   for (const key of Object.keys(props)) {

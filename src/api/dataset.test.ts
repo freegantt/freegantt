@@ -1383,18 +1383,17 @@ describe('a plugin’s declared Field is the plugin’s, not the document’s (#
   });
 });
 
-describe('a plugin Field declared at construction is there before entries are read (#496 grill round 3)', () => {
-  /** No `ctx.fields.register` call: the plugin declares `locked` on itself, the same shape
-   *  `DatasetOptions.fields` takes. This is what `harness/plugins/lock-entries.ts` moves to. */
+describe('a core Field declared at construction is there before entries are read (#496 grill round 3)', () => {
+  /** `locked` is a core Field now (ADR 0038); this plugin declares nothing of its own and only
+   *  stands in for the #496 grill scenario the tests below still pin. */
   const locks = () => ({
     id: 'demo.locks',
-    fields: [{ key: 'locked', type: 'boolean', editable: 'api' }] as const,
     data(): void {
       /* the extension hook and the store are out of scope for this gap — see lock-entries.ts */
     },
   });
 
-  it('keeps a flat plugin-Field value new Dataset() is given, the same as entries.load() already does', () => {
+  it('keeps a flat core-Field value new Dataset() is given, the same as entries.load() already does', () => {
     const dataset = new Dataset<{ locked?: boolean }>({
       timeZone: 'UTC',
       entries: [{ id: 't1', name: 'Design', start: '2026-09-01', end: '2026-09-08', locked: true }],
@@ -1415,11 +1414,9 @@ describe('a plugin Field declared at construction is there before entries are re
     );
   });
 
-  it('reports a duplicate plugin id, not a shared Field key it also declares (ocr review of #532)', () => {
-    // Two installs of the same factory: same id, same declared Field key. Duplicate-id must win —
-    // that is the error docs/06-plugin-authoring.md documents for two plugins sharing an id — and it
-    // has to win *before* the Field merge below ever sees the shared key, or a factory called twice
-    // throws the wrong error naming a key instead of the plugin id it actually got wrong.
+  it('reports a duplicate plugin id (ocr review of #532)', () => {
+    // Two installs of the same factory: same id. Duplicate-id must win — that is the error
+    // docs/06-plugin-authoring.md documents for two plugins sharing an id.
     expect(() => new Dataset({ timeZone: 'UTC', entries: [], plugins: [locks(), locks()] })).toThrow(
       DuplicatePluginIdError,
     );

@@ -810,6 +810,7 @@ export interface EntryInput<TProps = Record<string, unknown>> {
     end?: InstantInput | undefined;
     // (undocumented)
     id: string;
+    locked?: boolean | undefined;
     name?: string | undefined;
     parentId?: string | undefined;
     props?: Partial<TProps>;
@@ -2003,11 +2004,12 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
     readonly __brand: 'ProposedEdit';
     readonly props: Readonly<Partial<TProps>>;
     readonly proposedKeys: ReadonlySet<string>;
-} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'parentId' | 'name' | 'props'>> & {
+} & Partial<Omit<StoredEntry, 'id' | 'start' | 'end' | 'parentId' | 'name' | 'locked' | 'props'>> & {
     start?: Instant | undefined;
     end?: Instant | undefined;
     parentId?: EntryId | undefined;
     name?: string | undefined;
+    locked?: boolean | undefined;
 };
 
 // @public
@@ -2292,6 +2294,7 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
     end?: Instant;
     // (undocumented)
     id: EntryId;
+    locked?: boolean;
     name?: string;
     parentId?: EntryId;
     props: Readonly<Partial<TProps>>;

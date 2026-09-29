@@ -18,7 +18,6 @@ export type CrewDayProps = {
   hours: number;
   worker: string;
   filled: boolean;
-  locked: boolean;
 };
 
 export type HierarchyEntryProps = { cost: number; team: string } & Partial<CrewDayProps>;
@@ -103,7 +102,8 @@ export const hierarchyEntryInputs: EntryInput<HierarchyEntryProps>[] = [
     parentId: 'req-1',
     start: '2026-03-18',
     end: '2026-03-19',
-    props: { hours: 4, worker: 'Cy', filled: false, locked: true },
+    locked: true,
+    props: { hours: 4, worker: 'Cy', filled: false },
   },
   // A root span with no name — an Entry's `name` is optional, and a nameless bar still draws; it
   // prints no label (#421 acceptance, user story 6).
@@ -129,6 +129,5 @@ export const hierarchyFieldOptions = {
     { key: 'hours' as const, type: 'number' as const, rollUp: 'sum', column: { header: 'Hours' } },
     { key: 'worker' as const },
     { key: 'filled' as const, type: 'boolean' as const },
-    { key: 'locked' as const, type: 'boolean' as const },
   ],
 } as const;

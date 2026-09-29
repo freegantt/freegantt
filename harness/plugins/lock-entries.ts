@@ -5,14 +5,12 @@
 import { addMs, diffMs, fieldRowsOf, mergeEntryEdits, moveEntryTo } from 'freegantt';
 import type { Dataset, DataPlugin, EditRequest, EntryEdit, EntryId } from 'freegantt';
 
-/** The lock flag, an ordinary Field, not a plugin store row (#496): per-entry data a consumer
- *  must export and load back has to sit where `toInput()` and `entries.load()` both read it, and
- *  neither reads a plugin store. `editable: 'api'` keeps the cell dead in every grid; declaring no
- *  `column` means no grid ever draws one. `lock()`/`unlock()` below are the one door that writes it. */
+/** The lock flag, a core Field (ADR 0038): `toInput()` and `entries.load()` both carry it, so this
+ *  plugin declares nothing of its own. `lock()`/`unlock()` below are the one door that writes it. */
 const LOCKED_FIELD_KEY = 'locked';
 
-/** The one key this plugin declares. A consumer that wants a typed `entry.read('locked')` on its own
- *  Dataset adds it to its own props, e.g. `Dataset<TaskProps & LockProps>`. */
+/** A consumer that wants a typed `entry.read('locked')` on its own Dataset adds it to its own props,
+ *  e.g. `Dataset<TaskProps & LockProps>`. */
 export interface LockProps {
   locked?: boolean;
 }
@@ -78,8 +76,6 @@ export function lockEntries(): LockEntriesPlugin {
 
   return {
     id: 'demo.lockEntries',
-
-    fields: [{ key: LOCKED_FIELD_KEY, type: 'boolean', editable: 'api' }],
 
     data(ctx) {
       dataset = ctx.dataset;
