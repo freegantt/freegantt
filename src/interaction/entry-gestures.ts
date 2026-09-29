@@ -423,6 +423,12 @@ export function attachEntryGestures(
     rowReorder.pointercancel(e);
   }
 
+  /** #602: registered `{ passive: false }` — a touch long-press that armed a reorder must stop the
+   *  browser's own page pan, or the finger scrolls the page instead of dragging the row. */
+  function onRowLayerTouchMove(e: TouchEvent): void {
+    rowReorder.touchmove(e);
+  }
+
   pane.addEventListener('pointerdown', onPointerDown);
   pane.addEventListener('pointerup', onPointerUp);
   pane.addEventListener('pointermove', onPointerMove);
@@ -433,6 +439,7 @@ export function attachEntryGestures(
   rowLayer.addEventListener('pointermove', onRowLayerPointerMove);
   rowLayer.addEventListener('pointerleave', onRowLayerPointerLeave);
   rowLayer.addEventListener('pointercancel', onRowLayerPointerCancel);
+  rowLayer.addEventListener('touchmove', onRowLayerTouchMove, { passive: false });
   container.addEventListener('keydown', onKeyDown);
   container.addEventListener('mousedown', onMouseDown);
   container.addEventListener('selectstart', onSelectStart);
@@ -452,6 +459,7 @@ export function attachEntryGestures(
       rowLayer.removeEventListener('pointermove', onRowLayerPointerMove);
       rowLayer.removeEventListener('pointerleave', onRowLayerPointerLeave);
       rowLayer.removeEventListener('pointercancel', onRowLayerPointerCancel);
+      rowLayer.removeEventListener('touchmove', onRowLayerTouchMove);
       container.removeEventListener('keydown', onKeyDown);
       container.removeEventListener('mousedown', onMouseDown);
       container.removeEventListener('selectstart', onSelectStart);

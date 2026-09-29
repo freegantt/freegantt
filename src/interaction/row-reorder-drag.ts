@@ -34,6 +34,9 @@ export interface RowReorderDrag {
   escape(): boolean;
   /** Feed a row-layer pointercancel. */
   pointercancel(e: PointerEvent): void;
+  /** Feed a row-layer touchmove. Stops the browser's own pan/scroll once a touch long-press has
+   *  armed a session, so the finger drags the row instead of the page. */
+  touchmove(e: TouchEvent): void;
   detach(): void;
 }
 
@@ -111,6 +114,9 @@ export function createRowReorderDrag(
     },
     pointercancel(e: PointerEvent): void {
       drag.pointercancel(e);
+    },
+    touchmove(e: TouchEvent): void {
+      if (session !== undefined) e.preventDefault();
     },
     detach(): void {
       drag.detach();
