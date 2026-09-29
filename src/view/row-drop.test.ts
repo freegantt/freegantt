@@ -118,6 +118,18 @@ describe('resolveRowDrop', () => {
     expect(drop).toEqual({ kind: 'refused', rowId: HEADER_ROW.id, reason: 'groupHeader' });
   });
 
+  it('a row whose subject the live Dataset no longer holds refuses with entryGone, never throws', () => {
+    const rows = rowsForDrop();
+    const staleRows: RowsForDrop = { ...rows, entryOf: (id) => (id === c.id ? undefined : rows.entryOf(id)) };
+
+    expect(() => resolveRowDrop(input({ rows: staleRows, zone: rowZone(4, 'into') }))).not.toThrow();
+    expect(resolveRowDrop(input({ rows: staleRows, zone: rowZone(4, 'into') }))).toEqual({
+      kind: 'refused',
+      rowId: rowId(c.id),
+      reason: 'entryGone',
+    });
+  });
+
   it('dropping a parent onto its own child refuses with ownDescendant', () => {
     const drop = resolveRowDrop(input({ movedTopMost: [P1], zone: rowZone(1, 'into') }));
     expect(drop).toEqual({ kind: 'refused', rowId: rowId('a'), reason: 'ownDescendant' });

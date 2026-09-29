@@ -36,9 +36,12 @@ export interface DropPlace {
   readonly side: RowDropSide | 'end';
 }
 
-/** A drop a Row drop zone resolves to no Tree place at all — the zone named a group header row,
- *  which stands for no Entry to become a parent or a sibling of. */
-export type DropPlaceAnswer = DropPlace | { readonly refused: 'groupHeader'; readonly rowId: RowId };
+/** A drop a Row drop zone resolves to no Tree place at all. `'groupHeader'` — the zone named a
+ *  group header row, which stands for no Entry to become a parent or a sibling of. `'entryGone'` —
+ *  the row plan is a stale mid-drag snapshot (`RowsForDrop`'s own doc) and the row's subject is an
+ *  id the Dataset no longer holds; refusing is the only safe answer until the plan catches up. */
+export type DropPlaceAnswer =
+  DropPlace | { readonly refused: 'groupHeader' | 'entryGone'; readonly rowId: RowId };
 
 /** Turns a resolved `RowDropZone` into where the drop lands, or a refusal. Takes only `'row'` and
  *  `'belowLastRow'` zones — `'sourceRow'` is a time-only move and never reaches here
@@ -67,7 +70,10 @@ function rowZonePlace(zone: Extract<RowDropZone, { kind: 'row' }>, rows: RowsFor
   if (isPlannedHeaderRow(row)) return { refused: 'groupHeader', rowId: row.id };
 
   const subjectId = row.entryIds[0]!; // A non-header row always names its own subject first.
-  const subject = rows.entryOf(subjectId)!; // The row plan and the Dataset it drew from agree.
+  // A stale mid-drag plan (`RowsForDrop`'s own doc) can still name a subject the live Dataset has
+  // already dropped — refuse the zone rather than crash on a row the next frame's plan will drop too.
+  const subject = rows.entryOf(subjectId);
+  if (subject === undefined) return { refused: 'entryGone', rowId: row.id };
 
   if (row.childrenAsSegments === true || zone.side === 'into') return intoPlace(row, subject);
   if (zone.side === 'before') return beforePlace(zone.rowIndex, row, subject, rows);

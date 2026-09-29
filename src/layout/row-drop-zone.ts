@@ -81,6 +81,7 @@ export function rowDropZoneAt(input: RowDropZoneInput, previous: RowDropZone): R
 
   if (
     previous.kind === ROW_DROP_ZONE_KIND.row &&
+    previous.rowIndex < rowCount && // the plan may have shrunk mid-drag; a stale rowIndex names no row any more
     previous.rowIndex !== rowIndex &&
     Math.abs(previous.rowIndex - rowIndex) === 1 &&
     Math.abs(y - heights.topAt(Math.max(previous.rowIndex, rowIndex))) < DROP_ZONE_HYSTERESIS_PX

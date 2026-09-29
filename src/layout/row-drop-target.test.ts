@@ -121,6 +121,16 @@ describe('dropPlaceFor', () => {
     expect(place).toEqual({ refused: 'groupHeader', rowId: withHeader[0]!.id });
   });
 
+  it('a row whose subject the Dataset no longer holds refuses, and never throws', () => {
+    // A plan snapshot taken before a same-tick remove: the row still names `c`, but the live
+    // Dataset (`entryOf`) has already dropped it — the exact gap a stale mid-drag plan leaves open.
+    const rows = rowsForDrop();
+    const staleRows: RowsForDrop = { ...rows, entryOf: (id) => (id === c.id ? undefined : rows.entryOf(id)) };
+
+    expect(() => dropPlaceFor(rowZone(4, 'into'), staleRows)).not.toThrow();
+    expect(dropPlaceFor(rowZone(4, 'into'), staleRows)).toEqual({ refused: 'entryGone', rowId: rowId(c.id) });
+  });
+
   it('below the last row appends as the last root', () => {
     const place = dropPlaceFor({ kind: 'belowLastRow' }, rowsForDrop());
     expect(place).toMatchObject({ parentId: undefined, index: 3, depth: 0, rowId: undefined, side: 'end' });

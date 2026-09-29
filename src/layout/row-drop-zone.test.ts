@@ -104,6 +104,22 @@ describe('rowDropZoneAt', () => {
     });
   });
 
+  it('a previous zone whose rowIndex the plan has since dropped is never held through hysteresis', () => {
+    // The plan shrank mid-drag from 10 rows to 9 — `previous` still names row 9, a rank the new
+    // plan has no row for. The pointer sits right at the new last row's own bottom edge, squarely
+    // inside the hysteresis band a stale `previous.rowIndex` would otherwise hold onto.
+    const previous: RowDropZone = { kind: 'row', rowIndex: 9, side: 'after' };
+    const shrunkRowCount = 9;
+    const shrunkHeights = new PrefixSumHeightIndex(shrunkRowCount, () => ROW_HEIGHT);
+    const zone = zoneAt(9 * ROW_HEIGHT - 1, previous, {
+      rowCount: shrunkRowCount,
+      heights: shrunkHeights,
+    });
+    expect(zone).not.toEqual(previous);
+    expect(zone.kind).toBe('row');
+    if (zone.kind === 'row') expect(zone.rowIndex).toBeLessThan(shrunkRowCount);
+  });
+
   it('resolves past the last row to belowLastRow, and clamps a negative y into row 0', () => {
     expect(zoneAt(ROW_HEIGHT * ROW_COUNT, SOURCE_ROW)).toEqual({ kind: 'belowLastRow' });
     expect(zoneAt(ROW_HEIGHT * ROW_COUNT + 500, SOURCE_ROW)).toEqual({ kind: 'belowLastRow' });
