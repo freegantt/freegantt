@@ -173,6 +173,29 @@ const dataset = new Dataset({
 dataset.entries.update('roofing', { siblingIndex: 0 });
 ```
 
+### Drag a row to another place
+
+A user drags a bar vertically, or drags a grid row. Both read the same drop: `before` a row, `into`
+it, or `after` it, and both write one undo step. Turn the gesture off with one switch, in either pane:
+
+```ts
+const gantt = new Gantt({ container, dataset, capabilities: { reorder: false } });
+// or, at runtime:
+gantt.setCapabilityRule('reorder', false);
+```
+
+A handler reads `move.place` to see where the drop landed, and `move.shiftsTime` to tell a tree-only
+move from a time move — `move.start`/`move.end` are present only when `move.shiftsTime` is `true`:
+
+```ts
+gantt.on('beforeEntryMove', (move) => {
+  if (move.place === undefined) return;                 // a time-only move
+  if (move.place.parentId !== move.currentPlace.parentId) {
+    return move.refuse('A day stays with its crew this week');
+  }
+});
+```
+
 ### Dataset
 
 - `fields`, `fieldTypes`, `aggregators` — declare consumer Fields beside core's. `{ key: 'due', type: 'date' }` names a shipped type with no local `fieldTypes` entry. Core Fields name those types (`name` is `text`, `start`/`end` are `date`, `duration` is `duration`). `currency({ code: 'EUR' })` is a factory, not a seeded name: `{ key: 'cost', type: currency({ code: 'EUR' }), rollUp: 'sum' }`. A core Field's key cannot be redeclared (`IllegalCoreFieldOverrideError`) — but every core Field takes a consumer override on `editable` and `formatValue`, and on `rollUp` too where the core Field declares one of its own (`start`, `end`). Type name `date` is replaceable at construction via `fieldTypes` — that door is construction-only.
