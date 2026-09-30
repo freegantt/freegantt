@@ -260,7 +260,7 @@ test("a locked row's grid drag commits nothing, and a plain click still selects"
   await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
 });
 
-test("a grid row dropped into a locked parent's middle refuses, with a not-allowed cursor, and writes nothing", async ({
+test("a grid row dropped into a locked parent's middle commits: the lock protects only its own row", async ({
   page,
 }) => {
   await gotoGeneric(page);
@@ -293,13 +293,11 @@ test("a grid row dropped into a locked parent's middle refuses, with a not-allow
 
   await dragPointerTo(page, grabX, grabY, grabX, targetBox.y + targetBox.height / 2);
 
-  await expect(page.locator('#gantt')).toHaveAttribute('data-drop', 'refused');
-  await expect
-    .poll(() => page.locator('#gantt').evaluate((el) => getComputedStyle(el).cursor))
-    .toBe('not-allowed');
+  await expect(page.locator('#gantt')).not.toHaveAttribute('data-drop', 'refused');
 
   await page.mouse.up();
-  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
+  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(target.entryId);
+  expect(leafParentId).not.toBe(target.entryId);
 });
 
 test('a double-click on a Name cell still opens the inline editor', async ({ page }) => {

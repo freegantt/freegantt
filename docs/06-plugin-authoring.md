@@ -499,7 +499,64 @@ plugins claim the same key.
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
 | `edits.setLockRule(wrap)` | the one lock seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts`, "a plugin's per-entry lock rule opens a locked Field (#473)" |
 | `edits.setPlaceRule(wrap)` | the one place seam | Composes — the second rule receives the first and may call it | `src/data/entry-store.mutation.test.ts` (ADR 0038) |
+| `edits.setRemoveRule(wrap)` | the one remove seam | Composes — the second rule receives the first and may call it | `src/api/lock-lanes.test.ts` |
+| `edits.setBarMoveRule(wrap)` | the one bar move seam | Composes — the second rule receives the first and may call it | `src/api/lock-lanes.test.ts` |
 | `events.on(name, handler)` | none | Additive — every handler runs, in registration order; the returned `Disposer` removes only that one handler | `src/data/event-bus.test.ts` |
+
+### Build a different lock
+
+The core lock protects only its own row: its cells, its bar, and its own delete. Core installs its
+lock rule, remove rule, and bar move rule before every plugin. Your rule wraps each one. Answer
+`next(...)` to leave the core lock in force. Answer `'anywhere'` (or `true`) to release it. Core
+adds no option for a wider lock. Compose the public seams.
+
+Lock the whole subtree of `root`:
+
+```ts
+import { definePlugin, type FieldLockQuery } from 'freegantt';
+
+function lockSubtree(root: string) {
+  const inSubtree = (q?: FieldLockQuery) => q !== undefined && (q.id === root || q.isDescendantOf(root));
+  return definePlugin({
+    id: 'demo.lockSubtree',
+    data(ctx) {
+      ctx.edits.setLockRule((next) => (entry, field) => (inSubtree(entry) ? 'api' : next(entry, field)));
+      ctx.edits.setPlaceRule((next) => (place) =>
+        inSubtree(place.entry) || inSubtree(place.parent) ? 'api' : next(place),
+      );
+      ctx.edits.setRemoveRule((next) => (removal) => (inSubtree(removal.entry) ? 'api' : next(removal)));
+      ctx.edits.setBarMoveRule((next) => (entry) => (inSubtree(entry) ? false : next(entry)));
+    },
+  });
+}
+
+export { lockSubtree };
+```
+
+Lock the children list of `parent`. The parent's own cells stay open:
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function lockChildren(parent: string) {
+  return definePlugin({
+    id: 'demo.lockChildren',
+    data(ctx) {
+      ctx.edits.setPlaceRule((next) => (place) =>
+        place.parent?.id === parent || place.currentParent?.id === parent ? 'api' : next(place),
+      );
+      ctx.edits.setRemoveRule((next) => (removal) =>
+        removal.currentParent?.id === parent ? 'api' : next(removal),
+      );
+    },
+  });
+}
+
+export { lockChildren };
+```
+
+`src/api/lock-lanes.test.ts` builds both lanes. Call `ctx.edits.rulesChanged()` when a rule's outside
+state moves with no dataset write.
 
 A Field, a Field type or an Aggregator is not on this table: a plugin
 declares those on itself — `fields`, `fieldTypes`, `aggregators` — never

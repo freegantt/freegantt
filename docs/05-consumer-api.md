@@ -197,8 +197,9 @@ gantt.on('beforeEntryMove', (move) => {
 
 ### Lock an Entry
 
-`locked` is a core Field: the app sets it, and the user cannot edit, move, or reorder that Entry, in
-either pane, or drop another Entry into or out of it.
+`locked` is a core Field: the app sets it. The user cannot edit, move, or delete that one row, in
+either pane. The lock protects only its own row: its cells, its bar, and its own delete. The children of
+a locked parent stay free. They move, resize, reorder, leave, and join.
 
 ```ts
 dataset.entries.update('t2', { locked: true }); // lock it
@@ -207,8 +208,44 @@ dataset.entries.get('t2')?.read('locked'); // read it back
 ```
 
 The lock is a UI refusal, not a data one: `entries.update()`, `add()`, an `EditExtender` cascade,
-`load`, `sync`, undo and redo all still write a locked Entry's cells — only a grid edit, a bar drag,
-and a grid row drag refuse.
+`load`, `sync`, undo and redo all still write a locked Entry's cells. Only a grid edit, a bar drag,
+a grid row drag, and a Delete refuse.
+
+A locked parent's summary bar does not move. The Rollup still writes the parent's dates when a
+child moves.
+
+<!-- doc-example-setup
+declare const container: HTMLElement;
+-->
+
+To give the user a lock toggle, list `'locked'` in `gridColumns`. The Field brings a default column:
+header "Locked", centered, 80 px wide. The default grid does not show it. The cell is a checkbox. A
+locked row leaves its own `locked` cell open, so the user can unlock it from the grid.
+
+```ts
+import { Gantt } from 'freegantt';
+
+new Gantt({ container, dataset, gridColumns: ['name', 'locked'] });
+```
+
+To change the header or the width, give the column object form: `{ field: 'locked', header: 'Lock' }`.
+
+To show the column read-only, close it with `capabilities.edit`. The app still writes the Field.
+
+```ts
+import { Gantt } from 'freegantt';
+
+new Gantt({
+  container,
+  dataset,
+  gridColumns: ['name', 'locked'],
+  capabilities: { edit: (entry, field) => (field === 'locked' ? false : undefined) },
+});
+```
+
+A plugin can change the core lock. It wraps the lock rule, the remove rule, or the bar move rule.
+It can narrow or widen each one. A plugin that calls `next()` leaves the core lock in force. See
+"Other locks are plugins" in the plugin guide.
 
 ### Dataset
 

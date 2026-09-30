@@ -3,16 +3,15 @@
 // precedent: a `FieldEditable` answer, composed with `next`, read once per Entry the write touches.
 //
 // Types only, like `place-rule.ts`; `data/write-rule.ts` holds the resolver that reads one and
-// core's own rule (every removal answers `'anywhere'`, until the core lock composes onto it).
+// core's own rule (every removal answers `'anywhere'`). The core lock wraps it (`data/entry-lock.ts`).
 
-import type { EntryId } from './ids.js';
 import type { FieldEditable } from './field.js';
 import type { FieldLockQuery } from './field-lock.js';
 
 /**
  * One Entry a removal takes with it: the top id `entries.remove()` was called with, or one member
- * of its subtree. `currentParentId` is the Entry's own parent as the hierarchy source answers it
- * now — `undefined` for a root Entry, the same meaning `PlaceQuery.currentParentId` carries.
+ * of its subtree. `currentParent` is the Entry's own parent as the hierarchy source answers it
+ * now — `undefined` for a root Entry, the same meaning `PlaceQuery.currentParent` carries.
  *
  * `entry` is the same `FieldLockQuery` shape a lock rule and a place rule both read — a rule that
  * already knows how to answer "is this Entry, or one of its descendants, locked" reads the identical
@@ -20,7 +19,7 @@ import type { FieldLockQuery } from './field-lock.js';
  */
 export interface RemoveQuery {
   readonly entry: FieldLockQuery;
-  readonly currentParentId: EntryId | undefined;
+  readonly currentParent: FieldLockQuery | undefined;
 }
 
 /**

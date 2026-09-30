@@ -108,10 +108,12 @@ dataset.entries.update('t7', { parentId: 'p2', siblingIndex: 2 }); // reparents 
 // both writes renumber the touched sibling group in the same transaction, so each move is one undo step
 ```
 
-- **`locked` is an ordinary core Field: a boolean, `editable: 'api'`, no grid column (ADR 0038).**
+- **`locked` is an ordinary core Field: a boolean, `editable: 'anywhere'` with a checkbox editor. It has a default column, but the default grid does not list it (ADR 0038).**
   `dataset.entries.update(id, { locked: true })` sets it; `{ locked: undefined }` clears it. Core's
-  own lock rule and place rule (below) close every other cell of a locked Entry to a gesture, in
-  both panes, and refuse a drop that would cross into or out of a locked parent — `entries.update()`,
+  own lock rule, remove rule and bar move rule (below) close the cells, the bar and the delete of a
+  locked Entry to a gesture, in both panes. A lock protects only its own row: its children stay free,
+  and core installs no place rule. Core installs its rules before every plugin, so a plugin wraps each
+  one and can narrow or widen it — `entries.update()`,
   `add()`, an `EditExtender` cascade, a `RemovalExtender` removal, `load`, `sync`, undo and redo all still
   write past the lock.
 - **`siblingIndex` is an ordinary core Field: an integer rank among an entry's siblings (ADR 0034).** A write that names it, or a write that moves an entry to a different sibling group, renumbers every sibling the move displaces in the same transaction — the ChangeSet carries a row for the moved entry and for every shifted sibling, so one call is one undo step. `add()` with no index appends to the end of its group; `add()` with an index places it there. `remove()` closes the gap its group is left with. `editable: 'never'` on the Field refuses an explicit move; a reparent with no requested index still appends, because the lock that governs a reparent is `parentId`'s own, not this Field's. `entries.all` reads each sibling group in this Field's order (`01` §6).
@@ -762,10 +764,11 @@ whose only half is `data`. There is no ordering knob.
 this plugin's store, `ctx.edits.setExtender` claims the extension hook, `ctx.edits.setRemovalExtender`
 claims the removal hook, `ctx.edits.setLockRule`
 claims the per-entry lock rule (ADR 0015, #473), and `ctx.edits.setPlaceRule` claims the place rule —
-whether an Entry may land under a given parent (ADR 0038), and `ctx.edits.setRemoveRule` claims the remove rule —
-whether `entries.remove()` may take an Entry and its subtree (ADR 0039). Each door takes one occupant that composes
+whether an Entry may land under a given parent (ADR 0038), `ctx.edits.setRemoveRule` claims the remove rule —
+whether `entries.remove()` may take an Entry and its subtree (ADR 0039), and `ctx.edits.setBarMoveRule` claims the
+bar move rule — whether the bar of an Entry moves (ADR 0038). Each door takes one occupant that composes
 — a plugin receives the current occupant and may call it — so a second plugin adds to the first
-rather than evicting it (D-S5-23). `setExtender`, `setRemovalExtender`, `setLockRule`, `setPlaceRule` and `setRemoveRule` are legal while
+rather than evicting it (D-S5-23). `setExtender`, `setRemovalExtender`, `setLockRule`, `setPlaceRule`, `setRemoveRule` and `setBarMoveRule` are legal while
 `data()` runs and not after (ADR 0031); `ctx.store.reserve` is ungated. A store row belongs to one
 Entry: `store.set(id, row)` throws `EntryNotFoundError` for an id with no Entry, as the open
 transaction leaves it, the rule `entries.update` follows. Removing an Entry removes its rows in the
@@ -814,17 +817,28 @@ cascade — reads the same resolved answer, and `Dataset.editableOf(id, field)` 
 
 ```ts
 ctx.edits.setPlaceRule((next) => (place) =>
-  isLocked(place.parentId) ? 'api' : next(place));
+  place.parent?.isDescendantOf(frozenRootId) ? 'api' : next(place));
 ```
 
-That reads: set the place rule — a place under a locked parent opens to the API only, else ask the
-next rule. `place` is a `PlaceQuery`: the moved Entry (`entry`, the same `FieldLockQuery` shape a
-lock rule reads), the parent it would land under (`parentId`, `undefined` for the root), and the
-parent it sits under now (`currentParentId`). Answering `'api'` on `currentParentId` refuses giving
-up a child the same way answering it on `parentId` refuses taking one in. Asked once for a
+That reads: set the place rule — a place under the frozen subtree opens to the API only, else ask the
+next rule. `place` is a `PlaceQuery`: the moved Entry (`entry`), the parent it would land under
+(`parent`, `undefined` for the root), and the parent it sits under now (`currentParent`). Each is the
+same cached `FieldLockQuery` shape a lock rule reads, so a rule reads the id as `place.parent?.id` and
+asks `isDescendantOf` with no dataset lookup. Answering `'api'` on `currentParent` refuses giving
+up a child the same way answering it on `parent` refuses taking one in. Asked once for a
 cross-parent drop and once for `entries.update()`/`add()` alike (ADR 0038), so a bar drag, a grid row
 drag, and a programmatic move all meet the same resolution (I14). A same-parent reorder is not asked
 here — the lock rule already owns whether a child may reorder under its own parent.
+
+```ts
+ctx.edits.setBarMoveRule((next) => (entry) => entry.id === 'phase-1' ? false : next(entry));
+```
+
+That reads: set the bar move rule — the bar of `phase-1` does not move; for any other Entry, ask the
+next rule. `BarMoveRule` is `(entry: FieldLockQuery) => boolean`. A summary bar shows derived dates,
+so no lock rule on a cell can stop it. A bar drag and the keyboard nudge both ask this rule. Core
+installs a rule that answers `false` for a locked Entry before every plugin, so a plugin answering
+`true` releases it.
 
 ```ts
 definePlugin<PlannerProps>({
@@ -848,7 +862,7 @@ or `entry.parent()` is how a caller reads this source's own answer instead.
 
 Published types: `ChromePlugin`, `DataPlugin`, `Plugin`, `PluginContext`, `DatasetPluginContext`,
 `HierarchySource`, `HierarchySourceWrapper`, `FieldLockQuery`, `FieldLockRule`,
-`FieldLockRuleWrapper`, `PlaceQuery`, `PlaceRule`, `PlaceRuleWrapper` (ADR 0038), and the generic
+`FieldLockRuleWrapper`, `PlaceQuery`, `PlaceRule`, `PlaceRuleWrapper` (ADR 0038), `BarMoveRule`, `BarMoveRuleWrapper`, and the generic
 `*Of` shapes behind each. The retired pair is `GanttPlugin` / `DatasetPlugin`. `DatasetHierarchy`
 retires with `ctx.hierarchy.setSource` (ADR 0031).
 

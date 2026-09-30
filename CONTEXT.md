@@ -206,28 +206,37 @@ The function type that may occupy the removal hook: `(request: EditRequest) => R
 _Avoid_: cascade (that is the **EditExtender**'s word for extra field writes), delete hook
 
 **Locked entry**:
-An Entry whose core `locked` Field reads `true` (`editable: 'api'`, no grid column). The user may not
-edit any of its cells, move it, or reorder it, in the grid pane or the timeline pane alike; a drop
-that would carry another Entry into or out of a locked parent refuses the same way (see **Place
-rule**, below). A user delete of a locked Entry refuses too, and so does a delete of an ancestor
-that would take it (see **Remove rule**, below). A user may still delete an unlocked child of a
-locked Entry. `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo all
-still write a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
-.update(id, { locked: true })` sets it; `{ locked: undefined }` clears it.
-A locked bar does not move, and a locked parent's own summary bar is one. A child of a locked parent
-still moves, resizes, and nudges, and the Rollup still changes the locked parent's dates. The lock
-never blocks the Rollup.
+An Entry whose core `locked` Field reads `true`. A lock protects only its own row: its cells, its bar,
+and its own delete. The user may not edit its cells, move it, reorder it, or delete it, in the grid
+pane or the timeline pane alike. A delete of an ancestor that would take it refuses too (see **Remove
+rule**, below). Its children stay free: they move, resize, reorder, leave and join, and a user may
+delete an unlocked child. `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo
+and redo all still write a locked Entry's cells — the lock stops a user gesture, not the app.
+`dataset.entries.update(id, { locked: true })` sets it; `{ locked: undefined }` clears it. The Field
+is `editable: 'anywhere'` with a checkbox editor. It has a default column, but the default grid does not list it. When an
+app lists `'locked'` in `gridColumns`, the user may toggle it, and a locked row leaves its own `locked` cell open.
+A locked parent's own summary bar does not move (see **Bar move rule**). The Rollup still changes the
+locked parent's dates. The lock never blocks the Rollup. A plugin can change the core lock: core
+installs it first, so a plugin wraps it.
 _Avoid_: Pinned (the scheduling plugin's own whole-Entry state, a separate refusal with a separate
 owner — see **Pinned**, above), Read-only, Frozen, Disabled
 
 **Place rule**:
 The plugin seam that answers whether an Entry may land under a given parent, set with `ctx.edits
 .setPlaceRule` and composed onto the next occupant the way a lock rule composes (see
-**EditExtender**). It answers a cell's `FieldEditable` for a cross-parent drop only — a same-parent
-reorder stays the lock rule's question. A bar drag, a grid row drag, and `entries.update()`/`add()`
+**EditExtender**). It answers a `FieldEditable` for a place: the Entry, the parent it would land under, and the parent it
+sits under now, each a lock query. Core installs no place rule. A bar drag, a grid row drag, and `entries.update()`/`add()`
 all ask the same resolution, so one answer gates preview and commit alike (I14).
 _Avoid_: Drop rule (the drop target itself is resolved elsewhere — see **Drop target**, below; this
 seam only answers the one question a resolved drop then checks)
+
+**Bar move rule**:
+The plugin seam that answers whether the bar of an Entry moves, set with `ctx.edits.setBarMoveRule`
+and composed onto the next occupant the way a lock rule composes. It answers a boolean. `false` means
+the bar does not move, whatever its cells allow. It covers a summary bar, whose dates the Rollup
+derives, so no lock on a cell can stop it. A bar drag and the keyboard nudge both ask it. Core installs
+one that answers `false` for a locked Entry, before every plugin, so a plugin can release it.
+_Avoid_: Move rule, Drag rule, Summary lock
 
 **Remove rule**:
 The plugin seam that answers whether `entries.remove()` may take an Entry, set with `ctx.edits
@@ -637,7 +646,7 @@ May the user drag this Entry to another place in the tree — a new parent, a ne
 siblings, or both. A `Capability` like `move` or `resize` (see **Capability**, above): resolved
 per Entry, offered or refused as a whole. `gantt.setCapabilityRule('reorder', rule)` sets it. A
 vertical bar drag and a grid row drag both ask it. `capabilities: { reorder: false }` turns off both.
-A locked Entry refuses it in both panes (see **Locked entry**).
+A locked Entry refuses its own reorder in both panes (see **Locked entry**).
 _Avoid_: `reparent` for this word (that names only the parent half of the job — see **Tree place**)
 
 **Tree place** (#425):
@@ -665,7 +674,7 @@ _Avoid_: Drop position (reads as the same thing as a bar's time position)
 **Drop target** (#425):
 The **Tree place** a drop would write, resolved from the **Row drop zone** the pointer sits over — or
 a refusal, when no rule lets the drop land there (a group header row, the Entry's own descendant, a
-locked `siblingIndex` or `parentId`, or a locked parent it would enter or leave — see **Place rule**).
+locked `siblingIndex` or `parentId`, or a plugin's place rule refusing the parent — see **Place rule**).
 _Avoid_: Drop position (see **Row drop zone**)
 
 **Insertion line** (#425):
