@@ -77,15 +77,28 @@ past 300k. The marks tell a planner to stop research and write, never to quit.
 asking it to self-report is the half you do not control. The other half is a
 background watcher that reads its transcript and wakes you.
 
-Start the watcher and dispatch in **one turn** — the watcher first, in the same
-message as the `Agent` call:
+Before you start a watcher, find the running ones:
+
+```
+pgrep -af '[w]atch-agent-context.sh'
+```
+
+The brackets stop the pattern from matching the shell that runs `pgrep`. A plain
+`pgrep -f watch-agent-context.sh` always finds that shell. If the list shows a watcher
+whose task id you hold, it already watches the new agent. Start none.
+
+Otherwise, start the watcher and dispatch in **one turn** — the watcher first, in the
+same message as the `Agent` call:
 
 ```
 Bash(run_in_background: true):
   .agents/skills/subagents/watch-agent-context.sh
 ```
 
-Keep the pid that Bash returns. You will kill that pid when the wave ends.
+Run it only with `run_in_background: true`, and only once. A foreground run before each
+dispatch blocks your turn and duplicates the background one. One session ran it 7 times.
+
+Keep the task id that Bash returns. You stop that task when the wave ends.
 
 It polls every agent transcript in this **project** — from any session, not only yours —
 and exits when one passes its next mark or when they all stop. Each agent has two
@@ -119,7 +132,7 @@ until `MAX` (7200s). A watcher with no agent left still runs to timeout, then sp
 a later turn on `stopped after 7200s`. That notification is waste.
 
 ```
-kill <pid>
+TaskStop(task_id: <the watcher's task id>)
 ```
 
 Done means: this session has no `watch-agent-context.sh` process after the last
@@ -150,7 +163,7 @@ Then act on what it says:
   write the handoff now and report. A planner gets the same message and no more: let
   it finish its plan.
 - **After either alert** — start the same watcher command again, in the same turn,
-  if any agent you started still runs. Keep the new pid. It skips the alert you just
+  if any agent you started still runs. Keep the new task id. It skips the alert you just
   handled and still watches every other agent at 200k.
 - **Every agent stopped** — the watcher already exited. Do not start
   another.
@@ -186,6 +199,22 @@ Read the handoff, then dispatch a fresh subagent with it.
 A subagent already running the final tests, lint, or QC pass finishes that pass, even past 200k — a half-run suite tells you nothing. Its completion criterion is the result reported.
 
 Watch that it lands there. When the result is in and the agent keeps working — new fixes, new files, a fresh investigation — send it a message: report the result and hand off now.
+
+## Wait on a log
+
+An `ocr` or `verify:full` run writes a log `$L` and ends on one verdict line. Wait for
+that line with one of these:
+
+- One `Monitor`. Give it a `description`, or the call fails.
+- One background loop:
+
+  ```
+  Bash(run_in_background: true):
+    until grep -qE '^(verify:full|ocr-review) (PASS|FAILED|PARTIAL|STALLED)' $L; do sleep 10; done
+  ```
+
+The loop exits on the verdict, and its exit wakes you. Then read the verdict line.
+Repeated `sleep 5; tail $L` calls each spend a turn and tell you nothing new.
 
 ## Your own context
 
