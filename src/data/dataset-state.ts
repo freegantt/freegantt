@@ -17,6 +17,7 @@ import type {
   FieldLockRuleWrapper,
   FieldType,
   PlaceRuleWrapper,
+  RemoveRuleWrapper,
   Instant,
   Disposer,
   EditExtender,
@@ -404,6 +405,13 @@ export class DatasetState implements Dataset {
     this.entries.setPlaceRule(wrap);
   }
 
+  /** Call: `ctx.edits.setRemoveRule((next) => (removal) => isLocked(removal.entry.id) ? 'api' : next(removal))`.
+   *  Installing composes onto the current occupant rather than evicting it, exactly the way
+   *  `setPlaceRule` above does (#611). */
+  setRemoveRule(wrap: RemoveRuleWrapper): void {
+    this.entries.setRemoveRule(wrap);
+  }
+
   /** Call: `ctx.edits.rulesChanged()`. Wakes every listener `onRulesChanged` below registered — one
    *  per bound Gantt — so each re-resolves what it currently offers. Writes nothing (I14 unaffected). */
   rulesChanged(): void {
@@ -430,6 +438,13 @@ export class DatasetState implements Dataset {
    *  `entries.update()`/`add()` all meet (I14). */
   placeableOf(id: EntryId | string, parentId: EntryId | string | undefined): FieldEditable {
     return this.entries.placeableOf(id, parentId);
+  }
+
+  /** Call: `dataset.removableOf('t2')` — the effective remove rule answer for `id`'s whole removal
+   *  (#611): the top id and every member of its subtree, narrowest answer wins. The same resolver
+   *  `entries.remove()` reads (I14). */
+  removableOf(id: EntryId | string): FieldEditable {
+    return this.entries.removableOf(id);
   }
 
   /** `Dataset`'s constructor calls this once, right after the last plugin's `data()` returns

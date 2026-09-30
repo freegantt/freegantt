@@ -517,7 +517,7 @@ Selection and belong on any consumer's cheat sheet:
 
 | Chord | Command | What it does |
 |---|---|---|
-| `Delete` | `freegantt.deleteSelection` | Two intents, kept apart by what was clicked (ADR 0012, ADR 0026): on a bar it un-dates the child Entry that bar draws (`entries.update`, clearing `start`/`end`); on a grid row or cell it removes the record (`dataset.entries.remove`). A `beforeChange` veto leaves the target untouched. |
+| `Delete` | `freegantt.deleteSelection` | Two intents, kept apart by what was clicked (ADR 0012, ADR 0026): on a bar it un-dates the child Entry that bar draws (`entries.update`, clearing `start`/`end`); on a grid row or cell it removes the record (`dataset.entries.remove`). A `beforeChange` veto leaves the target untouched. A row Delete is all or nothing: if the remove rule refuses one row, none go, and the Gantt raises one `info` report with code `entry-remove-refused` that names the refused rows. One Delete is one undo step. |
 | `Mod+ArrowRight` / `Mod+ArrowLeft` | `freegantt.selectNextEntry` / `selectPreviousEntry` (renamed from `selectNextSegment`/`selectPreviousSegment`, ADR 0025, #421) | Steps the Selection between the Entries the row it already sits on owns (#212, ADR 0010, issue #218). A row that owns one Entry has nowhere to step, so the chord writes nothing; it clamps at both ends. |
 | `Escape` | `freegantt.discardCellEdit` | Closes an open Cell editor and writes nothing (`inlineEditing()`, D-S5-47, issue #160). Escape runs the command itself, and so does the editor's own discard button, shown in the invalid state — one road, so overriding the command changes both (#231 F2). A Gantt with no `inlineEditing()` answers the id with an inert registration and holds no editor code. |
 
@@ -759,9 +759,10 @@ whose only half is `data`. There is no ordering knob.
 this plugin's store, `ctx.edits.setExtender` claims the extension hook, `ctx.edits.setRemovalExtender`
 claims the removal hook, `ctx.edits.setLockRule`
 claims the per-entry lock rule (ADR 0015, #473), and `ctx.edits.setPlaceRule` claims the place rule —
-whether an Entry may land under a given parent (ADR 0038). Each door takes one occupant that composes
+whether an Entry may land under a given parent (ADR 0038), and `ctx.edits.setRemoveRule` claims the remove rule —
+whether `entries.remove()` may take an Entry and its subtree (ADR 0039). Each door takes one occupant that composes
 — a plugin receives the current occupant and may call it — so a second plugin adds to the first
-rather than evicting it (D-S5-23). `setExtender`, `setRemovalExtender`, `setLockRule` and `setPlaceRule` are legal while
+rather than evicting it (D-S5-23). `setExtender`, `setRemovalExtender`, `setLockRule`, `setPlaceRule` and `setRemoveRule` are legal while
 `data()` runs and not after (ADR 0031); `ctx.store.reserve` is ungated. A store row belongs to one
 Entry: `store.set(id, row)` throws `EntryNotFoundError` for an id with no Entry, as the open
 transaction leaves it, the rule `entries.update` follows. Removing an Entry removes its rows in the

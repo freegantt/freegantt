@@ -61,6 +61,7 @@ import {
   hierarchyFollowsParentId,
   onRulesChanged,
   placeableOf,
+  removableOf,
   rolledUpEditsFor,
   type Dataset,
 } from './dataset.js';
@@ -433,6 +434,7 @@ export class Gantt<TProps = unknown> {
       rolledUpEditsFor: (draft) => rolledUpEditsFor(options.dataset, draft),
       hierarchyFollowsParentId: () => hierarchyFollowsParentId(options.dataset),
       placeableOf: (id, parentId) => placeableOf(options.dataset, id, parentId),
+      removableOf: (id) => removableOf(options.dataset, id),
       onRulesChanged: (listener) => onRulesChanged(options.dataset, listener),
       wiring: {
         entryGestures: attachEntryGestures,

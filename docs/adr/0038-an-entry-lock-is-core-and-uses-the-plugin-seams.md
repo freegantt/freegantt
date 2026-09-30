@@ -13,17 +13,15 @@ decided: `locked` is a core Field (§"The public API a consumer meets"). Core in
   chain below it, never widen a Field the rest of the chain already refused. The lock stops only the
   user; `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo, redo, the
   sibling renumber (ADR 0034) and the Rollup all still write past it.
-open: the step-11 door's final name (working name `rulesChanged()`) waits on the naming skill —
-  `PlaceRefusedError` is settled, the naming skill kept the working name. Follow-up issues #610 (a
-  child's time drag can widen a locked parent's Rollup) and #611 (Delete on a locked row, or on its
-  child, passes) are filed and out of this record's scope.
+open: none. The step-11 door shipped as `rulesChanged` (`src/api/dataset-plugin.ts`). Follow-up
+  issue #611 (Delete on a locked row, or on its child, passes) is filed and out of this record's scope.
 ---
 
 # An Entry lock is core, and it uses the plugin seams
 
 ## Context
 
-Issue [#473](https://github.com/Pawel-IT/FreeGantt/issues/473) gave a plugin author a per-entry lock
+Issue [#473](https://github.com/freegantt/freegantt/issues/473) gave a plugin author a per-entry lock
 rule, and the harness demoed it with its own plugin, `harness/plugins/lock-entries.ts`. Two gaps
 showed up once a real consumer tried to lock a row and keep it locked through every gesture:
 
@@ -122,7 +120,7 @@ commit alike.
 
 A plugin's own lock or place rule can start answering a cell differently behind a toggle it owns —
 FreeGantt's own harness plugin flips one on a "today" boundary — with no `ChangeSet` for a mounted
-Gantt to react to. `ctx.edits.rulesChanged()` (working name; the naming skill settles the final one)
+Gantt to react to. `ctx.edits.rulesChanged()`
 tells every Gantt bound to that Dataset to re-resolve its affordances on the next frame, with no
 undo step of its own.
 
@@ -157,10 +155,10 @@ undo step of its own.
 
 ## Out of scope
 
-- A child's time drag widening a locked parent's Rollup ([#610](https://github.com/Pawel-IT/FreeGantt/issues/610)).
-- Delete on a locked row, or on its child, passing ([#611](https://github.com/Pawel-IT/FreeGantt/issues/611)).
+- Delete on a locked row, or on its child, passing ([#611](https://github.com/freegantt/freegantt/issues/611)) —
+  fixed by [ADR 0039](0039-a-remove-rule-refuses-a-user-delete.md).
 - A bar drag of a parent with a locked dated child not arming at all — the grid row drag already
-  carries this; the bar drag closes with [#615](https://github.com/Pawel-IT/FreeGantt/issues/615)
+  carries this; the bar drag closes with [#615](https://github.com/freegantt/freegantt/issues/615)
   (a bar's vertical drag arms on the reorder capability alone).
 - An extender demo with its own job, now that `lock-entries.ts` no longer occupies
-  `ctx.edits.setExtender` — follow-up [#620](https://github.com/Pawel-IT/FreeGantt/issues/620).
+  `ctx.edits.setExtender` — follow-up [#620](https://github.com/freegantt/freegantt/issues/620).

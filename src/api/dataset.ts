@@ -35,7 +35,7 @@ import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 import { storedParentSource } from '../data/hierarchy-source.js';
-import { lockedEntryLockRule, lockedEntryPlaceRule } from '../data/entry-lock.js';
+import { lockedEntryLockRule, lockedEntryPlaceRule, lockedEntryRemoveRule } from '../data/entry-lock.js';
 
 // I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
 // Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
@@ -204,13 +204,15 @@ export class Dataset<TProps = unknown> {
     // `clearHistory()` right after empties that stack, so `canUndo` still reads `false` once this
     // constructor returns (#137).
     this.#disposePlugins = this.#installPlugins();
-    // What does a locked Entry refuse? Every gesture onto its cells, and any drop into or out of it.
-    // It installs last, so no plugin already installed can reopen a locked cell it closes (ADR 0038).
-    // Built the same way a plugin builds a lock (`data/entry-lock.ts`), through the same
-    // `setLockRule`/`setPlaceRule` doors `ctx.edits` calls above.
+    // What does a locked Entry refuse? Every gesture onto its cells, any drop into or out of it, and
+    // any delete of it or of its child. It installs last, so no plugin already installed can reopen
+    // a locked cell it closes (ADR 0038). Built the same way a plugin builds a lock
+    // (`data/entry-lock.ts`), through the same `setLockRule`/`setPlaceRule`/`setRemoveRule` doors
+    // `ctx.edits` calls above.
     const isLocked = (id: EntryId): boolean => this.#state.entries.get(id)?.read('locked') === true;
     this.#state.setLockRule(lockedEntryLockRule(isLocked));
     this.#state.setPlaceRule(lockedEntryPlaceRule(isLocked));
+    this.#state.setRemoveRule(lockedEntryRemoveRule(isLocked));
     this.#state.clearHistory();
   }
 
@@ -236,6 +238,10 @@ export class Dataset<TProps = unknown> {
         setPlaceRule: (wrap) => {
           gate.assertOpen();
           this.#state.setPlaceRule(wrap);
+        },
+        setRemoveRule: (wrap) => {
+          gate.assertOpen();
+          this.#state.setRemoveRule(wrap);
         },
         // No gate: a rule's outside state can move at any time, not only during setup.
         rulesChanged: () => this.#state.rulesChanged(),
@@ -514,6 +520,17 @@ export function placeableOf<TProps>(
     throw new Error('placeableOf: dataset was not constructed through the Dataset constructor');
   }
   return state.placeableOf(id, parentId);
+}
+
+/** The friend function `view/capability.ts`'s `canRemove` reads before a row Delete — the same
+ *  friend-map pattern `placeableOf` above uses. Not public: an app author deletes through
+ *  `entries.remove()`, which throws `RemoveRefusedError` for the same answer. */
+export function removableOf<TProps>(dataset: Dataset<TProps>, id: EntryId | string): FieldEditable {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('removableOf: dataset was not constructed through the Dataset constructor');
+  }
+  return state.removableOf(id);
 }
 
 /** ADR 0038: the friend function `GanttShell` subscribes through, the same friend-map pattern
