@@ -19,8 +19,14 @@ import { siblingBlockMove } from '../data/sibling-order.js';
  *  `'capability'` — the moved Entry's own `reorder` capability, its `siblingIndex` cell, or a
  *  plugin's place rule refuses the gesture outright, a same-parent drop included. `'parentLocked'` —
  *  `reorder` is open and a same-parent drop would land, but this drop crosses into a different
- *  parent and the Entry's `parentId` cell, or a plugin's place rule, refuses that crossing. */
-export type RowDropRefusal = 'groupHeader' | 'entryGone' | 'ownDescendant' | 'capability' | 'parentLocked';
+ *  parent and the Entry's `parentId` cell, or a plugin's place rule, refuses that crossing.
+ *  `'ancestorLocked'` — this file never returns it (`resolveRowDrop` answers place, never time); the
+ *  gesture pipeline does, for a drop whose Rollup would change a date an ancestor's lock holds
+ *  (`gesture-pipeline.ts`'s `#refusedWhereDatesHold`). Unlike `'parentLocked'`, which refuses the
+ *  moved Entry's own `parentId` cell, this refuses a date cell somewhere above it that the move never
+ *  names directly. */
+export type RowDropRefusal =
+  'groupHeader' | 'entryGone' | 'ownDescendant' | 'capability' | 'parentLocked' | 'ancestorLocked';
 
 /** One Entry a `place` drop writes. `at` is the call-time index the pipeline's `entries.update`
  *  names for this Entry — a rank into the group as it stood when that call ran, not the final rank

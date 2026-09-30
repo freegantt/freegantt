@@ -104,6 +104,9 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     // ADR 0013: an ordinary bar writes itself. The fixtures here are childless, and a test that
     // wants a parent bar's drag overrides this with the descendants below it.
     entriesMovedBy: (entry) => [entry],
+    // #610: open by default — a test that cares about a locked ancestor overrides this to close
+    // one Entry's own `start`/`end`.
+    canRollUpInto: () => true,
     commitEntryEdits: () => true,
     // Part 3 (#273): required, not optional — a test that cares about the staleness guard overrides
     // this with a real, mutable roster (see `storedMap`/`storedRow` above); everyone else gets an
@@ -1347,6 +1350,171 @@ describe('an owning parent bar drag (#470) — the preview and the commit agree'
       [barId(entryId('phase')), 50, false],
       [barId(entryId('child')), 50, false],
     ]);
+  });
+});
+
+// #610: a locked parent's `end` must not move just because a child's time drag would push the
+// Rollup past it. `p{start:100, end:400}` and its dated child `child{start:100, end:200}`.
+describe("a locked ancestor holds its dates through a child's gesture (#610)", () => {
+  function plannedRow(row: Entry, depth: number, index: number): PlannedRow {
+    return {
+      id: rowId(row.id),
+      kind: PLANNED_ROW_KIND.entry,
+      index,
+      depth,
+      entryIds: [row.id],
+      expandable: row.hasChildren,
+      expanded: row.hasChildren,
+    };
+  }
+
+  /** `p` holds `start`/`end` through the Rollup; `child` is the only dated descendant below it. No
+   *  vertical drop is offered here — every test in this suite drags time only, so `p`'s lock is
+   *  asked through `canRollUpInto`, never through `canPlace`. */
+  function withHeldAncestor() {
+    const [p, child] = entryDoubles([
+      { id: 'p', start: 100, end: 400 },
+      { id: 'child', parentId: 'p', start: 100, end: 200 },
+    ]) as [Entry, Entry];
+    const rows: readonly PlannedRow[] = [plannedRow(p, 0, 0), plannedRow(child, 1, 1)];
+    const rowIndexOf = new Map([
+      [p.id, 0],
+      [child.id, 1],
+    ]);
+    const rowsForDrop: RowsForDrop = {
+      rows,
+      rowTop: (index) => index * 32,
+      rowHeightAt: () => 32,
+      entryOf: (id) => [p, child].find((row) => row.id === id),
+      rootEntries: () => [p],
+    };
+    const built = withRoster([p, child], {
+      rowsForDrop: () => rowsForDrop,
+      rowIndexForEntry: (id) => rowIndexOf.get(id) ?? -1,
+    });
+    return { p, child, ...built };
+  }
+
+  /** `p`'s own `end` is closed; every other date on every other Entry stays open. */
+  function lockPEnd(p: Entry): GesturePipelineDeps['canRollUpInto'] {
+    return (entry, field) => !(entry.id === p.id && field === 'end');
+  }
+
+  it("refuses a time drag whose Rollup would move the locked parent's end, painting the refused row", async () => {
+    const { p, child, deps, appliedRowDrops } = withHeldAncestor();
+    const commitEntryEdits = vi.fn(() => true);
+    const pipeline = new GesturePipeline({
+      ...deps,
+      canRollUpInto: lockPEnd(p),
+      rolledUpEditsFor: () => new Map([[p.id, pe({ end: 450 })]]),
+      commitEntryEdits,
+    });
+    const session = pipeline.session(child.id, { kind: 'move' })!;
+
+    session.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(appliedRowDrops.at(-1)).toEqual({ refusedRowId: p.id });
+
+    const committed = await session.commit(50);
+
+    expect(committed).toBe(false);
+    expect(commitEntryEdits).not.toHaveBeenCalled();
+  });
+
+  it('commits a time drag whose Rollup only moves an open ancestor date', async () => {
+    const { p, child, deps } = withHeldAncestor();
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      rolledUpEditsFor: () => new Map([[p.id, pe({ end: 450 })]]),
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(child.id, { kind: 'move' })!.commit(50);
+
+    expect(committed).toBe(true);
+    expect(written).toHaveLength(1);
+  });
+
+  it('commits a time drag that stays inside the locked parent — the Rollup names no held field', async () => {
+    const { p, child, deps } = withHeldAncestor();
+    const written: ProposedEdits[] = [];
+    const pipeline = new GesturePipeline({
+      ...deps,
+      canRollUpInto: lockPEnd(p),
+      rolledUpEditsFor: () => new Map(), // the child's move never pushed p's own span
+      commitEntryEdits: (edits) => {
+        written.push(edits);
+        return true;
+      },
+    });
+
+    const committed = await pipeline.session(child.id, { kind: 'move' })!.commit(10);
+
+    expect(committed).toBe(true);
+    expect(written).toHaveLength(1);
+  });
+
+  it('refuses a resize the same way a move refuses', async () => {
+    const { p, child, deps } = withHeldAncestor();
+    const commitEntryEdits = vi.fn(() => true);
+    const pipeline = new GesturePipeline({
+      ...deps,
+      canRollUpInto: lockPEnd(p),
+      rolledUpEditsFor: () => new Map([[p.id, pe({ end: 450 })]]),
+      commitEntryEdits,
+    });
+
+    const committed = await pipeline.session(child.id, { kind: 'resize', edge: 'end' })!.commit(50);
+
+    expect(committed).toBe(false);
+    expect(commitEntryEdits).not.toHaveBeenCalled();
+  });
+
+  it('refuses a nudge the same way a move refuses', async () => {
+    const { p, child, deps } = withHeldAncestor();
+    const commitEntryEdits = vi.fn(() => true);
+    const pipeline = new GesturePipeline({
+      ...deps,
+      canRollUpInto: lockPEnd(p),
+      rolledUpEditsFor: () => new Map([[p.id, pe({ end: 450 })]]),
+      commitEntryEdits,
+    });
+
+    const committed = await pipeline.session(child.id, { kind: 'move' })!.nudge(1);
+
+    expect(committed).toBe(false);
+    expect(commitEntryEdits).not.toHaveBeenCalled();
+  });
+
+  it('asks the Rollup nothing when no ancestor holds a locked date (I5)', async () => {
+    const rolledUpEditsFor = vi.fn(() => new Map());
+    const { child, deps } = withHeldAncestor();
+    const pipeline = new GesturePipeline({ ...deps, rolledUpEditsFor });
+    const session = pipeline.session(child.id, { kind: 'move' })!;
+
+    session.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await session.commit(50);
+
+    expect(rolledUpEditsFor).not.toHaveBeenCalled();
+  });
+
+  it('asks the Rollup once per frame even across three preview() calls (I5)', async () => {
+    const rolledUpEditsFor = vi.fn(() => new Map());
+    const { p, child, deps } = withHeldAncestor();
+    const pipeline = new GesturePipeline({ ...deps, canRollUpInto: lockPEnd(p), rolledUpEditsFor });
+    const session = pipeline.session(child.id, { kind: 'move' })!;
+
+    session.preview(10);
+    session.preview(20);
+    session.preview(30);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(rolledUpEditsFor).toHaveBeenCalledTimes(1);
   });
 });
 

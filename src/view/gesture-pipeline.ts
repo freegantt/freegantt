@@ -70,6 +70,9 @@ const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId
  *  (`interaction/entry-gestures.ts` zeroes its own `dxPx` before this ever runs), so once the row
  *  target itself refuses, there is no time fallback left to commit either. */
 const NO_WRITES: ProposedEdits = Object.freeze(new Map());
+/** #610: the two Fields the Rollup ever moves a parent's own envelope through — the pair
+ *  `#refusedWhereDatesHold` and `#anAncestorHoldsDates` both walk, so the list is spelled once. */
+const DATE_FIELDS = Object.freeze(['start', 'end'] as const);
 
 /** #425: a `paintedOnly` Entry's own translated dates (ADR 0013 — they never write directly), with
  *  the dates dropped so `#writesWithPlace` can still write its tree place. `undefined` in,
@@ -108,6 +111,12 @@ export interface GesturePipelineDeps {
    *  the shell like every other capability answer (I14). An ordinary bar answers with itself. A
    *  parent bar answers with the dated descendants below it, because its own dates roll up. */
   entriesMovedBy(entry: Entry): readonly Entry[];
+  /** #610: may a user gesture change `field` on `entry` through the Rollup —
+   *  `ResolvedCapabilities.canRollUpInto`, resolved by the shell like every other capability answer
+   *  (I14). `session()` asks it once per armed gesture, to see whether any ancestor holds a date this
+   *  drag could touch; `#refusedWhereDatesHold` asks it again, per Entry the Rollup actually names, to
+   *  find the one that refuses. */
+  canRollUpInto(entry: Entry, field: 'start' | 'end'): boolean;
   commitEntryEdits(edits: ProposedEdits): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** A vetoed gesture still draws nothing and still throws nothing, and now it also
@@ -195,6 +204,12 @@ interface GestureProposal {
   /** #425: where this move lands in the tree, or the proof it never asked — `{ kind: 'timeOnly' }`
    *  for a resize, a nudge, or a drag whose pointer never left the source row. */
   readonly drop: RowDrop;
+  /** #610: would this proposal's own Rollup answer be worth reading before it writes — a `place`
+   *  drop (which already asks, for its own ghost) or an ancestor of a drafted Entry that holds a date
+   *  the drag could touch (`datesMayHold`, `session()`'s own one-time arming check). `false` skips
+   *  `#refusedWhereDatesHold`'s Rollup call outright (I5): no held ancestor means nothing it could
+   *  ever refuse. */
+  readonly asksRollup: boolean;
 }
 
 /** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
@@ -255,11 +270,17 @@ export class GesturePipeline {
   constructor(deps: GesturePipelineDeps) {
     this.#deps = deps;
     this.#previewFrame = new FrameScheduler(() => {
+      // #610: one Rollup answer per frame, and one resolved proposal built from it — the bar preview
+      // and the row paint both read the one resolution, never asking the Rollup a second time for
+      // what a `place` drop's own ghost already asked (`#computePreview`'s own doc).
+      const scheduled = this.#scheduledProposal;
+      const rolled = scheduled === undefined ? NO_EXTRA_EDITS : this.#rolledUpForProposal(scheduled);
+      const proposal = scheduled === undefined ? undefined : this.#refusedWhereDatesHold(scheduled, rolled);
       this.#deps.applyGestureState(
-        this.#computePreview(this.#scheduledProposal),
+        this.#computePreview(proposal, rolled),
         this.#held?.barIds,
         this.#computeCursor(),
-        this.#rowDropForPaint(this.#scheduledProposal?.drop),
+        this.#rowDropForPaint(proposal?.drop),
       );
     });
   }
@@ -280,6 +301,11 @@ export class GesturePipeline {
     // A reorder never drafts a date (D2), so `#proposalFor` — the only reader of this — never runs
     // for one either (`proposalFor` below). Computing it there anyway would draft dates nothing reads.
     const draftedEntries = gesture.kind === 'reorder' ? undefined : this.#draftedEntries(bars, capability);
+    // #610: one arming-time check for the whole gesture (I5) — a reorder drafts no dates, so it asks
+    // over `bars` itself rather than a drafted list that was never built for it.
+    const datesMayHold = this.#anAncestorHoldsDates(
+      gesture.kind === 'reorder' ? bars : draftedEntries!.entries,
+    );
     const reparents = gesture.kind === 'move' || gesture.kind === 'reorder';
     const movedTopMost = reparents ? this.#movedTopMost(anchor.id, bars) : [];
     const sourceRowIndex = reparents ? this.#deps.rowIndexForEntry(anchor.id) : -1;
@@ -301,8 +327,16 @@ export class GesturePipeline {
     };
     const proposalFor = (dxPx: number, options: DraftOptions | undefined, drop: RowDrop): GestureProposal =>
       gesture.kind === 'reorder'
-        ? this.#reorderProposal(anchor.id, drop)
-        : this.#proposalFor({ gesture, ...draftedEntries!, grabbed: anchor.id, dxPx, options, drop });
+        ? this.#reorderProposal(anchor.id, drop, datesMayHold)
+        : this.#proposalFor({
+            gesture,
+            ...draftedEntries!,
+            grabbed: anchor.id,
+            dxPx,
+            options,
+            drop,
+            datesMayHold,
+          });
     return {
       preview: (dxPx, options) => {
         this.#preview(proposalFor(dxPx, options, dropFor(options, true)), options?.cursorX);
@@ -339,10 +373,12 @@ export class GesturePipeline {
    *  `#proposalFor` rather than asking it to draft a time axis a reorder never moves. A `place` drop
    *  writes the tree place alone; anything else (refused, or the pointer never left the source row)
    *  writes nothing. */
-  #reorderProposal(grabbed: EntryId, drop: RowDrop): GestureProposal {
-    if (drop.kind !== 'place') return { writes: NO_WRITES, paints: NO_WRITES, grabbed, drop };
+  #reorderProposal(grabbed: EntryId, drop: RowDrop, datesMayHold: boolean): GestureProposal {
+    // #610: a `place` drop already asks the Rollup for its own ghost; `datesMayHold` covers the rest.
+    const asksRollup = drop.kind === 'place' || datesMayHold;
+    if (drop.kind !== 'place') return { writes: NO_WRITES, paints: NO_WRITES, grabbed, drop, asksRollup };
     const placed = this.#writesWithPlace(NO_WRITES, NO_WRITES, drop.moves);
-    return { writes: placed, paints: placed, grabbed, drop };
+    return { writes: placed, paints: placed, grabbed, drop, asksRollup };
   }
 
   /** #425 (ruling 9): grabbed first, then row order, dropping an Entry with a selected ancestor
@@ -462,6 +498,30 @@ export class GesturePipeline {
     return { entries, paintedOnly };
   }
 
+  /** #610: does an ancestor of any of these entries hold a date this gesture may not open through
+   *  the Rollup — `session()`'s one arming-time check (I5), so a drag with no locked ancestor
+   *  anywhere never asks the Rollup at all, on any frame. `false` here means `#refusedWhereDatesHold`
+   *  can skip every `rolledUpEditsFor` call this gesture ever makes; `true` only means it is worth
+   *  asking — the per-frame check still finds the actual Entry the Rollup would touch, if any.
+   *
+   *  Walks each entry's own ancestor chain to the root, stopping a chain the moment it reaches an
+   *  ancestor an earlier entry's walk already covered — that ancestor's own chain above it was
+   *  covered too, in the same walk. */
+  #anAncestorHoldsDates(entries: readonly Entry[]): boolean {
+    const seen = new Set<EntryId>();
+    for (const entry of entries) {
+      let ancestor = entry.parent();
+      while (ancestor !== undefined && !seen.has(ancestor.id)) {
+        seen.add(ancestor.id);
+        for (const field of DATE_FIELDS) {
+          if (ancestor[field] !== undefined && !this.#deps.canRollUpInto(ancestor, field)) return true;
+        }
+        ancestor = ancestor.parent();
+      }
+    }
+    return false;
+  }
+
   #proposalFor(input: {
     gesture: EntryGesture;
     entries: readonly Entry[];
@@ -470,8 +530,9 @@ export class GesturePipeline {
     dxPx: number;
     options: DraftOptions | undefined;
     drop: RowDrop;
+    datesMayHold: boolean;
   }): GestureProposal {
-    const { gesture, entries, paintedOnly, grabbed, dxPx, options, drop } = input;
+    const { gesture, entries, paintedOnly, grabbed, dxPx, options, drop, datesMayHold } = input;
     const base = {
       zone: this.#deps.timeZone(),
       scale: this.#deps.timeScale(),
@@ -489,11 +550,19 @@ export class GesturePipeline {
       for (const id of paintedOnly) stripped.delete(id);
       writes = stripped;
     }
+    // #610: a `place` drop already asks the Rollup for its own ghost; `datesMayHold` covers the rest.
+    const asksRollup = drop.kind === 'place' || datesMayHold;
     if (drop.kind === 'place') {
-      return { writes: this.#writesWithPlace(writes, paints, drop.moves), paints, grabbed, drop };
+      return {
+        writes: this.#writesWithPlace(writes, paints, drop.moves),
+        paints,
+        grabbed,
+        drop,
+        asksRollup,
+      };
     }
-    if (drop.kind === 'refused') return { writes: NO_WRITES, paints, grabbed, drop };
-    return { writes, paints, grabbed, drop };
+    if (drop.kind === 'refused') return { writes: NO_WRITES, paints, grabbed, drop, asksRollup };
+    return { writes, paints, grabbed, drop, asksRollup };
   }
 
   /** #425: folds a `place` drop's own tree write into `writes`, on top of whatever `writes` already
@@ -569,6 +638,9 @@ export class GesturePipeline {
    *  into one `false`. A `before*` handler that returns a Promise instead of resolving synchronously
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles. */
   #commit(gesture: EntryGesture, proposal: GestureProposal): Promise<boolean> {
+    // #610: the same gate a preview frame resolves through — a resize and a `nudge()` never build a
+    // `RowDrop` of their own, so this is the only place either one meets it.
+    proposal = this.#refusedWhereDatesHold(proposal, this.#rolledUpForProposal(proposal));
     this.#scheduledCursorX = undefined;
     // A refused drop (or any drag whose draft ended up writing nothing) leaves the pointer up with
     // no commit to settle — `#settle` never runs, so its own `#preview(undefined)` never fires
@@ -927,17 +999,19 @@ export class GesturePipeline {
   /** The extension hook sees `writes` and the bars follow `paints`. A parent bar's own translated
    *  envelope is paint and nothing else (ADR 0013): showing it to the hook would offer a plugin an
    *  edit the commit never makes. */
-  #computePreview(proposal: GestureProposal | undefined): readonly BarPreview[] | undefined {
+  #computePreview(
+    proposal: GestureProposal | undefined,
+    rolled: ProposedEdits,
+  ): readonly BarPreview[] | undefined {
     if (!proposal || proposal.paints.size === 0) return undefined;
     const draft = proposal.paints;
     const extenderExtra = this.#extraFor(proposal.writes);
     // #425 ruling 5: a `place` drop's own Rollup ghost — the new parent's dates rolling up to cover
     // the entry it just gained — merges in beside whatever the extension hook already ghosted.
-    // A time-only drag never asks: it keeps today's silence on purpose, a follow-up's job.
+    // A time-only drag never asks: it keeps today's silence on purpose, a follow-up's job. `rolled`
+    // is the frame's own one Rollup answer (`#rolledUpForProposal`) — never asked twice for it.
     const extra =
-      proposal.drop.kind === 'place'
-        ? mergeProposedEditsByEntry(extenderExtra, this.#rolledUpFor(proposal.writes))
-        : extenderExtra;
+      proposal.drop.kind === 'place' ? mergeProposedEditsByEntry(extenderExtra, rolled) : extenderExtra;
     const entries: Entry[] = [];
     const seen = new Set<EntryId>();
     const pushEntry = (id: EntryId): void => {
@@ -1033,6 +1107,48 @@ export class GesturePipeline {
       this.#reportRollupFault(error);
       return NO_EXTRA_EDITS;
     }
+  }
+
+  /** #610: `rolled = rolledUpEditsFor(proposal.writes)`, read once per frame and once per commit —
+   *  `!asksRollup` (no ancestor could ever hold one, and this is not a `place` drop asking for its
+   *  own ghost) or an empty `writes` (nothing to roll up) both skip the Rollup call outright (I5).
+   *  The frame callback shares this one answer with `#computePreview`'s own `place`-drop ghost,
+   *  rather than asking the Rollup twice for one frame. */
+  #rolledUpForProposal(proposal: GestureProposal): ProposedEdits {
+    if (!proposal.asksRollup || proposal.writes.size === 0) return NO_EXTRA_EDITS;
+    return this.#rolledUpFor(proposal.writes);
+  }
+
+  /** #610: the one gate a preview frame and a commit both resolve `proposal` through before either
+   *  reads it — the answer to "does this proposal's Rollup change a date a lock holds?" `rolled` is
+   *  `#rolledUpForProposal`'s own answer, asked once and handed to both this and (for a `place` drop)
+   *  the ghost `#computePreview` paints. This reads back every parent `rolled` touched: the first one
+   *  `proposedKeys` names a `start`/`end` for, where that field's own lock refuses, is the reason.
+   *  None found returns `proposal` unchanged. */
+  #refusedWhereDatesHold(proposal: GestureProposal, rolled: ProposedEdits): GestureProposal {
+    if (rolled.size === 0) return proposal;
+    let holderId: EntryId | undefined;
+    for (const [id, edit] of rolled) {
+      const heldEntry = this.#deps.entryById(id);
+      if (heldEntry === undefined) continue;
+      const fails = DATE_FIELDS.some(
+        (field) => edit.proposedKeys.has(field) && !this.#deps.canRollUpInto(heldEntry, field),
+      );
+      if (fails) {
+        holderId = id;
+        break;
+      }
+    }
+    if (holderId === undefined) return proposal;
+    const rows = this.#deps.rowsForDrop();
+    const rowId = rows.rows[this.#deps.rowIndexForEntry(holderId)]?.id;
+    return {
+      writes: NO_WRITES,
+      paints: proposal.paints,
+      grabbed: proposal.grabbed,
+      asksRollup: proposal.asksRollup,
+      drop: { kind: 'refused', rowId, reason: 'ancestorLocked' },
+    };
   }
 
   /** #332: `by: 'plugin'`, not a specific `PluginId` — `setExtender` composes, so the hook

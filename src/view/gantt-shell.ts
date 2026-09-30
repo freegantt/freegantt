@@ -1251,6 +1251,7 @@ export class GanttShell {
       minBarWidthPx: () => this.#frameSettings.minBarWidthPx,
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
       entriesMovedBy: (entry) => this.#capabilities.entriesMovedBy(entry),
+      canRollUpInto: (entry, field) => this.#capabilities.canRollUpInto(entry, field),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
       emit: (name, payload) => this.#emit(name, payload),
       raiseError: this.#raiseError,
