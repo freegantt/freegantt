@@ -178,6 +178,7 @@ where they do something beyond re-export.
 | `view/styles.ts` | `ensureBaseStyles()` | Idempotently injects the library's base stylesheet once per `document`. |
 | `view/frame-scheduler.ts` | `FrameScheduler` | Coalesces render requests into at most one `requestAnimationFrame` per tick — the throttle between "a change happened" and "a frame drew". |
 | `view/row-edge-scroll.ts` | `createRowEdgeScroll(), edgeScrollSpeed(), RowEdgeScroll` | Scrolls the rows while a row drag rests near the top or bottom edge of the rows viewport. |
+| `view/row-hover-expand.ts` | `createRowHoverExpand(), HOVER_EXPAND_DELAY_MS, RowHoverExpand` | Expands a collapsed parent while a row drag rests in its "into" zone, so a drop can land between its children. |
 | `view/dataset-change-subscription.ts` | `subscribeToDatasetChanges()` | Bridges the dataset's `change` event into the shell's render pipeline. |
 | `view/grid-columns.ts` | `resolveColumns(), resolveFieldCompares(), resolveGanttFields()` | Bridges the consumer's `gridColumns` input and field declarations to layout's `ResolvedColumn[]` model. |
 | `view/bar-labels.ts` | `resolveBarLabelText(), resolveBarLabelPolicy()` | Bridges the Gantt's own `barLabels` and a row's own variant `barLabels` to a Field — the bar's own `resolveColumns`. |
