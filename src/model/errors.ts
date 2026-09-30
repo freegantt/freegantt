@@ -80,7 +80,8 @@ export type BuiltInThrownCode =
   | 'empty-covers'
   | 'custom-row-source-not-filterable-or-sortable'
   | 'sibling-index-out-of-range'
-  | 'place-refused';
+  | 'place-refused'
+  | 'remove-refused';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -627,6 +628,27 @@ export class PlaceRefusedError extends FreeGanttError {
     this.name = 'PlaceRefusedError';
     this.id = id;
     this.parentId = parentId;
+    this.operation = operation;
+  }
+}
+
+/** `code: 'remove-refused'` — a remove rule (#611) answered `'never'` for `id`, or for one Entry
+ *  under it: `entries.remove()` throws this before it stages anything.
+ *
+ *  A remove rule names what a *caller* may write, never what the library may — `load`, `syncAll`,
+ *  `syncChanges({ remove })` and undo all still remove past it, the same carve-out `PlaceRefusedError`
+ *  keeps for a place rule. */
+export class RemoveRefusedError extends FreeGanttError {
+  readonly id: EntryId;
+  readonly operation: string;
+
+  constructor(id: EntryId, operation: string) {
+    super(
+      'remove-refused' satisfies BuiltInThrownCode,
+      `${operation}: "${id}" may not be removed — a remove rule refuses it, or an Entry under it. Install a remove rule that answers 'api' or 'anywhere' to allow it.`,
+    );
+    this.name = 'RemoveRefusedError';
+    this.id = id;
     this.operation = operation;
   }
 }

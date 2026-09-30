@@ -209,8 +209,10 @@ _Avoid_: cascade (that is the **EditExtender**'s word for extra field writes), d
 An Entry whose core `locked` Field reads `true` (`editable: 'api'`, no grid column). The user may not
 edit any of its cells, move it, or reorder it, in the grid pane or the timeline pane alike; a drop
 that would carry another Entry into or out of a locked parent refuses the same way (see **Place
-rule**, below). `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo
-all still write a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
+rule**, below). A user delete of a locked Entry refuses too, and so does a delete of an ancestor
+that would take it (see **Remove rule**, below). A user may still delete an unlocked child of a
+locked Entry. `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo all
+still write a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
 .update(id, { locked: true })` sets it; `{ locked: undefined }` clears it.
 A locked bar does not move, and a locked parent's own summary bar is one. A child of a locked parent
 still moves, resizes, and nudges, and the Rollup still changes the locked parent's dates. The lock
@@ -226,6 +228,18 @@ reorder stays the lock rule's question. A bar drag, a grid row drag, and `entrie
 all ask the same resolution, so one answer gates preview and commit alike (I14).
 _Avoid_: Drop rule (the drop target itself is resolved elsewhere — see **Drop target**, below; this
 seam only answers the one question a resolved drop then checks)
+
+**Remove rule**:
+The plugin seam that answers whether `entries.remove()` may take an Entry, set with `ctx.edits
+.setRemoveRule` and composed onto the next occupant the way a place rule composes (see
+**EditExtender**). Asked once for the id the caller named, and once for every member of its
+subtree — the narrowest answer wins, so removing an unlocked parent that holds one locked descendant
+refuses too. `entries.remove()` throws `RemoveRefusedError` on `'never'`; `load`, `syncAll`,
+`syncChanges({ remove })` and undo all still remove past it, the same carve-out a place rule keeps.
+A row Delete asks it first: one refused row stops the whole Delete, and the Gantt raises one `info`
+report, code `entry-remove-refused`, naming the refused rows.
+_Avoid_: Delete rule (Delete is the command label a user gesture carries, not the data verb this
+seam gates — see **Locked entry**, above)
 
 ### Scheduling
 

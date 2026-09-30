@@ -48,6 +48,11 @@ export interface CoreCommandPorts {
   /** ADR 0012: clears both dates of the Entry a bar draws. One transaction, undoable as one press,
    *  the same door a cell edit writes through. */
   clearDates(id: EntryId): void;
+  /** Which of these Entries may a user not delete? A locked row is one, and so is a parent that
+   *  holds a locked row. Empty means the whole Delete may go ahead. */
+  refusedRemovals(ids: readonly EntryId[]): readonly EntryId[];
+  /** Tells the app that a Delete removed nothing, and names the Entries that stopped it. */
+  reportRemoveRefused(ids: readonly EntryId[]): void;
   pageDown(): void;
   pageUp(): void;
   panToStart(): void;
@@ -165,6 +170,9 @@ export function registerCoreCommands(
   // *is*, not which of the two doors a Delete opens — a segment bar un-dates the child Entry
   // it draws, exactly as a Segment delete used to drop one drawn stretch.
   //
+  // A row Delete is all or nothing. One refused row stops the whole Delete, and it makes one report.
+  // The removals share one transaction, so one Delete is one undo step.
+  //
   // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,
   // so it stops here instead of reaching `CommandRegistry.run` uncaught (the same swallow `api/`'s
   // `attemptMutation` does; `view/` cannot import `api/`, so this repeats that one line inline).
@@ -175,16 +183,27 @@ export function registerCoreCommands(
     run: (ctx) => {
       const target = asCtx(ctx).target;
       if (target === undefined) return;
-      try {
-        for (const id of target.entryIds ?? []) {
-          if (target.kind === 'bar') {
-            // A bar whose dates are derived has none of its own to clear (ADR 0013). The command
-            // passes over it rather than throwing `DerivedFieldNotWritableError` out of a keypress.
-            if (ports.canClearDates(id)) ports.clearDates(id);
-          } else {
-            asCtx(ctx).dataset?.entries.remove(id);
-          }
+      const ids = target.entryIds ?? [];
+      if (target.kind !== 'bar') {
+        const refused = ports.refusedRemovals(ids);
+        if (refused.length > 0) {
+          ports.reportRemoveRefused(refused);
+          return;
         }
+      }
+      try {
+        asCtx(ctx).dataset?.transaction(() => {
+          for (const id of ids) {
+            if (target.kind === 'bar') {
+              // A bar whose dates are derived has none of its own to clear (ADR 0013). The command
+              // passes over it rather than throwing `DerivedFieldNotWritableError` out of a keypress.
+              if (ports.canClearDates(id)) ports.clearDates(id);
+            } else if (asCtx(ctx).dataset?.entries.has(id) === true) {
+              // A parent's removal already took a selected child, so that child is gone by now.
+              asCtx(ctx).dataset?.entries.remove(id);
+            }
+          }
+        });
       } catch (error) {
         if (!(error instanceof MutationCancelledError)) throw error;
       }
