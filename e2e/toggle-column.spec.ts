@@ -64,7 +64,7 @@ test('the column header names the checkbox, and the icon is hidden from assistiv
 test('a header renderer keeps the header string as its accessible name', async ({ page }) => {
   await open(page);
   const header = page.locator('.fg-col-header[data-field="done"]');
-  await expect(header).toHaveText('✔');
-  await expect(header).toHaveAttribute('aria-label', 'Done');
+  await expect(header.locator('.fg-col-header-label')).toHaveText('✔');
+  await expect(header.locator('.fg-visually-hidden')).toHaveText('Done');
   await expect(page.getByRole('columnheader', { name: 'Done' })).toBeVisible();
 });
