@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { EntryNotFoundError, InvertedSpanError, entryId, barId, rowId } from '../model/index.js';
+import type { RowId } from '../model/index.js';
 import type {
   Entry,
   EntryId,
@@ -131,6 +132,7 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     rowIndexForEntry: () => -1,
     canPlace: () => true,
     verticalDropOffered: () => false,
+    rowHoverExpand: { holdOver: () => {}, stop: () => {} },
     ...overrides,
   };
   return { deps, emitted, applied, appliedRowDrops, reported };
@@ -1717,6 +1719,93 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
     const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
     expect(preview.map((bar) => bar.dy)).toEqual([0]);
     expect(appliedRowDrops.at(-1)).toBeUndefined();
+  });
+
+  describe('hover expand (#604)', () => {
+    function withHoverSpy(overrides: Partial<GesturePipelineDeps> = {}) {
+      const held: (RowId | undefined)[] = [];
+      let stops = 0;
+      let onExpanded: (() => void) | undefined;
+      const tree = withTree({
+        rowHoverExpand: {
+          holdOver: (id, callback) => {
+            held.push(id);
+            onExpanded = callback;
+          },
+          stop: () => {
+            stops += 1;
+          },
+        },
+        ...overrides,
+      });
+      return { ...tree, held, stops: () => stops, expanded: () => onExpanded!() };
+    }
+
+    it('aims the hover expand at the row an into drop lands on', () => {
+      const { deps, held } = withHoverSpy({ rowDropZoneAt: () => intoP2() });
+      new GesturePipeline(deps).session(entryId('a'), { kind: 'reorder' })!.preview(0, { contentY: 100 });
+      expect(held).toEqual([rowId('p2')]);
+    });
+
+    it('aims at no row for a before drop and for the source row', () => {
+      const zones: RowDropZone[] = [{ kind: 'row', rowIndex: 3, side: 'before' }, { kind: 'sourceRow' }];
+      const { deps, held } = withHoverSpy({ rowDropZoneAt: () => zones.shift()! });
+      const session = new GesturePipeline(deps).session(entryId('a'), { kind: 'reorder' })!;
+      session.preview(0, { contentY: 100 });
+      session.preview(0, { contentY: 40 });
+      expect(held).toEqual([undefined, undefined]);
+    });
+
+    it('aims at no row for a drop the place rule refuses', () => {
+      const { deps, held } = withHoverSpy({ rowDropZoneAt: () => intoP2(), canPlace: () => false });
+      new GesturePipeline(deps).session(entryId('a'), { kind: 'reorder' })!.preview(0, { contentY: 100 });
+      expect(held).toEqual([undefined]);
+    });
+
+    it('aims at no row when the drop lands inside the grabbed subtree', () => {
+      const { deps, held } = withHoverSpy({
+        rowDropZoneAt: () => ({ kind: 'row', rowIndex: 1, side: 'into' }),
+      });
+      new GesturePipeline(deps).session(entryId('p1'), { kind: 'reorder' })!.preview(0, { contentY: 40 });
+      expect(held).toEqual([undefined]);
+    });
+
+    it('previews again at the last pointer when the parent expands', async () => {
+      const { deps, held, expanded, appliedRowDrops } = withHoverSpy({ rowDropZoneAt: () => intoP2() });
+      new GesturePipeline(deps).session(entryId('a'), { kind: 'reorder' })!.preview(0, { contentY: 100 });
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const paintsBefore = appliedRowDrops.length;
+      expanded();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      expect(appliedRowDrops.length).toBe(paintsBefore + 1);
+      expect(held).toEqual([rowId('p2'), rowId('p2')]);
+    });
+
+    it('reads the grabbed row index again when the parent expands, since the rows below moved', () => {
+      let grabbedRowIndex = 1;
+      const seenSourceRows: number[] = [];
+      const { deps, expanded } = withHoverSpy({
+        rowIndexForEntry: () => grabbedRowIndex,
+        rowDropZoneAt: (_contentY, sourceRowIndex) => {
+          seenSourceRows.push(sourceRowIndex);
+          return intoP2();
+        },
+      });
+      new GesturePipeline(deps).session(entryId('a'), { kind: 'reorder' })!.preview(0, { contentY: 100 });
+      grabbedRowIndex = 4;
+      expanded();
+      expect(seenSourceRows).toEqual([1, 4]);
+    });
+
+    it('stops the hover expand on cancel, commit, and a new session', async () => {
+      const { deps, stops } = withHoverSpy({ rowDropZoneAt: () => intoP2() });
+      const pipeline = new GesturePipeline(deps);
+      const armed = stops();
+      pipeline.session(entryId('a'), { kind: 'reorder' })!.cancel();
+      expect(stops()).toBe(armed + 2); // one for the new session, one for the cancel
+      await pipeline.session(entryId('a'), { kind: 'reorder' })!.commit(0, { contentY: 100 });
+      expect(stops()).toBe(armed + 4);
+    });
   });
 });
 
