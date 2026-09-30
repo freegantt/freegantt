@@ -4,6 +4,7 @@ import { Dataset } from './dataset.js';
 import { inlineEditing } from '../extensions/features/inline-editing.js';
 import { ToggleFieldNotBooleanError } from './index.js';
 import { boolean } from '../data/fields/field-types.js';
+import type { DataPlugin } from './gantt.js';
 import type { ColumnToggle, EntryInput, GridColumnInput } from './index.js';
 
 interface Meta {
@@ -443,5 +444,79 @@ describe('a toggle column in the gridColumnsChange payload', () => {
     });
     gantt.hideGridColumn('name');
     expect(payloads).toEqual([true]);
+  });
+});
+
+describe('a closed toggle tells a screen reader it is read only', () => {
+  const frame = (): Promise<void> => new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  const checkboxOf = (container: HTMLElement, id: string): Element | null =>
+    cellFor(container, id).querySelector('[role="checkbox"]');
+
+  it('an open toggle carries no aria-readonly', () => {
+    const { container } = mount();
+    expect(checkboxOf(container, 'a')?.hasAttribute('aria-readonly')).toBe(false);
+  });
+
+  it.each([
+    ['a Field with editable never', { editable: 'never' as const }],
+    ['a Field with editable api', { editable: 'api' as const }],
+    ['capabilities.edit off', { capabilities: { edit: false } }],
+  ])('%s', (_name, options) => {
+    const { container } = mount(true, options);
+    expect(checkboxOf(container, 'a')?.getAttribute('aria-readonly')).toBe('true');
+  });
+
+  it('a lock rule closes one Entry and leaves the other open', () => {
+    const { container, dataset } = mount();
+    dataset.entries.update('a', { locked: true });
+    return frame().then(() => {
+      expect(checkboxOf(container, 'a')?.getAttribute('aria-readonly')).toBe('true');
+      expect(checkboxOf(container, 'b')?.hasAttribute('aria-readonly')).toBe(false);
+    });
+  });
+
+  it('follows a capability rule that changes at run time', async () => {
+    const { container, gantt } = mount();
+    gantt.setCapabilityRule('edit', () => false);
+    await frame();
+    expect(checkboxOf(container, 'a')?.getAttribute('aria-readonly')).toBe('true');
+    gantt.clearCapabilityRule('edit');
+    await frame();
+    expect(checkboxOf(container, 'a')?.hasAttribute('aria-readonly')).toBe(false);
+  });
+
+  it('follows a lock rule that changes with no write, once the plugin calls rulesChanged()', async () => {
+    let closed = false;
+    let announce: (() => void) | undefined;
+    const plugin: DataPlugin = {
+      id: 'demo.closing-lock',
+      data(ctx) {
+        ctx.edits.setLockRule(
+          (next) => (entry, field) =>
+            closed && entry.id === 'a' && field === 'done' ? 'never' : next(entry, field),
+        );
+        announce = () => ctx.edits.rulesChanged();
+      },
+    };
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset<Meta>({
+      entries: structuredClone([...ENTRIES]),
+      timeZone: 'UTC',
+      fields: [{ key: 'done', type: 'boolean', editable: true }],
+      plugins: [plugin],
+    });
+    mounted.push(new Gantt({ container, dataset, gridColumns: ['name', { field: 'done', toggle: true }] }));
+    expect(checkboxOf(container, 'a')?.hasAttribute('aria-readonly')).toBe(false);
+
+    closed = true;
+    announce!();
+    await frame();
+    expect(checkboxOf(container, 'a')?.getAttribute('aria-readonly')).toBe('true');
+
+    closed = false;
+    announce!();
+    await frame();
+    expect(checkboxOf(container, 'a')?.hasAttribute('aria-readonly')).toBe(false);
   });
 });
