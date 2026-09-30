@@ -414,6 +414,30 @@ describe('a per-column headerRenderer', () => {
     expect(svg.querySelector('circle')?.namespaceURI).toBe('http://www.w3.org/2000/svg');
     expect(hiddenNameOf(container, 'name')).toBe('Task');
   });
+
+  it('gives a header cell the same align as its column cells, with and without a renderer', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: [...ENTRIES], timeZone: 'UTC' }),
+      gridColumns: [
+        { field: 'name', align: 'center', headerRenderer: () => ({ text: '#' }) },
+        { field: 'start', align: 'center' },
+        { field: 'end', align: 'end' },
+      ],
+    });
+    mounted.push(gantt);
+    for (const [field, align] of [
+      ['name', 'center'],
+      ['start', 'center'],
+      ['end', 'end'],
+    ] as const) {
+      const cell = container.querySelector<HTMLElement>(`.fg-row[data-entry-id] [data-field="${field}"]`)!;
+      expect(headerOf(container, field).dataset['align']).toBe(align);
+      expect(cell.dataset['align']).toBe(align);
+    }
+  });
 });
 
 describe('a toggle cell with double-click activation', () => {
