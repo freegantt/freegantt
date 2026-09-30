@@ -83,7 +83,8 @@ export interface ColumnToggleContext {
  *
  *  A user switches the value with one click, or with `Space` or `Enter` on the focused cell. The
  *  cell opens no editor. The Field's `editable`, the lock rule, `capabilities.edit` and
- *  `beforeChange` decide whether the toggle acts. A closed toggle draws its value and does nothing. */
+ *  `beforeChange` decide whether the toggle acts. A closed toggle draws its value, does nothing, and
+ *  carries `aria-readonly="true"`. An open toggle carries no `aria-readonly`. */
 export interface ColumnToggle {
   /** What the cell draws when the value is `true`. Default: a checked box. */
   on?: ElementDescription;
