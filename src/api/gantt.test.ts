@@ -7065,7 +7065,7 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
     gantt.destroy();
   });
 
-  it('a grid row drag of an unlocked parent with a locked child commits; a bar drag of the same parent does not arm — reorder and move ask different cells', () => {
+  it('a grid row drag of an unlocked parent with a locked child commits; its bar shows no grab cursor, since a time move is refused', () => {
     const { container, dataset } = rollupTree();
     const gantt = new Gantt({ container, dataset });
     const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
@@ -7091,6 +7091,62 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
     expect(afterEvents).toHaveLength(1);
     expect(afterEvents[0]!.place?.parentId).toBe(entryId('p4'));
     expect(dataset.entries.get('p3')!.parent()?.id).toBe(entryId('p4'));
+
+    gantt.destroy();
+  });
+
+  it('a row-axis bar drag of an unlocked parent with a locked child commits a reparent (#615)', () => {
+    const { container, dataset } = rollupTree();
+    const gantt = new Gantt({ container, dataset });
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+    const before = datesOf(dataset.entries.get(entryId('d'))!);
+
+    // Row 2's ('p4') own middle third — reparents 'p3' under 'p4', the same drop the grid row makes.
+    dragBarInto(container, summaryBar, 90);
+
+    expect(afterEvents).toHaveLength(1);
+    expect(afterEvents[0]!.place?.parentId).toBe(entryId('p4'));
+    expect(dataset.entries.get('p3')!.parent()?.id).toBe(entryId('p4'));
+    expect(datesOf(dataset.entries.get(entryId('d'))!)).toEqual(before);
+
+    gantt.destroy();
+  });
+
+  it('a row-axis bar drag of that parent refuses when reorder is off, and a time-axis drag still refuses (#615)', () => {
+    const { container, dataset } = rollupTree();
+    const gantt = new Gantt({ container, dataset, capabilities: { reorder: false } });
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragBarInto(container, summaryBar, 90);
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get('p3')!.parent()).toBeUndefined();
+
+    gantt.destroy();
+  });
+
+  it('a locked bar arms no row-axis drag either (#615)', () => {
+    const { container, dataset } = siblingTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Row 2's ('b') own middle third.
+    dragBarInto(container, bar, 90);
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get('a')!.parent()?.id).toBe(entryId('p1'));
 
     gantt.destroy();
   });

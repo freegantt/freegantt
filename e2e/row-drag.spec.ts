@@ -368,7 +368,8 @@ test('with "Lock tree" checked, a vertical drag refuses and leaves parentId unch
 
   await dragBarTo(page, grabX, grabY, grabX, targetBand.y + targetBand.height / 2);
 
-  await expect(page.locator('#gantt')).toHaveAttribute('data-drop', 'refused');
+  // With `reorder` off, a row-axis bar drag arms nothing, so no drop paint appears at all.
+  await expect(page.locator('#gantt')).not.toHaveAttribute('data-drop', /.+/);
 
   await page.mouse.up();
   await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
