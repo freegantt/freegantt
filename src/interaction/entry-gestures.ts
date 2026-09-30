@@ -13,6 +13,7 @@
 import type { Entry, EntryId, BarId } from '../model/index.js';
 import { entryIdOfBar } from '../model/index.js';
 import { createPointerGesture, isPrimaryButton } from './pointer-gesture.js';
+import type { DragAxis } from './pointer-gesture.js';
 import { createRowReorderDrag } from './row-reorder-drag.js';
 import type {
   Detachable,
@@ -94,8 +95,42 @@ export function attachEntryGestures(
    *  successful `start()` and the matching `commit`/`cancel`. */
   let session: EntryGestureSession | undefined;
 
-  function currentGesture(): EntryGesture {
-    return grabbedEdge !== undefined ? { kind: 'resize', edge: grabbedEdge } : { kind: 'move' };
+  /** True once a bar drag asked for its session and got none — the locked axis's capability is off.
+   *  The rest of that drag then does nothing, and `move()` stops asking. */
+  let sessionRefused = false;
+
+  /** A resize arms on its edge alone, so it reads no axis. A bar drag arms on `move` or `reorder`,
+   *  and the axis lock picks one: a row-axis drag asks `reorder`, a time-axis drag asks `move`. */
+  function gestureFor(axis: DragAxis | undefined): EntryGesture {
+    if (grabbedEdge !== undefined) return { kind: 'resize', edge: grabbedEdge };
+    return axis === 'y' ? { kind: 'reorder' } : { kind: 'move' };
+  }
+
+  /** #211/#212: a bar drag whose session arms on a bar the Selection does not already hold selects
+   *  that bar's Entry first — so the draft `session()` builds reads the same Selection this write
+   *  just made, and the drag moves only the grabbed Entry rather than every Entry of whatever was
+   *  selected before (or nothing at all). A resize grab is left alone: `resizableEntryId` resolves
+   *  off hover, not the Selection, so a handle grab selects nothing here. */
+  function selectGrabbedBar(): void {
+    if (grabbedEdge !== undefined || grabbedBarId === undefined) return;
+    const grabbedEntryId = entryIdOfBar(grabbedBarId);
+    if (ctx.selection.entryIds().includes(grabbedEntryId)) return;
+    anchor = grabbedEntryId;
+    ctx.selection.propose([grabbedEntryId]);
+  }
+
+  function armSession(axis: DragAxis | undefined): void {
+    selectGrabbedBar();
+    session = ctx.session(grabbedId!, gestureFor(axis));
+    sessionRefused = session === undefined;
+  }
+
+  function endGrab(): void {
+    session = undefined;
+    sessionRefused = false;
+    grabbedId = undefined;
+    grabbedEdge = undefined;
+    grabbedBarId = undefined;
   }
 
   const drag = createPointerGesture(
@@ -103,25 +138,13 @@ export function attachEntryGestures(
     {
       start(): boolean {
         if (grabbedId === undefined) return false;
-        // #211/#212: a move drag that just armed on a bar the Selection does not already hold selects
-        // that bar's Entry before asking for the session — so the draft `session()` builds reads the
-        // same Selection this write just made, and the drag moves only the grabbed Entry rather than
-        // every Entry of whatever was selected before (or nothing at all). A resize grab is left
-        // alone: `resizableEntryId` resolves off hover, not the Selection, so a handle grab selects
-        // nothing here.
-        if (grabbedEdge === undefined && grabbedBarId !== undefined) {
-          const grabbedEntryId = entryIdOfBar(grabbedBarId);
-          const selected = ctx.selection.entryIds();
-          if (!selected.includes(grabbedEntryId)) {
-            anchor = grabbedEntryId;
-            ctx.selection.propose([grabbedEntryId]);
-          }
-        }
-        session = ctx.session(grabbedId, currentGesture());
-        return session !== undefined;
+        // A resize reads no axis, so it asks for its session now. A bar drag asks in `move()`, once
+        // the axis is known. A refused bar session there ends in no drag and keeps the Selection.
+        if (grabbedEdge !== undefined) armSession(undefined);
+        return grabbedEdge === undefined || session !== undefined;
       },
-      // `_dyPx`: a row drop reads the pointer's content-y instead — the row under the pointer, not
-      // how far it moved. `elementFromPoint` would read the bar itself, since the bar tracks the
+      // `dyPx` only tells travel from no travel. A row drop reads the pointer's content-y instead —
+      // the row under the pointer, not how far it moved. `elementFromPoint` would read the bar itself, since the bar tracks the
       // pointer during the drag.
       //
       // #425 axis lock: the owner's ruling ("if you start dragging vertically it only allows
@@ -130,7 +153,7 @@ export function attachEntryGestures(
       // A row-axis move zeroes `dxPx` (the bar's dates hold still) and omits `contentY` when the
       // axis is time instead (`options.contentY === undefined` is `dropFor`'s own "no row drop" read,
       // `view/gesture-pipeline.ts`).
-      move(e, dxPx, _dyPx, axis): void {
+      move(e, dxPx, dyPx, axis): void {
         // The live preview always tracks the pointer at full resolution (never quantized to a snap
         // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
         // applies to what actually gets written — see commit() below — this only affects what paints
@@ -138,10 +161,14 @@ export function attachEntryGestures(
         // offset plus the bound scroll, never element.scrollLeft/scrollTop (I12).
         // The rect only serves `offsetX`: content-y goes straight through `clientY` now, since both
         // panes share one row geometry and the door reads the pane top itself.
+        // A touch long-press arms with no travel, so its axis is not known yet. The session waits
+        // for the first travel, or a still finger would lock the drag to the wrong axis.
+        if (session === undefined && !sessionRefused && (dxPx !== 0 || dyPx !== 0)) armSession(axis);
+        if (session === undefined) return;
         const rect = pane.getBoundingClientRect();
         const offsetX = e.clientX - rect.left;
         const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
-        session!.preview(rowAxisLocked ? 0 : dxPx, {
+        session.preview(rowAxisLocked ? 0 : dxPx, {
           suspendSnap: true,
           cursorX: ctx.contentXAtPaneOffset(offsetX),
           ...(rowAxisLocked ? { contentY: ctx.contentYAtClientY(e.clientY) } : undefined),
@@ -154,21 +181,15 @@ export function attachEntryGestures(
         // so a drag that ends over row 3 commits into row 3 even where the pointer never fires
         // another move first.
         const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
-        void session!.commit(rowAxisLocked ? 0 : dxPx, {
+        void session?.commit(rowAxisLocked ? 0 : dxPx, {
           ...(e.altKey ? { suspendSnap: true } : undefined),
           ...(rowAxisLocked ? { contentY: ctx.contentYAtClientY(e.clientY) } : undefined),
         });
-        session = undefined;
-        grabbedId = undefined;
-        grabbedEdge = undefined;
-        grabbedBarId = undefined;
+        endGrab();
       },
       cancel(): void {
-        session!.cancel();
-        session = undefined;
-        grabbedId = undefined;
-        grabbedEdge = undefined;
-        grabbedBarId = undefined;
+        session?.cancel();
+        endGrab();
       },
     },
     { arm: 'xy' },
@@ -217,12 +238,17 @@ export function attachEntryGestures(
     // A drag only ever starts on a bar: a row hit arms nothing.
     const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
     const bar = hit?.kind === 'bar' ? hit : undefined;
+    sessionRefused = false;
     const entry = bar !== undefined ? ctx.entryFor(bar.barId) : undefined;
     if (entry !== undefined && bar?.edge !== undefined && ctx.can('resize', entry, bar.edge)) {
       grabbedId = entry.id;
       grabbedEdge = bar.edge;
       grabbedBarId = undefined;
-    } else if (entry !== undefined && bar !== undefined && ctx.can('move', entry)) {
+    } else if (
+      entry !== undefined &&
+      bar !== undefined &&
+      (ctx.can('move', entry) || ctx.can('reorder', entry))
+    ) {
       grabbedId = entry.id;
       grabbedEdge = undefined;
       grabbedBarId = bar.barId;
