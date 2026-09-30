@@ -30,6 +30,7 @@ import type {
   GestureDroppedReason,
   Instant,
   BarId,
+  RowId,
   ProposedEdit,
   RaiseError,
   Refusable,
@@ -208,7 +209,7 @@ interface GestureProposal {
    *  drop (which already asks, for its own ghost) or an ancestor of a drafted Entry that holds a date
    *  the drag could touch (`datesMayHold`, `session()`'s own one-time arming check). `false` skips
    *  `#refusedWhereDatesHold`'s Rollup call outright (I5): no held ancestor means nothing it could
-   *  ever refuse. */
+   *  ever refuse. Re-checked once more at commit (`#commit`'s own doc) — never trusted past arming. */
   readonly asksRollup: boolean;
 }
 
@@ -499,10 +500,11 @@ export class GesturePipeline {
   }
 
   /** #610: does an ancestor of any of these entries hold a date this gesture may not open through
-   *  the Rollup — `session()`'s one arming-time check (I5), so a drag with no locked ancestor
-   *  anywhere never asks the Rollup at all, on any frame. `false` here means `#refusedWhereDatesHold`
-   *  can skip every `rolledUpEditsFor` call this gesture ever makes; `true` only means it is worth
-   *  asking — the per-frame check still finds the actual Entry the Rollup would touch, if any.
+   *  the Rollup — `session()`'s arming-time check (I5), and `#askRollupAgainAtCommit`'s own re-check,
+   *  so a drag with no locked ancestor anywhere never asks the Rollup at all, on any frame. `false`
+   *  here means `#refusedWhereDatesHold` can skip every `rolledUpEditsFor` call this gesture ever
+   *  makes; `true` only means it is worth asking — the per-frame check still finds the actual Entry
+   *  the Rollup would touch, if any.
    *
    *  Walks each entry's own ancestor chain to the root, stopping a chain the moment it reaches an
    *  ancestor an earlier entry's walk already covered — that ancestor's own chain above it was
@@ -520,6 +522,20 @@ export class GesturePipeline {
       }
     }
     return false;
+  }
+
+  /** #610: `#commit`'s own re-check of arming's `asksRollup` — a lock the app sets mid-drag, after
+   *  `session()` armed, must still refuse at commit. Walks `#anAncestorHoldsDates` once more, over the
+   *  same entries arming walked (`proposal.paints`'s own ids), and only when arming's answer was
+   *  `false` — one walk per commit, never per pointer move (I5). */
+  #askRollupAgainAtCommit(proposal: GestureProposal): boolean {
+    if (proposal.asksRollup) return true;
+    const entries: Entry[] = [];
+    for (const id of proposal.paints.keys()) {
+      const entry = this.#deps.entryById(id);
+      if (entry !== undefined) entries.push(entry);
+    }
+    return this.#anAncestorHoldsDates(entries);
   }
 
   #proposalFor(input: {
@@ -639,7 +655,9 @@ export class GesturePipeline {
    *  holds the **commit draft** as preview and marks the bars `pending` until it settles. */
   #commit(gesture: EntryGesture, proposal: GestureProposal): Promise<boolean> {
     // #610: the same gate a preview frame resolves through — a resize and a `nudge()` never build a
-    // `RowDrop` of their own, so this is the only place either one meets it.
+    // `RowDrop` of their own, so this is the only place either one meets it. `#askRollupAgainAtCommit`
+    // runs first: arming's `asksRollup` can go stale if the app locks an ancestor mid-drag.
+    proposal = { ...proposal, asksRollup: this.#askRollupAgainAtCommit(proposal) };
     proposal = this.#refusedWhereDatesHold(proposal, this.#rolledUpForProposal(proposal));
     this.#scheduledCursorX = undefined;
     // A refused drop (or any drag whose draft ended up writing nothing) leaves the pointer up with
@@ -1093,12 +1111,14 @@ export class GesturePipeline {
   }
 
   /** #425 ruling 5: `rolledUpEditsFor = rolledUpEditsFor(draft)`, `#computePreview`'s door onto the
-   *  Rollup alone — never the extension hook, never a commit. `undefined` (no wiring, or a test-built
-   *  pipeline) ghosts nothing, the same silence an unwired `extraEditsFor` leaves.
+   *  Rollup alone — never the extension hook. `#commit` calls it too, through `#rolledUpForProposal`.
+   *  `undefined` (no wiring, or a test-built pipeline) ghosts nothing, the same silence an unwired
+   *  `extraEditsFor` leaves.
    *
    *  A plugin's own `rollUp: fn` aggregator can still throw — it is plugin code, the same as an
    *  extender, not core's own — so this needs `#extraFor`'s own recovery: catch here, the one place
-   *  on this rAF path that can, and paint no Rollup ghost for that frame. */
+   *  on this rAF path that can, and paint no Rollup ghost for that frame. A throw at commit reports
+   *  the same fault and recovers the same way. */
   #rolledUpFor(draft: ProposedEdits): ProposedEdits {
     const rolledUpEditsFor = this.#deps.rolledUpEditsFor;
     if (rolledUpEditsFor === undefined) return NO_EXTRA_EDITS;
@@ -1125,7 +1145,11 @@ export class GesturePipeline {
    *  `#rolledUpForProposal`'s own answer, asked once and handed to both this and (for a `place` drop)
    *  the ghost `#computePreview` paints. This reads back every parent `rolled` touched: the first one
    *  `proposedKeys` names a `start`/`end` for, where that field's own lock refuses, is the reason.
-   *  None found returns `proposal` unchanged. */
+   *  None found returns `proposal` unchanged.
+   *
+   *  A flat or grouped row source plans no row for an ancestor (`rowIndexForEntry` gives `-1`). The
+   *  refusal then paints the grabbed Entry's own row instead, so the preview still shows the refusal
+   *  the commit is about to give. */
   #refusedWhereDatesHold(proposal: GestureProposal, rolled: ProposedEdits): GestureProposal {
     if (rolled.size === 0) return proposal;
     let holderId: EntryId | undefined;
@@ -1142,7 +1166,8 @@ export class GesturePipeline {
     }
     if (holderId === undefined) return proposal;
     const rows = this.#deps.rowsForDrop();
-    const rowId = rows.rows[this.#deps.rowIndexForEntry(holderId)]?.id;
+    const rowIdFor = (id: EntryId): RowId | undefined => rows.rows[this.#deps.rowIndexForEntry(id)]?.id;
+    const rowId = rowIdFor(holderId) ?? rowIdFor(proposal.grabbed);
     return {
       writes: NO_WRITES,
       paints: proposal.paints,

@@ -1516,6 +1516,48 @@ describe("a locked ancestor holds its dates through a child's gesture (#610)", (
 
     expect(rolledUpEditsFor).toHaveBeenCalledTimes(1);
   });
+
+  it('paints the refusal on the grabbed row when the locked ancestor holds no row of its own', async () => {
+    const { p, child, deps, appliedRowDrops } = withHeldAncestor();
+    // The ancestor has no row of its own — a flat or grouped row source (frame-layout.ts's
+    // `rowIndexForEntry` gives `-1` for an id it never planned a row for).
+    const rowIndexForEntry = (id: EntryId): number => (id === child.id ? 1 : -1);
+    const pipeline = new GesturePipeline({
+      ...deps,
+      canRollUpInto: lockPEnd(p),
+      rolledUpEditsFor: () => new Map([[p.id, pe({ end: 450 })]]),
+      rowIndexForEntry,
+    });
+    const session = pipeline.session(child.id, { kind: 'move' })!;
+
+    session.preview(50);
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(appliedRowDrops.at(-1)).toEqual({ refusedRowId: rowId(child.id) });
+  });
+
+  it('locks an ancestor between preview() and commit() and still refuses at commit', async () => {
+    const { p, child, deps } = withHeldAncestor();
+    // Arming (`session()`) sees `p`'s dates open; the app locks `p.end` after that, mid-drag —
+    // the check `session()` made once at arming time must not be the last word at commit.
+    let locked = false;
+    const canRollUpInto: GesturePipelineDeps['canRollUpInto'] = (entry, field) =>
+      !(locked && entry.id === p.id && field === 'end');
+    const commitEntryEdits = vi.fn(() => true);
+    const pipeline = new GesturePipeline({
+      ...deps,
+      canRollUpInto,
+      rolledUpEditsFor: () => new Map([[p.id, pe({ end: 450 })]]),
+      commitEntryEdits,
+    });
+    const session = pipeline.session(child.id, { kind: 'move' })!;
+
+    locked = true;
+    const committed = await session.commit(50);
+
+    expect(committed).toBe(false);
+    expect(commitEntryEdits).not.toHaveBeenCalled();
+  });
 });
 
 // #425: a vertical drag reparents the grabbed bar. `p1{a, b}` and `p2{c}` — root order `p1, p2`.
