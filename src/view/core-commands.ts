@@ -64,9 +64,10 @@ export interface CoreCommandPorts {
   refusedRemovals(ids: readonly EntryId[]): readonly EntryId[];
   /** Tells the app that a Delete removed nothing, and names the Entries that stopped it. */
   reportRemoveRefused(ids: readonly EntryId[]): void;
-  /** Moves one Entry in the tree by one keyboard step, through the rules and events a row drag uses.
-   *  A refused step changes nothing and announces its reason. The shell keeps focus on the Entry. */
-  stepEntry(id: EntryId, step: EntryStep): void;
+  /** Moves each Entry in the tree by one keyboard step, through the rules and events a row drag uses.
+   *  A refused Entry stays and announces its reason. The others still move. The shell keeps focus
+   *  where it was. */
+  stepEntries(ids: readonly EntryId[], step: EntryStep): void;
   pageDown(): void;
   pageUp(): void;
   panToStart(): void;
@@ -179,23 +180,21 @@ export function registerCoreCommands(
     when: () => ports.focusedCellIsToggle(),
     run: () => ports.switchFocusedToggle(),
   });
-  // Which commands move the focused row in the tree? Each one runs a step through the same rules
-  // as a row drag. The chords and the context menu run these same commands. `when` asks only for a
-  // row or bar, because a refused step announces its reason instead of hiding the command.
-  const focusedEntry = (ctx: unknown): CommandContext<unknown>['entry'] => {
-    const { entry, target } = asCtx(ctx);
+  // Which commands move the selected rows in the tree? Each one runs a step for every selected Entry
+  // through the same rules as a row drag. The chords and the context menu run these same commands.
+  // `when` asks only for a row or bar, because a refused step announces its reason instead of hiding
+  // the command.
+  const steppedEntryIds = (ctx: unknown): readonly EntryId[] => {
+    const { target } = asCtx(ctx);
     const onRowOrBar = target?.kind === 'row' || target?.kind === 'gridCell' || target?.kind === 'bar';
-    return onRowOrBar ? entry : undefined;
+    return onRowOrBar ? (target.entryIds ?? []) : [];
   };
   const registerEntryStepCommand = (id: BuiltInCommandId, label: string, step: EntryStep): void => {
     register({
       id,
       label,
-      when: (ctx) => focusedEntry(ctx) !== undefined,
-      run: (ctx) => {
-        const entry = focusedEntry(ctx);
-        if (entry !== undefined) ports.stepEntry(entry.id, step);
-      },
+      when: (ctx) => steppedEntryIds(ctx).length > 0,
+      run: (ctx) => ports.stepEntries(steppedEntryIds(ctx), step),
     });
   };
   registerEntryStepCommand('freegantt.moveEntryUp', 'Move up', 'up');

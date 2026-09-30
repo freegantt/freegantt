@@ -58,7 +58,9 @@ import type {
 import type { RowDrop, PlacedEntry } from './row-drop.js';
 import { resolveRowDrop, ROW_DROP_REFUSAL_TEXT } from './row-drop.js';
 import type { EntryStep } from './entry-step.js';
-import { ENTRY_STEP_REFUSAL_TEXT, resolveEntryStep } from './entry-step.js';
+import { EntryStepTree } from './entry-step-tree.js';
+import { entryStepRefusalMessage, resolveEntryStep } from './entry-step.js';
+import type { EntryStepInput, EntryStepRefusal, EntryStepVerdict } from './entry-step.js';
 import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { RowHoverExpand } from './row-hover-expand.js';
@@ -118,6 +120,9 @@ export interface GesturePipelineDeps {
    *  parent bar answers with the dated descendants below it, because its own dates roll up. */
   entriesMovedBy(entry: Entry): readonly Entry[];
   commitEntryEdits(edits: ProposedEdits): boolean;
+  /** Runs `body` as one transaction, so its writes are one undo step. `false` when a `beforeChange`
+   *  handler refused the whole transaction. */
+  inOneTransaction(body: () => void): boolean;
   emit: EventBus<GanttEventMap, AsyncCancelableEvent>['emit'];
   /** A vetoed gesture still draws nothing and still throws nothing, and now it also
    *  reports. `plans/02` §3's "a vetoed gesture is silent" stays true of the *UI*. */
@@ -207,6 +212,15 @@ interface GestureProposal {
   /** #425: where this move lands in the tree, or the proof it never asked — `{ kind: 'timeOnly' }`
    *  for a resize, a nudge, or a drag whose pointer never left the source row. */
   readonly drop: RowDrop;
+}
+
+/** One Entry of a keyboard step run that its `beforeEntryMove` handlers let through. */
+interface AcceptedStep {
+  readonly id: EntryId;
+  readonly writes: ProposedEdits;
+  readonly payload: EntryMove;
+  readonly refusal: GestureRefusal;
+  readonly proposal: GestureProposal;
 }
 
 /** What one refused gesture reports — built once in `#commit`, where the gesture's own event name is
@@ -372,36 +386,164 @@ export class GesturePipeline {
     });
   }
 
-  /** A keyboard step moves one Entry in the tree — up, down, indent or outdent. It asks the rules a
-   *  row drop asks and commits through the same `beforeEntryMove`/`entryMove` pair, as one
-   *  transaction. A step the rules refuse writes nothing and raises one Error report, which the live
-   *  region announces. Answers `true` only when the Entry moved. */
-  commitEntryStep(id: EntryId, step: EntryStep): Promise<boolean> {
+  /** A keyboard step moves every Entry it is given in the tree — up, down, indent or outdent. Each
+   *  Entry takes the step it would take alone: it asks the same rules a row drop asks and commits
+   *  through the same `beforeEntryMove`/`entryMove` pair. An Entry the rules refuse stays, and the
+   *  others still move. The whole step is one transaction, so it is one undo step. Refused Entries
+   *  make one Error report, which the live region announces. Answers the Entries that moved. */
+  commitEntrySteps(ids: readonly EntryId[], step: EntryStep): Promise<readonly EntryId[]> {
     // Like `session()`, a new gesture supersedes a held one.
     this.#dropHeldGesture('superseded');
-    const entry = this.#deps.entryById(id);
-    if (entry === undefined) return Promise.resolve(false);
-    const verdict = resolveEntryStep({
+    return Promise.resolve(this.#commitEntryStepRun(ids, step));
+  }
+
+  /** Several Entries, one after the other, in the order a user would pick: `up` and `indent` go top
+   *  to bottom, `down` and `outdent` go bottom to top. Each step reads the Tree the steps before it
+   *  left, and no write happens until every step has its answer. Then one transaction writes them all.
+   *
+   *  A `beforeEntryMove` handler may answer with a Promise. The run holds like one held gesture: it
+   *  waits, and then asks the next Entry. A sync answer waits for nothing. If the data changes during
+   *  a wait, the run drops and writes nothing. A newer gesture supersedes the run, as it does a drag. */
+  #commitEntryStepRun(
+    ids: readonly EntryId[],
+    step: EntryStep,
+  ): readonly EntryId[] | Promise<readonly EntryId[]> {
+    const entries = this.#entriesInStepOrder(ids, step);
+    const tree = new EntryStepTree(this.#deps.rowsForDrop());
+    const accepted: AcceptedStep[] = [];
+    const refused: { id: EntryId; reason: EntryStepRefusal }[] = [];
+    // The rows as the run first saw them, for the data-changed check after a wait.
+    const measuredFrom = new Map<EntryId, StoredEntry | undefined>();
+    const askFrom = (start: number): readonly EntryId[] | Promise<readonly EntryId[]> => {
+      for (let index = start; index < entries.length; index += 1) {
+        const entry = entries[index]!;
+        const verdict = resolveEntryStep(this.#stepInput(entry, step), tree);
+        if (verdict.kind === 'refused') {
+          refused.push({ id: entry.id, reason: verdict.reason });
+          continue;
+        }
+        const { asked, answer } = this.#askBeforeEntryMove(entry.id, verdict);
+        for (const [id, row] of this.#measuredFrom(asked.proposal)) {
+          if (!measuredFrom.has(id)) measuredFrom.set(id, row);
+        }
+        const take = (): void => {
+          tree.place(verdict.moves[0]!);
+          accepted.push(asked);
+        };
+        if (typeof answer === 'boolean') {
+          if (answer) take();
+          else this.#reportRefusal(asked.refusal);
+          continue;
+        }
+        const generation = this.#awaitVeto([], asked.proposal, asked.refusal);
+        return answer.then((allowed) => {
+          // A newer gesture or Escape already reported and released this wait.
+          if (this.#held?.generation !== generation) return [];
+          const changed = this.#rowsChangedSince(measuredFrom);
+          this.#releaseHold();
+          if (!allowed) this.#reportRefusal(asked.refusal);
+          if (changed && (allowed || index + 1 < entries.length)) {
+            this.#reportGestureDropped(asked.refusal.entryId, asked.refusal.event, 'data-changed');
+            return [];
+          }
+          if (allowed) take();
+          return askFrom(index + 1);
+        });
+      }
+      return this.#writeAcceptedSteps(accepted, refused);
+    };
+    return askFrom(0);
+  }
+
+  /** One transaction writes every accepted step. Then each `entryMove` fires, and one report names
+   *  the refused Entries. */
+  #writeAcceptedSteps(
+    accepted: readonly AcceptedStep[],
+    refused: readonly { id: EntryId; reason: EntryStepRefusal }[],
+  ): readonly EntryId[] {
+    const written: AcceptedStep[] = [];
+    const first = accepted[0];
+    // A fault in the commit reports, and never throws: a key press has no caller to catch it.
+    const committed =
+      first === undefined ||
+      this.#finishCommit(
+        () =>
+          this.#deps.inOneTransaction(() => {
+            for (const one of accepted) {
+              if (this.#finishCommit(() => this.#deps.commitEntryEdits(one.writes), one.refusal)) {
+                written.push(one);
+              }
+            }
+          }),
+        first.refusal,
+      );
+    if (!committed) return [];
+    for (const one of written) this.#deps.emit('entryMove', one.payload);
+    if (refused.length > 0) this.#reportStepsRefused(refused, written.length);
+    return written.map((one) => one.id);
+  }
+
+  #stepInput(entry: Entry, step: EntryStep): EntryStepInput {
+    return {
       entry,
       step,
       rows: this.#deps.rowsForDrop(),
       canPlace: (moved, parentId) => this.#deps.canPlace(moved, parentId),
       verticalDropOffered: this.#deps.verticalDropOffered(),
-    });
-    if (verdict.kind === 'refused') {
-      this.#deps.raiseError({
-        code: 'entry-step-refused',
-        message: ENTRY_STEP_REFUSAL_TEXT[verdict.reason],
-        severity: 'info',
-        by: 'core',
-        entryId: id,
-      });
-      return Promise.resolve(false);
-    }
+    };
+  }
+
+  /** The selected Entries that still exist, top row first for `up` and `indent`, bottom row first for
+   *  `down` and `outdent`. */
+  #entriesInStepOrder(ids: readonly EntryId[], step: EntryStep): readonly Entry[] {
+    const topFirst = ids
+      .flatMap((id) => this.#deps.entryById(id) ?? [])
+      .sort((a, b) => this.#deps.rowIndexForEntry(a.id) - this.#deps.rowIndexForEntry(b.id));
+    return step === 'up' || step === 'indent' ? topFirst : topFirst.reverse();
+  }
+
+  /** Asks `beforeEntryMove` for one Entry of a run. `answer` is the handlers' verdict: `true` or
+   *  `false` at once, or a Promise when a handler waits. */
+  #askBeforeEntryMove(
+    id: EntryId,
+    verdict: Extract<EntryStepVerdict, { kind: 'place' }>,
+  ): { asked: AcceptedStep; answer: boolean | Promise<boolean> } {
     const drop: RowDrop = { kind: 'place', place: verdict.place, moves: verdict.moves };
-    // A step paints no preview, so `paints` stays empty: a held async veto shows no bar on the move.
     const writes = this.#writesWithPlace(NO_WRITES, NO_WRITES, verdict.moves);
-    return this.#commit({ kind: 'reorder' }, { writes, paints: NO_WRITES, grabbed: id, drop });
+    const proposal: GestureProposal = { writes, paints: NO_WRITES, grabbed: id, drop };
+    const payload = this.#entryMoveFor(proposal, this.#proposedDatesOf(id, undefined), [
+      this.#proposedDatesOf(id, writes.get(id)),
+    ]);
+    const note = new RefusalNote();
+    const refusal: GestureRefusal = { event: 'beforeEntryMove', entryId: id, note };
+    const before = this.#deps.emit('beforeEntryMove', {
+      ...payload,
+      refuse: note.refuse,
+    } satisfies Refusable);
+    const answer =
+      typeof before === 'boolean'
+        ? before
+        : before.then(
+            (allowed) => allowed,
+            () => false,
+          );
+    return { asked: { id, writes, payload, refusal, proposal }, answer };
+  }
+
+  /** One report for every Entry a step left in place. */
+  #reportStepsRefused(
+    refused: readonly { id: EntryId; reason: EntryStepRefusal }[],
+    movedCount: number,
+  ): void {
+    const first = refused[0];
+    if (first === undefined) return;
+    this.#deps.raiseError({
+      code: 'entry-step-refused',
+      message: entryStepRefusalMessage(refused, movedCount),
+      severity: 'info',
+      by: 'core',
+      entryId: first.id,
+    });
   }
 
   /** #602: `session()`'s one small map from gesture kind to the capability that gates it — a
@@ -683,15 +825,7 @@ export class GesturePipeline {
         : {
             before: 'beforeEntryMove' as const,
             after: 'entryMove' as const,
-            afterPayload: {
-              ...this.#movedDatesOf(proposal.grabbed, grabbed),
-              ...this.#treePlaceChangeFor(proposal.grabbed, proposal.drop),
-              entries: spans.map((span) => ({
-                ...span,
-                ...this.#treePlaceChangeFor(span.entry, proposal.drop),
-                shiftsTime: this.#shiftsTime(span.entry, span),
-              })),
-            } satisfies EntryMove,
+            afterPayload: this.#entryMoveFor(proposal, grabbed, spans),
           };
     // One payload shape, spelled once. The `before*` copy adds the note; nothing removes it again.
     const beforePayload = { ...event.afterPayload, refuse: note.refuse } satisfies Refusable;
@@ -708,6 +842,24 @@ export class GesturePipeline {
       }
       return committed;
     });
+  }
+
+  /** What `beforeEntryMove` and `entryMove` carry: the grabbed Entry's dates, and each moved Entry's
+   *  dates and tree place. */
+  #entryMoveFor(
+    proposal: GestureProposal,
+    grabbed: ProposedDates,
+    spans: readonly ProposedDates[],
+  ): EntryMove {
+    return {
+      ...this.#movedDatesOf(proposal.grabbed, grabbed),
+      ...this.#treePlaceChangeFor(proposal.grabbed, proposal.drop),
+      entries: spans.map((span) => ({
+        ...span,
+        ...this.#treePlaceChangeFor(span.entry, proposal.drop),
+        shiftsTime: this.#shiftsTime(span.entry, span),
+      })),
+    } satisfies EntryMove;
   }
 
   /** #425: this Entry's own share of `proposal.drop` — `{}` (no key at all, under
