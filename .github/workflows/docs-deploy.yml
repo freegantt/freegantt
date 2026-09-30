@@ -11,7 +11,7 @@ name: Docs deploy
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'src/**', 'etc/freegantt.api.md']
+    paths: ['docs/**', 'src/**', 'harness/**', 'fixtures/**', 'etc/freegantt.api.md']
   workflow_dispatch:
 
 permissions: {}

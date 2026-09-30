@@ -23,6 +23,15 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'performance', label: 'Performance', file: 'performance.html' },
 ];
 
+/** A build can ship some of the demo pages. `VITE_HARNESS_PAGES=generic-demo,performance` keeps
+ *  those two in the nav. Unset, every page shows, as in `pnpm dev`. */
+function shippedPages(): readonly HarnessPage[] {
+  const ids = (import.meta as { env?: { VITE_HARNESS_PAGES?: string } }).env?.VITE_HARNESS_PAGES;
+  if (!ids) return HARNESS_PAGES;
+  const shipped = ids.split(',');
+  return HARNESS_PAGES.filter((page) => shipped.includes(page.id));
+}
+
 /** The demo page `pathname` points at. The site root serves `index.html`. */
 function currentPageFile(pathname: string): string {
   return pathname.split('/').pop() || 'index.html';
@@ -30,7 +39,7 @@ function currentPageFile(pathname: string): string {
 
 function mountHarnessNav(nav: HTMLElement): void {
   const current = currentPageFile(window.location.pathname);
-  for (const page of HARNESS_PAGES) {
+  for (const page of shippedPages()) {
     const link = document.createElement('a');
     link.href = `./${page.file}`;
     link.textContent = page.label;
