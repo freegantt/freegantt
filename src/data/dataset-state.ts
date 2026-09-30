@@ -321,9 +321,10 @@ export class DatasetState implements Dataset {
    *  rolling up to cover the entry it just gained (ruling 5). Runs the Rollup alone, on the
    *  committed rows plus `draft`, with no extension hook to call and nothing to commit
    *  (`build-commit-change-set.ts`'s `rolledUpEditsFor`, mirroring `extraEditsFor`'s own shape,
-   *  ADR 0007). `view/gesture-pipeline.ts#computePreview` is the only caller, and only for a
-   *  `place` drop — a time-only drag ghosts nothing here on purpose (#425 ruling, a follow-up
-   *  covers it).
+   *  ADR 0007). `view/gesture-pipeline.ts#rolledUpForProposal` is the only caller, once per frame
+   *  and once per commit. A `place` drop reads this answer for its own ghost
+   *  (`#computePreview`); a time-only drag reads it too, when an ancestor might hold a date the
+   *  drag could move — but only to refuse the gesture (#610), never to paint an envelope.
    *
    *  A row-axis drag holds its own dates still and revisits the same drop target for many frames in
    *  a row (`entry-gestures.ts` pins `dxPx` to 0 there), so `#rolledUpPreview` answers straight from

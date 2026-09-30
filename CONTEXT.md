@@ -205,8 +205,10 @@ _Avoid_: ProposalResolver (superseded); EditAdjustment/`{ patch }` (retired 2026
 An Entry whose core `locked` Field reads `true` (`editable: 'api'`, no grid column). The user may not
 edit any of its cells, move it, or reorder it, in the grid pane or the timeline pane alike; a drop
 that would carry another Entry into or out of a locked parent refuses the same way (see **Place
-rule**, below). `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo
-all still write a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
+rule**, below). A gesture on some other Entry also refuses outright when the Rollup it would trigger
+changes `start`/`end` on a locked ancestor — either direction, since "hold" means the value stays.
+`entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo all still write
+a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
 .update(id, { locked: true })` sets it; `{ locked: undefined }` clears it.
 _Avoid_: Pinned (the scheduling plugin's own whole-Entry state, a separate refusal with a separate
 owner — see **Pinned**, above), Read-only, Frozen, Disabled

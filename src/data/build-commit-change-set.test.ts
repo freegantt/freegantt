@@ -216,6 +216,26 @@ describe("rolledUpEditsFor previews the Rollup a place drop's commit would settl
     expect(state.rolledUpEditsFor(draft).size).toBe(0);
   });
 
+  it("a time-only draft — no reparenting — still returns the parent's rolled-up row (#610)", () => {
+    // #610: a child's own time drag can move its parent's rolled-up dates too, the same as a
+    // reparenting drop does. `rolledUpEditsFor` must answer this for a time-only draft, not just
+    // one that moves an entry under a new parent — the gesture pipeline's refusal check reads it.
+    const state = new DatasetState({
+      entries: [
+        { id: 'parent', name: 'parent' },
+        { id: 'child', name: 'child', start: 100, end: 200 },
+      ],
+      timeZone: 'UTC',
+    });
+    state.entries.update('child', { parentId: entryId('parent') });
+
+    const draft = draftOf('child', { end: 300 });
+    const rolledUp = state.rolledUpEditsFor(draft);
+
+    const parentEdit = rolledUp.get(entryId('parent'));
+    expect(parentEdit?.end).toBe(300);
+  });
+
   it('a second frame that repeats the same drop does not copy the committed map again (I5)', () => {
     // `#writesWithPlace` (`view/gesture-pipeline.ts`) builds a fresh `ProposedEdit` on every rAF
     // frame, and a row-axis drag holds its own dates still (`dxPx` pinned to 0) — so a drag that

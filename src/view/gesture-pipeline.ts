@@ -1008,8 +1008,9 @@ export class GesturePipeline {
     const extenderExtra = this.#extraFor(proposal.writes);
     // #425 ruling 5: a `place` drop's own Rollup ghost — the new parent's dates rolling up to cover
     // the entry it just gained — merges in beside whatever the extension hook already ghosted.
-    // A time-only drag never asks: it keeps today's silence on purpose, a follow-up's job. `rolled`
-    // is the frame's own one Rollup answer (`#rolledUpForProposal`) — never asked twice for it.
+    // A time-only drag still ghosts nothing here: `#refusedWhereDatesHold` (#610) reads `rolled` to
+    // refuse the gesture, but this function only ever paints it for a `place` drop. `rolled` is the
+    // frame's own one Rollup answer (`#rolledUpForProposal`) — never asked twice for it.
     const extra =
       proposal.drop.kind === 'place' ? mergeProposedEditsByEntry(extenderExtra, rolled) : extenderExtra;
     const entries: Entry[] = [];

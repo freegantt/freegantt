@@ -359,8 +359,9 @@ export interface RolledUpEditsInput {
  *  the draft, so every parent the Rollup revisits is one the draft's own reparenting touched. Each
  *  rolling-up Field the pass rewrites folds onto one `ProposedEdit` per parent — the same
  *  `extraEditsFor` shape `gesture-pipeline.ts#computePreview` already ghosts an extension hook's
- *  writes through (ADR 0007). A time-only drag never calls this: showing no envelope ghost there is
- *  today's behaviour, kept on purpose (a follow-up covers it). */
+ *  writes through (ADR 0007). A time-only drag calls this too, when an ancestor might hold a date
+ *  it could move (#610) — but only to refuse the gesture; `#computePreview` still ghosts the
+ *  answer as an envelope for a `place` drop alone. */
 export function rolledUpEditsFor(input: RolledUpEditsInput): ProposedEdits {
   const pending: PendingRollUp = { added: [], removed: [], edits: { merged: input.draft } };
   const { updated } = rollUpFields(input.committed, pending, input.fields, input.fieldAccess, input.tree);

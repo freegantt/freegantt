@@ -72,6 +72,20 @@ describe('the core lock refuses a gesture onto a locked Entry (ADR 0038)', () =>
     expect(dataset.entries.get('t1')?.read('name')).toBe('Renamed by app code');
   });
 
+  it("entries.update() of a child still widens a locked parent's rolled-up dates (#610) — the lock stops only the user", () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'parent', name: 'Locked parent', locked: true },
+        { id: 'child', name: 'Child', parentId: 'parent', start: '2026-01-01', end: '2026-01-05' },
+      ],
+    });
+
+    dataset.entries.update('child', { end: '2026-01-20' });
+
+    expect(dataset.entries.get('child')?.end).toBe(dataset.entries.get('parent')?.end);
+  });
+
   it('an undo of a lock restores the Entry, in one step', () => {
     const dataset = new Dataset({
       timeZone: 'UTC',

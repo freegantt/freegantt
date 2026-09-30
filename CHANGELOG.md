@@ -28,6 +28,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 - The planner harness page's `#` cell no longer keeps a work row's number after the row becomes a phase. ([#618](https://github.com/freegantt/freegantt/issues/618))
 - A dataset write that closes a row's capabilities with no capability-rule change of its own — locking the only selected Entry, for example — now refreshes its affordances right away. Before, a stale resize handle or drop indicator stayed painted until the next hover, Selection change, or capability change. ([#612](https://github.com/freegantt/freegantt/issues/612))
+- A locked parent's own summary bar no longer arms a move. Its dates roll up from its children, so it never "owns" them, and a move used to read that as open. ([#610](https://github.com/freegantt/freegantt/issues/610))
+- A move, resize, nudge, reorder, or a drop into a new parent now refuses when its own Rollup would change `start`/`end` on an ancestor a lock holds, wider or narrower — the same silent refusal a lock already gives every other gesture. Before, dragging a child past a locked parent's end moved the parent's dates along with it. ([#610](https://github.com/freegantt/freegantt/issues/610))
 
 ## [0.0.1] - 2026-09-28
 

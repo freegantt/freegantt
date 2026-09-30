@@ -2,8 +2,11 @@
 status: accepted — ruled 2026-09-28/29. Amends [ADR 0015](0015-what-the-write-door-refuses.md) — a
   lock rule always answers; `undefined` silence retires. Amends
   [ADR 0034](0034-sibling-order-is-a-field.md) — an explicit move also asks the place rule below; the
-  renumber and the Rollup still write past a lock. Working material:
-  `plan-612.md` (issue #612).
+  renumber and the Rollup still write past a lock. Amended by
+  [0039](0039-a-user-gesture-refuses-a-rollup-that-would-move-a-locked-date.md) — a user gesture also
+  refuses when its own Rollup would change a date this lock holds; app code, a cascade and every
+  other door still write past it, as this record already settled for every other cell. Working
+  material: `plan-612.md` (issue #612).
 decided: `locked` is a core Field (§"The public API a consumer meets"). Core installs its own lock
   rule and a new place rule after every plugin, so no plugin widens a locked Entry. A plugin still
   locks a cell or a subtree, and a new place rule seam (`ctx.edits.setPlaceRule`) answers whether an
