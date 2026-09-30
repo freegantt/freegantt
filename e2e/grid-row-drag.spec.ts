@@ -42,7 +42,10 @@ async function firstVisibleGridRow(
     const box = await gridRow(page, row.rowId).boundingBox();
     if (!box) continue;
     if (box.y < viewport.y || box.y + box.height > viewport.y + viewport.height) continue;
-    return { row, grabX: box.x + box.width - 20, grabY: box.y + box.height / 2 };
+    // The Start cell: the padlock toggle column sits last, and a click on it would switch the lock.
+    const cell = await gridRow(page, row.rowId).locator('[data-field="start"]').boundingBox();
+    if (!cell) continue;
+    return { row, grabX: cell.x + cell.width / 2, grabY: box.y + box.height / 2 };
   }
   throw new Error('no candidate row is visible in the grid pane at the current scroll position');
 }
