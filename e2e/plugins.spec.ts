@@ -82,23 +82,29 @@ test('[#437] a context menu opened near a pane top paints, and hit-tests, above 
 // A preset switch changes the axis's total pixel width (`ScrollAxis.position` is a raw
 // px offset, never re-anchored to a time when content width changes), so the visible window after
 // a bare preset assignment is not the same instant range the previous preset showed. `panToDate`
-// states the instant this test actually needs — 2026-09-12, a Saturday inside the demo dataset's
-// range (`fixtures/demo-dataset.ts`) — instead of relying on wherever the axis happened to leave
+// states the instant this test actually needs — the next Saturday, inside the demo dataset's
+// range (`fixtures/demo-dataset.ts`, which starts two weeks before today) — instead of relying on wherever the axis happened to leave
 // the old pixel position.
 test('[#404] timeShading() still paints at both hour zoom rungs', async ({ page }) => {
   await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
-  await page.evaluate(() => {
-    window.__gantt.preset = 'hour';
-    window.__gantt.panToDate('2026-09-12', 'center');
+  const saturday = await page.evaluate(() => {
+    const day = new Date();
+    day.setUTCHours(12, 0, 0, 0);
+    day.setUTCDate(day.getUTCDate() + ((6 - day.getUTCDay() + 7) % 7 || 7));
+    return day.toISOString();
   });
+  await page.evaluate((at) => {
+    window.__gantt.preset = 'hour';
+    window.__gantt.panToDate(at, 'center');
+  }, saturday);
   await expect(page.locator('#gantt .fg-range-band.fg-time-shading').first()).toBeVisible();
 
-  await page.evaluate(() => {
+  await page.evaluate((at) => {
     window.__gantt.preset = 'hourDayWeek';
-    window.__gantt.panToDate('2026-09-12', 'center');
-  });
+    window.__gantt.panToDate(at, 'center');
+  }, saturday);
   await expect(page.locator('#gantt .fg-range-band.fg-time-shading').first()).toBeVisible();
 });
 

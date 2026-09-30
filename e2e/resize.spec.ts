@@ -17,13 +17,21 @@ import { test, expect, type Locator } from '@playwright/test';
 async function visibleResizableBar(page: import('@playwright/test').Page): Promise<Locator> {
   const bars = page.locator('#gantt .fg-bar');
   await bars.first().waitFor();
+  // The page pans to today on load, one frame later. Bars hold still only after that.
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
   const count = await bars.count();
   const viewport = page.viewportSize();
   const endHandle = page.locator('.fg-bar-handle[data-edge="end"]');
   for (let i = 0; i < count; i++) {
     const bar = bars.nth(i);
+    // A leg of the segmented row shares its row with two other legs, so it is not a plain task bar.
+    if (((await bar.getAttribute('data-bar-id')) ?? '').startsWith('entry-16-')) continue;
+    await bar.scrollIntoViewIfNeeded();
     const box = await bar.boundingBox();
-    if (!box || box.x < 0 || !viewport || box.x + box.width > viewport.width) continue;
+    // The drags below pull an edge 60px right, so the bar needs that room inside the viewport, and a click may scroll it right.
+    if (!box || box.x < 0 || !viewport || box.x + box.width + 200 > viewport.width) continue;
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     if (await endHandle.isVisible()) return bar;
   }

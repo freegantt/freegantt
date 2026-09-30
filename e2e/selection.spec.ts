@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { panToPlanBody } from './row-drag-support.js';
 
 async function nativeHighlight(page: import('@playwright/test').Page): Promise<string> {
   return page.evaluate(() => window.getSelection()?.toString() ?? '');
@@ -150,6 +151,7 @@ test('a right-click keeps a multi-bar Selection when it lands inside it, and cle
 }) => {
   await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await panToPlanBody(page);
 
   const bars = await unobstructedBars(page, 2);
   const firstBar = bars[0]!;

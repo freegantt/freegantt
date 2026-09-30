@@ -154,7 +154,13 @@ const gantt = new Gantt({
   gridColumns: GRID_COLUMNS,
   gridWidth: 'fitColumns',
   rowSource: { source: 'entries', tree: true, childrenAsSegments: drawsChildrenAsSegments },
-  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
+  dateLines: [
+    {
+      placeAt: mobilization,
+      label: "Mobilization — can't move before this",
+      className: 'demo-mobilization-line',
+    },
+  ],
   dateLineLabelPlacement: 'inHeader',
   gridCellRenderer: overBudgetCell,
 });
