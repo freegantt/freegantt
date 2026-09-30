@@ -326,7 +326,7 @@ ${DARK_COLOR_TOKENS}
 /* S5.7: a fixed/pinned column's cursor stays a plain pointer — no resize/reorder affordance
    to promise. */
 .fg-col-header[data-movable-off] { cursor: default; }
-.fg-col-header-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+.fg-col-header-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 1 auto; }
 /* S5.7: the resize grip. 6px wide visually; --fg-column-resizer-hit (default 12px, via the
    ::before overlay below) widens only the pointer hit target, so adjacent cells' text never loses
    space to it. --fg-column-min-width (default 40, read by GanttShell, no rule of its own here — same
