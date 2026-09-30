@@ -5,7 +5,9 @@
 
 import type { Entry, EntryId } from '../model/index.js';
 import type { DropPlace, RowsForDrop } from '../layout/row-drop-target.js';
-import { placedEntriesFor, placementRefusal, ROW_DROP_REFUSAL_TEXT } from './row-drop.js';
+import { siblingBlockMove } from '../data/sibling-order.js';
+import { EntryStepTree } from './entry-step-tree.js';
+import { placementRefusal, ROW_DROP_REFUSAL_TEXT } from './row-drop.js';
 import type { PlacedEntry, PlacementRefusal, RowDropInput } from './row-drop.js';
 
 /** One keyboard step. `up` and `down` swap the Entry with a sibling. `indent` makes it the last child
@@ -58,10 +60,15 @@ interface StepTarget {
  * Where a keyboard step puts the Entry, or why it does not.
  *
  * Call: `resolveEntryStep({ entry, step: 'indent', rows, canPlace, verticalDropOffered })`.
+ * A run of steps passes one `tree`, so each step reads the Tree as the steps before it left it.
+ * The caller tells the `tree` about a step that lands (`tree.place`). This function never does.
  */
-export function resolveEntryStep(input: EntryStepInput): EntryStepVerdict {
+export function resolveEntryStep(
+  input: EntryStepInput,
+  tree: EntryStepTree = new EntryStepTree(input.rows),
+): EntryStepVerdict {
   const { entry, step, rows } = input;
-  const target = stepTarget(entry, step, rows);
+  const target = stepTarget(entry, step, tree);
   if ('refused' in target) return { kind: 'refused', reason: target.refused };
   if (!input.verticalDropOffered && !appendsToSegmentsRow(step, target, rows)) {
     return { kind: 'refused', reason: 'rowsOutOfTreeOrder' };
@@ -80,16 +87,41 @@ export function resolveEntryStep(input: EntryStepInput): EntryStepVerdict {
     rowId: undefined,
     side: 'end',
   };
-  return { kind: 'place', place, moves: placedEntriesFor([entry], place, rows) };
+  return { kind: 'place', place, moves: [placedEntryFor(entry, place, target.parent, tree)] };
+}
+
+/** The write for one Entry. `siblingBlockMove` counts the target group with the Entry in it, the same as a row drop. */
+function placedEntryFor(
+  entry: Entry,
+  place: DropPlace,
+  parent: Entry | undefined,
+  tree: EntryStepTree,
+): PlacedEntry {
+  const currentSiblings = tree.siblingsOf(entry);
+  const { calls, finalRanks } = siblingBlockMove({
+    movedIds: [entry.id],
+    targetSiblings: tree.childrenOf(parent).map((sibling) => sibling.id),
+    index: place.index,
+  });
+  return {
+    id: entry.id,
+    parentId: place.parentId,
+    at: calls[0]!.at,
+    place: { parentId: place.parentId, siblingIndex: finalRanks.get(entry.id)! },
+    currentPlace: {
+      parentId: tree.parentOf(entry)?.id,
+      siblingIndex: currentSiblings.findIndex((sibling) => sibling.id === entry.id),
+    },
+  };
 }
 
 function stepTarget(
   entry: Entry,
   step: EntryStep,
-  rows: RowsForDrop,
+  tree: EntryStepTree,
 ): StepTarget | { refused: EntryStepRefusal } {
-  const parent = entry.parent();
-  const siblings = siblingsOf(entry, rows);
+  const parent = tree.parentOf(entry);
+  const siblings = tree.siblingsOf(entry);
   const rank = siblings.findIndex((sibling) => sibling.id === entry.id);
   switch (step) {
     case 'up':
@@ -101,18 +133,14 @@ function stepTarget(
       const above = siblings[rank - 1];
       return above === undefined
         ? { refused: 'noSiblingAbove' }
-        : { parent: above, index: above.children().length };
+        : { parent: above, index: tree.childrenOf(above).length };
     }
     case 'outdent': {
       if (parent === undefined) return { refused: 'topLevel' };
-      const parentRank = siblingsOf(parent, rows).findIndex((sibling) => sibling.id === parent.id);
-      return { parent: parent.parent(), index: parentRank + 1 };
+      const parentRank = tree.siblingsOf(parent).findIndex((sibling) => sibling.id === parent.id);
+      return { parent: tree.parentOf(parent), index: parentRank + 1 };
     }
   }
-}
-
-function siblingsOf(entry: Entry, rows: RowsForDrop): readonly Entry[] {
-  return entry.parent()?.children() ?? rows.rootEntries();
 }
 
 /** True for an `indent` under a `childrenAsSegments` row. A row drop also lands "into" such a row
@@ -121,4 +149,16 @@ function appendsToSegmentsRow(step: EntryStep, target: StepTarget, rows: RowsFor
   if (step !== 'indent' || target.parent === undefined) return false;
   const parentId: EntryId = target.parent.id;
   return rows.rows.find((row) => row.entryIds[0] === parentId)?.childrenAsSegments === true;
+}
+
+/** Why these Entries did not move, in one sentence. One refused Entry alone keeps its own sentence. */
+export function entryStepRefusalMessage(
+  refused: readonly { readonly id: EntryId; readonly reason: EntryStepRefusal }[],
+  movedCount: number,
+): string {
+  const first = refused[0];
+  if (first === undefined) return '';
+  if (refused.length === 1 && movedCount === 0) return ENTRY_STEP_REFUSAL_TEXT[first.reason];
+  const lead = movedCount === 0 ? 'Nothing moved.' : 'Some entries did not move.';
+  return `${lead} These entries stay in place: ${refused.map((one) => one.id).join(', ')}.`;
 }

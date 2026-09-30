@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEntryStep } from './entry-step.js';
+import { entryStepRefusalMessage, resolveEntryStep } from './entry-step.js';
+import { EntryStepTree } from './entry-step-tree.js';
 import type { EntryStep, EntryStepInput, EntryStepVerdict } from './entry-step.js';
 import type { RowsForDrop } from '../layout/row-drop-target.js';
 import { PLANNED_ROW_KIND } from '../layout/rows/row-source.js';
@@ -43,15 +44,23 @@ const ROWS: RowsForDrop = {
   rootEntries: () => [P1, P2, r, g],
 };
 
-function resolve(entry: Entry, step: EntryStep, overrides: Partial<EntryStepInput> = {}): EntryStepVerdict {
-  return resolveEntryStep({
-    entry,
-    step,
-    rows: ROWS,
-    canPlace: () => true,
-    verticalDropOffered: true,
-    ...overrides,
-  });
+function resolve(
+  entry: Entry,
+  step: EntryStep,
+  overrides: Partial<EntryStepInput> = {},
+  tree?: EntryStepTree,
+): EntryStepVerdict {
+  return resolveEntryStep(
+    {
+      entry,
+      step,
+      rows: ROWS,
+      canPlace: () => true,
+      verticalDropOffered: true,
+      ...overrides,
+    },
+    tree,
+  );
 }
 
 function placed(verdict: EntryStepVerdict): { parentId: unknown; index: number } {
@@ -166,5 +175,65 @@ describe('resolveEntryStep', () => {
         reason: 'rowsOutOfTreeOrder',
       });
     });
+  });
+});
+
+describe('a run of steps over one tree', () => {
+  /** Resolves each Entry in turn, like the pipeline, and lets the tree hear about every step that lands. */
+  function run(entries: readonly Entry[], step: EntryStep): string[] {
+    const tree = new EntryStepTree(ROWS);
+    return entries.map((entry) => {
+      const verdict = resolve(entry, step, {}, tree);
+      if (verdict.kind === 'place') tree.place(verdict.moves[0]!);
+      return verdict.kind === 'place'
+        ? `${entry.id}@${String(verdict.place.parentId)}:${verdict.place.index}`
+        : `${entry.id}:${verdict.reason}`;
+    });
+  }
+
+  it('indents two siblings top to bottom into the same parent', () => {
+    expect(run([b, c], 'indent')).toEqual(['b@a:0', 'c@a:1']);
+  });
+
+  it('indents two siblings bottom to top into nested parents, which is the wrong order', () => {
+    expect(run([c, b], 'indent')).toEqual(['c@b:0', 'b@a:0']);
+  });
+
+  it('outdents two siblings bottom to top without swapping them', () => {
+    expect(run([c, b], 'outdent')).toEqual(['c@undefined:1', 'b@undefined:1']);
+  });
+
+  it('lets a lower Entry pass a blocked one at the selection edge', () => {
+    expect(run([a, b], 'up')).toEqual(['a:firstSibling', 'b@P1:0']);
+  });
+
+  it('moves down bottom to top, so the lower Entry makes room', () => {
+    expect(run([c, b], 'down')).toEqual(['c:lastSibling', 'b@P1:3']);
+  });
+});
+
+describe('entryStepRefusalMessage', () => {
+  it('keeps the one sentence of a single refused Entry', () => {
+    expect(entryStepRefusalMessage([{ id: a.id, reason: 'firstSibling' }], 0)).toBe(
+      'Nothing moved. This entry is the first of its siblings.',
+    );
+  });
+
+  it('names every refused Entry when nothing moved', () => {
+    expect(
+      entryStepRefusalMessage(
+        [
+          { id: a.id, reason: 'firstSibling' },
+          { id: P1.id, reason: 'firstSibling' },
+        ],
+        0,
+      ),
+    ).toBe('Nothing moved. These entries stay in place: a, P1.');
+  });
+
+  it('says some Entries did not move when others moved', () => {
+    expect(entryStepRefusalMessage([{ id: a.id, reason: 'firstSibling' }], 2)).toBe(
+      'Some entries did not move. These entries stay in place: a.',
+    );
   });
 });

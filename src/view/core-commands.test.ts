@@ -12,7 +12,7 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
   return {
     collapseAll: vi.fn(),
     expandAll: vi.fn(),
-    stepEntry: vi.fn(),
+    stepEntries: vi.fn(),
     collapseRow: vi.fn(),
     expandRow: vi.fn(),
     canZoomIn: vi.fn(() => true),
@@ -564,8 +564,28 @@ describe('the entry step commands', () => {
 
     registry.run(id);
 
-    expect(ports.stepEntry).toHaveBeenCalledOnce();
-    expect(ports.stepEntry).toHaveBeenCalledWith(focusedRow.id, step);
+    expect(ports.stepEntries).toHaveBeenCalledOnce();
+    expect(ports.stepEntries).toHaveBeenCalledWith([focusedRow.id], step);
+  });
+
+  it('steps every selected Entry in one call', () => {
+    const ports = fakePorts();
+    const ids = [entryId('e1'), entryId('e2'), entryId('e3')];
+    const registry = new CommandRegistry<unknown>(
+      () =>
+        ({
+          dataset: {},
+          gantt: {},
+          entry: focusedRow,
+          target: { kind: 'bar', entryIds: ids },
+        }) as unknown as CommandContext<unknown>,
+    );
+    registerCoreCommands(registry, ports);
+
+    registry.run('freegantt.moveEntryDown');
+
+    expect(ports.stepEntries).toHaveBeenCalledOnce();
+    expect(ports.stepEntries).toHaveBeenCalledWith(ids, 'down');
   });
 
   it.each(['row', 'gridCell', 'bar'] as const)('is available on a %s target', (kind) => {
@@ -593,7 +613,7 @@ describe('the entry step commands', () => {
 
     registry.run('freegantt.indentEntry');
 
-    expect(ports.stepEntry).not.toHaveBeenCalled();
+    expect(ports.stepEntries).not.toHaveBeenCalled();
     expect(registry.available().map((command) => command.id)).not.toContain('freegantt.indentEntry');
   });
 });
