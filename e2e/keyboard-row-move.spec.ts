@@ -32,7 +32,10 @@ async function pickSubject(page: Page): Promise<Subject> {
       const siblings = parent.children();
       const index = siblings.findIndex((sibling) => sibling.id === entry.id);
       const previous = siblings[index - 1];
-      if (index > 0 && index < siblings.length - 1 && previous !== undefined) {
+      // An indent nests the row under `previous`. A segmented parent draws its children as bars on its
+      // own row, so the indented row would leave the grid. Only a childless sibling makes a safe parent.
+      const previousIsLeaf = previous !== undefined && previous.children().length === 0;
+      if (index > 0 && index < siblings.length - 1 && previous !== undefined && previousIsLeaf) {
         return { id: String(entry.id), parentId: String(parent.id), previousSiblingId: String(previous.id) };
       }
     }
