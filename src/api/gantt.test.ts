@@ -7458,6 +7458,114 @@ describe('Gantt entryMove — a grid row drag reaches the same switch as a bar d
 // ADR 0038: a plugin's place rule refuses a cross-parent drop the same way in both panes — the
 // owner's "a plugin gets the same preview-time refusal" proof. `p2`'s own place rule refuses; `p1`
 // still takes the drop.
+// #604: a row drag that rests "into" a collapsed parent expands it, so a drop can land between its
+// children. The expand is view state: the Dataset takes no write and holds no undo step.
+describe('Gantt — a row drag held over a collapsed parent expands it (#604)', () => {
+  const ROWS_LAYER = '.fg-rows';
+  const HOLD_MS = 700;
+
+  function collapsedParentGantt() {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'c', name: 'C', parentId: 'p2', start: '2026-01-05', end: '2026-01-08' },
+      ],
+    });
+    const gantt = new Gantt({ container, dataset, collapsed: ['p2'] });
+    return { container, dataset, gantt };
+  }
+
+  /** Grabs row "a" and moves the pointer to `clientY`. Row height is 36, so y=90 is p2's middle. */
+  function grabRowAndMoveTo(container: HTMLElement, clientY: number): HTMLElement {
+    const rowsLayer = container.querySelector<HTMLElement>(ROWS_LAYER)!;
+    rowsLayer.setPointerCapture = vi.fn();
+    rowsLayer.releasePointerCapture = vi.fn();
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"]')!;
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? row : null);
+    rowsLayer.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    rowsLayer.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY, pointerId: 1 }));
+    return rowsLayer;
+  }
+
+  const originalElementFromPoint = document.elementFromPoint?.bind(document);
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    document.elementFromPoint = originalElementFromPoint;
+  });
+
+  it('expands the parent after the hold, with no Dataset write and no undo step', () => {
+    const { container, dataset, gantt } = collapsedParentGantt();
+    const changes: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      changes.push(changeSet);
+    });
+
+    grabRowAndMoveTo(container, 90);
+    vi.advanceTimersByTime(HOLD_MS - 1);
+    expect(gantt.collapseStateOf('p2')).toBe('collapsed');
+    vi.advanceTimersByTime(1);
+
+    expect(gantt.collapseStateOf('p2')).toBe('expanded');
+    expect(changes).toEqual([]);
+    expect(dataset.canUndo).toBe(false);
+    gantt.destroy();
+  });
+
+  it('leaves the parent expanded when Escape cancels the drag', () => {
+    const { container, dataset, gantt } = collapsedParentGantt();
+    grabRowAndMoveTo(container, 90);
+    vi.advanceTimersByTime(HOLD_MS);
+
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(gantt.collapseStateOf('p2')).toBe('expanded');
+    expect(dataset.canUndo).toBe(false);
+    expect(dataset.entries.get(entryId('a'))!.parent()?.id).toBe(entryId('p1'));
+    gantt.destroy();
+  });
+
+  it('does not expand when Escape cancels the drag before the hold ends', () => {
+    const { container, gantt } = collapsedParentGantt();
+    grabRowAndMoveTo(container, 90);
+    vi.advanceTimersByTime(HOLD_MS - 100);
+
+    container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    vi.advanceTimersByTime(HOLD_MS);
+
+    expect(gantt.collapseStateOf('p2')).toBe('collapsed');
+    gantt.destroy();
+  });
+
+  it('lets the drop land between the children after the parent expands', () => {
+    const { container, dataset, gantt } = collapsedParentGantt();
+    const rowsLayer = grabRowAndMoveTo(container, 90);
+    vi.advanceTimersByTime(HOLD_MS);
+
+    // p2 expanded: its child "c" now paints below it, at y 108. Its top third is a drop before it.
+    rowsLayer.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 115, pointerId: 1 }));
+    rowsLayer.dispatchEvent(new PointerEvent('pointerup', { clientX: 5, clientY: 115, pointerId: 1 }));
+
+    const a = dataset.entries.get(entryId('a'))!;
+    expect(a.parent()?.id).toBe(entryId('p2'));
+    expect(
+      dataset.entries
+        .get(entryId('p2'))!
+        .children()
+        .map((child) => child.id),
+    ).toEqual([entryId('a'), entryId('c')]);
+    gantt.destroy();
+  });
+});
+
 describe("a plugin's place rule refuses a drop at preview, in both panes", () => {
   function stubPointerCapture(el: HTMLElement): void {
     el.setPointerCapture = vi.fn();

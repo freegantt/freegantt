@@ -34,6 +34,7 @@ import type {
   RaiseError,
   Refusable,
   ProposedEdits,
+  RowId,
 } from '../model/index.js';
 import { EntryNotFoundError, InvertedSpanError, barId, spansTime } from '../model/index.js';
 import type { BeforeGestureEvent } from '../data/error-reporting.js';
@@ -58,6 +59,7 @@ import type { RowDrop, PlacedEntry } from './row-drop.js';
 import { resolveRowDrop } from './row-drop.js';
 import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
+import type { RowHoverExpand } from './row-hover-expand.js';
 import type { DraftOptions, EntryGesture, EntryGestureSession } from './entry-gesture-context.js';
 import type { InteractionState } from '../render/backend.js';
 
@@ -70,6 +72,11 @@ const NOTHING_PAINTED_ONLY: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId
  *  (`interaction/entry-gestures.ts` zeroes its own `dxPx` before this ever runs), so once the row
  *  target itself refuses, there is no time fallback left to commit either. */
 const NO_WRITES: ProposedEdits = Object.freeze(new Map());
+
+/** The row a drop lands "into", or `undefined` for any other verdict. A refused drop names no row. */
+function intoRowOf(drop: RowDrop): RowId | undefined {
+  return drop.kind === 'place' && drop.place.side === 'into' ? drop.place.rowId : undefined;
+}
 
 /** #425: a `paintedOnly` Entry's own translated dates (ADR 0013 — they never write directly), with
  *  the dates dropped so `#writesWithPlace` can still write its tree place. `undefined` in,
@@ -177,6 +184,9 @@ export interface GesturePipelineDeps {
   /** #425: does this Gantt's row order mirror the tree at all — `false` for a plugin-owned
    *  hierarchy or a sorted/grouped row source, which offer no vertical drop (coordinator ruling). */
   verticalDropOffered(): boolean;
+  /** #604: expands a collapsed parent the drop rests "into", so a drop can land between its
+   *  children. The pipeline aims it on each row-drop preview and stops it when the drag ends. */
+  readonly rowHoverExpand: RowHoverExpand;
 }
 
 /** What one gesture proposes, ready to write and ready to paint.
@@ -272,6 +282,7 @@ export class GesturePipeline {
     // #272/#273: a new gesture supersedes a held one instead of refusing to arm over it — the old
     // "arm lock" let one hung handler on one bar refuse every gesture in the Gantt, forever.
     this.#dropHeldGesture('superseded');
+    this.#deps.rowHoverExpand.stop();
     const capability = this.#capabilityFor(gesture);
     const edge = gesture.kind === 'resize' ? gesture.edge : undefined;
     const bars = this.#entriesForGesture(grabbed, capability, edge);
@@ -282,7 +293,7 @@ export class GesturePipeline {
     const draftedEntries = gesture.kind === 'reorder' ? undefined : this.#draftedEntries(bars, capability);
     const reparents = gesture.kind === 'move' || gesture.kind === 'reorder';
     const movedTopMost = reparents ? this.#movedTopMost(anchor.id, bars) : [];
-    const sourceRowIndex = reparents ? this.#deps.rowIndexForEntry(anchor.id) : -1;
+    let sourceRowIndex = reparents ? this.#deps.rowIndexForEntry(anchor.id) : -1;
     // #425: the last resolved zone for this drag, so `rowDropZoneAt`'s hysteresis measures against
     // the drag's own history rather than a fresh reading every frame. `dropFor`'s `persist` flag
     // keeps a `commit()`/`nudge()` call (which never repeats) from advancing it.
@@ -299,15 +310,34 @@ export class GesturePipeline {
         verticalDropOffered: this.#deps.verticalDropOffered(),
       });
     };
+    // The last preview, so a hover expand can preview again with no pointer move.
+    let hasPreviewed = false;
+    let lastDxPx = 0;
+    let lastOptions: DraftOptions | undefined;
+    const previewAgain = (): void => {
+      if (!hasPreviewed) return;
+      // The expanded rows moved every row below them, the grabbed row too.
+      sourceRowIndex = this.#deps.rowIndexForEntry(anchor.id);
+      previewNow(lastDxPx, lastOptions);
+    };
+    const previewNow = (dxPx: number, options: DraftOptions | undefined): void => {
+      const drop = dropFor(options, true);
+      this.#preview(proposalFor(dxPx, options, drop), options?.cursorX);
+      if (reparents) this.#deps.rowHoverExpand.holdOver(intoRowOf(drop), previewAgain);
+    };
     const proposalFor = (dxPx: number, options: DraftOptions | undefined, drop: RowDrop): GestureProposal =>
       gesture.kind === 'reorder'
         ? this.#reorderProposal(anchor.id, drop)
         : this.#proposalFor({ gesture, ...draftedEntries!, grabbed: anchor.id, dxPx, options, drop });
     return {
       preview: (dxPx, options) => {
-        this.#preview(proposalFor(dxPx, options, dropFor(options, true)), options?.cursorX);
+        hasPreviewed = true;
+        lastDxPx = dxPx;
+        lastOptions = options;
+        previewNow(dxPx, options);
       },
       commit: (dxPx, options) => {
+        this.#deps.rowHoverExpand.stop();
         return this.#commit(gesture, proposalFor(dxPx, options, dropFor(options, false)));
       },
       nudge: (direction, options) => {
@@ -321,6 +351,7 @@ export class GesturePipeline {
         return this.#commit(gesture, proposalFor(dxPx, options, { kind: 'timeOnly' }));
       },
       cancel: () => {
+        this.#deps.rowHoverExpand.stop();
         this.#preview(undefined);
       },
     };

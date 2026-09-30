@@ -386,3 +386,56 @@ test("the insertion line sits deeper above a group's last child than below it, d
 
   expect(insetAboveBoundary).toBeGreaterThan(insetBelowBoundary);
 });
+
+test('holding a grid row drag over a collapsed parent expands it, and the drop lands between its children', async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const before = await rowPlan(page);
+  const viewport = await rowsViewportBox(page);
+  const { row: leaf } = await firstVisibleGridRow(
+    page,
+    before.filter((row) => row.childCount === 0 && row.hasOwnBar),
+    viewport,
+  );
+  const leafParentId = await currentParentId(page, leaf.entryId);
+  // A parent that paints its own bar takes an ordinary "into" drop. A parent that draws its
+  // children as bars on itself has no child rows to expand.
+  const target = before.find(
+    (row) =>
+      row.childCount > 0 && row.hasOwnBar && row.entryId !== leafParentId && row.entryId !== leaf.entryId,
+  )!;
+
+  await page.evaluate((id) => window.__gantt.collapse(id), target.rowId);
+  await expect
+    .poll(() => page.evaluate((id) => window.__gantt.collapseStateOf(id), target.rowId))
+    .toBe('collapsed');
+
+  // The collapse moved every row below it, so read the grab point and the target after it.
+  const collapsedRows = await rowPlan(page);
+  const grab = await firstVisibleGridRow(
+    page,
+    collapsedRows.filter((row) => row.entryId === leaf.entryId),
+    viewport,
+  );
+  const targetBox = (await gridRow(page, target.rowId).boundingBox())!;
+  await countChangesFromHere(page);
+
+  await dragPointerTo(page, grab.grabX, grab.grabY, grab.grabX, targetBox.y + targetBox.height / 2);
+
+  // The pointer holds still: only the delay expands the parent.
+  await expect
+    .poll(() => page.evaluate((id) => window.__gantt.collapseStateOf(id), target.rowId))
+    .toBe('expanded');
+  expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(0);
+  expect(await page.evaluate(() => window.__gantt.dataset.canUndo)).toBe(false);
+
+  // The first child row now sits below the parent. Its top third drops before it.
+  const firstChild = await firstChildRow(page, target.entryId, await rowPlan(page));
+  const childBox = (await gridRow(page, firstChild.rowId).boundingBox())!;
+  await page.mouse.move(grab.grabX, childBox.y + 3, { steps: 1 });
+  await page.mouse.up();
+
+  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(target.entryId);
+  expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(1);
+});

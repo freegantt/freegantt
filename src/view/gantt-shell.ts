@@ -132,6 +132,8 @@ import type { DatasetChangeSubscription } from './dataset-change-subscription.js
 import { FrameScheduler } from './frame-scheduler.js';
 import { createRowEdgeScroll } from './row-edge-scroll.js';
 import type { RowEdgeScroll } from './row-edge-scroll.js';
+import { createRowHoverExpand } from './row-hover-expand.js';
+import type { RowHoverExpand } from './row-hover-expand.js';
 import { PluginRegistrations } from './plugin-registrations.js';
 import type { PluginRegistrationPorts } from './plugin-registrations.js';
 import { FrameSettings } from './frame-settings.js';
@@ -646,6 +648,7 @@ export class GanttShell {
   #frames = new FrameScheduler(() => this.render());
   /** A row drag near the rows' top or bottom edge scrolls them (#603). */
   #rowEdgeScroll: RowEdgeScroll;
+  #rowHoverExpand: RowHoverExpand;
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
   /** This Gantt's own raise seam, over the bus above. Every collaborator that
    *  observes a refusal or a recovered fault takes it. That is the gesture pipeline, the render
@@ -801,6 +804,15 @@ export class GanttShell {
       now: () => performance.now(),
     });
     this.#teardown.add(() => this.#rowEdgeScroll.stop());
+    this.#rowHoverExpand = createRowHoverExpand({
+      isCollapsedParent: (id) => this.#isCollapsedParentRow(id),
+      expand: (id) => {
+        this.expand(id);
+        // The drag previews again right away, so the new rows must exist before it asks for them.
+        this.#frames.flush();
+      },
+    });
+    this.#teardown.add(() => this.#rowHoverExpand.stop());
 
     // Constructed with the options, not assigned through the live setters. So the first paint below
     // (`#frames.flush()`) sees what the consumer asked for, and no port fires while half this shell
@@ -1301,6 +1313,7 @@ export class GanttShell {
         rootEntries: () => this.#options.dataset.entries.all.filter((entry) => entry.depth === 0),
       }),
       rowIndexForEntry: (id) => this.#layout.rowIndexForEntry(id),
+      rowHoverExpand: this.#rowHoverExpand,
       canPlace: (entry, parentId) => this.#capabilities.canPlace(entry, parentId),
       verticalDropOffered: () => {
         const resolved = resolveRowSource(this.#frameSettings.rowSource);
@@ -1312,6 +1325,13 @@ export class GanttShell {
         );
       },
     };
+  }
+
+  /** Does this row hide child rows that a drop could land between? A row that draws its children as
+   *  segments has none to show. */
+  #isCollapsedParentRow(id: RowId): boolean {
+    if (this.collapseStateOf(id) !== 'collapsed') return false;
+    return this.#layout.plannedRows().find((row) => row.id === id)?.childrenAsSegments !== true;
   }
 
   /** What does a pointer or keyboard editing attachment ask this shell? */
