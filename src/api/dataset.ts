@@ -29,7 +29,7 @@ import { assertNoDuplicateIds, resolveSetupOrder } from '../extensions/plugin-or
 import { createErrorRaiser } from '../data/error-reporting.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
-import type { DatasetPluginContextOf } from './dataset-plugin.js';
+import type { DatasetEditHook, DatasetPluginContextOf } from './dataset-plugin.js';
 import type { PluginOf } from './plugin.js';
 import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
@@ -220,6 +220,31 @@ export class Dataset<TProps = unknown> {
     return installDatasetPlugins(this.#plugins, createErrorRaiser(this.#state.bus), (pluginId: PluginId) => {
       const disposables = new DisposableStore();
       const gate = new RegistrationGate(pluginId);
+      const erasedEdits: DatasetEditHook = {
+        setExtender: (wrap) => {
+          gate.assertOpen();
+          this.#state.setExtender(wrap);
+        },
+        setRemovalExtender: (wrap) => {
+          gate.assertOpen();
+          this.#state.setRemovalExtender(wrap);
+        },
+        setLockRule: (wrap) => {
+          gate.assertOpen();
+          this.#state.setLockRule(wrap);
+        },
+        setPlaceRule: (wrap) => {
+          gate.assertOpen();
+          this.#state.setPlaceRule(wrap);
+        },
+        // No gate: a rule's outside state can move at any time, not only during setup.
+        rulesChanged: () => this.#state.rulesChanged(),
+      };
+      // Erased at install, the same trust boundary as `hierarchySourceWrappersOf`. `data/` holds each
+      // extender over the erased `Record<string, unknown>` props. `DatasetEditHook` declares its
+      // setters as methods, so TypeScript checks their parameters bivariantly and accepts the erased
+      // hook where the typed one is due. No cast is needed. The plugin author's typed `props` read
+      // reaches no further than the entry it reads.
       const context: DatasetPluginContextOf<Dataset<TProps>> = {
         dataset: this,
         events: {
@@ -230,26 +255,7 @@ export class Dataset<TProps = unknown> {
           },
           off: (name, handler) => this.#state.off(name, handler),
         },
-        edits: {
-          setExtender: (wrap) => {
-            gate.assertOpen();
-            this.#state.setExtender(wrap);
-          },
-          setRemovalExtender: (wrap) => {
-            gate.assertOpen();
-            this.#state.setRemovalExtender(wrap);
-          },
-          setLockRule: (wrap) => {
-            gate.assertOpen();
-            this.#state.setLockRule(wrap);
-          },
-          setPlaceRule: (wrap) => {
-            gate.assertOpen();
-            this.#state.setPlaceRule(wrap);
-          },
-          // No gate: a rule's outside state can move at any time, not only during setup.
-          rulesChanged: () => this.#state.rulesChanged(),
-        },
+        edits: erasedEdits,
         store: {
           reserve: <T extends object>() => this.#state.pluginStores.reserve<T>(pluginId),
           read: <T extends object>(otherId: PluginId) => this.#state.pluginStores.read<T>(otherId),

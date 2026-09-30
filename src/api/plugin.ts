@@ -14,26 +14,12 @@ import type {
   Aggregator,
   CoreFieldKey,
   Disposer,
-  EntryStoreView,
   Field,
   FieldType,
   HierarchySource,
   PluginId,
 } from '../model/index.js';
-import type { DatasetPluginContextOf } from './dataset-plugin.js';
-
-/** The props a `TDataset` type argument carries, read off its own `entries` collection — the same
- *  trust boundary `api/dataset.ts`'s class note describes. Falls back to a plain record when
- *  `TDataset` names no Dataset type (the default, `unknown`), so `hierarchySource` still type-checks
- *  with no `props` shape declared. The untyped `DataPlugin<unknown>` arm infers `TProps` as `unknown`
- *  too. The `unknown extends TProps` arm catches that case the same way. `DataPluginOf.fields`
- *  narrows each `key` against this same answer. Not exported: `ae-forgotten-export` records it, same
- *  as `EntryEnvelope` today. */
-type PropsOf<TDataset> = TDataset extends { entries: EntryStoreView<infer TProps> }
-  ? unknown extends TProps
-    ? Record<string, unknown>
-    : TProps
-  : Record<string, unknown>;
+import type { DatasetPluginContextOf, PropsOf } from './dataset-plugin.js';
 
 /** The two members every plugin declares, whichever halves it fills.
  *
