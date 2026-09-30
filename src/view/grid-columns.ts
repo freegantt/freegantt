@@ -1,7 +1,7 @@
 // view/ — binds this Gantt's locale to declared Fields. layout/ never learns where a Field's value lives.
 
 import type { Dataset, Entry, Field, GridColumn, GridColumnInput } from '../model/index.js';
-import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
+import { FieldColumnNotDefinedError, ToggleFieldNotBooleanError, UnknownFieldError } from '../model/index.js';
 
 import { createFormatContext, formatFieldValue } from '../data/fields/format-field-value.js';
 import { sizingOfColumn } from '../data/fields/column-sizing.js';
@@ -78,6 +78,9 @@ function columnFrom(
   }
   // A tooltip has no fallback: absent means the column stays out of the default bar tooltip.
   const tooltip = input.tooltip ?? defaults?.tooltip;
+  if (input.toggle !== undefined && field.inputType !== 'checkbox') {
+    throw new ToggleFieldNotBooleanError(String(field.key));
+  }
   return {
     field: field.key,
     header: columnChoice(input.header, defaults?.header, String(field.key)),
@@ -86,9 +89,13 @@ function columnFrom(
     movable: columnChoice(input.movable, defaults?.movable, true),
     ...columnWidthOrFlex(input, field, defaultWidthPx),
     ...(tooltip === undefined ? {} : { tooltip }),
-    // Per-column `columnRenderer` comes only from this Gantt's own column — `Field.column` cannot
-    // carry one (`model/field.ts`'s narrower default set).
-    ...pickDefined({ columnRenderer: input.columnRenderer }, ['columnRenderer']),
+    // A renderer and a toggle come only from this Gantt's own column — `Field.column` cannot carry
+    // one (`model/field.ts`'s narrower default set).
+    ...pickDefined({ columnRenderer: input.columnRenderer, headerRenderer: input.headerRenderer }, [
+      'columnRenderer',
+      'headerRenderer',
+    ]),
+    ...pickDefined({ toggle: input.toggle }, ['toggle']),
   };
 }
 
@@ -101,7 +108,7 @@ export function toGridColumn(column: ResolvedColumn): GridColumn {
     field: column.field,
     header: column.header,
     align: column.align,
-    ...pickDefined(column, ['columnRenderer', 'resizable', 'movable', 'tooltip']),
+    ...pickDefined(column, ['columnRenderer', 'headerRenderer', 'toggle', 'resizable', 'movable', 'tooltip']),
   };
   // `GridColumn`'s sizing pair is exclusive (#249), so `shared` cannot carry `width` or `flex` — one
   // literal per branch is the only construction `tsc` checks against that union; a single `out`

@@ -417,6 +417,12 @@ ${DARK_COLOR_TOKENS}
 .fg-row-cell { padding-inline-start: var(--fg-cell-padding-inline, 10px); }
 .fg-row-label { padding-inline-start: calc(var(--fg-row-depth, 0) * var(--fg-indent-width, 12px) + var(--fg-cell-padding-inline, 10px)); }
 .fg-row-label-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A toggle column's cell: one checkbox, drawn by the library unless the column names its own icons. */
+.fg-toggle { display: inline-flex; align-items: center; cursor: pointer; }
+.fg-toggle-icon { display: inline-flex; align-items: center; }
+.fg-toggle-box { box-sizing: border-box; width: 14px; height: 14px; border: 1.5px solid var(--fg-row-label-color); border-radius: 3px; display: inline-block; position: relative; }
+.fg-toggle-box-checked { background: var(--fg-selection-color); border-color: var(--fg-selection-color); }
+.fg-toggle-box-checked::after { content: ''; position: absolute; left: 3.5px; top: 0.5px; width: 3px; height: 7px; border: solid var(--fg-pane-bg); border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
 .fg-row-twisty::before { content: '▸'; }
 .fg-row-twisty[aria-expanded='true']::before { content: '▾'; }

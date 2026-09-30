@@ -169,6 +169,7 @@ where they do something beyond re-export.
 | `view/gantt-dom.ts` | `GanttDom, ContainerDom, DomTarget` | This Gantt's rendered DOM as a read surface: is this node mine, what is it, where is the element for this entry. |
 | `view/mount-layer.ts` | `MountLayer` | Where a plugin mounts and how it stays put. Overlay escapes the pane box; row layer travels with the rows. |
 | `view/column-chrome.ts` | `ColumnChrome` | Grid-column resolve, live resize/reorder preview, and the one commit sequence pointer drag and `gantt.gridColumns = …` share. |
+| `view/column-toggle.ts` | `toggleCellContent`, `switchToggleCell` | A toggle column's cell look, and the one gated switch a click and a key press share. |
 | `view/column-gesture-context.ts` | `ColumnGestureContext` | The seam `interaction/column-gestures.ts` drives and `GanttShell` implements. |
 | `view/core-commands.ts` | `registerCoreCommands()` | The core command catalog, split out of the shell so it is reviewable as a table. |
 | `view/tree-collapse.ts` | `TreeCollapse` | Collapsed `RowId`s as per-Gantt view state, plus the tree-arrow and ancestor-expand policy. Propose/commit two-step, so a `beforeCollapseChange` veto can cancel the commit. |

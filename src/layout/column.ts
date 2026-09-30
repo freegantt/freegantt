@@ -1,6 +1,13 @@
 // layout/ — plain-data column types. No registry, no Dataset, no Field value access.
 
-import type { ColumnAlign, ColumnRenderer, Entry, FieldKey } from '../model/index.js';
+import type {
+  ColumnAlign,
+  ColumnHeaderRenderer,
+  ColumnRenderer,
+  ColumnToggle,
+  Entry,
+  FieldKey,
+} from '../model/index.js';
 
 export type { ColumnAlign } from '../model/index.js';
 
@@ -29,6 +36,10 @@ export interface FrameColumn {
 export interface ResolvedColumn extends FrameColumn {
   format(entry: Entry): string;
   columnRenderer?: ColumnRenderer;
+  /** Paints this column's header. Undefined means "fall back to the Gantt-wide one". */
+  headerRenderer?: ColumnHeaderRenderer;
+  /** Set when the column is a toggle, as authored. Read it through `toggleOf` (`view/column-toggle.ts`). */
+  toggle?: true | ColumnToggle;
   resizable?: boolean;
   movable?: boolean;
   /** `true` marks this column for the default tooltip body. Not a paint concern, so it

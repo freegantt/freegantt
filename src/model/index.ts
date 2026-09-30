@@ -86,6 +86,10 @@ export type {
   ColumnRenderer,
   ColumnAlign,
   ColumnRendererContext,
+  ColumnHeaderRenderer,
+  ColumnHeaderRendererContext,
+  ColumnToggle,
+  ColumnToggleContext,
   TooltipColumn,
 } from './field.js';
 export type { BuiltInThrownCode, ThrownCode } from './errors.js';
@@ -119,6 +123,7 @@ export {
   UnknownAggregatorError,
   UnknownFieldTypeError,
   FieldColumnNotDefinedError,
+  ToggleFieldNotBooleanError,
   DuplicateRowIdError,
   AggregatorFailedError,
   MutationDuringNotificationError,
