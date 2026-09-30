@@ -7139,6 +7139,185 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
 
     gantt.destroy();
   });
+
+  /** `p` (locked, no dates of its own) rolls its dates up from three children: `left` and `right`
+   *  hold the span's two ends, `c1` sits inside with room either side to move without touching
+   *  either end. Dragging `c1` far enough right pushes its own end past `right`'s, which is the
+   *  case that must refuse; a shorter drag stays inside `left`/`right`'s span and commits. */
+  function heldSpanTree(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'P', locked: true },
+        { id: 'left', name: 'Left', parentId: 'p', start: '2026-01-01', end: '2026-01-02' },
+        { id: 'right', name: 'Right', parentId: 'p', start: '2026-01-20', end: '2026-01-25' },
+        { id: 'c1', name: 'C1', parentId: 'p', start: '2026-01-10', end: '2026-01-12' },
+      ],
+    });
+    return { container, dataset };
+  }
+
+  /** `gp` (locked, no dates of its own) rolls its dates up from its one child `p` (unlocked, also
+   *  no dates of its own), which in turn rolls up from `onlyChild`. `e` is a root Entry, dated far
+   *  wider than `onlyChild` — dropping it into `p` would widen `p`'s span and, through `p`, `gp`'s
+   *  held span too. */
+  function heldGrandparentTree(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'gp', name: 'GP', locked: true },
+        { id: 'p', name: 'P', parentId: 'gp' },
+        { id: 'onlyChild', name: 'OnlyChild', parentId: 'p', start: '2026-01-05', end: '2026-01-10' },
+        { id: 'e', name: 'E', start: '2026-01-01', end: '2026-01-30' },
+      ],
+    });
+    return { container, dataset };
+  }
+
+  it("a child dragged past a locked parent's end paints refused and writes nothing (#610)", async () => {
+    const { container, dataset } = heldSpanTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('c1'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const childId = entryId('c1');
+    const parentId = entryId('p');
+    const beforeChild = datesOf(dataset.entries.get(childId)!);
+    const beforeParent = datesOf(dataset.entries.get(parentId)!);
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Far enough right that c1's own end would pass `right`'s end and widen p's held span.
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 1505, clientY: 5, pointerId: 1 }));
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(container.getAttribute('data-drop')).toBe('refused');
+
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 1505, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toEqual([]);
+    expect(datesOf(dataset.entries.get(childId)!)).toEqual(beforeChild);
+    expect(datesOf(dataset.entries.get(parentId)!)).toEqual(beforeParent);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a drag that stays inside the locked parent’s dates commits (#610)', () => {
+    const { container, dataset } = heldSpanTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('c1'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const childId = entryId('c1');
+    const parentId = entryId('p');
+    const beforeChild = datesOf(dataset.entries.get(childId)!);
+    const beforeParent = datesOf(dataset.entries.get(parentId)!);
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // Moves c1 well clear of its own start but short of `right`'s end — p's held span holds.
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 1205, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 1205, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toHaveLength(1);
+    expect(datesOf(dataset.entries.get(childId)!)).not.toEqual(beforeChild);
+    expect(datesOf(dataset.entries.get(parentId)!)).toEqual(beforeParent);
+    expect(dataset.canUndo).toBe(true);
+
+    gantt.destroy();
+  });
+
+  it("a drag that shrinks a locked parent's held date refuses too (#610)", () => {
+    const { container, dataset } = heldSpanTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('right'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+
+    const rightId = entryId('right');
+    const parentId = entryId('p');
+    const beforeRight = datesOf(dataset.entries.get(rightId)!);
+    const beforeParent = datesOf(dataset.entries.get(parentId)!);
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    // `right` is the sole owner of p's held end; pulling it earlier shrinks that end instead of
+    // widening it, and "hold" means the value stays either way (coordinator ruling Q2).
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: -95, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: -95, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    expect(afterEvents).toEqual([]);
+    expect(datesOf(dataset.entries.get(rightId)!)).toEqual(beforeRight);
+    expect(datesOf(dataset.entries.get(parentId)!)).toEqual(beforeParent);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a bar drop into an unlocked parent under a locked grandparent refuses when it would widen the grandparent (#610)', () => {
+    const { container, dataset } = heldGrandparentTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('e'), 0)}"]`)!;
+
+    const beforeGp = datesOf(dataset.entries.get(entryId('gp'))!);
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragBarInto(container, bar, 54); // row 1's ('p') own middle third
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(entryId('e'))!.parent()).toBeUndefined();
+    expect(datesOf(dataset.entries.get(entryId('gp'))!)).toEqual(beforeGp);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
+
+  it('a grid row drop into an unlocked parent under a locked grandparent refuses when it would widen the grandparent (#610)', () => {
+    const { container, dataset } = heldGrandparentTree();
+    const gantt = new Gantt({ container, dataset });
+    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="p"]')!;
+
+    const beforeGp = datesOf(dataset.entries.get(entryId('gp'))!);
+    const afterEvents: EntryMove[] = [];
+    gantt.on('entryMove', (p) => {
+      afterEvents.push(p);
+    });
+
+    dragRowInto(container, row, 54); // row 1's ('p') own middle third
+
+    expect(afterEvents).toEqual([]);
+    expect(dataset.entries.get(entryId('e'))!.parent()).toBeUndefined();
+    expect(datesOf(dataset.entries.get(entryId('gp'))!)).toEqual(beforeGp);
+    expect(dataset.canUndo).toBe(false);
+
+    gantt.destroy();
+  });
 });
 
 // #602: a grid row drag reaches `entryMove` through the same one switch (`reorder`) and the same
