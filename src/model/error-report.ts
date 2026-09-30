@@ -42,7 +42,7 @@ export type BuiltInReportCode =
   | 'mutation-cancelled'
   | 'entry-move-cancelled'
   | 'entry-resize-cancelled'
-  // A row Delete stopped by the remove rule: a locked row, or a parent that holds one. Nothing was
+  // A row Delete stopped by the remove rule: a locked row, or a parent that holds one, is one case. Nothing was
   // removed. `entryId` names the first refused row, and `message` names them all.
   | 'entry-remove-refused'
   // A gesture core dropped on its own, never a handler's veto (#272, #273, #377) — the reason rides

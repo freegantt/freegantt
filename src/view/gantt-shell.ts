@@ -2312,7 +2312,7 @@ export class GanttShell {
 
   /** A refused Delete is the library working, so it reports at `'info'` and writes nothing. */
   #reportRemoveRefused(ids: readonly EntryId[]): void {
-    const reason = `These rows are locked, or hold a locked row: ${ids.join(', ')}.`;
+    const reason = `A remove rule refuses these rows, or a row below them: ${ids.join(', ')}.`;
     this.#raiseError({
       code: 'entry-remove-refused',
       message: `Nothing was deleted. ${reason}`,
