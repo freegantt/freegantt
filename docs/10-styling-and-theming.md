@@ -271,6 +271,7 @@ rename.
 | `.fg-cursor-line` | Hot-path cursor stroke under the pointer. |
 | `.fg-cursor-line-label` | Cursor line chip, always below the header bands. |
 | `.fg-drop-line` | A vertical drag's Insertion line — one in the grid pane, inset by the target depth, one full-width in the timeline pane. |
+| `.fg-drop-note` | The note beside the pointer that says why a drag refuses its drop. Hidden except while a refused row sits under the pointer. |
 | `.fg-decorations-under` | Decoration layer below the bars. |
 | `.fg-decorations-over` | Decoration layer above the bars. |
 | `.fg-range-band` | A range decoration (weekend shading, and the like). |
@@ -317,6 +318,19 @@ none out of the box. See "Date lines and the Today line" below for the worked ex
 | `.fg-date-line[data-flag~="today"]` | the library (Today line) |
 | `.fg-date-line-label[data-flag~="today"]` | the library (Today line) |
 
+### `data-locked`
+
+`data-locked` marks a locked Entry. The library writes it on the Entry's `.fg-row` and on each of its
+`.fg-bar` elements. It has no value. An Entry is locked when its bar does not move for a user. The
+core lock answers that, and so does any plugin bar move rule. The attribute clears when the Entry
+unlocks. A plugin that changes its rule calls `ctx.edits.rulesChanged()`, and the next frame repaints
+it.
+
+| Selector | Meaning |
+|---|---|
+| `.fg-row[data-locked]` | the row of a locked Entry, in the grid pane |
+| `.fg-bar[data-locked]` | a bar of a locked Entry. The built-in themes set `cursor: not-allowed` on it |
+
 ### `data-drop`
 
 `data-drop` marks a vertical drag's own row target, on `.fg-row` and its timeline `.fg-row-band`
@@ -330,6 +344,11 @@ has left the source row, and clears the moment the drag ends or returns to that 
 | `.fg-row[data-drop="into"]`, `.fg-row-band[data-drop="into"]` | the drop lands as this row's own child — the row's own outline is the indicator, no `.fg-drop-line` |
 | `.fg-row[data-drop="refused"]`, `.fg-row-band[data-drop="refused"]` | no rule lets the drop land on this row |
 | `.fg-container[data-drop="refused"]` | sets `cursor: not-allowed` over the whole Gantt while the pointer sits over a refused row |
+
+While a row is refused, `.fg-drop-note` shows the reason beside the pointer. When the user releases
+the pointer, the Gantt raises one `entry-drop-refused` report, and the live region announces the same
+sentence. A bar drag that `capabilities.reorder: false` stops vertically arms no row drop. It gets
+no refused cursor and no note.
 
 ### Internal Parts
 

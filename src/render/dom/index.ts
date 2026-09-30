@@ -188,6 +188,7 @@ type RowGeom = {
   expandable: boolean;
   expanded: boolean;
   matched?: boolean;
+  locked?: boolean;
 };
 /** The timeline pane's own zebra band for one row — the same paint `.fg-row` carries in the grid
  *  pane, from the same `FrameRow`, so both panes stripe the same rows (I9's pixel identity applies
@@ -222,6 +223,8 @@ type BarGeom = Pick<
   FrameBar,
   'variant' | 'label' | 'x' | 'y' | 'width' | 'height' | 'flags' | 'a11yLabel' | 'span'
 > & {
+  /** `true` for a locked Entry's bar. */
+  locked: boolean;
   /** S5.4: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
   /** This frame's label token — see `BarLabelToken` for what each value means and costs.
@@ -474,6 +477,32 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  depth, the timeline pane runs it full width, `view/styles.ts`'s own `.fg-drop-line` rule tells
    *  the two apart). Created once at mount, moved and parked by `applyState`. */
   let dropLineGrid: HTMLElement | undefined;
+  /** The note near the pointer that says why a drop refuses. One node, created at mount, shown only
+   *  while a refused row sits under the pointer. It follows `pointerX`/`pointerY`, which a container
+   *  listener keeps current, so the drag frame reads the pointer and allocates no event state. */
+  let dropNote: HTMLElement | undefined;
+  let pointerX = 0;
+  let pointerY = 0;
+  const DROP_NOTE_OFFSET_PX = 16;
+  function placeDropNote(): void {
+    if (dropNote === undefined || dropNote.hidden) return;
+    dropNote.style.transform = `translate(${pointerX + DROP_NOTE_OFFSET_PX}px, ${pointerY + DROP_NOTE_OFFSET_PX}px)`;
+  }
+  function trackPointer(event: PointerEvent): void {
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+    placeDropNote();
+  }
+  function paintDropNote(note: string | undefined): void {
+    if (dropNote === undefined) return;
+    if (note === undefined) {
+      dropNote.hidden = true;
+      return;
+    }
+    if (dropNote.textContent !== note) dropNote.textContent = note;
+    dropNote.hidden = false;
+    placeDropNote();
+  }
   let dropLineTimeline: HTMLElement | undefined;
   /** The Entries each mounted row owns (a header row owns none) — what `applyState`'s row diff reads
    *  `FrameRow.entryIds` into (#230, #421), so the row diff never resolves an Entry to answer it.
@@ -852,17 +881,20 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     if (rowDrop === undefined) {
       paintDropRowToken(undefined, undefined);
       fgContainer?.removeAttribute('data-drop');
+      paintDropNote(undefined);
       paintDropLine(undefined, 0);
       return;
     }
     if ('refusedRowId' in rowDrop) {
       paintDropRowToken(rowDrop.refusedRowId, 'refused');
       fgContainer?.setAttribute('data-drop', 'refused');
+      paintDropNote(rowDrop.note);
       paintDropLine(undefined, 0);
       return;
     }
     paintDropRowToken(rowDrop.rowId, rowDrop.side);
     fgContainer?.removeAttribute('data-drop');
+    paintDropNote(undefined);
     paintDropLine(rowDrop.lineY, rowDrop.depth);
   }
 
@@ -1082,6 +1114,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           expanded: row.expanded,
         };
         if (row.matched === false) geom.matched = false;
+        if (row.locked === true) geom.locked = true;
         return geom;
       },
       patch: (node, geom) => {
@@ -1096,6 +1129,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         node.dataset['parity'] = rowParity(geom.index);
         if (geom.matched === false) node.dataset['matched'] = 'false';
         else delete node.dataset['matched'];
+        if (geom.locked === true) node.dataset['locked'] = '';
+        else delete node.dataset['locked'];
       },
     });
 
@@ -1278,6 +1313,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           flags: bar.flags,
           a11yLabel: bar.a11yLabel,
           span: bar.span,
+          locked: bar.locked === true,
           labelPlacement: labelToken,
           ...(content !== undefined ? { content } : {}),
         };
@@ -1290,6 +1326,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         if (geom.span === 'exact') delete node.dataset['span'];
         else node.dataset['span'] = geom.span;
         node.dataset['flag'] = flagTokens(geom.flags);
+        if (geom.locked) node.dataset['locked'] = '';
+        else delete node.dataset['locked'];
         // See `BarLabelToken` for what `undefined` vs. each token means and costs.
         if (geom.labelPlacement === undefined) delete node.dataset['label'];
         else node.dataset['label'] = geom.labelPlacement;
@@ -1420,6 +1458,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // #425: `gridLayer` (`.fg-rows`) and `timelineHost` (`.fg-timeline-pane`) both mount inside
       // one `.fg-container` (`view/pane-layout.ts`) — walked once here, not re-read per drag.
       fgContainer = gridLayer.closest<HTMLElement>('.fg-container') ?? undefined;
+      dropNote = document.createElement('div');
+      dropNote.className = 'fg-drop-note';
+      dropNote.setAttribute('aria-hidden', 'true');
+      dropNote.hidden = true;
+      fgContainer?.append(dropNote);
+      fgContainer?.addEventListener('pointermove', trackPointer, true);
       dropLineGrid = document.createElement('div');
       dropLineGrid.className = 'fg-drop-line';
       dropLineGrid.setAttribute('aria-hidden', 'true');
@@ -1677,6 +1721,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       cursorLineHeight = 0;
       paintedDropRowId = undefined;
       paintedDropToken = undefined;
+      fgContainer?.removeEventListener('pointermove', trackPointer, true);
+      dropNote?.remove();
+      dropNote = undefined;
       fgContainer = undefined;
       dropLineGrid = undefined;
       dropLineTimeline = undefined;

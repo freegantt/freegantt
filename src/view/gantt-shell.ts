@@ -3146,6 +3146,9 @@ export class GanttShell {
         // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
         // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
         barLabelFor: (entry) => this.#labelFor(entry),
+        // A locked Entry is one whose bar does not move. Fresh every frame, so `rulesChanged()`
+        // repaints it.
+        entryLocked: (entry) => this.#options.barMovesOf?.(entry.id) === false,
       }),
     );
     // Which pattern the grid pane announces, and how big it says it is. Both are
