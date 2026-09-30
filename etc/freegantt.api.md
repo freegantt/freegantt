@@ -93,6 +93,12 @@ export interface BarLabelSpec {
 }
 
 // @public
+export type BarMoveRule = (entry: FieldLockQuery) => boolean;
+
+// @public
+export type BarMoveRuleWrapper = (next: BarMoveRule) => BarMoveRule;
+
+// @public
 export type BarProducer = (entry: Entry, variant: string, childrenAsSegments?: boolean) => readonly Bar[];
 
 // @public
@@ -404,6 +410,8 @@ export class Dataset<TProps = unknown> {
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
     // (undocumented)
     rulesChanged(): void;
+    // (undocumented)
+    setBarMoveRule(wrap: BarMoveRuleWrapper): void;
     // (undocumented)
     setExtender(wrap: ExtenderWrapper<TProps>): void;
     // (undocumented)
@@ -1789,11 +1797,11 @@ export interface PixelSpan {
 // @public
 export interface PlaceQuery {
     // (undocumented)
-    readonly currentParentId: EntryId | undefined;
+    readonly currentParent: FieldLockQuery | undefined;
     // (undocumented)
     readonly entry: FieldLockQuery;
     // (undocumented)
-    readonly parentId: EntryId | undefined;
+    readonly parent: FieldLockQuery | undefined;
 }
 
 // @public
@@ -2072,7 +2080,7 @@ export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (next: Re
 // @public
 export interface RemoveQuery {
     // (undocumented)
-    readonly currentParentId: EntryId | undefined;
+    readonly currentParent: FieldLockQuery | undefined;
     // (undocumented)
     readonly entry: FieldLockQuery;
 }
