@@ -10,6 +10,12 @@ open: nothing.
 
 # A spanning Entry draws a Bar
 
+> **One sentence here is retired by [#648](https://github.com/freegantt/freegantt/issues/648).**
+> §Consequences says: *"Delete on a child drawn as a Segment still un-dates, not removes."* That
+> sentence is void. Delete on a bar removes the Entry the bar draws. See "Amendment: Delete on a bar
+> removes its Entry" in [ADR 0012](0012-dates-are-optional-on-every-kind.md). **The rest of the
+> paragraph stands.**
+
 **Reads after [0026](0026-the-segment-retires.md).** That ADR retires `Segment` as a type. This one
 states the rule that replaces the half of [ADR 0012](0012-dates-are-optional-on-every-kind.md) that
 named it.

@@ -113,25 +113,42 @@ test('ArrowRight expands and ArrowLeft collapses; focus stays on the parent row'
   await expect(gridRow).toBeFocused();
 });
 
-test("Delete on a parent's own bar keeps the parent and its child (ADR 0012 supersedes #212, fix plan R3)", async ({
+test('Delete on a bar removes its Entry, and Ctrl+Z restores it', async ({ page }) => {
+  await gotoHierarchy(page);
+
+  const bar = page.locator('#gantt .fg-bar[data-bar-id^="task-beta:"]').first();
+  await bar.click();
+  await page.keyboard.press('Delete');
+
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-beta'))).toBe(false);
+  await expect(page.locator('#gantt .fg-bar[data-bar-id^="task-beta:"]')).toHaveCount(0);
+
+  await page.keyboard.press('Control+z');
+
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-beta'))).toBe(true);
+  await expect(page.locator('#gantt .fg-bar[data-bar-id^="task-beta:"]').first()).toBeVisible();
+});
+
+test("Delete on a parent's own bar removes the parent and its child, and Ctrl+Z restores both", async ({
   page,
 }) => {
   await gotoHierarchy(page);
 
-  // `task-alpha-1` draws one Bar (its whole span) and owns `deep-leaf` as a child (fixtures/
-  // hierarchy-dataset.ts). Deleting that Bar no longer removes the Entry (ADR 0012): the row
-  // stays, and never had a reason to reparent `deep-leaf` in the first place.
-  const before = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
-  expect(before).toBe('task-alpha-1');
-
+  // `task-alpha-1` draws one Bar and owns `deep-leaf` as a child (fixtures/hierarchy-dataset.ts).
   const bar = page.locator('#gantt .fg-bar[data-bar-id^="task-alpha-1:"]').first();
   await bar.click();
   await page.keyboard.press('Delete');
 
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-alpha-1'))).toBe(false);
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('deep-leaf'))).toBe(false);
+
+  await page.keyboard.press('Control+z');
+
   await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('task-alpha-1'))).toBe(true);
-  await expect(page.locator('#gantt .fg-row[data-entry-id="deep-leaf"]')).toBeVisible();
-  const after = await page.evaluate(() => String(window.__dataset.entries.get('deep-leaf')?.parent()?.id));
-  expect(after).toBe('task-alpha-1');
+  const restoredParent = await page.evaluate(() =>
+    String(window.__dataset.entries.get('deep-leaf')?.parent()?.id),
+  );
+  expect(restoredParent).toBe('task-alpha-1');
 });
 
 // ADR 0020: a plugin states the parent of an Entry out of a `props` key, and everything downstream

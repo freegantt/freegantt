@@ -51,6 +51,7 @@ export type BuiltInCommandId =
   | 'freegantt.indentEntry'
   | 'freegantt.outdentEntry'
   | 'freegantt.deleteSelection'
+  | 'freegantt.clearDates'
   | 'freegantt.discardCellEdit'
   | 'freegantt.editFocusedCell'
   | 'freegantt.switchToggle'

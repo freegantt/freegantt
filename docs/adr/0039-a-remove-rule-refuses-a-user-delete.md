@@ -4,6 +4,8 @@ status: accepted — ruled 2026-09-29. Follows the seam pattern [ADR 0038](0038-
   Amended 2026-09-30 ([#638](https://github.com/freegantt/freegantt/issues/638)) — core installs its
   remove rule first, as the innermost occupant, so a plugin can widen it. `RemoveQuery` carries the
   current parent as a query.
+  Amended 2026-09-30 ([#648](https://github.com/freegantt/freegantt/issues/648)) — a bar Delete asks
+  the remove rule too, the same as a row Delete.
 decided: a new plugin seam, the remove rule (`ctx.edits.setRemoveRule`), answers whether
   `entries.remove()` may take an Entry — asked once for the id a caller named and once for every
   member of its subtree, narrowest answer wins. Core installs `lockedEntryRemoveRule` before every
@@ -70,7 +72,7 @@ plugin wraps it: a plugin that calls `next()` leaves the refusal in force, and a
 
 ### What the user sees
 
-A row Delete asks the remove rule for every named row first. One refused row stops the whole
+A row or bar Delete asks the remove rule for every named row first. One refused row stops the whole
 Delete, so nothing is removed. The Gantt raises one `info` report, code `entry-remove-refused`, that
 names the refused rows, and the harness shows it as a toast. The removals share one transaction, so
 one Delete is one undo step.

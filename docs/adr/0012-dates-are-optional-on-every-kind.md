@@ -1,6 +1,6 @@
 ---
-status: accepted — built and verified 2026-09-11, in the field redesign. Verdict: [BUILD-SPEC.md §Build 1](../../plans/field-redesign/BUILD-SPEC.md#build-1--adr-0012-optional-dates). Spike report: [reviews/2026-09-09-0012-optional-dates-spikes](../../plans/field-redesign/reviews/2026-09-09-0012-optional-dates-spikes/README.md).
-decided (*"core does not paint a diamond"* narrowed 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md), proposed — core paints no diamond **for a zero-length span on its own**; it ships `diamond()`, which claims one only once an author writes it): an Entry spans iff both `start` and `end` are present; it holds a Segment (and draws a bar) iff it spans; one date without the other is legal (decision 4, grill 2026-09-10); default `gridColumns` is `['name', 'start', 'end']`; core does not paint a diamond.
+status: accepted — built and verified 2026-09-11, in the field redesign. Amended 2026-09-30 ([#648](https://github.com/freegantt/freegantt/issues/648)) — Delete on a bar removes its Entry and never clears dates. "Clear dates" is its own command. Verdict: [BUILD-SPEC.md §Build 1](../../plans/field-redesign/BUILD-SPEC.md#build-1--adr-0012-optional-dates). Spike report: [reviews/2026-09-09-0012-optional-dates-spikes](../../plans/field-redesign/reviews/2026-09-09-0012-optional-dates-spikes/README.md).
+decided (*"core does not paint a diamond"* narrowed 2026-09-12 by [ADR 0022](0022-core-ships-variants-and-a-variant-answers-about-itself.md), proposed — core paints no diamond **for a zero-length span on its own**; it ships `diamond()`, which claims one only once an author writes it): an Entry spans iff both `start` and `end` are present; it holds a Segment (and draws a bar) iff it spans; one date without the other is legal (decision 4, grill 2026-09-10); default `gridColumns` is `['name', 'start', 'end']`; core does not paint a diamond. **Amended 2026-09-30 (#648):** Delete on a focused bar removes the Entry that bar draws; it never clears dates. "Clear dates" is its own context-menu command and the only UI path that clears dates.
 open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The working material is in `plans/field-redesign/0012-optional-dates/`.
 ---
 
@@ -23,6 +23,12 @@ open: none. Two decisions closed — 4 (overruled 2026-09-10) and 15. The workin
 > steps `end` back one millisecond and shows the day that lands on, the same as it does with a
 > start. Only a zero-length span (`end === start`) shows `end` unchanged — and that check needs a
 > start to fire at all. **The rest of the paragraph — end with no start is allowed — stands.**
+
+> **Two sentences here are retired by [#648](https://github.com/freegantt/freegantt/issues/648).**
+> §Consequences says: *"Keyboard Delete on a bar un-dates both dates when it was the last bar."* The
+> "Required follow-up" section repeats it. Both sentences are void. Delete on a bar removes the
+> Entry. See "Amendment: Delete on a bar removes its Entry" below. **The rest of both paragraphs
+> stands.**
 
 **This ADR carries no open decision, and it lands second**, after [ADR 0016](0016-the-library-holds-no-save-format.md). [ADR 0013](0013-what-decides-that-a-row-derives-its-values.md) demotes an Entry to *a normal Entry with no dates*, and `model/entry.ts:31-33` declares `start: Instant` and `end: Instant` **required** today. That shape is not representable until this lands. **There is no Document**, so this ADR writes no schema number.
 
@@ -87,6 +93,76 @@ End with no start is allowed. Inclusive-end formatting has no start: show the st
 
 **Last-segment-remove un-dates both dates.** ADR 0010 said an Entry never survives empty and bound grid-row Delete to `removeSegments`. This ADR makes zero Segments a legal row that does not span. The new rule: `removeSegments` of the last Segment keeps the Entry and clears start and end; `entries.remove(id)` deletes the row; grid-row Delete on the name cell is `remove(id)`. Keyboard Delete on a bar un-dates both dates when it was the last bar. ADR 0006: the old ADR is not edited. The revision lives here.
 
+## Amendment: Delete on a bar removes its Entry
+
+Amended 2026-09-30, [#648](https://github.com/freegantt/freegantt/issues/648).
+
+### Why the old rule ends
+
+The old rule said a bar draws a span, so Delete on a bar clears the span and keeps the record. A grid
+row names the record, so Delete on a row removes it. The rule was true when a bar could draw a Segment
+that was not an Entry.
+
+Three facts changed it:
+
+- [ADR 0026](0026-the-segment-retires.md) retired the Segment type. Each Segment is an ordinary child
+  Entry now. A bar always names one Entry.
+- The library cannot tell a split task from a lane. A segmented row (`childrenAsSegments`) can mean
+  either. The library must never remove a record the user did not point at. A bar points at exactly one
+  Entry, so removing that Entry is safe. Clearing its dates is not the same as pointing at it.
+- The old rule left a dateless Entry with no bar and no row. A segment child with no dates has no bar on
+  the segmented row, and the parent draws no row for it. The user cannot see it or reach it.
+
+One key on two targets did two different things. That was a trap. Now the key does one thing.
+
+### The rule
+
+**Delete on a focused bar removes the Entry that the bar draws. It never clears dates.**
+
+| Target | What Delete does |
+|---|---|
+| A bar that is the one bar of its row | Removes the Entry. The row goes. |
+| A bar of a Variant that draws several bars for one Entry | Removes that one Entry. Every bar of it goes. |
+| A bar in a segmented row (`childrenAsSegments`) | Removes only the child Entry that the bar draws. The other children stay. |
+| The last child bar of a segmented row | Removes that child. The parent stays as an empty row. |
+| The bar of a parent that rolls up its children | Removes the parent and every Entry below it, the same as row Delete. |
+| A bar of a locked Entry, or of an Entry a remove rule refuses | Writes nothing. Announces the reason. |
+
+The parent stays when its last child goes. The empty row still shows in the grid. The user can delete it
+there. The library does not remove the parent for the user.
+
+Bar Delete asks the remove rule, the same as row Delete ([ADR 0039](0039-a-remove-rule-refuses-a-user-delete.md)).
+The rule answers for the Entry and for every Entry below it. One refused Entry stops the whole Delete.
+A refusal writes nothing. The Gantt raises one `info` report, code `entry-remove-refused`, that names the
+refused Entries.
+
+One Delete is one undo step. Undo restores every removed Entry together.
+
+### "Clear dates" is its own command
+
+"Clear dates" is a context-menu command. It clears `start` and `end` of the acted-on Entry and keeps the
+record. It is the only UI path that clears dates. No key runs it by default.
+
+- It writes `update(id, { start: undefined, end: undefined })` in one transaction. That is one undo step.
+- It offers itself only where the Entry owns its dates. A rolling-up parent does not own its dates
+  ([ADR 0013](0013-what-decides-that-a-row-derives-its-values.md)), so the command does not appear for
+  it. An Entry with no dates has nothing to clear, so the command does not appear for it either.
+- The lock and the Field's writable rule apply, as they do for a cell edit.
+- On a selection, it clears every acted-on Entry that owns its dates and passes over the rest. A
+  rolling-up parent or a dateless Entry has nothing to clear, so passing over it is not a refusal.
+- A refusal is all or nothing, the same as Delete. If the lock, the writable rule or `beforeChange`
+  refuses one Entry, the command writes nothing and reports the reason.
+
+The dataset door does not change. `update(id, { start: undefined, end: undefined })` stays the un-date
+verb. `entries.remove(id)` stays the remove verb.
+
+### What stays the same
+
+- An Entry spans if and only if both `start` and `end` are present.
+- One date without the other is legal.
+- A grid row Delete removes the Entry, as before.
+- The remove rule stops only the user. `entries.remove()`, `load`, `syncAll` and undo still remove past it.
+
 ## Issues this ADR depends on
 
 | Issue | What this ADR needs from it |
@@ -103,3 +179,4 @@ These entries were `plans/field-redesign/BUILD-LOG.md`. That log is deleted; wha
 | `Q5` | does `model/`'s types-only carve-out admit a small runtime helper? **Answered 2026-09-11: yes, one function.** `spansTime(entry)` states this ADR's span invariant in one place, and five of the six casts that restated it are gone |
 | `J2` | `wholeEntryBar`'s signature is untouched; the span guard sits once in `produceBarsForRow` |
 | `N10` | `wholeEntryBar`'s parameter should be a spanning Entry, and that is a public change |
+

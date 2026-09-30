@@ -56,6 +56,13 @@ export interface ResolvedCapabilities {
    *  it, so a parent that holds a locked child refuses too. A row Delete asks this before it
    *  removes anything. */
   canRemove(entry: Entry): boolean;
+  /** Does this Entry hold a date, and own every date it holds, so that "Clear dates" has something to clear? A rolling-up
+   *  parent owns no date, because the Rollup writes it (ADR 0013). An Entry with no date has none to
+   *  clear. Both answer `false`, and the command passes over them. */
+  holdsDatesToClear(entry: Entry): boolean;
+  /** May a user clear every date this Entry holds? The lock and the Field's writable rule answer,
+   *  the same as for a cell edit. Only the dates the Entry holds are asked about. */
+  canClearDates(entry: Entry): boolean;
 }
 
 /** What one Gantt's capability resolution reads. An object, not four positional arguments: the
@@ -320,6 +327,11 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
 
   const canRemove = (entry: Entry): boolean => (inputs.removableOf?.(entry.id) ?? 'anywhere') === 'anywhere';
 
+  const holdsDatesToClear = (entry: Entry): boolean =>
+    (entry.start !== undefined || entry.end !== undefined) && ownsTheDatesItHolds(entry);
+
+  const canClearDates = mayTranslateTheDatesItHolds;
+
   return {
     can(capability, entry, edge) {
       if (!isOffered(capability, entry)) return false;
@@ -329,5 +341,7 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     entriesMovedBy,
     canPlace,
     canRemove,
+    holdsDatesToClear,
+    canClearDates,
   };
 }
