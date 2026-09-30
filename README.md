@@ -7,13 +7,8 @@ reader user hears the grid as an ARIA grid or tree grid, and a live region annou
 demo page passes automated axe checks in CI, in every built-in theme.
 
 Framework-free TypeScript Gantt/timeline library. Library-first: the API, docs, and packaging are
-designed for external consumers from day one. See `plans/00-overview.md` for the full spec,
-`plans/03-slices.md` for the delivery roadmap, and `docs/05-consumer-api.md` for a consumer API index;
-this file documents the public surface as it lands, slice by slice.
-
-**Status:** pre-release, slice **S4** in progress (hierarchy, fields, row sources — see `plans/03-slices.md`).
-The public API below reflects what ships on this branch; names and options may still change until S4
-closes. The full, defended spec is `plans/02-public-api.md`; `CONTEXT.md` is the glossary.
+designed for external consumers from day one. See `docs/05-consumer-api.md` for a consumer API index.
+`CONTEXT.md` is the glossary.
 
 <!-- doc-example-setup
 // What the examples below stand on: the classes a reader has already imported, a live Dataset and
@@ -87,7 +82,7 @@ dataset.redo();
 
 `undo()`/`redo()` return nothing — like every other commit, what they did arrives on
 `dataset.on('change')`, tagged `origin: 'undo'`/`'redo'`. `canUndo`/`canRedo` say whether there is
-anything to undo/redo, and `dataset.on('historyChange')` fires when either answer changes. Dependencies land in a later slice — see `plans/03-slices.md`.
+anything to undo/redo, and `dataset.on('historyChange')` fires when either answer changes.
 
 ## Dates and ids a consumer can write
 
@@ -194,7 +189,7 @@ boundary already and is read literally. `start` is never adjusted.
 
 Everything importable by a consumer lives under `src/api/` and `src/model/` (types only). Internal
 layers (`time/`, `data/`, `scheduling/`, `layout/`, `render/`, `view/`) are not part of the public
-surface. The authoritative design doc is `plans/02-public-api.md`.
+surface.
 
 ### `Dataset`
 
@@ -257,8 +252,6 @@ after mount renders on the next frame with no extra call.
 **Fields** declare what values _are_ (`fields`, `fieldTypes`, `aggregators` on the Dataset). A Field
 key on `entries.update` and `entries.fieldValue` is the one write/read path for entry-sourced,
 meta-sourced, and compute-sourced values. An unregistered key throws `UnknownFieldError`.
-
-Dependencies land in slice S7 — see `plans/03-slices.md`.
 
 ### Fields and grid columns
 
@@ -512,7 +505,7 @@ point only. `docs/06-plugin-authoring.md` has the full contract.
 
 Gantt events (`entryMove`, `selectionChange`, `collapseChange`, `navigationChange`, …) fire on the
 `Gantt`. Data events (`change`, `beforeChange`) fire on the `Dataset`. Every mutating interaction has
-a cancelable `before*` pair where veto applies — see `plans/02-public-api.md` §3 for the full table.
+a cancelable `before*` pair where veto applies.
 
 ### Talking to a server
 
@@ -564,8 +557,7 @@ properties it defines, in the consumer app's own `.css`:
 ```
 
 The full set of overridable tokens (`--fg-pane-bg`, `--fg-header-bg`, `--fg-bar-fill`,
-`--fg-warn`, `--fg-indent-width`, and so on) is listed in `plans/02-public-api.md`
-§4.1 and `src/view/styles.ts`. Any selector the library renders
+`--fg-warn`, `--fg-indent-width`, and so on) is listed in `src/view/styles.ts`. Any selector the library renders
 (`.fg-bar`, `.fg-row`, `.fg-header`, …) can also be targeted directly for changes a token doesn't
 cover.
 
@@ -600,10 +592,8 @@ To customize dark mode instead of just light mode, scope the override to the dar
 
 | Doc                               | Audience                                                                        |
 | --------------------------------- | ------------------------------------------------------------------------------- |
-| `plans/02-public-api.md`          | Full consumer API — events, errors, serialization, customization ladder         |
-| `docs/05-consumer-api.md`         | Consumer API index and S4 surface summary                                       |
+| `docs/05-consumer-api.md`         | Consumer API index                                                              |
 | `CONTEXT.md`                      | Glossary (Entry, Field, Row, Row source, Rollup, …)                             |
-| `plans/03-slices.md`              | Delivery roadmap and acceptance criteria                                        |
 | `etc/freegantt.api.md`            | Generated TypeScript export report (api-extractor)                              |
 | `docs/09-integration-pitfalls.md` | Integration traps — theme, zoom notification, overscan, row click               |
 | `docs/06-plugin-authoring.md`     | Plugin authoring guide — `ChromePlugin`, `DataPlugin`, every registration seam  |
@@ -664,5 +654,4 @@ The dev harness (`harness/`) is the library's first consumer. Open `http://local
 - **Performance** (`performance.html`) — 50,000 entries.
 
 Each page lists the features it shows above the chart. The pages under `harness/e2e/` are Playwright
-fixtures, not demos; the nav does not link them. Every slice adds to the harness; acceptance criteria
-live in `plans/03-slices.md`.
+fixtures, not demos; the nav does not link them.
