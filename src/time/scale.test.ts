@@ -172,6 +172,28 @@ describe('ticks() anchoring (#489)', () => {
     );
   });
 
+  it('ticks({ hour, 1 }) starts at the unit floor when the zone shifts by 30 minutes (Lord Howe DST start)', () => {
+    const edge = instant(1759593600000);
+    const scale = createTimeScale({
+      timeZone: 'Australia/Lord_Howe',
+      range: { start: edge, end: instant(1759593600000 + 24 * 60 * 60 * 1000) },
+      pxPerMs: 1,
+    });
+    const ticks = scale.ticks({ unit: 'hour', increment: 1 }, { x: 0, width: 1 });
+    expect(ticks[0]?.instant).toBe(startOf('Australia/Lord_Howe', edge, 'hour'));
+  });
+
+  it('ticks({ hour, 1 }) starts at the unit floor when the zone shifts back by 30 minutes (Lord Howe DST end)', () => {
+    const edge = instant(1775314800000);
+    const scale = createTimeScale({
+      timeZone: 'Australia/Lord_Howe',
+      range: { start: edge, end: instant(1775314800000 + 24 * 60 * 60 * 1000) },
+      pxPerMs: 1,
+    });
+    const ticks = scale.ticks({ unit: 'hour', increment: 1 }, { x: 0, width: 1 });
+    expect(ticks[0]?.instant).toBe(startOf('Australia/Lord_Howe', edge, 'hour'));
+  });
+
   it('snapInstant always answers an instant scale.ticks() itself draws, at any increment (one tick walk)', () => {
     fc.assert(
       fc.property(
