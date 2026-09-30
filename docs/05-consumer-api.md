@@ -214,6 +214,18 @@ a grid row drag, and a Delete refuse.
 A locked parent's summary bar does not move. The Rollup still writes the parent's dates when a
 child moves.
 
+### Delete an Entry and clear its dates
+
+`Delete` removes the Entry. It does the same on a row, a grid cell, and a bar. A bar draws one Entry,
+so `Delete` on it never clears dates. The bar of a parent removes the parent and every Entry below it.
+The remove rule can refuse. A refused Delete writes nothing and raises one `info` report with code
+`entry-remove-refused`. One Delete is one undo step.
+
+`freegantt.clearDates` ("Clear dates") clears `start` and `end` and keeps the Entry. It has no key.
+The context menu lists it, and `gantt.commands.run('freegantt.clearDates')` runs it on the Selection.
+It passes over an Entry with no dates of its own to clear. A lock or a `beforeChange` refusal stops
+the whole command, and the Gantt raises one `info` report with code `entry-clear-dates-refused`.
+
 <!-- doc-example-setup
 declare const container: HTMLElement;
 -->

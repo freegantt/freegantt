@@ -648,7 +648,8 @@ Three vetoes share `buildRefusalReport`. The cell editor raises its own report. 
 | --- | --- | --- | --- | --- |
 | `beforeChange` | a Dataset handler | `MutationCancelledError` | Dataset `error` | no — subscribe with `watchAllErrors` |
 | `beforeEntryMove` / `beforeEntryResize` | a Gantt handler | none — the pipeline restores the preview | Gantt `error`, codes `entry-move-cancelled` / `entry-resize-cancelled` | yes — `LiveRegion` is already subscribed |
-| row `Delete` | the remove rule (a locked row, or a parent that holds one) | none — the command removes nothing | Gantt `error`, code `entry-remove-refused` | yes — same Gantt bus |
+| row or bar `Delete` | the remove rule (a locked Entry, or a parent that holds one) | none — the command removes nothing | Gantt `error`, code `entry-remove-refused` | yes — same Gantt bus |
+| "Clear dates" | a lock, a writable rule, or `beforeChange` | none — the command writes nothing | Gantt `error`, code `entry-clear-dates-refused` | yes — same Gantt bus |
 | cell editor | the `inlineEditing()` plugin | none — the editor stays open, or a notice sits on the cell | Gantt `error`, plugin codes such as `derived-value` | yes — same Gantt bus |
 
 :::note A refused gesture commit is one record, not two

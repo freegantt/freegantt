@@ -519,7 +519,7 @@ Selection and belong on any consumer's cheat sheet:
 
 | Chord | Command | What it does |
 |---|---|---|
-| `Delete` | `freegantt.deleteSelection` | Two intents, kept apart by what was clicked (ADR 0012, ADR 0026): on a bar it un-dates the child Entry that bar draws (`entries.update`, clearing `start`/`end`); on a grid row or cell it removes the record (`dataset.entries.remove`). A `beforeChange` veto leaves the target untouched. A row Delete is all or nothing: if the remove rule refuses one row, none go, and the Gantt raises one `info` report with code `entry-remove-refused` that names the refused rows. One Delete is one undo step. |
+| `Delete` | `freegantt.deleteSelection` | Removes the Entry the target names, on a bar, a grid row or a cell alike (`dataset.entries.remove`, ADR 0012 amended, #648). A bar never clears dates. A parent's bar removes its subtree. A `beforeChange` veto leaves the target untouched. A Delete is all or nothing: if the remove rule refuses one Entry, none go, and the Gantt raises one `info` report with code `entry-remove-refused` that names the refused Entries. One Delete is one undo step. |
 | `Mod+ArrowRight` / `Mod+ArrowLeft` | `freegantt.selectNextEntry` / `selectPreviousEntry` (renamed from `selectNextSegment`/`selectPreviousSegment`, ADR 0025, #421) | Steps the Selection between the Entries the row it already sits on owns (#212, ADR 0010, issue #218). A row that owns one Entry has nowhere to step, so the chord writes nothing; it clamps at both ends. |
 | `Alt+ArrowUp` / `Alt+ArrowDown` | `freegantt.moveEntryUp` / `freegantt.moveEntryDown` (#614) | Moves the focused Entry one sibling up or down, in the grid pane and on a bar. On a bar, it moves the row and never moves focus to another row. Asks the `reorder` capability, the lock rule and the place rule, fires `beforeEntryMove`/`entryMove` with `shiftsTime: false`, and is one undo step. A refused step changes nothing and raises an `entry-step-refused` report. |
 | `Alt+Shift+ArrowRight` / `Alt+Shift+ArrowLeft` | `freegantt.indentEntry` / `freegantt.outdentEntry` (#614) | Indent makes the Entry the last child of the sibling above. Outdent puts it just after its parent; the later siblings stay. The grid pane binds these two chords. On a bar, the horizontal arrows keep their time meaning: `Alt+Shift+Arrow` resizes with the snap off. A bar reaches indent and outdent through the context menu. Same rules, events and undo as the row above. |
@@ -537,7 +537,7 @@ A **convenience chord**'s command has another door — a button, a menu item, or
 |---|---|---|
 | `Mod+Z` / `Mod+Shift+Z` | `freegantt.undo` / `freegantt.redo` | `dataset.undo()` / `redo()`, and a toolbar button. |
 | `Mod+A` | `freegantt.selectAll` | `gantt.selectedEntryIds = ...`. |
-| `Delete` | `freegantt.deleteSelection` | `entries.update` (un-date a bar) / `entries.remove()` (drop a row) directly. |
+| `Delete` | `freegantt.deleteSelection` | `entries.remove()` directly. `freegantt.clearDates` ("Clear dates", no key) is the command that un-dates; `entries.update(id, { start: undefined, end: undefined })` is its data verb. |
 | `Mod+=` / `Mod+-` | `freegantt.zoomIn` / `freegantt.zoomOut` | The methods of the same name. |
 | `Mod+0` | `freegantt.panToToday` | The method of the same name. |
 | `Alt+ArrowRight` / `Alt+ArrowLeft` | `freegantt.panRight` / `freegantt.panLeft` | `gantt.panToDate(...)`. |

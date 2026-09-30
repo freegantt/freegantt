@@ -2070,10 +2070,12 @@ export class GanttShell {
           switchToggleCell(this.#cellTogglePorts(), entry, focused.field);
         }
       },
-      canClearDates: (id) => this.#canClearDates(id),
+      hasDatesToClear: (id) => this.#hasDatesToClear(id),
       clearDates: (id) => {
         this.#options.dataset.entries.update(id, { start: undefined, end: undefined });
       },
+      refusedClears: (ids) => this.#refusedClears(ids),
+      reportClearRefused: (ids) => this.#reportClearRefused(ids),
       refusedRemovals: (ids) => this.#refusedRemovals(ids),
       reportRemoveRefused: (ids) => this.#reportRemoveRefused(ids),
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
@@ -2377,21 +2379,24 @@ export class GanttShell {
    *  registered through `core-commands.ts` — a plugin can override any of them. The old
    *  standalone `attachKeyboardNavigation` (`view/keyboard-navigation.ts`) is superseded by this;
    *  this shell no longer calls it. */
-  /** ADR 0012: a Delete on a bar un-dates the Entry that bar draws, so this asks whether those dates
-   *  are the Entry's own to clear. A rolling-up parent's are not — the Rollup writes them (ADR 0013)
-   *  — and an Entry holding no date has nothing to clear. Both answer `false`, and the Delete passes
-   *  over the bar instead of throwing out of a keypress. Only the dates the Entry actually holds are
-   *  asked about: a half-dated descendant clears the one it has. */
-  #canClearDates(id: EntryId): boolean {
+  /** ADR 0012: does "Clear dates" have something to clear on this Entry? A rolling-up parent's dates
+   *  are not its own — the Rollup writes them (ADR 0013) — and an Entry holding no date has none. Both
+   *  answer `false`, and the command passes over them. */
+  #hasDatesToClear(id: EntryId): boolean {
     const entry = this.#options.dataset.entries.get(id);
-    if (entry === undefined) return false;
-    if (entry.start === undefined && entry.end === undefined) return false;
-    const writable = (field: 'start' | 'end'): boolean =>
-      entry[field] === undefined || this.#capabilities.canWrite(entry, field).ok;
-    return writable('start') && writable('end');
+    return entry !== undefined && this.#capabilities.holdsDatesToClear(entry);
   }
 
-  /** The Entries a row Delete may not take. The remove rule answers for each Entry and its whole
+  /** The Entries whose dates a user may not clear. The lock and the Field's writable rule answer, the
+   *  same as for a cell edit. */
+  #refusedClears(ids: readonly EntryId[]): readonly EntryId[] {
+    return ids.filter((id) => {
+      const entry = this.#options.dataset.entries.get(id);
+      return entry !== undefined && !this.#capabilities.canClearDates(entry);
+    });
+  }
+
+  /** The Entries a Delete may not take. The remove rule answers for each Entry and its whole
    *  subtree, so an unlocked parent that holds a locked child is on this list too. */
   #refusedRemovals(ids: readonly EntryId[]): readonly EntryId[] {
     return ids.filter((id) => {
@@ -2402,10 +2407,23 @@ export class GanttShell {
 
   /** A refused Delete is the library working, so it reports at `'info'` and writes nothing. */
   #reportRemoveRefused(ids: readonly EntryId[]): void {
-    const reason = `A remove rule refuses these rows, or a row below them: ${ids.join(', ')}.`;
+    const reason = `A remove rule refuses these Entries, or an Entry below them: ${ids.join(', ')}.`;
     this.#raiseError({
       code: 'entry-remove-refused',
       message: `Nothing was deleted. ${reason}`,
+      reason,
+      severity: 'info',
+      by: 'core',
+      ...(ids[0] === undefined ? {} : { entryId: ids[0] }),
+    });
+  }
+
+  /** A refused "Clear dates" is the library working, so it reports at `'info'` and writes nothing. */
+  #reportClearRefused(ids: readonly EntryId[]): void {
+    const reason = `A lock or a writable rule refuses the dates of these Entries: ${ids.join(', ')}.`;
+    this.#raiseError({
+      code: 'entry-clear-dates-refused',
+      message: `No dates were cleared. ${reason}`,
       reason,
       severity: 'info',
       by: 'core',
