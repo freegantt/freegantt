@@ -12,6 +12,12 @@ export class FrameScheduler {
   readonly #render: () => void;
   #frameId: number | undefined;
 
+  /** Built once, so a request in a hot loop creates no closure. */
+  readonly #onFrame = (): void => {
+    this.#frameId = undefined;
+    this.#render();
+  };
+
   constructor(render: () => void) {
     this.#render = render;
   }
@@ -20,10 +26,7 @@ export class FrameScheduler {
    *  the frame runs. */
   request(): void {
     if (this.#frameId !== undefined) return;
-    this.#frameId = requestAnimationFrame(() => {
-      this.#frameId = undefined;
-      this.#render();
-    });
+    this.#frameId = requestAnimationFrame(this.#onFrame);
   }
 
   /** Synchronous: runs `render` now and cancels a pending frame, so a caller never gets rendered

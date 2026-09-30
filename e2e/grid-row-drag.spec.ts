@@ -9,6 +9,10 @@ import {
   dragPointerTo,
   hasDirectLeafChild,
   lockEntryAt,
+  visibleRowEntryIds,
+  holdAtBottomEdgeUntilRowsSettle,
+  parentRowScrolledIntoView,
+  rowsViewportBox,
 } from './row-drag-support.js';
 
 // A drag on a grid row reorders or re-parents its Entry (#602) — the same one switch (`reorder`),
@@ -18,10 +22,6 @@ import {
 
 function gridRow(page: Page, rowId: string): Locator {
   return page.locator(`#gantt .fg-grid-pane .fg-row[data-row-id="${rowId}"]`);
-}
-
-async function gridRowsViewport(page: Page) {
-  return (await page.locator('#gantt .fg-rows-clip').boundingBox())!;
 }
 
 interface GridGrabPoint {
@@ -52,7 +52,7 @@ test("dragging a leaf grid row into another parent's row middle reparents it, in
 }) => {
   await gotoGeneric(page);
   const rows = await rowPlan(page);
-  const viewport = await gridRowsViewport(page);
+  const viewport = await rowsViewportBox(page);
 
   const {
     row: leaf,
@@ -99,10 +99,46 @@ test("dragging a leaf grid row into another parent's row middle reparents it, in
   await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
 });
 
+test('holding a grid row drag at the bottom edge scrolls the rows, and the drop lands on a row that was off screen', async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const rows = await rowPlan(page);
+  const viewport = await rowsViewportBox(page);
+  const visibleAtStart = await visibleRowEntryIds(page);
+  const {
+    row: leaf,
+    grabX,
+    grabY,
+  } = await firstVisibleGridRow(
+    page,
+    rows.filter((row) => row.childCount === 0 && row.hasOwnBar),
+    viewport,
+  );
+
+  await countChangesFromHere(page);
+
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await holdAtBottomEdgeUntilRowsSettle(page, grabX);
+
+  const target = await parentRowScrolledIntoView(page, visibleAtStart);
+  const targetBox = (await gridRow(page, target.rowId).boundingBox())!;
+  await page.mouse.move(grabX, targetBox.y + targetBox.height / 2, { steps: 1 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((id) => window.__gantt.dataset.entries.get(id)?.read('parentId'), leaf.entryId),
+    )
+    .toBe(target.entryId);
+  expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(1);
+});
+
 test('a plain click on a grid row selects it and writes nothing', async ({ page }) => {
   await gotoGeneric(page);
   const rows = await rowPlan(page);
-  const viewport = await gridRowsViewport(page);
+  const viewport = await rowsViewportBox(page);
   const { row, grabX, grabY } = await firstVisibleGridRow(page, rows, viewport);
 
   await countChangesFromHere(page);
@@ -117,7 +153,7 @@ test('dragging a parent grid row onto its own child row refuses, with a not-allo
 }) => {
   await gotoGeneric(page);
   const rows = await rowPlan(page);
-  const viewport = await gridRowsViewport(page);
+  const viewport = await rowsViewportBox(page);
 
   const parentCandidates: RowInfo[] = [];
   for (const row of rows.filter((row) => row.childCount > 0)) {
@@ -150,7 +186,7 @@ test('with "Lock tree" checked, a grid row drag commits nothing, and a plain cli
   await page.locator('#gantt').scrollIntoViewIfNeeded();
 
   const rows = await rowPlan(page);
-  const viewport = await gridRowsViewport(page);
+  const viewport = await rowsViewportBox(page);
   const { row: leaf } = await firstVisibleGridRow(
     page,
     rows.filter((row) => row.childCount === 0),
@@ -193,7 +229,7 @@ test('with "Lock tree" checked, a grid row drag commits nothing, and a plain cli
 test("a locked row's grid drag commits nothing, and a plain click still selects", async ({ page }) => {
   await gotoGeneric(page);
   const rows = await rowPlan(page);
-  const viewport = await gridRowsViewport(page);
+  const viewport = await rowsViewportBox(page);
   const {
     row: leaf,
     grabX,
@@ -229,7 +265,7 @@ test("a grid row dropped into a locked parent's middle refuses, with a not-allow
 }) => {
   await gotoGeneric(page);
   const rows = await rowPlan(page);
-  const viewport = await gridRowsViewport(page);
+  const viewport = await rowsViewportBox(page);
 
   const {
     row: leaf,
@@ -300,7 +336,7 @@ test("the insertion line sits deeper above a group's last child than below it, d
 }) => {
   await gotoGeneric(page);
   const allRows = await rowPlan(page);
-  const viewport = await gridRowsViewport(page);
+  const viewport = await rowsViewportBox(page);
 
   // A leaf whose next row steps back out to a shallower depth: the owner's rule says the leaf's own
   // bottom zone still belongs to its group (deeper), and the row right after does not.

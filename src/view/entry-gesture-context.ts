@@ -7,6 +7,7 @@
 
 import type { Entry, EntryId, BarId, RowId, ClientPoint } from '../model/index.js';
 import type { GestureCapability } from './capability.js';
+import type { RowEdgeScroll } from './row-edge-scroll.js';
 
 /** What kind of data gesture is in flight — a bar drag that moves it, a bar drag that resizes one
  *  edge, or a grid row drag that reorders or re-parents the Entry and writes no date. */
@@ -123,6 +124,9 @@ export interface EntryGestureContext {
   /** Content-y under a pointer at `clientY`, read through the bound y `ScrollAxis`. Both panes
    *  share one row geometry, so it needs no pane. */
   contentYAtClientY(clientY: number): number;
+  /** Scrolls the rows while a row drag rests near the top or bottom edge of the rows viewport
+   *  (#603). Only a row-axis drag feeds it. */
+  rowEdgeScroll: RowEdgeScroll;
   /** Arms a gesture on the grabbed entry (+ capable co-selected entries). Returns
    *  `undefined` when nothing capable is grabbed — replaces the length check `start()` in
    *  `entry-gestures.ts` used to make by hand against `entriesForGesture()`'s result. */

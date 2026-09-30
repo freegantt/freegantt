@@ -70,6 +70,7 @@ function makeContext(
     setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     contentYAtClientY: (clientY) => clientY,
+    rowEdgeScroll: { follow: () => {}, stop: () => {} },
     selection: {
       selectableEntriesInRowOrder: () => ORDER,
       // `hitTest` always misses in this fake (this file drives keyboard chords, never a pointer
