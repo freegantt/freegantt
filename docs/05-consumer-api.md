@@ -357,14 +357,14 @@ write.
       {
         field: 'done',
         header: 'Done', // the accessible name, even with a headerRenderer
-        headerRenderer: () => ({ text: '✔' }),
+        headerRenderer: () => ({ text: '✔' }), // or an icon: { html: '<svg …>' }
         toggle: { on: { text: '☑' }, off: { text: '☐' } }, // omit for a checkbox look
       },
     ],
   });
   ```
 
-  The default write is one undo step and meets the Field's `editable`, `capabilities.edit` and `beforeChange`. A closed toggle draws its value and does nothing. `toggle: { onToggle: ({ entry, field, nextValue, announceEdit }) => … }` replaces the write, for example to ask first, then call `dataset.entries.update`. The default write announces `entryEdit` itself. A custom `onToggle` must call `announceEdit()` after its write, also after an async one, or `entryEdit` listeners never see the switch. `beforeEntryEdit` still fires before the callback. The library writes the ARIA: `role="checkbox"`, `aria-checked`, and the column `header` as the name.
+  The default write is one undo step and meets the Field's `editable`, `capabilities.edit` and `beforeChange`. A closed toggle draws its value and does nothing. `toggle: { onToggle: ({ entry, field, nextValue, announceEdit }) => … }` replaces the write, for example to ask first, then call `dataset.entries.update`. The default write announces `entryEdit` itself. A custom `onToggle` must call `announceEdit()` after its write, also after an async one, or `entryEdit` listeners never see the switch. `beforeEntryEdit` still fires before the callback. The library writes the ARIA: `role="checkbox"`, `aria-checked`, and the column `header` as the name. A header renderer may return only an icon or an SVG: the library adds the `header` string as visually hidden text beside the output.
 - Grid columns are fixed-width. A column takes its own `width`, else its Field's `column.width`, else `--fg-column-width` (120). When the set outgrows the grid pane, the pane scrolls horizontally to reach it. Give a column `flex` instead to have it share the pane's leftover room.
 - The grid pane never sits wider than its columns — a splitter drag stops at the last column's edge, and a `gridWidth` past it is capped to it. Narrower is always fine: the columns overflow and the pane scrolls. A `flex` column lifts the cap, since it has no fixed edge.
 - `gridWidth: 'fitColumns'` — size the grid pane to its columns and keep it there, instead of hand-computing the number. Live, and re-measured whenever the columns change. Reads back in px. A Splitter drag ends it; a `flex` column leaves nothing to fit, so the pane keeps the width it has.

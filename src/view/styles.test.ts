@@ -117,7 +117,7 @@ describe('ensureBaseStyles', () => {
     // The wrapper, not one rule inside it — an edit that only means to add a rule must not be able
     // to drop the layer.
     expect(css).toContain(':root {');
-    expect(css).toContain('.fg-live-region {');
+    expect(css).toContain('.fg-live-region, .fg-visually-hidden {');
   });
 
   it('the injected sheet carries every colour token on :root and on the theme pins, never on .fg-container (#271)', () => {

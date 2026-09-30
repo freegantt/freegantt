@@ -49,6 +49,7 @@ import {
   BAR_HANDLE_CLASS,
   BAR_TESTID,
   COLUMN_HEADER_CLASS,
+  VISUALLY_HIDDEN_CLASS,
   DEFAULT_BAR_LABEL_GAP_PX,
   ENTRY_ID_KEY,
   FIELD_KEY,
@@ -1028,10 +1029,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // owns which one header cell is the pane's tab stop.
       const label = document.createElement('span');
       label.className = 'fg-col-header-label';
+      const accessibleName = document.createElement('span');
+      accessibleName.className = VISUALLY_HIDDEN_CLASS;
       const resizer = document.createElement('div');
       resizer.className = 'fg-column-resizer';
       resizer.setAttribute('aria-hidden', 'true');
-      node.append(label, resizer);
+      node.append(label, accessibleName, resizer);
       return node;
     },
     toGeom: (cell: CellItem): HeaderCellGeom => ({
@@ -1045,14 +1048,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       ...(cell.content !== undefined ? { content: cell.content } : {}),
     }),
     patch: (node: HTMLElement, geom: HeaderCellGeom): void => {
-      // `create` above always appends `label` first — the same structural guarantee the row-cell
-      // spec's own twisty/label pair relies on just above.
-      const label = node.firstElementChild as HTMLElement;
+      // `create` above always appends `label`, then the hidden name span.
+      const label = node.children[0] as HTMLElement;
+      const accessibleName = node.children[1] as HTMLElement;
       applyElementDescription(label, geom.content ?? { text: geom.text });
       // A renderer changes what the header shows, not what a screen reader hears. The header text
-      // stays the accessible name.
-      if (geom.content !== undefined) node.setAttribute('aria-label', geom.text);
-      else node.removeAttribute('aria-label');
+      // stays the accessible name, as hidden text beside the renderer's output.
+      if (geom.content !== undefined) label.setAttribute('aria-hidden', 'true');
+      else label.removeAttribute('aria-hidden');
+      accessibleName.textContent = geom.content !== undefined ? geom.text : '';
       node.setAttribute('aria-colindex', String(geom.columnIndex));
       paintColumnBox(node, geom);
       if (geom.resizable) node.removeAttribute('data-resizable-off');

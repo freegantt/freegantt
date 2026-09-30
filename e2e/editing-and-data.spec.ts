@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import {
   currentParentId,
   dragPointerTo,
@@ -38,6 +39,15 @@ test('adding an entry is one transaction, and the log shows it as one changeset'
   expect(lines[0]).toMatch(/entries · new-1 · added/);
 });
 
+// The padlock column is the page's one lock control.
+function lockCell(page: Page, entryId: string): Locator {
+  return page.locator(`#gantt .fg-row[data-entry-id="${entryId}"] [data-field="locked"]`);
+}
+
+function lockBox(page: Page, entryId: string): Locator {
+  return lockCell(page, entryId).getByRole('checkbox');
+}
+
 // #612: the lock is a core Field now, and it stops only the user — the Rename button is app code,
 // so it still writes a locked entry. What a lock closes is the grid editor and the drag.
 test('a locked row opens no Name editor, and its bar does not drag', async ({ page }) => {
@@ -45,10 +55,10 @@ test('a locked row opens no Name editor, and its bar does not drag', async ({ pa
   const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
   await expect(bar).toBeVisible();
   await bar.click();
-  await expect(page.locator('#lock-checkbox')).toBeEnabled();
 
   const entryId = await page.evaluate(() => window.__gantt.selectedEntryIds[0]!);
-  await page.locator('#lock-checkbox').check();
+  await lockCell(page, entryId).click();
+  await expect(lockBox(page, entryId)).toHaveAttribute('aria-checked', 'true');
 
   const nameCell = page.locator(`#gantt .fg-row[data-entry-id="${entryId}"] [data-field="name"]`);
   await nameCell.click(); // settle the selection reflow before the real double-click
@@ -66,6 +76,43 @@ test('a locked row opens no Name editor, and its bar does not drag', async ({ pa
   expect(after).toBe(before);
 });
 
+test('a click and Space on the focused padlock cell lock and unlock a leaf', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const leafId = await page.evaluate(
+    () => window.__dataset.entries.all.find((e) => e.children().length === 0)!.id as string,
+  );
+  await page.evaluate((id) => window.__gantt.reveal(id), leafId);
+
+  await lockCell(page, leafId).click();
+  await expect(lockBox(page, leafId)).toHaveAttribute('aria-checked', 'true');
+  expect(await page.evaluate((id) => window.__dataset.entries.get(id)!.read('locked'), leafId)).toBe(true);
+
+  await lockCell(page, leafId).focus();
+  await page.keyboard.press('Space');
+  await expect(lockBox(page, leafId)).toHaveAttribute('aria-checked', 'false');
+});
+
+// A parent asks before it unlocks. Accept writes the value. Dismiss writes nothing.
+test('unlocking a parent asks first, and a dismissed dialog keeps it locked', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const parentId = await page.evaluate(
+    () => window.__dataset.entries.all.find((e) => e.children().length > 0)!.id as string,
+  );
+  await page.evaluate((id) => window.__gantt.reveal(id), parentId);
+  await lockCell(page, parentId).click();
+  await expect(lockBox(page, parentId)).toHaveAttribute('aria-checked', 'true');
+
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await lockCell(page, parentId).click();
+  await expect(lockBox(page, parentId)).toHaveAttribute('aria-checked', 'true');
+
+  page.once('dialog', (dialog) => dialog.accept());
+  await lockCell(page, parentId).click();
+  await expect(lockBox(page, parentId)).toHaveAttribute('aria-checked', 'false');
+});
+
 // A lock protects only its own row. The children of a locked parent stay free: a user drags one out.
 test('an unlocked child leaves a locked parent by a bar drag', async ({ page }) => {
   await page.goto('/editing-and-data.html');
@@ -78,11 +125,9 @@ test('an unlocked child leaves a locked parent by a bar drag', async ({ page }) 
   const childId = leafIds[0]!;
   const lockedParentId = (await currentParentId(page, childId))!;
 
-  // Locks first: checking the box scrolls the page, and the geometry below must read after that.
-  await page.evaluate((id) => {
-    window.__gantt.selectedEntryIds = [id];
-  }, lockedParentId);
-  await page.locator('#lock-checkbox').check();
+  // Locks first: the click can scroll the page, and the geometry below must read after that.
+  await page.evaluate((id) => window.__gantt.reveal(id), lockedParentId);
+  await lockCell(page, lockedParentId).click();
   expect(await page.evaluate((id) => window.__dataset.entries.get(id)!.read('locked'), lockedParentId)).toBe(
     true,
   );
@@ -130,9 +175,9 @@ test('the Delete key on a locked row keeps the row and toasts why', async ({ pag
   const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
   await expect(bar).toBeVisible();
   await bar.click();
-  await expect(page.locator('#lock-checkbox')).toBeEnabled();
   const entryId = await page.evaluate(() => window.__gantt.selectedEntryIds[0]!);
-  await page.locator('#lock-checkbox').check();
+  await lockCell(page, entryId).click();
+  await expect(lockBox(page, entryId)).toHaveAttribute('aria-checked', 'true');
 
   await page.locator(`#gantt .fg-row[data-entry-id="${entryId}"] [data-field="name"]`).click();
   const before = await page.evaluate(() => window.__dataset.entries.all.length);
@@ -311,7 +356,6 @@ test("a sync overwrites a local rename it never saw, and undo keeps the server's
   const bar = page.locator('#gantt .fg-bar[data-bar-id^="entry-3:"]').first();
   await expect(bar).toBeVisible();
   await bar.click();
-  await expect(page.locator('#lock-checkbox')).toBeEnabled();
 
   const nameBefore = await bar.textContent();
   await page.locator('#rename-input').fill('Renamed locally');

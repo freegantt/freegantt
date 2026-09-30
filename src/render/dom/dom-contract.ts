@@ -19,6 +19,8 @@ export const ROW_CELL_CLASS = 'fg-row-cell';
 export const ROW_LABEL_TEXT_CLASS = 'fg-row-label-text';
 /** One header cell of the grid pane. Carries `data-field`. */
 export const COLUMN_HEADER_CLASS = 'fg-col-header';
+/** Text a screen reader hears and the eye never sees. */
+export const VISUALLY_HIDDEN_CLASS = 'fg-visually-hidden';
 /** The collapse control inside a name cell. */
 export const ROW_TWISTY_CLASS = 'fg-row-twisty';
 /** The shared resize-handle pair over the currently resizable bar. Carries `data-edge`. */
