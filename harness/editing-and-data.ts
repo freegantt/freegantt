@@ -122,8 +122,7 @@ const lockToggle: ColumnToggle = {
   on: closedPadlock,
   off: openPadlock,
   onToggle: ({ entry, nextValue, announceEdit }) => {
-    if (!nextValue && entry.children().length > 0 && !confirm(`Unlock "${entry.name}" and its phase?`))
-      return;
+    if (!nextValue && entry.children().length > 0 && !confirm(`Unlock "${entry.name}"?`)) return;
     dataset.entries.update(entry.id, { locked: nextValue });
     announceEdit();
   },
