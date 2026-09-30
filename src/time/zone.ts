@@ -346,6 +346,17 @@ function fixedOrigin(zone: string, unit: TimeUnit): Instant {
   return startOf(zone, epochLocal, unit);
 }
 
+/** The first `unit` start after `boundary`, read from the zone's own calendar: the first instant
+ * whose `startOf` differs from `boundary`'s. A plain `stepBy` is one real hour, so it skips the next
+ * hour start after a 30-minute DST shift (Lord Howe) and stretches the short hour to 60 minutes.
+ * It also lands inside a repeated hour (the clock goes back), where `startOf` still answers
+ * `boundary` — so the loop steps on until the floor moves. */
+function nextUnitStart(zone: string, boundary: Instant, unit: TimeUnit): Instant {
+  let probe = stepBy(zone, boundary, unit, 1);
+  while (startOf(zone, probe, unit) <= boundary) probe = stepBy(zone, probe, unit, 1);
+  return startOf(zone, probe, unit);
+}
+
 /** The tick immediately after `boundary`, which must already be a valid tick (a `tickFloor` or
  * `nextTick` answer, never an arbitrary instant) — exported so `TimeScale.ticks` can walk a whole
  * window one tick at a time, and `snap.ts` can find both boundaries flanking an instant, without
@@ -364,6 +375,7 @@ function fixedOrigin(zone: string, unit: TimeUnit): Instant {
  * days would collapse to the week it started in). This strides on regardless of the container it
  * crosses, so the caller always gets the `increment` it asked for. */
 export function nextTick(zone: string, boundary: Instant, unit: TimeUnit, increment: number): Instant {
+  if (increment === 1) return nextUnitStart(zone, boundary, unit);
   if (!stepFitsAnchorContainer(unit, increment)) {
     return stepBy(zone, boundary, unit, increment);
   }
@@ -390,7 +402,8 @@ export function nextTick(zone: string, boundary: Instant, unit: TimeUnit, increm
  * costs one `startOf`/`stepBy` pair regardless of `unit` or how far `at` sits from the origin.
  *
  * `increment: 1` answers `startOf(zone, at, unit)` directly. The arithmetic below counts real time,
- * so it would land 30 minutes early in a zone whose DST shift is 30 minutes (Lord Howe).
+ * so it would land 30 minutes early in a zone whose DST shift is 30 minutes (Lord Howe). `nextTick`
+ * keeps the same rule going forward: at `increment: 1`, each tick ends where `startOf` changes.
  *
  * On a DST-transition day, `unitsBetween`'s real-time count keeps a tick's spacing even but drops
  * it off a wall-clock multiple until the next day starts — a chosen trade-off, not a bug

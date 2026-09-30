@@ -109,6 +109,8 @@ describe('createTimeScale', () => {
 // on a boundary a gridline drew.
 describe('ticks() anchoring (#489)', () => {
   const zones = ['America/Chicago', 'America/New_York', 'Europe/London', 'Australia/Lord_Howe', 'UTC'];
+  // Lord Howe shifts 30 minutes at DST, Chatham has a 45-minute offset: the increment 1 walk must hold in both.
+  const halfHourZones = [...zones, 'Pacific/Chatham'];
   // 2025-01-01..2027-01-01 spans every zone's own DST transitions in that window (Lord Howe's
   // included, a 30-minute-offset transition zone.test.ts's own property tests already lean on).
   const anyInstantMs = fc.integer({
@@ -156,7 +158,7 @@ describe('ticks() anchoring (#489)', () => {
   it('ticks({ increment: 1 }, ...) still starts at the window edge’s own unit floor (unchanged)', () => {
     fc.assert(
       fc.property(
-        fc.constantFrom(...zones),
+        fc.constantFrom(...halfHourZones),
         fc.constantFrom<TimeUnit>('minute', 'hour', 'day', 'week', 'month', 'year'),
         anyInstantMs,
         (zone, unit, atMs) => {
@@ -192,6 +194,70 @@ describe('ticks() anchoring (#489)', () => {
     });
     const ticks = scale.ticks({ unit: 'hour', increment: 1 }, { x: 0, width: 1 });
     expect(ticks[0]?.instant).toBe(startOf('Australia/Lord_Howe', edge, 'hour'));
+  });
+
+  describe('hour ticks across a 30-minute DST shift (Lord Howe)', () => {
+    const zone = 'Australia/Lord_Howe';
+    const minutes = (n: number) => n * 60 * 1000;
+    const walkHours = (edge: number) => {
+      const scale = createTimeScale({
+        timeZone: zone,
+        range: { start: instant(edge - minutes(180)), end: instant(edge + minutes(180)) },
+        pxPerMs: 1,
+      });
+      return scale.ticks({ unit: 'hour', increment: 1 }, { x: 0, width: minutes(360) });
+    };
+
+    it('starts the first tick at the window edge when the edge is the 03:00 hour start', () => {
+      const edge = instant(1759593600000); // 16:00Z, 03:00 +11:00
+      const scale = createTimeScale({
+        timeZone: zone,
+        range: { start: edge, end: instant(1759593600000 + minutes(1440)) },
+        pxPerMs: 1,
+      });
+      const ticks = scale.ticks({ unit: 'hour', increment: 1 }, { x: 0, width: 1 });
+      expect(ticks.map((tick) => tick.instant)).toEqual([1759593600000]);
+    });
+
+    it('draws the short 02:30 hour 30 minutes wide and lands the next tick on 03:00 (DST start)', () => {
+      const ticks = walkHours(1759591800000); // 15:30Z, 02:30 +11:00
+      const short = ticks.find((tick) => tick.instant === 1759591800000);
+      expect(short?.width).toBe(minutes(30));
+      expect(ticks.map((tick) => tick.instant)).toContain(1759593600000);
+      expect(ticks.map((tick) => tick.width)).toEqual([60, 60, 60, 30, 60, 60, 60].map(minutes));
+    });
+
+    it('draws the repeated 01:30 to 02:00 half hour inside the 01 tick, 90 minutes wide (DST end)', () => {
+      const ticks = walkHours(1775314800000); // 15:00Z, the clock goes back to 01:30
+      const first = ticks.find((tick) => tick.instant === 1775311200000); // 14:00Z, 01:00 +11:00
+      expect(first?.width).toBe(minutes(90));
+      expect(ticks.map((tick) => tick.instant)).toContain(1775316600000); // 15:30Z, 02:00 +10:30
+      expect(ticks.map((tick) => tick.instant)).not.toContain(1775314800000);
+    });
+
+    it('never overlaps ticks and ends each tick where the next begins, in every zone', () => {
+      fc.assert(
+        fc.property(
+          fc.constantFrom(...halfHourZones),
+          fc.constantFrom<TimeUnit>('minute', 'hour', 'day', 'week', 'month'),
+          anyInstantMs,
+          (tickZone, unit, atMs) => {
+            const scale = createTimeScale({
+              timeZone: tickZone,
+              range: { start: instant(atMs), end: instant(atMs + 30 * 24 * 60 * 60 * 1000) },
+              pxPerMs: 1,
+            });
+            const windowMs = unit === 'minute' ? 3 * 60 * 60 * 1000 : 4 * 24 * 60 * 60 * 1000;
+            const ticks = scale.ticks({ unit, increment: 1 }, { x: 0, width: windowMs });
+            ticks.forEach((tick, i) => {
+              const next = ticks[i + 1];
+              if (next) expect(tick.x + tick.width).toBe(next.x);
+            });
+          },
+        ),
+        { numRuns: 100 },
+      );
+    });
   });
 
   it('snapInstant always answers an instant scale.ticks() itself draws, at any increment (one tick walk)', () => {
