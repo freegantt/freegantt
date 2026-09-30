@@ -455,6 +455,7 @@ export class Gantt<TProps = unknown> {
               for (const [id, edit] of edits) store.entries.update(id, entryEditFromProposedEdit(edit));
             });
           }),
+        inOneTransaction: (body: () => void) => attemptMutation(() => store.transaction(body)),
         // This file binds the two members it alone has. `dataset` is the full `api/Dataset` and
         // `gantt` is `this`. See `api/plugin-context.ts`'s file header for why `view/` may name
         // neither. `this` is real by the time any plugin's `view()` runs (ADR 0032): `this.plugins

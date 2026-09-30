@@ -668,7 +668,9 @@ One keyboard action that moves an Entry one place in the tree: `up`, `down`, `in
 It asks the **Reorder** capability and the **Place rule**, as a row drag does. It fires the same
 `beforeEntryMove` and `entryMove` pair with `shiftsTime: false`. It is one undo step. A refused
 step changes nothing and raises the `entry-step-refused` report. The core commands `moveEntryUp`,
-`moveEntryDown`, `indentEntry` and `outdentEntry` run it.
+`moveEntryDown`, `indentEntry` and `outdentEntry` run it. They run it for every selected Entry. Each
+Entry takes the step it would take alone, and a refused Entry stays. A run goes top to bottom for `up`
+and `indent`, and bottom to top for `down` and `outdent`. One key press is one undo step.
 _Avoid_: `nudge` (that names the keyboard time move of a bar)
 
 **Row drop zone** (#425):

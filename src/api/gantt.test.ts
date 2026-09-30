@@ -10489,6 +10489,183 @@ describe('Gantt — the keyboard moves an Entry in the tree', () => {
     gantt.destroy();
   });
 
+  describe('with several Entries selected', () => {
+    const rootIds = (dataset: Dataset): string[] =>
+      dataset.entries.all.filter((entry) => entry.depth === 0).map((entry) => entry.id);
+
+    it('moveEntryDown moves every selected Entry and keeps their order', () => {
+      const { gantt, dataset } = mount();
+      gantt.selectedEntryIds = [entryId('a'), entryId('b')];
+
+      gantt.commands.run('freegantt.moveEntryDown');
+
+      expect(childIdsOf(dataset, 'p1')).toEqual(['c', 'a', 'b']);
+      gantt.destroy();
+    });
+
+    it('moveEntryUp moves every selected Entry and keeps their order', () => {
+      const { gantt, dataset } = mount();
+      gantt.selectedEntryIds = [entryId('b'), entryId('c')];
+
+      gantt.commands.run('freegantt.moveEntryUp');
+
+      expect(childIdsOf(dataset, 'p1')).toEqual(['b', 'c', 'a']);
+      gantt.destroy();
+    });
+
+    it('two siblings that indent together do not nest', () => {
+      const { gantt, dataset } = mount();
+      gantt.selectedEntryIds = [entryId('b'), entryId('c')];
+
+      gantt.commands.run('freegantt.indentEntry');
+
+      expect(childIdsOf(dataset, 'a')).toEqual(['b', 'c']);
+      expect(childIdsOf(dataset, 'b')).toEqual([]);
+      gantt.destroy();
+    });
+
+    it('two siblings that outdent together do not swap', () => {
+      const { gantt, dataset } = mount();
+      gantt.selectedEntryIds = [entryId('a'), entryId('b')];
+
+      gantt.commands.run('freegantt.outdentEntry');
+
+      expect(rootIds(dataset)).toEqual(['p1', 'a', 'b', 'p2']);
+      expect(childIdsOf(dataset, 'p1')).toEqual(['c']);
+      gantt.destroy();
+    });
+
+    it('a locked Entry stays and the others still move', () => {
+      const { gantt, dataset, reports } = mount();
+      dataset.entries.update('b', { locked: true });
+      gantt.selectedEntryIds = [entryId('a'), entryId('b'), entryId('c')];
+
+      gantt.commands.run('freegantt.outdentEntry');
+
+      expect(rootIds(dataset)).toEqual(['p1', 'a', 'c', 'p2']);
+      expect(childIdsOf(dataset, 'p1')).toEqual(['b']);
+      expect(reports).toHaveLength(1);
+      expect(reports[0]).toMatchObject({ code: 'entry-step-refused', entryId: entryId('b') });
+      gantt.destroy();
+    });
+
+    it('a selection at the edge lets a lower selected Entry pass the blocked one', () => {
+      const { gantt, dataset } = mount();
+      gantt.selectedEntryIds = [entryId('a'), entryId('b')];
+
+      gantt.commands.run('freegantt.moveEntryUp');
+
+      expect(childIdsOf(dataset, 'p1')).toEqual(['b', 'a', 'c']);
+      gantt.destroy();
+    });
+
+    it('a selected parent and its selected child both move', () => {
+      const { gantt, dataset } = mount();
+      gantt.selectedEntryIds = [entryId('p2'), entryId('c')];
+
+      gantt.commands.run('freegantt.moveEntryUp');
+
+      expect(rootIds(dataset)).toEqual(['p2', 'p1']);
+      expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'c', 'b']);
+      gantt.destroy();
+    });
+
+    it('fires one event pair for each moved Entry, and undoes all of them in one step', () => {
+      const { gantt, dataset, events, moves } = mount();
+      gantt.selectedEntryIds = [entryId('a'), entryId('b')];
+
+      gantt.commands.run('freegantt.moveEntryDown');
+
+      expect(events).toEqual(['beforeEntryMove', 'beforeEntryMove', 'entryMove', 'entryMove']);
+      expect(moves.map((move) => move.entry)).toEqual([entryId('b'), entryId('a')]);
+      dataset.undo();
+      expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+      expect(dataset.canUndo).toBe(false);
+      gantt.destroy();
+    });
+
+    it('one report names every refused Entry', () => {
+      const { gantt, reports } = mount();
+      gantt.selectedEntryIds = [entryId('a'), entryId('p1')];
+
+      gantt.commands.run('freegantt.moveEntryUp');
+
+      expect(reports).toHaveLength(1);
+      expect(reports[0]?.code).toBe('entry-step-refused');
+      expect(reports[0]?.message).toContain('p1, a');
+      gantt.destroy();
+    });
+
+    it('a beforeEntryMove Promise that resolves true lets every Entry move, in one undo step', async () => {
+      const { gantt, dataset } = mount();
+      gantt.on('beforeEntryMove', () => Promise.resolve());
+      gantt.selectedEntryIds = [entryId('a'), entryId('b')];
+
+      gantt.commands.run('freegantt.moveEntryDown');
+
+      expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+      await vi.waitFor(() => expect(childIdsOf(dataset, 'p1')).toEqual(['c', 'a', 'b']));
+      dataset.undo();
+      expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+      expect(dataset.canUndo).toBe(false);
+      gantt.destroy();
+    });
+
+    it('a beforeEntryMove Promise that resolves false refuses the middle Entry only', async () => {
+      const { gantt, dataset } = mount();
+      gantt.on('beforeEntryMove', (move) => Promise.resolve(move.entry === entryId('b') ? false : undefined));
+      gantt.selectedEntryIds = [entryId('a'), entryId('b'), entryId('c')];
+
+      gantt.commands.run('freegantt.outdentEntry');
+
+      await vi.waitFor(() => expect(childIdsOf(dataset, 'p1')).toEqual(['b']));
+      expect(rootIds(dataset)).toEqual(['p1', 'a', 'c', 'p2']);
+      gantt.destroy();
+    });
+
+    it('sync and async handlers together keep the processing order, in one undo step', async () => {
+      const { gantt, dataset, moves } = mount();
+      gantt.on('beforeEntryMove', (move) => (move.entry === entryId('b') ? Promise.resolve() : undefined));
+      gantt.selectedEntryIds = [entryId('b'), entryId('c')];
+
+      gantt.commands.run('freegantt.indentEntry');
+
+      await vi.waitFor(() => expect(childIdsOf(dataset, 'a')).toEqual(['b', 'c']));
+      expect(moves.map((move) => move.entry)).toEqual([entryId('b'), entryId('c')]);
+      dataset.undo();
+      expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+      expect(dataset.canUndo).toBe(false);
+      gantt.destroy();
+    });
+
+    it('a change to the data while a handler waits drops the whole run', async () => {
+      const { gantt, dataset, reports } = mount();
+      let release: () => void = () => undefined;
+      gantt.on('beforeEntryMove', () => new Promise<void>((resolve) => (release = resolve)));
+      gantt.selectedEntryIds = [entryId('a'), entryId('b')];
+
+      gantt.commands.run('freegantt.moveEntryDown');
+      dataset.entries.update('c', { name: 'C2' });
+      release();
+
+      await vi.waitFor(() => expect(reports.map((report) => report.code)).toContain('entry-move-dropped'));
+      expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+      gantt.destroy();
+    });
+
+    it('a beforeEntryMove veto on one Entry leaves that Entry in place', () => {
+      const { gantt, dataset, reports } = mount();
+      gantt.on('beforeEntryMove', (move) => (move.entry === entryId('a') ? false : undefined));
+      gantt.selectedEntryIds = [entryId('a'), entryId('b')];
+
+      gantt.commands.run('freegantt.moveEntryDown');
+
+      expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'c', 'b']);
+      expect(reports.map((report) => report.code)).toEqual(['entry-move-cancelled']);
+      gantt.destroy();
+    });
+  });
+
   it('a beforeEntryMove handler that returns false vetoes the step', () => {
     const { gantt, dataset, reports } = mount();
     gantt.on('beforeEntryMove', () => false);

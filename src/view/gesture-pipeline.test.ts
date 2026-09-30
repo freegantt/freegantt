@@ -107,6 +107,10 @@ function makeDeps(overrides: Partial<GesturePipelineDeps> = {}): {
     // wants a parent bar's drag overrides this with the descendants below it.
     entriesMovedBy: (entry) => [entry],
     commitEntryEdits: () => true,
+    inOneTransaction: (body) => {
+      body();
+      return true;
+    },
     // Part 3 (#273): required, not optional — a test that cares about the staleness guard overrides
     // this with a real, mutable roster (see `storedMap`/`storedRow` above); everyone else gets an
     // empty one, which measures every drafted id against `undefined` and never trips the guard.

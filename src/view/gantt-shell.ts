@@ -249,6 +249,9 @@ export interface GanttShellWiring {
    *  away, supplies this instead. It answers `false` for a sync veto and for a
    *  `MutationCancelledError` from `beforeChange`. The shell never sees the exception either way. */
   commitEntryEdits?: (edits: ProposedEdits) => boolean;
+  /** Runs a body as one Dataset transaction, for the same reason. It answers `false` when
+   *  `beforeChange` refused the whole transaction. */
+  inOneTransaction?: (body: () => void) => boolean;
   /** Fills the api-level pieces of a plugin's `PluginContext`. `view/` cannot type
    *  those without reaching past its own boundary. They are the full api `Dataset` and the
    *  public `Gantt` façade. `model/dataset.ts`'s narrow interface hides `.transaction()`, the same
@@ -1299,6 +1302,7 @@ export class GanttShell {
       canGesture: (capability, id, edge) => this.#canGesture(capability, id, edge),
       entriesMovedBy: (entry) => this.#capabilities.entriesMovedBy(entry),
       commitEntryEdits: (edits) => this.#options.wiring.commitEntryEdits?.(edits) ?? false,
+      inOneTransaction: (body) => this.#options.wiring.inOneTransaction?.(body) ?? false,
       emit: (name, payload) => this.#emit(name, payload),
       raiseError: this.#raiseError,
       ...(this.#options.extraEditsFor ? { extraEditsFor: this.#options.extraEditsFor } : {}),
@@ -2014,15 +2018,15 @@ export class GanttShell {
     }
   }
 
-  /** Moves the Entry one keyboard step and keeps real focus on its row or bar. The pane is read
-   *  before the move, because the move re-renders the node that holds focus. A collapsed parent the
-   *  Entry indents under expands, so the Entry stays in view. */
-  #stepEntry(id: EntryId, step: EntryStep): void {
+  /** Moves the Entries one keyboard step and keeps real focus on the row or bar that had it. The
+   *  pane is read before the move, because the move re-renders the node that holds focus. A collapsed
+   *  parent an Entry indents under expands, so the Entry stays in view. */
+  #stepEntries(ids: readonly EntryId[], step: EntryStep): void {
     const pane = this.#rovingFocus.focusedPane();
-    void this.#gesturePipeline.commitEntryStep(id, step).then((moved) => {
-      if (!moved) return;
+    void this.#gesturePipeline.commitEntrySteps(ids, step).then((moved) => {
+      if (moved.length === 0) return;
       this.#frames.flush();
-      this.#expandAndFindRow(id);
+      for (const id of moved) this.#expandAndFindRow(id);
       this.#rovingFocus.restoreFocus(pane ?? 'grid');
     });
   }
@@ -2034,7 +2038,7 @@ export class GanttShell {
     return {
       collapseAll: () => this.collapseAll(),
       expandAll: () => this.expandAll(),
-      stepEntry: (id, step) => this.#stepEntry(id, step),
+      stepEntries: (ids, step) => this.#stepEntries(ids, step),
       collapseRow: (id) => this.collapse(id),
       expandRow: (id) => this.expand(id),
       canZoomIn: () => this.canZoomIn,
