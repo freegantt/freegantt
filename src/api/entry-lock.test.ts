@@ -5,7 +5,7 @@
 // takes no door a plugin cannot also reach.
 
 import { describe, expect, it } from 'vitest';
-import { Dataset } from './dataset.js';
+import { Dataset, removableOf } from './dataset.js';
 import { fieldRowsOf } from '../data/change-set.js';
 import { entryId, RemoveRefusedError } from './index.js';
 import type { DataPlugin, EntryInput } from './index.js';
@@ -209,6 +209,58 @@ describe('the core lock refuses a user delete (#611)', () => {
 
     expect(() => dataset.entries.remove('q')).toThrow(RemoveRefusedError);
     expect(dataset.entries.has('q')).toBe(true);
+  });
+});
+
+describe('a removal extender writes past the remove rule and the lock', () => {
+  it('removes a locked parent when its last child goes, the way an edit extender writes past a lock', () => {
+    const removesEmptyParent: DataPlugin = {
+      id: 'demo.tidy',
+      data(ctx) {
+        ctx.edits.setRemovalExtender(
+          () => (request) =>
+            request.removedEntryIds.has(entryId('child')) && !request.hasChildren('parent')
+              ? new Set([entryId('parent')])
+              : new Set(),
+        );
+      },
+    };
+    const refusesParent: DataPlugin = {
+      id: 'demo.refuseParent',
+      data(ctx) {
+        ctx.edits.setRemoveRule(
+          (next) => (removal) => (removal.entry.id === 'parent' ? 'never' : next(removal)),
+        );
+      },
+    };
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'parent', name: 'parent', locked: true },
+        { id: 'child', name: 'child', parentId: 'parent' },
+      ],
+      plugins: [removesEmptyParent],
+    });
+    expect(removableOf(dataset, 'parent')).toBe('api');
+
+    dataset.entries.remove('child');
+
+    expect(dataset.entries.has('parent')).toBe(false);
+    expect(dataset.entries.has('child')).toBe(false);
+
+    const refusing = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'parent', name: 'parent' },
+        { id: 'child', name: 'child', parentId: 'parent' },
+      ],
+      plugins: [removesEmptyParent, refusesParent],
+    });
+    expect(() => refusing.entries.remove('parent')).toThrow(RemoveRefusedError);
+
+    refusing.entries.remove('child');
+
+    expect(refusing.entries.has('parent')).toBe(false);
   });
 });
 
