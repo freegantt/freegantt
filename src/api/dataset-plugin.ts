@@ -13,6 +13,7 @@ import type {
   DatasetEventMap,
   Disposer,
   ExtenderWrapper,
+  RemovalExtenderWrapper,
   FieldLockRuleWrapper,
   PlaceRuleWrapper,
   PluginId,
@@ -23,7 +24,7 @@ import type { DisposableStore } from '../extensions/disposables.js';
 
 // Re-exported so a plugin author names the store types from the same module as the contract that
 // hands them over, rather than hunting for the module they are declared in.
-export type { PluginStore, PluginStoreView, ExtenderWrapper };
+export type { PluginStore, PluginStoreView, ExtenderWrapper, RemovalExtenderWrapper };
 // A plugin author writing a hierarchy source names both: the wrapper its plugin's own
 // `hierarchySource` member takes, and the source it composes onto (`api/plugin.ts`). Here for the
 // same reason the store types are — beside the contract that hands them over.
@@ -86,6 +87,7 @@ export interface DatasetEvents {
  *  during setup. Writes nothing itself (I14 unaffected — no changeset, no undo step). */
 export interface DatasetEditHook {
   setExtender(wrap: ExtenderWrapper): void;
+  setRemovalExtender(wrap: RemovalExtenderWrapper): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
   rulesChanged(): void;

@@ -693,12 +693,18 @@ export class EntryStore implements EntryStoreContract {
     this.#mutate((token) => {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.remove');
-      // Only the top id leaves its group (ADR 0034) — its subtree goes with it, so a descendant logs
-      // no departure of its own: it was never a member of a group `renumberSiblingGroups` renumbers.
-      this.#logSiblingDeparture(key);
-      for (const descendantId of this.#subtreeOf(key)) this.stageRemove(token, descendantId);
-      this.stageRemove(token, key);
+      this.stageSubtreeRemoval(token, key);
     });
+  }
+
+  /** Stages `id` and its whole subtree as removed — what `remove` does after it checks `id` exists,
+   *  and what the commit path does for each id a removal extender returns. */
+  stageSubtreeRemoval(token: TxToken, id: EntryId): void {
+    // Only the top id leaves its group (ADR 0034) — its subtree goes with it, so a descendant logs
+    // no departure of its own: it was never a member of a group `renumberSiblingGroups` renumbers.
+    this.#logSiblingDeparture(id);
+    for (const descendantId of this.#subtreeOf(id)) this.stageRemove(token, descendantId);
+    this.stageRemove(token, id);
   }
 
   /**
