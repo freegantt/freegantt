@@ -117,7 +117,7 @@ export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' |
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused';
 
 // @public
 export interface Capabilities {
@@ -412,6 +412,8 @@ export interface DatasetEditHook<TProps = Record<string, unknown>> {
     setPlaceRule(wrap: PlaceRuleWrapper): void;
     // (undocumented)
     setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
+    // (undocumented)
+    setRemoveRule(wrap: RemoveRuleWrapper): void;
 }
 
 // @public
@@ -2066,6 +2068,27 @@ export type RemovalExtender<TProps = Record<string, unknown>> = (request: EditRe
 
 // @public
 export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (next: RemovalExtender<TProps>) => RemovalExtender<TProps>;
+export interface RemoveQuery {
+    // (undocumented)
+    readonly currentParentId: EntryId | undefined;
+    // (undocumented)
+    readonly entry: FieldLockQuery;
+}
+
+// @public
+export class RemoveRefusedError extends FreeGanttError {
+    constructor(id: EntryId, operation: string);
+    // (undocumented)
+    readonly id: EntryId;
+    // (undocumented)
+    readonly operation: string;
+}
+
+// @public
+export type RemoveRule = (removal: RemoveQuery) => FieldEditable;
+
+// @public
+export type RemoveRuleWrapper = (next: RemoveRule) => RemoveRule;
 
 // @public
 export class RendererAlreadyRegisteredError extends FreeGanttError {
