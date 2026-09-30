@@ -20,7 +20,11 @@ import { siblingBlockMove } from '../data/sibling-order.js';
  *  plugin's place rule refuses the gesture outright, a same-parent drop included. `'parentLocked'` —
  *  `reorder` is open and a same-parent drop would land, but this drop crosses into a different
  *  parent and the Entry's `parentId` cell, or a plugin's place rule, refuses that crossing. */
-export type RowDropRefusal = 'groupHeader' | 'entryGone' | 'ownDescendant' | 'capability' | 'parentLocked';
+export type RowDropRefusal = 'groupHeader' | 'entryGone' | PlacementRefusal;
+
+/** The refusals that ask about the moved Entries and the parent they would land under, not about
+ *  the row the drop names. A keyboard step can meet these and no other. */
+export type PlacementRefusal = 'ownDescendant' | 'capability' | 'parentLocked';
 
 /** One Entry a `place` drop writes. `at` is the call-time index the pipeline's `entries.update`
  *  names for this Entry — a rank into the group as it stood when that call ran, not the final rank
@@ -76,10 +80,28 @@ export function resolveRowDrop(input: RowDropInput): RowDrop {
   if ('refused' in answer) return { kind: 'refused', rowId: answer.rowId, reason: answer.refused };
   const place = answer;
 
+  const refusal = placementRefusal(movedTopMost, place.parentId, rows, (entry, parentId) =>
+    input.canPlace(entry, parentId),
+  );
+  if (refusal !== undefined) return { kind: 'refused', rowId: place.rowId, reason: refusal };
+
+  return { kind: 'place', place, moves: placedEntriesFor(movedTopMost, place, rows) };
+}
+
+/** Why a drop under `parentId` refuses for the moved Entries, or `undefined` when every one of them
+ *  may land there. The drag and the keyboard step both ask this, so the two doors share one rule.
+ *
+ *  Order matters: a cycle check runs for every moved Entry before any capability is asked, because a
+ *  capability refusal and a cycle refusal read as two different reasons and the cycle is the cheaper
+ *  of the two to rule out. */
+export function placementRefusal(
+  movedTopMost: readonly Entry[],
+  parentId: EntryId | undefined,
+  rows: RowsForDrop,
+  canPlace: RowDropInput['canPlace'],
+): PlacementRefusal | undefined {
   for (const entry of movedTopMost) {
-    if (landsInsideOwnSubtree(entry, place.parentId, rows)) {
-      return { kind: 'refused', rowId: place.rowId, reason: 'ownDescendant' };
-    }
+    if (landsInsideOwnSubtree(entry, parentId, rows)) return 'ownDescendant';
   }
 
   for (const entry of movedTopMost) {
@@ -88,15 +110,10 @@ export function resolveRowDrop(input: RowDropInput): RowDrop {
     // (`ResolvedCapabilities.canPlace`'s own rule), so a `false` here can only be the first half.
     // ADR 0038: a plugin's place rule also gets a say on this same-parent call — a rule that closes
     // a parent entirely (not just to a crossing) reads as this same 'capability' refusal.
-    if (!input.canPlace(entry, entry.parent()?.id)) {
-      return { kind: 'refused', rowId: place.rowId, reason: 'capability' };
-    }
-    if (!input.canPlace(entry, place.parentId)) {
-      return { kind: 'refused', rowId: place.rowId, reason: 'parentLocked' };
-    }
+    if (!canPlace(entry, entry.parent()?.id)) return 'capability';
+    if (!canPlace(entry, parentId)) return 'parentLocked';
   }
-
-  return { kind: 'place', place, moves: movesFor(movedTopMost, place, rows) };
+  return undefined;
 }
 
 /** True for a `row` zone naming a `childrenAsSegments` row — the one row shape that still takes an
@@ -117,12 +134,13 @@ function landsInsideOwnSubtree(entry: Entry, parentId: EntryId | undefined, rows
   return false;
 }
 
-/** The write every moved Entry's `entries.update` call makes, once every Entry has cleared both
- *  checks above. `targetSiblings` is the target group's own committed order — the same list
- *  `place.index` was read against — moved ids already in that group included. */
-function movesFor(
+/** The write every moved Entry's `entries.update` call makes, once every Entry has cleared
+ *  `placementRefusal`. `place.parentId` and `place.index` are all it reads. The target group is its
+ *  own committed order — the same list `place.index` was read against — moved ids already in that
+ *  group included. */
+export function placedEntriesFor(
   movedTopMost: readonly Entry[],
-  place: DropPlace,
+  place: Pick<DropPlace, 'parentId' | 'index'>,
   rows: RowsForDrop,
 ): readonly PlacedEntry[] {
   const byId = new Map(movedTopMost.map((entry) => [entry.id, entry]));

@@ -6,6 +6,7 @@
 import type { EntryId, FieldKey } from '../model/index.js';
 import { MutationCancelledError } from '../model/index.js';
 import type { BuiltInCommandId, Command, CommandContext } from '../extensions/commands.js';
+import type { EntryStep } from './entry-step.js';
 
 /** The shell verbs the core catalog calls — pan, zoom, select, collapse/expand. Undo/redo read
  *  `CommandContext.dataset` directly, so they need no
@@ -53,6 +54,9 @@ export interface CoreCommandPorts {
   refusedRemovals(ids: readonly EntryId[]): readonly EntryId[];
   /** Tells the app that a Delete removed nothing, and names the Entries that stopped it. */
   reportRemoveRefused(ids: readonly EntryId[]): void;
+  /** Moves one Entry in the tree by one keyboard step, through the rules and events a row drag uses.
+   *  A refused step changes nothing and announces its reason. The shell keeps focus on the Entry. */
+  stepEntry(id: EntryId, step: EntryStep): void;
   pageDown(): void;
   pageUp(): void;
   panToStart(): void;
@@ -159,6 +163,29 @@ export function registerCoreCommands(
     when: () => ports.canActivateFocused(),
     run: () => ports.activateFocused(),
   });
+  // Which commands move the focused row in the tree? Each one runs a step through the same rules
+  // as a row drag. The chords and the context menu run these same commands. `when` asks only for a
+  // row or bar, because a refused step announces its reason instead of hiding the command.
+  const focusedEntry = (ctx: unknown): CommandContext<unknown>['entry'] => {
+    const { entry, target } = asCtx(ctx);
+    const onRowOrBar = target?.kind === 'row' || target?.kind === 'gridCell' || target?.kind === 'bar';
+    return onRowOrBar ? entry : undefined;
+  };
+  const registerEntryStepCommand = (id: BuiltInCommandId, label: string, step: EntryStep): void => {
+    register({
+      id,
+      label,
+      when: (ctx) => focusedEntry(ctx) !== undefined,
+      run: (ctx) => {
+        const entry = focusedEntry(ctx);
+        if (entry !== undefined) ports.stepEntry(entry.id, step);
+      },
+    });
+  };
+  registerEntryStepCommand('freegantt.moveEntryUp', 'Move up', 'up');
+  registerEntryStepCommand('freegantt.moveEntryDown', 'Move down', 'down');
+  registerEntryStepCommand('freegantt.indentEntry', 'Indent', 'indent');
+  registerEntryStepCommand('freegantt.outdentEntry', 'Outdent', 'outdent');
   // #212, ADR 0010, ADR 0025: the right-click menu and the `Delete` key run this one command, and
   // every target kind names the Entries it acts on in `entryIds` — ADR 0025 retired the second id
   // set a `'bar'` target used to carry.
