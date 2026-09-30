@@ -420,6 +420,10 @@ export interface GanttShellOptions {
    *  wires it the same friend-map way `placeableOf` above does. `undefined` (a test-built shell with no
    *  wiring) lets every Delete through. */
   removableOf?: (id: string) => FieldEditable;
+  /** The friend function `api/dataset.ts`'s `barMovesOf` — does the bar of this Entry move, past the
+   *  bar move rule? `resolveCapabilities` asks it before it builds the list of Entries a move writes.
+   *  `undefined` (a test-built shell with no wiring) lets every bar move. */
+  barMovesOf?: (id: string) => boolean;
   /** ADR 0038: the friend function `api/dataset.ts`'s `onRulesChanged`. A plugin calls
    *  `ctx.edits.rulesChanged()` after a lock rule's or a place rule's outside state moves. This shell
    *  answers by re-resolving what it currently offers, then it requests a frame. An affordance a rule
@@ -1815,6 +1819,7 @@ export class GanttShell {
       editableOf: (id, key) => this.#options.dataset.editableOf(id, key),
       placeableOf: this.#options.placeableOf,
       removableOf: this.#options.removableOf,
+      barMovesOf: this.#options.barMovesOf,
     });
   }
 

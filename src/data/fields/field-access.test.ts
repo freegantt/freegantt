@@ -532,7 +532,7 @@ describe('locked is a core Field, on the same doors every other core Field meets
 
     const entry = state.entries.get('a')!;
     expect(entry.read('locked')).toBe(true);
-    expect(state.editableOf('a', 'locked')).toBe('api');
+    expect(state.editableOf('a', 'locked')).toBe('anywhere');
     expect(entry.toInput().locked).toBe(true);
     expect(fieldRowsOf(seen[0]!).find((row) => row.field === 'locked')?.to).toBe(true);
   });
@@ -583,10 +583,10 @@ describe('locked is a core Field, on the same doors every other core Field meets
     expect(state.entries.get('a')?.read('locked')).toBeUndefined();
   });
 
-  it('editableOf answers api, the door app code writes a lock through', () => {
+  it('editableOf answers anywhere, so a grid checkbox toggles the lock', () => {
     const state = new DatasetState({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A' }] });
 
-    expect(state.editableOf('a', 'locked')).toBe('api');
+    expect(state.editableOf('a', 'locked')).toBe('anywhere');
   });
 });
 

@@ -466,25 +466,52 @@ describe("entriesMovedBy — what a parent bar's drag writes (ADR 0013, Q9)", ()
   });
 });
 
-describe('a locked parent — its own summary bar does not move, its children do', () => {
-  const lockedFamily = (): readonly Entry[] =>
+describe('a parent whose bar move rule answers false — its own summary bar does not move, its children do', () => {
+  const family = (): readonly Entry[] =>
     entryDoubles([
-      { id: 'e1', start: 0, end: 1, props: { locked: true } },
+      { id: 'e1', start: 0, end: 1 },
       { id: 'c1', start: 0, end: 1, parentId: 'e1' },
     ]);
+  const onlyE1Frozen = { barMovesOf: (id: string): boolean => id !== 'e1' };
 
-  it("arms no move on the locked parent's own summary bar", () => {
-    const caps = capabilities();
-    const [parent] = lockedFamily();
+  it("arms no move on the frozen parent's own summary bar", () => {
+    const caps = capabilities(onlyE1Frozen);
+    const [parent] = family();
     expect(caps.entriesMovedBy(parent!)).toEqual([]);
     expect(caps.can('move', parent!)).toBe(false);
   });
 
-  it("still moves the locked parent's child on the child's own bar", () => {
-    const caps = capabilities();
-    const [, child] = lockedFamily() as readonly [Entry, Entry];
+  it("still moves the frozen parent's child on the child's own bar", () => {
+    const caps = capabilities(onlyE1Frozen);
+    const [, child] = family() as readonly [Entry, Entry];
     expect(caps.entriesMovedBy(child)).toEqual([child]);
     expect(caps.can('move', child)).toBe(true);
+  });
+
+  it('refuses the whole gesture of an ancestor when a translated descendant is frozen', () => {
+    const caps = capabilities({ barMovesOf: (id) => id !== 'c1' });
+    const [parent] = family();
+    expect(caps.entriesMovedBy(parent!)).toEqual([]);
+    expect(caps.can('move', parent!)).toBe(false);
+  });
+
+  it('moves every bar when no bar move rule is wired', () => {
+    const caps = capabilities();
+    const [parent] = family();
+    expect(caps.can('move', parent!)).toBe(true);
+  });
+
+  it('does not allocate a list to answer a frozen leaf on the hover path', () => {
+    const asked: string[] = [];
+    const caps = capabilities({
+      barMovesOf: (id) => {
+        asked.push(id);
+        return false;
+      },
+    });
+    const [, child] = family() as readonly [Entry, Entry];
+    expect(caps.can('move', child)).toBe(false);
+    expect(asked).toEqual(['c1']);
   });
 });
 

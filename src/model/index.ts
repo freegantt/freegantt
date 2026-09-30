@@ -39,6 +39,7 @@ export { spansTime } from './stored-entry.js';
 export type { HierarchySource, HierarchySourceWrapper } from './hierarchy-source.js';
 export type { FieldLockQuery, FieldLockRule, FieldLockRuleWrapper } from './field-lock.js';
 export type { PlaceQuery, PlaceRule, PlaceRuleWrapper } from './place-rule.js';
+export type { BarMoveRule, BarMoveRuleWrapper } from './bar-move-rule.js';
 export type { RemoveQuery, RemoveRule, RemoveRuleWrapper } from './remove-rule.js';
 export type { Point, Size, PixelSpan, Rect, ClientPoint } from './geometry.js';
 export type { ElementDescription } from './render.js';

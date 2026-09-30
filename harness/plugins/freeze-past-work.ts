@@ -64,9 +64,9 @@ export function freezePastWork(): FreezePastWorkPlugin {
         const answer = next(place);
         if (
           !frozen ||
-          place.parentId === undefined ||
-          place.parentId === place.currentParentId ||
-          !endsBeforeToday(place.parentId)
+          place.parent === undefined ||
+          place.parent.id === place.currentParent?.id ||
+          !endsBeforeToday(place.parent.id)
         ) {
           return answer;
         }

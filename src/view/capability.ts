@@ -91,6 +91,10 @@ export interface CapabilityInputs {
    *  remove rule answer for one Entry and its whole subtree. `canRemove` refuses whenever it is not
    *  `'anywhere'`. Absent in a hand-built test fixture, `canRemove` answers `true`. */
   removableOf?: ((id: string) => FieldEditable) | undefined;
+  /** From the bound `Dataset` — the friend function `api/dataset.ts`'s `barMovesOf`. The effective
+   *  bar move rule answer for one Entry: does its bar move? `false` moves nothing, past every cell
+   *  lock. Absent in a hand-built test fixture, every bar moves. */
+  barMovesOf?: ((id: string) => boolean) | undefined;
 }
 
 /** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
@@ -255,11 +259,13 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     (entry.start !== undefined && ownsField(entry, 'start')) ||
     (entry.end !== undefined && ownsField(entry, 'end'));
 
+  /** Does the bar move, past the bar move rule? A frozen parent's summary bar does not move. Its
+   *  children still move on their own bars, and the Rollup still writes the parent's dates. */
+  const barMoves = (entry: Entry): boolean => inputs.barMovesOf?.(entry.id) !== false;
+
   const entriesMovedBy = (entry: Entry): readonly Entry[] => {
+    if (!barMoves(entry)) return NOTHING_MOVES;
     if (!entry.hasChildren) return movesItsOwnDates(entry) ? [entry] : NOTHING_MOVES;
-    // A locked bar does not move, and a locked parent's summary bar is one. Its children still
-    // move on their own bars, and the Rollup still writes the parent's dates.
-    if (entry.read('locked') === true) return NOTHING_MOVES;
     // One locked date on an owning bar refuses the whole gesture, the same as one locked descendant
     // does below. Painting the bar anyway would drag it for the whole gesture. The date it owns
     // would then go stale, since nothing rolls an owned date back up.
@@ -277,7 +283,7 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
       // One locked descendant refuses the whole gesture. A parent bar that moved part of its own
       // subtree would land somewhere the gesture never showed. The envelope it paints while dragging
       // is the whole subtree translated. The Rollup would then compute a different one.
-      if (!mayTranslateTheDatesItHolds(descendant)) return NOTHING_MOVES;
+      if (!barMoves(descendant) || !mayTranslateTheDatesItHolds(descendant)) return NOTHING_MOVES;
       moved.push(descendant);
     }
     return moved;
@@ -287,7 +293,7 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
    *  *whether*. The hover path asks this one (`can('move', …)` resolves an affordance), so an
    *  ordinary bar answers it without building a list (I5). */
   const moveWritesSomething = (entry: Entry): boolean =>
-    entry.hasChildren ? entriesMovedBy(entry).length > 0 : movesItsOwnDates(entry);
+    entry.hasChildren ? entriesMovedBy(entry).length > 0 : barMoves(entry) && movesItsOwnDates(entry);
 
   const isOffered = (capability: GestureCapability, entry: Entry): boolean => {
     const consumerAnswer = askCapabilityRule(capabilities?.[capability], entry);

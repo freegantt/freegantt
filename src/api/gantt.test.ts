@@ -6775,7 +6775,7 @@ describe('Gantt entryMove — a vertical drag places the entry under a new paren
 // ADR 0038: the core lock's own proof at gesture level, both panes — replaces the harness-plugin
 // suite above. `entry-lock.test.ts` already proves the same rule at the data level; these tests
 // prove the drag and the drop paint and refuse the same way, through `new Gantt(...)`.
-describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
+describe('a locked row refuses a user drag onto itself in both panes', () => {
   function stubPointerCapture(el: HTMLElement): void {
     el.setPointerCapture = vi.fn();
     el.releasePointerCapture = vi.fn();
@@ -6893,6 +6893,70 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
     gantt.destroy();
   });
 
+  /** Hover the summary bar of `lockedParentTree` and read whether it offers a move. */
+  function summaryBarIsMovable(plugins: DataPlugin[]): boolean {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p5', name: 'P5', locked: true },
+        { id: 'e', name: 'E', parentId: 'p5', start: '2026-01-01', end: '2026-01-05' },
+      ],
+      plugins,
+    });
+    const gantt = new Gantt({ container, dataset });
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? summaryBar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+    const movable = summaryBar.hasAttribute('data-movable');
+    document.elementFromPoint = original;
+    gantt.destroy();
+    return movable;
+  }
+
+  it("a plugin's bar move rule releases a locked parent's summary bar", () => {
+    const releases: DataPlugin = {
+      id: 'test.releasesSummaryBar',
+      data(ctx) {
+        ctx.edits.setBarMoveRule((next) => (entry) => (entry.id === entryId('p5') ? true : next(entry)));
+      },
+    };
+
+    expect(summaryBarIsMovable([])).toBe(false);
+    expect(summaryBarIsMovable([releases])).toBe(true);
+  });
+
+  it('a plugin that freezes a summary bar stops its move with no locked Field', () => {
+    const freezes: DataPlugin = {
+      id: 'test.freezesSummaryBar',
+      data(ctx) {
+        ctx.edits.setBarMoveRule((next) => (entry) => (entry.id === entryId('p5') ? false : next(entry)));
+      },
+    };
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p5', name: 'P5' },
+        { id: 'e', name: 'E', parentId: 'p5', start: '2026-01-01', end: '2026-01-05' },
+      ],
+      plugins: [freezes],
+    });
+    const gantt = new Gantt({ container, dataset });
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? summaryBar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    expect(summaryBar.hasAttribute('data-movable')).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
   it("a child's bar drag under a locked parent commits, and the parent's dates roll up", () => {
     const { container, dataset } = lockedParentTree();
     const gantt = new Gantt({ container, dataset });
@@ -6946,35 +7010,28 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
     gantt.destroy();
   });
 
-  it('a bar drop into a locked row refuses at preview: no move fires, parentId is unchanged', () => {
+  it('a bar drop into a locked row commits: the lock protects only its own row', () => {
     const { container, dataset } = siblingTree();
     const gantt = new Gantt({ container, dataset });
     const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('b'), 0)}"]`)!;
-
-    const id = entryId('b');
-    const before = dataset.entries.get(id)!.parent()?.id;
     const afterEvents: EntryMove[] = [];
     gantt.on('entryMove', (p) => {
       afterEvents.push(p);
     });
 
-    // Row 1's ('a', locked) own middle third.
+    // Row 1's ('a', locked) own middle third: b lands under a.
     dragBarInto(container, bar, 54);
 
-    expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
-    expect(dataset.canUndo).toBe(false);
+    expect(afterEvents).toHaveLength(1);
+    expect(dataset.entries.get(entryId('b'))!.parent()?.id).toBe(entryId('a'));
 
     gantt.destroy();
   });
 
-  it('a grid row drop into a locked row refuses at preview: no move fires, no write', () => {
+  it('a grid row drop into a locked row commits: the lock protects only its own row', () => {
     const { container, dataset } = siblingTree();
     const gantt = new Gantt({ container, dataset });
     const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="b"]')!;
-
-    const id = entryId('b');
-    const before = dataset.entries.get(id)!.parent()?.id;
     const afterEvents: EntryMove[] = [];
     gantt.on('entryMove', (p) => {
       afterEvents.push(p);
@@ -6982,37 +7039,32 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
 
     dragRowInto(container, row, 54);
 
-    expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
-    expect(dataset.canUndo).toBe(false);
+    expect(afterEvents).toHaveLength(1);
+    expect(dataset.entries.get(entryId('b'))!.parent()?.id).toBe(entryId('a'));
 
     gantt.destroy();
   });
 
-  it('a child dragged out of a locked parent refuses — bar drag and grid row drag', () => {
-    const { container, dataset } = siblingTree();
-    const gantt = new Gantt({ container, dataset });
-    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('c'), 0)}"]`)!;
-    const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="c"]')!;
+  it('a child dragged out of a locked parent commits, by bar drag and by grid row drag', () => {
+    for (const drag of [dragBarInto, dragRowInto]) {
+      const { container, dataset } = siblingTree();
+      const gantt = new Gantt({ container, dataset });
+      const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('c'), 0)}"]`)!;
+      const row = container.querySelector<HTMLElement>('.fg-row[data-entry-id="c"]')!;
+      const afterEvents: EntryMove[] = [];
+      gantt.on('entryMove', (p) => {
+        afterEvents.push(p);
+      });
 
-    const id = entryId('c');
-    const before = dataset.entries.get(id)!.parent()?.id;
-    const afterEvents: EntryMove[] = [];
-    gantt.on('entryMove', (p) => {
-      afterEvents.push(p);
-    });
+      // Row 0's ('p1') own middle third: c leaves the locked 'p2' and lands under 'p1'.
+      drag(container, drag === dragBarInto ? bar : row, 18);
 
-    // Row 0's ('p1') own middle third — out of the locked 'p2' and into 'p1' instead.
-    dragBarInto(container, bar, 18);
-    expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
+      expect(afterEvents).toHaveLength(1);
+      expect(dataset.entries.get(entryId('c'))!.parent()?.id).toBe(entryId('p1'));
+      expect(dataset.entries.get(entryId('p2'))!.read('locked')).toBe(true);
 
-    dragRowInto(container, row, 18);
-    expect(afterEvents).toEqual([]);
-    expect(dataset.entries.get(id)!.parent()?.id).toBe(before);
-    expect(dataset.canUndo).toBe(false);
-
-    gantt.destroy();
+      gantt.destroy();
+    }
   });
 
   it('a locked Entry sits out of a multi-select reorder and renumbers as a neighbour', () => {
@@ -7577,7 +7629,9 @@ describe("a plugin's place rule refuses a drop at preview, in both panes", () =>
     return {
       id: 'test.refuse-p2',
       data(ctx) {
-        ctx.edits.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'api' : next(place)));
+        ctx.edits.setPlaceRule(
+          (next) => (place) => (place.parent?.id === entryId('p2') ? 'api' : next(place)),
+        );
       },
     };
   }

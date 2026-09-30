@@ -16,6 +16,7 @@ import type {
   FieldLockRule,
   FieldLockRuleWrapper,
   FieldType,
+  BarMoveRuleWrapper,
   PlaceRuleWrapper,
   RemoveRuleWrapper,
   Instant,
@@ -398,7 +399,7 @@ export class DatasetState implements Dataset {
     this.entries.setLockRule(wrap);
   }
 
-  /** Call: `ctx.edits.setPlaceRule((next) => (place) => isLocked(place.parentId) ? 'api' : next(place))`.
+  /** Call: `ctx.edits.setPlaceRule((next) => (place) => isLocked(place.parent?.id) ? 'api' : next(place))`.
    *  Installing composes onto the current occupant rather than evicting it, exactly the way
    *  `setLockRule` above does. */
   setPlaceRule(wrap: PlaceRuleWrapper): void {
@@ -431,6 +432,17 @@ export class DatasetState implements Dataset {
    *  resolver `entries.update()` and an `EditExtender` cascade write against (I14). */
   editableOf(id: EntryId | string, field: FieldKey): FieldEditable {
     return this.entries.editableOf(id, field);
+  }
+
+  /** Call: `ctx.edits.setBarMoveRule((next) => (entry) => entry.id === 'phase-1' ? false : next(entry))`.
+   *  Installing composes onto the current occupant, the same way `setRemoveRule` above does. */
+  setBarMoveRule(wrap: BarMoveRuleWrapper): void {
+    this.entries.setBarMoveRule(wrap);
+  }
+
+  /** Call: `dataset.barMovesOf('phase-1')` — the effective bar move rule answer for one Entry. */
+  barMovesOf(id: EntryId | string): boolean {
+    return this.entries.barMovesOf(id);
   }
 
   /** Call: `dataset.placeableOf('t2', 'p1')` — the effective place rule answer for one cross-parent

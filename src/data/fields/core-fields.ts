@@ -64,12 +64,16 @@ export const CORE_FIELDS: readonly Field[] = Object.freeze([
     editable: 'anywhere',
   },
   {
-    // A lock refuses a gesture on every other cell of this Entry (ADR 0038). No `column`: the grid
-    // never shows a "locked" header unless a consumer lists it in `gridColumns`.
+    // A lock refuses a gesture on every other cell of this Entry (ADR 0038). The default grid
+    // still shows no "locked" header: `gridColumns` lists `name`, `start` and `end` only. When a
+    // consumer lists `'locked'`, the cell is a checkbox and a user toggles the lock. An app closes
+    // that column with `capabilities.edit` or a lock rule.
     key: 'locked',
     type: 'boolean',
     equals: byReference,
-    editable: 'api',
+    inputType: 'checkbox',
+    editable: 'anywhere',
+    column: { header: 'Locked', align: 'center', width: 80 },
   },
   {
     // How long does this row run? Its own span, `end - start`, and nothing once a date is missing.

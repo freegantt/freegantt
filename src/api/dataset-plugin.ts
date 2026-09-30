@@ -10,6 +10,7 @@
 // runs. `api/plugin.ts` holds the plugin shapes that carry both halves.
 
 import type {
+  BarMoveRuleWrapper,
   DatasetEventMap,
   Disposer,
   EntryStoreView,
@@ -43,6 +44,10 @@ export type { PlaceRuleWrapper };
 // the rule reads (#611). Here for the same reason the place-rule types are.
 export type { RemoveQuery, RemoveRule } from '../model/index.js';
 export type { RemoveRuleWrapper };
+// A plugin author writing a bar move rule names both: the wrapper `setBarMoveRule` takes, and the
+// rule it composes onto. Here for the same reason the place-rule types are.
+export type { BarMoveRule } from '../model/index.js';
+export type { BarMoveRuleWrapper };
 // The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
@@ -89,11 +94,16 @@ export interface DatasetEvents {
  *  narrowest answer wins, so removing an unlocked parent that holds one locked descendant refuses
  *  too.
  *
- *  `rulesChanged` is the fifth seam (ADR 0038): a lock rule, a place rule or a remove rule can close
+ *  `setBarMoveRule` is the fifth seam: it answers whether the bar of an Entry moves when a user drags
+ *  it. A summary bar shows derived dates, so no lock rule on a cell can stop it. Core installs its
+ *  own lock, remove and bar move rules before every plugin, so a plugin wraps each one. A plugin can
+ *  narrow or widen the core lock.
+ *
+ *  `rulesChanged` is the sixth seam (ADR 0038): a lock rule, a place rule, a remove rule or a bar move rule can close
  *  over state outside the Entry it reads — a clock, a toggle — so its answer can move with no write
  *  the Dataset sees. Call it after that outside state moves. Every bound Gantt re-resolves what it
  *  currently offers, the same re-resolution a Field write already triggers, so an affordance a rule
- *  just closed clears on the next frame. No gate: unlike the four seams above, a plugin calls this
+ *  just closed clears on the next frame. No gate: unlike the five seams above, a plugin calls this
  *  any time after its own `data()` returns, because a rule's outside state can move at any time, not
  *  only during setup. Writes nothing itself (I14 unaffected — no changeset, no undo step). */
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
@@ -102,6 +112,7 @@ export interface DatasetEditHook<TProps = Record<string, unknown>> {
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
   setRemoveRule(wrap: RemoveRuleWrapper): void;
+  setBarMoveRule(wrap: BarMoveRuleWrapper): void;
   rulesChanged(): void;
 }
 
