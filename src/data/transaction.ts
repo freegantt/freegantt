@@ -113,8 +113,9 @@ export interface TransactionData {
    *  separate, narrower door onto the same occupant. It is not a `Dataset` method (#250 S6-1). */
   extraEditsReadingFor(request: EditRequest): EditsReading;
   /** The commit path's door onto the removal hook: calls the current occupant once and returns the
-   *  ids it removes. `DatasetState.removalsFor` is its one implementation. */
-  removalsFor(request: EditRequest): ReadonlySet<EntryId>;
+   *  ids it removes. It calls `buildRequest` only when a plugin installed a removal extender.
+   *  `DatasetState.removalsFor` is its one implementation. */
+  removalsFor(buildRequest: () => EditRequest): ReadonlySet<EntryId>;
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule).
    *  `EntryStore` read it for a while, to tell a standalone `update()` from one joining a caller's
    *  open transaction — and that made the derived-write refusal a consumer's to opt out of, because
@@ -347,17 +348,19 @@ export function commitChangeSet(
  * does not know, or one this transaction already removes, is skipped in silence.
  */
 function stageRemovalExtenderRemovals(data: TransactionData, token: TxToken): void {
-  const request = createEditRequest({
-    entries: data.entries.committedById(),
-    proposed: data.entries.pendingEdits(),
-    added: data.entries.pendingAdded().map((row) => row.entity),
-    removed: data.entries.pendingRemoved().map((row) => row.entity),
-    hierarchySource: data.hierarchySource,
-    committedChildIds: data.entries.committedChildIds(),
-    fields: data.fields,
-    lockRule: data.lockRule,
-  });
-  for (const id of data.removalsFor(request)) {
+  const removals = data.removalsFor(() =>
+    createEditRequest({
+      entries: data.entries.committedById(),
+      proposed: data.entries.pendingEdits(),
+      added: data.entries.pendingAdded().map((row) => row.entity),
+      removed: data.entries.pendingRemoved().map((row) => row.entity),
+      hierarchySource: data.hierarchySource,
+      committedChildIds: data.entries.committedChildIds(),
+      fields: data.fields,
+      lockRule: data.lockRule,
+    }),
+  );
+  for (const id of removals) {
     if (data.entries.has(id)) data.entries.stageSubtreeRemoval(token, id);
   }
 }

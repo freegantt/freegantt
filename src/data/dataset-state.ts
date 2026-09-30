@@ -39,7 +39,7 @@ import { storedParentSource } from './hierarchy-source.js';
 import { toEditsReading } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import { EMPTY_ENTRY_IDS, identityExtender } from './edit-extension.js';
+import { EMPTY_ENTRY_IDS, identityExtender, identityRemovalExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
 import { EventBus } from './event-bus.js';
 import { buildSiblingIndexDroppedReport, createErrorRaiser, raiseErrorOn } from './error-reporting.js';
@@ -146,7 +146,7 @@ export class DatasetState implements Dataset {
    *  at one site. */
   #editExtender: EditExtender;
   /** The removal hook's current occupant. It returns no id until a plugin composes onto it. */
-  #removalExtender: RemovalExtender = () => EMPTY_ENTRY_IDS;
+  #removalExtender: RemovalExtender = identityRemovalExtender;
   /** `runTransaction`'s notification channel. Internal only, same reasoning as
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
@@ -278,8 +278,11 @@ export class DatasetState implements Dataset {
 
   /** The commit path's door onto the removal hook: calls the occupant once, with
    *  `runningExtensionHook` set, so a store write from inside it throws
-   *  `MutationDuringExtensionHookError` — the same guard the edit extender has. */
-  removalsFor(request: EditRequest): ReadonlySet<EntryId> {
+   *  `MutationDuringExtensionHookError` — the same guard the edit extender has. It builds the
+   *  request only when a plugin installed a removal extender. */
+  removalsFor(buildRequest: () => EditRequest): ReadonlySet<EntryId> {
+    if (this.#removalExtender === identityRemovalExtender) return EMPTY_ENTRY_IDS;
+    const request = buildRequest();
     this.runningExtensionHook = true;
     try {
       return this.#removalExtender(request);

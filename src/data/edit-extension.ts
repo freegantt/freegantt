@@ -1,7 +1,7 @@
 // data/ — the extension hook every transaction calls once (D4). An unoccupied hook is the identity
 // function; an installed plugin (S7's scheduling engine) is what returns anything else.
 
-import type { EditExtender, EntryEdit, EntryEdits, EntryId } from '../model/index.js';
+import type { EditExtender, EntryEdit, EntryEdits, EntryId, RemovalExtender } from '../model/index.js';
 
 // `ProposedEdit`/`EntryEdits` moved to `model/entry.ts` in S3.3 so `layout/gesture-draft.ts`
 // can build one without reaching into `data/`; `EditRequest`/`EditExtender` followed in S5.10
@@ -27,6 +27,10 @@ export const identityExtender: EditExtender = () => EMPTY_EDITS;
  *  preview never does (#235), so this is what `addedEntryIds`/`removedEntryIds` read there. One
  *  frozen `Set`, not a fresh one per call, so a preview frame allocates nothing (I5). */
 export const EMPTY_ENTRY_IDS: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
+
+/** No removal, ever — the removal hook's occupant until a plugin composes onto it. The commit path
+ *  checks for this occupant, so a Dataset with no removal extender builds no `EditRequest` for it. */
+export const identityRemovalExtender: RemovalExtender = () => EMPTY_ENTRY_IDS;
 
 /**
  * Merges two sets of extra writes, keyed by Entry — the composition an `ExtenderWrapper` needs
