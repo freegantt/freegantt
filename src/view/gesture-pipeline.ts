@@ -56,7 +56,7 @@ import type {
   TreePlaceChange,
 } from './event-bus.js';
 import type { RowDrop, PlacedEntry } from './row-drop.js';
-import { resolveRowDrop } from './row-drop.js';
+import { resolveRowDrop, ROW_DROP_REFUSAL_TEXT } from './row-drop.js';
 import type { EntryStep } from './entry-step.js';
 import { ENTRY_STEP_REFUSAL_TEXT, resolveEntryStep } from './entry-step.js';
 import type { GestureCapability } from './capability.js';
@@ -359,6 +359,19 @@ export class GesturePipeline {
     };
   }
 
+  /** A refused drop released over a row writes nothing. The note near the pointer is gone with the
+   *  drag, so one `info` report says why, and the live region announces it. */
+  #announceRefusedDrop(proposal: GestureProposal): void {
+    if (proposal.drop.kind !== 'refused') return;
+    this.#deps.raiseError({
+      code: 'entry-drop-refused',
+      message: ROW_DROP_REFUSAL_TEXT[proposal.drop.reason],
+      severity: 'info',
+      by: 'core',
+      entryId: proposal.grabbed,
+    });
+  }
+
   /** A keyboard step moves one Entry in the tree — up, down, indent or outdent. It asks the rules a
    *  row drop asks and commits through the same `beforeEntryMove`/`entryMove` pair, as one
    *  transaction. A step the rules refuse writes nothing and raises one Error report, which the live
@@ -640,6 +653,7 @@ export class GesturePipeline {
     // either. Clear the paint here instead, or a refused row keeps its highlight until a later
     // gesture happens to preview over it.
     if (proposal.writes.size === 0) {
+      this.#announceRefusedDrop(proposal);
       this.#preview(undefined);
       return Promise.resolve(false);
     }
@@ -1054,7 +1068,9 @@ export class GesturePipeline {
    *  commit's business, never a backend's. `undefined` for a resize, a nudge, or a time-only drag. */
   #rowDropForPaint(drop: RowDrop | undefined): InteractionState['rowDrop'] {
     if (drop === undefined || drop.kind === 'timeOnly') return undefined;
-    if (drop.kind === 'refused') return { refusedRowId: drop.rowId };
+    if (drop.kind === 'refused') {
+      return { refusedRowId: drop.rowId, note: ROW_DROP_REFUSAL_TEXT[drop.reason] };
+    }
     const { place } = drop;
     return { rowId: place.rowId, side: place.side, depth: place.depth, lineY: place.lineY };
   }

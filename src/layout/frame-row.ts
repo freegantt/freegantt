@@ -16,6 +16,8 @@ export interface FrameRow {
   expanded: boolean;
   /** `false` when the row was kept only because a descendant matched the filter. */
   matched?: boolean;
+  /** `true` when the row's subject Entry is locked. Absent otherwise. `render/` stamps `data-locked`. */
+  locked?: boolean;
   /** One library-formatted string per configured grid column, in column order (ADR 0005). */
   gridCells: readonly string[];
   /** Every Entry this row owns, in the order the row source gave them (#185). Empty for a header

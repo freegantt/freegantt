@@ -1499,7 +1499,7 @@ describe('render/dom backend', () => {
     expect(lineInTimeline.hidden).toBe(true);
 
     // A refused drop tints the row and sets the container's own cursor state (CSS reads this).
-    backend.applyState({ rowDrop: { refusedRowId: target.id } });
+    backend.applyState({ rowDrop: { refusedRowId: target.id, note: 'Nothing moved.' } });
     expect(row.dataset['drop']).toBe('refused');
     expect(band.dataset['drop']).toBe('refused');
     expect(grid.dataset['drop']).toBe('refused');

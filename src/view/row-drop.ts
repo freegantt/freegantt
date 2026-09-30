@@ -26,6 +26,16 @@ export type RowDropRefusal = 'groupHeader' | 'entryGone' | PlacementRefusal;
  *  the row the drop names. A keyboard step can meet these and no other. */
 export type PlacementRefusal = 'ownDescendant' | 'capability' | 'parentLocked';
 
+/** What a person reads when a drop refuses. One sentence each, and the first says nothing moved. The
+ *  note near the pointer shows it, and the live region announces it. */
+export const ROW_DROP_REFUSAL_TEXT: Readonly<Record<RowDropRefusal, string>> = Object.freeze({
+  groupHeader: 'Nothing moved. A group header takes no entry.',
+  entryGone: 'Nothing moved. The target entry no longer exists.',
+  ownDescendant: 'Nothing moved. An entry cannot move inside itself.',
+  capability: 'Nothing moved. This entry cannot change its place in the tree.',
+  parentLocked: 'Nothing moved. This entry cannot enter or leave that parent.',
+});
+
 /** One Entry a `place` drop writes. `at` is the call-time index the pipeline's `entries.update`
  *  names for this Entry — a rank into the group as it stood when that call ran, not the final rank
  *  every call together produces (`SiblingBlockMove`'s own doc covers why the two differ).
