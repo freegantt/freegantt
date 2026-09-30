@@ -680,12 +680,12 @@ describe('RovingFocus — timeline bar keys (#handleTimelineKeyDown)', () => {
     expect(document.activeElement).toBe(b2);
   });
 
-  it('Alt+ArrowDown still moves one row — Alt is not a timeline-bar chord guard', () => {
-    const [b1, b2] = mountBars(['e1', 'e2']);
+  it('Alt+ArrowDown leaves focus on the bar — it moves the Entry in the tree instead', () => {
+    const [b1] = mountBars(['e1', 'e2']);
     b1!.focus();
 
-    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { altKey: true }).defaultPrevented).toBe(true);
-    expect(document.activeElement).toBe(b2);
+    expect(harness.dispatchTimelineKey(b1!, 'ArrowDown', { altKey: true }).defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(b1);
   });
 
   it('Home and End focus the first and last bar of the focused row', () => {

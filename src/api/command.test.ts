@@ -46,6 +46,10 @@ describe('resolveActedOn() (#212)', () => {
  *  The ports are never called: registration only closes over them. */
 const EVERY_BUILT_IN_ID: Record<BuiltInCommandId, true> = {
   'freegantt.collapseAll': true,
+  'freegantt.moveEntryUp': true,
+  'freegantt.moveEntryDown': true,
+  'freegantt.indentEntry': true,
+  'freegantt.outdentEntry': true,
   'freegantt.expandAll': true,
   'freegantt.collapseRow': true,
   'freegantt.expandRow': true,

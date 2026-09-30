@@ -10276,3 +10276,271 @@ describe('Gantt — never-called public members (#275 §3/§4, merged with the l
     }
   });
 });
+
+describe('Gantt — the keyboard moves an Entry in the tree', () => {
+  function tree(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p1', name: 'P1', start: '2026-01-01', end: '2026-01-10' },
+        { id: 'a', name: 'A', parentId: 'p1', start: '2026-01-01', end: '2026-01-03' },
+        { id: 'b', name: 'B', parentId: 'p1', start: '2026-01-04', end: '2026-01-06' },
+        { id: 'c', name: 'C', parentId: 'p1', start: '2026-01-07', end: '2026-01-09' },
+        { id: 'p2', name: 'P2', start: '2026-01-01', end: '2026-01-10' },
+      ],
+    });
+    return { container, dataset };
+  }
+
+  function mount(): {
+    gantt: Gantt;
+    dataset: Dataset;
+    container: HTMLDivElement;
+    events: string[];
+    moves: EntryMove[];
+    reports: ErrorReport[];
+  } {
+    const { container, dataset } = tree();
+    const gantt = new Gantt({ container, dataset });
+    const events: string[] = [];
+    const moves: EntryMove[] = [];
+    const reports: ErrorReport[] = [];
+    gantt.on('beforeEntryMove', () => {
+      events.push('beforeEntryMove');
+    });
+    gantt.on('entryMove', (move) => {
+      events.push('entryMove');
+      moves.push(move);
+    });
+    gantt.on('error', (report) => {
+      reports.push(report);
+    });
+    return { gantt, dataset, container, events, moves, reports };
+  }
+
+  const childIdsOf = (dataset: Dataset, id: string): string[] =>
+    dataset.entries
+      .get(id)!
+      .children()
+      .map((child) => child.id);
+
+  it('moveEntryDown swaps the Entry with the next sibling, fires the event pair, and undoes in one step', () => {
+    const { gantt, dataset, events, moves } = mount();
+    gantt.selectedEntryIds = [entryId('a')];
+
+    gantt.commands.run('freegantt.moveEntryDown');
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['b', 'a', 'c']);
+    expect(events).toEqual(['beforeEntryMove', 'entryMove']);
+    expect(moves[0]).toMatchObject({
+      shiftsTime: false,
+      place: { parentId: entryId('p1'), siblingIndex: 1 },
+      currentPlace: { parentId: entryId('p1'), siblingIndex: 0 },
+    });
+
+    dataset.undo();
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+    expect(dataset.canUndo).toBe(false);
+    gantt.destroy();
+  });
+
+  it('moveEntryUp swaps the Entry with the previous sibling', () => {
+    const { gantt, dataset } = mount();
+    gantt.selectedEntryIds = [entryId('c')];
+
+    gantt.commands.run('freegantt.moveEntryUp');
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'c', 'b']);
+    gantt.destroy();
+  });
+
+  it('indentEntry makes the Entry the last child of the sibling above, in one undo step', () => {
+    const { gantt, dataset, moves } = mount();
+    gantt.selectedEntryIds = [entryId('p2')];
+
+    gantt.commands.run('freegantt.indentEntry');
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c', 'p2']);
+    expect(moves[0]?.place?.parentId).toBe(entryId('p1'));
+    dataset.undo();
+    expect(dataset.entries.get('p2')!.parent()).toBeUndefined();
+    expect(dataset.canUndo).toBe(false);
+    gantt.destroy();
+  });
+
+  it('outdentEntry puts the Entry just after its old parent and leaves the later siblings behind', () => {
+    const { gantt, dataset } = mount();
+    gantt.selectedEntryIds = [entryId('b')];
+
+    gantt.commands.run('freegantt.outdentEntry');
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'c']);
+    const rootIds = dataset.entries.all.filter((entry) => entry.depth === 0).map((entry) => entry.id);
+    expect(rootIds).toEqual(['p1', 'b', 'p2']);
+    gantt.destroy();
+  });
+
+  it('a step changes no date', () => {
+    const { gantt, dataset } = mount();
+    const before = dataset.entries.get('b')!.start;
+    gantt.selectedEntryIds = [entryId('b')];
+
+    gantt.commands.run('freegantt.outdentEntry');
+
+    expect(dataset.entries.get('b')!.start).toBe(before);
+    gantt.destroy();
+  });
+
+  it.each([
+    ['freegantt.moveEntryUp', 'a', 'Nothing moved. This entry is the first of its siblings.'],
+    ['freegantt.moveEntryDown', 'c', 'Nothing moved. This entry is the last of its siblings.'],
+    ['freegantt.indentEntry', 'a', 'Nothing moved. No sibling above this entry can take it as a child.'],
+    ['freegantt.outdentEntry', 'p1', 'Nothing moved. This entry has no parent to leave.'],
+  ] as const)('%s on "%s" changes nothing and announces why', (command, id, message) => {
+    const { gantt, dataset, events, reports } = mount();
+    gantt.selectedEntryIds = [entryId(id)];
+
+    gantt.commands.run(command);
+
+    expect(events).toEqual([]);
+    expect(dataset.canUndo).toBe(false);
+    expect(reports).toHaveLength(1);
+    expect(reports[0]).toMatchObject({ code: 'entry-step-refused', severity: 'info', by: 'core', message });
+    gantt.destroy();
+  });
+
+  it('a refusal reaches the live region a screen reader reads', () => {
+    const { gantt, container } = mount();
+    gantt.selectedEntryIds = [entryId('a')];
+
+    gantt.commands.run('freegantt.moveEntryUp');
+
+    expect(container.querySelector('.fg-live-region')?.textContent).toBe(
+      'Nothing moved. This entry is the first of its siblings.',
+    );
+    gantt.destroy();
+  });
+
+  it('reorder: false refuses the step with the capability reason', () => {
+    const { gantt, dataset, reports } = mount();
+    gantt.setCapabilityRule('reorder', false);
+    gantt.selectedEntryIds = [entryId('b')];
+
+    gantt.commands.run('freegantt.moveEntryUp');
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+    expect(reports[0]?.message).toBe('Nothing moved. This entry cannot change its place in the tree.');
+    gantt.destroy();
+  });
+
+  it('a locked Entry refuses the step', () => {
+    const { gantt, dataset, reports } = mount();
+    dataset.entries.update('b', { locked: true });
+    gantt.selectedEntryIds = [entryId('b')];
+
+    gantt.commands.run('freegantt.moveEntryUp');
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+    expect(reports.at(-1)?.code).toBe('entry-step-refused');
+    gantt.destroy();
+  });
+
+  it('a beforeEntryMove handler that returns false vetoes the step', () => {
+    const { gantt, dataset, reports } = mount();
+    gantt.on('beforeEntryMove', () => false);
+    gantt.selectedEntryIds = [entryId('b')];
+
+    gantt.commands.run('freegantt.moveEntryUp');
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+    expect(dataset.canUndo).toBe(false);
+    expect(reports.map((report) => report.code)).toEqual(['entry-move-cancelled']);
+    gantt.destroy();
+  });
+
+  function pressOn(target: Element, key: string, extra: KeyboardEventInit): KeyboardEvent {
+    const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...extra });
+    target.dispatchEvent(event);
+    return event;
+  }
+
+  function focusGridRow(container: HTMLElement, id: string): HTMLElement {
+    const row = container.querySelector<HTMLElement>(`.fg-row[data-row-id="${id}"]`)!;
+    row.focus();
+    return row;
+  }
+
+  it('in the grid pane, all four chords run the four commands', () => {
+    const { gantt, dataset, container } = mount();
+    document.body.append(container);
+    gantt.selectedEntryIds = [entryId('a')];
+
+    pressOn(focusGridRow(container, 'a'), 'ArrowDown', { altKey: true });
+    expect(childIdsOf(dataset, 'p1')).toEqual(['b', 'a', 'c']);
+
+    pressOn(focusGridRow(container, 'a'), 'ArrowUp', { altKey: true });
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+
+    gantt.selectedEntryIds = [entryId('b')];
+    pressOn(focusGridRow(container, 'b'), 'ArrowRight', { altKey: true, shiftKey: true });
+    expect(childIdsOf(dataset, 'a')).toEqual(['b']);
+
+    pressOn(focusGridRow(container, 'b'), 'ArrowLeft', { altKey: true, shiftKey: true });
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+    expect(childIdsOf(dataset, 'a')).toEqual([]);
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('in the timeline pane, Alt+ArrowUp and Alt+ArrowDown move the row', () => {
+    const { gantt, dataset, container } = mount();
+    document.body.append(container);
+    gantt.selectedEntryIds = [entryId('a')];
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('a'), 0)}"]`)!;
+    bar.focus();
+
+    pressOn(bar, 'ArrowDown', { altKey: true });
+
+    expect(childIdsOf(dataset, 'p1')).toEqual(['b', 'a', 'c']);
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('in the timeline pane, Alt+Shift+Arrow leaves the tree alone and resizes with the snap off', () => {
+    const { gantt, dataset, container, moves } = mount();
+    document.body.append(container);
+    const before = datesOf(dataset.entries.get('b')!);
+    gantt.selectedEntryIds = [entryId('b')];
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('b'), 0)}"]`)!;
+    bar.focus();
+
+    pressOn(bar, 'ArrowRight', { altKey: true, shiftKey: true });
+
+    const after = datesOf(dataset.entries.get('b')!);
+    expect(childIdsOf(dataset, 'p1')).toEqual(['a', 'b', 'c']);
+    expect(moves).toEqual([]);
+    expect(after.start).toBe(before.start);
+    expect(after.end).not.toBe(before.end);
+    gantt.destroy();
+    container.remove();
+  });
+
+  it('the four commands are available for a context menu, and each one is a public command id', () => {
+    const { gantt } = mount();
+    gantt.selectedEntryIds = [entryId('b')];
+
+    const ids = gantt.commands.available().map((command) => command.id);
+
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        'freegantt.moveEntryUp',
+        'freegantt.moveEntryDown',
+        'freegantt.indentEntry',
+        'freegantt.outdentEntry',
+      ]),
+    );
+    gantt.destroy();
+  });
+});
