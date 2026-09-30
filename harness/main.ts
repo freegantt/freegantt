@@ -22,7 +22,11 @@ import type {
   GridCellRenderer,
   HeaderRenderer,
 } from 'freegantt';
-import { SEGMENTED_PARENT_ID, demoFieldOptions, demoTreeEntryInputs } from '../fixtures/demo-dataset.js';
+import {
+  SEGMENTED_PARENT_ID,
+  demoFieldOptions,
+  demoTreeEntryInputsStartingDaysBack,
+} from '../fixtures/demo-dataset.js';
 import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
@@ -53,7 +57,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
 // `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A
 // hand-written copy here drifted from it the moment ADR 0018 added `milestone`.
 const dataset = new Dataset<DemoEntryProps>({
-  entries: demoTreeEntryInputs,
+  entries: demoTreeEntryInputsStartingDaysBack(14),
   timeZone: 'UTC',
   ...demoFieldOptions,
 });
@@ -65,11 +69,11 @@ function isLocked(id: string): boolean {
 }
 
 // S3 direct manipulation demo (editing.html's own `mobilization` date line): a hard boundary a
-// `beforeEntryMove` veto below enforces — dropping a bar before it is refused. A week out from
+// `beforeEntryMove` veto below enforces — dropping a bar before it is refused. Two days after
 // today, not today itself — so this labelled Date line and the unlabelled Today line wrapper
 // (`todayLine`'s own default) land at two different x's instead of one, and this page shows both
 // (#319 follow-up).
-const mobilization = dataset.time.addDays(now(), 7);
+const mobilization = dataset.time.addDays(now(), 2);
 
 /** The one parent this page draws with segments. A predicate, not a Field match, because the page
  *  names a single id — `hierarchy.ts` shows the other half, where a written Field decides it and
@@ -87,7 +91,13 @@ const gantt = new Gantt({
   // `entry-16` draws its three legs on one row; every other Entry draws its own single bar. Before
   // ADR 0026 this picture needed a Segment — a second id space that only the library understood.
   rowSource: { source: 'entries', tree: true, childrenAsSegments: drawsChildrenAsSegments },
-  dateLines: [{ placeAt: mobilization, label: 'Mobilization', className: 'demo-mobilization-line' }],
+  dateLines: [
+    {
+      placeAt: mobilization,
+      label: "Mobilization — can't move before this",
+      className: 'demo-mobilization-line',
+    },
+  ],
   // #318: the default (`'belowHeader'`) anchors below the header, which a scrolled-up row's
   // own bar can still reach — this page's own "Program" summary bar does, right where it lands.
   // The header itself never scrolls, so anchoring the label there instead is the one placement no

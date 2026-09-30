@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { panToPlanBody } from './row-drag-support.js';
 
 // S0 acceptance (plans/03-slices.md): "Harness shows fixture entries as bars positioned
 // correctly against time." Smoke-checks what the DOM unit test (src/api/gantt.test.ts)
@@ -207,6 +208,7 @@ test('a segmented row draws its children as bars, and opening the segments back 
 }) => {
   await page.goto('/generic.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await panToPlanBody(page);
 
   const segmentedRow = page.locator('#gantt .fg-row[data-entry-id="entry-16"]');
   const legRows = page.locator('#gantt .fg-row[data-entry-id^="entry-16-"]');
