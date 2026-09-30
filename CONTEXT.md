@@ -236,6 +236,8 @@ The plugin seam that answers whether `entries.remove()` may take an Entry, set w
 subtree — the narrowest answer wins, so removing an unlocked parent that holds one locked descendant
 refuses too. `entries.remove()` throws `RemoveRefusedError` on `'never'`; `load`, `syncAll`,
 `syncChanges({ remove })` and undo all still remove past it, the same carve-out a place rule keeps.
+A row Delete asks it first: one refused row stops the whole Delete, and the Gantt raises one `info`
+report, code `entry-remove-refused`, naming the refused rows.
 _Avoid_: Delete rule (Delete is the command label a user gesture carries, not the data verb this
 seam gates — see **Locked entry**, above)
 

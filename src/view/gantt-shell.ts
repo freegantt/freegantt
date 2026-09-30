@@ -414,6 +414,11 @@ export interface GanttShellOptions {
    *  friend-map way `hierarchyFollowsParentId` above does. `undefined` (a test-built shell with no
    *  wiring) keeps `canPlace`'s pre-ADR-0038 answer. */
   placeableOf?: (id: string, parentId: EntryId | undefined) => FieldEditable;
+  /** The friend function `api/dataset.ts`'s `removableOf` — may a user delete this Entry and its
+   *  subtree, past a plugin's own remove rule. `resolveCapabilities`'s `canRemove` asks it. `api/gantt.ts`
+   *  wires it the same friend-map way `placeableOf` above does. `undefined` (a test-built shell with no
+   *  wiring) lets every Delete through. */
+  removableOf?: (id: string) => FieldEditable;
   /** ADR 0038: the friend function `api/dataset.ts`'s `onRulesChanged`. A plugin calls
    *  `ctx.edits.rulesChanged()` after a lock rule's or a place rule's outside state moves. This shell
    *  answers by re-resolving what it currently offers, then it requests a frame. An affordance a rule
@@ -1808,6 +1813,7 @@ export class GanttShell {
       variantCapabilitiesFor: (entry) => this.#registrations.variants.resolveFor(entry).capabilities,
       editableOf: (id, key) => this.#options.dataset.editableOf(id, key),
       placeableOf: this.#options.placeableOf,
+      removableOf: this.#options.removableOf,
     });
   }
 
@@ -1978,6 +1984,8 @@ export class GanttShell {
       clearDates: (id) => {
         this.#options.dataset.entries.update(id, { start: undefined, end: undefined });
       },
+      refusedRemovals: (ids) => this.#refusedRemovals(ids),
+      reportRemoveRefused: (ids) => this.#reportRemoveRefused(ids),
       pageDown: () => this.#panBy(0, this.#viewport.visible.height),
       pageUp: () => this.#panBy(0, -this.#viewport.visible.height),
       panToStart: () => this.#viewport.scroll.x.panTo(0),
@@ -2291,6 +2299,28 @@ export class GanttShell {
     const writable = (field: 'start' | 'end'): boolean =>
       entry[field] === undefined || this.#capabilities.canWrite(entry, field).ok;
     return writable('start') && writable('end');
+  }
+
+  /** The Entries a row Delete may not take. The remove rule answers for each Entry and its whole
+   *  subtree, so an unlocked parent that holds a locked child is on this list too. */
+  #refusedRemovals(ids: readonly EntryId[]): readonly EntryId[] {
+    return ids.filter((id) => {
+      const entry = this.#options.dataset.entries.get(id);
+      return entry !== undefined && !this.#capabilities.canRemove(entry);
+    });
+  }
+
+  /** A refused Delete is the library working, so it reports at `'info'` and writes nothing. */
+  #reportRemoveRefused(ids: readonly EntryId[]): void {
+    const reason = `These rows are locked, or hold a locked row: ${ids.join(', ')}.`;
+    this.#raiseError({
+      code: 'entry-remove-refused',
+      message: `Nothing was deleted. ${reason}`,
+      reason,
+      severity: 'info',
+      by: 'core',
+      ...(ids[0] === undefined ? {} : { entryId: ids[0] }),
+    });
   }
 
   #registerCoreCommands(): void {

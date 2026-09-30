@@ -522,6 +522,17 @@ export function placeableOf<TProps>(
   return state.placeableOf(id, parentId);
 }
 
+/** The friend function `view/capability.ts`'s `canRemove` reads before a row Delete — the same
+ *  friend-map pattern `placeableOf` above uses. Not public: an app author deletes through
+ *  `entries.remove()`, which throws `RemoveRefusedError` for the same answer. */
+export function removableOf<TProps>(dataset: Dataset<TProps>, id: EntryId | string): FieldEditable {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('removableOf: dataset was not constructed through the Dataset constructor');
+  }
+  return state.removableOf(id);
+}
+
 /** ADR 0038: the friend function `GanttShell` subscribes through, the same friend-map pattern
  *  `hierarchyFollowsParentId` above uses for a query instead of a subscription — wakes on a
  *  plugin's own `ctx.edits.rulesChanged()`. Not public: an app author never subscribes to this

@@ -52,6 +52,10 @@ export interface ResolvedCapabilities {
    *  `parentId` open. A plugin's place rule (ADR 0038) gets the final say either way. A locked
    *  `parentId` or a place rule's own refusal both refuse a drag the way `entries.update()` refuses. */
   canPlace(entry: Entry, parentId: EntryId | undefined): boolean;
+  /** May a user delete this Entry? The remove rule answers for the Entry and for everything below
+   *  it, so a parent that holds a locked child refuses too. A row Delete asks this before it
+   *  removes anything. */
+  canRemove(entry: Entry): boolean;
 }
 
 /** What one Gantt's capability resolution reads. An object, not four positional arguments: the
@@ -83,6 +87,10 @@ export interface CapabilityInputs {
    *  outright whenever it is not `'anywhere'`. Absent in a hand-built test fixture, `canPlace` keeps
    *  today's `parentId`-cell-only answer. */
   placeableOf?: ((id: string, parentId: EntryId | undefined) => FieldEditable) | undefined;
+  /** From the bound `Dataset` — the friend function `api/dataset.ts`'s `removableOf`. The effective
+   *  remove rule answer for one Entry and its whole subtree. `canRemove` refuses whenever it is not
+   *  `'anywhere'`. Absent in a hand-built test fixture, `canRemove` answers `true`. */
+  removableOf?: ((id: string) => FieldEditable) | undefined;
 }
 
 /** One frozen empty list, so the common "this bar's move writes nothing" answer allocates nothing on
@@ -304,6 +312,8 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     return (inputs.placeableOf?.(entry.id, parentId) ?? 'anywhere') === 'anywhere';
   };
 
+  const canRemove = (entry: Entry): boolean => (inputs.removableOf?.(entry.id) ?? 'anywhere') === 'anywhere';
+
   return {
     can(capability, entry, edge) {
       if (!isOffered(capability, entry)) return false;
@@ -312,5 +322,6 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     canWrite,
     entriesMovedBy,
     canPlace,
+    canRemove,
   };
 }

@@ -205,8 +205,8 @@ dataset.on('change', ({ changeSet }: DatasetEventMap['change']) => {
 });
 
 // Who reports a refusal? The library, on one subscription over both emitters — the mobilization
-// veto's own `refuse(reason)` words arrive here. The core lock reports nothing: it closes a locked
-// row's cells so no gesture ever arms, and a click never sees a refusal to report.
+// veto's own `refuse(reason)` words arrive here. So does a Delete that the core lock refuses. The
+// lock closes a locked row's cells, so no gesture arms, but a Delete key press still arrives.
 const toast = document.querySelector<HTMLDivElement>('#toast')!;
 
 function showToast(message: string): void {
