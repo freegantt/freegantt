@@ -1,12 +1,13 @@
 name: Docs deploy
 
-# The docs site in freegantt/freegantt.github.io reads `docs/` and `src/` from this repository at build time.
-# Its deploy workflow runs on a push there, but it cannot see a push here. This sends it the
-# `library-updated` event when a merge to `main` changes what the site reads, so a page goes live
+# The docs site in freegantt/freegantt.github.io reads `docs/` and `src/` from this repository at
+# build time. Its deploy workflow runs on a push there, but it cannot see a push here. This sends it
+# the `library-updated` event when a merge to `main` changes what the site reads, so a page goes live
 # when it lands.
 #
-# The token is the secret `DOCS_DISPATCH_TOKEN`: a fine-grained token with `Contents: write` on
-# freegantt/freegantt.github.io only. GitHub needs that permission to accept a repository dispatch.
+# Auth is the `freegantt-docs-dispatch` GitHub App, installed on freegantt.github.io only with
+# `Contents: write` (GitHub needs that permission to accept a repository dispatch). Its private key
+# is the secret `DOCS_APP_PRIVATE_KEY`. Each run mints a token that expires after an hour.
 on:
   push:
     branches: [main]
@@ -19,12 +20,15 @@ jobs:
   rebuild-site:
     runs-on: ubuntu-latest
     steps:
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: '5141517'
+          private-key: ${{ secrets.DOCS_APP_PRIVATE_KEY }}
+          owner: freegantt
+          repositories: freegantt.github.io
+
       - name: Send library-updated to freegantt/freegantt.github.io
         env:
-          GH_TOKEN: ${{ secrets.DOCS_DISPATCH_TOKEN }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::DOCS_DISPATCH_TOKEN is not set, so the docs site did not rebuild."
-            exit 0
-          fi
-          gh api repos/freegantt/freegantt.github.io/dispatches -f event_type=library-updated
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: gh api repos/freegantt/freegantt.github.io/dispatches -f event_type=library-updated
