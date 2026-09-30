@@ -1,5 +1,9 @@
 # FreeGantt
 
+**An accessible Gantt chart.** A keyboard user can move, resize, reorder, and edit every task. A screen
+reader user hears the grid as an ARIA grid or tree grid, and a live region announces each refusal. Every
+demo page passes automated axe checks in CI, in every built-in theme.
+
 Framework-free TypeScript Gantt/timeline library. Library-first: the API, docs, and packaging are
 designed for external consumers from day one. See `plans/00-overview.md` for the full spec,
 `plans/03-slices.md` for the delivery roadmap, and `docs/05-consumer-api.md` for a consumer API index;
