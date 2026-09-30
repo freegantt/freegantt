@@ -226,6 +226,29 @@ The context menu lists it, and `gantt.commands.run('freegantt.clearDates')` runs
 It passes over an Entry with no dates of its own to clear. A lock or a `beforeChange` refusal stops
 the whole command, and the Gantt raises one `info` report with code `entry-clear-dates-refused`.
 
+### Move the Selection in the tree
+
+Four commands move Entries in the tree: `freegantt.moveEntryUp`, `freegantt.moveEntryDown`,
+`freegantt.indentEntry` and `freegantt.outdentEntry`. The chords are `Alt+ArrowUp`, `Alt+ArrowDown`,
+`Alt+Shift+ArrowRight` and `Alt+Shift+ArrowLeft`. The context menu lists them too.
+
+The commands act on every selected Entry. Each Entry takes the step it would take if the user moved
+it alone. It asks its own `reorder` capability, lock rule and place rule. A refused Entry stays, and
+the others still move. Each Entry that moves fires its own `beforeEntryMove` and `entryMove`. A
+`beforeEntryMove` handler may answer with a Promise. The Gantt waits for each answer in turn, then
+writes every accepted move at once. If the data changes during a wait, the Gantt drops the whole
+step and raises `entry-move-dropped`. One key press is one undo step.
+
+The Entries move one after the other. `up` and `indent` go from the top row to the bottom row.
+`down` and `outdent` go from the bottom row to the top row. Two siblings that indent together stay
+siblings, and two that outdent together keep their order. Two results follow from this rule:
+
+- At the edge of the tree, a selected Entry that cannot move lets a lower selected Entry pass it.
+- A selected parent and its selected child both move. The child also moves inside the parent.
+
+All refused Entries make one `info` report with code `entry-step-refused`. Its `entryId` names the
+first one, and its `message` names them all.
+
 <!-- doc-example-setup
 declare const container: HTMLElement;
 -->

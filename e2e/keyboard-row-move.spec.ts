@@ -104,6 +104,54 @@ test('on a bar, Alt+ArrowUp and Alt+ArrowDown move the row and keep focus on the
   await expect(bar).toBeFocused();
 });
 
+/** Three visible siblings in a row, with a fourth below them. The run moves down past that fourth. */
+async function pickThreeSiblings(page: Page): Promise<{ parentId: string; ids: string[] }> {
+  const visible = await visibleRowEntryIds(page);
+  const found = await page.evaluate((visibleIds) => {
+    for (const id of visibleIds) {
+      const parent = window.__gantt.dataset.entries.get(id)?.parent();
+      if (parent === undefined) continue;
+      const siblings = parent.children().map((child) => String(child.id));
+      for (let start = 0; start + 3 < siblings.length; start += 1) {
+        const run = siblings.slice(start, start + 4);
+        if (run.every((sibling) => visibleIds.includes(sibling))) {
+          return { parentId: String(parent.id), ids: run.slice(0, 3) };
+        }
+      }
+    }
+    return undefined;
+  }, visible);
+  if (found === undefined) throw new Error('no parent shows four visible children');
+  return found;
+}
+
+test('with three rows selected, Alt+ArrowDown moves all three, and Ctrl+Z restores them', async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const { parentId, ids } = await pickThreeSiblings(page);
+  const startOrder = await childIdsOf(page, parentId);
+  const firstIndex = startOrder.indexOf(ids[0]!);
+  const expected = [...startOrder];
+  const [passed] = expected.splice(firstIndex + 3, 1);
+  expected.splice(firstIndex, 0, passed!);
+  const row = gridRowOf(page, ids[0]!);
+  // Focus selects its row, so the three-row Selection comes after it.
+  await row.focus();
+  await page.evaluate((selected) => {
+    window.__gantt.selectedEntryIds = selected.map((id) => window.__dataset.entries.get(id)!.id);
+  }, ids);
+
+  await page.keyboard.press('Alt+ArrowDown');
+
+  await expect.poll(() => childIdsOf(page, parentId)).toEqual(expected);
+  await expect(gridRowOf(page, ids[0]!)).toBeFocused();
+
+  await page.keyboard.press('Control+z');
+
+  await expect.poll(() => childIdsOf(page, parentId)).toEqual(startOrder);
+});
+
 test('on a bar, Alt+Shift+Arrow resizes the bar and leaves the tree alone', async ({ page }) => {
   await gotoGeneric(page);
   const subject = await pickSubject(page);
