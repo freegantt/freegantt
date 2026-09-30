@@ -1019,6 +1019,18 @@ describe('Dataset plugins (S5.10)', () => {
     expect(setPlaceRuleLate).toThrow(RegistrationClosedError);
   });
 
+  it('throws RegistrationClosedError when a plugin claims the remove rule after setup returned', () => {
+    let setRemoveRuleLate = (): void => undefined;
+    const late: DataPlugin = {
+      id: 'demo.late-remove',
+      data(ctx) {
+        setRemoveRuleLate = () => ctx.edits.setRemoveRule((next) => next);
+      },
+    };
+    new Dataset({ timeZone: 'UTC', entries: [oneEntry()], plugins: [late] });
+    expect(setRemoveRuleLate).toThrow(RegistrationClosedError);
+  });
+
   it('has a Field a plugin declares in the registry, already settled by the construction Rollup (#496)', () => {
     const declaresCost: DataPlugin = {
       id: 'demo.cost',

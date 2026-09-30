@@ -17,6 +17,8 @@ import type {
   FieldLockRule,
   PlaceQuery,
   PlaceRule,
+  RemoveQuery,
+  RemoveRule,
   WriteRefusalReason,
   WriteTarget,
   WriteVerdict,
@@ -96,6 +98,26 @@ export const openPlaceRule: PlaceRule = () => 'anywhere';
  *  locked parent. */
 export function placeAnswerFor(place: PlaceQuery, placeRule: PlaceRule): FieldEditable {
   return placeRule(place);
+}
+
+/** Core's own remove rule (#611): every removal answers `'anywhere'` until a plugin's own rule
+ *  composes onto it. The bottom occupant of `ctx.edits.setRemoveRule`, mirroring `openPlaceRule`'s
+ *  role for the place rule — a Dataset with no plugin installed still answers every removal, and a
+ *  plugin's narrowing rule always has an answer under it to narrow. */
+export const openRemoveRule: RemoveRule = () => 'anywhere';
+
+/** What `EntryStore.removableOf`/`remove()` ask, once per Entry a removal takes with it — the top id
+ *  and every member of its subtree. The narrowest answer wins (`'never'` < `'api'` < `'anywhere'`),
+ *  and the walk stops the moment it finds a `'never'`: removing an unlocked parent that holds one
+ *  locked descendant refuses too, because that removal would still destroy a locked row. */
+export function removeAnswerFor(removals: Iterable<RemoveQuery>, removeRule: RemoveRule): FieldEditable {
+  let narrowest: FieldEditable = 'anywhere';
+  for (const removal of removals) {
+    const answer = removeRule(removal);
+    if (answer === 'never') return 'never';
+    if (answer === 'api') narrowest = 'api';
+  }
+  return narrowest;
 }
 
 /** One cell's address, built from whichever lookup a caller holds — `EntryStore`'s own

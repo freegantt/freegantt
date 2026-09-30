@@ -20,6 +20,7 @@ import type {
   PluginId,
   PluginStore,
   PluginStoreView,
+  RemoveRuleWrapper,
 } from '../model/index.js';
 import type { DisposableStore } from '../extensions/disposables.js';
 
@@ -38,6 +39,10 @@ export type { FieldLockRuleWrapper };
 // the rule reads (ADR 0038). Here for the same reason the lock rule types are.
 export type { PlaceQuery, PlaceRule } from '../model/index.js';
 export type { PlaceRuleWrapper };
+// A plugin author writing a remove rule names both: the wrapper `setRemoveRule` takes, and the query
+// the rule reads (#611). Here for the same reason the place-rule types are.
+export type { RemoveQuery, RemoveRule } from '../model/index.js';
+export type { RemoveRuleWrapper };
 // The one legal way to compose two extenders' writes (#197), here for that same reason: it belongs
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
@@ -79,18 +84,24 @@ export interface DatasetEvents {
  *  parent, asked once for a cross-parent move and once for a gesture preview, so a bar drag, a grid
  *  row drag and `entries.update()`/`add()` all meet the same resolution.
  *
- *  `rulesChanged` is the fourth seam (ADR 0038): a lock rule or a place rule can close over state
- *  outside the Entry it reads — a clock, a toggle — so its answer can move with no write the Dataset
- *  sees. Call it after that outside state moves. Every bound Gantt re-resolves what it currently
- *  offers, the same re-resolution a Field write already triggers, so an affordance a rule just closed
- *  clears on the next frame. No gate: unlike the three seams above, a plugin calls this any time
- *  after its own `data()` returns, because a rule's outside state can move at any time, not only
- *  during setup. Writes nothing itself (I14 unaffected — no changeset, no undo step). */
+ *  `setRemoveRule` is the fourth seam (#611): it answers whether `entries.remove()` may take an
+ *  Entry, asked once for the id the caller named and once for every member of its subtree — the
+ *  narrowest answer wins, so removing an unlocked parent that holds one locked descendant refuses
+ *  too.
+ *
+ *  `rulesChanged` is the fifth seam (ADR 0038): a lock rule, a place rule or a remove rule can close
+ *  over state outside the Entry it reads — a clock, a toggle — so its answer can move with no write
+ *  the Dataset sees. Call it after that outside state moves. Every bound Gantt re-resolves what it
+ *  currently offers, the same re-resolution a Field write already triggers, so an affordance a rule
+ *  just closed clears on the next frame. No gate: unlike the four seams above, a plugin calls this
+ *  any time after its own `data()` returns, because a rule's outside state can move at any time, not
+ *  only during setup. Writes nothing itself (I14 unaffected — no changeset, no undo step). */
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
   setExtender(wrap: ExtenderWrapper<TProps>): void;
   setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
+  setRemoveRule(wrap: RemoveRuleWrapper): void;
   rulesChanged(): void;
 }
 

@@ -16,6 +16,7 @@ import {
   FieldNotEditableError,
   PlaceRefusedError,
   ParentCycleError,
+  RemoveRefusedError,
   UnknownFieldError,
   entryId,
 } from '../model/index.js';
@@ -1064,6 +1065,111 @@ describe("a plugin's place rule gates an explicit move (ADR 0038)", () => {
 
     state.entries.update('c1', { parentId: 'p2' });
     expect(calls).toEqual(['second', 'first']);
+  });
+});
+
+describe("a plugin's remove rule gates entries.remove() (#611)", () => {
+  function removeDataset(): DatasetState {
+    return new DatasetState({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p' },
+        { id: 'c1', parentId: 'p', name: 'c1' },
+        { id: 'c2', parentId: 'p', name: 'c2' },
+        { id: 'other', name: 'other' },
+      ],
+    });
+  }
+
+  it("throws RemoveRefusedError and stages nothing when the rule answers 'never'", () => {
+    const state = removeDataset();
+    const seen = changeSets(state);
+    state.setRemoveRule((next) => (removal) => (removal.entry.id === entryId('p') ? 'never' : next(removal)));
+
+    expect(() => state.entries.remove('p')).toThrow(RemoveRefusedError);
+    expect(state.entries.has('p')).toBe(true);
+    expect(seen).toHaveLength(0);
+  });
+
+  it("removes when the rule answers 'api'", () => {
+    const state = removeDataset();
+    state.setRemoveRule((next) => (removal) => (removal.entry.id === entryId('p') ? 'api' : next(removal)));
+
+    state.entries.remove('p');
+
+    expect(state.entries.has('p')).toBe(false);
+  });
+
+  it('asks once per subtree member, each with its own currentParentId', () => {
+    const state = removeDataset();
+    const seen: Array<{ id: EntryId; currentParentId: EntryId | undefined }> = [];
+    state.setRemoveRule((next) => (removal) => {
+      seen.push({ id: removal.entry.id, currentParentId: removal.currentParentId });
+      return next(removal);
+    });
+
+    state.entries.remove('p');
+
+    expect(seen).toEqual(
+      expect.arrayContaining([
+        { id: entryId('p'), currentParentId: undefined },
+        { id: entryId('c1'), currentParentId: entryId('p') },
+        { id: entryId('c2'), currentParentId: entryId('p') },
+      ]),
+    );
+    expect(seen).toHaveLength(3);
+  });
+
+  it('a locked descendant refuses the removal of its unlocked ancestor (narrowest answer wins)', () => {
+    const state = removeDataset();
+    state.setRemoveRule(
+      (next) => (removal) => (removal.entry.id === entryId('c1') ? 'never' : next(removal)),
+    );
+
+    expect(() => state.entries.remove('p')).toThrow(RemoveRefusedError);
+    expect(state.entries.has('p')).toBe(true);
+  });
+
+  it('load never asks the remove rule', () => {
+    const state = removeDataset();
+    const rule = vi.fn((_removal: unknown) => 'anywhere' as const);
+    state.setRemoveRule((next) => (removal) => {
+      rule(removal);
+      return next(removal);
+    });
+
+    state.entries.load([{ id: 'fresh', name: 'fresh', start: 0, end: 1 }]);
+
+    expect(rule).not.toHaveBeenCalled();
+  });
+
+  it('syncChanges({ remove }) never asks the remove rule', () => {
+    const state = removeDataset();
+    const rule = vi.fn((_removal: unknown) => 'anywhere' as const);
+    state.setRemoveRule((next) => (removal) => {
+      rule(removal);
+      return next(removal);
+    });
+
+    state.entries.syncChanges({ remove: ['p'] });
+
+    expect(rule).not.toHaveBeenCalled();
+    expect(state.entries.has('p')).toBe(false);
+  });
+
+  it('undo of an add never asks the remove rule', () => {
+    const state = removeDataset();
+    state.entries.add({ id: 'fresh', name: 'fresh' });
+    const rule = vi.fn((_removal: unknown) => 'anywhere' as const);
+    state.setRemoveRule((next) => (removal) => {
+      rule(removal);
+      return next(removal);
+    });
+
+    state.undo();
+
+    expect(rule).not.toHaveBeenCalled();
+    expect(state.entries.has('fresh')).toBe(false);
   });
 });
 

@@ -27,6 +27,8 @@ import type {
   PlaceRule,
   PlaceRuleWrapper,
   RaiseError,
+  RemoveRule,
+  RemoveRuleWrapper,
 } from '../model/index.js';
 import {
   entryId,
@@ -35,6 +37,7 @@ import {
   EntryNotFoundError,
   ParentCycleError,
   PlaceRefusedError,
+  RemoveRefusedError,
   SiblingIndexOutOfRangeError,
 } from '../model/index.js';
 import type { SiblingChange, SiblingGroupKey } from './sibling-order.js';
@@ -79,7 +82,9 @@ import {
   fieldEditableRule,
   fieldLockQueryFor,
   openPlaceRule,
+  openRemoveRule,
   placeAnswerFor,
+  removeAnswerFor,
   resolveWriteTarget,
 } from './write-rule.js';
 import type { FieldLockQuery } from '../model/index.js';
@@ -158,6 +163,10 @@ export class EntryStore implements EntryStoreContract {
    *  own bottom occupant answers every place `'anywhere'`, until a plugin composes onto it through
    *  `setPlaceRule`. */
   #placeRule: PlaceRule = openPlaceRule;
+  /** The remove rule's current occupant (#611), read the same imperative way `#placeRule` is. Core's
+   *  own bottom occupant answers every removal `'anywhere'`, until a plugin composes onto it through
+   *  `setRemoveRule`. */
+  #removeRule: RemoveRule = openRemoveRule;
   /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
    *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
    *  never depends on who read first (`F5`). `reportRefusedHierarchyAnswers` raises. */
@@ -442,6 +451,14 @@ export class EntryStore implements EntryStoreContract {
     this.#placeRule = wrap(this.#placeRule);
   }
 
+  /** Call: `ctx.edits.setRemoveRule((next) => (removal) => isLocked(removal.entry.id) ? 'api' : next(removal))`.
+   *  Installing composes onto the current occupant rather than evicting it, the same way `setPlaceRule`
+   *  does (#611). Not on `EntryStoreView`: this is a plugin-author door, and it reaches a plugin
+   *  through `ctx.edits` alone. */
+  setRemoveRule(wrap: RemoveRuleWrapper): void {
+    this.#removeRule = wrap(this.#removeRule);
+  }
+
   /** The place rule's own answer for one place (ADR 0038) — the one resolution `#updateFrom`, `add()`
    *  and `view/capability.ts`'s `canPlace` all ask, so a bar drag, a grid row drag and a programmatic
    *  move all meet the same answer (I14). `currentParentId` reads the Entry's own parent as the
@@ -457,6 +474,24 @@ export class EntryStore implements EntryStoreContract {
         currentParentId: stored === undefined ? undefined : this.parentIdOf(stored),
       },
       this.#placeRule,
+    );
+  }
+
+  /** The remove rule's own answer for `id`'s whole removal (#611) — the top id, and every member of
+   *  its subtree, each asked once. The narrowest answer wins, so removing an unlocked parent that
+   *  holds one locked descendant refuses too. `remove()` reads this before it stages anything;
+   *  `api/dataset.ts`'s friend `removableOf` is the published door onto this. */
+  removableOf(id: EntryId | string): FieldEditable {
+    const key = entryId(id);
+    return removeAnswerFor(
+      [key, ...this.#subtreeOf(key)].map((memberId) => {
+        const stored = this.storedEntry(memberId);
+        return {
+          entry: this.#lockQueryFor(memberId),
+          currentParentId: stored === undefined ? undefined : this.parentIdOf(stored),
+        };
+      }),
+      this.#removeRule,
     );
   }
 
@@ -693,6 +728,7 @@ export class EntryStore implements EntryStoreContract {
     this.#mutate((token) => {
       const key = entryId(id);
       if (!this.has(key)) throw new EntryNotFoundError(key, 'entries.remove');
+      if (this.removableOf(key) === 'never') throw new RemoveRefusedError(key, 'entries.remove');
       this.stageSubtreeRemoval(token, key);
     });
   }

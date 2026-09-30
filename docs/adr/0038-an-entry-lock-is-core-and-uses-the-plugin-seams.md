@@ -158,7 +158,8 @@ undo step of its own.
 ## Out of scope
 
 - A child's time drag widening a locked parent's Rollup ([#610](https://github.com/Pawel-IT/FreeGantt/issues/610)).
-- Delete on a locked row, or on its child, passing ([#611](https://github.com/Pawel-IT/FreeGantt/issues/611)).
+- Delete on a locked row, or on its child, passing ([#611](https://github.com/Pawel-IT/FreeGantt/issues/611)) —
+  fixed by [ADR 0040](0040-a-remove-rule-refuses-a-user-delete.md).
 - A bar drag of a parent with a locked dated child not arming at all — the grid row drag already
   carries this; the bar drag closes with [#615](https://github.com/Pawel-IT/FreeGantt/issues/615)
   (a bar's vertical drag arms on the reorder capability alone).
