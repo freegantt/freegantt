@@ -42,6 +42,9 @@ export type BuiltInReportCode =
   | 'mutation-cancelled'
   | 'entry-move-cancelled'
   | 'entry-resize-cancelled'
+  // A row Delete stopped by the remove rule: a locked row, or a parent that holds one. Nothing was
+  // removed. `entryId` names the first refused row, and `message` names them all.
+  | 'entry-remove-refused'
   // A gesture core dropped on its own, never a handler's veto (#272, #273, #377) — the reason rides
   // on `ErrorReport.droppedReason` (`GestureDroppedReason`). Its own group, not the refusal group above:
   // `by: 'core'` here, always `by: 'consumer'` above, and conflating the two misreports which one
@@ -219,8 +222,8 @@ export interface ErrorReport {
   readonly severity: ErrorSeverity;
   readonly by: ErrorReporter;
   /** Why the refusal happened, in the words of whoever refused — a `before*` handler's own sentence,
-   *  verbatim (#210). Present only when a handler called `refuse(reason)`; a bare `false` leaves it
-   *  `undefined`. `message` quotes it too, so a console fallback prints it; this member is here so a
+   *  verbatim (#210). Present when a handler called `refuse(reason)`; a bare `false` leaves it
+   *  `undefined`. Core also sets it on `'entry-remove-refused'`, where the library refuses and says why. `message` quotes it too, so a console fallback prints it; this member is here so a
    *  consumer can show their own words without core's framing around them. */
   readonly reason?: string;
   /** Why core dropped a gesture on its own — present only on `'entry-move-dropped'` and

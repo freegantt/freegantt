@@ -30,6 +30,8 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
     activateFocused: vi.fn(),
     canClearDates: vi.fn(() => true),
     clearDates: vi.fn(),
+    refusedRemovals: vi.fn(() => []),
+    reportRemoveRefused: vi.fn(),
     pageDown: vi.fn(),
     pageUp: vi.fn(),
     panToStart: vi.fn(),
@@ -188,6 +190,49 @@ describe('registerCoreCommands (S5.2)', () => {
 
     expect(undo).toHaveBeenCalledOnce();
     expect(redo).not.toHaveBeenCalled();
+  });
+
+  describe('freegantt.deleteSelection on a row target', () => {
+    function deleteContext(entryIds: string[]) {
+      const remove = vi.fn();
+      const transaction = vi.fn((body: () => void) => body());
+      const ctx = {
+        dataset: {
+          entries: { remove, has: () => true },
+          transaction,
+        } as unknown as CommandContext<unknown>['dataset'],
+        gantt: {},
+        target: { kind: 'row' as const, entryIds: entryIds.map(entryId) },
+      } as CommandContext<unknown>;
+      return { ctx, remove, transaction };
+    }
+
+    it('removes every named row inside one transaction', () => {
+      const ports = fakePorts();
+      const { ctx, remove, transaction } = deleteContext(['a', 'b']);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      registry.run('freegantt.deleteSelection');
+
+      expect(transaction).toHaveBeenCalledOnce();
+      expect(remove.mock.calls).toEqual([['a'], ['b']]);
+      expect(ports.reportRemoveRefused).not.toHaveBeenCalled();
+    });
+
+    it('removes nothing and reports once when any row is refused', () => {
+      const ports = fakePorts();
+      ports.refusedRemovals.mockReturnValue([entryId('b')]);
+      const { ctx, remove, transaction } = deleteContext(['a', 'b']);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      registry.run('freegantt.deleteSelection');
+
+      expect(remove).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+      expect(ports.reportRemoveRefused.mock.calls).toEqual([[[entryId('b')]]]);
+    });
   });
 
   // #160: the id is registered so `run` answers on a Gantt with no `inlineEditing()`,

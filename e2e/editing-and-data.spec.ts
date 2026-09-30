@@ -56,6 +56,26 @@ test('a locked row opens no Name editor, and its bar does not drag', async ({ pa
   expect(after).toBe(before);
 });
 
+// A Delete on a locked row removes nothing. The library reports it once, and the page toasts it.
+test('the Delete key on a locked row keeps the row and toasts why', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  const bar = page.locator('#gantt .fg-bar:not(.fg-bar-summary)').first();
+  await expect(bar).toBeVisible();
+  await bar.click();
+  await expect(page.locator('#lock-checkbox')).toBeEnabled();
+  const entryId = await page.evaluate(() => window.__gantt.selectedEntryIds[0]!);
+  await page.locator('#lock-checkbox').check();
+
+  await page.locator(`#gantt .fg-row[data-entry-id="${entryId}"] [data-field="name"]`).click();
+  const before = await page.evaluate(() => window.__dataset.entries.all.length);
+  await page.keyboard.press('Delete');
+
+  await expect(page.locator('#toast')).toBeVisible();
+  await expect(page.locator('#toast')).toContainText(entryId);
+  expect(await page.evaluate(() => window.__dataset.entries.all.length)).toBe(before);
+  expect((await logLines(page))[0]).toMatch(/entry-remove-refused/);
+});
+
 test("unlocking Program's subtree opens note inside it, and leaves an outside entry locked", async ({
   page,
 }) => {
