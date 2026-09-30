@@ -308,6 +308,30 @@ describe('a toggle column', () => {
     const { gantt } = mount(true);
     expect(gantt.gridColumns).toEqual(['name', { field: 'done', header: 'Done', toggle: true }]);
   });
+
+  it('a toggle on the core locked Field switches the lock, and one undo restores it', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const dataset = new Dataset({
+      entries: [{ id: 'a', name: 'Alpha', start: '2026-01-01', end: '2026-01-05' }],
+      timeZone: 'UTC',
+    });
+    const gantt = new Gantt({
+      container,
+      dataset,
+      gridColumns: ['name', { field: 'locked', header: 'Lock', toggle: true }],
+      plugins: [inlineEditing()],
+    });
+    mounted.push(gantt);
+    const cell = container.querySelector<HTMLElement>('.fg-row[data-entry-id="a"] [data-field="locked"]')!;
+
+    click(cell);
+    expect(dataset.entries.get('a')?.read('locked')).toBe(true);
+    click(cell);
+    expect(dataset.entries.get('a')?.read('locked')).toBeFalsy();
+    dataset.undo();
+    expect(dataset.entries.get('a')?.read('locked')).toBe(true);
+  });
 });
 
 describe('a per-column headerRenderer', () => {
