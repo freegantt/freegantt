@@ -28,6 +28,8 @@ import { closedPadlock, padlockToggle } from './lock-column.js';
 import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import type { BufferKindProps } from './plugins/buffer-kind.js';
+import { bufferTrailsTask } from './plugins/buffer-trails-task.js';
+import type { BufferTrailsTaskProps } from './plugins/buffer-trails-task.js';
 import { riskKind } from './plugins/risk-kind.js';
 import type { RiskKindProps } from './plugins/risk-kind.js';
 import { overBudgetRows } from './plugins/over-budget-rows.js';
@@ -43,7 +45,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'editing-
 // its own `when`/`command` rule off a row this page marks. A chrome plugin declares no Field of its
 // own, so this page adds each plugin's exported props to its own, and declares both in `fields`
 // below — a chrome plugin installs after Field registration closes (ADR 0011).
-interface EditingDataProps extends DemoEntryProps, BufferKindProps, RiskKindProps {
+interface EditingDataProps extends DemoEntryProps, BufferKindProps, RiskKindProps, BufferTrailsTaskProps {
   buffer?: boolean;
   risk?: boolean;
   note?: string;
@@ -58,8 +60,31 @@ const NOTE_UNLOCK_ROOT_ID = 'program';
 const BUFFER_ENTRY_ID = 'entry-30';
 const RISK_ENTRY_ID = 'entry-40';
 
+// The buffer trails this task: `bufferTrailsTask()` keeps the buffer starting where the task ends.
+const BUFFERED_TASK_ID = 'entry-29';
+
+// The demo dates are `Date`s, so the buffer starts on its task's end and keeps its own length.
+const bufferedTaskEnd = demoTreeEntryInputs.find((entry) => entry.id === BUFFERED_TASK_ID)?.end;
+
+function startedAtTaskEnd(buffer: EntryInput<DemoEntryProps>): EntryInput<DemoEntryProps> {
+  if (
+    !(buffer.start instanceof Date) ||
+    !(buffer.end instanceof Date) ||
+    !(bufferedTaskEnd instanceof Date)
+  ) {
+    return buffer;
+  }
+  const length = buffer.end.getTime() - buffer.start.getTime();
+  return { ...buffer, start: bufferedTaskEnd, end: new Date(bufferedTaskEnd.getTime() + length) };
+}
+
 function withKindProps(entry: EntryInput<DemoEntryProps>): EntryInput<EditingDataProps> {
-  if (entry.id === BUFFER_ENTRY_ID) return { ...entry, props: { ...entry.props, buffer: true } };
+  if (entry.id === BUFFER_ENTRY_ID) {
+    return {
+      ...startedAtTaskEnd(entry),
+      props: { ...entry.props, buffer: true, bufferOf: BUFFERED_TASK_ID },
+    };
+  }
   if (entry.id === RISK_ENTRY_ID) return { ...entry, props: { ...entry.props, risk: true } };
   return entry;
 }
@@ -79,7 +104,7 @@ const dataset = new Dataset<EditingDataProps>({
     { key: 'accepted' },
     { key: 'note', editable: false },
   ],
-  plugins: [notes],
+  plugins: [notes, bufferTrailsTask()],
 });
 
 // #517: stands in for a server this page polls. It carries the page's own list from page load, so
