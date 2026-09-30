@@ -5,11 +5,11 @@
 
 import type { HarnessPageId } from '../harness-nav.js';
 
-const PUBLIC_API = '../plans/02-public-api.md';
-const PLUGIN_GUIDE = '../docs/06-plugin-authoring.md';
-const SERVER_DATA_GUIDE = '../docs/11-server-data.md';
-const STYLING_GUIDE = '../docs/10-styling-and-theming.md';
-const BAR_IS_AN_ENTRY = '../docs/08-a-bar-is-an-entry.md';
+const DOCS_SITE = 'https://freegantt.dev/docs';
+const PLUGIN_GUIDE = `${DOCS_SITE}/plugin-authoring`;
+const SERVER_DATA_GUIDE = `${DOCS_SITE}/server-data`;
+const STYLING_GUIDE = `${DOCS_SITE}/styling-and-theming`;
+const BAR_IS_AN_ENTRY = `${DOCS_SITE}/a-bar-is-an-entry`;
 
 /** One doorway into the spec. `label` is what a reader clicks; `href` is where it lands. */
 interface SpecLink {
@@ -25,9 +25,6 @@ interface PageBrief {
   readonly specLinks: readonly SpecLink[];
 }
 
-// Anchors point at plans/02-public-api.md's own headings. A markdown file has no live table of
-// contents in a browser tab, so the fragment is a best-effort jump; the link text always names the
-// section too.
 const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
   planner: {
     features: [
@@ -45,7 +42,6 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       ':root.theme-paper { --fg-pane-bg: …; --fg-bar-fill: … }',
     ],
     specLinks: [
-      { label: 'plans/02 §4.1 — Per-entry looks and actions', href: `${PUBLIC_API}#41-per-entry-looks-and-actions` },
       { label: 'docs/10 — Styling and theming', href: STYLING_GUIDE },
     ],
   },
@@ -57,7 +53,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'A bench below the torn rule that drives mutation, vetoes, plugins, renderers, and JSON round-trips',
     ],
     config: ["new Dataset({ entries, timeZone: 'UTC' })", "new Gantt({ container: '#gantt', dataset })"],
-    specLinks: [{ label: 'plans/02 §2 — Shape', href: `${PUBLIC_API}#2-shape` }],
+    specLinks: [],
   },
   'editing-and-data': {
     features: [
@@ -90,8 +86,6 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'dataset.entries.syncChanges(server.fetchChanges())',
     ],
     specLinks: [
-      { label: 'plans/02 — Programmatic mutation', href: `${PUBLIC_API}#programmatic-mutation-always-transactional` },
-      { label: 'plans/02 §3 — Events', href: `${PUBLIC_API}#3-events-one-bus-one-vocabulary` },
       { label: 'docs/06 — Plugin authoring guide', href: PLUGIN_GUIDE },
       { label: 'docs/11 — Server data guide', href: SERVER_DATA_GUIDE },
     ],
@@ -112,8 +106,6 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'gantt.zoomIn() / gantt.zoomOut() / gantt.panToToday()',
     ],
     specLinks: [
-      { label: 'plans/02 §4.2 — Fields and grid columns', href: `${PUBLIC_API}#42-fields-and-grid-columns` },
-      { label: '§4.3 — Row sources, collapse, and tree', href: `${PUBLIC_API}#43-row-sources-collapse-and-tree` },
       { label: 'docs/08 — A bar is an Entry', href: BAR_IS_AN_ENTRY },
     ],
   },
@@ -128,9 +120,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'new Dataset({ entries: fiftyThousandEntries })',
       'new Gantt({ container, dataset, scale, scroll: { x } })',
     ],
-    specLinks: [
-      { label: 'plans/02 §5 — Shared axes and scroll', href: `${PUBLIC_API}#5-shared-axes-and-scroll-multi-gantt-d9` },
-    ],
+    specLinks: [],
   },
 };
 
@@ -166,8 +156,8 @@ export function mountPageBrief(container: HTMLElement, pageId: HarnessPageId): v
     config.append(code);
   });
 
-  // Where does the spec say so?
-  const spec = labelledLine('Spec');
+  // Which guides go deeper? A page with none leaves the line out.
+  const spec = labelledLine('Guides');
   brief.specLinks.forEach((link, index) => {
     if (index > 0) spec.append(' · ');
     const anchor = document.createElement('a');
@@ -176,5 +166,6 @@ export function mountPageBrief(container: HTMLElement, pageId: HarnessPageId): v
     spec.append(anchor);
   });
 
-  container.append(heading, features, config, spec);
+  container.append(heading, features, config);
+  if (brief.specLinks.length > 0) container.append(spec);
 }
