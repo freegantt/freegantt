@@ -24,6 +24,8 @@ import type {
   FieldLockRule,
   FieldLockRuleWrapper,
   HierarchySource,
+  BarMoveRule,
+  BarMoveRuleWrapper,
   PlaceRule,
   PlaceRuleWrapper,
   RaiseError,
@@ -81,6 +83,7 @@ import {
   editableAnswerFor,
   fieldEditableRule,
   fieldLockQueryFor,
+  openBarMoveRule,
   openPlaceRule,
   openRemoveRule,
   placeAnswerFor,
@@ -167,6 +170,10 @@ export class EntryStore implements EntryStoreContract {
    *  own bottom occupant answers every removal `'anywhere'`, until a plugin composes onto it through
    *  `setRemoveRule`. */
   #removeRule: RemoveRule = openRemoveRule;
+  /** The bar move rule's current occupant, read the same imperative way `#removeRule` is. Core's own
+   *  bottom occupant answers every bar `true`, until a rule composes onto it through
+   *  `setBarMoveRule`. */
+  #barMoveRule: BarMoveRule = openBarMoveRule;
   /** The source's answers for the committed rows, after core checked them (ADR 0020). One pass per
    *  revision, and a **pure** one: it refuses an answer but raises nothing, so what a reader sees
    *  never depends on who read first (`F5`). `reportRefusedHierarchyAnswers` raises. */
@@ -443,7 +450,7 @@ export class EntryStore implements EntryStoreContract {
     this.#lockRule = wrap(this.#lockRule);
   }
 
-  /** Call: `ctx.edits.setPlaceRule((next) => (place) => isLocked(place.parentId) ? 'api' : next(place))`.
+  /** Call: `ctx.edits.setPlaceRule((next) => (place) => isLocked(place.parent?.id) ? 'api' : next(place))`.
    *  Installing composes onto the current occupant rather than evicting it, the same way `setLockRule`
    *  does (ADR 0038). Not on `EntryStoreView`: this is a plugin-author door, and it reaches a plugin
    *  through `ctx.edits` alone. */
@@ -459,9 +466,24 @@ export class EntryStore implements EntryStoreContract {
     this.#removeRule = wrap(this.#removeRule);
   }
 
+  /** Call: `ctx.edits.setBarMoveRule((next) => (entry) => entry.id === 'phase-1' ? false : next(entry))`.
+   *  Installing composes onto the current occupant rather than evicting it, the same way
+   *  `setRemoveRule` does. Not on `EntryStoreView`: this is a plugin-author door, and it reaches a
+   *  plugin through `ctx.edits` alone. */
+  setBarMoveRule(wrap: BarMoveRuleWrapper): void {
+    this.#barMoveRule = wrap(this.#barMoveRule);
+  }
+
+  /** The bar move rule's own answer for one Entry: does its bar move when a user drags it? The
+   *  hover affordance, the drag preview and the commit all ask this one, so they never drift
+   *  (I14). It takes the cached `FieldLockQuery`, so it allocates nothing on the hover path (I5). */
+  barMovesOf(id: EntryId | string): boolean {
+    return this.#barMoveRule(this.#lockQueryFor(entryId(id)));
+  }
+
   /** The place rule's own answer for one place (ADR 0038) — the one resolution `#updateFrom`, `add()`
    *  and `view/capability.ts`'s `canPlace` all ask, so a bar drag, a grid row drag and a programmatic
-   *  move all meet the same answer (I14). `currentParentId` reads the Entry's own parent as the
+   *  move all meet the same answer (I14). `currentParent` reads the Entry's own parent as the
    *  hierarchy source answers it now — `undefined` for a root Entry, and for one `add()` has not
    *  staged yet. */
   placeableOf(id: EntryId | string, parentId: EntryId | string | undefined): FieldEditable {
@@ -470,8 +492,8 @@ export class EntryStore implements EntryStoreContract {
     return placeAnswerFor(
       {
         entry: this.#lockQueryFor(key),
-        parentId: parentId === undefined ? undefined : entryId(parentId),
-        currentParentId: stored === undefined ? undefined : this.parentIdOf(stored),
+        parent: parentId === undefined ? undefined : this.#lockQueryFor(entryId(parentId)),
+        currentParent: this.#currentParentQueryOf(stored),
       },
       this.#placeRule,
     );
@@ -488,11 +510,19 @@ export class EntryStore implements EntryStoreContract {
         const stored = this.storedEntry(memberId);
         return {
           entry: this.#lockQueryFor(memberId),
-          currentParentId: stored === undefined ? undefined : this.parentIdOf(stored),
+          currentParent: this.#currentParentQueryOf(stored),
         };
       }),
       this.#removeRule,
     );
+  }
+
+  /** The query of an Entry's own parent as the hierarchy source answers it now. `undefined` for a
+   *  root Entry, and for one `add()` has not staged yet. Reuses the cached query, so it allocates
+   *  nothing (I5). */
+  #currentParentQueryOf(stored: UnplacedEntry | undefined): FieldLockQuery | undefined {
+    const parentId = stored === undefined ? undefined : this.parentIdOf(stored);
+    return parentId === undefined ? undefined : this.#lockQueryFor(parentId);
   }
 
   /** Live rows; *which* rows is committed-only, so this array does not grow inside an open

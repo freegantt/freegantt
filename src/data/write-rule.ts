@@ -15,6 +15,7 @@ import type {
   FieldKey,
   FieldLockQuery,
   FieldLockRule,
+  BarMoveRule,
   PlaceQuery,
   PlaceRule,
   RemoveQuery,
@@ -105,6 +106,10 @@ export function placeAnswerFor(place: PlaceQuery, placeRule: PlaceRule): FieldEd
  *  role for the place rule — a Dataset with no plugin installed still answers every removal, and a
  *  plugin's narrowing rule always has an answer under it to narrow. */
 export const openRemoveRule: RemoveRule = () => 'anywhere';
+
+/** Core's own bar move rule: every bar moves until a rule composes onto it. The bottom occupant of
+ *  `ctx.edits.setBarMoveRule`, mirroring `openPlaceRule`'s role for the place rule. */
+export const openBarMoveRule: BarMoveRule = () => true;
 
 /** What `EntryStore.removableOf`/`remove()` ask, once per Entry a removal takes with it — the top id
  *  and every member of its subtree. The narrowest answer wins (`'never'` < `'api'` < `'anywhere'`),

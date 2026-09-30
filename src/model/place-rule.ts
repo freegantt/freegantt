@@ -4,24 +4,24 @@
 // cell already does.
 //
 // Types only, like `field-lock.ts`; `data/write-rule.ts` holds the resolver that reads one and core's
-// own rule (every place answers `'anywhere'`, until the core lock composes onto it).
+// own rule (every place answers `'anywhere'`). Core installs no place rule of its own.
 
-import type { EntryId } from './ids.js';
 import type { FieldEditable } from './field.js';
 import type { FieldLockQuery } from './field-lock.js';
 
 /**
  * One place to answer about: an Entry, the parent it would land under, and the parent it sits under
- * now. `parentId` is `undefined` for a place at the root; `currentParentId` is `undefined` for a
+ * now. `parent` is `undefined` for a place at the root; `currentParent` is `undefined` for a
  * root Entry, and for one `entries.add()` has not placed yet.
  *
- * `entry` is the same `FieldLockQuery` shape a lock rule reads — a rule that already knows how to
- * answer "is this Entry, or one of its descendants, locked" reads the identical shape here.
+ * Each of the three is the same `FieldLockQuery` shape a lock rule reads. A rule reads the id as
+ * `place.parent?.id`. A rule for a subtree writes `place.parent?.isDescendantOf(root)`, with no
+ * lookup of its own.
  */
 export interface PlaceQuery {
   readonly entry: FieldLockQuery;
-  readonly parentId: EntryId | undefined;
-  readonly currentParentId: EntryId | undefined;
+  readonly parent: FieldLockQuery | undefined;
+  readonly currentParent: FieldLockQuery | undefined;
 }
 
 /**
@@ -31,7 +31,7 @@ export interface PlaceQuery {
  *
  * Asked once for a cross-parent move and once for a same-parent one (`entries.update()`'s
  * `siblingIndex` alone, or `add()`'s own group) — a same-parent answer is the rule's to give, not the
- * seam's, so a plugin decides whether children may reorder under a locked parent.
+ * seam's, so a plugin decides whether children may reorder under a frozen parent.
  */
 export type PlaceRule = (place: PlaceQuery) => FieldEditable;
 
@@ -41,11 +41,11 @@ export type PlaceRule = (place: PlaceQuery) => FieldEditable;
  *
  * ```ts
  * ctx.edits.setPlaceRule((next) => (place) =>
- *   isLocked(place.parentId) ? 'api' : next(place));
+ *   place.parent?.id === frozenParentId ? 'api' : next(place));
  * ```
  *
- * That reads: set the place rule — a place under a locked parent opens to the API only, else ask the
- * next rule. Answering `'api'` on `currentParentId` refuses giving up a child the same way answering
- * it on `parentId` refuses taking one in.
+ * That reads: set the place rule — a place under the frozen parent opens to the API only, else ask the
+ * next rule. Answering `'api'` on `currentParent` refuses giving up a child the same way answering
+ * it on `parent` refuses taking one in.
  */
 export type PlaceRuleWrapper = (next: PlaceRule) => PlaceRule;

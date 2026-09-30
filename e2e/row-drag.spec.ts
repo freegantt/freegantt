@@ -380,7 +380,7 @@ test('with "Lock tree" checked, a vertical drag refuses and leaves parentId unch
 
 // #612: the lock is a core Field now, reached through the right-click "Lock" command instead of a
 // harness plugin — locking one parent, not the whole tree, is what a real consumer's lock looks like.
-test("a bar dropped into a locked parent's middle refuses, and leaves parentId unchanged", async ({
+test("a bar dropped into a locked parent's middle commits: the lock protects only its own row", async ({
   page,
 }) => {
   await gotoGeneric(page);
@@ -416,10 +416,11 @@ test("a bar dropped into a locked parent's middle refuses, and leaves parentId u
 
   await dragBarTo(page, grabX, grabY, grabX, targetBand.y + targetBand.height / 2);
 
-  await expect(page.locator('#gantt')).toHaveAttribute('data-drop', 'refused');
+  await expect(page.locator('#gantt')).not.toHaveAttribute('data-drop', 'refused');
 
   await page.mouse.up();
-  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
+  await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(target.entryId);
+  expect(leafParentId).not.toBe(target.entryId);
 });
 
 test('holding a vertical bar drag at the bottom edge scrolls the rows, and the drop lands on a row that was off screen', async ({

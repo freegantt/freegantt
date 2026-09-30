@@ -17,6 +17,8 @@ export type {
   FieldLockQuery,
   FieldLockRule,
   FieldLockRuleWrapper,
+  BarMoveRule,
+  BarMoveRuleWrapper,
   PlaceQuery,
   PlaceRule,
   PlaceRuleWrapper,

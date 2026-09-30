@@ -1,4 +1,14 @@
 import { test, expect } from '@playwright/test';
+import {
+  currentParentId,
+  dragPointerTo,
+  firstGrabbableBar,
+  headerBox,
+  rowBand,
+  rowPlan,
+  type RowInfo,
+  timelinePaneBox,
+} from './row-drag-support.js';
 
 declare global {
   interface Window {
@@ -54,6 +64,64 @@ test('a locked row opens no Name editor, and its bar does not drag', async ({ pa
   await page.mouse.up();
   const after = await page.evaluate((id) => window.__dataset.entries.get(id)!.start?.toString(), entryId);
   expect(after).toBe(before);
+});
+
+// A lock protects only its own row. The children of a locked parent stay free: a user drags one out.
+test('an unlocked child leaves a locked parent by a bar drag', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const leafIds = await page.evaluate(() =>
+    window.__dataset.entries.all
+      .filter((e) => e.parent() !== undefined && e.children().length === 0)
+      .map((e) => String(e.id)),
+  );
+  const childId = leafIds[0]!;
+  const lockedParentId = (await currentParentId(page, childId))!;
+
+  // Locks first: checking the box scrolls the page, and the geometry below must read after that.
+  await page.evaluate((id) => {
+    window.__gantt.selectedEntryIds = [id];
+  }, lockedParentId);
+  await page.locator('#lock-checkbox').check();
+  expect(await page.evaluate((id) => window.__dataset.entries.get(id)!.read('locked'), lockedParentId)).toBe(
+    true,
+  );
+
+  await page.evaluate((id) => window.__gantt.reveal(id), childId);
+  await page.locator('#gantt').scrollIntoViewIfNeeded();
+  const rows = (await rowPlan(page)).filter((row) => row.hasOwnBar);
+  const pane = await timelinePaneBox(page);
+  const header = await headerBox(page);
+  const {
+    row: child,
+    grabX,
+    grabY,
+  } = await firstGrabbableBar(
+    page,
+    rows.filter((row) => row.entryId === childId),
+    pane,
+    header,
+  );
+  let target: RowInfo | undefined;
+  let targetBand: { y: number; height: number } | undefined;
+  for (const row of rows.filter((r) => r.childCount > 0 && r.entryId !== lockedParentId)) {
+    const band = await rowBand(page, row.rowId).boundingBox();
+    if (band && band.y > header.y + header.height && band.y + band.height < pane.y + pane.height) {
+      target = row;
+      targetBand = band;
+      break;
+    }
+  }
+  if (!target || !targetBand) throw new Error('no other parent row is on screen');
+
+  await dragPointerTo(page, grabX, grabY, grabX, targetBand.y + targetBand.height / 2);
+  await expect(page.locator('#gantt')).not.toHaveAttribute('data-drop', 'refused');
+  await page.mouse.up();
+
+  await expect.poll(() => currentParentId(page, child.entryId)).toBe(target.entryId);
+  expect(await page.evaluate((id) => window.__dataset.entries.get(id)!.read('locked'), lockedParentId)).toBe(
+    true,
+  );
 });
 
 // A Delete on a locked row removes nothing. The library reports it once, and the page toasts it.

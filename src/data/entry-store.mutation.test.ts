@@ -989,7 +989,7 @@ describe("a plugin's place rule gates an explicit move (ADR 0038)", () => {
 
   it("refuses a move into a parent the rule answers 'never' for, and stages nothing", () => {
     const state = placeDataset();
-    state.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'never' : next(place)));
+    state.setPlaceRule((next) => (place) => (place.parent?.id === entryId('p2') ? 'never' : next(place)));
 
     expect(() => state.entries.update('c1', { parentId: 'p2' })).toThrow(PlaceRefusedError);
     expect(state.entries.get('c1')!.read('parentId')).toBe(entryId('p1'));
@@ -997,29 +997,54 @@ describe("a plugin's place rule gates an explicit move (ADR 0038)", () => {
 
   it("commits a move into a parent the rule answers 'api' for", () => {
     const state = placeDataset();
-    state.setPlaceRule((next) => (place) => (place.parentId === entryId('p2') ? 'api' : next(place)));
+    state.setPlaceRule((next) => (place) => (place.parent?.id === entryId('p2') ? 'api' : next(place)));
 
     state.entries.update('c1', { parentId: 'p2' });
     expect(state.entries.get('c1')!.read('parentId')).toBe(entryId('p2'));
   });
 
-  it('reads currentParentId as the child moves out of a parent, so giving up a child is refusable', () => {
+  it('reads currentParent as the child moves out of a parent, so giving up a child is refusable', () => {
     const state = placeDataset();
     const seen: Array<EntryId | undefined> = [];
     state.setPlaceRule((next) => (place) => {
-      seen.push(place.currentParentId);
-      return place.currentParentId === entryId('p1') ? 'never' : next(place);
+      seen.push(place.currentParent?.id);
+      return place.currentParent?.id === entryId('p1') ? 'never' : next(place);
     });
 
     expect(() => state.entries.update('c1', { parentId: 'p2' })).toThrow(PlaceRefusedError);
     expect(seen).toContain(entryId('p1'));
   });
 
-  it('a same-parent siblingIndex move asks with parentId equal to currentParentId', () => {
+  it('hands the same cached query to every ask, so a hover allocates no query', () => {
+    const state = placeDataset();
+    const seen: Array<{ entry: unknown; parent: unknown; currentParent: unknown }> = [];
+    state.setPlaceRule((next) => (place) => {
+      seen.push({ entry: place.entry, parent: place.parent, currentParent: place.currentParent });
+      return next(place);
+    });
+
+    state.placeableOf('c1', 'p2');
+    state.placeableOf('c1', 'p2');
+
+    expect(seen).toHaveLength(2);
+    expect(seen[1]!.entry).toBe(seen[0]!.entry);
+    expect(seen[1]!.parent).toBe(seen[0]!.parent);
+    expect(seen[1]!.currentParent).toBe(seen[0]!.currentParent);
+  });
+
+  it('a subtree rule reads the target parent with no dataset lookup', () => {
+    const state = placeDataset();
+    state.setPlaceRule((next) => (place) => (place.parent?.isDescendantOf('p1') ? 'never' : next(place)));
+
+    expect(state.placeableOf('c1', 'c2')).toBe('never');
+    expect(state.placeableOf('c1', 'p2')).toBe('anywhere');
+  });
+
+  it('a same-parent siblingIndex move asks with the same parent as currentParent', () => {
     const state = placeDataset();
     let asked: { parentId: EntryId | undefined; currentParentId: EntryId | undefined } | undefined;
     state.setPlaceRule((next) => (place) => {
-      asked = { parentId: place.parentId, currentParentId: place.currentParentId };
+      asked = { parentId: place.parent?.id, currentParentId: place.currentParent?.id };
       return next(place);
     });
 
@@ -1027,11 +1052,11 @@ describe("a plugin's place rule gates an explicit move (ADR 0038)", () => {
     expect(asked).toEqual({ parentId: entryId('p1'), currentParentId: entryId('p1') });
   });
 
-  it('entries.add() asks with currentParentId undefined — the row has no place yet', () => {
+  it('entries.add() asks with currentParent undefined — the row has no place yet', () => {
     const state = placeDataset();
     let asked: { currentParentId: EntryId | undefined } | undefined;
     state.setPlaceRule((next) => (place) => {
-      asked = { currentParentId: place.currentParentId };
+      asked = { currentParentId: place.currentParent?.id };
       return next(place);
     });
 
@@ -1100,11 +1125,11 @@ describe("a plugin's remove rule gates entries.remove() (#611)", () => {
     expect(state.entries.has('p')).toBe(false);
   });
 
-  it('asks once per subtree member, each with its own currentParentId', () => {
+  it('asks once per subtree member, each with its own currentParent', () => {
     const state = removeDataset();
     const seen: Array<{ id: EntryId; currentParentId: EntryId | undefined }> = [];
     state.setRemoveRule((next) => (removal) => {
-      seen.push({ id: removal.entry.id, currentParentId: removal.currentParentId });
+      seen.push({ id: removal.entry.id, currentParentId: removal.currentParent?.id });
       return next(removal);
     });
 
