@@ -563,16 +563,17 @@ timeShadingToggle.addEventListener('change', () => {
   }
 });
 
-// Which commands does an entry menu show? — Delete, Lock and Unlock, the same three for the
-// right-clicked bar, its grid row, or the menu key on a selected row (context-menu.ts and the
+// Which commands does an entry menu show? — Delete, Clear dates, Lock and Unlock, the same four for
+// the right-clicked bar, its grid row, or the menu key on a selected row (context-menu.ts and the
 // keymap both resolve through `resolveActedOn`, `api/command.ts`). Right-clicking empty timeline
-// or an unpopulated grid stretch leaves `ctx.entry` undefined, so none of the three show there —
+// or an unpopulated grid stretch leaves `ctx.entry` undefined, so none of the four show there —
 // background right-clicks stay on "Collapse all"/"Expand all".
 //
-// Why is one of them the library's own? — `freegantt.deleteSelection` ships with core (#212, ADR
+// Why are two of them the library's own? — `freegantt.deleteSelection` ships with core (#212, ADR
 // 0010) and is already bound to the `Delete` key, so the page adds nothing for Delete. It reads
-// `ctx.target.entryIds` and removes every one of those records (`src/view/core-commands.ts` states
-// the dispatch rule).
+// `ctx.target.entryIds` and removes every one of those records, on a bar as on a row.
+// `freegantt.clearDates` also ships with core (#648). It has no key, and it lists itself only when
+// an acted-on Entry has dates of its own to clear.
 //
 // Which commands move a row in the tree? — Move up, Move down, Indent and Outdent ship with core.
 // The same four commands run from the keyboard, so the menu is the path for a bar, which keeps
@@ -587,6 +588,7 @@ const ENTRY_CONTEXT_COMMAND_IDS = [
   'freegantt.indentEntry',
   'freegantt.outdentEntry',
   'freegantt.deleteSelection',
+  'freegantt.clearDates',
   'demo.lockEntry',
   'demo.unlockEntry',
 ];

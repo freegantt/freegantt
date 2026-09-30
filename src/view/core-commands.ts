@@ -47,14 +47,18 @@ export interface CoreCommandPorts {
   /** Switches the focused toggle cell, through the same gates a click asks. A closed toggle does
    *  nothing. */
   switchFocusedToggle(): void;
-  /** ADR 0012: may this Entry's own dates be cleared? A rolling-up parent's cannot — the Rollup
-   *  writes them, not the user (ADR 0013) — so a Delete on its bar passes over it and the row
-   *  stays, which is what `e2e/hierarchy.spec.ts` pins. A dateless Entry has nothing to clear and
-   *  answers `false` too. */
-  canClearDates(id: EntryId): boolean;
-  /** ADR 0012: clears both dates of the Entry a bar draws. One transaction, undoable as one press,
-   *  the same door a cell edit writes through. */
+  /** ADR 0012: does "Clear dates" have something to clear on this Entry? A rolling-up parent's
+   *  dates are not its own — the Rollup writes them (ADR 0013) — and a dateless Entry has none. Both
+   *  answer `false`. */
+  hasDatesToClear(id: EntryId): boolean;
+  /** ADR 0012: clears both dates of one Entry. The caller wraps the calls in one transaction, so the
+   *  whole command is one undo step. */
   clearDates(id: EntryId): void;
+  /** Which of these Entries may a user not clear the dates of? A lock or a writable rule refuses.
+   *  Empty means the whole command may go ahead. */
+  refusedClears(ids: readonly EntryId[]): readonly EntryId[];
+  /** Tells the app that "Clear dates" cleared nothing, and names the Entries that stopped it. */
+  reportClearRefused(ids: readonly EntryId[]): void;
   /** Which of these Entries may a user not delete? A locked row is one, and so is a parent that
    *  holds a locked row. Empty means the whole Delete may go ahead. */
   refusedRemovals(ids: readonly EntryId[]): readonly EntryId[];
@@ -199,53 +203,64 @@ export function registerCoreCommands(
   registerEntryStepCommand('freegantt.indentEntry', 'Indent', 'indent');
   registerEntryStepCommand('freegantt.outdentEntry', 'Outdent', 'outdent');
   // #212, ADR 0010, ADR 0025: the right-click menu and the `Delete` key run this one command, and
-  // every target kind names the Entries it acts on in `entryIds` — ADR 0025 retired the second id
-  // set a `'bar'` target used to carry.
+  // every target kind names the Entries it acts on in `entryIds`.
   //
-  // What the two target kinds *mean* stays apart, and ADR 0012 is where that is written: "Keyboard
-  // Delete on a bar un-dates both dates ... `entries.remove(id)` deletes the row ... Two intents."
-  // A bar is a drawing of a span, so deleting it clears the span and leaves the record; a grid row
-  // or cell names the record itself, so deleting it removes the record. ADR 0026 changed what a bar
-  // *is*, not which of the two doors a Delete opens — a segment bar un-dates the child Entry
-  // it draws, exactly as a Segment delete used to drop one drawn stretch.
+  // Delete removes the Entry, on a row, a cell, or a bar. A bar names one Entry, so it never clears
+  // dates (ADR 0012, amended). "Clear dates" below is the only command that does.
   //
-  // A row Delete is all or nothing. One refused row stops the whole Delete, and it makes one report.
-  // The removals share one transaction, so one Delete is one undo step.
+  // A Delete is all or nothing. One refused Entry stops the whole Delete, and it makes one report.
+  // The removals share one transaction, so one Delete is one undo step. A Variant that draws several
+  // bars for one Entry names that Entry once.
   //
   // A `beforeChange` handler may refuse the removal. That refusal is a normal outcome, not a fault,
   // so it stops here instead of reaching `CommandRegistry.run` uncaught (the same swallow `api/`'s
   // `attemptMutation` does; `view/` cannot import `api/`, so this repeats that one line inline).
+  const runInOneTransaction = (ctx: unknown, write: () => void): void => {
+    try {
+      asCtx(ctx).dataset?.transaction(write);
+    } catch (error) {
+      if (!(error instanceof MutationCancelledError)) throw error;
+    }
+  };
   register({
     id: 'freegantt.deleteSelection',
     label: 'Delete',
     when: (ctx) => (asCtx(ctx).target?.entryIds?.length ?? 0) > 0,
     run: (ctx) => {
-      const target = asCtx(ctx).target;
-      if (target === undefined) return;
-      const ids = target.entryIds ?? [];
-      if (target.kind !== 'bar') {
-        const refused = ports.refusedRemovals(ids);
-        if (refused.length > 0) {
-          ports.reportRemoveRefused(refused);
-          return;
+      const ids = asCtx(ctx).target?.entryIds ?? [];
+      const refused = ports.refusedRemovals(ids);
+      if (refused.length > 0) {
+        ports.reportRemoveRefused(refused);
+        return;
+      }
+      runInOneTransaction(ctx, () => {
+        for (const id of ids) {
+          // A parent's removal already took a selected child, so that child is gone by now.
+          if (asCtx(ctx).dataset?.entries.has(id) === true) asCtx(ctx).dataset?.entries.remove(id);
         }
+      });
+    },
+  });
+  // Which commands clear dates? This one, from the context menu or `commands.run`. It has no key, so
+  // a key next to Delete cannot mistake one for the other. An Entry with no date of its own to clear
+  // is passed over, and a menu with no such Entry does not list the command. A refusal is not a pass:
+  // one locked Entry stops the whole command.
+  const clearableIds = (ctx: unknown): readonly EntryId[] =>
+    (asCtx(ctx).target?.entryIds ?? []).filter((id) => ports.hasDatesToClear(id));
+  register({
+    id: 'freegantt.clearDates',
+    label: 'Clear dates',
+    when: (ctx) => clearableIds(ctx).length > 0,
+    run: (ctx) => {
+      const ids = clearableIds(ctx);
+      const refused = ports.refusedClears(ids);
+      if (refused.length > 0) {
+        ports.reportClearRefused(refused);
+        return;
       }
-      try {
-        asCtx(ctx).dataset?.transaction(() => {
-          for (const id of ids) {
-            if (target.kind === 'bar') {
-              // A bar whose dates are derived has none of its own to clear (ADR 0013). The command
-              // passes over it rather than throwing `DerivedFieldNotWritableError` out of a keypress.
-              if (ports.canClearDates(id)) ports.clearDates(id);
-            } else if (asCtx(ctx).dataset?.entries.has(id) === true) {
-              // A parent's removal already took a selected child, so that child is gone by now.
-              asCtx(ctx).dataset?.entries.remove(id);
-            }
-          }
-        });
-      } catch (error) {
-        if (!(error instanceof MutationCancelledError)) throw error;
-      }
+      runInOneTransaction(ctx, () => {
+        for (const id of ids) ports.clearDates(id);
+      });
     },
   });
   // #160: registered first and inert (`when` always declines), so a Gantt with no

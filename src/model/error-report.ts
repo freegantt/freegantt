@@ -42,9 +42,12 @@ export type BuiltInReportCode =
   | 'mutation-cancelled'
   | 'entry-move-cancelled'
   | 'entry-resize-cancelled'
-  // A row Delete stopped by the remove rule: a locked row, or a parent that holds one, is one case. Nothing was
-  // removed. `entryId` names the first refused row, and `message` names them all.
+  // A row or bar Delete stopped by the remove rule: a locked Entry, or a parent that holds one, is one
+  // case. Nothing was removed. `entryId` names the first refused Entry, and `message` names them all.
   | 'entry-remove-refused'
+  // "Clear dates" stopped by a lock or a writable rule. Nothing was cleared. `entryId` names the first
+  // refused Entry, and `message` names them all.
+  | 'entry-clear-dates-refused'
   // A keyboard step that moves an Entry in the tree and changes nothing: the first sibling steps up,
   // a root outdents, or a capability or place rule says no. `by: 'core'` and `severity: 'info'`, so
   // the live region announces `message` to a screen reader.
@@ -227,7 +230,7 @@ export interface ErrorReport {
   readonly by: ErrorReporter;
   /** Why the refusal happened, in the words of whoever refused — a `before*` handler's own sentence,
    *  verbatim (#210). Present when a handler called `refuse(reason)`; a bare `false` leaves it
-   *  `undefined`. Core also sets it on `'entry-remove-refused'`, where the library refuses and says why. `message` quotes it too, so a console fallback prints it; this member is here so a
+   *  `undefined`. Core also sets it on `'entry-remove-refused'` and `'entry-clear-dates-refused'`, where the library refuses and says why. `message` quotes it too, so a console fallback prints it; this member is here so a
    *  consumer can show their own words without core's framing around them. */
   readonly reason?: string;
   /** Why core dropped a gesture on its own — present only on `'entry-move-dropped'` and
