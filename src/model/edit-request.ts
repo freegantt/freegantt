@@ -83,3 +83,22 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
  * (`write-verdict.ts`), which reaches `plugin.ts` through `error-report.ts`'s `PluginId` import —
  * `plugin.ts` importing back from here would cycle. */
 export type ExtenderWrapper = (next: EditExtender) => EditExtender;
+
+/** The Entries this transaction removes on top of its body's own removals. Core calls it once per
+ *  transaction, after the body and before the `EditExtender`, and never on a drag preview.
+ *
+ *  A returned id takes its whole subtree with it, the same as `entries.remove(id)`. An id the store
+ *  does not know, or one this transaction already removes, is skipped in silence. The call does not
+ *  repeat: the hook returns its whole closure in one answer. It does not ask the lock. */
+export type RemovalExtender = (request: EditRequest) => ReadonlySet<EntryId>;
+
+/**
+ * How installing a removal extender composes. `next` is the hook's current occupant — a function
+ * that returns no id when nothing has claimed it yet.
+ *
+ * ```ts
+ * ctx.edits.setRemovalExtender((next) => (request) => new Set([...next(request), ...mine(request)]));
+ * ```
+ *
+ * Lives beside `RemovalExtender` for the same reason `ExtenderWrapper` lives beside `EditExtender`. */
+export type RemovalExtenderWrapper = (next: RemovalExtender) => RemovalExtender;

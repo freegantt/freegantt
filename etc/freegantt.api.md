@@ -410,6 +410,8 @@ export interface DatasetEditHook {
     setLockRule(wrap: FieldLockRuleWrapper): void;
     // (undocumented)
     setPlaceRule(wrap: PlaceRuleWrapper): void;
+    // (undocumented)
+    setRemovalExtender(wrap: RemovalExtenderWrapper): void;
 }
 
 // @public
@@ -2058,6 +2060,12 @@ export class RegistrationClosedError extends FreeGanttError {
     // (undocumented)
     readonly pluginId: PluginId;
 }
+
+// @public
+export type RemovalExtender = (request: EditRequest) => ReadonlySet<EntryId>;
+
+// @public
+export type RemovalExtenderWrapper = (next: RemovalExtender) => RemovalExtender;
 
 // @public
 export class RendererAlreadyRegisteredError extends FreeGanttError {

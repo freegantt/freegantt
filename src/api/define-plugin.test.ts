@@ -5,7 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { Dataset } from './dataset.js';
 import { Gantt } from './gantt.js';
 import { definePlugin } from './define-plugin.js';
-import { DuplicatePluginIdError, PluginNotInstalledError, PluginSetupError } from '../model/index.js';
+import {
+  DuplicatePluginIdError,
+  PluginNotInstalledError,
+  PluginSetupError,
+  entryId,
+} from '../model/index.js';
+import type { ChangeSet } from '../model/index.js';
 import type { ChromePlugin, DataPlugin } from './index.js';
 
 const entries = [
@@ -396,5 +402,36 @@ describe('a plugin names its own keys', () => {
     gantt.uninstallPlugin('demo.marks');
     gantt.installPlugin(marks());
     expect(gantt.hasPlugin('demo.marks')).toBe(true);
+  });
+});
+
+describe('a plugin removes an Entry through the removal hook', () => {
+  it('removes the parent of the last child in one ChangeSet and one undo step', () => {
+    const removesEmptyParent = definePlugin({
+      id: 'demo.tidy',
+      data(ctx) {
+        ctx.edits.setRemovalExtender(
+          () => (request) =>
+            request.removedEntryIds.has(entryId('t1')) && !request.hasChildren('p1')
+              ? new Set([entryId('p1')])
+              : new Set(),
+        );
+      },
+    });
+    const dataset = newDataset([removesEmptyParent]);
+    const changeSets: ChangeSet[] = [];
+    dataset.on('change', ({ changeSet }) => {
+      changeSets.push(changeSet);
+    });
+
+    dataset.entries.remove('t1');
+
+    expect(changeSets).toHaveLength(1);
+    expect(dataset.entries.has('p1')).toBe(false);
+
+    dataset.undo();
+
+    expect(dataset.entries.has('p1')).toBe(true);
+    expect(dataset.entries.has('t1')).toBe(true);
   });
 });
