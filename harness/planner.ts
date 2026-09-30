@@ -1,4 +1,4 @@
-import './harness-nav.ts';
+import { mountHarnessChrome } from './harness-nav.js';
 import {
   Gantt,
   Dataset,
@@ -25,6 +25,8 @@ import { plannerEntryInputs, plannerFieldOptions, plannerSpan } from '../fixture
 import type { PlannerEntryProps } from '../fixtures/planner-dataset.js';
 import { mountPlannerToolbar } from './planner-toolbar.js';
 import { mountPageBrief } from './docs/page-brief.js';
+
+mountHarnessChrome();
 
 // What this page shows, the config that does it, and the spec section behind it.
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'planner');

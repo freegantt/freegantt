@@ -37,8 +37,20 @@ function currentPageFile(pathname: string): string {
   return pathname.split('/').pop() || 'index.html';
 }
 
+/** A build can link the demo back to the site that hosts it: `VITE_HARNESS_HOME_URL=/`. Unset, the
+ *  nav shows no such link, as in `pnpm dev`. */
+function mountHomeLink(nav: HTMLElement): void {
+  const url = (import.meta as { env?: { VITE_HARNESS_HOME_URL?: string } }).env?.VITE_HARNESS_HOME_URL;
+  if (!url) return;
+  const link = document.createElement('a');
+  link.href = url;
+  link.textContent = '← FreeGantt site';
+  nav.append(link);
+}
+
 function mountHarnessNav(nav: HTMLElement): void {
   const current = currentPageFile(window.location.pathname);
+  mountHomeLink(nav);
   for (const page of shippedPages()) {
     const link = document.createElement('a');
     link.href = `./${page.file}`;
@@ -48,7 +60,9 @@ function mountHarnessNav(nav: HTMLElement): void {
   }
 }
 
-// Where can the reader go?
-document.querySelectorAll<HTMLElement>('.harness-site-nav').forEach(mountHarnessNav);
-// Which theme paints the page?
-document.querySelectorAll<HTMLElement>('.harness-theme-picker').forEach(mountThemePicker);
+/** Fills every page header: where the reader can go, and which theme paints the page. Each page
+ *  calls this once. A bare import would not do: a production build drops a module nothing uses. */
+export function mountHarnessChrome(): void {
+  document.querySelectorAll<HTMLElement>('.harness-site-nav').forEach(mountHarnessNav);
+  document.querySelectorAll<HTMLElement>('.harness-theme-picker').forEach(mountThemePicker);
+}

@@ -2,7 +2,7 @@
 
 ![FreeGantt demo: a Gantt chart being edited](https://freegantt.dev/img/video_1.5x.webp)
 
-**Live demo:** [Generic](https://freegantt.dev/demo/generic.html) · [Performance](https://freegantt.dev/demo/performance.html) · [Docs](https://freegantt.dev/docs/guardrails-overview)
+**Live demo:** [Planner](https://freegantt.dev/demo/) ([Light](https://freegantt.dev/demo/?theme=light) · [Dark](https://freegantt.dev/demo/?theme=dark) · [Paper](https://freegantt.dev/demo/?theme=paper)) · [Generic](https://freegantt.dev/demo/generic.html) · [Performance](https://freegantt.dev/demo/performance.html) · [Docs](https://freegantt.dev/docs/guardrails-overview)
 
 **An accessible Gantt chart.** A keyboard user can move, resize, reorder, and edit every task. A screen
 reader user hears the grid as an ARIA grid or tree grid, and a live region announces each refusal. Every

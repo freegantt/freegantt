@@ -8,11 +8,13 @@
 // `fit: 'preset'`), `harness/e2e/dense-tile-grid.ts` (the case for windowing) and
 // `harness/e2e/scroll-sync.ts` (two Gantts sharing one `TimeScaleModel`/`ScrollAxis` pair).
 
-import './harness-nav.ts';
+import { mountHarnessChrome } from './harness-nav.js';
 import { Gantt, Dataset, TimeScaleModel, ScrollAxis } from 'freegantt';
 import { seededEntryInputs } from '../fixtures/seeded-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { mountPageBrief } from './docs/page-brief.js';
+
+mountHarnessChrome();
 
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'performance');
 

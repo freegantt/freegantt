@@ -33,6 +33,13 @@ export function readStoredPageTheme(): PageTheme {
   }
 }
 
+/** The theme a link asks for: `planner.html?theme=paper`. `null` when the link names none. It beats
+ *  the stored choice, so a shared link opens in the theme its sender meant. */
+function readRequestedPageTheme(): PageTheme | null {
+  const requested = new URLSearchParams(window.location.search).get('theme');
+  return isPageTheme(requested) ? requested : null;
+}
+
 function storePageTheme(theme: PageTheme): void {
   try {
     localStorage.setItem(PAGE_THEME_STORAGE_KEY, theme);
@@ -71,5 +78,5 @@ export function mountThemePicker(container: HTMLElement): void {
     for (const { value, button } of buttons) button.setAttribute('aria-pressed', String(value === theme));
   }
 
-  pick(readStoredPageTheme());
+  pick(readRequestedPageTheme() ?? readStoredPageTheme());
 }
