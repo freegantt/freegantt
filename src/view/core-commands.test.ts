@@ -31,8 +31,10 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
     activateFocused: vi.fn(),
     focusedCellIsToggle: vi.fn(() => false),
     switchFocusedToggle: vi.fn(),
-    canClearDates: vi.fn(() => true),
+    hasDatesToClear: vi.fn(() => true),
     clearDates: vi.fn(),
+    refusedClears: vi.fn(() => []),
+    reportClearRefused: vi.fn(),
     refusedRemovals: vi.fn(() => []),
     reportRemoveRefused: vi.fn(),
     pageDown: vi.fn(),
@@ -195,8 +197,8 @@ describe('registerCoreCommands (S5.2)', () => {
     expect(redo).not.toHaveBeenCalled();
   });
 
-  describe('freegantt.deleteSelection on a row target', () => {
-    function deleteContext(entryIds: string[]) {
+  describe('freegantt.deleteSelection', () => {
+    function deleteContext(entryIds: string[], kind: 'row' | 'bar' | 'gridCell' = 'row') {
       const remove = vi.fn();
       const transaction = vi.fn((body: () => void) => body());
       const ctx = {
@@ -205,7 +207,7 @@ describe('registerCoreCommands (S5.2)', () => {
           transaction,
         } as unknown as CommandContext<unknown>['dataset'],
         gantt: {},
-        target: { kind: 'row' as const, entryIds: entryIds.map(entryId) },
+        target: { kind, entryIds: entryIds.map(entryId) },
       } as CommandContext<unknown>;
       return { ctx, remove, transaction };
     }
@@ -223,6 +225,33 @@ describe('registerCoreCommands (S5.2)', () => {
       expect(ports.reportRemoveRefused).not.toHaveBeenCalled();
     });
 
+    it.each(['row', 'gridCell', 'bar'] as const)('removes the Entry named by a %s target', (kind) => {
+      const ports = fakePorts();
+      const { ctx, remove } = deleteContext(['a'], kind);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      registry.run('freegantt.deleteSelection');
+
+      expect(remove.mock.calls).toEqual([['a']]);
+      expect(ports.clearDates).not.toHaveBeenCalled();
+    });
+
+    it('asks the remove rule for a bar target too, and a refusal writes nothing and reports once', () => {
+      const ports = fakePorts();
+      ports.refusedRemovals.mockReturnValue([entryId('a')]);
+      const { ctx, remove, transaction } = deleteContext(['a'], 'bar');
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      registry.run('freegantt.deleteSelection');
+
+      expect(ports.refusedRemovals).toHaveBeenCalledWith([entryId('a')]);
+      expect(remove).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+      expect(ports.reportRemoveRefused.mock.calls).toEqual([[[entryId('a')]]]);
+    });
+
     it('removes nothing and reports once when any row is refused', () => {
       const ports = fakePorts();
       ports.refusedRemovals.mockReturnValue([entryId('b')]);
@@ -235,6 +264,90 @@ describe('registerCoreCommands (S5.2)', () => {
       expect(remove).not.toHaveBeenCalled();
       expect(transaction).not.toHaveBeenCalled();
       expect(ports.reportRemoveRefused.mock.calls).toEqual([[[entryId('b')]]]);
+    });
+  });
+
+  describe('freegantt.clearDates', () => {
+    function clearContext(entryIds: string[], kind: 'row' | 'bar' | 'gridCell' | 'header' = 'bar') {
+      const transaction = vi.fn((body: () => void) => body());
+      const ctx = {
+        dataset: {
+          transaction,
+          entries: { has: () => true },
+        } as unknown as CommandContext<unknown>['dataset'],
+        gantt: {},
+        target: { kind, entryIds: entryIds.map(entryId) },
+      } as CommandContext<unknown>;
+      return { ctx, transaction };
+    }
+
+    it('is hidden when no acted-on Entry has dates to clear', () => {
+      const ports = fakePorts();
+      ports.hasDatesToClear.mockReturnValue(false);
+      const { ctx } = clearContext(['a', 'b']);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      expect(registry.available(ctx).map((command) => command.id)).not.toContain('freegantt.clearDates');
+    });
+
+    it('is hidden with no acted-on Entry at all', () => {
+      const ports = fakePorts();
+      const { ctx } = clearContext([], 'header');
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      expect(registry.available(ctx).map((command) => command.id)).not.toContain('freegantt.clearDates');
+    });
+
+    it('is offered, labelled "Clear dates", and has no key', () => {
+      const ports = fakePorts();
+      const { ctx } = clearContext(['a']);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      const command = registry.available(ctx).find((candidate) => candidate.id === 'freegantt.clearDates');
+      expect(command?.label).toBe('Clear dates');
+    });
+
+    it('clears every Entry that has dates in one transaction and passes over the rest', () => {
+      const ports = fakePorts();
+      ports.hasDatesToClear.mockImplementation((id: string) => id !== 'parent');
+      const { ctx, transaction } = clearContext(['a', 'parent', 'b']);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      registry.run('freegantt.clearDates');
+
+      expect(transaction).toHaveBeenCalledOnce();
+      expect(ports.clearDates.mock.calls).toEqual([['a'], ['b']]);
+      expect(ports.reportClearRefused).not.toHaveBeenCalled();
+    });
+
+    it('writes nothing and reports once when a gate refuses one Entry', () => {
+      const ports = fakePorts();
+      ports.refusedClears.mockReturnValue([entryId('b')]);
+      const { ctx, transaction } = clearContext(['a', 'b']);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      registry.run('freegantt.clearDates');
+
+      expect(ports.clearDates).not.toHaveBeenCalled();
+      expect(transaction).not.toHaveBeenCalled();
+      expect(ports.reportClearRefused.mock.calls).toEqual([[[entryId('b')]]]);
+    });
+
+    it('asks the gates only about the Entries it would clear', () => {
+      const ports = fakePorts();
+      ports.hasDatesToClear.mockImplementation((id: string) => id === 'a');
+      const { ctx } = clearContext(['a', 'parent']);
+      const registry = new CommandRegistry<unknown>(() => ctx);
+      registerCoreCommands(registry, ports);
+
+      registry.run('freegantt.clearDates');
+
+      expect(ports.refusedClears).toHaveBeenCalledWith([entryId('a')]);
     });
   });
 

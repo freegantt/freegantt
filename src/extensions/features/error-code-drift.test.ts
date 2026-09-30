@@ -19,6 +19,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'entry-move-cancelled': true,
   'entry-resize-cancelled': true,
   'entry-remove-refused': true,
+  'entry-clear-dates-refused': true,
   'entry-step-refused': true,
   'entry-move-dropped': true,
   'entry-resize-dropped': true,
