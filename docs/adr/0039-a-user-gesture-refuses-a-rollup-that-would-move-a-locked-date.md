@@ -1,8 +1,7 @@
 ---
 status: accepted — ruled 2026-09-29. Amends [ADR 0038](0038-an-entry-lock-is-core-and-uses-the-plugin-seams.md)
   — the core lock now also closes an ancestor's date against the Rollup, on the user-gesture side
-  only. Working material: `plan-610.md` (issue
-  [#610](https://github.com/Pawel-IT/FreeGantt/issues/610)).
+  only. Issue [#610](https://github.com/Pawel-IT/FreeGantt/issues/610).
 decided: a user gesture refuses outright when the Rollup it would trigger changes `start` or `end` on
   an Entry a lock holds — moving the value later, earlier, or to any date other than the one it holds
   now. App code (`entries.update()`, `add()`), an `EditExtender` cascade, load, sync, undo and redo
@@ -62,6 +61,10 @@ gesture, not just the parent's write, when it would.**
   once, per armed gesture, whether any drafted Entry's ancestor holds a date the gesture could ever
   touch. A gesture with no such ancestor never asks the Rollup a second time for this (I5) — the same
   cost a `place` drop's own ghost already pays.
+- `#commit` walks the ancestors once more when arming found none. A lock that app code sets during a
+  drag still refuses at commit. The walk runs once per commit, never per pointer-move.
+- A flat or grouped row source plans no row for the locked ancestor. The refusal then paints on the
+  grabbed Entry's own row, so the preview still shows what the commit will do.
 
 ## Rejected alternatives
 
@@ -90,4 +93,4 @@ gesture, not just the parent's write, when it would.**
 ## Out of scope
 
 - `rollUpWalkFrom` — a per-frame copy the pipeline's Rollup call still pays under a locked ancestor,
-  accepted for this slice; a follow-up issue tightens it.
+  accepted for this slice; [#622](https://github.com/freegantt/freegantt/issues/622) tightens it.
