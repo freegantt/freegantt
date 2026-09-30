@@ -99,9 +99,9 @@ export function attachEntryGestures(
    *  The rest of that drag then does nothing, and `move()` stops asking. */
   let sessionRefused = false;
 
-  /** A resize arms on its edge alone. A bar drag arms on `move` or `reorder`, so its session waits
-   *  for the axis lock: a row-axis drag asks `reorder`, a time-axis drag asks `move` (#615). */
-  function gestureFor(axis: DragAxis): EntryGesture {
+  /** A resize arms on its edge alone, so it reads no axis. A bar drag arms on `move` or `reorder`,
+   *  and the axis lock picks one: a row-axis drag asks `reorder`, a time-axis drag asks `move`. */
+  function gestureFor(axis: DragAxis | undefined): EntryGesture {
     if (grabbedEdge !== undefined) return { kind: 'resize', edge: grabbedEdge };
     return axis === 'y' ? { kind: 'reorder' } : { kind: 'move' };
   }
@@ -119,7 +119,7 @@ export function attachEntryGestures(
     ctx.selection.propose([grabbedEntryId]);
   }
 
-  function armSession(axis: DragAxis): void {
+  function armSession(axis: DragAxis | undefined): void {
     selectGrabbedBar();
     session = ctx.session(grabbedId!, gestureFor(axis));
     sessionRefused = session === undefined;
@@ -138,8 +138,9 @@ export function attachEntryGestures(
     {
       start(): boolean {
         if (grabbedId === undefined) return false;
-        // A resize knows its session now. A bar drag waits for `move()`, where the axis is known.
-        if (grabbedEdge !== undefined) armSession('x');
+        // A resize reads no axis, so it asks for its session now. A bar drag asks in `move()`, once
+        // the axis is known. A refused bar session there ends in no drag and keeps the Selection.
+        if (grabbedEdge !== undefined) armSession(undefined);
         return grabbedEdge === undefined || session !== undefined;
       },
       // `dyPx` only tells travel from no travel. A row drop reads the pointer's content-y instead —
