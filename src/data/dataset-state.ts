@@ -24,6 +24,8 @@ import type {
   EntryEdits,
   ProposedEdits,
   ExtenderWrapper,
+  RemovalExtender,
+  RemovalExtenderWrapper,
   HierarchySource,
   HierarchySourceWrapper,
   ReplayOptions,
@@ -37,7 +39,7 @@ import { storedParentSource } from './hierarchy-source.js';
 import { toEditsReading } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import { identityExtender } from './edit-extension.js';
+import { EMPTY_ENTRY_IDS, identityExtender } from './edit-extension.js';
 import { PluginStores } from './plugin-store.js';
 import { EventBus } from './event-bus.js';
 import { buildSiblingIndexDroppedReport, createErrorRaiser, raiseErrorOn } from './error-reporting.js';
@@ -143,6 +145,8 @@ export class DatasetState implements Dataset {
    *  plugin wraps whatever is already there, so `data/` still holds one field and calls it
    *  at one site. */
   #editExtender: EditExtender;
+  /** The removal hook's current occupant. It returns no id until a plugin composes onto it. */
+  #removalExtender: RemovalExtender = () => EMPTY_ENTRY_IDS;
   /** `runTransaction`'s notification channel. Internal only, same reasoning as
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
@@ -272,6 +276,18 @@ export class DatasetState implements Dataset {
     }
   }
 
+  /** The commit path's door onto the removal hook: calls the occupant once, with
+   *  `runningExtensionHook` set, so a store write from inside it throws
+   *  `MutationDuringExtensionHookError` — the same guard the edit extender has. */
+  removalsFor(request: EditRequest): ReadonlySet<EntryId> {
+    this.runningExtensionHook = true;
+    try {
+      return this.#removalExtender(request);
+    } finally {
+      this.runningExtensionHook = false;
+    }
+  }
+
   /** The one door onto the extension hook (D4): calls the current occupant and hands back
    *  what it returns. `api/dataset.ts`'s `extraEditsFor(dataset, request)` (the friend function this
    *  mirrors, ADR 0007) and `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two —
@@ -355,6 +371,12 @@ export class DatasetState implements Dataset {
    *  no priority machinery and `EditExtenderConflictError` never gets written. */
   setExtender(wrap: ExtenderWrapper): void {
     this.#editExtender = wrap(this.#editExtender);
+  }
+
+  /** Call: `ctx.edits.setRemovalExtender((next) => (request) => new Set([...next(request), ...mine(request)]))`.
+   *  Installing composes onto the current occupant, the same as `setExtender` above. */
+  setRemovalExtender(wrap: RemovalExtenderWrapper): void {
+    this.#removalExtender = wrap(this.#removalExtender);
   }
 
   /** The per-entry lock rule every write door reads (#473, I14). Core's own bottom occupant answers
