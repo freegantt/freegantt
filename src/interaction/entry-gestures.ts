@@ -125,7 +125,20 @@ export function attachEntryGestures(
     sessionRefused = session === undefined;
   }
 
+  /** The last row-axis pointer reading, so a scroll step can preview again with no pointer move. */
+  let lastClientY = 0;
+  let lastCursorX = 0;
+
+  function previewRowAxis(): void {
+    session?.preview(0, {
+      suspendSnap: true,
+      cursorX: lastCursorX,
+      contentY: ctx.contentYAtClientY(lastClientY),
+    });
+  }
+
   function endGrab(): void {
+    ctx.rowEdgeScroll.stop();
     session = undefined;
     sessionRefused = false;
     grabbedId = undefined;
@@ -168,11 +181,16 @@ export function attachEntryGestures(
         const rect = pane.getBoundingClientRect();
         const offsetX = e.clientX - rect.left;
         const rowAxisLocked = grabbedEdge === undefined && axis === 'y';
-        session.preview(rowAxisLocked ? 0 : dxPx, {
-          suspendSnap: true,
-          cursorX: ctx.contentXAtPaneOffset(offsetX),
-          ...(rowAxisLocked ? { contentY: ctx.contentYAtClientY(e.clientY) } : undefined),
-        });
+        const cursorX = ctx.contentXAtPaneOffset(offsetX);
+        if (!rowAxisLocked) {
+          session.preview(dxPx, { suspendSnap: true, cursorX });
+          return;
+        }
+        lastClientY = e.clientY;
+        lastCursorX = cursorX;
+        previewRowAxis();
+        // A row-axis drag held near the rows' edge scrolls them, so a drop can reach an off-screen row.
+        ctx.rowEdgeScroll.follow(e.clientY, previewRowAxis);
       },
       commit(e, dxPx, _dyPx, axis): void {
         // The committed value snaps to the preset's tick unit unless Alt held it off for fine
@@ -465,6 +483,7 @@ export function attachEntryGestures(
 
   return {
     detach(): void {
+      ctx.rowEdgeScroll.stop();
       drag.detach();
       rowReorder.detach();
       pane.removeEventListener('pointerdown', onPointerDown);
