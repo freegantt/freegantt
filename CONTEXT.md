@@ -338,6 +338,13 @@ _Avoid_: cell on its own in a type, a config key or a literal; Timeline cell, Bu
 What one Grid column paints its own cells with (`ColumnRenderer`, `GridColumn.columnRenderer`). Declared once per column, so it needs no `column` or `row` argument. Distinct from the **Grid cell renderer** (`GridCellRenderer`, `GanttOptions.gridCellRenderer`, renderer point `'gridCell'`), which is Gantt-wide and receives both. A per-column renderer wins over the Gantt-wide one for its own column. Core ships two Column renderers: `meter()` and `image()`, both taking `()` like `diamond()`.
 _Avoid_: `cellRenderer` / `CellRenderer` (retired — the per-column one is `columnRenderer`, the Gantt-wide one is `gridCellRenderer`), `meterCell()` / `imageCell()` (retired — `meter()` / `image()`)
 
+**Toggle column**:
+A Grid column on a `boolean` Field that a user switches with one click, or with `Space` or `Enter` on the focused cell (`GridColumn.toggle`). It shows an `on` and an `off` icon, or a checkbox look by default. The default action writes the opposite value, one undo step. The optional `onToggle` replaces that write and calls `announceEdit()` after it. The Field's `editable`, the lock rule, `capabilities.edit` and `beforeChange` gate it; a closed toggle draws its value and does nothing. It opens no editor. The library writes its accessible name: `role="checkbox"`, `aria-checked`, and the column `header` as the name.
+_Avoid_: checkbox column (a **Toggle column** may show any icon)
+
+**Column header renderer**:
+What one Grid column paints its own header cell with (`ColumnHeaderRenderer`, `GridColumn.headerRenderer`). It wins over the Gantt-wide `headerRenderer` for its column. The column's `header` string stays the header cell's accessible name.
+
 **Column helper**:
 What `createGridColumnHelper(dataset)` returns. Its `column(field, options)` writes a Grid column and types the Column renderer's `fieldValue` from that key, the same type `entry.read(field)` answers. It is optional: `column()` returns the plain column object, and a plain column object reads `fieldValue` as `unknown`. It knows the core keys and the Dataset's props keys. A plugin key or an undeclared computed key takes a plain column object.
 _Avoid_: column builder (it holds no state and builds nothing up), column factory

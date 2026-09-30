@@ -33,7 +33,9 @@ function isApplePlatform(): boolean {
  *  again at match time. */
 export function normalizeChord(chord: string, applePlatform: boolean = isApplePlatform()): NormalizedChord {
   const parts = chord.split('+').map((part) => part.trim());
-  const key = parts[parts.length - 1]!.toLowerCase();
+  // `KeyboardEvent.key` spells the space bar as one space. A chord spells it `Space`.
+  const spelled = parts[parts.length - 1]!.toLowerCase();
+  const key = spelled === 'space' ? ' ' : spelled;
   const modifiers = new Set(parts.slice(0, -1).map((part) => part.toLowerCase()));
   const usesMod = modifiers.has('mod');
   return {

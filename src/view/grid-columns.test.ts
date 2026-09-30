@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FieldRegistry } from '../data/fields/field-registry.js';
-import { FieldColumnNotDefinedError, UnknownFieldError } from '../model/index.js';
+import { FieldColumnNotDefinedError, ToggleFieldNotBooleanError, UnknownFieldError } from '../model/index.js';
 import { CORE_FIELDS } from '../data/fields/core-fields.js';
 import {
   DEFAULT_COLUMN_WIDTH_PX,
@@ -115,6 +115,35 @@ describe('resolveColumns (D-S4-12)', () => {
     expect(() => resolveColumns(['nope'], lookupFrom(CORE_FIELDS), { timeZone: zone })).toThrow(
       UnknownFieldError,
     );
+  });
+
+  it('a toggle on a boolean Field resolves, and toggle: true keeps its authored form', () => {
+    const lookup = lookupFrom([...CORE_FIELDS, { key: 'done', type: 'boolean', inputType: 'checkbox' }]);
+    const on = { tag: 'span', text: 'x' };
+    const [plain, custom] = resolveColumns(
+      [
+        { field: 'done', toggle: true },
+        { field: 'done', toggle: { on } },
+      ],
+      lookup,
+      { timeZone: zone },
+    );
+    expect(plain?.toggle).toBe(true);
+    expect(custom?.toggle).toEqual({ on });
+  });
+
+  it('a toggle on a Field that is not boolean throws ToggleFieldNotBooleanError', () => {
+    expect(() =>
+      resolveColumns([{ field: 'name', toggle: true }], lookupFrom(CORE_FIELDS), { timeZone: zone }),
+    ).toThrow(ToggleFieldNotBooleanError);
+  });
+
+  it('a headerRenderer rides on the resolved column', () => {
+    const headerRenderer = () => undefined;
+    const [column] = resolveColumns([{ field: 'name', headerRenderer }], lookupFrom(CORE_FIELDS), {
+      timeZone: zone,
+    });
+    expect(column?.headerRenderer).toBe(headerRenderer);
   });
 
   it("gridColumns: ['parentId'] throws FieldColumnNotDefinedError", () => {

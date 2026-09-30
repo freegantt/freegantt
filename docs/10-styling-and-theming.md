@@ -246,6 +246,10 @@ rename.
 | `.fg-row-label` | First-column label cell. Carries hierarchy indent. |
 | `.fg-row-label-text` | The label cell's text child. |
 | `.fg-row-cell` | A data cell in the grid. |
+| `.fg-toggle` | The checkbox inside a toggle column's cell. Carries `role="checkbox"` and `aria-checked`. |
+| `.fg-toggle-icon` | Wraps the on or off icon. `aria-hidden`. |
+| `.fg-toggle-box` | The default checkbox look, when the column names no icons. |
+| `.fg-toggle-box-checked` | The default checkbox look while the value is `true`. |
 | `.fg-meter` | `meter()` wrapper. Track plus optional formatted text. |
 | `.fg-meter-track` | The meter graphic. `aria-hidden` when text sits beside it. |
 | `.fg-meter-fill` | The filled portion of the track. Width is the clamped percent. |

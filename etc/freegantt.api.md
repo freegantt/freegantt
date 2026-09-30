@@ -117,13 +117,13 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
-export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.moveEntryUp' | 'freegantt.moveEntryDown' | 'freegantt.indentEntry' | 'freegantt.outdentEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
+export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.moveEntryUp' | 'freegantt.moveEntryDown' | 'freegantt.indentEntry' | 'freegantt.outdentEntry' | 'freegantt.deleteSelection' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.switchToggle' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-remove-refused' | 'entry-step-refused' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused';
 
 // @public
 export interface Capabilities {
@@ -205,6 +205,16 @@ export type CollapseState = 'collapsed' | 'expanded' | 'leaf';
 // @public
 export type ColumnAlign = 'start' | 'center' | 'end';
 
+// @public
+export type ColumnHeaderRenderer = (ctx: ColumnHeaderRendererContext) => ElementDescription | undefined;
+
+// @public
+export interface ColumnHeaderRendererContext {
+    // (undocumented)
+    field: FieldKey;
+    header: string;
+}
+
 // @public (undocumented)
 export type ColumnRenderer<TValue = unknown> = (ctx: ColumnRendererContext<TValue>) => ElementDescription | undefined;
 
@@ -213,6 +223,23 @@ export interface ColumnRendererContext<TValue = unknown> {
     entry?: Entry | undefined;
     fieldValue: TValue | undefined;
     value: string;
+}
+
+// @public
+export interface ColumnToggle {
+    off?: ElementDescription;
+    on?: ElementDescription;
+    onToggle?: (ctx: ColumnToggleContext) => void;
+}
+
+// @public
+export interface ColumnToggleContext {
+    announceEdit: () => void;
+    // (undocumented)
+    entry: Entry;
+    // (undocumented)
+    field: FieldKey;
+    nextValue: boolean;
 }
 
 // @public
@@ -951,7 +978,7 @@ export type Field<TValue = unknown> = {
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
     parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
     inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
-    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'headerRenderer' | 'toggle' | 'hidden'> & GridColumnSizing;
 } | {
     key: FieldKey;
     type?: FieldTypeName | FieldType<TValue>;
@@ -960,7 +987,7 @@ export type Field<TValue = unknown> = {
     compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
-    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'headerRenderer' | 'toggle' | 'hidden'> & GridColumnSizing;
     equals?: never;
     parseValue?: never;
     inputType?: never;
@@ -1021,7 +1048,7 @@ export function fieldRowsOf(changeSet: ChangeSet): readonly FieldUpdated[];
 // @public
 export interface FieldType<TValue = unknown> {
     // (undocumented)
-    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
+    column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'headerRenderer' | 'toggle' | 'hidden'> & GridColumnSizing;
     // (undocumented)
     compare?(a: TValue | undefined, b: TValue | undefined): number;
     editable?: FieldEditable | boolean;
@@ -1452,9 +1479,11 @@ export interface GridColumnBase {
     field: FieldKey;
     // (undocumented)
     header?: string;
+    headerRenderer?: ColumnHeaderRenderer;
     hidden?: boolean;
     movable?: boolean;
     resizable?: boolean;
+    toggle?: true | ColumnToggle;
     tooltip?: boolean;
 }
 
@@ -2146,10 +2175,12 @@ export interface ResolvedColumn extends FrameColumn {
     columnRenderer?: ColumnRenderer;
     // (undocumented)
     format(entry: Entry): string;
+    headerRenderer?: ColumnHeaderRenderer;
     // (undocumented)
     movable?: boolean;
     // (undocumented)
     resizable?: boolean;
+    toggle?: true | ColumnToggle;
     tooltip?: boolean;
 }
 
@@ -2477,6 +2508,13 @@ export interface TimeUnitWidth {
     // (undocumented)
     readonly unit: TimeUnit;
     readonly widthPx: number;
+}
+
+// @public
+export class ToggleFieldNotBooleanError extends FreeGanttError {
+    constructor(key: string);
+    // (undocumented)
+    readonly key: string;
 }
 
 // @public
