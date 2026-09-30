@@ -61,6 +61,7 @@ export type BuiltInThrownCode =
   | 'unknown-field-type'
   | 'aggregator-failed'
   | 'field-column-not-defined'
+  | 'toggle-field-not-boolean'
   | 'unknown-grid-column'
   | 'mutation-during-notification'
   | 'mutation-during-extension-hook'
@@ -744,6 +745,21 @@ export class FieldColumnNotDefinedError extends FreeGanttError {
       `gridColumns: the field "${key}" has no column defined. Pass a column object in gridColumns, or add a "column" section on a Field you declared.`,
     );
     this.name = 'FieldColumnNotDefinedError';
+    this.key = key;
+  }
+}
+
+/** A grid column asks for `toggle`, and its Field has no checkbox input, so it is not a boolean. A toggle writes the
+ *  opposite of a boolean, so no other type has a value to flip. Thrown where `gridColumns` resolves. */
+export class ToggleFieldNotBooleanError extends FreeGanttError {
+  readonly key: string;
+
+  constructor(key: string) {
+    super(
+      'toggle-field-not-boolean' satisfies BuiltInThrownCode,
+      `gridColumns: the field "${key}" is not a boolean, so its column cannot be a toggle. Declare the Field with type "boolean", or remove "toggle" from the column.`,
+    );
+    this.name = 'ToggleFieldNotBooleanError';
     this.key = key;
   }
 }

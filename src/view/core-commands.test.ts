@@ -29,6 +29,8 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
     selectPreviousEntry: vi.fn(),
     canActivateFocused: vi.fn(() => false),
     activateFocused: vi.fn(),
+    focusedCellIsToggle: vi.fn(() => false),
+    switchFocusedToggle: vi.fn(),
     canClearDates: vi.fn(() => true),
     clearDates: vi.fn(),
     refusedRemovals: vi.fn(() => []),

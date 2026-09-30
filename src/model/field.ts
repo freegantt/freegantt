@@ -52,6 +52,51 @@ export type ColumnRenderer<TValue = unknown> = (
   ctx: ColumnRendererContext<TValue>,
 ) => ElementDescription | undefined;
 
+/** What a per-column `headerRenderer` receives. It names the column's Field and its header text.
+ *  The renderer already knows its column, so it gets no column object. That keeps `GridColumn` a
+ *  `model/` type with zero dependencies, the same way `ColumnRendererContext` does. */
+export interface ColumnHeaderRendererContext {
+  field: FieldKey;
+  /** The header text of this column. It stays the accessible name of the header cell. */
+  header: string;
+}
+/** `undefined` keeps the library's own header for this one column. */
+export type ColumnHeaderRenderer = (ctx: ColumnHeaderRendererContext) => ElementDescription | undefined;
+
+/** What a toggle column's `onToggle` receives: the Entry, the Field, and the value a default toggle
+ *  would write. */
+export interface ColumnToggleContext {
+  entry: Entry;
+  field: FieldKey;
+  /** The opposite of the value the cell shows now. An empty cell reads as `false`, so this is `true`. */
+  nextValue: boolean;
+  /** Tells `entryEdit` listeners that this switch wrote. Call it once, after your own write, also
+   *  after an async write such as a confirm dialog. It reads `from` (the value `beforeEntryEdit`
+   *  saw) and `to` (the value the Entry holds now), so it takes no argument. It announces even when
+   *  `to` equals `from`, as the built-in editor does. A second call does nothing. It does nothing
+   *  after the Entry leaves the Dataset. The default write announces for you. A custom `onToggle`
+   *  that never calls this helper leaves `entryEdit` listeners blind to the switch. */
+  announceEdit: () => void;
+}
+
+/** How a toggle column looks and acts. The column's Field is `type: 'boolean'`.
+ *
+ *  A user switches the value with one click, or with `Space` or `Enter` on the focused cell. The
+ *  cell opens no editor. The Field's `editable`, the lock rule, `capabilities.edit` and
+ *  `beforeChange` decide whether the toggle acts. A closed toggle draws its value and does nothing. */
+export interface ColumnToggle {
+  /** What the cell draws when the value is `true`. Default: a checked box. */
+  on?: ElementDescription;
+  /** What the cell draws when the value is `false` or empty. Default: an empty box. */
+  off?: ElementDescription;
+  /** Replaces the default write. Runs only when the toggle is open. Write through the public API,
+   *  for example `dataset.entries.update(entry.id, { done: nextValue })`, or write nothing. The write meets the same
+   *  gates. The library fires `beforeEntryEdit` before this call. The default write announces
+   *  `entryEdit` itself. Your write does not. Call `ctx.announceEdit()` after it, or `entryEdit`
+   *  listeners never see the switch. */
+  onToggle?: (ctx: ColumnToggleContext) => void;
+}
+
 /** Where a cell's text and header sit within the column's width. Default `'start'`. */
 export type ColumnAlign = 'start' | 'center' | 'end';
 
@@ -64,6 +109,12 @@ export interface GridColumnBase {
   align?: ColumnAlign;
   /** S5.7 — per-column, more specific than `GanttOptions.gridCellRenderer`. */
   columnRenderer?: ColumnRenderer;
+  /** Paints this column's header cell. It wins over the Gantt-wide `headerRenderer` for this column.
+   *  The `header` string stays the accessible name of the cell. */
+  headerRenderer?: ColumnHeaderRenderer;
+  /** Makes a `boolean` Field's cell a toggle. `true` takes the default look and the default write.
+   *  Any other Field type throws `ToggleFieldNotBooleanError` where the column is declared. */
+  toggle?: true | ColumnToggle;
   /** Default `true`. A fixed column refuses the resize drag and the resize chord. */
   resizable?: boolean;
   /** Default `true`. A pinned column refuses the reorder drag and the move chord. */
@@ -179,14 +230,15 @@ export type Field<TValue = unknown> =
        *  instead. For a full widget swap, not just the native input type, veto with
        *  `beforeEntryEdit` and mount your own control. */
       inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
-      /** `columnRenderer` sits on the Gantt's `GridColumn`, never here — `data/` never holds a
-       *  renderer, so this default set excludes it. `hidden` is excluded for a different reason.
+      /** `columnRenderer`, `headerRenderer` and `toggle` sit on the Gantt's `GridColumn`, never here —
+       *  `data/` never holds a renderer or a callback, so this default set excludes them. `hidden` is excluded for a different reason.
        *  A Field default of `hidden: true` would make a Gantt that names the column show
        *  nothing. Which columns a view shows is the Gantt's question, never the Field's.
        *  `Omit<GridColumn, …>` would flatten the sizing union and let a Field default name both `width`
        *  and `flex` (#249) — so this type is built from `GridColumnBase` directly, joined back to
        *  `GridColumnSizing`, the same exclusive pair `GridColumn` itself carries. */
-      column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
+      column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'headerRenderer' | 'toggle' | 'hidden'> &
+        GridColumnSizing;
     }
   | {
       key: FieldKey;
@@ -203,7 +255,8 @@ export type Field<TValue = unknown> =
       compute(entry: StoredEntry, ctx: ComputeContext): TValue | undefined;
       compare?(a: TValue | undefined, b: TValue | undefined): number;
       formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
-      column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
+      column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'headerRenderer' | 'toggle' | 'hidden'> &
+        GridColumnSizing;
       // Declared `never` (never abbreviated away, unlike the ADR's shorthand comment) so a caller
       // holding a bare `Field` can read `field.equals`/`.parseValue`/`.inputType` without narrowing
       // the union first — the same reason `rollUp`/`editable`/`compute` cross-declare above.
@@ -229,7 +282,8 @@ export interface FieldType<TValue = unknown> {
   formatValue?(value: TValue | undefined, ctx: FormatContext, entry: Entry): string;
   parseValue?(text: string, ctx: FieldContext, entry: Entry): TValue | undefined;
   inputType?: 'text' | 'number' | 'email' | 'tel' | 'url' | 'checkbox';
-  column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'hidden'> & GridColumnSizing;
+  column?: Omit<GridColumnBase, 'field' | 'columnRenderer' | 'headerRenderer' | 'toggle' | 'hidden'> &
+    GridColumnSizing;
 }
 
 /** What `createFieldContext` and column resolve need — `FieldRegistry.get` and `dataset.field` both satisfy this. */

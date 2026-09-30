@@ -1017,6 +1017,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // spec's own twisty/label pair relies on just above.
       const label = node.firstElementChild as HTMLElement;
       applyElementDescription(label, geom.content ?? { text: geom.text });
+      // A renderer changes what the header shows, not what a screen reader hears. The header text
+      // stays the accessible name.
+      if (geom.content !== undefined) node.setAttribute('aria-label', geom.text);
+      else node.removeAttribute('aria-label');
       node.setAttribute('aria-colindex', String(geom.columnIndex));
       paintColumnBox(node, geom);
       if (geom.resizable) node.removeAttribute('data-resizable-off');

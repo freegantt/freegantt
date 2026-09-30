@@ -147,6 +147,8 @@ import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
 import type { ResolveBarLabelPorts } from './bar-labels.js';
 
 import { ColumnChrome } from './column-chrome.js';
+import { switchToggleCell, toggleCellContent, toggleOf } from './column-toggle.js';
+import type { CellTogglePorts } from './column-toggle.js';
 import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
 import type { GanttShellPorts, PluginContextParts } from './plugin-ports.js';
@@ -994,6 +996,7 @@ export class GanttShell {
     // of `inlineEditing()`'s document-level one. So a `return` here always reaches that listener
     // next — no explicit ordering needed beyond where each one attaches.
     this.#attachDoubleClickActivation();
+    this.#attachToggleClick();
     // Document-level capture-phase fallback (issue #137,
     // `plans/reviews/2026-09-03-s5-start-fixes-qc.md`): the bubble listener above only ever sees a
     // key event whose target sits inside `#container`. A popup opened from an outside trigger has
@@ -1164,6 +1167,14 @@ export class GanttShell {
       resolveGridCellRenderer: (columnKey) => {
         const column = this.#columnChrome.resolvedColumn(columnKey);
         if (column === undefined) return undefined;
+        // A toggle column draws its own checkbox. A `columnRenderer` on the same column still wins.
+        const toggle = toggleOf(column);
+        if (toggle !== undefined && column.columnRenderer === undefined) {
+          return {
+            renderer: (ctx) =>
+              toggleCellContent(toggle, column.header, ctx.entry?.read(column.field) === true),
+          };
+        }
         // A per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
         // Gantt-wide one for that column. No `pluginId`, since a `GridColumn` only ever arrives
         // from the consumer's own config until a plugin can `registerGridColumn`.
@@ -1194,12 +1205,15 @@ export class GanttShell {
           ...(resolved.pluginId !== undefined ? { pluginId: resolved.pluginId } : {}),
         };
       },
-      // Same bind-in-here posture as `resolveGridCellRenderer` just above. A
-      // `GridColumn` has no per-column `headerRenderer` slot (`layout/column.ts`). So this only
-      // ever resolves the Gantt-wide/plugin one, bound to its column.
+      // Same bind-in-here posture as `resolveGridCellRenderer` just above. A per-column
+      // `headerRenderer` beats the Gantt-wide/plugin one for its own column.
       resolveHeaderRenderer: (columnKey) => {
         const column = this.#columnChrome.resolvedColumn(columnKey);
         if (column === undefined) return undefined;
+        if (column.headerRenderer !== undefined) {
+          const perColumnRenderer = column.headerRenderer;
+          return { renderer: () => perColumnRenderer({ field: column.field, header: column.header }) };
+        }
         const resolved = this.#registrations.renderers.resolve('header', this.#frameSettings.headerRenderer);
         if (resolved === undefined) return undefined;
         const headerRenderer = resolved.renderer;
@@ -1390,12 +1404,55 @@ export class GanttShell {
       const domTarget = this.#dom.targetUnder(event.target);
       if (domTarget === undefined || domTarget.entry === undefined) return;
       if (!this.#isActivatableTargetKind(domTarget.kind)) return;
-      if (domTarget.kind === 'gridCell' && this.#editorTakesFocusedCell()) return;
+      // A toggle cell switches on the click. Its double-click also activates nothing.
+      if (
+        domTarget.kind === 'gridCell' &&
+        (this.#editorTakesFocusedCell() || this.#isToggleCell(domTarget.field))
+      ) {
+        return;
+      }
       if (!this.#canGesture('activate', domTarget.entry.id)) return;
       this.#activateEntry(domTarget.entry, 'dblclick', domTarget.kind);
     };
     this.#container.addEventListener('dblclick', this.#dblClickListener);
     this.#teardown.add(() => this.#container.removeEventListener('dblclick', this.#dblClickListener));
+  }
+
+  /** Which click switches a toggle cell? One click does, and the second click of a double-click
+   *  does not. A double-click switches the value once, and opens no editor. */
+  #attachToggleClick(): void {
+    const onClick = (event: MouseEvent): void => {
+      if (event.detail >= 2 || !(event.target instanceof Node)) return;
+      const target = this.#dom.targetUnder(event.target);
+      if (target?.kind !== 'gridCell' || target.entry === undefined || target.field === undefined) return;
+      switchToggleCell(this.#cellTogglePorts(), target.entry, target.field);
+    };
+    this.#container.addEventListener('click', onClick);
+    this.#teardown.add(() => this.#container.removeEventListener('click', onClick));
+  }
+
+  #isToggleCell(field: FieldKey | undefined): boolean {
+    return field !== undefined && this.#columnChrome.resolvedColumn(field)?.toggle !== undefined;
+  }
+
+  /** What does a toggle cell ask this shell? The write gate is the one every cell write asks (I14). */
+  #cellTogglePorts(): CellTogglePorts {
+    const dataset = this.#options.dataset;
+    return {
+      toggleOf: (field) => {
+        const column = this.#columnChrome.resolvedColumn(field);
+        return column === undefined ? undefined : toggleOf(column);
+      },
+      entryById: (id) => dataset.entries.get(id),
+      canWrite: (entry, field) => this.#capabilities.canWrite(entry, field),
+      proposeEntryEdit: (payload) => this.#emit('beforeEntryEdit', payload),
+      announceEntryEdit: (payload) => {
+        this.#emit('entryEdit', payload);
+      },
+      write: (id, field, value) => {
+        dataset.entries.update(id, { [field]: value });
+      },
+    };
   }
 
   /** What does a column-gesture attachment ask this shell? */
@@ -2000,6 +2057,19 @@ export class GanttShell {
         const target = this.#focusedActivationTarget();
         if (target !== undefined) this.#activateEntry(target.entry, 'key', target.kind);
       },
+      focusedCellIsToggle: () => {
+        const focused = this.#focusedCell();
+        return (
+          focused !== undefined && this.#columnChrome.resolvedColumn(focused.field)?.toggle !== undefined
+        );
+      },
+      switchFocusedToggle: () => {
+        const focused = this.#focusedCell();
+        const entry = focused === undefined ? undefined : this.#options.dataset.entries.get(focused.entryId);
+        if (focused !== undefined && entry !== undefined) {
+          switchToggleCell(this.#cellTogglePorts(), entry, focused.field);
+        }
+      },
       canClearDates: (id) => this.#canClearDates(id),
       clearDates: (id) => {
         this.#options.dataset.entries.update(id, { start: undefined, end: undefined });
@@ -2433,6 +2503,11 @@ export class GanttShell {
     // Obligation (#262): a click activates too, and WCAG 2.1.1 requires a keyboard path for every
     // pointer capability. `Enter` is the only one this capability has, so it stays unconditional.
     bind('Enter', 'freegantt.activateEntry');
+    // A toggle cell opens no editor. `Space` and `Enter` switch it. This binding is newer than the
+    // `Enter` fallback above, so it answers first, and `inlineEditing()`'s own `Enter` declines a
+    // toggle cell.
+    bind('Space', 'freegantt.switchToggle');
+    bind('Enter', 'freegantt.switchToggle');
   }
 
   #panBy(dx: number, dy: number): void {
