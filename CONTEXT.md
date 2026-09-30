@@ -212,6 +212,9 @@ that would carry another Entry into or out of a locked parent refuses the same w
 rule**, below). `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo
 all still write a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
 .update(id, { locked: true })` sets it; `{ locked: undefined }` clears it.
+A locked bar does not move, and a locked parent's own summary bar is one. A child of a locked parent
+still moves, resizes, and nudges, and the Rollup still changes the locked parent's dates. The lock
+never blocks the Rollup.
 _Avoid_: Pinned (the scheduling plugin's own whole-Entry state, a separate refusal with a separate
 owner — see **Pinned**, above), Read-only, Frozen, Disabled
 
