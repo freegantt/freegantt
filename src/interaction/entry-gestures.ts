@@ -142,8 +142,8 @@ export function attachEntryGestures(
         if (grabbedEdge !== undefined) armSession('x');
         return grabbedEdge === undefined || session !== undefined;
       },
-      // `_dyPx`: a row drop reads the pointer's content-y instead — the row under the pointer, not
-      // how far it moved. `elementFromPoint` would read the bar itself, since the bar tracks the
+      // `dyPx` only tells travel from no travel. A row drop reads the pointer's content-y instead —
+      // the row under the pointer, not how far it moved. `elementFromPoint` would read the bar itself, since the bar tracks the
       // pointer during the drag.
       //
       // #425 axis lock: the owner's ruling ("if you start dragging vertically it only allows
@@ -152,7 +152,7 @@ export function attachEntryGestures(
       // A row-axis move zeroes `dxPx` (the bar's dates hold still) and omits `contentY` when the
       // axis is time instead (`options.contentY === undefined` is `dropFor`'s own "no row drop" read,
       // `view/gesture-pipeline.ts`).
-      move(e, dxPx, _dyPx, axis): void {
+      move(e, dxPx, dyPx, axis): void {
         // The live preview always tracks the pointer at full resolution (never quantized to a snap
         // unit) so the grabbed spot on the bar never drifts from the cursor mid-drag. Snapping still
         // applies to what actually gets written — see commit() below — this only affects what paints
@@ -160,7 +160,9 @@ export function attachEntryGestures(
         // offset plus the bound scroll, never element.scrollLeft/scrollTop (I12).
         // The rect only serves `offsetX`: content-y goes straight through `clientY` now, since both
         // panes share one row geometry and the door reads the pane top itself.
-        if (session === undefined && !sessionRefused) armSession(axis);
+        // A touch long-press arms with no travel, so its axis is not known yet. The session waits
+        // for the first travel, or a still finger would lock the drag to the wrong axis.
+        if (session === undefined && !sessionRefused && (dxPx !== 0 || dyPx !== 0)) armSession(axis);
         if (session === undefined) return;
         const rect = pane.getBoundingClientRect();
         const offsetX = e.clientX - rect.left;

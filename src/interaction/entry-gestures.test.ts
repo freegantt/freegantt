@@ -1243,6 +1243,34 @@ describe('attachEntryGestures — move (S3.3)', () => {
 
     expect(seenEntries[0]?.map((e) => e.id)).toEqual([A, B]);
   });
+
+  it('a touch long-press on a bar waits for the first travel to pick its axis', () => {
+    vi.useFakeTimers();
+    try {
+      const pane = document.createElement('div');
+      mockPointerCapture(pane);
+      const container = document.createElement('div');
+      const rowLayer = document.createElement('div');
+      const seenGestures: EntryGesture[] = [];
+      const { ctx } = makeContext({
+        draftFor: (gesture, entries) => {
+          seenGestures.push(gesture);
+          return new Map(entries.map((e) => [e.id, {}]));
+        },
+      });
+      attachEntryGestures(pane, rowLayer, container, ctx);
+
+      pane.dispatchEvent(down(0, { pointerType: 'touch' }));
+      vi.advanceTimersByTime(ROW_REORDER_LONG_PRESS_MS);
+      pane.dispatchEvent(move(0, { pointerType: 'touch' })); // a still finger: no travel yet
+      expect(seenGestures).toEqual([]);
+
+      pane.dispatchEvent(move(0, { clientY: 8, pointerType: 'touch' }));
+      expect(seenGestures.at(-1)).toEqual({ kind: 'reorder' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('attachEntryGestures — resize (S3.4)', () => {
