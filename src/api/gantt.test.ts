@@ -6865,6 +6865,58 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
     gantt.destroy();
   });
 
+  function lockedParentTree(): { container: HTMLDivElement; dataset: Dataset } {
+    const container = document.createElement('div');
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p5', name: 'P5', locked: true },
+        { id: 'e', name: 'E', parentId: 'p5', start: '2026-01-01', end: '2026-01-05' },
+      ],
+    });
+    return { container, dataset };
+  }
+
+  it("a locked parent's own summary bar arms no move", () => {
+    const { container, dataset } = lockedParentTree();
+    const gantt = new Gantt({ container, dataset });
+    const summaryBar = container.querySelector<HTMLElement>('[data-variant="summary"]')!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? summaryBar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5, clientY: 5 }));
+
+    expect(summaryBar.hasAttribute('data-movable')).toBe(false);
+
+    document.elementFromPoint = original;
+    gantt.destroy();
+  });
+
+  it("a child's bar drag under a locked parent commits, and the parent's dates roll up", () => {
+    const { container, dataset } = lockedParentTree();
+    const gantt = new Gantt({ container, dataset });
+    const bar = container.querySelector<HTMLElement>(`.fg-bar[data-bar-id="${barId(entryId('e'), 0)}"]`)!;
+    const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    stubPointerCapture(timeline);
+    const parentStart = dataset.entries.get(entryId('p5'))!.start;
+
+    const original = document.elementFromPoint.bind(document);
+    document.elementFromPoint = (x: number, y: number) => (x === 5 && y === 5 ? bar : original(x, y));
+    timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: 5005, clientY: 5, pointerId: 1 }));
+    document.elementFromPoint = original;
+
+    const child = dataset.entries.get(entryId('e'))!;
+    const parent = dataset.entries.get(entryId('p5'))!;
+    expect(child.start).not.toBe(parentStart);
+    expect(parent.start).toBe(child.start);
+    expect(parent.end).toBe(child.end);
+
+    gantt.destroy();
+  });
+
   it('a locked row’s grid drag grabs nothing, and a click still selects it', () => {
     const { container, dataset } = siblingTree();
     const gantt = new Gantt({ container, dataset });

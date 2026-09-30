@@ -249,6 +249,9 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
 
   const entriesMovedBy = (entry: Entry): readonly Entry[] => {
     if (!entry.hasChildren) return movesItsOwnDates(entry) ? [entry] : NOTHING_MOVES;
+    // A locked bar does not move, and a locked parent's summary bar is one. Its children still
+    // move on their own bars, and the Rollup still writes the parent's dates.
+    if (entry.read('locked') === true) return NOTHING_MOVES;
     // One locked date on an owning bar refuses the whole gesture, the same as one locked descendant
     // does below. Painting the bar anyway would drag it for the whole gesture. The date it owns
     // would then go stale, since nothing rolls an owned date back up.
