@@ -58,6 +58,7 @@ Never cite a spec label such as `D-S5-31`, `J54` or `Q3` in a code comment, a te
 ## Workflow
 
 - TS strict (with `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), pnpm, Vite, Vitest (pure tests run in Node with no DOM env), fast-check for property tests. Dont do lie generics
+- **ADRs**: ask the owner before you write, amend, or accept an ADR. Put the decision and its options in the chat first. Write the ADR only after the owner approves it. A plan, a coordinator, or an implementer never decides an ADR alone.
 - Slice gates (`plans/00` §4) must pass before the next slice starts.
 - The invariants table (`plans/01` §11, I1–I15) is the review checklist; every invariant maps to a CI job.
 - Rename a class, a type or a function with `pk-rename-symbol`. It renames through the language service, so it follows re-exports and aliases, and it skips prose. Then run `pnpm typecheck`. A same-named string in a comment or a doc stays as it is — decide those separately.
