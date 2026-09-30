@@ -271,7 +271,10 @@ describe('registerCoreCommands (S5.2)', () => {
     function clearContext(entryIds: string[], kind: 'row' | 'bar' | 'gridCell' | 'header' = 'bar') {
       const transaction = vi.fn((body: () => void) => body());
       const ctx = {
-        dataset: { transaction } as unknown as CommandContext<unknown>['dataset'],
+        dataset: {
+          transaction,
+          entries: { has: () => true },
+        } as unknown as CommandContext<unknown>['dataset'],
         gantt: {},
         target: { kind, entryIds: entryIds.map(entryId) },
       } as CommandContext<unknown>;

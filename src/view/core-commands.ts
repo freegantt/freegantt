@@ -259,7 +259,10 @@ export function registerCoreCommands(
         return;
       }
       runInOneTransaction(ctx, () => {
-        for (const id of ids) ports.clearDates(id);
+        for (const id of ids) {
+          // An extender may remove an Entry as it clears an earlier one, so ask before each write.
+          if (asCtx(ctx).dataset?.entries.has(id) === true) ports.clearDates(id);
+        }
       });
     },
   });
