@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Changed
 
+- An edit extender and a removal extender read their own Fields typed. `EditRequest`, `EditExtender`, `RemovalExtender`, their wrappers and `DatasetEditHook` take a `TProps` parameter, and `ctx.edits` carries the plugin's own props. `moveEntryTo` accepts any `StoredEntry<TProps>`. ([#626](https://github.com/freegantt/freegantt/issues/626))
 - `parentId` is now `editable: 'anywhere'`. A vertical drag may re-parent an Entry; the grid cell still shows no editor for it, because `entryId` ships no `parseValue`. ([#425](https://github.com/freegantt/freegantt/issues/425))
 - **Breaking:** `FieldLockRule` always returns a `FieldEditable` answer; it no longer returns `undefined` for "no opinion". Call `next(query, field)` in place of returning `undefined` to defer to the next rule. ([#612](https://github.com/freegantt/freegantt/issues/612))
 
