@@ -64,7 +64,9 @@ test("a locked summary refuses a child's drag that would widen its end", async (
 
   // The child that owns its parent's end: any drag right widens the parent.
   const pair = await page.evaluate(() => {
-    for (const node of document.querySelectorAll<HTMLElement>('#gantt .fg-bar:not(.fg-bar-summary)')) {
+    for (const node of Array.from(
+      document.querySelectorAll<HTMLElement>('#gantt .fg-bar:not(.fg-bar-summary)'),
+    )) {
       const child = window.__dataset.entries.get(node.dataset['barId']!.split(':')[0]!);
       const parent = child?.parent();
       if (child === undefined || parent === undefined || child.end === undefined) continue;
