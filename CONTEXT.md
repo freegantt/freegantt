@@ -209,8 +209,9 @@ _Avoid_: cascade (that is the **EditExtender**'s word for extra field writes), d
 An Entry whose core `locked` Field reads `true` (`editable: 'api'`, no grid column). The user may not
 edit any of its cells, move it, or reorder it, in the grid pane or the timeline pane alike; a drop
 that would carry another Entry into or out of a locked parent refuses the same way (see **Place
-rule**, below), and so does a user delete of it, or of one of its children (see **Remove rule**,
-below). `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo all
+rule**, below). A user delete of a locked Entry refuses too, and so does a delete of an ancestor
+that would take it (see **Remove rule**, below). A user may still delete an unlocked child of a
+locked Entry. `entries.update()`, `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo all
 still write a locked Entry's cells — the lock stops a user gesture, not the app. `dataset.entries
 .update(id, { locked: true })` sets it; `{ locked: undefined }` clears it.
 A locked bar does not move, and a locked parent's own summary bar is one. A child of a locked parent
