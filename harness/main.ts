@@ -26,7 +26,7 @@ import { SEGMENTED_PARENT_ID, demoFieldOptions, demoTreeEntryInputs } from '../f
 import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
-import { closedPadlock, padlockToggle } from './lock-column.js';
+import { padlockHeader, padlockToggle } from './lock-column.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
@@ -47,7 +47,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   'end',
   { field: 'duration', align: 'start' },
   { field: 'cost', header: 'Budget' },
-  { field: 'locked', headerRenderer: () => closedPadlock, toggle: padlockToggle },
+  { field: 'locked', headerRenderer: () => padlockHeader, toggle: padlockToggle },
 ];
 
 // `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A

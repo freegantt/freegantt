@@ -120,6 +120,16 @@ describe('ensureBaseStyles', () => {
     expect(css).toContain('.fg-live-region, .fg-visually-hidden {');
   });
 
+  it('a header label never grows, so the column align places it the way it places a cell', () => {
+    clearStyles();
+    ensureBaseStyles(document);
+    const css = document.head.querySelector('style[data-freegantt-styles]')?.textContent ?? '';
+    const [labelRule] = css.match(/\.fg-col-header-label\s*{[^}]*}/) ?? [''];
+    expect(labelRule).toContain('flex: 0 1 auto');
+    expect(css).toContain(".fg-col-header[data-align='center'] { justify-content: center;");
+    expect(css).toContain(".fg-row-cell[data-align='center'] { justify-content: center;");
+  });
+
   it('the injected sheet carries every colour token on :root and on the theme pins, never on .fg-container (#271)', () => {
     clearStyles();
     ensureBaseStyles(document);
