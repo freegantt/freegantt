@@ -32,7 +32,7 @@ export interface StoredEntry<TProps = Record<string, unknown>> {
    *  it beyond the Grid's `name` column and the default bar label reading the same Field. */
   name?: string;
   /** A locked Entry refuses a gesture on every cell but this one (ADR 0038). `undefined` and
-   *  `false` both read as unlocked; only app code sets or clears this key (`editable: 'api'`). */
+   *  `false` both read as unlocked; a user sets it through the `locked` grid column, and app code sets it too. */
   locked?: boolean;
   /** Omitted iff this Entry does not span (ADR 0012). Present with `end` if and only if this Entry
    * draws a bar. */
