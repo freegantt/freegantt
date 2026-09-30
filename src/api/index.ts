@@ -11,6 +11,7 @@ export type {
   PluginStore,
   PluginStoreView,
   ExtenderWrapper,
+  RemovalExtenderWrapper,
   HierarchySource,
   HierarchySourceWrapper,
   FieldLockQuery,
@@ -35,6 +36,7 @@ export { moveEntryTo } from './dataset-plugin.js';
 export type {
   EditRequest,
   EditExtender,
+  RemovalExtender,
   EntryEdits,
   ProposedEdit,
   ProposedEdits,

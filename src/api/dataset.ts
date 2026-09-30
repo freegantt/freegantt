@@ -235,6 +235,10 @@ export class Dataset<TProps = unknown> {
             gate.assertOpen();
             this.#state.setExtender(wrap);
           },
+          setRemovalExtender: (wrap) => {
+            gate.assertOpen();
+            this.#state.setRemovalExtender(wrap);
+          },
           setLockRule: (wrap) => {
             gate.assertOpen();
             this.#state.setLockRule(wrap);

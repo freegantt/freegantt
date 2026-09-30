@@ -26,7 +26,13 @@ export type {
   ProposedEdits,
   EntryEdits,
 } from './stored-entry.js';
-export type { EditRequest, EditExtender, ExtenderWrapper } from './edit-request.js';
+export type {
+  EditRequest,
+  EditExtender,
+  ExtenderWrapper,
+  RemovalExtender,
+  RemovalExtenderWrapper,
+} from './edit-request.js';
 // The span invariant's one home (ADR 0012). A value export, and the only one `model/` holds outside
 // ids.ts and errors.ts — see `spansTime`'s own comment for why the carve-out admits it.
 export { spansTime } from './stored-entry.js';

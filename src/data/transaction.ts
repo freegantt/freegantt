@@ -31,6 +31,7 @@ import {
   raiseErrorOn,
 } from './error-reporting.js';
 import type { EditRequest, ProposedEdits } from './edit-extension.js';
+import { createEditRequest } from './edit-request.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EventBus } from './event-bus.js';
 import { RefusalNote } from './event-bus.js';
@@ -55,6 +56,9 @@ export interface TransactionalEntryStore {
   /** Does `id` name an Entry, as this transaction leaves it? — see `EntryStore.has`. A plugin store
    *  write asks this before it stages. */
   has(id: EntryId): boolean;
+  /** Stages `id` and its whole subtree as removed — see `EntryStore.stageSubtreeRemoval`. The
+   *  removal extender's ids go in through it. */
+  stageSubtreeRemoval(token: TxToken, id: EntryId): void;
   /** The committed rows' checked parents, memoized per revision — see `EntryStore.committedParents`. */
   committedParents(): ParentIndex;
   /** The committed rows' children, by parent id — see `EntryStore.committedChildIds`. */
@@ -108,6 +112,10 @@ export interface TransactionData {
    *  `extraEditsFor(dataset, request)` the drag preview calls (`api/dataset.ts`, ADR 0007) is a
    *  separate, narrower door onto the same occupant. It is not a `Dataset` method (#250 S6-1). */
   extraEditsReadingFor(request: EditRequest): EditsReading;
+  /** The commit path's door onto the removal hook: calls the current occupant once and returns the
+   *  ids it removes. It calls `buildRequest` only when a plugin installed a removal extender.
+   *  `DatasetState.removalsFor` is its one implementation. */
+  removalsFor(buildRequest: () => EditRequest): ReadonlySet<EntryId>;
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule).
    *  `EntryStore` read it for a while, to tell a standalone `update()` from one joining a caller's
    *  open transaction — and that made the derived-write refusal a consumer's to opt out of, because
@@ -335,6 +343,29 @@ export function commitChangeSet(
 }
 
 /**
+ * Asks the removal hook once, then stages each id it returns with the subtree walk `entries.remove`
+ * uses. Every later commit stage reads those removals as if the body staged them. An id the store
+ * does not know, or one this transaction already removes, is skipped in silence.
+ */
+function stageRemovalExtenderRemovals(data: TransactionData, token: TxToken): void {
+  const removals = data.removalsFor(() =>
+    createEditRequest({
+      entries: data.entries.committedById(),
+      proposed: data.entries.pendingEdits(),
+      added: data.entries.pendingAdded().map((row) => row.entity),
+      removed: data.entries.pendingRemoved().map((row) => row.entity),
+      hierarchySource: data.hierarchySource,
+      committedChildIds: data.entries.committedChildIds(),
+      fields: data.fields,
+      lockRule: data.lockRule,
+    }),
+  );
+  for (const id of removals) {
+    if (data.entries.has(id)) data.entries.stageSubtreeRemoval(token, id);
+  }
+}
+
+/**
  * The commit path (`plans/s2-data-core/s2.2-transactions-and-changesets.md` §2.3): run the body, call
  * the extension hook once, roll up Fields, fold everything into one `ChangeSet`, and — unless it
  * is empty or a `beforeChange` handler refuses it — apply it and emit `change`.
@@ -374,6 +405,7 @@ export function runTransaction<T>(
 
   let built: BuiltCommit;
   try {
+    stageRemovalExtenderRemovals(data, token);
     built = buildCommitChangeSet(data, origin);
   } catch (error) {
     endStores(data, token, undefined);

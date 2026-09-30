@@ -112,7 +112,8 @@ dataset.entries.update('t7', { parentId: 'p2', siblingIndex: 2 }); // reparents 
   `dataset.entries.update(id, { locked: true })` sets it; `{ locked: undefined }` clears it. Core's
   own lock rule and place rule (below) close every other cell of a locked Entry to a gesture, in
   both panes, and refuse a drop that would cross into or out of a locked parent — `entries.update()`,
-  `add()`, an `EditExtender` cascade, `load`, `sync`, undo and redo all still write past the lock.
+  `add()`, an `EditExtender` cascade, a `RemovalExtender` removal, `load`, `sync`, undo and redo all still
+  write past the lock.
 - **`siblingIndex` is an ordinary core Field: an integer rank among an entry's siblings (ADR 0034).** A write that names it, or a write that moves an entry to a different sibling group, renumbers every sibling the move displaces in the same transaction — the ChangeSet carries a row for the moved entry and for every shifted sibling, so one call is one undo step. `add()` with no index appends to the end of its group; `add()` with an index places it there. `remove()` closes the gap its group is left with. `editable: 'never'` on the Field refuses an explicit move; a reparent with no requested index still appends, because the lock that governs a reparent is `parentId`'s own, not this Field's. `entries.all` reads each sibling group in this Field's order (`01` §6).
 - **The `Segment` type retired with no legacy; the word did not (ADR 0026, #421, Q17).** A Segment is a Bar on a row that draws more than one Bar — a reading of what a reader sees, never a record (`CONTEXT.md`). What this section used to describe —
   `dataset.entries.update(id, { segments })` moving one Segment by position, `removeSegments(ids)`,
@@ -755,15 +756,27 @@ together with its own chrome under that one graph (D-S5-31), so a chrome plugin 
 whose only half is `data`. There is no ordering knob.
 
 **The `data` half's own doors are namespaced, and every one is expert.** `ctx.store.reserve` takes
-this plugin's store, `ctx.edits.setExtender` claims the extension hook, `ctx.edits.setLockRule`
+this plugin's store, `ctx.edits.setExtender` claims the extension hook, `ctx.edits.setRemovalExtender`
+claims the removal hook, `ctx.edits.setLockRule`
 claims the per-entry lock rule (ADR 0015, #473), and `ctx.edits.setPlaceRule` claims the place rule —
 whether an Entry may land under a given parent (ADR 0038). Each door takes one occupant that composes
 — a plugin receives the current occupant and may call it — so a second plugin adds to the first
-rather than evicting it (D-S5-23). `setExtender`, `setLockRule` and `setPlaceRule` are legal while
+rather than evicting it (D-S5-23). `setExtender`, `setRemovalExtender`, `setLockRule` and `setPlaceRule` are legal while
 `data()` runs and not after (ADR 0031); `ctx.store.reserve` is ungated. A store row belongs to one
 Entry: `store.set(id, row)` throws `EntryNotFoundError` for an id with no Entry, as the open
 transaction leaves it, the rule `entries.update` follows. Removing an Entry removes its rows in the
 same `ChangeSet`, even a row the same transaction wrote first.
+
+**The removal hook lets a plugin remove an Entry (#629).** `setRemovalExtender` takes a
+`RemovalExtenderWrapper`. The occupant is a `RemovalExtender`: `(request: EditRequest) =>
+ReadonlySet<EntryId>`. Core calls it once per transaction. The call comes after the body and before
+the `EditExtender`. Core stages each returned id with the subtree walk `entries.remove` uses. The
+`EditExtender`, the Rollup, the plugin-store rows, the sibling ranks and `beforeChange` all read the
+removal as if the body made it. It is one `ChangeSet` and one undo step. The call does not repeat, so
+the plugin returns its whole closure in one answer. An unknown id, or one already removed, is skipped
+in silence. An Entry the body added folds away. The hook does not ask the lock. The drag preview,
+`load`, `sync`, undo, redo and `replay` never call it. A store write from inside it throws
+`MutationDuringExtensionHookError`.
 
 **A Field, a Field type, an Aggregator and the hierarchy source are not a `ctx` door at all** — a
 plugin declares them on itself, `fields`/`fieldTypes`/`aggregators`/`hierarchySource`, the same shape
