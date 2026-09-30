@@ -157,6 +157,7 @@ import { EntrySelection } from './entry-selection.js';
 import type { EntrySelectionPorts } from './entry-selection.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
+import type { EntryStep } from './entry-step.js';
 
 import { RovingFocus } from './roving-focus.js';
 import type { RovingFocusPorts } from './roving-focus.js';
@@ -1951,6 +1952,19 @@ export class GanttShell {
     }
   }
 
+  /** Moves the Entry one keyboard step and keeps real focus on its row or bar. The pane is read
+   *  before the move, because the move re-renders the node that holds focus. A collapsed parent the
+   *  Entry indents under expands, so the Entry stays in view. */
+  #stepEntry(id: EntryId, step: EntryStep): void {
+    const pane = this.#rovingFocus.focusedPane();
+    void this.#gesturePipeline.commitEntryStep(id, step).then((moved) => {
+      if (!moved) return;
+      this.#frames.flush();
+      this.#expandAndFindRow(id);
+      this.#rovingFocus.restoreFocus(pane ?? 'grid');
+    });
+  }
+
   /** The shell verbs `core-commands.ts`'s catalog calls, closing over this shell's own
    *  private state. `registerCoreCommands` never touches a shell field directly — this is the one
    *  seam between the two. */
@@ -1958,6 +1972,7 @@ export class GanttShell {
     return {
       collapseAll: () => this.collapseAll(),
       expandAll: () => this.expandAll(),
+      stepEntry: (id, step) => this.#stepEntry(id, step),
       collapseRow: (id) => this.collapse(id),
       expandRow: (id) => this.expand(id),
       canZoomIn: () => this.canZoomIn,
@@ -2382,6 +2397,24 @@ export class GanttShell {
     // Obligation (#262): WCAG 2.1.1 — the only keyboard path to a second bar on a row.
     bind('Mod+ArrowRight', 'freegantt.selectNextEntry');
     bind('Mod+ArrowLeft', 'freegantt.selectPreviousEntry');
+    // Which chords move the focused row in the tree? The same four commands the context menu offers.
+    // `Alt+Arrow` follows the line move of a code editor.
+    // A bar keeps the horizontal arrows for time, so `Alt+Shift+Arrow` resizes it with the snap off.
+    // Only the grid pane indents and outdents from the keyboard. The context menu reaches both from a bar.
+    // Obligation (#262): WCAG 2.1.1 — the only keyboard path to move a row.
+    bind('Alt+ArrowUp', 'freegantt.moveEntryUp');
+    bind('Alt+ArrowDown', 'freegantt.moveEntryDown');
+    const notOnBar = (ctx: CommandContext<unknown>): boolean => ctx.target?.kind !== 'bar';
+    this.#keymap.register({
+      chord: 'Alt+Shift+ArrowRight',
+      command: 'freegantt.indentEntry',
+      when: notOnBar,
+    });
+    this.#keymap.register({
+      chord: 'Alt+Shift+ArrowLeft',
+      command: 'freegantt.outdentEntry',
+      when: notOnBar,
+    });
     // #212, ADR 0010: the same command the right-click menu offers. `captureInEditable` stays at
     // its default `false` — Keymap's own gate. So a cell editor's `<input>` and mid-IME composition
     // both refuse the chord, the same way every other core binding already does.

@@ -57,6 +57,8 @@ import type {
 } from './event-bus.js';
 import type { RowDrop, PlacedEntry } from './row-drop.js';
 import { resolveRowDrop } from './row-drop.js';
+import type { EntryStep } from './entry-step.js';
+import { ENTRY_STEP_REFUSAL_TEXT, resolveEntryStep } from './entry-step.js';
 import type { GestureCapability } from './capability.js';
 import { FrameScheduler } from './frame-scheduler.js';
 import type { RowHoverExpand } from './row-hover-expand.js';
@@ -355,6 +357,38 @@ export class GesturePipeline {
         this.#preview(undefined);
       },
     };
+  }
+
+  /** A keyboard step moves one Entry in the tree — up, down, indent or outdent. It asks the rules a
+   *  row drop asks and commits through the same `beforeEntryMove`/`entryMove` pair, as one
+   *  transaction. A step the rules refuse writes nothing and raises one Error report, which the live
+   *  region announces. Answers `true` only when the Entry moved. */
+  commitEntryStep(id: EntryId, step: EntryStep): Promise<boolean> {
+    // Like `session()`, a new gesture supersedes a held one.
+    this.#dropHeldGesture('superseded');
+    const entry = this.#deps.entryById(id);
+    if (entry === undefined) return Promise.resolve(false);
+    const verdict = resolveEntryStep({
+      entry,
+      step,
+      rows: this.#deps.rowsForDrop(),
+      canPlace: (moved, parentId) => this.#deps.canPlace(moved, parentId),
+      verticalDropOffered: this.#deps.verticalDropOffered(),
+    });
+    if (verdict.kind === 'refused') {
+      this.#deps.raiseError({
+        code: 'entry-step-refused',
+        message: ENTRY_STEP_REFUSAL_TEXT[verdict.reason],
+        severity: 'info',
+        by: 'core',
+        entryId: id,
+      });
+      return Promise.resolve(false);
+    }
+    const drop: RowDrop = { kind: 'place', place: verdict.place, moves: verdict.moves };
+    // A step paints no preview, so `paints` stays empty: a held async veto shows no bar on the move.
+    const writes = this.#writesWithPlace(NO_WRITES, NO_WRITES, verdict.moves);
+    return this.#commit({ kind: 'reorder' }, { writes, paints: NO_WRITES, grabbed: id, drop });
   }
 
   /** #602: `session()`'s one small map from gesture kind to the capability that gates it — a
@@ -882,6 +916,7 @@ export class GesturePipeline {
       measuredFrom.set(id, committed.get(id));
     };
     for (const id of proposal.paints.keys()) snapshot(id);
+    snapshot(proposal.grabbed);
     if (proposal.drop.kind === 'place') {
       const { parentId } = proposal.drop.place;
       if (parentId !== undefined) snapshot(parentId);

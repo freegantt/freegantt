@@ -12,6 +12,7 @@ function fakePorts(): { [K in keyof CoreCommandPorts]: ReturnType<typeof vi.fn> 
   return {
     collapseAll: vi.fn(),
     expandAll: vi.fn(),
+    stepEntry: vi.fn(),
     collapseRow: vi.fn(),
     expandRow: vi.fn(),
     canZoomIn: vi.fn(() => true),
@@ -422,3 +423,62 @@ function makeHeaderCommandContext(field: string): {
   } as CommandContext<unknown>;
   return { registry: new CommandRegistry<unknown>(() => ctx), ctx };
 }
+
+describe('the entry step commands', () => {
+  const STEP_COMMANDS = [
+    ['freegantt.moveEntryUp', 'up'],
+    ['freegantt.moveEntryDown', 'down'],
+    ['freegantt.indentEntry', 'indent'],
+    ['freegantt.outdentEntry', 'outdent'],
+  ] as const;
+  const focusedRow = { id: entryId('e1') } as Entry;
+
+  function contextOn(kind: 'row' | 'gridCell' | 'bar' | 'header', entry: Entry | undefined) {
+    return {
+      dataset: {} as CommandContext<unknown>['dataset'],
+      gantt: {},
+      ...(entry === undefined ? {} : { entry }),
+      target: { kind, entryIds: entry === undefined ? [] : [entry.id] },
+    } as CommandContext<unknown>;
+  }
+
+  it.each(STEP_COMMANDS)('%s steps the focused Entry %s', (id, step) => {
+    const ports = fakePorts();
+    const registry = new CommandRegistry<unknown>(() => contextOn('row', focusedRow));
+    registerCoreCommands(registry, ports);
+
+    registry.run(id);
+
+    expect(ports.stepEntry).toHaveBeenCalledOnce();
+    expect(ports.stepEntry).toHaveBeenCalledWith(focusedRow.id, step);
+  });
+
+  it.each(['row', 'gridCell', 'bar'] as const)('is available on a %s target', (kind) => {
+    const registry = new CommandRegistry<unknown>(() => contextOn(kind, focusedRow));
+    registerCoreCommands(registry, fakePorts());
+
+    const ids = registry.available().map((command) => command.id);
+
+    expect(ids).toEqual(expect.arrayContaining(STEP_COMMANDS.map(([id]) => id)));
+  });
+
+  it('is not available on a header cell', () => {
+    const registry = new CommandRegistry<unknown>(() => contextOn('header', focusedRow));
+    registerCoreCommands(registry, fakePorts());
+
+    const ids = registry.available().map((command) => command.id);
+
+    for (const [id] of STEP_COMMANDS) expect(ids).not.toContain(id);
+  });
+
+  it('is not available with no Entry, and run() then does nothing', () => {
+    const ports = fakePorts();
+    const registry = new CommandRegistry<unknown>(() => contextOn('row', undefined));
+    registerCoreCommands(registry, ports);
+
+    registry.run('freegantt.indentEntry');
+
+    expect(ports.stepEntry).not.toHaveBeenCalled();
+    expect(registry.available().map((command) => command.id)).not.toContain('freegantt.indentEntry');
+  });
+});

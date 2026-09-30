@@ -72,6 +72,9 @@ export interface RovingFocusPorts {
   revealEntry(id: EntryId): void;
 }
 
+/** The pane real focus sits in — see `RovingFocus.focusedPane`. */
+export type FocusedPane = 'grid' | 'timeline';
+
 type GridFocus = { pane: 'header'; field: FieldKey } | { pane: 'row'; rowId: RowId; field?: FieldKey };
 
 /** The planned row a grid-pane key moves from, and the cell Field it keeps when focus is on a cell. */
@@ -179,6 +182,31 @@ export class RovingFocus {
     if (this.#panes.rows.contains(active) || this.#panes.gridHeader.contains(active)) return active;
     if (this.#panes.timeline.contains(active)) return active;
     return undefined;
+  }
+
+  /** Which pane holds real focus: the grid pane for a row, a cell or a header cell, the timeline
+   *  pane for a bar. `undefined` when focus sits elsewhere, such as an open menu. */
+  focusedPane(): FocusedPane | undefined {
+    const focused = this.focusedElement();
+    if (focused === undefined) return undefined;
+    if (this.#panes.timeline.contains(focused)) return 'timeline';
+    return this.#panes.splitter === focused ? undefined : 'grid';
+  }
+
+  /** Puts real focus back on the row or bar this pane remembers. A tree move re-renders the row's
+   *  node, and the browser drops focus from a node it moves. This scrolls the row or bar into view
+   *  first, so a move to a far place keeps the Entry on screen. */
+  restoreFocus(pane: FocusedPane): void {
+    if (pane === 'grid') {
+      const focus = this.#gridFocus;
+      if (focus?.pane === 'row') this.#focusGridRow(focus.rowId, focus.field);
+      return;
+    }
+    const remembered = this.#timelineFocus;
+    if (remembered === undefined) return;
+    this.#ports.revealEntry(entryIdOfBar(remembered));
+    const bar = this.#barElements().find((candidate) => candidate.dataset['barId'] === remembered);
+    if (bar !== undefined) this.#focusBar(bar);
   }
 
   /** Called once per render, after the backend has synced the DOM to the new frame. Reassigns
@@ -451,8 +479,9 @@ export class RovingFocus {
     if (bars.length === 0) return;
     const currentIndex = timelineBarIndexOf(bars, this.#timelineFocus);
 
-    // Which bar does a vertical arrow land on?
-    const direction = valueForKey(ADJACENT_BAR_DIRECTION, event.key);
+    // Which bar does a vertical arrow land on? `Alt+Arrow` moves the Entry in the tree instead
+    // (`freegantt.moveEntryUp`), so it never moves focus.
+    const direction = event.altKey ? undefined : valueForKey(ADJACENT_BAR_DIRECTION, event.key);
     if (direction !== undefined) {
       const target = this.#nearestBarInAdjacentRow(bars, currentIndex, direction);
       if (target === undefined) return;
