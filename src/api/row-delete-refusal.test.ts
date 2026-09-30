@@ -76,8 +76,8 @@ describe('a row Delete meets the remove rule', () => {
       by: 'core',
       entryId: 'locked',
     });
-    expect(setup.reports[0]?.reason).toContain('locked');
-    expect(setup.reports[0]?.message).toContain('locked');
+    expect(setup.reports[0]?.reason).toContain('remove rule');
+    expect(setup.reports[0]?.message).toContain('remove rule');
     unmount(setup);
   });
 
@@ -89,7 +89,7 @@ describe('a row Delete meets the remove rule', () => {
     expect(setup.dataset.entries.get('open')).toBeDefined();
     expect(setup.dataset.entries.get('locked')).toBeDefined();
     expect(setup.reports).toHaveLength(1);
-    expect(setup.reports[0]?.message).toContain('locked');
+    expect(setup.reports[0]?.message).toContain('remove rule');
     expect(setup.reports[0]?.message).not.toContain('open');
     expect(setup.dataset.canUndo).toBe(false);
     unmount(setup);
