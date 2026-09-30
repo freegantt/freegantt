@@ -12,7 +12,9 @@ You are the coordinator. You plan, dispatch, rule, log and merge. You do not wri
 
 - The owner allows: merge each PR after its code review findings are fixed and CI is green. Mark drafts ready.
 - The owner does not allow: squash, amend, force-push, git stash, recurring timers, or deleting anything you did not create.
-- A decision you are unsure of: decide, mark it ⚠️ in the log, and keep going. Stop only for public API changes or conflicts with an ADR's open question. Ask about those at once, not at the end.
+- A decision you are unsure of: decide, mark it ⚠️ in the log, and keep going. This covers only how to build what the issue or the owner already stated.
+- **Ask before you decide a behavior rule.** A rule the issue text or the owner did not state is the owner's decision, even when it looks obvious. Ask at once, with a recommendation. Also ask for a public API change, for any ADR (write, amend or accept), and for a conflict with an ADR's open question. An issue title is not a ruling: on #610 a rule read from a title cost a plan, six implementers and a closed PR.
+- **Ask the owner, in the scope-check batch, whether to check in after each merged PR.** The check-in gives the time spent, what merged, and the next issue. With a yes, wait for the owner's go before the next issue. Log the answer. It holds for the whole queue.
 - Ask the owner which ocr mode to use before the first review, in the scope-check batch. Log the answer. It holds for the whole queue:
   1. Is ocr delegated or not delegated? Delegated: an agent does the review with its own model. Not delegated: ocr does the review with its configured LLM.
   2. If delegated: does this session review, or a new Cursor session?
@@ -22,6 +24,8 @@ You are the coordinator. You plan, dispatch, rule, log and merge. You do not wri
 Route and write every dispatch with the `subagents` skill. It holds the agent table, the dispatch shape, the context budget, and the watcher. Do a small rename, docblock edit, or lookup in your own session or in the implementer.
 
 - One implementer per worktree at a time. Parallel work only in separate worktrees on disjoint files.
+- **One implementer per issue, when the issue fits.** Every fresh agent re-reads the plan, the rules and the code before it builds, so each handoff costs a full context load. #425 took 20 implementers and #612 took 15. Split an issue that does not fit one implementer into smaller issues, not into more implementers.
+- **Debug it yourself after one failed delegated fix.** Reproduce the failure, probe it, and find the root cause in your own session. Then fix it yourself if the fix is small, or send an implementer the root cause and the fix. Never send a second implementer to guess. On #610 three implementers failed on one browser test; the coordinator found the cause in ten minutes.
 - **Retire an implementer when it compacts or reaches its budget.** Start a fresh one with file paths and the exact state. A resumed, compacted agent loses its identity and works in the wrong worktree.
 - **Clean up after each agent you retire.** Its background shells outlive it. Run the orphan check in "Waiting" and kill what it finds, in the same turn.
 - At most one reviewer agent. Let it compact. Do not start a second one.
@@ -38,7 +42,7 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
 ## Per issue
 
 1. **Scope check.** Read the issue and the governing plans and ADRs. Grep `docs/adr/` for open questions in the area. Log each hit, or "no open questions". Ask the owner the blocking design questions now, in one batch, with a recommendation each.
-2. **Plan.** Dispatch a fresh `planner`. Each step is one atomic commit, with its test and the files it touches. Review the plan. Push back on vague steps and on over-claims (for example "same rows in the same order" when only values matter). Post the approved plan as an issue comment.
+2. **Plan.** Dispatch a fresh `planner`. Each step is one atomic commit, with its test and the files it touches. A plan has at most 5 steps. A bigger plan means a bigger issue: split the issue. Review the plan. Push back on vague steps and on over-claims (for example "same rows in the same order" when only values matter). Post the approved plan as an issue comment.
 3. **Watch the scope.** At each agent report, compare the work with the plan. These signals mean the slice is growing:
    - steps added that the plan did not list;
    - core files changed that the plan did not name;
@@ -54,14 +58,16 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
    - the exact state (last sha, uncommitted files);
    - which steps to do, and when to STOP (a design question, a blocker, or the budget).
 7. **Rule fast.** When an implementer stops with a question, decide in the same turn if you can. Log it. Send the ruling with the reason and the exact edit.
-8. **Review.**
+8. **Review.** One review per PR: the ocr run or a `reviewer` agent, never both.
    - Default: one ocr run at the end, in the mode the owner chose (Authority). Fix each finding as it lands. A run of 10–30+ minutes is normal.
    - **Delegated, this session.** You run `ocr delegate preview --from origin/main --to HEAD`, then `ocr delegate rule <files>`. You review each file against its rules and fix each finding.
    - **Delegated, new Cursor session.** A supervised Orca worker runs a Cursor agent in the issue's worktree, and that agent does the review. Use Grok 4.6 at high effort. Never use a `-fast` model. Run the owner's global `orca-worker` script in the background:
+
      ```bash
      orca-worker --worktree <worktreePath> --prompt-file <scratchpad>/ocr-<n>-prompt.md \
        --model cursor-grok-4.6 --effort high --title "ocr #<n>" --timeout-min 40
      ```
+
      It starts the worker, waits for it, prints the worker's last message, and releases the worker's terminal. Exit codes:
      - `0`: done. Read the findings file.
      - `2`: the worker asks a question and still runs. The script prints the `reply` command and the `--wait` command to go on.
@@ -70,8 +76,9 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
      Do not start the agent with `orca terminal create --command` and `terminal wait --for exit`. Orca types `--command` into an interactive shell. The shell stays open after `cursor-agent` exits, so the wait never fires.
 
      The prompt tells the agent to run the two `ocr delegate` commands above and review each file against its rules. It writes the findings to `<scratchpad>/ocr-<n>-findings.md`: one finding each, with `file:line`, the rule, and the fix. It changes no file in the repo.
+
    - **Not delegated.** Run `pnpm ocr-review` in the background. ocr's configured LLM does the review and reports findings as it runs. The script kills a run only after 15 minutes with no progress. Resume a PARTIAL run with `pnpm ocr-review --resume <id>`.
-   - A `reviewer` pass per batch of 2–4 commits only for risky core changes (data model, undo, public API).
+   - Use a `reviewer` agent instead of ocr only for a risky core change (data model, undo, public API). Say which one in the log.
 9. **PR.**
    1. Merge `origin/main` in (a merge commit).
    2. `pnpm open-pr --title … --body-file …`. The body lists: what, why, fixes found on the way, ⚠️ decisions, numbers, review summary, and "Closes #n".
@@ -80,6 +87,7 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
    5. `timeout 1500 pnpm pr-wait <PR>` in the background, once.
    6. `gh pr merge <PR> --merge --match-head-commit <sha>`.
    7. `orca worktree rm`.
+   8. If the owner chose check-ins (Authority): report the time spent, what merged, and the next issue. Wait for the owner's go.
 10. File new issues for gaps found on the way.
 
 ## Waiting — IMPORTANT: never burn tokens
