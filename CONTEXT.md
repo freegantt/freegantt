@@ -647,6 +647,14 @@ the Entry lands) and `currentPlace` (where it sat before the drop) only when a d
 a time-only drag carries neither key.
 _Avoid_: Position (ambiguous with a bar's time position on the timeline)
 
+**Entry step** (#614):
+One keyboard action that moves an Entry one place in the tree: `up`, `down`, `indent` or `outdent`.
+It asks the **Reorder** capability and the **Place rule**, as a row drag does. It fires the same
+`beforeEntryMove` and `entryMove` pair with `shiftsTime: false`. It is one undo step. A refused
+step changes nothing and raises the `entry-step-refused` report. The core commands `moveEntryUp`,
+`moveEntryDown`, `indentEntry` and `outdentEntry` run it.
+_Avoid_: `nudge` (that names the keyboard time move of a bar)
+
 **Row drop zone** (#425):
 Which third of a row the pointer sits over during a vertical drag: `before` (the top quarter),
 `into` (the middle half), `after` (the bottom quarter). A `childrenAsSegments` row (see

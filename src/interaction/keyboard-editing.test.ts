@@ -160,6 +160,20 @@ describe('attachKeyboardEditing (S3.5, D-S3-13)', () => {
     expect(nudges).toEqual([[1, true]]);
   });
 
+  it.each([
+    ['ArrowRight', 1],
+    ['ArrowLeft', -1],
+  ])('Alt+Shift+%s resizes with the snap suspended', (arrow, direction) => {
+    const container = document.createElement('div');
+    const { ctx, sessions, nudges } = makeContext([A]);
+    attachKeyboardEditing(container, ctx);
+
+    container.dispatchEvent(key('keydown', { key: arrow, altKey: true, shiftKey: true }));
+
+    expect(sessions).toEqual([[A, { kind: 'resize', edge: 'end' }]]);
+    expect(nudges).toEqual([[direction, true]]);
+  });
+
   it('an incapable or pending grab (ctx.session() undefined) no-ops silently', () => {
     const container = document.createElement('div');
     const { ctx, nudges } = makeContext([A], { refuseSession: [A] });
