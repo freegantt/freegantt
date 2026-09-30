@@ -116,8 +116,17 @@ test("'fitColumns' re-measures when the column set changes (#157)", async ({ pag
   expect(withBudget).toBe(await columnsWidth());
 
   await page.locator('#toggle-budget-btn').click();
-  await expect.poll(paneWidth, { timeout: 2000 }).toBeLessThan(withBudget);
-  expect(await paneWidth()).toBe(await columnsWidth());
+  // The pane resizes at once, and the column headers repaint on the next frame. So wait until both
+  // agree on a width narrower than before, not for the pane alone.
+  await expect
+    .poll(
+      async () => {
+        const [pane, columns] = [await paneWidth(), await columnsWidth()];
+        return pane === columns && pane < withBudget;
+      },
+      { timeout: 2000 },
+    )
+    .toBe(true);
 
   await page.locator('#toggle-budget-btn').click();
   await expect.poll(paneWidth, { timeout: 2000 }).toBe(withBudget);
