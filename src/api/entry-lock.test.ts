@@ -7,7 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { barMovesOf, Dataset, placeableOf, removableOf } from './dataset.js';
 import { fieldRowsOf } from '../data/change-set.js';
-import { entryId, RemoveRefusedError } from './index.js';
+import { entryId, MutationCancelledError, RemoveRefusedError } from './index.js';
 import type { DataPlugin, EntryInput } from './index.js';
 import { lockedEntryBarMoveRule, lockedEntryLockRule, lockedEntryRemoveRule } from '../data/entry-lock.js';
 
@@ -102,6 +102,78 @@ describe('the core lock refuses a gesture onto a locked Entry (ADR 0038)', () =>
 
     expect(dataset.entries.get('t1')?.read('locked')).toBeUndefined();
     expect(dataset.editableOf('t1', 'name')).toBe('anywhere');
+  });
+});
+
+describe("'locked' is an ordinary Field on the write path", () => {
+  it('an edit extender cascades a lock to the children, in one ChangeSet and one undo step', () => {
+    const locksChildren: DataPlugin = {
+      id: 'demo.lockCascade',
+      data(ctx) {
+        ctx.edits.setExtender(() => (request) => {
+          const cascade = new Map<ReturnType<typeof entryId>, { locked: true }>();
+          if (request.entryAfterEdits('parent')?.locked !== true) return cascade;
+          if (!request.proposed.has(entryId('parent'))) return cascade;
+          for (const candidate of request.entries.values()) {
+            if (candidate.parentId === 'parent') cascade.set(candidate.id, { locked: true });
+          }
+          return cascade;
+        });
+      },
+    };
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'parent', name: 'parent' },
+        { id: 'child-1', name: 'child 1', parentId: 'parent' },
+        { id: 'child-2', name: 'child 2', parentId: 'parent' },
+      ],
+      plugins: [locksChildren],
+    });
+    const changeSets: { field: string; id: string }[][] = [];
+    dataset.on('change', ({ changeSet }) => {
+      changeSets.push(fieldRowsOf(changeSet).map((row) => ({ field: row.field, id: row.id })));
+    });
+
+    dataset.entries.update('parent', { locked: true });
+
+    expect(['parent', 'child-1', 'child-2'].map((id) => dataset.entries.get(id)?.read('locked'))).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(changeSets).toHaveLength(1);
+    expect(
+      changeSets[0]
+        ?.filter((row) => row.field === 'locked')
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(['child-1', 'child-2', 'parent']);
+
+    dataset.undo();
+
+    expect(['parent', 'child-1', 'child-2'].map((id) => dataset.entries.get(id)?.read('locked'))).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
+    expect(dataset.canUndo).toBe(false);
+  });
+
+  it('a beforeChange handler refuses an unlock, and the Entry stays locked', () => {
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Locked', locked: true }],
+    });
+    dataset.on('beforeChange', ({ changeSet }) =>
+      fieldRowsOf(changeSet).some((row) => row.field === 'locked' && row.to === undefined)
+        ? false
+        : undefined,
+    );
+
+    expect(() => dataset.entries.update('t1', { locked: undefined })).toThrow(MutationCancelledError);
+
+    expect(dataset.entries.get('t1')?.read('locked')).toBe(true);
   });
 });
 
