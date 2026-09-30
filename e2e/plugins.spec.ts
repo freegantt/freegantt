@@ -278,18 +278,22 @@ test('#280: a menu taller than the pane scrolls, so every item stays reachable',
     popupBoxBefore.x + popupBoxBefore.width / 2,
     popupBoxBefore.y + popupBoxBefore.height / 2,
   );
-  await page.mouse.wheel(0, 1000);
-
   // `boundingBox()` gives `{x, y, width, height}`, not `{top, bottom}` — the container's own bottom
   // edge is `y + height`, not a `.bottom` field it never carries.
   const containerBottom = containerBox.y + containerBox.height;
-  await expect
-    .poll(async () => {
-      const box = await lastItem.boundingBox();
-      if (!box) return false;
-      return box.y >= containerBox.y - 1 && box.y + box.height <= containerBottom + 1;
-    })
-    .toBe(true);
+  const lastItemIsInsideContainer = async () => {
+    const box = await lastItem.boundingBox();
+    if (!box) return false;
+    return box.y >= containerBox.y - 1 && box.y + box.height <= containerBottom + 1;
+  };
+
+  // A user scrolls until the last item shows. One wheel gesture is not enough everywhere: Firefox
+  // caps a single gesture below one page, so it stops short of the end of this menu. Scroll again
+  // until the last item sits inside the container.
+  await expect(async () => {
+    await page.mouse.wheel(0, 1000);
+    expect(await lastItemIsInsideContainer()).toBe(true);
+  }).toPass({ timeout: 5000 });
   await expect(lastItem).toBeVisible();
 
   // The scroll landed on the menu's own overflow, not a second popup this gesture happened to open.
