@@ -239,3 +239,20 @@ function segmentLegs(): EntryInput<DemoEntryProps>[] {
   const legs = segmentChildrenOf(SEGMENTED_PARENT_ID, parent!.start!, COMPACT_LEGS);
   return legs.map((leg, i) => ({ ...leg, props: { cost: (i + 1) * 250, team: 'edge' } }));
 }
+
+/** The same tree slid so its earliest leaf starts `daysBack` days before today's own UTC midnight.
+ *  A parent's dates roll up from its leaves, so the earliest leaf is the earliest start a person sees.
+ *  Every other date keeps its offset from that leaf, so the plan keeps its shape. */
+export function demoTreeEntryInputsStartingDaysBack(daysBack: number): EntryInput<DemoEntryProps>[] {
+  const parentIds = new Set(demoTreeEntryInputs.map((entry) => entry.parentId));
+  const leafStarts = demoTreeEntryInputs
+    .filter((entry) => entry.start !== undefined && !parentIds.has(entry.id))
+    .map((entry) => instant(entry.start!));
+  const slideMs = todayStartMs - daysBack * DAY_MS - Math.min(...leafStarts.map(Number));
+  const slide = (input: InstantInput): Date => new Date(Number(instant(input)) + slideMs);
+  return demoTreeEntryInputs.map((entry) => ({
+    ...entry,
+    ...(entry.start !== undefined ? { start: slide(entry.start) } : {}),
+    ...(entry.end !== undefined ? { end: slide(entry.end) } : {}),
+  }));
+}

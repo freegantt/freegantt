@@ -18,12 +18,22 @@ declare global {
   }
 }
 
-// `main.ts`'s own Mobilization date line vetoes a drop whose proposed start lands before it (a week
+// `main.ts`'s own Mobilization date line vetoes a drop whose proposed start lands before it (two days
 // out from today) — a vertical-only drag keeps the dragged Entry's own start, so a bar dated before
 // that line refuses every drop, not just an early one. `panToDate` centres the pane on a date safely
 // past it (14 days, double the boundary, so no clock skew between the test runner and the page turns
 // this into a coin flip) — a public API call, not a scroll simulation.
 export const PAST_MOBILIZATION_MS = Date.now() + 14 * 24 * 60 * 60 * 1000;
+
+/** The demo plan starts two weeks before today, so the page opens on today with the early bars off to
+ *  the left. This pans to the body of the plan, where bars sit on screen. A public `panToDate` call. */
+export async function panToPlanBody(page: Page): Promise<void> {
+  const bodyMs = Date.now() + 10 * 24 * 60 * 60 * 1000;
+  await page.evaluate((ms) => window.__gantt.panToDate(new Date(ms), 'center'), bodyMs);
+  await page.evaluate(
+    () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+  );
+}
 
 export async function gotoGeneric(page: Page): Promise<void> {
   await page.goto('/generic.html');
