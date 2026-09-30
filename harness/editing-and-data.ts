@@ -24,6 +24,7 @@ import { mountGanttToolbar } from './gantt-toolbar.js';
 import { zoomPresetsWithSixHour } from './six-hour-preset.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { fakeServer } from './fake-server.js';
+import { closedPadlock, padlockToggle } from './lock-column.js';
 import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import type { BufferKindProps } from './plugins/buffer-kind.js';
@@ -104,23 +105,9 @@ const overBudgetCell: GridCellRenderer = ({ column, value, fieldValue }) =>
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
 
-// The padlock icons draw in the theme's own row-label colour, so every built-in theme reads them.
-const padlockIcon = (
-  shackle: string,
-): { html: string; attrs: Record<string, string>; style: Record<string, string> } => ({
-  html:
-    '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
-    `<rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="${shackle}"/></svg>`,
-  attrs: { 'aria-hidden': 'true' },
-  style: { color: 'var(--fg-row-label-color)', display: 'inline-flex' },
-});
-const closedPadlock = padlockIcon('M5 7V5a3 3 0 0 1 6 0v2');
-const openPadlock = padlockIcon('M5 7V5a3 3 0 0 1 6 0');
-
 // Shows a toggle's `onToggle`: ask before a parent unlocks, then write and announce the edit.
 const lockToggle: ColumnToggle = {
-  on: closedPadlock,
-  off: openPadlock,
+  ...padlockToggle,
   onToggle: ({ entry, nextValue, announceEdit }) => {
     if (!nextValue && entry.children().length > 0 && !confirm(`Unlock "${entry.name}"?`)) return;
     dataset.entries.update(entry.id, { locked: nextValue });

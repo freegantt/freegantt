@@ -26,6 +26,7 @@ import { SEGMENTED_PARENT_ID, demoFieldOptions, demoTreeEntryInputs } from '../f
 import type { DemoEntryProps } from '../fixtures/demo-dataset.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
+import { closedPadlock, padlockToggle } from './lock-column.js';
 import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
@@ -46,6 +47,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   'end',
   { field: 'duration', align: 'start' },
   { field: 'cost', header: 'Budget' },
+  { field: 'locked', headerRenderer: () => closedPadlock, toggle: padlockToggle },
 ];
 
 // `DemoEntryProps` is the fixture's own published shape, and the page states nothing about it. A
@@ -56,7 +58,7 @@ const dataset = new Dataset<DemoEntryProps>({
   ...demoFieldOptions,
 });
 
-// `locked` is a core Field (#612) — the checkbox below and the right-click Lock/Unlock items both
+// `locked` is a core Field (#612) — the padlock column and the right-click Lock/Unlock items both
 // write it, so the page keeps no lock state of its own.
 function isLocked(id: string): boolean {
   return dataset.entries.get(id)?.read('locked') === true;
@@ -322,7 +324,6 @@ refreshRowSourceUi();
 
 const addEntryBtn = document.querySelector<HTMLButtonElement>('#add-entry')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
-const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const exportBtn = document.querySelector<HTMLButtonElement>('#export-btn')!;
 const documentJson = document.querySelector<HTMLTextAreaElement>('#document-json')!;
 
@@ -346,25 +347,11 @@ costBtn.addEventListener('click', () => {
   });
 });
 
-// The checkbox locks the dataset's current first entry through the core `locked` Field (#612), the
-// same door the right-click menu writes. Locking is a real dataset write, so it commits, it logs
-// like every other change, and Ctrl+Z unlocks (#156). A locked row's own refusal — no grid editor,
-// no drag — is the core lock's doing, with no plugin in the way.
-function firstEntryId(): string | undefined {
-  return dataset.entries.all[0]?.id;
-}
-
 // Who reports a refusal? The library, on one subscription over both emitters — this page keeps
 // no refusal callback of its own.
 watchAllErrors([dataset, gantt], (report) => {
   const reason = report.reason === undefined ? '' : ` · ${report.reason}`;
   prependLogLine(log, `error · ${report.severity} · ${report.by} · ${report.code}${reason}`);
-});
-
-lockCheckbox.addEventListener('change', () => {
-  const id = firstEntryId();
-  if (id === undefined) return;
-  dataset.entries.update(id, { locked: lockCheckbox.checked ? true : undefined });
 });
 
 // A read-only dump — every stored Entry, through the row's own copy door. The library holds no
