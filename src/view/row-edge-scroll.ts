@@ -64,7 +64,7 @@ export function createRowEdgeScroll(ports: RowEdgeScrollPorts): RowEdgeScroll {
     looping = false;
     if (speed === 0 || onScrolled === undefined) return;
     const now = ports.now();
-    const elapsedMs = Math.min(now - lastFrameMs, MAX_STEP_MS);
+    const elapsedMs = Math.max(0, Math.min(now - lastFrameMs, MAX_STEP_MS));
     lastFrameMs = now;
     const before = ports.scrollY.state.position;
     ports.scrollY.panTo(before + (speed * elapsedMs) / 1000);

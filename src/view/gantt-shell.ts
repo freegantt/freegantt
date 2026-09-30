@@ -764,7 +764,6 @@ export class GanttShell {
     this.#teardown.add(() => this.#paneLayout.destroy());
     // Registered first, released last: every resource below draws into these panes.
     this.#teardown.add(() => this.#frames.cancel());
-    this.#teardown.add(() => this.#rowEdgeScroll.stop());
     this.#panes = this.#paneLayout.panes;
     this.#gridPaneWidth = new GridPaneWidth(this.#gridPaneWidthPorts(), options.gridWidth === 'fitColumns');
     // Constructed right after the panes it measures, so it is ready by the time the
@@ -801,6 +800,7 @@ export class GanttShell {
       rowsHeight: () => this.#rowsViewportHeight(),
       now: () => performance.now(),
     });
+    this.#teardown.add(() => this.#rowEdgeScroll.stop());
 
     // Constructed with the options, not assigned through the live setters. So the first paint below
     // (`#frames.flush()`) sees what the consumer asked for, and no port fires while half this shell
