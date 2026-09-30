@@ -574,10 +574,22 @@ timeShadingToggle.addEventListener('change', () => {
 // `ctx.target.entryIds` and removes every one of those records (`src/view/core-commands.ts` states
 // the dispatch rule).
 //
+// Which commands move a row in the tree? — Move up, Move down, Indent and Outdent ship with core.
+// The same four commands run from the keyboard, so the menu is the path for a bar, which keeps
+// `Alt+Shift+Arrow` for a resize.
+//
 // What does the page still own? — Lock and Unlock. `locked` is a core Field (#612), but no
 // command ships to toggle it, so the page defines its own. They read `ctx.target.entryIds`: a
 // lock is a property of the whole record.
-const ENTRY_CONTEXT_COMMAND_IDS = ['freegantt.deleteSelection', 'demo.lockEntry', 'demo.unlockEntry'];
+const ENTRY_CONTEXT_COMMAND_IDS = [
+  'freegantt.moveEntryUp',
+  'freegantt.moveEntryDown',
+  'freegantt.indentEntry',
+  'freegantt.outdentEntry',
+  'freegantt.deleteSelection',
+  'demo.lockEntry',
+  'demo.unlockEntry',
+];
 
 function entryContextActions() {
   return definePlugin({
