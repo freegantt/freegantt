@@ -46,7 +46,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Fre
 
 ### Fixed
 
-- hour ticks in `Australia/Lord_Howe` no longer start 30 minutes before the hour floor at a DST change. A one-unit tick now starts where `startOf` says, in every zone. ([#599](https://github.com/freegantt/freegantt/issues/599))
+- Hour ticks in a zone with a 30-minute DST shift (`Australia/Lord_Howe`) are right at the switch. A one-unit tick starts where `startOf` says, in every zone, and ends where the next tick starts. The short 30-minute hour is 30 minutes wide, and the repeated hour at the DST end stays one tick. ([#599](https://github.com/freegantt/freegantt/issues/599))
 - A row Delete on a parent and its selected child no longer throws `EntryNotFoundError`. The parent's removal takes the child, and the Delete passes over the child. A Delete on several rows was one undo step per row, and is now one undo step. ([#611](https://github.com/freegantt/freegantt/issues/611))
 - A bar drag on the row axis asks the `reorder` capability, the same as a grid row drag. A parent with a locked dated child changes rows from its bar, and still refuses a time move. A drag on the time axis still asks `move`. ([#615](https://github.com/freegantt/freegantt/issues/615))
 - The planner harness page's `#` cell no longer keeps a work row's number after the row becomes a phase. ([#618](https://github.com/freegantt/freegantt/issues/618))
