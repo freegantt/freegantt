@@ -35,7 +35,7 @@ import type { HierarchySourceWrapper, PluginId } from '../model/index.js';
 import { createZonedTime, resolveDefaultTimeZone } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 import { storedParentSource } from '../data/hierarchy-source.js';
-import { lockedEntryLockRule, lockedEntryPlaceRule, lockedEntryRemoveRule } from '../data/entry-lock.js';
+import { lockedEntryBarMoveRule, lockedEntryLockRule, lockedEntryRemoveRule } from '../data/entry-lock.js';
 
 // I2-ok: keyed by Dataset instance (ADR 0007); one Dataset's state never reaches another's.
 // Friend-only state for `extraEditsFor` below — `Dataset` genuinely has no such method, because it
@@ -199,20 +199,20 @@ export class Dataset<TProps = unknown> {
     });
     this.#time = createZonedTime(this.#state.timeZone);
     datasetState.set(this, this.#state);
+    // What does a locked Entry refuse? Its own cells, its own bar and its own delete. Its children
+    // stay free. Core installs before every plugin, as the innermost occupant, so a plugin wraps
+    // each rule and can narrow or widen it, the way a lock rule wraps a Field's own `editable`.
+    // Built the same way a plugin builds a lock (`data/entry-lock.ts`), through the same
+    // `setLockRule`/`setRemoveRule`/`setBarMoveRule` doors `ctx.edits` calls below.
+    const isLocked = (id: EntryId): boolean => this.#state.entries.get(id)?.read('locked') === true;
+    this.#state.setLockRule(lockedEntryLockRule(isLocked));
+    this.#state.setRemoveRule(lockedEntryRemoveRule(isLocked));
+    this.#state.setBarMoveRule(lockedEntryBarMoveRule(isLocked));
     // Every plugin's `data()` runs here, on the finished Dataset above — `ctx.dataset.*` all read
     // (ADR 0031). A setup write is an ordinary commit, so History records it like any other;
     // `clearHistory()` right after empties that stack, so `canUndo` still reads `false` once this
     // constructor returns (#137).
     this.#disposePlugins = this.#installPlugins();
-    // What does a locked Entry refuse? Every gesture onto its cells, any drop into or out of it, and
-    // any delete of it or of its child. It installs last, so no plugin already installed can reopen
-    // a locked cell it closes (ADR 0038). Built the same way a plugin builds a lock
-    // (`data/entry-lock.ts`), through the same `setLockRule`/`setPlaceRule`/`setRemoveRule` doors
-    // `ctx.edits` calls above.
-    const isLocked = (id: EntryId): boolean => this.#state.entries.get(id)?.read('locked') === true;
-    this.#state.setLockRule(lockedEntryLockRule(isLocked));
-    this.#state.setPlaceRule(lockedEntryPlaceRule(isLocked));
-    this.#state.setRemoveRule(lockedEntryRemoveRule(isLocked));
     this.#state.clearHistory();
   }
 
@@ -242,6 +242,10 @@ export class Dataset<TProps = unknown> {
         setRemoveRule: (wrap) => {
           gate.assertOpen();
           this.#state.setRemoveRule(wrap);
+        },
+        setBarMoveRule: (wrap) => {
+          gate.assertOpen();
+          this.#state.setBarMoveRule(wrap);
         },
         // No gate: a rule's outside state can move at any time, not only during setup.
         rulesChanged: () => this.#state.rulesChanged(),
@@ -520,6 +524,17 @@ export function placeableOf<TProps>(
     throw new Error('placeableOf: dataset was not constructed through the Dataset constructor');
   }
   return state.placeableOf(id, parentId);
+}
+
+/** The friend function `view/capability.ts`'s `entriesMovedBy` reads before a bar drag — the same
+ *  friend-map pattern `removableOf` below uses. Not public: an app author sets the rule through
+ *  `ctx.edits.setBarMoveRule`, and asks it only through a gesture. */
+export function barMovesOf<TProps>(dataset: Dataset<TProps>, id: EntryId | string): boolean {
+  const state = datasetState.get(dataset);
+  if (!state) {
+    throw new Error('barMovesOf: dataset was not constructed through the Dataset constructor');
+  }
+  return state.barMovesOf(id);
 }
 
 /** The friend function `view/capability.ts`'s `canRemove` reads before a row Delete — the same

@@ -168,8 +168,8 @@ module.exports = {
       '^src/data/history\\.ts$',
       '^src/data/(dataset-state\\.ts|history\\.(test|property\\.test)\\.ts)$',
     ),
-    // The dogfood proof for ADR 0038's core lock: `src/data/entry-lock.ts` composes the same two
-    // public seams (`FieldLockRuleWrapper`, `PlaceRuleWrapper`) a plugin author reaches through
+    // The dogfood proof for ADR 0038's core lock: `src/data/entry-lock.ts` composes the same
+    // public seams (`FieldLockRuleWrapper`, `RemoveRuleWrapper`, `BarMoveRuleWrapper`) a plugin author reaches through
     // `ctx.edits`, so this file may import `model/` and nothing else in `src/`. `scripts/guard-red-
     // test.mjs` proves the rule actually blocks a violation of this one named file.
     {

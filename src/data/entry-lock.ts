@@ -1,15 +1,16 @@
 // data/ — the core lock (ADR 0038, #611), written the way a plugin writes one: three rules composed
-// over the public seams `ctx.edits.setLockRule`/`setPlaceRule`/`setRemoveRule` expose. A
+// over the public seams `ctx.edits.setLockRule`/`setRemoveRule`/`setBarMoveRule` expose. A
 // dependency-cruiser rule holds this file to `model/` imports only, so that claim is checked by CI,
 // not left as prose — a plugin author reaches nothing here that `import { ... } from 'freegantt'`
 // could not also reach.
 //
-// `Dataset`'s constructor installs all three, last (`api/dataset.ts`), so no plugin already
-// installed can widen a cell, a border, or a removal a locked Entry closes (ADR 0038).
+// `Dataset`'s constructor installs all three, first (`api/dataset.ts`), as the innermost occupant.
+// A plugin wraps each one and can narrow or widen it, the way a lock rule wraps a Field's own
+// `editable`. A locked Entry protects only itself: its cells, its bar and its own delete.
 
 import type { EntryId } from '../model/ids.js';
 import type { FieldLockRuleWrapper } from '../model/field-lock.js';
-import type { PlaceRuleWrapper } from '../model/place-rule.js';
+import type { BarMoveRuleWrapper } from '../model/bar-move-rule.js';
 import type { RemoveRuleWrapper } from '../model/remove-rule.js';
 
 /**
@@ -31,27 +32,18 @@ export function lockedEntryLockRule(isLocked: (id: EntryId) => boolean): FieldLo
 }
 
 /**
- * What does a locked Entry refuse at its border? Landing a new child under it, and giving one of its
- * own children up — both narrow to `'api'`. A same-parent place is the next rule's alone to answer,
- * unconditionally: this rule defers before it ever asks whether that parent is locked, which is what
- * lets children reorder under a locked parent (ADR 0038).
+ * Does the bar of a locked Entry move? No. This covers a summary bar, whose dates the Rollup derives,
+ * so no lock on a cell can close it. The children of a locked parent keep their own bars, and the
+ * Rollup still writes the parent's dates. A plugin that wraps this rule can answer `true`.
  */
-export function lockedEntryPlaceRule(isLocked: (id: EntryId) => boolean): PlaceRuleWrapper {
-  return (next) => (place) => {
-    const answer = next(place);
-    if (place.parentId === place.currentParentId) return answer;
-    const crossesLockedBorder =
-      (place.parentId !== undefined && isLocked(place.parentId)) ||
-      (place.currentParentId !== undefined && isLocked(place.currentParentId));
-    if (!crossesLockedBorder) return answer;
-    return answer === 'anywhere' ? 'api' : answer;
-  };
+export function lockedEntryBarMoveRule(isLocked: (id: EntryId) => boolean): BarMoveRuleWrapper {
+  return (next) => (entry) => !isLocked(entry.id) && next(entry);
 }
 
 /**
  * What does a locked Entry refuse on removal (#611)? Every removal that would take it away, whether
  * it is the id the caller named or a descendant caught in the same subtree. Narrows only
- * `'anywhere'` to `'api'`, the same test the lock rule and the place rule both make: `entries.remove`
+ * `'anywhere'` to `'api'`, the same test the lock rule makes: `entries.remove`
  * still removes a locked row — the lock stops only the user, never the app.
  */
 export function lockedEntryRemoveRule(isLocked: (id: EntryId) => boolean): RemoveRuleWrapper {

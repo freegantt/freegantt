@@ -57,6 +57,7 @@ import { CustomRowSourceNotFilterableOrSortableError, PluginSetupError } from '.
 import { attemptMutation } from './attempt-mutation.js';
 import { now, toInstant } from '../time/index.js';
 import {
+  barMovesOf,
   extraEditsFor,
   hierarchyFollowsParentId,
   onRulesChanged,
@@ -433,6 +434,7 @@ export class Gantt<TProps = unknown> {
       extraEditsFor: (draft) => extraEditsFor(options.dataset, draft),
       rolledUpEditsFor: (draft) => rolledUpEditsFor(options.dataset, draft),
       hierarchyFollowsParentId: () => hierarchyFollowsParentId(options.dataset),
+      barMovesOf: (id) => barMovesOf(options.dataset, id),
       placeableOf: (id, parentId) => placeableOf(options.dataset, id, parentId),
       removableOf: (id) => removableOf(options.dataset, id),
       onRulesChanged: (listener) => onRulesChanged(options.dataset, listener),

@@ -1,15 +1,15 @@
 // api/ — the core lock (ADR 0038, #611): a `Dataset` installs
-// `lockedEntryLockRule`/`lockedEntryPlaceRule`/`lockedEntryRemoveRule` (`data/entry-lock.ts`) last, so
-// every consumer meets the same lock with no plugin of their own. The parity test at the end proves a
+// `lockedEntryLockRule`/`lockedEntryRemoveRule`/`lockedEntryBarMoveRule` (`data/entry-lock.ts`) first,
+// so every consumer meets the same lock with no plugin of their own. A plugin wraps each rule. The parity test at the end proves a
 // plugin author could build the identical rule through the public `ctx.edits` seam — the core lock
 // takes no door a plugin cannot also reach.
 
 import { describe, expect, it } from 'vitest';
-import { Dataset, removableOf } from './dataset.js';
+import { barMovesOf, Dataset, placeableOf, removableOf } from './dataset.js';
 import { fieldRowsOf } from '../data/change-set.js';
 import { entryId, RemoveRefusedError } from './index.js';
 import type { DataPlugin, EntryInput } from './index.js';
-import { lockedEntryLockRule, lockedEntryPlaceRule, lockedEntryRemoveRule } from '../data/entry-lock.js';
+import { lockedEntryBarMoveRule, lockedEntryLockRule, lockedEntryRemoveRule } from '../data/entry-lock.js';
 
 /** Two root Entries, `a` locked, `b` its next sibling — the shape the renumber test below shares. */
 function twoRootEntries(overrides: { a?: Partial<EntryInput>; b?: Partial<EntryInput> } = {}): EntryInput[] {
@@ -44,7 +44,7 @@ describe('the core lock refuses a gesture onto a locked Entry (ADR 0038)', () =>
     expect(dataset.editableOf('t1', 'owner')).toBe('never');
   });
 
-  it("does not reopen a locked Entry a plugin's own lock rule answers 'anywhere' for", () => {
+  it("reopens a locked cell a plugin's own lock rule answers 'anywhere' for", () => {
     const opensName: DataPlugin = {
       id: 'demo.opensName',
       data(ctx) {
@@ -57,6 +57,22 @@ describe('the core lock refuses a gesture onto a locked Entry (ADR 0038)', () =>
       timeZone: 'UTC',
       entries: [{ id: 't1', name: 'Locked', locked: true }],
       plugins: [opensName],
+    });
+
+    expect(dataset.editableOf('t1', 'name')).toBe('anywhere');
+  });
+
+  it('keeps the lock on a cell when a plugin only calls next', () => {
+    const asksNext: DataPlugin = {
+      id: 'demo.asksNext',
+      data(ctx) {
+        ctx.edits.setLockRule((next) => (query, field) => next(query, field));
+      },
+    };
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 't1', name: 'Locked', locked: true }],
+      plugins: [asksNext],
     });
 
     expect(dataset.editableOf('t1', 'name')).toBe('api');
@@ -89,7 +105,7 @@ describe('the core lock refuses a gesture onto a locked Entry (ADR 0038)', () =>
   });
 });
 
-describe('the core lock refuses a place into or out of a locked Entry (ADR 0038)', () => {
+describe('a core lock protects only its own row', () => {
   function withLockedParent(): Dataset {
     return new Dataset({
       timeZone: 'UTC',
@@ -98,38 +114,97 @@ describe('the core lock refuses a place into or out of a locked Entry (ADR 0038)
         { id: 'q', name: 'q' },
         { id: 'c1', parentId: 'p', name: 'c1' },
         { id: 'c2', parentId: 'p', name: 'c2' },
+        { id: 'free', name: 'free' },
       ],
     });
   }
 
-  it('refuses a gesture landing a new child under a locked parent, api still writes it', () => {
-    const dataset = new Dataset({
-      timeZone: 'UTC',
-      entries: [
-        { id: 'p', name: 'p', locked: true },
-        { id: 'c', name: 'c' },
-      ],
-    });
-
-    dataset.entries.update('c', { parentId: 'p' });
-
-    expect(dataset.entries.get('c')?.read('parentId')).toBe(entryId('p'));
+  it('lets a user drop an Entry under a locked parent', () => {
+    expect(placeableOf(withLockedParent(), 'free', 'p')).toBe('anywhere');
   });
 
-  it('refuses giving up a child from a locked parent the same way (isLocked reads currentParentId)', () => {
+  it('lets a user drag a child out of a locked parent', () => {
+    expect(placeableOf(withLockedParent(), 'c1', 'q')).toBe('anywhere');
+  });
+
+  it('lets a child of a locked parent reorder', () => {
+    expect(placeableOf(withLockedParent(), 'c1', 'p')).toBe('anywhere');
+  });
+
+  it('keeps the cells of a child of a locked parent open', () => {
+    const dataset = withLockedParent();
+
+    expect(dataset.editableOf('c1', 'name')).toBe('anywhere');
+    expect(dataset.editableOf('c1', 'siblingIndex')).toBe('anywhere');
+    expect(removableOf(dataset, 'c1')).toBe('anywhere');
+  });
+
+  it('keeps the parent locked when its last child leaves', () => {
     const dataset = withLockedParent();
 
     dataset.entries.update('c1', { parentId: 'q' });
+    dataset.entries.update('c2', { parentId: 'q' });
 
-    expect(dataset.entries.get('c1')?.read('parentId')).toBe(entryId('q'));
+    expect(dataset.entries.get('p')?.read('locked')).toBe(true);
+    expect(dataset.editableOf('p', 'name')).toBe('api');
   });
+});
 
-  it('leaves a same-parent reorder under a locked parent to the next rule — children may reorder', () => {
+describe('the core lock stops the bar of a locked Entry', () => {
+  function withLockedParent(plugins: DataPlugin[] = []): Dataset {
+    return new Dataset({
+      timeZone: 'UTC',
+      entries: [
+        { id: 'p', name: 'p', locked: true },
+        { id: 'c', name: 'c', parentId: 'p', start: '2026-01-01', end: '2026-01-05' },
+        { id: 'free', name: 'free' },
+      ],
+      plugins,
+    });
+  }
+
+  it('answers false for a locked Entry and true for a free one', () => {
     const dataset = withLockedParent();
 
-    dataset.entries.update('c1', { siblingIndex: 1 });
+    expect(barMovesOf(dataset, 'p')).toBe(false);
+    expect(barMovesOf(dataset, 'c')).toBe(true);
+    expect(barMovesOf(dataset, 'free')).toBe(true);
+  });
 
-    expect(dataset.entries.get('c1')?.read('siblingIndex')).toBe(1);
+  it('lets a plugin release a locked bar', () => {
+    const releases: DataPlugin = {
+      id: 'demo.releasesBar',
+      data(ctx) {
+        ctx.edits.setBarMoveRule((next) => (entry) => (entry.id === 'p' ? true : next(entry)));
+      },
+    };
+
+    expect(barMovesOf(withLockedParent([releases]), 'p')).toBe(true);
+  });
+
+  it('lets a plugin freeze a free bar', () => {
+    const freezes: DataPlugin = {
+      id: 'demo.freezesBar',
+      data(ctx) {
+        ctx.edits.setBarMoveRule((next) => (entry) => (entry.id === 'free' ? false : next(entry)));
+      },
+    };
+
+    const dataset = withLockedParent([freezes]);
+
+    expect(barMovesOf(dataset, 'free')).toBe(false);
+    expect(barMovesOf(dataset, 'c')).toBe(true);
+  });
+
+  it('keeps the lock on a bar when a plugin only calls next', () => {
+    const asksNext: DataPlugin = {
+      id: 'demo.asksNextBar',
+      data(ctx) {
+        ctx.edits.setBarMoveRule((next) => (entry) => next(entry));
+      },
+    };
+
+    expect(barMovesOf(withLockedParent([asksNext]), 'p')).toBe(false);
   });
 });
 
@@ -173,7 +248,7 @@ describe('the core lock refuses a user delete (#611)', () => {
     expect(dataset.entries.has('p')).toBe(false);
   });
 
-  it("does not reopen a locked row a plugin's own remove rule answers 'anywhere' for", () => {
+  it("reopens a locked row a plugin's own remove rule answers 'anywhere' for", () => {
     const opensRemove: DataPlugin = {
       id: 'demo.opensRemove',
       data(ctx) {
@@ -186,10 +261,23 @@ describe('the core lock refuses a user delete (#611)', () => {
       plugins: [opensRemove],
     });
 
-    // The core lock installs last (ADR 0038): whatever a plugin answers, the locked row still only
-    // opens to the API, never wider — the same posture `entries.remove()` still keeps below.
-    expect(() => dataset.entries.remove('p')).not.toThrow(RemoveRefusedError);
-    expect(dataset.entries.has('p')).toBe(false);
+    expect(removableOf(dataset, 'p')).toBe('anywhere');
+  });
+
+  it('keeps the lock on a delete when a plugin only calls next', () => {
+    const asksNext: DataPlugin = {
+      id: 'demo.asksNextRemove',
+      data(ctx) {
+        ctx.edits.setRemoveRule((next) => (removal) => next(removal));
+      },
+    };
+    const dataset = new Dataset({
+      timeZone: 'UTC',
+      entries: [{ id: 'p', name: 'p', locked: true }],
+      plugins: [asksNext],
+    });
+
+    expect(removableOf(dataset, 'p')).toBe('api');
   });
 
   it("a plugin's own 'never' remove rule still refuses entries.remove() — the core lock never widens it", () => {
@@ -300,8 +388,8 @@ describe('a plugin builds the identical lock through the public ctx.edits seam (
       data(ctx) {
         dataset = ctx.dataset;
         ctx.edits.setLockRule(lockedEntryLockRule(isLocked));
-        ctx.edits.setPlaceRule(lockedEntryPlaceRule(isLocked));
         ctx.edits.setRemoveRule(lockedEntryRemoveRule(isLocked));
+        ctx.edits.setBarMoveRule(lockedEntryBarMoveRule(isLocked));
       },
     };
   }
@@ -321,6 +409,9 @@ describe('a plugin builds the identical lock through the public ctx.edits seam (
 
     expect(withPlugin.editableOf('p', 'name')).toBe(core.editableOf('p', 'name'));
     expect(withPlugin.editableOf('q', 'name')).toBe(core.editableOf('q', 'name'));
+    expect(barMovesOf(withPlugin, 'p')).toBe(barMovesOf(core, 'p'));
+    expect(barMovesOf(withPlugin, 'q')).toBe(barMovesOf(core, 'q'));
+    expect(removableOf(withPlugin, 'p')).toBe(removableOf(core, 'p'));
 
     withPlugin.entries.update('c1', { parentId: 'q' });
     core.entries.update('c1', { parentId: 'q' });
