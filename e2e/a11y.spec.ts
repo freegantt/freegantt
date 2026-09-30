@@ -53,3 +53,18 @@ for (const file of HARNESS_PAGE_FILES) {
     });
   }
 }
+
+// Fixture pages that no nav link reaches still owe the same run. The toggle page is one: its cells
+// and headers carry names the library writes, so axe checks that they form a valid grid.
+const FIXTURE_PAGE_FILES = ['e2e/toggle-column.html'];
+
+for (const file of FIXTURE_PAGE_FILES) {
+  test(`${file} has no axe violations`, async ({ page }) => {
+    await page.goto(`/${file}`);
+    await waitForPageToSettle(page);
+
+    const results = await new AxeBuilder({ page }).analyze();
+
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+  });
+}

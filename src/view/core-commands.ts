@@ -41,6 +41,12 @@ export interface CoreCommandPorts {
    *  if nothing focused answers `canActivateFocused()` — asked again rather than trusted from the
    *  `when` that gated this `run`, the same posture every command here takes. */
   activateFocused(): void;
+  /** Does real focus sit on a toggle column's cell? The `when` half of `freegantt.switchToggle`.
+   *  A closed toggle answers `true` too, so `Enter` on it never falls through to an editor. */
+  focusedCellIsToggle(): boolean;
+  /** Switches the focused toggle cell, through the same gates a click asks. A closed toggle does
+   *  nothing. */
+  switchFocusedToggle(): void;
   /** ADR 0012: may this Entry's own dates be cleared? A rolling-up parent's cannot — the Rollup
    *  writes them, not the user (ADR 0013) — so a Delete on its bar passes over it and the row
    *  stays, which is what `e2e/hierarchy.spec.ts` pins. A dateless Entry has nothing to clear and
@@ -162,6 +168,12 @@ export function registerCoreCommands(
     label: 'Activate entry',
     when: () => ports.canActivateFocused(),
     run: () => ports.activateFocused(),
+  });
+  register({
+    id: 'freegantt.switchToggle',
+    label: 'Switch toggle',
+    when: () => ports.focusedCellIsToggle(),
+    run: () => ports.switchFocusedToggle(),
   });
   // Which commands move the focused row in the tree? Each one runs a step through the same rules
   // as a row drag. The chords and the context menu run these same commands. `when` asks only for a

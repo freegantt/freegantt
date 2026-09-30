@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>FreeGantt harness — toggle column</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 2rem;
+      }
+      .fg-row {
+        font-size: 11px;
+        line-height: var(--fg-row-height);
+        padding: 0 6px;
+        box-sizing: border-box;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .fg-bar {
+        font-size: 11px;
+      }
+      #gantt {
+        --fg-row-height: 32px;
+        --fg-grid-pane-width: 420px;
+        height: 240px;
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>FreeGantt — toggle column</h1>
+      <p>
+        The Done column is a toggle with its own icons and its own header. The Flag column is a toggle with
+        the default checkbox look.
+      </p>
+      <div id="gantt"></div>
+    </main>
+    <script type="module" src="./toggle-column.ts"></script>
+  </body>
+</html>

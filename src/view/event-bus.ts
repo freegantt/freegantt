@@ -62,7 +62,7 @@ export interface SelectionChange {
  *  (`EntryEdit` is already the write shape `update()` takes, `plans/02` §1 "one write shape", one
  *  name one concept). `beforeEntryEdit` fires **before the editor opens**, not before the write, so
  *  no candidate value exists yet at that point — `from` and `to` are both the entry's current stored
- *  value for that field. `entryEdit` fires after the commit, with `to` the value actually written. */
+ *  value for that field. A toggle column knows its candidate value, so its `beforeEntryEdit` carries the value it would write in `to`. `entryEdit` fires after the commit, with `to` the value actually written. */
 export interface EntryFieldEdit {
   readonly entry: Entry;
   readonly field: FieldKey;

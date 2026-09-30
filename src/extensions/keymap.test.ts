@@ -28,6 +28,11 @@ function makeCommands(): { registry: CommandRegistry<unknown>; ctx: CommandConte
 }
 
 describe('normalizeChord (D-S5-7)', () => {
+  it('spells the space bar as Space, and matches the one-space key of a KeyboardEvent', () => {
+    expect(normalizeChord('Space', false)).toMatchObject({ key: ' ', shift: false });
+    expect(normalizeChord('Shift+Space', false)).toMatchObject({ key: ' ', shift: true });
+  });
+
   it('resolves Mod to Ctrl off Apple and Meta on Apple', () => {
     expect(normalizeChord('Mod+Z', false)).toMatchObject({ key: 'z', ctrl: true, meta: false });
     expect(normalizeChord('Mod+Z', true)).toMatchObject({ key: 'z', ctrl: false, meta: true });

@@ -777,6 +777,13 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         });
       }
 
+      /** A toggle column switches on a click or a key press, so its cell opens no editor. */
+      function isToggleColumn(fieldKey: FieldKey): boolean {
+        return ctx.view
+          .resolvedColumns()
+          .some((column) => column.field === fieldKey && column.toggle !== undefined);
+      }
+
       /** The veto question fires *before the editor opens*, not before the write. A
        *  consumer's `beforeEntryEdit` handler opens its own dialog, and returns `false` to suppress
        *  the built-in editor entirely (U8). */
@@ -786,7 +793,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         // A cell with no editor refuses silently. Asked before `canWrite`, so a writable
         // `entryId` Field never reaches the "editor it cannot open" refusal below. That refusal
         // speaks a reason, and this cell never had one to speak.
-        if (offersNoEditor(field)) return;
+        if (offersNoEditor(field) || isToggleColumn(field.key)) return;
         // Which refusals speak (`s5.8-inline-editing.md` §1). A cell that offers no editor at all
         // refuses silently. A cell that offers an editor it cannot open names its reason. #256 moved
         // that decision onto the verdict itself, so this file holds no list of which refusal is
@@ -860,7 +867,7 @@ export function inlineEditing(options: InlineEditingOptions = {}): ChromePlugin 
         const focused = ctx.view.focusedCell();
         if (focused === undefined) return false;
         const field = ctx.dataset.field(focused.field);
-        if (field === undefined || offersNoEditor(field)) return false;
+        if (field === undefined || offersNoEditor(field) || isToggleColumn(focused.field)) return false;
         const entry = ctx.dataset.entries.get(focused.entryId);
         return entry !== undefined && ctx.interaction.canWrite(entry, focused.field).ok;
       };
