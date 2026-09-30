@@ -389,8 +389,8 @@ export function nextTick(zone: string, boundary: Instant, unit: TimeUnit, increm
  * or origin start would cost up to 60,000 iterations for a millisecond-level tick (#489) — this
  * costs one `startOf`/`stepBy` pair regardless of `unit` or how far `at` sits from the origin.
  *
- * `increment: 1` always answers the same boundary `startOf(zone, at, unit)` already gave: one whole
- * `unit` from the container's own start is the boundary `at` already sits inside.
+ * `increment: 1` answers `startOf(zone, at, unit)` directly. The arithmetic below counts real time,
+ * so it would land 30 minutes early in a zone whose DST shift is 30 minutes (Lord Howe).
  *
  * On a DST-transition day, `unitsBetween`'s real-time count keeps a tick's spacing even but drops
  * it off a wall-clock multiple until the next day starts — a chosen trade-off, not a bug
@@ -399,6 +399,7 @@ export function tickFloor(zone: string, at: Instant, unit: TimeUnit, increment: 
   if (!Number.isInteger(increment) || increment <= 0) {
     throw new InvalidSnapIncrementError(unit, increment);
   }
+  if (increment === 1) return startOf(zone, at, unit);
   const start = stepFitsAnchorContainer(unit, increment)
     ? startOf(zone, at, anchorUnit(unit))
     : fixedOrigin(zone, unit);
