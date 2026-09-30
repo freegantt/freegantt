@@ -214,6 +214,35 @@ a grid row drag, and a Delete refuse.
 A locked parent's summary bar does not move. The Rollup still writes the parent's dates when a
 child moves.
 
+<!-- doc-example-setup
+declare const container: HTMLElement;
+-->
+
+To give the user a lock toggle, list `'locked'` in `gridColumns`. The Field brings a default column:
+header "Locked", centered, 80 px wide. The default grid does not show it. The cell is a checkbox. A
+locked row leaves its own `locked` cell open, so the user can unlock it from the grid.
+
+```ts
+import { Gantt } from 'freegantt';
+
+new Gantt({ container, dataset, gridColumns: ['name', 'locked'] });
+```
+
+To change the header or the width, give the column object form: `{ field: 'locked', header: 'Lock' }`.
+
+To show the column read-only, close it with `capabilities.edit`. The app still writes the Field.
+
+```ts
+import { Gantt } from 'freegantt';
+
+new Gantt({
+  container,
+  dataset,
+  gridColumns: ['name', 'locked'],
+  capabilities: { edit: (entry, field) => (field === 'locked' ? false : undefined) },
+});
+```
+
 A plugin can change the core lock. It wraps the lock rule, the remove rule, or the bar move rule.
 It can narrow or widen each one. A plugin that calls `next()` leaves the core lock in force. See
 "Other locks are plugins" in the plugin guide.

@@ -30,7 +30,7 @@ describe('the core lock refuses a gesture onto a locked Entry (ADR 0038)', () =>
     });
 
     expect(dataset.editableOf('t1', 'name')).toBe('api');
-    expect(dataset.editableOf('t1', 'locked')).toBe('api');
+    expect(dataset.editableOf('t1', 'locked')).toBe('anywhere');
     expect(dataset.editableOf('t2', 'name')).toBe('anywhere');
   });
 
