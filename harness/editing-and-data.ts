@@ -24,7 +24,7 @@ import { mountGanttToolbar } from './gantt-toolbar.js';
 import { zoomPresetsWithSixHour } from './six-hour-preset.js';
 import { prependChangeSet, prependLogLine } from './change-log.js';
 import { fakeServer } from './fake-server.js';
-import { closedPadlock, padlockToggle } from './lock-column.js';
+import { padlockHeader, padlockToggle } from './lock-column.js';
 import { subtreeUnlock } from './plugins/subtree-unlock.js';
 import { bufferKind } from './plugins/buffer-kind.js';
 import type { BufferKindProps } from './plugins/buffer-kind.js';
@@ -120,7 +120,7 @@ const GRID_COLUMNS: readonly GridColumnInput[] = [
   'start',
   'end',
   { field: 'cost', header: 'Cost' },
-  { field: 'locked', headerRenderer: () => closedPadlock, toggle: lockToggle },
+  { field: 'locked', headerRenderer: () => padlockHeader, toggle: lockToggle },
 ];
 
 const gantt = new Gantt({
