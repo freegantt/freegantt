@@ -52,6 +52,14 @@ export interface ResolvedCapabilities {
    *  `parentId` open. A plugin's place rule (ADR 0038) gets the final say either way. A locked
    *  `parentId` or a place rule's own refusal both refuse a drag the way `entries.update()` refuses. */
   canPlace(entry: Entry, parentId: EntryId | undefined): boolean;
+  /** May a user gesture change `field` on `entry` through the Rollup? `canWrite` answers "derived,
+   *  refused" for every rolling-up cell, locked or not. So it cannot tell a held date from an open
+   *  one. This question skips that verdict and asks the lock alone: the effective `editableOf`
+   *  answer, or the Field's own declared `editable` with no lock rule installed. A consumer's
+   *  `capabilities.edit` and a variant's own `edit` answer a different question: whether the gesture
+   *  is offered at all. Neither gets a say here, the same way neither gets one over `canWrite`'s own
+   *  refusal. */
+  canRollUpInto(entry: Entry, field: 'start' | 'end'): boolean;
 }
 
 /** What one Gantt's capability resolution reads. An object, not four positional arguments: the
@@ -212,6 +220,18 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
   const ownsField = (entry: Entry, field: FieldKey): boolean =>
     resolveWriteTarget(entry.hasChildren, fieldFor(field)) === 'entry';
 
+  /** #610: is this date open under the lock a plugin or the Field declares? No opinion asked from
+   *  `hasChildren`, `capabilities.edit` or a variant's own `edit`. A rolling-up parent's `start`/`end`
+   *  are always "derived, refused" to `canWrite` — that is the write-rule ladder's own verdict, not
+   *  the lock's. This function reads the lock alone. So a locked roll-up parent and an open one give
+   *  different answers where `canWrite` gives the same one for both. */
+  const canRollUpInto = (entry: Entry, field: 'start' | 'end'): boolean => {
+    const declared = fieldFor(field);
+    if (!hasSomewhereToWrite(declared)) return false;
+    const effectiveEditable = inputs.editableOf?.(entry.id, field) ?? editableOf(declared);
+    return effectiveEditable === 'anywhere';
+  };
+
   /** The leaf rule, unchanged since #256: a bar that holds its own dates moves when it owns both of
    *  them and both may change. It asks about the Fields, never about the values, so a dateless leaf
    *  answers the same as a dated one. `ownsField` is a no-op for a leaf, because a childless row
@@ -269,6 +289,16 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
       if (!mayTranslateTheDatesItHolds(descendant)) return NOTHING_MOVES;
       moved.push(descendant);
     }
+    // #610: a date this row holds but does not own is the Rollup's own answer. A moving descendant
+    // that holds the same date asks the Rollup to write it here. A lock on that date refuses the
+    // whole gesture, the same way a locked descendant's own date does above. The summary bar must
+    // not offer a move the commit would refuse.
+    if (!ownsADateItHolds(entry)) {
+      for (const field of ['start', 'end'] as const) {
+        const rollupWouldWriteIt = moved.some((moving) => moving !== entry && moving[field] !== undefined);
+        if (rollupWouldWriteIt && !canRollUpInto(entry, field)) return NOTHING_MOVES;
+      }
+    }
     return moved;
   };
 
@@ -309,5 +339,6 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
     canWrite,
     entriesMovedBy,
     canPlace,
+    canRollUpInto,
   };
 }

@@ -464,6 +464,40 @@ describe("entriesMovedBy — what a parent bar's drag writes (ADR 0013, Q9)", ()
     const [parent, child] = family({ name: 'c1', start: 0 }) as readonly [Entry, Entry];
     expect(caps.entriesMovedBy(parent)).toEqual([child]);
   });
+
+  it("a locked parent's own summary bar arms no move (#610)", () => {
+    // `e1` is locked, but the dated child that feeds its Rollup is not.
+    const caps = capabilities({
+      editableOf: (id, field) => (id === 'e1' && field === 'start' ? 'api' : 'anywhere'),
+    });
+    const parent = rollUpParent();
+    expect(caps.entriesMovedBy(parent)).toEqual([]);
+    expect(caps.can('move', parent)).toBe(false);
+  });
+});
+
+describe('canRollUpInto — may a gesture change this date through the Rollup (#610)', () => {
+  it("answers false for a locked parent's start", () => {
+    const caps = capabilities({
+      editableOf: (id, field) => (id === 'e1' && field === 'start' ? 'api' : 'anywhere'),
+    });
+    expect(caps.canRollUpInto(rollUpParent(), 'start')).toBe(false);
+  });
+
+  it('answers true for an unlocked rolled-up parent', () => {
+    const caps = capabilities();
+    expect(caps.canRollUpInto(rollUpParent(), 'start')).toBe(true);
+    expect(caps.canRollUpInto(rollUpParent(), 'end')).toBe(true);
+  });
+
+  it("stays true under a consumer's capabilities.edit that closes every parent — it skips that ladder", () => {
+    const caps = capabilities({ capabilities: { edit: (e) => !e.hasChildren } });
+    const parent = rollUpParent();
+    // The library rule already reads this cell as derived, refused — `canWrite` would answer false
+    // here for a reason `canRollUpInto` must not carry.
+    expect(caps.canWrite(parent, 'start').ok).toBe(false);
+    expect(caps.canRollUpInto(parent, 'start')).toBe(true);
+  });
 });
 
 describe('#470: a parent that owns its dates (rollUp: none) is an ordinary bar too', () => {
