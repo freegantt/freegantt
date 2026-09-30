@@ -52,6 +52,10 @@ export type BuiltInReportCode =
   // a root outdents, or a capability or place rule says no. `by: 'core'` and `severity: 'info'`, so
   // the live region announces `message` to a screen reader.
   | 'entry-step-refused'
+  // A vertical drop that a rule refused, released over a row that takes nothing. Nothing moved.
+  // `by: 'core'` and `severity: 'info'`, so the live region announces `message`, the same sentence
+  // the note near the pointer showed.
+  | 'entry-drop-refused'
   // A gesture core dropped on its own, never a handler's veto (#272, #273, #377) — the reason rides
   // on `ErrorReport.droppedReason` (`GestureDroppedReason`). Its own group, not the refusal group above:
   // `by: 'core'` here, always `by: 'consumer'` above, and conflating the two misreports which one

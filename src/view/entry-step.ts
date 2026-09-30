@@ -5,7 +5,7 @@
 
 import type { Entry, EntryId } from '../model/index.js';
 import type { DropPlace, RowsForDrop } from '../layout/row-drop-target.js';
-import { placedEntriesFor, placementRefusal } from './row-drop.js';
+import { placedEntriesFor, placementRefusal, ROW_DROP_REFUSAL_TEXT } from './row-drop.js';
 import type { PlacedEntry, PlacementRefusal, RowDropInput } from './row-drop.js';
 
 /** One keyboard step. `up` and `down` swap the Entry with a sibling. `indent` makes it the last child
@@ -26,9 +26,9 @@ export const ENTRY_STEP_REFUSAL_TEXT: Readonly<Record<EntryStepRefusal, string>>
   noSiblingAbove: 'Nothing moved. No sibling above this entry can take it as a child.',
   topLevel: 'Nothing moved. This entry has no parent to leave.',
   rowsOutOfTreeOrder: 'Nothing moved. The rows do not follow the tree, so a tree move shows nowhere.',
-  ownDescendant: 'Nothing moved. An entry cannot move inside itself.',
-  capability: 'Nothing moved. This entry cannot change its place in the tree.',
-  parentLocked: 'Nothing moved. This entry cannot enter or leave that parent.',
+  ownDescendant: ROW_DROP_REFUSAL_TEXT.ownDescendant,
+  capability: ROW_DROP_REFUSAL_TEXT.capability,
+  parentLocked: ROW_DROP_REFUSAL_TEXT.parentLocked,
 });
 
 /** One step's verdict. `place` — the step lands; `moves` lists the write, the same shape a row drop

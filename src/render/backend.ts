@@ -61,11 +61,12 @@ export interface InteractionState {
    *  past the last row; `rowId` is `undefined` only for that past-the-last-row case. `depth` and
    *  `lineY` are what the Insertion line paints (`lineY` is `undefined` for an `into` drop — the
    *  target row's own outline is the indicator then, `layout/row-drop-target.ts`'s own `DropPlace`
-   *  doc). `refusedRowId` names the row a drop refuses instead, `undefined` past the last row.
+   *  doc). `refusedRowId` names the row a drop refuses instead, `undefined` past the last row; `note` says
+   *  why, for the note near the pointer.
    *  Undefined outside a vertical drag, or while it sits over the source row. */
   rowDrop?:
     | { rowId: RowId | undefined; side: RowDropSide | 'end'; depth: number; lineY: number | undefined }
-    | { refusedRowId: RowId | undefined };
+    | { refusedRowId: RowId | undefined; note: string };
 }
 
 /** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185). A row hit

@@ -528,6 +528,12 @@ ${DARK_COLOR_TOKENS}
 /* #425: a vertical drag over a row a drop refuses — the whole container takes the cursor, not just
    the refused row, because the pointer is over a bar mid-drag, never the row underneath it. */
 .fg-container[data-drop='refused'] { cursor: not-allowed; }
+/* Why the drop refuses, beside the pointer. Fixed to the viewport because the pointer is; the
+   live region announces the same sentence, so the note itself stays out of the accessibility tree. */
+.fg-drop-note { position: fixed; top: 0; left: 0; max-width: 260px; padding: 4px 8px; border-radius: 6px; background: var(--fg-popup-bg); color: var(--fg-header-text); border: 1px solid var(--fg-warn); box-shadow: var(--fg-popup-shadow); pointer-events: none; z-index: var(--fg-z-overlay, ${DEFAULT_OVERLAY_Z_INDEX}); }
+/* A locked Entry's bar does not move, so the pointer says so. A bar a rule leaves alone outranks the
+   grab cursor a movable bar gets. */
+.fg-bar[data-locked] { cursor: not-allowed; }
 /* One shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */

@@ -238,6 +238,9 @@ export interface FrameBar {
   width: number;
   height: number;
   flags: BarFlags;
+  /** `true` when the Entry's bar does not move for a user (a locked Entry). Absent otherwise.
+   *  `render/` stamps it as `data-locked`. */
+  locked?: boolean;
   /** What `barSpan` did to this bar's painted `[x, x + width)` extent: `'exact'` for the entry's own
    *  span, painted whole; `'clipped'` for that same span cut at a content edge — `x`/`width` are
    *  not the entry's own start/end here, so a reader that wants the real dates reads the Entry, not
@@ -418,6 +421,26 @@ export interface LayoutInput {
    *  back to the Bar's own `label` — `layout/`'s own tests, which build no `view/`, keep working
    *  with no resolver bound. */
   barLabelFor?: (entry: Entry) => string;
+  /** Does a user's gesture leave this Entry alone? `view/` asks the Dataset's bar move rule, so the
+   *  core lock and any plugin rule answer through one door. Read fresh every frame, so a rule that
+   *  changes with no write repaints on the next frame. Omitted → no row and no bar reads locked. */
+  entryLocked?: (entry: Entry) => boolean;
+}
+
+/** The `locked` member of a frame row or bar: present and `true` for a locked Entry, absent otherwise. */
+function lockedMark(locked: boolean): { locked?: true } {
+  return locked ? { locked: true } : {};
+}
+
+function entryIsLocked(entry: Entry | undefined, input: LayoutInput): boolean {
+  return entry !== undefined && input.entryLocked?.(entry) === true;
+}
+
+/** Does the row's subject Entry read locked? A header row stands for no Entry, so it never does. */
+function rowIsLocked(row: PlannedRow, entryById: ReadonlyMap<EntryId, Entry>, input: LayoutInput): boolean {
+  if (isPlannedHeaderRow(row)) return false;
+  const subjectId = row.entryIds[0];
+  return entryIsLocked(subjectId === undefined ? undefined : entryById.get(subjectId), input);
 }
 
 function cellsForRow(
@@ -634,6 +657,7 @@ function placeVisibleRowsAndBars(
       gridCells: cellsForRow(planned, input.columns, entryById),
       // A header row stands for no Entry, so it owns none and never becomes selectable.
       entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
+      ...lockedMark(rowIsLocked(planned, entryById, input)),
     });
 
     for (const producedBar of rowBars) {
@@ -664,6 +688,7 @@ function placeVisibleRowsAndBars(
         height: settings.barHeightPx,
         flags: {},
         span,
+        ...lockedMark(entryIsLocked(entry, input)),
         a11yLabel: barA11yLabel(label, producedBar, parts.get(producedBar.entryId) ?? 1, scale, locale),
       };
       bars.push(bar);

@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
+import { ROW_DROP_REFUSAL_TEXT } from './row-drop.js';
 import { GesturePipeline } from './gesture-pipeline.js';
 import type { GesturePipelineDeps } from './gesture-pipeline.js';
 import { EntryNotFoundError, InvertedSpanError, entryId, barId, rowId } from '../model/index.js';
@@ -1704,7 +1705,7 @@ describe('a vertical drag moves a bar to another row (#425)', () => {
 
     const preview = applied.at(-1) as readonly { barId: string; dy: number }[];
     expect(preview.map((bar) => bar.dy)).toEqual([0]);
-    expect(appliedRowDrops.at(-1)).toEqual({ refusedRowId: p2.id });
+    expect(appliedRowDrops.at(-1)).toEqual({ refusedRowId: p2.id, note: ROW_DROP_REFUSAL_TEXT.parentLocked });
   });
 
   it('a drag over the source row paints dy: 0 and no row drop', async () => {
