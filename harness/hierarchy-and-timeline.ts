@@ -3,7 +3,7 @@
 // feature needs its own Dataset: an owning parent's Fields opt out of the roll-up dataset-wide, so it
 // cannot share a Dataset with the rows that roll up above.
 
-import './harness-nav.ts';
+import { mountHarnessChrome } from './harness-nav.js';
 import {
   Dataset,
   Gantt,
@@ -32,6 +32,8 @@ import type { PhaseProps } from './plugins/phase-hierarchy.js';
 import { mountGanttToolbar } from './gantt-toolbar.js';
 import { prependChangeSet } from './change-log.js';
 import { mountPageBrief } from './docs/page-brief.js';
+
+mountHarnessChrome();
 
 declare global {
   interface Window {

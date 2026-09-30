@@ -1,4 +1,4 @@
-import './harness-nav.ts';
+import { mountHarnessChrome } from './harness-nav.js';
 import {
   Gantt,
   Dataset,
@@ -35,6 +35,8 @@ import { logEverything } from './plugins/log-everything.js';
 import { selectionShortcuts } from './plugins/selection-shortcuts.js';
 import { popupDemo } from './plugins/popup-demo.js';
 import { mountPageBrief } from './docs/page-brief.js';
+
+mountHarnessChrome();
 
 // The block above the Gantt names what this page demonstrates, the config that does it,
 // and the spec section that governs it — the one thing a reader new to the library needs first.
