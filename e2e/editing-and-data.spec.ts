@@ -56,6 +56,61 @@ test('a locked row opens no Name editor, and its bar does not drag', async ({ pa
   expect(after).toBe(before);
 });
 
+// #610: a locked summary holds the dates it rolls up. A child's drag that would move them is refused
+// on the frame, before the drop, so the user sees why the bar will not land.
+test("a locked summary refuses a child's drag that would widen its end", async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  // The child that owns its parent's end: any drag right widens the parent.
+  const pair = await page.evaluate(() => {
+    for (const node of document.querySelectorAll<HTMLElement>('#gantt .fg-bar:not(.fg-bar-summary)')) {
+      const child = window.__dataset.entries.get(node.dataset['barId']!.split(':')[0]!);
+      const parent = child?.parent();
+      if (child === undefined || parent === undefined || child.end === undefined) continue;
+      if (child.end === parent.end) return { childId: child.id, parentId: parent.id };
+    }
+    return undefined;
+  });
+  if (pair === undefined) throw new Error('missing a child bar that owns its parent’s end');
+  const { childId, parentId } = pair;
+
+  await page.evaluate((id) => {
+    window.__gantt.selectedEntryIds = [id];
+  }, parentId);
+  await page.locator('#lock-checkbox').check();
+
+  const before = await page.evaluate(
+    ({ childId, parentId }) => ({
+      childStart: window.__dataset.entries.get(childId)!.start,
+      parentEnd: window.__dataset.entries.get(parentId)!.end,
+    }),
+    { childId, parentId },
+  );
+
+  // The check scrolls the page, so read the bar's box after it, not before.
+  const bar = page.locator(`#gantt .fg-bar[data-bar-id^="${childId}:"]`).first();
+  await bar.scrollIntoViewIfNeeded();
+  const box = await bar.boundingBox();
+  if (!box) throw new Error('missing bar bounding box');
+
+  // One bar width right moves the child by its own length, so its end passes the parent's end.
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 1.5, box.y + box.height / 2, { steps: 10 });
+  await expect(page.locator('#gantt')).toHaveAttribute('data-drop', 'refused');
+  await page.mouse.up();
+
+  const after = await page.evaluate(
+    ({ childId, parentId }) => ({
+      childStart: window.__dataset.entries.get(childId)!.start,
+      parentEnd: window.__dataset.entries.get(parentId)!.end,
+    }),
+    { childId, parentId },
+  );
+  expect(after).toEqual(before);
+});
+
 test("unlocking Program's subtree opens note inside it, and leaves an outside entry locked", async ({
   page,
 }) => {
