@@ -9,6 +9,9 @@ import {
   dragPointerTo,
   hasDirectLeafChild,
   lockEntryAt,
+  visibleRowEntryIds,
+  holdAtBottomEdgeUntilRowsSettle,
+  parentRowScrolledIntoView,
 } from './row-drag-support.js';
 
 // A drag on a grid row reorders or re-parents its Entry (#602) — the same one switch (`reorder`),
@@ -97,6 +100,42 @@ test("dragging a leaf grid row into another parent's row middle reparents it, in
   await expect(undoBtn).toBeEnabled();
   await undoBtn.click();
   await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
+});
+
+test('holding a grid row drag at the bottom edge scrolls the rows, and the drop lands on a row that was off screen', async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const rows = await rowPlan(page);
+  const viewport = await gridRowsViewport(page);
+  const visibleAtStart = await visibleRowEntryIds(page);
+  const {
+    row: leaf,
+    grabX,
+    grabY,
+  } = await firstVisibleGridRow(
+    page,
+    rows.filter((row) => row.childCount === 0 && row.hasOwnBar),
+    viewport,
+  );
+
+  await countChangesFromHere(page);
+
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await holdAtBottomEdgeUntilRowsSettle(page, grabX);
+
+  const target = await parentRowScrolledIntoView(page, visibleAtStart);
+  const targetBox = (await gridRow(page, target.rowId).boundingBox())!;
+  await page.mouse.move(grabX, targetBox.y + targetBox.height / 2, { steps: 1 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((id) => window.__gantt.dataset.entries.get(id)?.read('parentId'), leaf.entryId),
+    )
+    .toBe(target.entryId);
+  expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(1);
 });
 
 test('a plain click on a grid row selects it and writes nothing', async ({ page }) => {
