@@ -12,6 +12,7 @@ import {
 import type {
   ChromePlugin,
   DatasetEventMap,
+  ColumnToggle,
   Entry,
   EntryInput,
   GridCellRenderer,
@@ -80,12 +81,6 @@ const dataset = new Dataset<EditingDataProps>({
   plugins: [notes],
 });
 
-// `locked` is a core Field (#612) — the checkbox below and its readout both write and read it
-// straight through the Field, so the page keeps no lock state of its own.
-function isLocked(id: string): boolean {
-  return dataset.entries.get(id)?.read('locked') === true;
-}
-
 // #517: stands in for a server this page polls. It carries the page's own list from page load, so
 // its scripted revisions build on what the page actually shows.
 const server = fakeServer(dataset.entries.all.map((entry) => entry.toInput()));
@@ -109,7 +104,38 @@ const overBudgetCell: GridCellRenderer = ({ column, value, fieldValue }) =>
     ? { class: { 'demo-over-budget': true }, text: value }
     : undefined;
 
-const GRID_COLUMNS: readonly GridColumnInput[] = ['name', 'start', 'end', { field: 'cost', header: 'Cost' }];
+// The padlock icons draw in the theme's own row-label colour, so every built-in theme reads them.
+const padlockIcon = (
+  shackle: string,
+): { html: string; attrs: Record<string, string>; style: Record<string, string> } => ({
+  html:
+    '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">' +
+    `<rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="${shackle}"/></svg>`,
+  attrs: { 'aria-hidden': 'true' },
+  style: { color: 'var(--fg-row-label-color)', display: 'inline-flex' },
+});
+const closedPadlock = padlockIcon('M5 7V5a3 3 0 0 1 6 0v2');
+const openPadlock = padlockIcon('M5 7V5a3 3 0 0 1 6 0');
+
+// Shows a toggle's `onToggle`: ask before a parent unlocks, then write and announce the edit.
+const lockToggle: ColumnToggle = {
+  on: closedPadlock,
+  off: openPadlock,
+  onToggle: ({ entry, nextValue, announceEdit }) => {
+    if (!nextValue && entry.children().length > 0 && !confirm(`Unlock "${entry.name}" and its phase?`))
+      return;
+    dataset.entries.update(entry.id, { locked: nextValue });
+    announceEdit();
+  },
+};
+
+const GRID_COLUMNS: readonly GridColumnInput[] = [
+  'name',
+  'start',
+  'end',
+  { field: 'cost', header: 'Cost' },
+  { field: 'locked', headerRenderer: () => closedPadlock, toggle: lockToggle },
+];
 
 const gantt = new Gantt({
   container: '#gantt',
@@ -148,7 +174,6 @@ const renameBtn = document.querySelector<HTMLButtonElement>('#rename-btn')!;
 const removeBtn = document.querySelector<HTMLButtonElement>('#remove-btn')!;
 const costBtn = document.querySelector<HTMLButtonElement>('#cost-btn')!;
 const noteBtn = document.querySelector<HTMLButtonElement>('#note-btn')!;
-const lockCheckbox = document.querySelector<HTMLInputElement>('#lock-checkbox')!;
 const unlockSubtreeCheckbox = document.querySelector<HTMLInputElement>('#unlock-subtree-checkbox')!;
 
 function renderSelection(): void {
@@ -175,15 +200,6 @@ function refreshMutationButtons(): void {
   noteBtn.disabled = none;
 }
 
-// The lock veto, made visible: the checkbox locks every currently selected entry, and reads back locked
-// exactly when the whole selection already is. Checking it is a real dataset write — it commits, it
-// logs like any other change, and one undo lifts it (#156).
-function refreshLockCheckbox(): void {
-  const ids = gantt.selectedEntryIds;
-  lockCheckbox.disabled = ids.length === 0;
-  lockCheckbox.checked = ids.length > 0 && ids.every((id) => isLocked(id));
-}
-
 // #473: undo/redo can close or open the subtree without the checkbox ever firing its own `change`
 // event, so the checkbox reads `notes.isOpen()` fresh on every selection sync, not just on click.
 function refreshUnlockCheckbox(): void {
@@ -194,7 +210,6 @@ function syncSelectionUi(): void {
   renderSelection();
   refreshNameInput();
   refreshMutationButtons();
-  refreshLockCheckbox();
   refreshUnlockCheckbox();
 }
 
@@ -307,16 +322,6 @@ noteBtn.addEventListener('click', () => {
 // ---- Vetoes -------------------------------------------------------------------------------------
 
 const holdDropCheckbox = document.querySelector<HTMLInputElement>('#hold-drop')!;
-
-lockCheckbox.addEventListener('change', () => {
-  const ids = gantt.selectedEntryIds;
-  if (ids.length === 0) return;
-  attemptMutation(() => {
-    dataset.transaction(() => {
-      for (const id of ids) dataset.entries.update(id, { locked: lockCheckbox.checked ? true : undefined });
-    });
-  });
-});
 
 let releaseHold: ((allow: boolean) => void) | undefined;
 
