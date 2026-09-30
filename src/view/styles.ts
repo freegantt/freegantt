@@ -645,7 +645,7 @@ ${DARK_COLOR_TOKENS}
    assistive tech — display: none/visibility: hidden would remove the node from the accessibility
    tree along with the page, and a screen reader would never read a text change it cannot see happen.
    The 1px clip-rect technique keeps the node painted, at zero size, off-screen. */
-.fg-live-region { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.fg-live-region, .fg-visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 }
 `.trim();
 

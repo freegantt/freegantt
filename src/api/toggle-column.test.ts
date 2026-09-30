@@ -339,6 +339,14 @@ describe('a per-column headerRenderer', () => {
     return container.querySelector<HTMLElement>(`.fg-col-header[data-field="${field}"]`)!;
   }
 
+  function labelOf(container: HTMLElement, field: string): HTMLElement {
+    return headerOf(container, field).querySelector<HTMLElement>('.fg-col-header-label')!;
+  }
+
+  function hiddenNameOf(container: HTMLElement, field: string): string | undefined {
+    return headerOf(container, field).querySelector('.fg-visually-hidden')?.textContent ?? undefined;
+  }
+
   it('wins over the Gantt-wide headerRenderer for its own column only', () => {
     const container = document.createElement('div');
     document.body.append(container);
@@ -352,8 +360,8 @@ describe('a per-column headerRenderer', () => {
       headerRenderer: ({ column }) => ({ text: `wide:${column.header}` }),
     });
     mounted.push(gantt);
-    expect(headerOf(container, 'start').textContent).toBe('own:From');
-    expect(headerOf(container, 'name').textContent).toBe('wide:Name');
+    expect(labelOf(container, 'start').textContent).toBe('own:From');
+    expect(labelOf(container, 'name').textContent).toBe('wide:Name');
   });
 
   it('keeps the header string as the accessible name', () => {
@@ -365,8 +373,46 @@ describe('a per-column headerRenderer', () => {
       gridColumns: [{ field: 'name', header: 'Task', headerRenderer: () => ({ text: '#' }) }, 'start'],
     });
     mounted.push(gantt);
-    expect(headerOf(container, 'name').getAttribute('aria-label')).toBe('Task');
-    expect(headerOf(container, 'start').hasAttribute('aria-label')).toBe(false);
+    expect(hiddenNameOf(container, 'name')).toBe('Task');
+    expect(labelOf(container, 'name').getAttribute('aria-hidden')).toBe('true');
+    expect(headerOf(container, 'name').hasAttribute('aria-label')).toBe(false);
+    expect(hiddenNameOf(container, 'start')).toBe('');
+    expect(labelOf(container, 'start').hasAttribute('aria-hidden')).toBe(false);
+  });
+
+  it('adds the header string as hidden text beside a Gantt-wide headerRenderer', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: [...ENTRIES], timeZone: 'UTC' }),
+      gridColumns: ['name'],
+      headerRenderer: () => ({ text: '#' }),
+    });
+    mounted.push(gantt);
+    expect(labelOf(container, 'name').textContent).toBe('#');
+    expect(hiddenNameOf(container, 'name')).toBe('Name');
+  });
+
+  it('draws an inline SVG in the SVG namespace', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const gantt = new Gantt({
+      container,
+      dataset: new Dataset({ entries: [...ENTRIES], timeZone: 'UTC' }),
+      gridColumns: [
+        {
+          field: 'name',
+          header: 'Task',
+          headerRenderer: () => ({ html: '<svg viewBox="0 0 4 4"><circle cx="2" cy="2" r="2"/></svg>' }),
+        },
+      ],
+    });
+    mounted.push(gantt);
+    const svg = labelOf(container, 'name').querySelector('svg')!;
+    expect(svg.namespaceURI).toBe('http://www.w3.org/2000/svg');
+    expect(svg.querySelector('circle')?.namespaceURI).toBe('http://www.w3.org/2000/svg');
+    expect(hiddenNameOf(container, 'name')).toBe('Task');
   });
 });
 

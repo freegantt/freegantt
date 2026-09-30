@@ -3731,7 +3731,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     const headerCell = container.querySelector<HTMLElement>('.fg-col-header')!;
     const headerLabel = headerCell.querySelector<HTMLElement>('.fg-col-header-label')!;
     expect(headerLabel.classList.contains('my-header')).toBe(true);
-    expect(headerCell.textContent).toBe('[Name]');
+    expect(headerLabel.textContent).toBe('[Name]');
 
     gantt.headerRenderer = undefined;
     await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -3761,7 +3761,7 @@ describe('Gantt renderer callbacks (S5.4, D-S5-10/11/12)', () => {
     await new Promise((resolve) => requestAnimationFrame(resolve));
 
     const headerCell = container.querySelector<HTMLElement>('.fg-col-header')!;
-    expect(headerCell.textContent).toBe('plugin-header');
+    expect(headerCell.querySelector('.fg-col-header-label')!.textContent).toBe('plugin-header');
 
     gantt.destroy();
   });
