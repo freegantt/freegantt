@@ -110,7 +110,8 @@ export interface GridColumnBase {
   /** S5.7 — per-column, more specific than `GanttOptions.gridCellRenderer`. */
   columnRenderer?: ColumnRenderer;
   /** Paints this column's header cell. It wins over the Gantt-wide `headerRenderer` for this column.
-   *  The `header` string stays the accessible name of the cell. */
+   *  The renderer may return only an icon or an inline SVG (`{ html: '<svg …>' }`). The library adds the
+   *  `header` string as visually hidden text beside the output, so it stays the accessible name. */
   headerRenderer?: ColumnHeaderRenderer;
   /** Makes a `boolean` Field's cell a toggle. `true` takes the default look and the default write.
    *  Any other Field type throws `ToggleFieldNotBooleanError` where the column is declared. */

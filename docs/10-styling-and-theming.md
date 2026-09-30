@@ -367,6 +367,7 @@ the next layout pass owns the node.
 | `.fg-content-sizer` | `render/dom/index.ts` | Hidden 1×1 marker for the timeline scroll extent. |
 | `.fg-date-lines` | `render/dom/date-line.ts` | Positioned ancestor for date-line strokes. |
 | `.fg-live-region` | `view/live-region.ts` | Visually hidden polite live region. Not a painted surface. |
+| `.fg-visually-hidden` | `render/dom/index.ts` | Visually hidden text. A header cell holds its `header` string in it when a header renderer paints the cell. Not a painted surface. |
 
 ## Date lines and the Today line
 
