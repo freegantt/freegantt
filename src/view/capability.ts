@@ -330,8 +330,7 @@ export function resolveCapabilities(inputs: CapabilityInputs): ResolvedCapabilit
   const holdsDatesToClear = (entry: Entry): boolean =>
     (entry.start !== undefined || entry.end !== undefined) && ownsTheDatesItHolds(entry);
 
-  const canClearDates = (entry: Entry): boolean =>
-    everyDateItHolds(entry, (e, field) => canWrite(e, field).ok);
+  const canClearDates = mayTranslateTheDatesItHolds;
 
   return {
     can(capability, entry, edge) {
