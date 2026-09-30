@@ -72,7 +72,7 @@ function startedAtTaskEnd(buffer: EntryInput<DemoEntryProps>): EntryInput<DemoEn
     !(buffer.end instanceof Date) ||
     !(bufferedTaskEnd instanceof Date)
   ) {
-    return buffer;
+    throw new Error(`${BUFFER_ENTRY_ID} and ${BUFFERED_TASK_ID} need Date start and end in the demo data`);
   }
   const length = buffer.end.getTime() - buffer.start.getTime();
   return { ...buffer, start: bufferedTaskEnd, end: new Date(bufferedTaskEnd.getTime() + length) };
