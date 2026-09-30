@@ -62,6 +62,19 @@ describe('the removal hook', () => {
     expect(Object.isFrozen(EMPTY_ENTRY_IDS)).toBe(true);
   });
 
+  it('builds no request when no plugin claims it', () => {
+    const state = newState();
+    let built = 0;
+
+    const removals = state.removalsFor(() => {
+      built += 1;
+      throw new Error('the request must not be built');
+    });
+
+    expect(removals).toBe(EMPTY_ENTRY_IDS);
+    expect(built).toBe(0);
+  });
+
   it('removes the parent of the last child that goes, in one ChangeSet and one undo step', () => {
     const state = newState();
     const notes = state.pluginStores.reserve<NoteRow>(NOTE);
