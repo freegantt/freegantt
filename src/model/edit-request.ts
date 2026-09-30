@@ -15,11 +15,11 @@ import type { WriteTarget } from './write-verdict.js';
 /** What the extension hook reads (D4). It carries the same three members on a preview call
  *  and on the real commit call, which is why an extender can never refuse a write — see the
  *  refusal note: a lock plugin vetoes in `beforeChange`, never here. */
-export interface EditRequest {
+export interface EditRequest<TProps = Record<string, unknown>> {
   /** Current store snapshot, before this transaction's edits — what a cascade reads to compute a
    *  delta (what moved, and by how much). Unlike `entryAfterEdits` below, this never reflects this
    *  transaction's own body edits. */
-  entries: ReadonlyMap<EntryId, StoredEntry>;
+  entries: ReadonlyMap<EntryId, StoredEntry<TProps>>;
   /** What the caller asked to change — storage-shaped and complete, the same as `entries` above
    *  (`plans/02`, "core fills zone math"): a cascade compares it against `entries` with no
    *  normalizing step of its own. */
@@ -31,7 +31,7 @@ export interface EditRequest {
    *  reasoning from it can propose a write core then refuses against the shape it actually has
    *  A per-id lookup, not a second map on this object: the drag preview calls this every
    *  rAF frame and must not copy the dataset to answer it (I5). */
-  entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
+  entryAfterEdits(id: EntryId | string): StoredEntry<TProps> | undefined;
   /** The Entries this transaction adds, by id — empty on a drag preview, and empty whenever the
    *  transaction adds none. Read one with `entryAfterEdits(id)`: an added Entry is not in `entries`
    *  above, which stays the pre-transaction snapshot. Net effect, not a call log: an Entry
@@ -62,7 +62,7 @@ export interface EditRequest {
  *  What it returns is read by the same rules `dataset.entries.update(id, edit)` obeys (#209): a Field
  *  no Dataset declares is refused (`UnknownFieldError`). `moveEntryTo` is the door a cascade uses to
  *  slide an Entry's whole span. An id nothing in the transaction knows is skipped. */
-export type EditExtender = (request: EditRequest) => EntryEdits;
+export type EditExtender<TProps = Record<string, unknown>> = (request: EditRequest<TProps>) => EntryEdits;
 
 /**
  * How installing an extender composes. `next` is the hook's current occupant — the identity
@@ -82,7 +82,9 @@ export type EditExtender = (request: EditRequest) => EntryEdits;
  * Lives beside `EditExtender`, not in `plugin.ts` (#466): `EditExtender` now names `WriteTarget`
  * (`write-verdict.ts`), which reaches `plugin.ts` through `error-report.ts`'s `PluginId` import —
  * `plugin.ts` importing back from here would cycle. */
-export type ExtenderWrapper = (next: EditExtender) => EditExtender;
+export type ExtenderWrapper<TProps = Record<string, unknown>> = (
+  next: EditExtender<TProps>,
+) => EditExtender<TProps>;
 
 /** The Entries this transaction removes on top of its body's own removals. Core calls it once per
  *  transaction, after the body and before the `EditExtender`, and never on a drag preview.
@@ -90,7 +92,9 @@ export type ExtenderWrapper = (next: EditExtender) => EditExtender;
  *  A returned id takes its whole subtree with it, the same as `entries.remove(id)`. An id the store
  *  does not know, or one this transaction already removes, is skipped in silence. The call does not
  *  repeat: the hook returns its whole closure in one answer. It does not ask the lock. */
-export type RemovalExtender = (request: EditRequest) => ReadonlySet<EntryId>;
+export type RemovalExtender<TProps = Record<string, unknown>> = (
+  request: EditRequest<TProps>,
+) => ReadonlySet<EntryId>;
 
 /**
  * How installing a removal extender composes. `next` is the hook's current occupant — a function
@@ -101,4 +105,6 @@ export type RemovalExtender = (request: EditRequest) => ReadonlySet<EntryId>;
  * ```
  *
  * Lives beside `RemovalExtender` for the same reason `ExtenderWrapper` lives beside `EditExtender`. */
-export type RemovalExtenderWrapper = (next: RemovalExtender) => RemovalExtender;
+export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (
+  next: RemovalExtender<TProps>,
+) => RemovalExtender<TProps>;

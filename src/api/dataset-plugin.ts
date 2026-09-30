@@ -12,6 +12,7 @@
 import type {
   DatasetEventMap,
   Disposer,
+  EntryStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
   FieldLockRuleWrapper,
@@ -85,9 +86,9 @@ export interface DatasetEvents {
  *  clears on the next frame. No gate: unlike the three seams above, a plugin calls this any time
  *  after its own `data()` returns, because a rule's outside state can move at any time, not only
  *  during setup. Writes nothing itself (I14 unaffected — no changeset, no undo step). */
-export interface DatasetEditHook {
-  setExtender(wrap: ExtenderWrapper): void;
-  setRemovalExtender(wrap: RemovalExtenderWrapper): void;
+export interface DatasetEditHook<TProps = Record<string, unknown>> {
+  setExtender(wrap: ExtenderWrapper<TProps>): void;
+  setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
   rulesChanged(): void;
@@ -102,6 +103,20 @@ export interface DatasetStoreAccess {
   read<T extends object>(pluginId: PluginId): PluginStoreView<T> | undefined;
 }
 
+/** The props a `TDataset` type argument carries, read off its own `entries` collection — the same
+ *  trust boundary `api/dataset.ts`'s class note describes. Falls back to a plain record when
+ *  `TDataset` names no Dataset type (the default, `unknown`), so `hierarchySource` still type-checks
+ *  with no `props` shape declared. The untyped `DataPlugin<unknown>` arm infers `TProps` as `unknown`
+ *  too. The `unknown extends TProps` arm catches that case the same way. `DataPluginOf.fields`
+ *  narrows each `key` against this same answer. Lives here so `DatasetPluginContextOf` and
+ *  `api/plugin.ts` both name it with no cycle. Not exported from the package: `ae-forgotten-export`
+ *  records it, same as `EntryEnvelope` today. */
+export type PropsOf<TDataset> = TDataset extends { entries: EntryStoreView<infer TProps> }
+  ? unknown extends TProps
+    ? Record<string, unknown>
+    : TProps
+  : Record<string, unknown>;
+
 /** What a plugin's `data()` half receives, once, while the Dataset constructs. A Field declares on
  *  the plugin object itself — `fields`/`fieldTypes`/`aggregators` (#496 grill round 3) — so there
  *  is no `ctx.fields` door here: one way to declare, so the earlier gap (a flat value dropped
@@ -109,7 +124,7 @@ export interface DatasetStoreAccess {
 export interface DatasetPluginContextOf<TDataset> {
   dataset: TDataset;
   events: DatasetEvents;
-  edits: DatasetEditHook;
+  edits: DatasetEditHook<PropsOf<TDataset>>;
   store: DatasetStoreAccess;
   disposables: DisposableStore;
 }

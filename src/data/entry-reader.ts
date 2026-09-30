@@ -179,7 +179,7 @@ export function toEntries(
  * zone core already holds — is the zone math core is supposed to fill for them (`plans/02`, "two
  * callers, two surfaces"). A caller who holds a loose date reads it with `time/`'s own helper first.
  */
-export function moveEntryTo(entry: StoredEntry, start: Instant): EntryEdit {
+export function moveEntryTo<TProps>(entry: StoredEntry<TProps>, start: Instant): EntryEdit {
   // Moving an Entry rigidly only makes sense for one that already spans (`spansTime`, ADR 0012): a
   // dateless or one-date Entry has no pair to translate.
   if (!spansTime(entry)) return {};
