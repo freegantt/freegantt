@@ -2,6 +2,8 @@
 
 ![FreeGantt demo: a Gantt chart being edited](https://freegantt.dev/img/video_1.5x.webp)
 
+**Live demo:** [Generic](https://freegantt.dev/demo/generic.html) · [Performance](https://freegantt.dev/demo/performance.html) · [Docs](https://freegantt.dev/docs/guardrails-overview)
+
 **An accessible Gantt chart.** A keyboard user can move, resize, reorder, and edit every task. A screen
 reader user hears the grid as an ARIA grid or tree grid, and a live region announces each refusal. Every
 demo page passes automated axe checks in CI, in every built-in theme.
