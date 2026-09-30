@@ -147,7 +147,7 @@ import { resolveBarLabelPolicy, resolveBarLabelText } from './bar-labels.js';
 import type { ResolveBarLabelPorts } from './bar-labels.js';
 
 import { ColumnChrome } from './column-chrome.js';
-import { switchToggleCell, toggleCellContent, toggleOf } from './column-toggle.js';
+import { switchToggleCell, toggleCellContent, toggleIsOpen, toggleOf } from './column-toggle.js';
 import type { CellTogglePorts } from './column-toggle.js';
 import type { ColumnChromePorts } from './column-chrome.js';
 import { buildPluginPorts } from './plugin-ports.js';
@@ -1171,8 +1171,12 @@ export class GanttShell {
         const toggle = toggleOf(column);
         if (toggle !== undefined && column.columnRenderer === undefined) {
           return {
+            // The gate is read at paint time. A rule change repaints through `rulesChanged()`.
             renderer: (ctx) =>
-              toggleCellContent(toggle, column.header, ctx.entry?.read(column.field) === true),
+              toggleCellContent(toggle, column.header, {
+                checked: ctx.entry?.read(column.field) === true,
+                open: ctx.entry !== undefined && toggleIsOpen(this.#capabilities, ctx.entry, column.field),
+              }),
           };
         }
         // A per-column `columnRenderer` (this Gantt's own `gridColumns`) beats the
@@ -1888,6 +1892,8 @@ export class GanttShell {
   #refreshCapabilities(): void {
     this.#capabilities = this.#resolveCapabilities();
     this.#refreshAffordances();
+    // A toggle cell reads its gate at paint time, so a capability change repaints it.
+    this.#frames.request();
   }
 
   /** Reversed by #489: what a drag snaps to right now — this Gantt's own setting when it

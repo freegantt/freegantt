@@ -18,14 +18,25 @@ const TOGGLE_ICON_CLASS = 'fg-toggle-icon';
 const TOGGLE_BOX_CLASS = 'fg-toggle-box';
 const TOGGLE_BOX_CHECKED_CLASS = 'fg-toggle-box-checked';
 
-/** What the toggle cell draws. Call: `toggleCellContent(column.toggle, column.header, true)`.
+/** Can this toggle cell switch now? The click, the key and the `aria-readonly` mark all ask here,
+ *  so they never disagree. Call: `toggleIsOpen(capabilities, entry, 'done')`. */
+export function toggleIsOpen(
+  gate: Pick<CellTogglePorts, 'canWrite'>,
+  entry: Entry,
+  field: FieldKey,
+): boolean {
+  return gate.canWrite(entry, field).ok;
+}
+
+/** What the toggle cell draws. Call: `toggleCellContent(column.toggle, column.header, { checked: true, open: false })`.
  *
  *  The cell holds one checkbox. The column header names it, and the icon stays out of the
- *  accessibility tree, so a screen reader hears "Done, checkbox, checked" for any icon. */
+ *  accessibility tree, so a screen reader hears "Done, checkbox, checked" for any icon.
+ *  A closed toggle also carries `aria-readonly`, so a screen reader says "read only". */
 export function toggleCellContent(
   toggle: ColumnToggle,
   header: string,
-  checked: boolean,
+  { checked, open }: { checked: boolean; open: boolean },
 ): ElementDescription {
   const icon = checked ? toggle.on : toggle.off;
   const look: ElementDescription = icon ?? {
@@ -34,7 +45,12 @@ export function toggleCellContent(
   };
   return {
     class: { [TOGGLE_CLASS]: true },
-    attrs: { role: 'checkbox', 'aria-checked': String(checked), 'aria-label': header },
+    attrs: {
+      role: 'checkbox',
+      'aria-checked': String(checked),
+      'aria-label': header,
+      ...(open ? {} : { 'aria-readonly': 'true' }),
+    },
     children: [
       {
         tag: 'span',
@@ -63,7 +79,7 @@ export interface CellTogglePorts {
  *  `beforeChange` may refuse it. */
 export function switchToggleCell(ports: CellTogglePorts, entry: Entry, field: FieldKey): void {
   const toggle = ports.toggleOf(field);
-  if (toggle === undefined || !ports.canWrite(entry, field).ok) return;
+  if (toggle === undefined || !toggleIsOpen(ports, entry, field)) return;
   const from = entry.read(field);
   const nextValue = from !== true;
   const answer = ports.proposeEntryEdit({ entry, field, from, to: nextValue });
