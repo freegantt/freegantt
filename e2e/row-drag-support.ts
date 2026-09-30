@@ -197,3 +197,57 @@ export async function hasDirectLeafChild(page: Page, entryId: string): Promise<b
     return children.some((child) => child.children().length === 0);
   }, entryId);
 }
+
+/** The rows viewport: the clipped band below the sticky header, where the rows scroll. */
+export async function rowsViewportBox(page: Page) {
+  return (await page.locator('#gantt .fg-rows-clip').boundingBox())!;
+}
+
+/** The entry id of every row whose grid box sits fully inside the rows viewport right now. */
+export async function visibleRowEntryIds(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const clip = document.querySelector('#gantt .fg-rows-clip')!.getBoundingClientRect();
+    return Array.from(document.querySelectorAll<HTMLElement>('#gantt .fg-grid-pane .fg-row'))
+      .filter((row) => {
+        const box = row.getBoundingClientRect();
+        return box.top >= clip.top && box.bottom <= clip.bottom;
+      })
+      .map((row) => row.dataset['entryId']!);
+  });
+}
+
+/** Moves a pressed pointer to `edgeGapPx` inside the bottom edge of the rows viewport, holds it
+ *  there with no further move, and waits until the rows stop scrolling at the content end. */
+export async function holdAtBottomEdgeUntilRowsSettle(page: Page, x: number, edgeGapPx = 6): Promise<void> {
+  const viewport = await rowsViewportBox(page);
+  await page.mouse.move(x, viewport.y + viewport.height - edgeGapPx, { steps: 1 });
+  const firstRowTop = () =>
+    page.evaluate(() => document.querySelector('#gantt .fg-grid-pane .fg-row')!.getBoundingClientRect().top);
+  let previous = Number.NaN;
+  await expect
+    .poll(
+      async () => {
+        const current = await firstRowTop();
+        const settled = current === previous;
+        previous = current;
+        return settled;
+      },
+      { intervals: [200] },
+    )
+    .toBe(true);
+}
+
+/** The last parent row that scrolled into view during a drag: it sat below the rows viewport at the
+ *  start, so no pointer move alone could reach it. */
+export async function parentRowScrolledIntoView(
+  page: Page,
+  visibleAtStart: readonly string[],
+): Promise<RowInfo> {
+  const nowVisible = new Set(await visibleRowEntryIds(page));
+  const scrolledIn = (await rowPlan(page)).filter(
+    (row) => row.childCount > 0 && nowVisible.has(row.entryId) && !visibleAtStart.includes(row.entryId),
+  );
+  const target = scrolledIn.at(-1);
+  if (!target) throw new Error('no parent row scrolled into view from below the rows viewport');
+  return target;
+}

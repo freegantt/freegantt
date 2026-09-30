@@ -71,12 +71,19 @@ interface SessionOverrides {
 type ContextOverrides = Partial<Omit<EntryGestureContext, 'selection'>> &
   SessionOverrides & { selection?: Partial<SelectionForGestures> };
 
+/** What the fake `rowEdgeScroll` saw: each `follow` call, and how many times it stopped. */
+interface EdgeScrollLog {
+  follows: [number, () => void][];
+  stops: number;
+}
+
 function makeContext(overrides: ContextOverrides = {}): {
   ctx: EntryGestureContext;
   proposals: (readonly EntryId[])[];
   previews: (EntryEdits | undefined)[];
   commits: [EntryGesture, EntryEdits][];
   activations: [EntryId, number, 'bar' | 'row'][];
+  edgeScroll: EdgeScrollLog;
 } {
   const {
     entriesForGesture = (grabbed) => [entryFor(grabbed)],
@@ -91,6 +98,7 @@ function makeContext(overrides: ContextOverrides = {}): {
   const previews: (EntryEdits | undefined)[] = [];
   const commits: [EntryGesture, EntryEdits][] = [];
   const activations: [EntryId, number, 'bar' | 'row'][] = [];
+  const edgeScroll: EdgeScrollLog = { follows: [], stops: 0 };
 
   const ctx: EntryGestureContext = {
     hitTest: (at) =>
@@ -106,6 +114,12 @@ function makeContext(overrides: ContextOverrides = {}): {
     setHoveredRow: () => {},
     contentXAtPaneOffset: (offsetX) => offsetX,
     contentYAtClientY: (clientY) => clientY,
+    rowEdgeScroll: {
+      follow: (clientY, onScrolled) => edgeScroll.follows.push([clientY, onScrolled]),
+      stop: () => {
+        edgeScroll.stops += 1;
+      },
+    },
     discardHeldGesture: () => false,
     session: (grabbed, gesture) => {
       const entries = entriesForGesture(grabbed, gesture.kind === 'resize' ? 'resize' : 'move');
@@ -168,7 +182,7 @@ function makeContext(overrides: ContextOverrides = {}): {
     ...ctxOverrides,
   };
   Object.assign(ctx.selection, selectionOverrides);
-  return { ctx, proposals, previews, commits, activations };
+  return { ctx, proposals, previews, commits, activations, edgeScroll };
 }
 
 function mockPointerCapture(el: HTMLElement): void {
@@ -896,6 +910,61 @@ describe('attachEntryGestures — row reorder drag (#602)', () => {
     expect(previews.at(-1)).toBeUndefined();
   });
 
+  describe('near the rows edge', () => {
+    function armedRowDrag(overrides: ContextOverrides = {}) {
+      const pane = document.createElement('div');
+      const container = document.createElement('div');
+      const rowLayer = document.createElement('div');
+      mockPointerCapture(rowLayer);
+      const made = rowReorderContext(overrides);
+      const detachable = attachEntryGestures(pane, rowLayer, container, made.ctx);
+      rowLayer.dispatchEvent(down(0, { clientY: 0 }));
+      rowLayer.dispatchEvent(move(0, { clientY: 10 }));
+      return { ...made, rowLayer, container, detachable };
+    }
+
+    it('reports every pointer move to the edge scroll', () => {
+      const { edgeScroll, rowLayer } = armedRowDrag();
+      rowLayer.dispatchEvent(move(0, { clientY: 30 }));
+      expect(edgeScroll.follows.map(([clientY]) => clientY)).toEqual([10, 30]);
+    });
+
+    it('previews again with the scrolled content-y when the rows scroll under a still pointer', () => {
+      let scrollY = 0;
+      const seenContentY: (number | undefined)[] = [];
+      const { edgeScroll } = armedRowDrag({
+        contentYAtClientY: (clientY) => clientY + scrollY,
+        draftFor: (_gesture, entries, _dxPx, options) => {
+          seenContentY.push(options?.contentY);
+          return new Map(entries.map((e) => [e.id, {}]));
+        },
+      });
+      expect(seenContentY.at(-1)).toBe(10);
+
+      scrollY = 25;
+      edgeScroll.follows.at(-1)![1]();
+
+      expect(seenContentY.at(-1)).toBe(35);
+    });
+
+    it('stops on commit, on Escape and on detach', () => {
+      const commit = armedRowDrag();
+      const stopsWhileDragging = commit.edgeScroll.stops;
+      commit.rowLayer.dispatchEvent(up(0, { clientY: 10 }));
+      expect(commit.edgeScroll.stops).toBeGreaterThan(stopsWhileDragging);
+
+      const escape = armedRowDrag();
+      const stopsBeforeEscape = escape.edgeScroll.stops;
+      escape.container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(escape.edgeScroll.stops).toBeGreaterThan(stopsBeforeEscape);
+
+      const detach = armedRowDrag();
+      const stopsBeforeDetach = detach.edgeScroll.stops;
+      detach.detachable.detach();
+      expect(detach.edgeScroll.stops).toBeGreaterThan(stopsBeforeDetach);
+    });
+  });
+
   it('a touch long-press arms a reorder, then stops the page pan (#602)', () => {
     vi.useFakeTimers();
     try {
@@ -1242,6 +1311,28 @@ describe('attachEntryGestures — move (S3.3)', () => {
     pane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1));
 
     expect(seenEntries[0]?.map((e) => e.id)).toEqual([A, B]);
+  });
+
+  it('a row-axis bar drag follows the pointer with the edge scroll, and a time-axis drag does not', () => {
+    const rowAxis = makeContext();
+    const rowPane = document.createElement('div');
+    mockPointerCapture(rowPane);
+    attachEntryGestures(rowPane, document.createElement('div'), document.createElement('div'), rowAxis.ctx);
+    rowPane.dispatchEvent(down(0));
+    rowPane.dispatchEvent(move(0, { clientY: 12 }));
+    rowPane.dispatchEvent(move(0, { clientY: 20 }));
+    expect(rowAxis.edgeScroll.follows.map(([clientY]) => clientY)).toEqual([12, 20]);
+    const stopsWhileDragging = rowAxis.edgeScroll.stops;
+    rowPane.dispatchEvent(up(0, { clientY: 20 }));
+    expect(rowAxis.edgeScroll.stops).toBeGreaterThan(stopsWhileDragging);
+
+    const timeAxis = makeContext();
+    const timePane = document.createElement('div');
+    mockPointerCapture(timePane);
+    attachEntryGestures(timePane, document.createElement('div'), document.createElement('div'), timeAxis.ctx);
+    timePane.dispatchEvent(down(0));
+    timePane.dispatchEvent(move(0 + DRAG_THRESHOLD_PX + 1, { clientY: 2 }));
+    expect(timeAxis.edgeScroll.follows).toEqual([]);
   });
 
   it('a touch long-press on a bar waits for the first travel to pick its axis', () => {

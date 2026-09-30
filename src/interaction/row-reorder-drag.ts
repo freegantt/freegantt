@@ -49,7 +49,15 @@ export function createRowReorderDrag(
    *  matching `commit`/`cancel`. */
   let session: EntryGestureSession | undefined;
 
+  /** The last pointer reading, so a scroll step can preview again with no pointer move. */
+  let lastClientY = 0;
+
+  function previewAtLastPointer(): void {
+    session?.preview(0, { contentY: ctx.contentYAtClientY(lastClientY) });
+  }
+
   function clearGrab(): void {
+    ctx.rowEdgeScroll.stop();
     grabbedHit = undefined;
     subject = undefined;
   }
@@ -68,7 +76,10 @@ export function createRowReorderDrag(
       // A reorder ignores travel: the row under the pointer decides the drop, not how far it moved.
       // No `cursorX` either — a reorder has no Cursor line.
       move(e): void {
-        session!.preview(0, { contentY: ctx.contentYAtClientY(e.clientY) });
+        lastClientY = e.clientY;
+        previewAtLastPointer();
+        // A drag held near the rows' edge scrolls them, so a drop can reach an off-screen row.
+        ctx.rowEdgeScroll.follow(e.clientY, previewAtLastPointer);
       },
       commit(e): void {
         void session!.commit(0, { contentY: ctx.contentYAtClientY(e.clientY) });
@@ -118,6 +129,7 @@ export function createRowReorderDrag(
       if (session !== undefined) e.preventDefault();
     },
     detach(): void {
+      ctx.rowEdgeScroll.stop();
       drag.detach();
     },
   };

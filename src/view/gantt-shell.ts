@@ -130,6 +130,8 @@ import type { Capabilities, GestureCapability, ResolvedCapabilities } from './ca
 import { subscribeToDatasetChanges } from './dataset-change-subscription.js';
 import type { DatasetChangeSubscription } from './dataset-change-subscription.js';
 import { FrameScheduler } from './frame-scheduler.js';
+import { createRowEdgeScroll } from './row-edge-scroll.js';
+import type { RowEdgeScroll } from './row-edge-scroll.js';
 import { PluginRegistrations } from './plugin-registrations.js';
 import type { PluginRegistrationPorts } from './plugin-registrations.js';
 import { FrameSettings } from './frame-settings.js';
@@ -642,6 +644,8 @@ export class GanttShell {
   /** The single rAF owner (B10): every render request past construction goes through
    *  this, so N mutations in one tick become one frame. */
   #frames = new FrameScheduler(() => this.render());
+  /** A row drag near the rows' top or bottom edge scrolls them (#603). */
+  #rowEdgeScroll: RowEdgeScroll;
   #events = new EventBus<GanttEventMap, AsyncCancelableEvent>();
   /** This Gantt's own raise seam, over the bus above. Every collaborator that
    *  observes a refusal or a recovered fault takes it. That is the gesture pipeline, the render
@@ -790,6 +794,13 @@ export class GanttShell {
       options.scroll,
       options.overscan,
     );
+    this.#rowEdgeScroll = createRowEdgeScroll({
+      scrollY: this.#viewport.scroll.y,
+      rowsTop: () => this.#paneLayout.timelineTop() + this.#paneLayout.measureHeaderHeight(),
+      rowsHeight: () => this.#rowsViewportHeight(),
+      now: () => performance.now(),
+    });
+    this.#teardown.add(() => this.#rowEdgeScroll.stop());
 
     // Constructed with the options, not assigned through the live setters. So the first paint below
     // (`#frames.flush()`) sees what the consumer asked for, and no port fires while half this shell
@@ -1336,6 +1347,7 @@ export class GanttShell {
         this.#paneLayout.timelineTop() +
         this.#viewport.scroll.y.state.position -
         this.#paneLayout.measureHeaderHeight(),
+      rowEdgeScroll: this.#rowEdgeScroll,
       session: (grabbed, gesture) => this.#gesturePipeline.session(grabbed, gesture),
       discardHeldGesture: () => this.#gesturePipeline.discardHeldGesture(),
     };
@@ -2897,11 +2909,14 @@ export class GanttShell {
    *  below its spacer for the same reason. Reporting the full pane box left the scroll model one
    *  header short of the true extent. The last row could then never scroll fully into view. */
   #applyRowsViewportSize(): void {
-    const headerHeight = this.#paneLayout.measureHeaderHeight();
     this.#viewportHandle.setPaneSize({
       width: this.#paneBox.width,
-      height: Math.max(0, this.#paneBox.height - headerHeight),
+      height: this.#rowsViewportHeight(),
     });
+  }
+
+  #rowsViewportHeight(): number {
+    return Math.max(0, this.#paneBox.height - this.#paneLayout.measureHeaderHeight());
   }
 
   /** What `FrameLayout.ensureRowPlan` needs to answer the row tree right now, built the same way

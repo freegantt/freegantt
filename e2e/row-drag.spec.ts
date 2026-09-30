@@ -15,6 +15,9 @@ import {
   firstGrabbableBar,
   hasDirectLeafChild,
   lockEntryAt,
+  visibleRowEntryIds,
+  holdAtBottomEdgeUntilRowsSettle,
+  parentRowScrolledIntoView,
 } from './row-drag-support.js';
 
 // A vertical drag moves a bar to another row — the pointer end of the seam the unit tests already
@@ -417,4 +420,43 @@ test("a bar dropped into a locked parent's middle refuses, and leaves parentId u
 
   await page.mouse.up();
   await expect.poll(() => currentParentId(page, leaf.entryId)).toBe(leafParentId);
+});
+
+test('holding a vertical bar drag at the bottom edge scrolls the rows, and the drop lands on a row that was off screen', async ({
+  page,
+}) => {
+  await gotoGeneric(page);
+  const rows = (await rowPlan(page)).filter((row) => row.hasOwnBar);
+  const pane = await timelinePaneBox(page);
+  const header = await headerBox(page);
+  const visibleAtStart = await visibleRowEntryIds(page);
+
+  const {
+    row: leaf,
+    grabX,
+    grabY,
+  } = await firstGrabbableBar(
+    page,
+    rows.filter((row) => row.childCount === 0),
+    pane,
+    header,
+  );
+
+  await countChangesFromHere(page);
+
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await holdAtBottomEdgeUntilRowsSettle(page, grabX);
+
+  const target = await parentRowScrolledIntoView(page, visibleAtStart);
+  const targetBand = (await rowBand(page, target.rowId).boundingBox())!;
+  await page.mouse.move(grabX, targetBand.y + targetBand.height / 2, { steps: 1 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((id) => window.__gantt.dataset.entries.get(id)?.read('parentId'), leaf.entryId),
+    )
+    .toBe(target.entryId);
+  expect(await page.evaluate(() => window.__rowDragChangeCount)).toBe(1);
 });
