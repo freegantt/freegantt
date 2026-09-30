@@ -37,7 +37,7 @@ function currentPageFile(pathname: string): string {
   return pathname.split('/').pop() || 'index.html';
 }
 
-/** A build can link the demo back to the site that hosts it: `VITE_HARNESS_HOME_URL=/`. Unset, the
+/** A build can link the demo back to the docs site: `VITE_HARNESS_HOME_URL=/`. Unset, the
  *  nav shows no such link, as in `pnpm dev`. */
 function mountHomeLink(nav: HTMLElement): void {
   const url = (import.meta as { env?: { VITE_HARNESS_HOME_URL?: string } }).env?.VITE_HARNESS_HOME_URL;
