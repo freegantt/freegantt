@@ -401,17 +401,17 @@ export class Dataset<TProps = unknown> {
 }
 
 // @public
-export interface DatasetEditHook {
+export interface DatasetEditHook<TProps = Record<string, unknown>> {
     // (undocumented)
     rulesChanged(): void;
     // (undocumented)
-    setExtender(wrap: ExtenderWrapper): void;
+    setExtender(wrap: ExtenderWrapper<TProps>): void;
     // (undocumented)
     setLockRule(wrap: FieldLockRuleWrapper): void;
     // (undocumented)
     setPlaceRule(wrap: PlaceRuleWrapper): void;
     // (undocumented)
-    setRemovalExtender(wrap: RemovalExtenderWrapper): void;
+    setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
 }
 
 // @public
@@ -462,7 +462,7 @@ export interface DatasetPluginContextOf<TDataset> {
     // (undocumented)
     disposables: DisposableStore;
     // (undocumented)
-    edits: DatasetEditHook;
+    edits: DatasetEditHook<PropsOf<TDataset>>;
     // (undocumented)
     events: DatasetEvents;
     // (undocumented)
@@ -660,14 +660,14 @@ export interface Duration {
 }
 
 // @public
-export type EditExtender = (request: EditRequest) => EntryEdits;
+export type EditExtender<TProps = Record<string, unknown>> = (request: EditRequest<TProps>) => EntryEdits;
 
 // @public
-export interface EditRequest {
+export interface EditRequest<TProps = Record<string, unknown>> {
     readonly addedEntryIds: ReadonlySet<EntryId>;
     editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
-    entries: ReadonlyMap<EntryId, StoredEntry>;
-    entryAfterEdits(id: EntryId | string): StoredEntry | undefined;
+    entries: ReadonlyMap<EntryId, StoredEntry<TProps>>;
+    entryAfterEdits(id: EntryId | string): StoredEntry<TProps> | undefined;
     hasChildren(id: EntryId | string): boolean;
     proposed: ProposedEdits;
     readonly removedEntryIds: ReadonlySet<EntryId>;
@@ -928,7 +928,7 @@ export type ErrorReportInput = Omit<ErrorReport, 'at'>;
 export type ErrorSeverity = 'error' | 'warning' | 'info';
 
 // @public
-export type ExtenderWrapper = (next: EditExtender) => EditExtender;
+export type ExtenderWrapper<TProps = Record<string, unknown>> = (next: EditExtender<TProps>) => EditExtender<TProps>;
 
 // @public
 export type Field<TValue = unknown> = {
@@ -1696,7 +1696,7 @@ export interface MountLayer {
 }
 
 // @public
-export function moveEntryTo(entry: StoredEntry, start: Instant): EntryEdit;
+export function moveEntryTo<TProps>(entry: StoredEntry<TProps>, start: Instant): EntryEdit;
 
 // @public (undocumented)
 export const MS: {
@@ -2062,10 +2062,10 @@ export class RegistrationClosedError extends FreeGanttError {
 }
 
 // @public
-export type RemovalExtender = (request: EditRequest) => ReadonlySet<EntryId>;
+export type RemovalExtender<TProps = Record<string, unknown>> = (request: EditRequest<TProps>) => ReadonlySet<EntryId>;
 
 // @public
-export type RemovalExtenderWrapper = (next: RemovalExtender) => RemovalExtender;
+export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (next: RemovalExtender<TProps>) => RemovalExtender<TProps>;
 
 // @public
 export class RendererAlreadyRegisteredError extends FreeGanttError {
@@ -2657,7 +2657,7 @@ export interface ZonedTime {
 
 // Warnings were encountered during analysis:
 //
-// dist/api/plugin.d.ts:78:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
+// dist/api/plugin.d.ts:68:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

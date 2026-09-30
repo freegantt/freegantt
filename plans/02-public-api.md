@@ -767,6 +767,13 @@ Entry: `store.set(id, row)` throws `EntryNotFoundError` for an id with no Entry,
 transaction leaves it, the rule `entries.update` follows. Removing an Entry removes its rows in the
 same `ChangeSet`, even a row the same transaction wrote first.
 
+**An extender reads its own Field typed (#626).** `EditRequest`, `EditExtender`, `ExtenderWrapper`,
+`RemovalExtender`, `RemovalExtenderWrapper` and `DatasetEditHook` take a `TProps` parameter. It
+defaults to `Record<string, unknown>`. In a `definePlugin<TProps>` plugin, `ctx.edits` carries the
+plugin's own `TProps`. So `request.entryAfterEdits(id)?.props.x` has the declared type with no cast.
+`moveEntryTo` takes a `StoredEntry<TProps>` of any props. Core erases `TProps` at install, the same
+as `hierarchySource`.
+
 **The removal hook lets a plugin remove an Entry (#629).** `setRemovalExtender` takes a
 `RemovalExtenderWrapper`. The occupant is a `RemovalExtender`: `(request: EditRequest) =>
 ReadonlySet<EntryId>`. Core calls it once per transaction. The call comes after the body and before
