@@ -7263,7 +7263,7 @@ describe('a locked row refuses a user drag in both panes (ADR 0038)', () => {
     });
 
     // `right` is the sole owner of p's held end; pulling it earlier shrinks that end instead of
-    // widening it, and "hold" means the value stays either way (coordinator ruling Q2).
+    // widening it, and "hold" means the value stays either way.
     timeline.dispatchEvent(new PointerEvent('pointerdown', { clientX: 5, clientY: 5, pointerId: 1 }));
     timeline.dispatchEvent(new PointerEvent('pointermove', { clientX: -95, clientY: 5, pointerId: 1 }));
     timeline.dispatchEvent(new PointerEvent('pointerup', { clientX: -95, clientY: 5, pointerId: 1 }));
