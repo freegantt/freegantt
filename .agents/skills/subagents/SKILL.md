@@ -200,6 +200,18 @@ A subagent already running the final tests, lint, or QC pass finishes that pass,
 
 Watch that it lands there. When the result is in and the agent keeps working — new fixes, new files, a fresh investigation — send it a message: report the result and hand off now.
 
+## Stop a finished agent
+
+An agent is finished when you have its report and you will send it no more work. Stop it in the turn you read that report:
+
+```
+TaskStop(task_id: <agent id>)
+```
+
+Stop it even when the report says it still has background work. A handed-off agent's successor reruns what it needs, and a stale `ocr` or test run can wake the old agent into work nobody asked for.
+
+Keep an agent only while you plan to `SendMessage` it more work, such as a fix on its own branch. Then `ListAgents` shows only live work.
+
 ## Wait on a log
 
 An `ocr` or `verify:full` run writes a log `$L` and ends on one verdict line. Wait for
