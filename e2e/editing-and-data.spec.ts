@@ -3,6 +3,7 @@ import type { Locator, Page } from '@playwright/test';
 import {
   currentParentId,
   dragPointerTo,
+  barOf,
   firstGrabbableBar,
   headerBox,
   rowBand,
@@ -455,4 +456,48 @@ test('the buffer + risk kind plugins toggle off and on', async ({ page }) => {
   await page.locator('#kind-plugins-toggle').check();
   await expect.poll(() => page.evaluate(() => window.__gantt.hasPlugin('demo.bufferKind'))).toBe(true);
   await expect.poll(() => page.evaluate(() => window.__gantt.hasPlugin('demo.riskKind'))).toBe(true);
+});
+
+// `bufferTrailsTask()`: entry-30 is the buffer of entry-29. Its start stays on the task's end, and it
+// leaves with the task. Each user action is one undo step.
+test('a buffer follows its task on a drag and leaves with it on Delete, one undo each', async ({ page }) => {
+  await page.goto('/editing-and-data.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await page.evaluate(() => window.__gantt.reveal('entry-29'));
+
+  const span = (id: string) =>
+    page.evaluate((entryId) => {
+      const entry = window.__dataset.entries.get(entryId);
+      return entry === undefined ? undefined : { start: String(entry.start), end: String(entry.end) };
+    }, id);
+  const taskBefore = await span('entry-29');
+  const bufferBefore = await span('entry-30');
+  expect(bufferBefore?.start).toBe(taskBefore?.end);
+
+  await barOf(page, 'entry-29').scrollIntoViewIfNeeded();
+  const box = await barOf(page, 'entry-29').boundingBox();
+  if (!box) throw new Error('missing task bar');
+  const grabX = box.x + box.width / 2;
+  const grabY = box.y + box.height / 2;
+  await page.mouse.move(grabX, grabY);
+  await page.mouse.down();
+  await page.mouse.move(grabX + 120, grabY, { steps: 10 });
+  await page.mouse.up();
+
+  const taskMoved = await span('entry-29');
+  expect(taskMoved?.end).not.toBe(taskBefore?.end);
+  expect((await span('entry-30'))?.start).toBe(taskMoved?.end);
+
+  await page.keyboard.press('Control+z');
+  expect(await span('entry-29')).toEqual(taskBefore);
+  expect(await span('entry-30')).toEqual(bufferBefore);
+
+  await barOf(page, 'entry-29').click();
+  await page.keyboard.press('Delete');
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('entry-29'))).toBe(false);
+  expect(await page.evaluate(() => window.__dataset.entries.has('entry-30'))).toBe(false);
+
+  await page.keyboard.press('Control+z');
+  await expect.poll(() => page.evaluate(() => window.__dataset.entries.has('entry-29'))).toBe(true);
+  expect(await page.evaluate(() => window.__dataset.entries.has('entry-30'))).toBe(true);
 });
