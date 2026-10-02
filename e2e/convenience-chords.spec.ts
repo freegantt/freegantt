@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { gotoGeneric } from './row-drag-support.js';
 
 // #262: convenienceChords turns a chord's own default binding off while the command it runs stays
 // reachable another way — the toolbar's Undo button, here. A unit test already pins the resolve
@@ -42,8 +43,7 @@ async function unobstructedBar(page: import('@playwright/test').Page) {
 test('with the undo chord off, Control+Z inside the Gantt leaves an edit standing; the toolbar Undo button still undoes it', async ({
   page,
 }) => {
-  await page.goto('/generic.html');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await gotoGeneric(page);
 
   const bar = await unobstructedBar(page);
   const box = await bar.boundingBox();
@@ -85,8 +85,7 @@ test('with the undo chord off, Control+Z inside the Gantt leaves an edit standin
 test('with every convenience chord off, Control+Z is inert but Escape still clears the selection', async ({
   page,
 }) => {
-  await page.goto('/generic.html');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await gotoGeneric(page);
 
   const bar = await unobstructedBar(page);
   const box = await bar.boundingBox();

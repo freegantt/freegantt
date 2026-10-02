@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { gotoGeneric } from './row-drag-support.js';
 
 // #434: entryActivate over a real page — the click and key paths generic.html's own readout
 // wires (harness/main.ts), and the pointer-trigger choice behind the bench's own select
@@ -53,8 +54,7 @@ async function entryNameOfBar(page: import('@playwright/test').Page, barId: stri
 }
 
 test('a plain click activates the bar’s own Entry, once', async ({ page }) => {
-  await page.goto('/generic.html');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await gotoGeneric(page);
 
   const bar = await unobstructedBar(page);
   const barId = (await bar.getAttribute('data-bar-id'))!;
@@ -68,8 +68,7 @@ test('a plain click activates the bar’s own Entry, once', async ({ page }) => 
 });
 
 test('Enter on the just-clicked (now focused) bar activates it again, cause "key"', async ({ page }) => {
-  await page.goto('/generic.html');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await gotoGeneric(page);
 
   const bar = await unobstructedBar(page);
   const barId = (await bar.getAttribute('data-bar-id'))!;
@@ -88,8 +87,7 @@ test('Enter on the just-clicked (now focused) bar activates it again, cause "key
 });
 
 test('default mode: a real double-click activates once, not three times', async ({ page }) => {
-  await page.goto('/generic.html');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await gotoGeneric(page);
   await expect(page.locator('#pointer-activation-select')).toHaveValue('click');
 
   const bar = await unobstructedBar(page);
@@ -109,8 +107,7 @@ test('default mode: a real double-click activates once, not three times', async 
 });
 
 test('double-click mode: a single click activates nothing', async ({ page }) => {
-  await page.goto('/generic.html');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await gotoGeneric(page);
 
   await page.locator('#pointer-activation-select').selectOption('dblclick');
 
@@ -126,8 +123,7 @@ test('double-click mode: a single click activates nothing', async ({ page }) => 
 });
 
 test('double-click mode: a real double-click activates exactly once, cause "dblclick"', async ({ page }) => {
-  await page.goto('/generic.html');
-  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await gotoGeneric(page);
 
   await page.locator('#pointer-activation-select').selectOption('dblclick');
 
