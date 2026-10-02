@@ -606,15 +606,16 @@ To customize dark mode instead of just light mode, scope the override to the dar
 ```
 pnpm install
 pnpm dev        # harness at http://localhost:5173
-pnpm verify:full # the gate: everything below, then Playwright against the harness
+pnpm verify:full # the local gate: everything below, then Chromium against the harness
 pnpm verify      # the browser-free chain — on its own it cannot see e2e/
 pnpm test:e2e    # Playwright against the harness, on its own
 pnpm open-pr     # push the branch, open a draft pull request (docs/04 §5.2)
 ```
 
-`pnpm verify:full` is the one command every caller runs: you, `.githooks/pre-push`, and CI. Its last
-line is the verdict — quote that, never an exit code (`docs/04` §3.2). CI runs it in one job, on any
-pull request that is ready for review; a draft runs nothing, so `pnpm open-pr --ready` is what starts it.
+`pnpm verify:full` is the local gate: `verify`, then Chromium e2e. Its last
+line is the verdict — quote that, never an exit code (`docs/04` §3.2). CI runs `verify` and
+Playwright on Chromium, Firefox, and WebKit in parallel, on any pull request that is ready for
+review. A draft runs nothing, so `pnpm open-pr --ready` is what starts it. There is no pre-push hook.
 
 ### `isDevMode()` is a library-build flag, not a consumer's
 

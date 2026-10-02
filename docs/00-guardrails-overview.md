@@ -40,7 +40,7 @@ flowchart TB
   L1["<b>L1 — Types</b><br/>tsconfig strict flags · branded Instant<br/>sealed exports map · typed event union"]
   L2["<b>L2 — Static analysis</b><br/>ESLint flat config: 10 builtin-restriction configs<br/>+ 14 custom rules in a local plugin<br/>dependency-cruiser layer graph"]
   L3["<b>L3 — Tests</b><br/>Vitest projects (pure=node, dom=happy-dom)<br/>property tests · golden fixtures · isolation · guard-tests"]
-  L4["<b>L4 — Hooks</b><br/>Claude Code PostToolUse/PreToolUse (agent-time)<br/>git pre-commit / pre-push (human-time)"]
+  L4["<b>L4 — Hooks</b><br/>Claude Code PostToolUse/PreToolUse (agent-time)<br/>git pre-commit / commit-msg (human-time)"]
   L5["<b>L5 — CI</b><br/>the same commands, no escape hatches<br/>+ api-report diff · size-limit · e2e/axe"]
 
   L1 --> L2 --> L3 --> L4 --> L5
