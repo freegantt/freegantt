@@ -1,6 +1,6 @@
 # FreeGantt
 
-![FreeGantt demo: a Gantt chart being edited](https://freegantt.dev/img/video_1.5x.webp)
+[![FreeGantt demo: a Gantt chart being edited](https://freegantt.dev/img/video_1.5x.webp)](https://freegantt.dev/demo/)
 
 **Live demo:** [Planner](https://freegantt.dev/demo/) ([Light](https://freegantt.dev/demo/?theme=light) · [Dark](https://freegantt.dev/demo/?theme=dark) · [Paper](https://freegantt.dev/demo/?theme=paper)) · [Generic](https://freegantt.dev/demo/generic.html) · [Performance](https://freegantt.dev/demo/performance.html) · [Docs](https://freegantt.dev/docs/guardrails-overview)
 
