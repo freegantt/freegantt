@@ -164,11 +164,12 @@ export async function firstGrabbableBar(
     if (!box) continue;
     const left = Math.max(box.x, pane.x);
     const right = Math.min(box.x + box.width, pane.x + pane.width);
-    // Wide enough to place the grab point 8px in from the visible edge, clear of a resize handle.
-    if (right - left < 12) continue;
+    // Wide enough that the visible middle sits clear of a resize handle at either edge. A sliver
+    // clipped at the pane edge is all handle.
+    if (right - left < 30) continue;
     const grabY = box.y + box.height / 2;
     if (grabY <= header.y + header.height || grabY >= pane.y + pane.height) continue;
-    return { row, grabX: left + 8, grabY };
+    return { row, grabX: (left + right) / 2, grabY };
   }
   throw new Error('no candidate row has a bar the pointer can reach in the current scroll position');
 }
