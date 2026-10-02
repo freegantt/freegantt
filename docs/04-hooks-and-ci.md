@@ -29,7 +29,7 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 | `size-limit` | `size-limit` (`.size-limit.json`) — a measurement, no ceiling; `check-bundle-growth` is the guard that reads its numbers (§5) | ~10s |
 | `check-bundle-growth` | `node scripts/check-bundle-growth.mjs` — fails a pull request whose `.size-limit.json` entries grow more than 1 kB (brotli) past `main`'s merge-base, unless `bundle-size-exceptions.md` records the growth | ~10s |
 | `verify` | the check chain in `package.json` — every check except the browser one | ~60s |
-| `verify:full` | `node scripts/verify-full.mjs` — the `verify` chain, then `test:e2e`. **The gate** | ~75s |
+| `verify:full` | `node scripts/verify-full.mjs` — the `verify` chain, then Chromium `test:e2e`. **The local gate** | ~75s |
 | `open-pr` | `node scripts/open-pr.mjs` — pushes the branch, opens a draft pull request (§5.2) | ~5s |
 | `pr-wait` | `node scripts/pr-wait.mjs <n>` — watches the pull request's CI run and prints one verdict line (`docs/agents/ci.md`). **Not a check** | up to CI |
 | `gate` | `node scripts/slice-gate.mjs` — the slice gate, run deliberately at a slice boundary, outside `verify` and outside CI (§5.1) | ~60s |
@@ -37,7 +37,7 @@ Everything is a `package.json` script; hooks and CI only ever call these.
 
 `pnpm verify` is the **browser-free chain**: every check except `test:e2e`. It is a stage of the gate, not the gate.
 
-`pnpm verify:full` is **the gate**. Three callers run it, and none of them runs anything else: an agent proving a change, `.githooks/pre-push`, and CI (§5). It reads its check list from the `verify` script at run time, so no caller can drift from another (§3.2).
+`pnpm verify:full` is **the local gate**. It runs `verify`, then Chromium e2e, and prints one verdict line. CI is the proof: a ready pull request runs `verify` and Playwright on Chromium, Firefox, and WebKit in parallel (§5). There is no pre-push hook. The wrapper still reads its check list from the `verify` script at run time, so a new check joins the local command the moment it joins `verify`.
 
 ### 1.1 `measure:scale` reports a number and judges nothing
 
@@ -148,13 +148,12 @@ A `Stop` hook running `pnpm verify` when `git status --porcelain src/` is non-em
 
 ## 3. Git hooks (`.githooks/`, no dependency)
 
-Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so it applies after `pnpm install`. No husky, no lint-staged — three shell scripts.
+Enabled by `git config core.hooksPath .githooks`, set by a `prepare` script so it applies after `pnpm install`. No husky, no lint-staged — two shell scripts.
 
 | Hook | Runs | Rationale |
 |---|---|---|
 | `pre-commit` | `format` (auto-fix) on staged files, **except partially staged ones** + `lint` on staged `*.ts` | Fast (<5s), catches the trivia; auto-fixes formatting instead of blocking on something `pnpm verify` would just fix anyway |
 | `commit-msg` | `scripts/refuse-ai-attribution.mjs --commit-msg` | Drops a trailer a coding tool appended. Cursor injects one after the author writes the message, so a refuse would block the commit. A Co-authored-by line for a person stays. A message that is only attribution is refused |
-| `pre-push` | `pnpm verify:full` (`verify`, then `test:e2e`) | The full gate before it becomes anyone else's problem. CI runs the same command on a ready pull request (§5); this half is faster, and it also covers a push that never becomes one |
 
 ### 3.0 A partially staged file is never formatted
 
@@ -164,19 +163,17 @@ So the hook skips any file that is both staged and unstaged-modified, and says w
 
 The warning names the **intersection** only, never every dirty file. A warning that fires on most commits is a warning people stop reading.
 
-`--no-verify` exists and is not fought. The server runs the whole gate on every pull request that asks for review, so a skipped hook costs a red run rather than a silent landing. Two gaps stay local, by design. A draft runs nothing, and a push that never becomes a pull request is never proved on the server.
+`--no-verify` exists and is not fought. It skips `pre-commit` and `commit-msg`. CI is the authority: a skipped hook costs a red run on a ready pull request, not a silent landing. A draft runs nothing, and a push that never becomes a pull request is never proved on the server.
 
-### 3.1 e2e runs in the gate, and the gate runs on the server too
+### 3.1 e2e runs in CI, and locally inside `verify:full`
 
-`pnpm test:e2e` sits outside `pnpm verify` and inside `pnpm verify:full`. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. The gate includes e2e tests so an unrun e2e suite makes the gate unprovable.
+`pnpm test:e2e` sits outside `pnpm verify` and inside `pnpm verify:full`. Playwright owns what happy-dom cannot express: a real engine clamps `scrollTop`, fires `scroll`, and lays out. CI runs Chromium, Firefox, and WebKit on every pull request that asks for review, so an unrun e2e suite makes that pull request unprovable.
 
-CI now runs the whole gate — `test:e2e` included — on every pull request that asks for review.
+There is no pre-push hook. A push is cheap. The server is the proof.
 
-`pre-push` stays, and it stays as the same command. It is the faster half, because a failure surfaces before the push rather than after a wait on a runner. It is also the only half that covers a push nobody opens a pull request for.
+`verify` still excludes e2e. It is the browser-free chain the wrapper builds on, and folding e2e in would demand a browser everywhere `verify` runs. `pnpm verify:full` is the local wrapper: `verify`, then Chromium. Firefox and WebKit stay on the server, where each engine is its own job.
 
-`verify` still excludes e2e. It is the browser-free chain the wrapper builds on, and folding e2e in would demand a browser everywhere `verify` runs. The gate is the wrapper, and the wrapper is what every caller runs.
-
-The cost is small: the whole suite runs in seconds, and `playwright.config.ts` starts its own dev server. The failure mode that is *not* a real failure — a missing browser binary — gets its own message pointing at `pnpm exec playwright install chromium`.
+The cost is on the runner, not on the push. `playwright.config.ts` starts its own dev server. The failure mode that is *not* a real failure — a missing browser binary — gets its own message pointing at `pnpm exec playwright install chromium`.
 
 ### 3.2 The last line is the verdict
 
@@ -204,7 +201,7 @@ Three properties follow, and they are the reason this is a script rather than a 
 - **Green needs a positive token.** The completion test is "quote the last line", not "report a number". A run that a signal kills, or a pipe truncates, has no verdict line, so it reads as **unproven** — never as green.
 - **The failing check names itself.** `[ELIFECYCLE] Command failed with exit code 1` says a step failed, not which one, and says nothing at all when the run passes.
 
-The wrapper never holds its own copy of the check list. It parses the `verify` script and appends `test:e2e`, so a new CI job joins the gate the moment it joins `verify`. A `verify` step it cannot parse, or a check no script defines, is a loud failure — never a silently skipped check.
+The wrapper never holds its own copy of the check list. It parses the `verify` script and appends `test:e2e`, so a new check joins the local command the moment it joins `verify`. A `verify` step it cannot parse, or a check no script defines, is a loud failure — never a silently skipped check.
 
 ---
 
@@ -219,7 +216,7 @@ The rule that makes this system trustworthy rather than decorative: **a guard wi
 | dependency-cruiser graph | `scripts/guard-red-test.mjs` (`03-boundaries-and-config.md` §1.3) | the graph config is loosened or the tool is misconfigured |
 | Purity of the pure layers | `test/setup/assert-no-dom.ts` throwing | a pure module reaches for the DOM |
 | The matrix itself | `test/guards/matrix-coverage.test.ts` — parses `docs/01-invariant-guard-matrix.md`, asserts the table carries one row per declared invariant, that every row names a gate check that runs, and that no row's status is blank; **and** that every `freegantt/*` rule named in the Mechanism column of both §1 and §2 is registered in `eslint/rules/index.cjs`, unless it is honestly marked `PLANNED (Sn)` | an invariant loses its job, a job is renamed, or a row claims a rule is enforced when no rule file exists |
-| One gate, every caller | `test/guards/gate-is-one-command.test.ts` — asserts CI runs `pnpm verify:full` and no single check beside it, that `pre-push` runs that same command, that the check list derives from `verify`, and that the workflow asks for `ready_for_review` and skips a draft | a caller starts proving a subset of the gate, or the draft rule stops holding |
+| One gate, every caller | `test/guards/gate-is-one-command.test.ts` — asserts CI runs `pnpm verify` and no leaf check beside it, that Chromium, Firefox and WebKit sit in the e2e matrix, that no pre-push hook or nightly engines workflow ships, that the local check list derives from `verify`, and that the workflow asks for `ready_for_review` and skips a draft | a caller starts proving a subset of the gate, or the draft rule stops holding |
 | The pr-wait hook | `test/guards/require-pr-wait.test.ts` — six hand-rolled waits are blocked, ten neighbouring commands pass, and the refusal names `pnpm pr-wait` | the hook stops blocking the poll, or starts blocking a log read or `gh run watch` |
 | The draft-PR hook | `test/guards/require-draft-pr.test.ts` — five ways to create a pull request are blocked, six neighbouring commands pass, and the hook is registered and executable | the hook stops blocking, or starts blocking `gh pr ready` and its neighbours |
 | AI tool attribution | `test/guards/refuse-ai-attribution.test.ts` — vendor trailers match, `commit-msg` drops them, `open-pr` refuses them, a human Co-authored-by still passes | a new Cursor or Claude trailer lands in git history, or a person cannot co-author |
@@ -256,11 +253,11 @@ A case with no failing fixture is presumed broken (the rule this whole section s
 
 ## 5. CI pipeline
 
-One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify:full` on `ubuntu-latest`, with `pnpm` on a frozen lockfile and Node pinned by `.nvmrc`.
+One workflow, four jobs that run in parallel, one required check. `.github/workflows/ci.yml` runs `pnpm verify` in one job and Playwright in one job per engine (`chromium`, `firefox`, `webkit`) on `ubuntu-latest`, with `pnpm` on a frozen lockfile and Node pinned by `.nvmrc`. A `gate` job needs all four and is the required check.
 
-**Why one job.** GitHub bills a job by the minute and rounds up. An earlier shape was eleven jobs, and each one paid for a checkout and an install before it did about ten seconds of work — roughly twenty billed minutes for a gate that runs in about one. Steps inside a job are free. The fan-out bought a prettier failure page, and the verdict line already names the check that stopped the run (§3.2).
+**Why several jobs.** This repo is public. Standard GitHub-hosted runners cost no Actions minutes here. Parallel jobs buy wall-clock: `verify` and three engines start together, so the run is as slow as the slowest job, not the sum. The old one-job shape saved billed minutes that a private repo spends. It also hid which engine failed behind one log.
 
-**Why one command.** The workflow holds no check list of its own. `pnpm verify:full` reads the list out of `package.json` at run time, so a check joins CI the moment it joins `verify`, and CI cannot run a spelling of the gate that nobody runs locally. `test/guards/gate-is-one-command.test.ts` fails the build when the workflow runs a single check beside the gate.
+**Why no leaf check list in the workflow.** The workflow holds no `lint` or `test:node` step of its own. `pnpm verify` reads the list out of `package.json` at run time, so a check joins CI the moment it joins `verify`, and CI cannot run a spelling of the chain that nobody runs locally. The e2e matrix names the three Playwright projects. `test/guards/gate-is-one-command.test.ts` fails the build when the workflow runs a leaf check beside `verify`, or when an engine drops out of the matrix.
 
 **Triggers.** Pull requests, plus `workflow_dispatch`:
 
@@ -274,21 +271,21 @@ One workflow, one job, one command. `.github/workflows/ci.yml` runs `pnpm verify
 
 `main` moving under a branch is the one case where a green run goes stale. Branch protection's "require branches to be up to date before merging" re-runs the gate exactly then, and never otherwise.
 
-**Caching.** Two caches, and a dependency change is the only thing that busts either:
+**Caching.** Two caches, and a dependency change is the only thing that busts the install:
 
 | Cache | Key | Effect |
 |---|---|---|
 | `node_modules` | `.nvmrc` + `pnpm-lock.yaml` | A run that changes no dependency installs nothing. Caching the directory, rather than the pnpm store, removes the link step too |
-| `~/.cache/ms-playwright` | the Playwright version, read from the install | Chromium downloads only after a Playwright bump. `--with-deps` runs on a miss; the runner image carries the system libraries a hit needs |
+| `~/.cache/ms-playwright` | the Playwright version plus the engine | Each engine has its own key, so a Chromium hit never serves a Firefox tree. `--with-deps` runs on a miss. A Firefox or WebKit hit still runs `install-deps`, because those libraries live on the runner, not in the cache |
 
-`concurrency` with `cancel-in-progress` kills a superseded run, so a second push never pays twice. `timeout-minutes: 20` caps a hung browser.
+`concurrency` with `cancel-in-progress` kills a superseded run, so a second push never pays twice. `timeout-minutes: 20` caps `verify`. `timeout-minutes: 30` caps each e2e engine.
 
 **Rules for the pipeline itself:**
 
-- **No `continue-on-error`.** A check that can be yellow is a check that is off. The gate has one exit code and one verdict line.
+- **No `continue-on-error`.** A check that can be yellow is a check that is off. The `gate` job fails when any child fails.
 - **A measurement is not a guard.** `size-limit` reports raw byte counts and sets no ceiling; `check-bundle-growth` reads those counts and is the guard, failing on growth past `main` rather than a fixed number (§1). `perf` measures until the budget behind it is measured rather than guessed. Each is labeled as a measurement where it is declared, not as a guard.
 - **`api-report` failure is not a bug**, it is a semver decision: the fix is either "revert the surface change" or "commit the updated report and say so in the pull request." The check's message says exactly that.
-- **Required check on `main`: `gate`.** One job, so one required check. Later work adds `axe` and `perf` as checks inside the gate, never as jobs beside it.
+- **Required check on `main`: `gate`.** That job needs `verify` and the e2e matrix. Later work adds `axe` and `perf` as checks inside `verify` or as jobs `gate` also needs, never as untracked jobs beside it.
 
 ### 5.1 Slice gates
 
@@ -304,20 +301,11 @@ S0 → S1 gate
 
 Bumping `.slice` is a reviewed commit. That is the enforcement: you cannot start S2 work without a commit that says the S1 gate was met, and that commit is where a reviewer asks about the `☐` items.
 
-### 5.1.1 Firefox and WebKit run every night
+### 5.1.1 Firefox and WebKit run on every ready pull request
 
-The gate and CI run Chromium only (#317). `.github/workflows/nightly-engines.yml` runs Firefox and WebKit every night at 3am America/Denver (#514). You can also start it by hand with `workflow_dispatch`.
+The local wrapper runs Chromium only (`pnpm test:e2e`). CI runs Firefox and WebKit beside it, each in its own job, on every pull request that asks for review. `fail-fast: false` keeps the other engines going when one fails, so the log names every engine that broke.
 
-GitHub cron runs in UTC. The workflow fires at 09:00 and 10:00 UTC, and keeps the one that is 3am in Denver on that day.
-
-A scheduled run is skipped when no commit landed on main in the last 25 hours. A merged PR and a direct push both count. A run started by hand always runs.
-
-A failed run calls `scripts/report-nightly-failures.mjs`:
-
-- No open issue has the `nightly-e2e-failure` label: the script opens one that lists each failure.
-- One is open: the script comments with only the failures that issue does not list yet.
-
-A failure is new when its engine, spec file, full test title, failing line or first error line is new. The full title starts with each `describe` title above the test, as Playwright prints it. A flaky test passed on a retry, so the script does not report it. Close the issue when the nightly run is green again.
+`pnpm test:e2e:engines` still runs all three locally, by hand. There is no nightly workflow. A scheduled run that only repeats what the pull request already proved buys a delay, not coverage.
 
 ---
 
@@ -335,7 +323,7 @@ The draft is not a formality. It is what the trigger set reads:
 
 - **A draft runs nothing.** Minutes go to work that asks for review, never to work in progress.
 - **"Ready" says one thing.** This is up for review, and it is meant to merge. Nobody guesses whether a pull request wants eyes.
-- **The push proves the work first.** `open-pr` pushes, so `pre-push` runs the gate before the pull request exists. CI then re-proves it on a clean runner.
+- **CI is the proof.** `open-pr` pushes, then you mark the pull request ready. That starts the parallel jobs. There is no pre-push gate.
 - **The copy names no tool as author.** `open-pr` scans the title and body with the same checker as `commit-msg`. A Cursor or Claude trailer in that copy is refused before the push. The commit hook drops the same strings, because Cursor injects them on `git commit`.
 
 So: open every pull request as a draft, and mark it ready only when it is the merge decision. A branch that waits stays a draft, and costs nothing while it waits.
@@ -356,12 +344,12 @@ Worth stating, because a guardrail system that nobody wants to run is a guardrai
 |---|---|
 | Per agent file-edit (PostToolUse) | ~2s |
 | Per commit (pre-commit) | ~5s |
-| Per push (pre-push, `verify:full`) | ~75s at current scale, e2e included |
-| Per ready pull request (CI, one job) | ~3 min wall clock, ~4 billed minutes |
+| Per push | nothing — there is no pre-push hook |
+| Per ready pull request (CI, parallel jobs) | wall clock is the slowest job, about 3 min today |
 | Per draft pull request (CI) | nothing — the job does not run |
 | Build-out cost | ~2 days, of which the 9 custom rules are ~1 day |
 
-The type-aware ESLint pass dominates local lint time and grows with the codebase. If `lint` crosses ~30s, the response is to split the type-aware rules into a separate `lint:types` script run at pre-push and CI only, keeping the per-edit hook syntactic and fast — not to drop rules.
+The type-aware ESLint pass dominates local lint time and grows with the codebase. If `lint` crosses ~30s, the response is to split the type-aware rules into a separate `lint:types` script run at CI only, keeping the per-edit hook syntactic and fast — not to drop rules.
 
 ---
 

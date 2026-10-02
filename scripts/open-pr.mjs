@@ -8,8 +8,8 @@
 // the raw command and names this script, because a rule an agent must remember is a rule that
 // breaks on a busy turn.
 //
-// This script also pushes the branch when the remote does not carry it yet. The push runs
-// `.githooks/pre-push`, so the local gate proves the work before the pull request exists.
+// This script also pushes the branch when the remote does not carry it yet. There is no pre-push
+// gate; CI on a ready pull request is the proof.
 //
 // `--ready` says the work is up for review and meant to merge — the one decision `gh pr ready`
 // carries (#255). It reaches both states this script can find a branch in: a pull request that does
@@ -127,7 +127,7 @@ const hasUpstream =
     .status === 0;
 const push = hasUpstream ? ['push'] : ['push', '--set-upstream', 'origin', branch];
 
-console.log(`open-pr: git ${push.join(' ')} — pre-push runs the gate.`);
+console.log(`open-pr: git ${push.join(' ')}.`);
 if (spawnSync('git', push, { stdio: 'inherit' }).status !== 0) {
   stop('the push failed, so the branch is not on the remote yet. Nothing was opened.');
 }

@@ -27,8 +27,8 @@ Open every pull request as a draft:
 pnpm open-pr --title "…" --body-file <path>
 ```
 
-`.claude/hooks/require-draft-pr.sh` blocks a raw `gh pr create`. CI runs the whole gate on
-`ready_for_review`, so a draft spends no minutes.
+`.claude/hooks/require-draft-pr.sh` blocks a raw `gh pr create`. CI runs `verify` and Playwright
+on Chromium, Firefox, and WebKit on `ready_for_review`, so a draft spends no minutes.
 
 ## Mark ready
 

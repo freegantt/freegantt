@@ -1,7 +1,7 @@
 // docs/04-hooks-and-ci.md §4 promises this file: "closes the loop plans/04 §4 opens (an invariant
 // without a job is a TODO, tracked in the table itself). The table stops being prose and becomes a
 // checked artifact." Parses docs/01-invariant-guard-matrix.md's numbered table and asserts every row
-// names a gate check that runs today (CI is one job running the whole gate — docs/04 §5), or one
+// names a gate check that runs today (CI runs `verify` plus Playwright on three engines — docs/04 §5), or one
 // docs/04 §5's pipeline diagram plans for a later slice, and that no row's status is blank (#43).
 
 import { describe, expect, it } from 'vitest';
@@ -69,9 +69,10 @@ function freegantRuleMentionsInCell(cell: string): { rule: string; plannedNearby
   }));
 }
 
-/** Every check the gate runs today. CI is one job running one command (docs/04 §5), so the list
- * lives in `package.json` — the same list `pre-push` and an agent run. Reading it from there, and
- * not from the workflow, is what keeps this table checked against what actually runs. */
+/** Every check the local gate runs today. CI runs that same list as `pnpm verify` plus
+ * Playwright on three engines (docs/04 §5). The list lives in `package.json` — reading it
+ * from there, and not from the workflow, is what keeps this table checked against what actually
+ * runs. */
 function checksRunByGate(): Set<string> {
   const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
   return new Set(readCheckList(pkg));
