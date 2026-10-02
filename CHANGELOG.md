@@ -2,9 +2,13 @@
 
 This file records every change a consumer of FreeGantt can see. The newest release is at the top.
 
-The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). FreeGantt has not shipped yet, so a breaking change does not change the major version before 1.0.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A breaking change does not change the major version before 1.0.
 
 ## [Unreleased]
+
+## [0.1.0] - 2026-09-30
+
+The first release. Install it with `npm install freegantt`.
 
 ### Changed
 
