@@ -46,10 +46,9 @@ A page that exists only for an e2e test goes in `harness/e2e/`. A themed demo pa
 
 ## Engines
 
-`playwright.config.ts` names three projects: `chromium`, `firefox`, `webkit`. The push gate and
-CI both call `pnpm test:e2e`, which pins `--project=chromium` — that stays the only engine either
-one runs (#317). Run the other two by hand, locally, with `pnpm test:e2e:engines`. They also
-run every night in `.github/workflows/nightly-engines.yml` (#514). A project's
+`playwright.config.ts` names three projects: `chromium`, `firefox`, `webkit`. The local
+wrapper and `pnpm test:e2e` pin `--project=chromium`. CI runs all three, each in its own job.
+Run every engine locally with `pnpm test:e2e:engines`. A project's
 `use` sets only `browserName`; it must not spread a Playwright device preset
 (`devices['Desktop Firefox']` and friends carry their own `viewport`, which would silently
 override the harness page's 1280x1100).

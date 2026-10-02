@@ -63,7 +63,7 @@ Never cite a spec label such as `D-S5-31`, `J54` or `Q3` in a code comment, a te
 - The invariants table (`plans/01` §11, I1–I15) is the review checklist; every invariant maps to a CI job.
 - Rename a class, a type or a function with `pk-rename-symbol`. It renames through the language service, so it follows re-exports and aliases, and it skips prose. Then run `pnpm typecheck`. A same-named string in a comment or a doc stays as it is — decide those separately.
 - **CI and the verification gate**: open `docs/agents/ci.md` to run the gate before hand-off, and to troubleshoot a failing or truncated check.
-- **Push after a green gate**: the pre-push hook runs `pnpm verify:full` and nothing else. If `verify:full` passed and no file changed since, push with `git push --no-verify`. Any edit after the gate, even a comment, voids this, so let the hook run.
+- **Push freely.** There is no pre-push gate. CI on a ready pull request is the proof. `pnpm verify:full` remains the local command that runs the browser-free chain then Chromium e2e.
 - **Changelog**: a commit that changes what a consumer sees adds its `CHANGELOG.md` line in that same commit. That covers a public API change, a behavior change, a fix a consumer could notice, and a new harness feature. The `pull-requests` skill gives the format.
 - **Pull requests**: use the `pull-requests` skill when you create a pull request, mark one ready, or watch its CI. Never sign a pull request or a commit with an AI tool.
 - **Reviews**: open `docs/agents/review.md` before you review a branch, and before you apply a fix a plan or review proposes. It names `ocr` as the branch reviewer and gives the one command. "ocr review" and "code review" both mean that doc — read it first, and never read `ocr` as a typo.

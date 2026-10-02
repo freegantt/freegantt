@@ -1,6 +1,6 @@
 # FreeGantt — Invariant → Guard Matrix
 
-The single table a reviewer (human or agent) checks against. Every rule in `CLAUDE.md` and this project's design appears exactly once, with the mechanism that proves it and the gate check that runs it. The gate is `pnpm verify:full`, and CI runs all of it in one job.
+The single table a reviewer (human or agent) checks against. Every rule in `CLAUDE.md` and this project's design appears exactly once, with the mechanism that proves it and the gate check that runs it. The gate is `pnpm verify:full` locally, and CI runs all of it as parallel jobs.
 
 **Status vocabulary**
 
