@@ -4,11 +4,9 @@ const PORT = process.env['FG_E2E_PORT'] ?? '5172';
 
 export default defineConfig({
   testDir: './e2e',
-  // The push gate (`verify:full`, pre-push) and CI both call `pnpm test:e2e`, which pins
-  // `--project=chromium` (#317): three engines would triple the gate's runtime for a check
-  // that already covers the acceptance boxes happy-dom cannot see. Firefox and WebKit run
-  // through `pnpm test:e2e:engines`: by hand, and every night in
-  // `.github/workflows/nightly-engines.yml` (#514).
+  // The local wrapper (`verify:full`) and `pnpm test:e2e` pin `--project=chromium`. CI runs
+  // all three engines, each in its own job. Run every engine locally with
+  // `pnpm test:e2e:engines`.
   //
   // Each project sets only `browserName`, not a Playwright device preset (`devices['Desktop
   // Firefox']` etc). A device preset carries its own `viewport`, and that would silently
@@ -22,16 +20,6 @@ export default defineConfig({
   // A single transient timeout or layout jitter should not fail the whole run; retry once
   // locally, twice on CI where runners are slower and noisier.
   retries: process.env['CI'] ? 2 : 1,
-  // The nightly engine run (#514) reads its failures from a JSON report. `FG_E2E_JSON_REPORT`
-  // names the file. The console keeps Playwright's default reporter for the environment.
-  ...(process.env['FG_E2E_JSON_REPORT']
-    ? {
-        reporter: [
-          [process.env['CI'] ? 'dot' : 'list'],
-          ['json', { outputFile: process.env['FG_E2E_JSON_REPORT'] }],
-        ],
-      }
-    : {}),
   // Playwright defaults to one worker on CI, and that default was costing more than the whole
   // rest of the gate: 128.8s of a 283s run, single-threaded, while `pnpm verify`'s fifteen checks
   // took 154s between them. Two workers, because the runner has two cores — a third would only
@@ -40,7 +28,7 @@ export default defineConfig({
   // file count is not the cap. Locally the default stands: Playwright already picks half the
   // cores, which is the right answer on a developer machine.
   //
-  // Watch `retries` above if this goes flaky. Two browsers on two cores, beside a Vite dev server,
+  // Watch `retries` above if this goes flaky. Two workers on two cores, beside a Vite dev server,
   // is real contention, and the timing-sensitive specs (drag, resize, scroll-sync) feel it first.
   // A rising retry count is the signal to drop back to one worker, not to raise the timeouts.
   ...(process.env['CI'] ? { workers: 2 } : {}),

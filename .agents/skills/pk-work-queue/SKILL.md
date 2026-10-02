@@ -106,7 +106,7 @@ Route and write every dispatch with the `subagents` skill. It holds the agent ta
 ## implementer-rules.md (copy into the scratchpad)
 
 - Work only in the named worktree. Before each commit, check `pwd` and `git branch --show-current` against the identity block.
-- Red test first for every behaviour fix. One atomic commit per step, green on `timeout 900 pnpm verify:full`, pushed.
+- Red test first for every behaviour fix. One atomic commit per step. Push; CI on a ready pull request is the proof. `timeout 900 pnpm verify:full` remains the local command when you want that answer before you push.
 - No stash, amend or force-push. No spec labels in code comments, test names or docs outside plans/.
 - Never use `git stash` in any form. The stash stack is shared with every worktree. To set a file aside, write `git diff -- <file>` to a patch in the scratchpad.
 - Run a long gate once, with `run_in_background`, and wait for its completion notice. Never write an `until pgrep …` or `while … sleep` loop. The pattern matches the loop itself, so the loop never ends.

@@ -17,10 +17,11 @@
 // tail -3 /tmp/v.log`.
 //
 // The check list is not written here. This script reads it from the `verify` script in
-// `package.json`. So `verify` stays the single source of truth, and a new check joins every caller
-// at once — this gate, `.githooks/pre-push`, and CI, which runs this same command in one job
-// (docs/04 §5). `test:e2e` is appended: it is the browser half `verify` leaves out, and it catches
-// the class of failure #255 records — a drag that a real browser breaks, and happy-dom cannot see.
+// `package.json`. So `verify` stays the single source of truth, and a new check joins the local
+// wrapper the moment it joins `verify`. CI runs that same `verify` chain as one job, then
+// Playwright as one job per engine (docs/04 §5). `test:e2e` is appended here: it is the Chromium
+// half `verify` leaves out, and it catches the class of failure #255 records — a drag that a
+// real browser breaks, and happy-dom cannot see.
 
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';

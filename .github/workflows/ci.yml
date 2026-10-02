@@ -1,7 +1,17 @@
 name: CI
 
-# One gate, three callers: an agent, `.githooks/pre-push`, and this workflow. All three run
-# `pnpm verify:full`, so no caller can prove a different thing from the others (#255).
+# The proof lives on the server. A ready pull request runs the browser-free chain and Playwright
+# on Chromium, Firefox, and WebKit in parallel. There is no pre-push hook: a push is cheap, and CI
+# is the gate. `pnpm verify:full` remains the local command that runs `verify` then Chromium e2e.
+#
+# This repo is public. Standard GitHub-hosted runners cost no Actions minutes here, so parallel
+# jobs buy wall-clock. The old one-job shape saved billed minutes that a private repo spends;
+# this one does not. The `gate` job still reports one required check: it needs every job below.
+#
+# The workflow holds no leaf check list. `pnpm verify` reads its chain from `package.json`, and
+# the e2e job runs Playwright's three projects. A check joins CI when it joins `verify` or
+# `playwright.config.ts`. `test/guards/gate-is-one-command.test.ts` fails the build when a leaf
+# script (`lint`, `test:node`, …) appears as its own step, or when an engine drops out of the matrix.
 #
 # Triggers are pull-request-only, and a draft never runs. `ready_for_review` is not a default
 # event type, so it is listed here: converting a draft with `gh pr ready` is what starts the
@@ -15,7 +25,7 @@ name: CI
 #
 # `closed` fires on a merge and on a close-without-merge alike, and either way the run in flight
 # for that branch has nothing left to prove — the PR it was gating is gone. `closed` earns no
-# `gate` run of its own (see the `if:` below); it exists only to make the concurrency group below
+# job of its own (see the `if:` below); it exists only to make the concurrency group below
 # see a new run and cancel the stale one. That run reports `skipped`, the same zero-cost shape a
 # draft's first push already gets.
 on:
@@ -44,12 +54,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # One job, not one job per check. GitHub bills a job by the minute, rounded up, and every job
-  # pays for its own checkout and install before it does ten seconds of work. Eleven such jobs
-  # cost about twenty billed minutes for a gate that runs in about one. Steps inside a job are
-  # free, and `pnpm verify:full` names the check that stopped the run in its verdict line, so the
-  # fan-out bought a slightly prettier failure page and nothing else.
-  gate:
+  verify:
     if: github.event.action != 'closed' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -86,11 +91,36 @@ jobs:
       - if: steps.node-modules.outputs.cache-hit != 'true'
         run: pnpm install --frozen-lockfile
 
-      # Chromium is cached against the Playwright version that drives it, read from the install
-      # rather than from a second copy of the version here. A Playwright bump busts this key and
-      # nothing else does. `--with-deps` runs only on a miss; the runner image already carries the
-      # system libraries Chromium needs, so a hit needs no apt step. If a future image drops one,
-      # the fix is `pnpm exec playwright install-deps chromium` on the hit path, not a wider key.
+      # The browser-free chain. `FG_PR_ID` is `check-bundle-growth`'s (#342) ledger key.
+      # `pull_request` carries a number, so that wins. `workflow_dispatch` carries none —
+      # `pull_request.number` reads as an empty string there — so the branch name stands in, the
+      # same fallback the script itself uses locally (a pull request has no number yet there).
+      - run: pnpm verify
+        env:
+          FG_PR_ID: ${{ github.event.pull_request.number || github.ref_name }}
+
+  e2e:
+    if: github.event.action != 'closed' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - id: node-modules
+        uses: actions/cache@v6
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml') }}
+      - if: steps.node-modules.outputs.cache-hit != 'true'
+        run: pnpm install --frozen-lockfile
+
       # Read the version from the installed package, never from `pnpm exec` output. `pnpm exec`
       # writes its own banner to stdout — "Already up to date" and "Done in 351ms using pnpm
       # v11.22.0" — whenever it decides the project needs an install check. `awk '{ print $NF }'`
@@ -100,24 +130,47 @@ jobs:
       # deterministic — it depends on whether the lockfile looks settled — so the step passed on
       # most branches and failed on the one that changed dependencies (#355). `require(...)` reads
       # the same install with no wrapper in front of it, so there is no banner to strip.
+      #
+      # The cache key includes the engine, so a Chromium hit never serves a Firefox tree. A miss
+      # downloads that engine and its system libraries. A hit still needs `install-deps` for
+      # Firefox and WebKit: those libraries live on the runner image, not in the cache. Chromium's
+      # libraries already ship on `ubuntu-latest`, so a Chromium hit skips apt.
       - id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - id: browsers
         uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.project }}
       - if: steps.browsers.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps ${{ matrix.project }}
+      - if: steps.browsers.outputs.cache-hit == 'true' && matrix.project != 'chromium'
+        run: pnpm exec playwright install-deps ${{ matrix.project }}
 
-      # The gate itself. Every check the local gate runs, in the same order, from one script that
-      # reads its check list out of `package.json` at run time. A check cannot join `verify` and
-      # miss CI, and CI cannot run a spelling of the gate that nobody runs locally.
-      #
-      # `FG_PR_ID` is `check-bundle-growth`'s (#342) ledger key. `pull_request` carries a number,
-      # so that wins. `workflow_dispatch` carries none — `pull_request.number` reads as an empty
-      # string there — so the branch name stands in, the same fallback the script itself uses
-      # locally (a pull request has no number yet there).
-      - run: pnpm verify:full
-        env:
-          FG_PR_ID: ${{ github.event.pull_request.number || github.ref_name }}
+      - run: pnpm exec playwright test --project=${{ matrix.project }}
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-${{ matrix.project }}
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # One required check. GitHub's matrix reports each engine as its own check; this job is the
+  # merge gate so branch protection can name `gate` and nothing else. `always()` is what makes a
+  # failed child produce a red check here rather than a skip.
+  gate:
+    if: always() && github.event.action != 'closed' && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    needs: [verify, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Every job passed
+        run: |
+          echo "verify=${{ needs.verify.result }}"
+          echo "e2e=${{ needs.e2e.result }}"
+          if [ "${{ needs.verify.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ]; then
+            exit 1
+          fi

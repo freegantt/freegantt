@@ -1,15 +1,16 @@
 // A guard with no failing fixture is presumed broken (docs/04-hooks-and-ci.md §4).
 //
-// One gate, three callers: an agent, `.githooks/pre-push`, and `.github/workflows/ci.yml`. All
-// three run `pnpm verify:full`. Before #255 they ran different spellings, and the agent's spelling
-// was the one that reported completion — `pnpm verify`, which starts no browser and could not see
-// a fully red `e2e/resize.spec.ts`. Before the CI rewrite, the workflow held its own hand-written
-// list of checks, which could fall behind `verify` in silence.
+// CI is the gate. A ready pull request runs `pnpm verify` (the browser-free chain) and Playwright
+// on Chromium, Firefox, and WebKit, in parallel. There is no pre-push hook. `pnpm verify:full`
+// remains the local command that runs `verify` then Chromium e2e, and it still reads its check
+// list out of `package.json` at run time.
 //
-// So this file pins the one property that makes the gate trustworthy: nobody runs a subset. CI
-// runs the whole gate command and no individual check beside it, `pre-push` runs the same command,
-// and the command reads its check list out of `package.json` at run time. The red fixtures below
-// prove the wrapper refuses a list it cannot run, instead of skipping a check.
+// Before #255 the callers ran different spellings, and the agent's spelling was the one that
+// reported completion — `pnpm verify`, which starts no browser and could not see a fully red
+// `e2e/resize.spec.ts`. Before the CI rewrite, the workflow held its own hand-written list of
+// checks, which could fall behind `verify` in silence. So this file pins the property that makes
+// the gate trustworthy: CI runs `verify` and no leaf check beside it, every Playwright engine
+// sits in the matrix, and the local wrapper refuses a list it cannot run.
 //
 // It also pins the draft rule (docs/04 §5.2): the workflow runs when a pull request asks for
 // review, and never while it is a draft. A draft that spends minutes is the cost failure; a ready
@@ -23,9 +24,6 @@ import { readCheckList } from '../../scripts/verify-full.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const read = (rel: string): string => fs.readFileSync(path.join(root, rel), 'utf8');
-
-/** The one command every caller runs. */
-const GATE = 'pnpm verify:full';
 
 /** `pnpm install` and `pnpm exec` are setup every runner repeats, not checks the gate owns. */
 const SCAFFOLDING = new Set(['install', 'exec']);
@@ -42,24 +40,37 @@ function pnpmScriptsRunBy(workflow: string): string[] {
   return [...new Set(names)].filter((name) => !SCAFFOLDING.has(name));
 }
 
-describe('CI and pre-push run the same gate, and run all of it', () => {
+describe('CI runs the gate as parallel jobs', () => {
   const workflow = read('.github/workflows/ci.yml');
   const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string> };
   const verify = pkg.scripts['verify'] ?? '';
-  const prePush = read('.githooks/pre-push');
 
-  it('CI runs the gate command, and no single check beside it', () => {
+  it('CI runs verify, and no leaf check beside it', () => {
     // A workflow that runs `pnpm lint` directly has started keeping a second check list. That list
     // is what drifts from `verify`, and the drift always resolves as "CI was green, main is red".
-    expect(pnpmScriptsRunBy(workflow)).toEqual(['verify:full']);
+    expect(pnpmScriptsRunBy(workflow)).toEqual(['verify']);
   });
 
-  it('CI runs that command as a step, not as a name in a comment', () => {
-    expect(workflow).toMatch(new RegExp(`^\\s*-\\s*run:\\s*${GATE}\\s*$`, 'm'));
+  it('CI runs verify as a step, not as a name in a comment', () => {
+    expect(workflow).toMatch(/^\s*- run: pnpm verify\s*$/m);
   });
 
-  it('pre-push invokes the same gate', () => {
-    expect(prePush).toMatch(/^\s*pnpm verify:full\s*$/m);
+  it('CI runs Playwright on chromium, firefox, and webkit', () => {
+    expect(workflow).toMatch(/project:\s*\[chromium,\s*firefox,\s*webkit\]/);
+    expect(workflow).toMatch(/playwright test --project=\$\{\{ matrix\.project \}\}/);
+  });
+
+  it('a gate job needs verify and e2e so one required check remains', () => {
+    expect(workflow).toMatch(/^ {2}gate:\s*$/m);
+    expect(workflow).toMatch(/needs: \[verify, e2e\]/);
+  });
+
+  it('does not ship a pre-push hook', () => {
+    expect(fs.existsSync(path.join(root, '.githooks/pre-push'))).toBe(false);
+  });
+
+  it('does not ship a nightly engines workflow', () => {
+    expect(fs.existsSync(path.join(root, '.github/workflows/nightly-engines.yml'))).toBe(false);
   });
 
   it("the gate runs verify's chain, then the browser check", () => {
@@ -170,6 +181,7 @@ const FIRST_NODE24_MAJOR = new Map([
   ['actions/setup-node', 5],
   ['actions/cache', 5],
   ['pnpm/action-setup', 5],
+  ['actions/upload-artifact', 5],
 ]);
 
 describe('every action runs on a supported Node runtime', () => {

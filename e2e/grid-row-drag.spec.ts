@@ -399,12 +399,21 @@ test('holding a grid row drag over a collapsed parent expands it, and the drop l
     before.filter((row) => row.childCount === 0 && row.hasOwnBar),
     viewport,
   );
-  const leafParentId = await currentParentId(page, leaf.entryId);
-  // A parent that paints its own bar takes an ordinary "into" drop. A parent that draws its
-  // children as bars on itself has no child rows to expand.
+  // Collapsing an ancestor hides the leaf. The target has to sit on another branch.
+  const ancestors = new Set<string>();
+  let walk = await currentParentId(page, leaf.entryId);
+  while (walk) {
+    ancestors.add(walk);
+    walk = await currentParentId(page, walk);
+  }
+  // A parent that draws its children as bars on itself has no child rows to expand. A parent
+  // with child rows paints a row one level deeper right below it.
   const target = before.find(
-    (row) =>
-      row.childCount > 0 && row.hasOwnBar && row.entryId !== leafParentId && row.entryId !== leaf.entryId,
+    (row, index) =>
+      row.childCount > 0 &&
+      row.entryId !== leaf.entryId &&
+      !ancestors.has(row.entryId) &&
+      before[index + 1]?.depth === row.depth + 1,
   )!;
 
   await page.evaluate((id) => window.__gantt.collapse(id), target.rowId);
@@ -414,11 +423,11 @@ test('holding a grid row drag over a collapsed parent expands it, and the drop l
 
   // The collapse moved every row below it, so read the grab point and the target after it.
   const collapsedRows = await rowPlan(page);
-  const grab = await firstVisibleGridRow(
-    page,
-    collapsedRows.filter((row) => row.entryId === leaf.entryId),
-    viewport,
-  );
+  const leafAfter = collapsedRows.find((row) => row.entryId === leaf.entryId);
+  expect(leafAfter).toBeDefined();
+  await gridRow(page, leafAfter!.rowId).scrollIntoViewIfNeeded();
+  const grab = await firstVisibleGridRow(page, [leafAfter!], await rowsViewportBox(page));
+  await gridRow(page, target.rowId).scrollIntoViewIfNeeded();
   const targetBox = (await gridRow(page, target.rowId).boundingBox())!;
   await countChangesFromHere(page);
 
