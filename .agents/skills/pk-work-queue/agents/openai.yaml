@@ -1,5 +1,0 @@
-interface:
-  display_name: "Work Queue"
-  short_description: "Run a queue of issues to merged PRs"
-policy:
-  allow_implicit_invocation: false
