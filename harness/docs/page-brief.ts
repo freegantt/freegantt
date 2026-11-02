@@ -160,6 +160,22 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
     ],
     specLinks: [],
   },
+  scheduling: {
+    features: [
+      'Drag a task later and its successors move; drag it earlier and they follow',
+      'One undo restores every task the drag moved',
+      'A Manual column toggles manuallyScheduled: the plugin never moves that task and reports the broken link',
+      'A task dated by hand keeps its date; the Dependency it breaks shows as a finding',
+      'A loop of Dependencies is listed by its members, and its connectors carry the cycle flag',
+    ],
+    config: [
+      'new Dataset({ entries, plugins: [entryDependencies(), scheduling({ successorMoves: "pushAndPull" })] })',
+      "gridColumns: ['name', 'start', 'end', { field: 'manuallyScheduled', toggle: true }]",
+      "scheduling.on('scheduleDiagnostics', (findings) => …) / scheduling.diagnostics()",
+      'scheduling.constraintOf(id) / scheduling.clearConstraint(id)',
+    ],
+    specLinks: [],
+  },
 };
 
 function labelledLine(label: string): HTMLParagraphElement {

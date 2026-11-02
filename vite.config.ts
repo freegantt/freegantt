@@ -35,6 +35,7 @@ export default defineConfig({
         performance: page('performance.html'),
         'related-to': page('related-to.html'),
         dependencies: page('dependencies.html'),
+        scheduling: page('scheduling.html'),
       },
     },
   },

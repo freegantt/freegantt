@@ -23,6 +23,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 - A date a user sets on a scheduled Entry becomes its "start no earlier than" constraint. `scheduling().constraintOf(id)` reads it and `clearConstraint(id)` removes it. A date that breaks a Dependency stays, and a `blocked-move` diagnostic marks the link. Option `editedDate` is `'userDateWins'`.
 - `scheduling().on('scheduleDiagnostics', handler)` reports cycles, blocked moves and unreadable Dependencies after each commit. `scheduling().diagnostics()` reads the latest. The connectors of a cycle carry the `cycle` flag.
 - New error `SchedulingNotInstalledError` (`code: 'scheduling-not-installed'`) for a `scheduling()` call before a Dataset installs it.
+- The harness has a "Scheduling" page. It installs `scheduling()` on a chain of six tasks joined by all four Dependency types and one negative lag. Drag a task later and its successors move. Drag it earlier and they follow. One undo restores them all. A Manual column toggles `manuallyScheduled`, and a loop of three tasks shows its members from the diagnostics.
 
 ### Fixed
 
