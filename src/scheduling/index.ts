@@ -11,6 +11,7 @@ export type {
   ScheduleRequest,
   ScheduleDependency,
   ScheduleConstraint,
+  ScheduleConstraintKind,
   ScheduleDependencyType,
   ScheduleCalendar,
   SuccessorMoves,
@@ -24,6 +25,7 @@ export type {
   ScheduleDiagnostic,
   CycleDiagnostic,
   BlockedMoveDiagnostic,
+  ConstraintViolationDiagnostic,
   BlockReason,
   InvalidDependencyDiagnostic,
 } from './schedule-result.js';
