@@ -63,6 +63,14 @@ describe('DecorationRunner', () => {
     }
   });
 
+  it('carries a rowSpan text to the resolved decoration', () => {
+    const provider: DecorationProvider = () => [
+      { kind: 'rowSpan', rowId: row.id, start, end: dayEnd, text: 'was 3 Sep' },
+    ];
+    const result = new DecorationRunner().run(baseInput([{ layer: 'underBars', provider }]));
+    expect(result.underBars).toMatchObject([{ kind: 'rowSpan', text: 'was 3 Sep' }]);
+  });
+
   it('gives a rowSpan whose end precedes its start no width', () => {
     const provider: DecorationProvider = () => [
       { kind: 'rowSpan', rowId: row.id, start: dayEnd, end: start },

@@ -48,7 +48,7 @@ export type DecorationProvider = (ctx: DecorationContext) => readonly Decoration
 export type DecorationInput =
   | { kind: 'rangeBand'; start: Instant; end: Instant; class?: string }
   | { kind: 'rowStripe'; rowId: RowId; class?: string }
-  | { kind: 'rowSpan'; rowId: RowId; start: Instant; end: Instant; class?: string };
+  | { kind: 'rowSpan'; rowId: RowId; start: Instant; end: Instant; class?: string; text?: string };
 
 /** A `DecorationInput.rangeBand`, resolved to content pixels through the bound `TimeScale`. `class`
  *  lands on the decoration node beside `.fg-range-band`, so two providers' bands are tellable apart
@@ -70,13 +70,15 @@ export interface RowStripe {
 
 /** A `DecorationInput.rowSpan`, resolved to content pixels through the bound `TimeScale`. It paints
  *  inside the row `rowId` names: `x` and `width` run along the time axis, and `render/dom` supplies
- *  the row's own top and height. `class` lands beside `.fg-row-span`. */
+ *  the row's own top and height. `class` lands beside `.fg-row-span`. `text` is a plain string the
+ *  node paints at the span's end. */
 export interface RowSpan {
   kind: 'rowSpan';
   rowId: RowId;
   x: number;
   width: number;
   class?: string;
+  text?: string;
 }
 
 /** Any decoration after `layout/` resolved it — what `GeometryFrame.underBars` and `.overBars` carry. */

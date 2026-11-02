@@ -2809,7 +2809,7 @@ describe('render/dom backend', () => {
     backend.sync({
       ...frame,
       underBars: [],
-      overBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, class: 'planned' }],
+      overBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, class: 'planned', text: 'was 3 Sep' }],
     });
 
     const bars = timeline.querySelector('.fg-bars')!;
@@ -2820,6 +2820,7 @@ describe('render/dom backend', () => {
     expect(span.hasAttribute('data-row-id')).toBe(false);
     expect(span.style.transform).toBe(`translate(40px, ${row.top}px)`);
     expect(span.style.width).toBe('25px');
+    expect(span.textContent).toBe('was 3 Sep');
     expect(span.style.height).toBe(`${row.height}px`);
     expect(bars.compareDocumentPosition(span) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
 
