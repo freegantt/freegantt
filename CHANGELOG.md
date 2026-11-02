@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
+### Fixed
+
+- `entries.syncAll()` drops the collapse state of a row the new list removes. `gantt.collapsed` no longer lists an id that names no row, and `collapseChange` announces the drop. A kept row stays collapsed, and scroll position and zoom stay as they were. `entries.load()` is unchanged: it starts the view over by design.
+
 ## [0.1.0] - 2026-09-30
 
 The first release. Install it with `npm install freegantt`.
