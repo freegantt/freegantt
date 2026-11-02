@@ -133,7 +133,19 @@ module.exports = {
     // extensions: `api/plugin.ts` types `PluginContext.disposables` against
     // `extensions/disposables.ts`'s `DisposableStore` (a leaf with no further imports of its own, so
     // this one addition carries no risk of routing api/ through the DOM-touching parts of extensions/).
-    forbid('api-boundary', 'api', ['view', 'data', 'model', 'time', 'layout', 'interaction', 'extensions']),
+    // scheduling: `api/` is the only public door, so it re-exports `workingCalendar()` and the other
+    // scheduling values. `package.json` `sideEffects` lists only `styles.ts`, so a consumer who
+    // imports no scheduling export ships none of `scheduling/`.
+    forbid('api-boundary', 'api', [
+      'view',
+      'data',
+      'model',
+      'time',
+      'layout',
+      'interaction',
+      'extensions',
+      'scheduling',
+    ]),
     // The first of the four removable-leaf rules. Only `build-commit-change-set.ts` (commit
     // path) and `transaction.ts` (construction path) may import the Rollup — delete src/data/rollup.ts
     // and groups keep their authored values, the same result `rollUpKinds: 'none'` already gives a
