@@ -160,6 +160,72 @@ describe('scheduling() moves successors', () => {
   });
 });
 
+describe('scheduling() setConstraint', () => {
+  it('moves an Entry with no Dependency to its start floor, with its successors, in one undo step', () => {
+    const { dataset, plugin } = chain();
+
+    plugin.setConstraint('a', { kind: 'startNoEarlierThan', date: day(5) });
+
+    expect([startOf(dataset, 'a'), startOf(dataset, 'b'), startOf(dataset, 'c')]).toEqual([
+      day(5),
+      day(6),
+      day(7),
+    ]);
+    expect(plugin.constraintOf('a')).toEqual({ kind: 'startNoEarlierThan', date: day(5) });
+    dataset.undo();
+    expect([startOf(dataset, 'a'), startOf(dataset, 'c')]).toEqual([day(0), day(2)]);
+    expect(plugin.constraintOf('a')).toBeUndefined();
+  });
+
+  it('puts an Entry on its must-start-on date and reports the Dependency it breaks', () => {
+    const { dataset, plugin } = chain();
+
+    plugin.setConstraint('b', { kind: 'mustStartOn', date: day(0) });
+
+    expect(startOf(dataset, 'b')).toBe(day(0));
+    expect(plugin.diagnostics()).toMatchObject([
+      { code: 'blocked-move', reason: 'mustStartOn', entryId: 'b', dependencyIds: ['d1'] },
+    ]);
+  });
+
+  it('moves nothing for a finish ceiling and names the Entry when it finishes late', () => {
+    const { dataset, plugin } = chain();
+    const seen: number[] = [];
+    plugin.on('scheduleDiagnostics', (found) => seen.push(found.length));
+
+    plugin.setConstraint('c', { kind: 'finishNoLaterThan', date: day(2) });
+
+    expect(startOf(dataset, 'c')).toBe(day(2));
+    expect(plugin.diagnostics()).toMatchObject([
+      { code: 'constraint-violated', constraint: 'finishNoLaterThan', entryId: 'c', dependencyIds: ['d2'] },
+    ]);
+    expect(seen).toEqual([1]);
+    plugin.clearConstraint('c');
+    expect(plugin.diagnostics()).toEqual([]);
+  });
+
+  it('keeps a must-start-on date when the user drags the Entry', () => {
+    const { dataset, plugin } = chain();
+    plugin.setConstraint('c', { kind: 'mustStartOn', date: day(2) });
+
+    dataset.entries.update('c', { start: day(6), end: day(7) });
+
+    expect(plugin.constraintOf('c')).toEqual({ kind: 'mustStartOn', date: day(2) });
+    expect(plugin.diagnostics()).toMatchObject([
+      { code: 'constraint-violated', constraint: 'mustStartOn', entryId: 'c' },
+    ]);
+  });
+
+  it('throws for an Entry the Dataset lacks, and without scheduling installed', () => {
+    const { plugin } = chain();
+
+    expect(() => plugin.setConstraint('zzz', { kind: 'mustStartOn', date: day(0) })).toThrow();
+    expect(() => scheduling().setConstraint('a', { kind: 'mustStartOn', date: day(0) })).toThrow(
+      SchedulingNotInstalledError,
+    );
+  });
+});
+
 describe('scheduling() manually scheduled Entries', () => {
   it('declares a boolean Field that a grid column binds to', () => {
     const { dataset } = chain();
