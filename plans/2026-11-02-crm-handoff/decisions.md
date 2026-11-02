@@ -41,3 +41,4 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | D11, C1, C3 | Owner confirmation | The owner confirmed 11A, C1 and C3 (2026-11-02). |
 | C4 | Connector refresh (S7.3) | Coordinator, from accepted ADR 0040: no `refreshConnectors()` door. A plugin keeps connector state in its plugin store. The harness "Related to" plugin moves its pairs there. S7.3 default for the owner to check: a locked Entry still allows 'connect' unless `capabilities.connect` says no. |
 | F1-a | Engine defaults (F1) | An edited Entry never pulls earlier: its new date is its floor. A floor on an Entry with no incoming Dependency does not move it; S7.9 decides how a violated constraint reports. |
+| C5 | Manually scheduled storage | Coordinator: `scheduling()` declares a boolean Field `manuallyScheduled`, because a grid toggle column binds to a Field (ruling D6). This replaces README decision 14 for that flag only. Constraints stay in the plugin store. |
