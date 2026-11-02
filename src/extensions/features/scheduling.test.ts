@@ -54,6 +54,7 @@ function connectorsOf(
         providers.push(next);
         return () => {};
       },
+      onConnect: () => () => {},
     },
   } as unknown as PluginContext;
   for (const plugin of plugins) plugin.view?.(stub);
