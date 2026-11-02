@@ -140,6 +140,8 @@ import { FrameSettings } from './frame-settings.js';
 import type { FrameSettingsPatch, FrameSettingsPorts } from './frame-settings.js';
 import { projectAffordances } from './affordance-projection.js';
 import type { EntryGestureContext, EntryHit } from './entry-gesture-context.js';
+import type { ConnectGestureContext } from './connect-context.js';
+import { proposeConnect } from './connect-proposal.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
@@ -195,6 +197,14 @@ export type AttachColumnGestures = (
   ctx: ColumnGestureContext,
 ) => Detachable;
 
+/** Same DI shape again — `interaction/connect.ts`'s `attachConnect` drives the connector port
+ *  drag. The shell attaches it only while a plugin registers a connect handler. */
+export type AttachConnect = (
+  pane: HTMLElement,
+  container: HTMLElement,
+  ctx: ConnectGestureContext,
+) => Detachable;
+
 /** Theming's only preset axis — `'auto'` follows `prefers-color-scheme` (no
  * `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. ADR 0029: the app pushes the
  * answer; it writes `gantt.theme` or pins `data-fg-theme` on an ancestor. The library never calls
@@ -243,6 +253,8 @@ export interface GanttShellWiring {
   keyboardEditing?: AttachKeyboardEditing;
   /** Injected, same reason as `entryGestures`. */
   columnGestures?: AttachColumnGestures;
+  /** Injected, same reason as `entryGestures`. */
+  connect?: AttachConnect;
   /** How a committed gesture draft reaches the store. `model/dataset.ts`'s `Dataset`
    *  (this shell's own `dataset` option) has no `transaction()` — "a view never opens a
    *  transaction". So `api/gantt.ts`, which holds the full `api/Dataset` the model interface narrows
@@ -586,6 +598,8 @@ export class GanttShell {
   #splitterAttachment!: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
   #entryGestures: Detachable | undefined;
+  /** The connect controller. It exists only while a plugin registers a connect handler. */
+  #connect: Detachable | undefined;
   #keyboardEditing: Detachable | undefined;
   #columnGestures: Detachable | undefined;
   /** Grid-column resolution, live resize/reorder preview, and the `gridColumns` commit sequence
@@ -1042,6 +1056,7 @@ export class GanttShell {
       gestureContext,
     );
     this.#teardown.add(() => this.#entryGestures?.detach());
+    this.#teardown.add(() => this.#connect?.detach());
     // Scoped to the timeline pane, not the whole container. A bar's nudge/resize
     // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
     this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
@@ -1461,6 +1476,61 @@ export class GanttShell {
       write: (id, field, value) => {
         dataset.entries.update(id, { [field]: value });
       },
+    };
+  }
+
+  /** Attaches the connect controller with the first connect handler, and detaches it with the last
+   *  one. The ports follow, because `#canGesture('connect', …)` is false while no handler exists. */
+  #syncConnect(): void {
+    const wanted = this.#registrations.connectHandlers.any;
+    if (wanted && this.#connect === undefined) {
+      this.#connect = this.#options.wiring.connect?.(
+        this.#panes.timeline,
+        this.#container,
+        this.#connectGestureContext(),
+      );
+    } else if (!wanted && this.#connect !== undefined) {
+      this.#connect.detach();
+      this.#connect = undefined;
+    }
+    this.#refreshAffordances();
+  }
+
+  /** What does the connect controller ask this shell? */
+  #connectGestureContext(): ConnectGestureContext {
+    const gestureContext = this.#entryGestureContext();
+    return {
+      hitTest: (at) => gestureContext.hitTest(at),
+      entryFor: (barId) => gestureContext.entryFor(barId),
+      canConnect: (entry) => this.#canGesture('connect', entry.id),
+      contentXAtPaneOffset: (offsetX) => gestureContext.contentXAtPaneOffset(offsetX),
+      contentYAtClientY: (clientY) => gestureContext.contentYAtClientY(clientY),
+      paint: (draft) => {
+        setOptional(this.#interactionState, 'connectDraft', draft);
+        this.#backend.applyState(this.#interactionState);
+      },
+      propose: (ends, signal) =>
+        proposeConnect(
+          ends,
+          {
+            emitBefore: (payload) => this.#emit('beforeConnect', payload),
+            emitAfter: (payload) => {
+              this.#emit('connect', payload);
+            },
+            handlers: () => this.#registrations.connectHandlers.list(),
+            reportHandlerFailure: (error) =>
+              this.#raiseError(
+                {
+                  code: 'connect-handler-failed',
+                  message: `A connect handler threw: ${error instanceof Error ? error.message : String(error)}`,
+                  severity: 'error',
+                  by: 'core',
+                },
+                () => console.error('FreeGantt: a connect handler threw', error),
+              ),
+          },
+          signal,
+        ),
     };
   }
 
@@ -2254,6 +2324,7 @@ export class GanttShell {
       invalidateBars: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
       refreshVariantStyles: () => this.#variantStyles.refresh(),
+      connectHandlersChanged: () => this.#syncConnect(),
       registerGridColumn: (column, pluginId) => this.#columnChrome.registerPluginColumn(column, pluginId),
     };
   }
@@ -2552,6 +2623,8 @@ export class GanttShell {
    *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). `edge`
    *  (#142) narrows a `'resize'` question to one handle; every other capability ignores it. */
   #canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean {
+    // With no connect handler there is nothing to drop on, so the same answer closes the port.
+    if (capability === 'connect' && !this.#registrations.connectHandlers.any) return false;
     const entry = this.#options.dataset.entries.get(id);
     return entry !== undefined && this.#capabilities.can(capability, entry, edge);
   }
@@ -2653,6 +2726,7 @@ export class GanttShell {
     setOptional(this.#interactionState, 'hoveredBarId', ids.hoveredBarId);
     setOptional(this.#interactionState, 'hoveredRowId', this.#hoveredRow());
     setOptional(this.#interactionState, 'movableBarId', ids.movableBarId);
+    setOptional(this.#interactionState, 'connectableBarId', ids.connectableBarId);
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);
     this.#backend.applyState(this.#interactionState);

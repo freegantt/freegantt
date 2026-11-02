@@ -264,6 +264,8 @@ rename.
 | `.fg-bar` | One Bar. Every look wears this class, diamonds included. |
 | `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
+| `.fg-connector-port` | One connector port beside a bar edge. It shows on the hovered bar while a plugin handles the connect drag. It carries `data-edge`, and `data-active` while a drop here would connect. |
+| `.fg-connect-preview` | The line a connect drag draws from its source edge to the pointer. It carries `data-pending` while an async `beforeConnect` handler holds the drop. |
 | `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-bar-diamond` | `diamond()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-date-line` | A Date line stroke, Today included. |

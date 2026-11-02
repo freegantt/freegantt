@@ -88,6 +88,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       registerRenderer: (point) => registry.add(`renderer:${point}`),
       registerDecoration: (layer) => registry.add(`decoration:${layer}`),
       registerConnector: () => registry.add('connector'),
+      registerConnectHandler: () => registry.add('connect-handler'),
       registerVariant: (variant) => registry.add(`variant:${variant.name}`),
       registerGridColumn: () => registry.add('column'),
     },
@@ -127,6 +128,7 @@ const gatedRegistrations: readonly (readonly [string, (parts: PluginContextParts
   ['view.registerRenderer', (p) => p.view.registerRenderer('gridCell', () => ({ text: '' }))],
   ['view.registerDecoration', (p) => p.view.registerDecoration('underBars', () => [])],
   ['view.registerConnector', (p) => p.view.registerConnector(() => [])],
+  ['view.onConnect', (p) => p.view.onConnect(() => {})],
   ['view.registerGridColumn', (p) => p.view.registerGridColumn('cost')],
   ['variants.add', (p) => p.variants.add({ name: 'buffer' })],
 ];

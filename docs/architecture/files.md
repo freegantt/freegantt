@@ -153,6 +153,7 @@ where they do something beyond re-export.
 | `render/dom/sync-keyed.ts` | `syncKeyed(), SyncKeyedSpec, KeyedLayer, NestedKeyedLayers` | The whole reconciler. Look-up-or-create per key → patch only if geometry changed → prune vanished keys. Scope is hard-bounded to attr/class/style/text + keyed children. |
 | `render/dom/pixel-property.ts` | `readPixelProperty(), PixelPropertyPolicy` | One reader for every `--fg-*` pixel custom property, with an explicit validity policy so "zero is nonsense" and "zero is a choice" are stated, not implied. |
 | `render/dom/date-line.ts` | `attachDateLines(), DateLineAttachment` | Renders the today-line and authored date lines as positioned decoration elements. |
+| `render/dom/connect-affordance.ts` | `ConnectAffordance` | Draws the connector ports beside the hovered bar's edges and the connect drag's preview line. It builds nothing until the first connectable bar is hovered. |
 | `render/dom/connectors.ts` | `ConnectorsAttachment` | Turns `FrameConnector` into keyed SVG paths in one layer above the bars. |
 | `render/dom/decorations.ts` | `DecorationsAttachment` | Turns `RangeBand`/`RowStripe` into keyed DOM nodes. |
 | `render/dom/dom-contract.ts` | `BAR_CLASS, ROW_CLASS, …` | Class names and data attributes this backend writes. Nothing outside `render/dom` may retype them; `view/gantt-dom.ts` resolves a node from these constants alone. |
@@ -170,6 +171,8 @@ where they do something beyond re-export.
 | `view/gantt-shell.ts` | `GanttShell, GanttShellOptions` | The composition root. Constructs the `Viewport`, `FrameLayout`, `PaneLayout`, `RenderBackend`, `EventBus`, `FrameScheduler`, `GesturePipeline`, `PluginRuntime`, `TreeCollapse` and every attachment; exposes live-reconfigurable properties. |
 | `view/frame-settings.ts` | `FrameSettings, DEFAULT_ROW_HEIGHT` | Every live setting that says what the next frame draws, plus the table of what each change invalidates. |
 | `view/plugin-ports.ts` | `buildPluginPorts(), PluginContextParts` | Everything a `PluginContext` carries that `GanttShell` owns. Spread into the public context; `api/gantt.ts` adds only `dataset` and `gantt`. |
+| `view/connect-context.ts` | `ConnectGestureContext, ConnectDraft` | What the connect controller asks the shell: a hit test, one capability answer, content coordinates, a paint door and a propose door. |
+| `view/connect-proposal.ts` | `proposeConnect(), ConnectHandlers, ConnectHandler` | Runs `beforeConnect`, then each connect handler, then `connect`. It holds the handler list, so the controller exists only while one is registered. |
 | `view/plugin-registrations.ts` | `PluginRegistrations` | The five seams a plugin registers into — renderer, decoration, bar producer, kind default, grid column — each with the refresh it owes. |
 | `view/renderer-registry.ts` | `RendererRegistry` | Resolves which renderer paints one bar/cell/header/tooltip. Consumer config always wins over a plugin. |
 | `view/gantt-dom.ts` | `GanttDom, ContainerDom, DomTarget` | This Gantt's rendered DOM as a read surface: is this node mine, what is it, where is the element for this entry. |
@@ -217,6 +220,7 @@ where they do something beyond re-export.
 
 | file | exports | what it is for |
 | --- | --- | --- |
+| `interaction/connect.ts` | `attachConnect()` | The Connect controller: a drag from a connector port to a port of another bar. It proposes the two ends on a drop and writes nothing itself. |
 | `interaction/entry-gestures.ts` | `attachEntryGestures()` | Wires pointer events on entries into the `EntryGestureContext`'s session lifecycle. |
 | `interaction/row-reorder-drag.ts` | `createRowReorderDrag()` | A grid row drag over its own pointer stream: grabs the row's subject and arms a `{ kind: 'reorder' }` session, tree-only, no date write. |
 | `interaction/column-gestures.ts` | `attachColumnGestures()` | Resize and reorder pointer sequences for grid columns, over the same `createPointerGesture` controller. |

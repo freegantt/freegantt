@@ -18,8 +18,9 @@
         <div class="page-head">
           <h1>Related to</h1>
           <p>
-            A small plugin keeps a list of related Entries and draws a line from one bar to the other. Scroll
-            down so one end leaves the window. The line stays drawn while its path crosses the window.
+            A small plugin keeps a list of related Entries and draws a line from one bar to the other. Hover a
+            bar, then drag from a port at its edge to a port on another bar to add a pair. Scroll down so one
+            end leaves the window. The line stays drawn while its path crosses the window.
           </p>
         </div>
         <div id="page-brief"></div>
@@ -28,6 +29,11 @@
           <div id="gantt"></div>
           <div class="statusbar">
             <span class="readout" id="connector-readout">Connectors: —</span>
+            <label class="readout"
+              ><input type="checkbox" id="hold-connect" /> Hold each connect for 600 ms</label
+            >
+            <span class="readout" id="connect-log">No connect yet.</span>
+            <span class="readout" id="locked-note"></span>
           </div>
         </section>
       </main>
