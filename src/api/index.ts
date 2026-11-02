@@ -254,6 +254,7 @@ export type {
   DependencyLag,
   DependencyType,
   EntryDependencies,
+  EntryDependenciesOptions,
 } from '../extensions/features/entry-dependencies.js';
 export { daysOfWeek, hours, dates, spans, notCovered } from '../extensions/features/time-shading-covers.js';
 export type { TimeCover, DayOfWeek } from '../extensions/features/time-shading-covers.js';
