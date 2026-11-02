@@ -33,6 +33,7 @@ export default defineConfig({
         'hierarchy-and-timeline': page('hierarchy-and-timeline.html'),
         'planned-vs-actual': page('planned-vs-actual.html'),
         performance: page('performance.html'),
+        'related-to': page('related-to.html'),
       },
     },
   },
