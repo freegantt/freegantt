@@ -5,6 +5,7 @@ declare global {
   interface Window {
     __dataset: import('freegantt').Dataset;
     __gantt: import('freegantt').Gantt;
+    __calendar: import('freegantt').WorkingCalendar;
   }
 }
 
@@ -68,7 +69,8 @@ test('dragging a predecessor earlier pulls its successors', async ({ page }) => 
   await expect.poll(async () => (await startsOf(page))[1]).toBeGreaterThan(0);
   const later = await startsOf(page);
 
-  await dragBarByDays(page, 'plan', -2);
+  // Three days back ends Plan on a Friday. Two days back would end it on a Saturday, and Design still starts Monday.
+  await dragBarByDays(page, 'plan', -3);
 
   await expect.poll(async () => (await startsOf(page))[1]).toBeLessThan(later[1]!);
   const earlier = await startsOf(page);
@@ -117,4 +119,31 @@ test('the page lists the members of a cycle and flags their connectors', async (
   await page.locator('#break-cycle-btn').click();
 
   await expect(page.locator('#cycle-members li')).toHaveCount(0);
+});
+
+test('a successor skips a holiday, and the skip matches the shaded days', async ({ page }) => {
+  await openScheduling(page);
+  const holidayEnd = Date.UTC(2026, 2, 13);
+
+  // Plan moves to Sunday March 8 and ends on Wednesday March 11, the first holiday. Design cannot start there.
+  await dragBarByDays(page, 'plan', 6);
+
+  await expect.poll(() => startMs(page, 'design')).toBeGreaterThanOrEqual(holidayEnd);
+  const startsOnWorkday = await page.evaluate(() => {
+    const start = window.__dataset.entries.get('design')?.start;
+    return start !== undefined && window.__calendar.isWorkday(start, window.__dataset.time);
+  });
+  expect(startsOnWorkday).toBe(true);
+
+  const designBox = await bar(page, 'design').boundingBox();
+  expect(designBox).not.toBeNull();
+  const bands = await page.locator('#gantt .fg-range-band.fg-time-shading').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const { x, right } = node.getBoundingClientRect();
+      return { x, right };
+    }),
+  );
+  expect(bands.length).toBeGreaterThan(0);
+  const startX = designBox!.x + 1;
+  expect(bands.some((band) => startX > band.x && startX < band.right)).toBe(false);
 });
