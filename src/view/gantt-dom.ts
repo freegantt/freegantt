@@ -27,6 +27,7 @@ import {
   BAR_CLASS,
   COLUMN_HEADER_CLASS,
   CONNECTOR_CLASS,
+  CONNECTOR_ID_ATTRIBUTE,
   CONNECTOR_ID_KEY,
   ENTRY_ID_ATTRIBUTE,
   ENTRY_ID_KEY,
@@ -92,6 +93,9 @@ export interface GanttDom {
    *  off still anchors on a later bar that is on screen. `undefined` when the entry has no bar in
    *  the current frame at all. */
   barFor(id: EntryId | string): HTMLElement | undefined;
+  /** The connector line the current frame has mounted for this provider id. `undefined` when the
+   *  connector is off screen or gone. A plugin moves focus to it. */
+  connectorFor(id: string): HTMLElement | undefined;
   /** The rendered grid cell for one entry and one Field. `undefined` when that row is not in the
    *  current frame, or the Gantt shows no column for `field`. It is also the one answer to "is my
    *  editor still anchored?" — a recycled row stops answering for the entry it used to hold. */
@@ -205,6 +209,11 @@ export class ContainerDom implements GanttDom {
       if (bar !== null) return bar;
     }
     return undefined;
+  }
+
+  connectorFor(id: string): HTMLElement | undefined {
+    const line = `.${CONNECTOR_CLASS}${attributeIs(CONNECTOR_ID_ATTRIBUTE, id)}`;
+    return this.#ports.container.querySelector<HTMLElement>(line) ?? undefined;
   }
 
   cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined {

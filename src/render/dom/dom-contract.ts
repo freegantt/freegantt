@@ -67,6 +67,8 @@ export const ENTRY_ID_ATTRIBUTE = 'data-entry-id';
 export const ROW_ID_ATTRIBUTE = 'data-row-id';
 /** The Bar id a bar stands for, as a selector name — `[data-bar-id="e1:0"]`. */
 export const BAR_ID_ATTRIBUTE = 'data-bar-id';
+/** The connector's id as an attribute name — `[data-connector-id="dependency:d1"]`. */
+export const CONNECTOR_ID_ATTRIBUTE = 'data-connector-id';
 
 /** `--fg-bar-label-gap`'s fallback, in px. `view/styles.ts` interpolates this number twice: into
  *  the declared token, and into each `var(...)` fallback. `render/dom/index.ts` reads the same
