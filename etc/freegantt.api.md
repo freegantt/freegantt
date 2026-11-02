@@ -2071,6 +2071,7 @@ export class PluginSetupError extends FreeGanttError {
 export interface PluginStore<T extends object> extends PluginStoreView<T> {
     remove(id: EntryId | string): void;
     set(id: EntryId | string, value: T): void;
+    syncAll(rows: ReadonlyMap<EntryId | string, T>): void;
 }
 
 // @public

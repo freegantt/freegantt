@@ -23,7 +23,8 @@ import type {
 } from '../model/index.js';
 import { EntryNotFoundError, MutationDuringExtensionHookError, entryId } from '../model/index.js';
 import { isNoOpStoreRowWrite } from './change-set.js';
-import { runTransaction } from './transaction.js';
+import { assertNoOpenTransaction, assertNoRunningExtensionHook, assertNotNotifying } from './entry-batch.js';
+import { commitChangeSet, runTransaction } from './transaction.js';
 import type { StagedRowWrite } from './edit-extension.js';
 import type { TransactionData, TxToken } from './transaction.js';
 
@@ -110,7 +111,50 @@ export class PluginStores {
           this.#stage(name, key, value);
         }),
       remove: (id: EntryId | string): void => this.#write(() => this.#stage(name, entryId(id), undefined)),
+      syncAll: (rows: ReadonlyMap<EntryId | string, T>): void => this.#syncAll(name, rows),
     };
+  }
+
+  /** Call: `store.syncAll(new Map([[entryId('b'), row]]))`. Diffs `rows` against the committed rows
+   *  and commits one `'sync'` change set, so History records no step for it. The check for every
+   *  Entry runs before the commit, so a refusal writes nothing. */
+  #syncAll(name: PluginStoreName, rows: ReadonlyMap<EntryId | string, object>): void {
+    const runner = this.#runner;
+    if (!runner) {
+      throw new Error(
+        'PluginStores: not bound to a transaction runner — data/dataset-state.ts always binds one',
+      );
+    }
+    const operation = 'store.syncAll';
+    assertNoOpenTransaction(runner.openTransactions, operation);
+    assertNoRunningExtensionHook(runner.runningExtensionHook, operation);
+    assertNotNotifying(runner.notifying, operation);
+
+    const target = new Map<EntryId, object>();
+    for (const [id, row] of rows) {
+      const key = entryId(id);
+      if (!runner.entries.has(key)) throw new EntryNotFoundError(key, operation);
+      target.set(key, row);
+    }
+
+    const committed = this.#committed.get(name) ?? new Map<EntryId, object>();
+    const updated: StoreRowUpdated[] = [];
+    for (const [id, from] of committed) {
+      if (!target.has(id)) updated.push({ store: name, id, from, to: undefined });
+    }
+    for (const [id, to] of target) {
+      const from = committed.get(id);
+      if (!isNoOpStoreRowWrite(from, to)) updated.push({ store: name, id, from, to });
+    }
+    if (updated.length === 0) return;
+
+    commitChangeSet(runner, {
+      id: runner.nextChangeSetId(),
+      origin: 'sync',
+      added: [],
+      removed: [],
+      updated,
+    });
   }
 
   /** Reads through an open write set first, so a plugin that writes and then reads inside one
