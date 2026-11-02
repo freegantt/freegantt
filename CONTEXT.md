@@ -230,8 +230,7 @@ app lists `'locked'` in `gridColumns`, the user may toggle it, and a locked row 
 A locked parent's own summary bar does not move (see **Bar move rule**). The Rollup still changes the
 locked parent's dates. The lock never blocks the Rollup. A plugin can change the core lock: core
 installs it first, so a plugin wraps it.
-_Avoid_: Pinned (the scheduling plugin's own whole-Entry state, a separate refusal with a separate
-owner — see **Pinned**, above), Read-only, Frozen, Disabled
+_Avoid_: Pinned (a retired word for the scheduling plugin's whole-Entry state — see **Manually scheduled**), Read-only, Frozen, Disabled
 
 **Place rule**:
 The plugin seam that answers whether an Entry may land under a given parent, set with `ctx.edits
@@ -274,22 +273,52 @@ _Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's de
 
 **SchedulingPolicy**:
 The pluggable seam, within the default scheduling plugin, that resolves how a proposed edit interacts with an Entry's existing schedule (e.g. whether the engine may move it). Parent dates come from the Rollup in core, not from this policy. Semantics that are not structure live in the policy, never in the engine itself.
-_Avoid_: Rule, constraint (Diagnostics, not policy, is where constraint violations surface)
+_Avoid_: Rule, constraint (a **Constraint** is a date rule on one Entry, not a policy)
 
 **Diagnostic**:
 A non-authoritative report the scheduling engine attaches to a `ScheduleResult` when it cannot satisfy a request (e.g. a dependency cycle, naming the Entry ids involved). The engine never silently rewrites what the user asked for — a conflict becomes a Diagnostic, not a mutation.
 _Avoid_: Error, warning
 
-**Pinned**:
-A whole-Entry boolean state, set by the user, that tells the scheduling engine never to move that Entry — an upstream change that would otherwise push it instead produces a Diagnostic reporting what the engine _would_ have done. It lives in the default scheduling plugin's own per-entry storage (exact contract tracked in issue #12), not on `Entry`/`model/`, the same way `Dependency` does — a Dataset with no scheduling plugin installed has no notion of "pinned" at all.
-_Avoid_: Locked, frozen, fixed (a lock is the UI refusal — see **Locked entry**)
+**Manually scheduled**:
+A whole-Entry boolean state, set by the user, that tells the scheduling engine never to move that Entry. A broken Dependency on it gives a **Blocked move diagnostic** that names the Dependency. The Entry keeps its dates. It lives in the default scheduling plugin's own per-Entry storage, not on `Entry`. A Dataset with no scheduling plugin has no such state. A consumer can show it as a column toggle.
+_Avoid_: Pinned (the grid already has pinned columns), Locked (a lock is the UI refusal — see **Locked entry**), Frozen, Fixed
+
+**Constraint**:
+A date rule on one Entry. `startNoEarlierThan` is the first kind: the Entry never starts before its date. A **Dependency** beats a Constraint, so the Entry moves later than the date when a predecessor demands it. An Entry with no incoming Dependency never moves, so its Constraint does not apply. A request carries at most one Constraint for each Entry.
+_Avoid_: Rule, Policy (see **SchedulingPolicy**), Mandatory date
+
+**Schedule request**:
+The plain data a caller hands `schedule()`: the Entries, the Dependencies, and optionally the dates the user just set, the manually scheduled Entries, the Constraints, the **Successor moves** option and a **SchedulingPolicy**. The engine reads no store.
+_Avoid_: Job, Input
+
+**Schedule result**:
+What `schedule()` answers: a patch of **Schedule changes** and a list of Diagnostics. The result never contains a date the user proposed.
+_Avoid_: Output, Plan
+
+**Schedule change**:
+One date the engine moves: an Entry id, the field (`start` or `end`), the old Instant and the new Instant. The caller writes the patch to the Dataset.
+_Avoid_: Edit (an edit is what the user makes), Delta
+
+**Successor moves**:
+The request option that says how a successor follows its predecessors. `pushAndPull` is the default: the successor moves to the earliest date that its Dependencies and Constraint allow, earlier too. `pushOnly` moves it later and never earlier.
+_Avoid_: Direction, As soon as possible (a Constraint name in other tools)
+
+**Cycle diagnostic**:
+A **Diagnostic** that names the Entries in one loop of Dependencies. The engine moves none of them.
+
+**Blocked move diagnostic**:
+A **Diagnostic** for a Dependency that wants an Entry to move while the engine does not move it. It names the Entry, the Dependencies, the reason (manually scheduled, proposed, policy or inverted) and the changes the engine would have made.
+_Avoid_: Conflict, Error
+
+**Invalid dependency diagnostic**:
+A **Diagnostic** for a Dependency that the engine skips because it cannot read it: it names an unknown Entry, or its lag unit has no fixed length (`month`, `year`).
 
 **Progress**:
-How complete an Entry is, as a fraction `0..1`. Scheduling-plugin data, not a core Field and not a key on `Entry` (ADR 0008) — a Dataset with no scheduling plugin installed has no Progress, the same way it has no pin flag. The plugin declares it as a Field and may roll it up with `weightedMeanByDuration`.
+How complete an Entry is, as a fraction `0..1`. Scheduling-plugin data, not a core Field and not a key on `Entry` (ADR 0008) — a Dataset with no scheduling plugin installed has no Progress, the same way it has no manually scheduled flag. The plugin declares it as a Field and may roll it up with `weightedMeanByDuration`.
 _Avoid_: Percent complete as a core Entry key, treating Progress as shipped with `name`/`start`/`end`
 
-**Working calendar**, **Constraint**, **Resource** / **Assignment**, **Baseline**:
-Reserved, not yet implemented — named seams for later slices (`plans/01` §4). `Working calendar` (which days/hours count as workable; `workingCalendar()` returns a `WorkingCalendar`, owned by the scheduling plugin and exported through `api/index.ts`; it answers `isWorkday`, `addWorkdays` and `workdaysBetween`, and `calendar.offTime()` returns a `TimeCover`-shaped object for `timeShading()`; it is optional everywhere, so with no calendar `scheduling()` counts 24-hour days), `Constraint` (date restrictions, defined by `SchedulingPolicy`'s own vocabulary), `Resource`/`Assignment` (staffing), and `Baseline` (schedule snapshots) all belong to the default scheduling plugin's domain, not `model/` — like `Dependency` and the pin flag (ADR 0002), a Dataset with no scheduling plugin installed has none of these.
+**Working calendar**, **Resource** / **Assignment**, **Baseline**:
+Reserved, not yet implemented — named seams for later slices (`plans/01` §4). `Working calendar` (which days/hours count as workable; `workingCalendar()` returns a `WorkingCalendar`, owned by the scheduling plugin and exported through `api/index.ts`; it answers `isWorkday`, `addWorkdays` and `workdaysBetween`, and `calendar.offTime()` returns a `TimeCover`-shaped object for `timeShading()`; it is optional everywhere, so with no calendar `scheduling()` counts 24-hour days), `Resource`/`Assignment` (staffing), and `Baseline` (schedule snapshots) all belong to the default scheduling plugin's domain, not `model/` — like `Dependency` and the manually scheduled flag (ADR 0002), a Dataset with no scheduling plugin installed has none of these.
 _Avoid_: Calendar alone (ambiguous with a UI date picker or an imported ICS calendar — the qualifier is load-bearing)
 
 ### Derived layout
@@ -866,7 +895,7 @@ The two verbs a plugin uses to raise the one event pair it owns (`ctx.interactio
 _Avoid_: Emit (retired on the plugin surface 2026-09-04 — "emit" says a thing went out, and says nothing about whether a decision comes back; `EventBus.emit` keeps the word for the bus's own mechanism)
 
 **EditExtender**, **PluginStore**:
-Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a plugin's `data` half occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field — one row per Entry, keyed by its id; a write for an id with no Entry throws. Landed in S5.10 (#15, #156). The plugin shapes live in `api/plugin.ts` and the `data` half's context in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
+Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a plugin's `data` half occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's manually scheduled flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field — one row per Entry, keyed by its id; a write for an id with no Entry throws. Landed in S5.10 (#15, #156). The plugin shapes live in `api/plugin.ts` and the `data` half's context in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
 
 **PluginRuntime**:
 The `extensions/plugin-runtime.ts` class that installs, diffs (by `id`) and disposes one Gantt's `view` halves (S5.1, D-S5-1/D-S5-3). That list is the Dataset's own plugins plus this Gantt's chrome, sorted under one `requires` graph (ADR 0019). One instance per `GanttShell`, never shared across Gantt instances (I2). Owns each plugin's `RegistrationGate` — closed the moment that plugin's own `view()` returns, so a `register*` call reached afterward throws `RegistrationClosedError` (D-S5-4) — and commits an `install()` atomically: a `view()` throw unwinds only the batch just added, leaving the previously installed set untouched.
