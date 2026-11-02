@@ -21,7 +21,9 @@
             The <code>entryDependencies()</code> plugin stores the Dependencies between Entries. The Gantt
             draws one connector for each. This page shows all four types and one negative lag. Replace the
             whole set, and scroll, zoom and collapsed groups stay as they are. Hover a bar and drag from one
-            of its ports to a port on another bar to add a Dependency. Undo removes it.
+            of its ports to a port on another bar to add a Dependency. Click a connector, or Tab to one, to
+            select it. Arrow keys move to the next connector. Delete removes the Dependency, and one undo
+            restores it.
           </p>
         </div>
         <div id="page-brief"></div>
@@ -35,6 +37,7 @@
           <div id="gantt"></div>
           <div class="statusbar">
             <span class="readout" id="dependency-readout">Dependencies: —</span>
+            <span class="readout" id="removal-readout" aria-live="polite">Removed by key: none</span>
           </div>
         </section>
       </main>

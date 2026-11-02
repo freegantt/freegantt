@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- harness "Dependencies" page selects a connector by click or Tab, moves with arrow keys, and removes it with Delete. One undo restores it. A readout names the Dependency removed by key. axe checks page.
+
 - `ConnectorInput` gains `showLabel?: boolean`. With `showLabel: true` and a `label`, core draws the label as SVG text, class `fg-connector-text`, at the middle of the line. The text is `aria-hidden`, because the line keeps the label as its accessible name. No `showLabel`, no text node. `entryDependencies({ showLabels: true })` turns it on for every Dependency connector. Default `false`.
 
 - `entryDependencies()` owns connector selection. A click or focus on a connector selects its Dependency and sets the `selected` flag. A click or focus elsewhere clears it. The Entry Selection does not change. A connector is focusable: arrows move focus to the next or previous connector, and `Delete` removes the focused Dependency, with one undo step. On any other target the keys keep their core meaning. `entryDependencies().on('beforeDependencyRemove', handler)` may veto: return `false`, or a Promise of `false`. `on('dependencyRemove', handler)` fires after the remove. Both fire for the keyboard remove only, not for `remove(id)`. `on` returns the call that removes the handler. New types `DependencyEvents`, `DependencyRemoval`, `BeforeDependencyRemoveHandler` and `DependencyRemoveHandler`.
