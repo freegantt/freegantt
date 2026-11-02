@@ -7,7 +7,7 @@
 import { mountThemePicker } from './page-theme.js';
 
 export type HarnessPageId =
-  'planner' | 'generic-demo' | 'editing-and-data' | 'hierarchy-and-timeline' | 'performance';
+  'planner' | 'generic-demo' | 'editing-and-data' | 'hierarchy-and-timeline' | 'performance' | 'related-to';
 
 interface HarnessPage {
   readonly id: HarnessPageId;
@@ -21,6 +21,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'editing-and-data', label: 'Editing & data', file: 'editing-and-data.html' },
   { id: 'hierarchy-and-timeline', label: 'Hierarchy & timeline', file: 'hierarchy-and-timeline.html' },
   { id: 'performance', label: 'Performance', file: 'performance.html' },
+  { id: 'related-to', label: 'Related to', file: 'related-to.html' },
 ];
 
 /** A build can ship some of the demo pages. `VITE_HARNESS_PAGES=generic-demo,performance` keeps
