@@ -1890,6 +1890,9 @@ export interface KeyEventLike {
 }
 
 // @public
+export type KeyHandler = (event: KeyEventLike) => void | false;
+
+// @public
 export function lastCoveredInstant(span: {
     readonly start?: Instant | undefined;
     readonly end: Instant;
@@ -2302,7 +2305,7 @@ export interface Refusable {
 }
 
 // @public
-export type RegisterKeyHandler = (chord: string, handler: (event: KeyEventLike) => void, options?: {
+export type RegisterKeyHandler = (chord: string, handler: KeyHandler, options?: {
     captureInEditable?: boolean;
 }) => () => void;
 

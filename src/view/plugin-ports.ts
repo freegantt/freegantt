@@ -182,6 +182,10 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  Escape dismissal then wins by the keymap's own newest-first order, the same way
      *  `extensions/popup.ts`'s own dismissal does.
      *
+     *  The handler may return `false` to decline. The key then goes to the next older binding, and
+     *  core keeps its own meaning for a key the plugin does not want. A plugin that binds `Delete`
+     *  or an arrow must decline every target it does not own.
+     *
      *  Two things differ from `registerKeybinding`. This one is callable any time the plugin is
      *  installed, not only while `setup` runs. That is because a popup opens and closes for as long
      *  as the plugin does, not once at startup. This one also returns its own disposer instead of
