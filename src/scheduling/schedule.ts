@@ -22,13 +22,18 @@ import { defaultPolicy } from './scheduling-policy.js';
 
 /**
  * Moves successors later when a dependency demands it, and reports what it cannot move.
- * It never writes a date the user proposed and never moves a pinned Entry.
+ * It never writes a date the user proposed and never moves a manually scheduled Entry.
  */
 export function schedule(request: ScheduleRequest): ScheduleResult {
   const policy = request.policy ?? defaultPolicy;
   const nodes = request.entries.map(toNode);
   const indexById = new Map(nodes.map((node, index) => [node.id, index]));
-  const run: Run = { nodes, policy, pinned: request.pinned ?? new Set(), diagnostics: [] };
+  const run: Run = {
+    nodes,
+    policy,
+    manuallyScheduled: request.manuallyScheduled ?? new Set(),
+    diagnostics: [],
+  };
 
   const unreadable: ScheduleDiagnostic[] = [];
   const edges = readEdges(request.dependencies, indexById, unreadable);

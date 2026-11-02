@@ -40,7 +40,7 @@ interface Demand {
 export interface Run {
   readonly nodes: readonly Node[];
   readonly policy: SchedulingPolicy;
-  readonly pinned: ReadonlySet<EntryId>;
+  readonly manuallyScheduled: ReadonlySet<EntryId>;
   readonly diagnostics: ScheduleDiagnostic[];
 }
 
@@ -90,8 +90,8 @@ export function moveSuccessor(
   }
   if (demands.length === 0 || !isDated(node)) return;
 
-  if (pinBeatsDependency(run, node)) {
-    report(run, node, demands, 'pinned');
+  if (manualBeatsDependency(run, node)) {
+    report(run, node, demands, 'manuallyScheduled');
     return;
   }
   const moves = movableFields(run.policy, node);
@@ -110,13 +110,13 @@ export function moveSuccessor(
   if (blockedField) report(run, node, demands, node.proposedFields.has(blockedField) ? 'proposed' : 'policy');
 }
 
-function pinBeatsDependency(run: Run, node: Node): boolean {
-  if (!run.pinned.has(node.id)) return false;
-  const rank = (kind: 'pinned' | 'dependency'): number => {
+function manualBeatsDependency(run: Run, node: Node): boolean {
+  if (!run.manuallyScheduled.has(node.id)) return false;
+  const rank = (kind: 'manuallyScheduled' | 'dependency'): number => {
     const position = run.policy.precedence.indexOf(kind);
     return position < 0 ? Number.POSITIVE_INFINITY : position;
   };
-  return rank('pinned') < rank('dependency');
+  return rank('manuallyScheduled') < rank('dependency');
 }
 
 function deltasByField(demands: readonly Demand[]): Record<ScheduleField, number> {
