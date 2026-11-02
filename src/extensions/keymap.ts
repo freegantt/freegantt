@@ -92,6 +92,10 @@ export interface KeyHandlerRegistrar {
   registerHandler: RegisterKeyHandler;
 }
 
+/** A raw chord callback. Return `false` to decline: the key stays unhandled and the keymap offers it
+ *  to the next older binding. Any other return, or none, handles the key. */
+export type KeyHandler = (event: KeyEventLike) => void | false;
+
 /** The one method `KeyHandlerRegistrar` exposes, named on its own — `createPopup` takes this
  *  directly, so a caller with a bound method (`ctx.interaction.registerKeyHandler`) passes it
  *  bare, instead of wrapping it in a one-field object.
@@ -101,7 +105,7 @@ export interface KeyHandlerRegistrar {
  *  report. One shape still keeps one name. */
 export type RegisterKeyHandler = (
   chord: string,
-  handler: (event: KeyEventLike) => void,
+  handler: KeyHandler,
   options?: { captureInEditable?: boolean },
 ) => () => void;
 
@@ -118,7 +122,7 @@ interface CommandBinding<TGantt> {
  *  Escape dismissal is the first of these. */
 interface HandlerBinding {
   kind: 'handler';
-  handler: (event: KeyEventLike) => void;
+  handler: KeyHandler;
   captureInEditable: boolean;
   chord: NormalizedChord;
 }
@@ -153,11 +157,7 @@ export class Keymap<TGantt = unknown> implements KeyHandlerRegistrar {
    *  see `HandlerBinding` above for why this exists alongside it. Default `captureInEditable: false`
    *  matches `register()`'s own default: the chord is ignored while the event's target is editable
    *  or mid-IME-composition unless the caller opts in. */
-  registerHandler(
-    chord: string,
-    handler: (event: KeyEventLike) => void,
-    options?: { captureInEditable?: boolean },
-  ): () => void {
+  registerHandler(chord: string, handler: KeyHandler, options?: { captureInEditable?: boolean }): () => void {
     const entry: HandlerBinding = {
       kind: 'handler',
       handler,
@@ -192,7 +192,7 @@ export class Keymap<TGantt = unknown> implements KeyHandlerRegistrar {
       if (editable && !captureInEditable) continue;
       if (!chordMatches(entry.chord, event)) continue;
       if (entry.kind === 'handler') {
-        entry.handler(event);
+        if (entry.handler(event) === false) continue;
         return true;
       }
       const command = this.#commands.find(entry.binding.command);

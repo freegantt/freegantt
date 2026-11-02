@@ -213,7 +213,7 @@ export type { GanttDom, DomTarget, PaneName, DomEventHandler, DomEventOptions } 
 // `RegisterKeyHandler` as a second argument, and a plugin author passes the same bound method it
 // already had: `ctx.interaction.registerKeyHandler`.
 export { createPopup } from '../extensions/popup.js';
-export type { RegisterKeyHandler, KeyEventLike } from '../extensions/keymap.js';
+export type { RegisterKeyHandler, KeyHandler, KeyEventLike } from '../extensions/keymap.js';
 export type {
   Popup,
   PopupOptions,
