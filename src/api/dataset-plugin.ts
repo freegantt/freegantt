@@ -61,7 +61,10 @@ export type { BarMoveRuleWrapper };
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
 // takes (#209), so the only type a plugin author names to write a cascade is one they already know.
-export { mergeEntryEdits } from '../data/edit-extension.js';
+// The one legal way to replace a Field the user proposed (ADR 0042), also beside `mergeEntryEdits`: an
+// extender result marks the Fields it overrides with `overridingProposed(['start'], { start })`. An
+// unmarked write to a proposed Field still throws in dev mode.
+export { mergeEntryEdits, overridingProposed } from '../data/edit-extension.js';
 // The move a plugin's cascade is honest about: a spanning Entry translated rigidly to a
 // new `start`, `end` shifted by the same delta so the Entry's own duration never changes. This is
 // how a plugin author writes a cascade move, rather than hand-rolling the same rigid translate
