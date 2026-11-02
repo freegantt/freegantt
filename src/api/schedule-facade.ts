@@ -8,5 +8,6 @@ export type {
   ScheduleDiagnostic,
   ScheduleEntry,
   ScheduleRequest,
+  ScheduleResult,
   SuccessorMoves,
 } from '../scheduling/index.js';

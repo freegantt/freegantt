@@ -5,12 +5,13 @@
 
 import type { DataPlugin } from '../../api/gantt.js';
 import type { Dataset } from '../../api/dataset.js';
-import { mergeEntryEdits } from '../../api/dataset-plugin.js';
+import { mergeEntryEdits, overridingProposed } from '../../api/dataset-plugin.js';
 import { schedule } from '../../api/schedule-facade.js';
 import type {
   ScheduleConstraint,
   ScheduleDiagnostic,
   ScheduleEntry,
+  ScheduleResult,
   SuccessorMoves,
 } from '../../api/schedule-facade.js';
 import { SchedulingNotInstalledError, entryId } from '../../model/index.js';
@@ -20,6 +21,7 @@ import type {
   EntryEdit,
   EntryEdits,
   EntryId,
+  FieldKey,
   Instant,
   PluginStore,
   StoreRowWrite,
@@ -33,13 +35,17 @@ export const SCHEDULING_ID = 'freegantt.scheduling';
 /** A date rule on one Entry. Today: "start no earlier than" a date. */
 export type EntryConstraint = ScheduleConstraint;
 
-/** What a user date does when it breaks a Dependency. Only `userDateWins` exists today: the date stays and a diagnostic marks the link. */
-export type EditedDate = 'userDateWins';
+/**
+ * What a user date does when it breaks a Dependency. `dependencyWins` places the Entry where the
+ * Dependency allows and keeps the user date as a "start no earlier than" floor. `userDateWins` keeps the
+ * date and a diagnostic marks the broken link.
+ */
+export type EditedDate = 'dependencyWins' | 'userDateWins';
 
 export interface SchedulingOptions {
   /** How a successor follows its predecessors. Defaults to `pushAndPull`. */
   readonly successorMoves?: SuccessorMoves;
-  /** What a user date does when it breaks a Dependency. Defaults to `userDateWins`. */
+  /** What a user date does when it breaks a Dependency. Defaults to `dependencyWins`. */
   readonly editedDate?: EditedDate;
 }
 
@@ -60,6 +66,12 @@ export interface Scheduling extends DataPlugin {
 
 /** The plugin declares this Field, so a grid column binds to it with no glue. */
 const MANUALLY_SCHEDULED = 'manuallyScheduled';
+
+/** The dates a user proposed on one Entry. */
+interface ProposedDates {
+  start?: Instant;
+  end?: Instant;
+}
 
 interface Installation {
   readonly dataset: Dataset;
@@ -137,10 +149,10 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     );
   }
 
-  function proposedDates(request: EditRequest): Map<EntryId, { start?: Instant; end?: Instant }> {
-    const dates = new Map<EntryId, { start?: Instant; end?: Instant }>();
+  function proposedDates(request: EditRequest): Map<EntryId, ProposedDates> {
+    const dates = new Map<EntryId, ProposedDates>();
     for (const [id, proposed] of request.proposed) {
-      const touched: { start?: Instant; end?: Instant } = {};
+      const touched: ProposedDates = {};
       if (proposed.proposedKeys.has('start') && proposed.start !== undefined) touched.start = proposed.start;
       if (proposed.proposedKeys.has('end') && proposed.end !== undefined) touched.end = proposed.end;
       if (touched.start !== undefined || touched.end !== undefined) dates.set(id, touched);
@@ -152,6 +164,56 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     return readDependencies(installed?.dependencyStore());
   }
 
+  /** Which user-dated Entries does a Dependency overrule? Those the engine could not place on the user's start. */
+  function overruledByDependency(
+    result: ScheduleResult,
+    request: EditRequest,
+    dates: ReadonlyMap<EntryId, ProposedDates>,
+  ): Set<EntryId> {
+    const ids = new Set<EntryId>();
+    for (const finding of result.diagnostics) {
+      if (finding.code !== 'blocked-move' || finding.reason !== 'proposed') continue;
+      const proposed = dates.get(finding.entryId);
+      if (proposed?.start !== undefined && !isManuallyScheduled(request, finding.entryId))
+        ids.add(finding.entryId);
+    }
+    return ids;
+  }
+
+  function runEngine(
+    request: EditRequest,
+    proposed: ReadonlyMap<EntryId, ProposedDates>,
+    constraints: ReadonlyMap<EntryId, EntryConstraint>,
+  ): ScheduleResult {
+    return schedule({
+      entries: scheduleEntries(request),
+      dependencies: dependencies(),
+      proposed,
+      manuallyScheduled: manuallyScheduledIds(request),
+      constraints,
+      ...(options.successorMoves === undefined ? {} : { successorMoves: options.successorMoves }),
+    });
+  }
+
+  /** The engine's answer to an edit. A Dependency that overrules a user start reruns it with that start as a floor. */
+  function place(
+    request: EditRequest,
+    store: PluginStore<EntryConstraint>,
+  ): { result: ScheduleResult; overruled: ReadonlySet<EntryId>; dates: ReadonlyMap<EntryId, ProposedDates> } {
+    const dates = proposedDates(request);
+    const first = runEngine(request, dates, store.all);
+    const overruled =
+      options.editedDate === 'userDateWins'
+        ? new Set<EntryId>()
+        : overruledByDependency(first, request, dates);
+    if (overruled.size === 0) return { result: first, overruled, dates };
+    const remaining = new Map([...dates].filter(([id]) => !overruled.has(id)));
+    const floors = new Map(store.all);
+    for (const id of overruled)
+      floors.set(id, { kind: 'startNoEarlierThan', date: dates.get(id)?.start as Instant });
+    return { result: runEngine(request, remaining, floors), overruled, dates };
+  }
+
   /** Runs the engine against the edit and answers the cascade, keeping the findings for `change`. */
   function extend(request: EditRequest): EntryEdits {
     const store = installed?.store;
@@ -159,18 +221,27 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       pending = undefined;
       return new Map();
     }
-    const result = schedule({
-      entries: scheduleEntries(request),
-      dependencies: dependencies(),
-      proposed: proposedDates(request),
-      manuallyScheduled: manuallyScheduledIds(request),
-      constraints: store.all,
-      ...(options.successorMoves === undefined ? {} : { successorMoves: options.successorMoves }),
-    });
+    const { result, overruled, dates } = place(request, store);
     pending = result.diagnostics;
     const edits = new Map<EntryId, EntryEdit>();
     for (const change of result.patch)
       edits.set(change.id, { ...edits.get(change.id), [change.field]: change.to });
+    // The engine placed an overruled Entry where its Dependency allows. The user's own dates sit in the
+    // edit, so the placement replaces them, even when the Entry stays where it was.
+    for (const id of overruled) {
+      const entry = request.entries.get(id);
+      const placed = edits.get(id);
+      const proposed = dates.get(id);
+      const replaced: FieldKey[] = proposed?.end === undefined ? ['start'] : ['start', 'end'];
+      edits.set(
+        id,
+        overridingProposed(replaced, {
+          ...placed,
+          start: placed?.start ?? entry?.start,
+          ...(proposed?.end === undefined ? {} : { end: placed?.end ?? entry?.end }),
+        }),
+      );
+    }
     return edits;
   }
 

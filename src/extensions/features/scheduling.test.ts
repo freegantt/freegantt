@@ -102,8 +102,29 @@ describe('scheduling() moves successors', () => {
     expect([startOf(dataset, 'b'), startOf(dataset, 'c')]).toEqual([day(4), day(5)]);
   });
 
-  it('keeps a user start that breaks a Dependency and reports the blocked move', () => {
+  it('places an Entry where its Dependency allows when the user start breaks it, and one undo restores the old date', () => {
     const { dataset, plugin } = chain();
+
+    dataset.entries.update('b', { start: day(0), end: day(1) });
+
+    expect([startOf(dataset, 'b'), startOf(dataset, 'c')]).toEqual([day(1), day(2)]);
+    expect(plugin.constraintOf('b')).toEqual({ kind: 'startNoEarlierThan', date: day(0) });
+    expect(plugin.diagnostics()).toEqual([]);
+    dataset.undo();
+    expect(startOf(dataset, 'b')).toBe(day(1));
+    expect(plugin.constraintOf('b')).toBeUndefined();
+  });
+
+  it('keeps the moved span when the Dependency overrules a bar move', () => {
+    const { dataset } = chain();
+
+    dataset.entries.update('b', { start: day(0), end: day(1) });
+
+    expect(dataset.entries.get('b')?.end).toBe(day(2));
+  });
+
+  it('keeps a user start that breaks a Dependency and reports the blocked move when editedDate is userDateWins', () => {
+    const { dataset, plugin } = chain({ editedDate: 'userDateWins' });
     const seen: number[] = [];
     plugin.on('scheduleDiagnostics', (found) => seen.push(found.length));
 

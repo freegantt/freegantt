@@ -76,6 +76,16 @@ test('dragging a predecessor earlier pulls its successors', async ({ page }) => 
   expect(earlier[5]).toBeLessThan(later[5]!);
 });
 
+test('dragging a task before its predecessor ends keeps it behind the predecessor', async ({ page }) => {
+  await openScheduling(page);
+  const designBefore = await startMs(page, 'design');
+
+  await dragBarByDays(page, 'design', -2);
+
+  await expect.poll(() => page.evaluate(() => window.__dataset.canUndo)).toBe(true);
+  expect(await startMs(page, 'design')).toBe(designBefore);
+});
+
 test('a manually scheduled task stays put and the page reports the broken link', async ({ page }) => {
   await openScheduling(page);
   const manualCell = page.locator('.fg-row[data-entry-id="design"] [data-field="manuallyScheduled"]');
