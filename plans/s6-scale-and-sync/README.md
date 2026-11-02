@@ -51,7 +51,21 @@ So R2 is the timing half of a fixture that already exists. It needs three measur
 | unthrottled | 16.6 ms | 17.6 ms | 22.9 ms | 0/240 | 4.24 ms |
 | 4x CPU slowdown | 26.2 ms | 32.9 ms | 61.3 ms | 17/240 | 18.85 ms |
 
-Run: `2026-09-22T19-32-23-416Z`. Trace: `measurements/2026-09-22T19-32-23-416Z-scroll-trace.json`. The `81e80c20` commit message quotes a different pair (4.43 ms / 20.66 ms script per frame). That pair is the before/after comparison for #414 from separate runs. This table is the recorded reading. No budget follows from this — S6 Q1 is still open. Hover and the bulk-edit-in-one-transaction measurements are not covered by `measure:scale` and remain unmeasured.
+Run: `2026-09-22T19-32-23-416Z`. Trace: `measurements/2026-09-22T19-32-23-416Z-scroll-trace.json`. The `81e80c20` commit message quotes a different pair (4.43 ms / 20.66 ms script per frame). That pair is the before/after comparison for #414 from separate runs. This table is the recorded reading. No budget follows from this — S6 Q1 is still open.
+
+**Hover and bulk-edit readings, 2026-11-02, commit a4956716, this developer machine (WSL2 on Linux, headless Chromium), 10,000 entries.** `FG_MEASURE_PORT=5235 pnpm measure:scale`, unthrottled and at 4x CPU slowdown. Hover is the time from a real pointer move onto a bar to the end of the frame that paints its hovered state: 60 hovers, each from rest off every bar. Bulk edit is one `transaction()` that shifts 1,000 entries by one day. The longest frame runs from just before the transaction to 30 frames after it.
+
+| | p50 | p95 | max | frames over 32 ms |
+|---|---|---|---|---|
+| hover, unthrottled | 14.9 ms | 15.6 ms | 15.8 ms | 0/60 |
+| hover, 4x CPU slowdown | 15.0 ms | 17.0 ms | 18.0 ms | 0/60 |
+
+| | transaction | longest frame after |
+|---|---|---|
+| bulk edit, unthrottled | 29.9 ms | 54.8 ms |
+| bulk edit, 4x CPU slowdown | 52.5 ms | 103 ms |
+
+Run: `2026-11-02T17-12-52-850Z`. Traces: `measurements/2026-11-02T17-12-52-850Z-scroll-trace.json` and `measurements/2026-11-02T17-12-52-850Z-bulk-edit-trace.json`. Read hover with care. The pointer move waits for the next animation frame, so the median sits near one frame (about 15 ms) whatever the work costs. The tail is the useful part. The viewport shows 14 bars, so each bar took several hovers. The bulk-edit frame is jank: it is over 32 ms unthrottled. The trace splits it in two. The transaction itself holds the main thread for about 30 ms. The library's next frame callback then spends about 21 ms in script. That second part has no layout or paint inside it. Neither part is fixed here. No budget follows from these readings — S6 Q1 is still open. R2 stays open.
 
 ### R3 — the linked-Gantt demo
 
