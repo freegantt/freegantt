@@ -220,7 +220,7 @@ describe('removing a Dependency with the keyboard', () => {
     expect(view.plugin.all()).toHaveLength(2);
   });
 
-  it('the host remove(id) call raises no event', () => {
+  it('a consumer remove(id) call raises no event', () => {
     const view = mount();
     const calls: string[] = [];
     view.plugin.on('beforeDependencyRemove', () => {

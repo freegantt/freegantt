@@ -278,7 +278,8 @@ rename.
 | `.fg-decorations-over` | Decoration layer above the bars. |
 | `.fg-connectors` | Layer above the bars that holds the connector SVG. It ignores the pointer. |
 | `.fg-connectors-svg` | The SVG box, sized to the content. |
-| `.fg-connector` | One connector path. It carries `data-connector-id` and `data-flag`. |
+| `.fg-connector` | One connector path. It carries `data-connector-id` and `data-flag`. A connector with a label takes the pointer on its stroke and takes focus. |
+| `.fg-connector-text` | The label text of a connector whose provider asks for it. It is `aria-hidden`. |
 | `.fg-range-band` | A range decoration (weekend shading, and the like). |
 | `.fg-row-stripe` | A row-height decoration stripe. |
 | `.fg-row-span` | A decoration box inside one row, between two Instants. It paints its optional `text` at its end. |
@@ -319,6 +320,7 @@ none out of the box. See "Date lines and the Today line" below for the worked ex
 | `.fg-bar[data-flag~="cycle"]` | the scheduling plugin |
 | `.fg-connector[data-flag~="inactive"]` | the connector provider |
 | `.fg-connector[data-flag~="cycle"]` | the connector provider |
+| `.fg-connector[data-flag~="selected"]` | the connector provider |
 | `.fg-date-line[data-flag~="today"]` | the library (Today line) |
 | `.fg-date-line-label[data-flag~="today"]` | the library (Today line) |
 
