@@ -21,7 +21,8 @@ import type {
 import { defaultPolicy } from './scheduling-policy.js';
 
 /**
- * Moves successors later when a dependency demands it, and reports what it cannot move.
+ * Moves each successor to the earliest date its dependencies and constraint allow, or only later
+ * when the request asks for `pushOnly`. It reports what it cannot move.
  * It never writes a date the user proposed and never moves a manually scheduled Entry.
  */
 export function schedule(request: ScheduleRequest): ScheduleResult {
@@ -32,6 +33,8 @@ export function schedule(request: ScheduleRequest): ScheduleResult {
     nodes,
     policy,
     manuallyScheduled: request.manuallyScheduled ?? new Set(),
+    constraints: request.constraints ?? new Map(),
+    successorMoves: request.successorMoves ?? 'pushAndPull',
     diagnostics: [],
   };
 

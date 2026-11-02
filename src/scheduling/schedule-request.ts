@@ -20,6 +20,22 @@ export interface ScheduleDependency {
 /** The dates a user just set on one Entry. A key that is absent was not touched. */
 export type ProposedEntryDates = Partial<Record<ScheduleField, Instant>>;
 
+/**
+ * A date rule on one Entry. The engine reads one kind today. A new kind joins this union
+ * with its own `kind` tag.
+ */
+export type ScheduleConstraint = {
+  /** The Entry never starts before `date`. A dependency can still move it later. */
+  readonly kind: 'startNoEarlierThan';
+  readonly date: Instant;
+};
+
+/**
+ * How a successor follows its predecessors. `pushAndPull` moves it to the earliest date its
+ * dependencies and constraint allow, earlier too. `pushOnly` moves it later and never earlier.
+ */
+export type SuccessorMoves = 'pushAndPull' | 'pushOnly';
+
 export interface ScheduleRequest {
   /** The schedule as it stands now, before the proposed dates apply. */
   readonly entries: readonly ScheduleEntry[];
@@ -31,6 +47,10 @@ export interface ScheduleRequest {
   readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
   /** Entries the engine must never move. */
   readonly manuallyScheduled?: ReadonlySet<EntryId>;
+  /** One constraint per Entry. An Entry with no incoming dependency never moves, so its constraint does not apply. */
+  readonly constraints?: ReadonlyMap<EntryId, ScheduleConstraint>;
+  /** Defaults to `pushAndPull`. */
+  readonly successorMoves?: SuccessorMoves;
   /** Defaults to `defaultPolicy`. */
   readonly policy?: SchedulingPolicy;
 }

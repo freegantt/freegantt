@@ -10,7 +10,9 @@ export type { SchedulingPolicy, EditResolution, ScheduleRuleKind } from './sched
 export type {
   ScheduleRequest,
   ScheduleDependency,
+  ScheduleConstraint,
   ScheduleDependencyType,
+  SuccessorMoves,
   ScheduleEntry,
   ScheduleField,
   ProposedEntryDates,

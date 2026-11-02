@@ -2,7 +2,13 @@
 // The runner converts days to instants, calls `schedule()`, and compares with the expected answer.
 import { entryId, type EntryId, type Instant } from '../../model/index.js';
 import { MS } from '../../time/index.js';
-import type { ScheduleDependencyType, ScheduleField, ScheduleRequest } from '../schedule-request.js';
+import type {
+  ScheduleConstraint,
+  ScheduleDependencyType,
+  ScheduleField,
+  ScheduleRequest,
+  SuccessorMoves,
+} from '../schedule-request.js';
 import type { BlockReason, ScheduleChange, ScheduleDiagnostic, ScheduleResult } from '../schedule-result.js';
 
 /** `[id, startDay, endDay]`, or `[id, startDay, endDay, 'parent']` for an Entry that has children. */
@@ -30,6 +36,9 @@ export interface GoldenScenario {
   /** What the user just set, per Entry id, in days. */
   readonly proposed?: Readonly<Record<string, Partial<Record<ScheduleField, number>>>>;
   readonly manuallyScheduled?: readonly string[];
+  /** Per Entry id, the day before which the Entry may not start. */
+  readonly startNoEarlierThan?: Readonly<Record<string, number>>;
+  readonly successorMoves?: SuccessorMoves;
   readonly expected: {
     readonly patch: readonly GoldenChange[];
     readonly diagnostics?: readonly GoldenDiagnostic[];
@@ -48,6 +57,12 @@ export function toRequest(scenario: GoldenScenario): ScheduleRequest {
       ...(fields.end === undefined ? {} : { end: day(fields.end) }),
     });
   }
+  const constraints = new Map<EntryId, ScheduleConstraint>(
+    Object.entries(scenario.startNoEarlierThan ?? {}).map(([id, date]) => [
+      entryId(id),
+      { kind: 'startNoEarlierThan', date: day(date) },
+    ]),
+  );
   return {
     entries: scenario.entries.map(([id, start, end, parent]) => ({
       id: entryId(id),
@@ -64,6 +79,8 @@ export function toRequest(scenario: GoldenScenario): ScheduleRequest {
     })),
     proposed,
     manuallyScheduled: new Set((scenario.manuallyScheduled ?? []).map(entryId)),
+    constraints,
+    ...(scenario.successorMoves === undefined ? {} : { successorMoves: scenario.successorMoves }),
   };
 }
 
