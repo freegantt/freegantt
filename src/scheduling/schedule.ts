@@ -4,7 +4,7 @@
 import type { EntryId, Instant } from '../model/index.js';
 import { addMs, diffMs } from '../time/index.js';
 import { FIELDS, moveSuccessor, movableFields, type Edge, type Node, type Run } from './propagate.js';
-import { applyLag } from './apply-lag.js';
+import { dayCountingFor } from './day-counting.js';
 import { orderByDependency } from './dependency-order.js';
 import type {
   ProposedEntryDates,
@@ -27,7 +27,7 @@ import { defaultPolicy } from './scheduling-policy.js';
  */
 export function schedule(request: ScheduleRequest): ScheduleResult {
   const policy = request.policy ?? defaultPolicy;
-  const nodes = request.entries.map(toNode);
+  const nodes = request.entries.map((entry) => toNode(entry, request.calendar));
   const indexById = new Map(nodes.map((node, index) => [node.id, index]));
   const run: Run = {
     nodes,
@@ -39,7 +39,7 @@ export function schedule(request: ScheduleRequest): ScheduleResult {
   };
 
   const unreadable: ScheduleDiagnostic[] = [];
-  const edges = readEdges(request.dependencies, indexById, unreadable);
+  const edges = readEdges(request.dependencies, nodes, indexById, unreadable);
   const proposed = request.proposed ?? new Map<EntryId, ProposedEntryDates>();
   applyProposals(run, proposed, indexById);
 
@@ -74,10 +74,11 @@ function inRequestOrder(loops: readonly CycleDiagnostic[], nodes: readonly Node[
   return [...loops].sort((a, b) => first(a) - first(b));
 }
 
-function toNode(entry: ScheduleRequest['entries'][number]): Node {
+function toNode(entry: ScheduleRequest['entries'][number], calendar: ScheduleRequest['calendar']): Node {
   return {
     id: entry.id,
     hasChildren: entry.hasChildren,
+    days: dayCountingFor(calendar, entry.id),
     original: { start: entry.start, end: entry.end },
     start: entry.start,
     end: entry.end,
@@ -88,6 +89,7 @@ function toNode(entry: ScheduleRequest['entries'][number]): Node {
 
 function readEdges(
   dependencies: readonly ScheduleDependency[],
+  nodes: readonly Node[],
   indexById: ReadonlyMap<EntryId, number>,
   diagnostics: ScheduleDiagnostic[],
 ): Edge[] {
@@ -97,7 +99,7 @@ function readEdges(
     const to = indexById.get(dependency.toId);
     if (from === undefined || to === undefined) {
       diagnostics.push({ code: 'unknown-entry', dependencyId: dependency.id });
-    } else if (applyLag(0 as Instant, dependency.lag) === undefined) {
+    } else if (!(nodes[to] as Node).days.supports(dependency.lag)) {
       diagnostics.push({ code: 'unsupported-lag-unit', dependencyId: dependency.id });
     } else {
       edges.push({ dependency, from, to });
@@ -126,9 +128,15 @@ function applyProposals(
     for (const field of touched) node[field] = dates[field];
     node.changed = true;
     if (before === undefined) continue;
+    const kept = node.original;
     for (const field of moves) {
       const current = node[field];
-      if (current !== undefined) node[field] = addMs(current, diffMs(after, before));
+      if (current === undefined) continue;
+      // A moved bar keeps its length in the Entry's own days. A resize frees no date to follow.
+      node[field] =
+        touched.length === 1 && kept.start !== undefined && kept.end !== undefined
+          ? node.days.follow({ start: kept.start, end: kept.end }, lead, node.days.settle(lead, after))[field]
+          : addMs(current, diffMs(after, before));
     }
   }
 }

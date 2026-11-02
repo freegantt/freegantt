@@ -3,10 +3,12 @@
 // file re-exports `scheduling` itself, so a feature file importing the barrel back would close a
 // cycle (no-circular) — the same reason `time-facade.ts` exists.
 export { schedule } from '../scheduling/index.js';
+export type { WorkingCalendar } from '../scheduling/index.js';
 export type {
   ScheduleConstraint,
   ScheduleDiagnostic,
   ScheduleEntry,
+  ScheduleCalendar,
   ScheduleRequest,
   ScheduleResult,
   SuccessorMoves,
