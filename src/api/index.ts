@@ -520,7 +520,7 @@ export type {
 // along: `ZonedTime.toPlain`/`.fromPlain` both name it.
 export type { ZonedTime, PlainParts } from '../time/index.js';
 
-// S7.6: the pure propagation engine. `schedule()` takes plain data and answers a patch plus
+// The pure propagation engine. `schedule()` takes plain data and answers a patch plus
 // diagnostics, so a caller can use it with no plugin installed. The scheduling plugin calls it
 // from its edit extender.
 export { schedule, defaultPolicy } from '../scheduling/index.js';
