@@ -6,7 +6,7 @@ import type { EntryId } from '../model/index.js';
 
 /** Every `ConnectorFlags` key — the connector-side twin of `BAR_FLAG_KEYS`. `render/` turns each
  *  true key into one `data-flag` token. */
-export const CONNECTOR_FLAG_KEYS = ['inactive', 'cycle'] as const;
+export const CONNECTOR_FLAG_KEYS = ['inactive', 'cycle', 'selected'] as const;
 
 export type ConnectorFlags = Partial<Record<(typeof CONNECTOR_FLAG_KEYS)[number], boolean>>;
 

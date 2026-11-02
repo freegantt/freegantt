@@ -342,7 +342,7 @@ export interface ConnectEnds {
 export type ConnectHandler = (ends: ConnectEnds) => void;
 
 // @public
-export const CONNECTOR_FLAG_KEYS: readonly ["inactive", "cycle"];
+export const CONNECTOR_FLAG_KEYS: readonly ["inactive", "cycle", "selected"];
 
 // @public
 export type ConnectorEdge = 'start' | 'end';

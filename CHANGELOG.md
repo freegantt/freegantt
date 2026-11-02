@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- Connector line takes pointer on its stroke only, and a connector with a `label` takes focus. One labelled connector is the tab stop: the one with the `selected` flag, else the first in frame order. Others have `tabindex="-1"`. `CONNECTOR_FLAG_KEYS` gains `'selected'`. It sets `data-flag="selected"` and `aria-current="true"`, and `.fg-connector[data-flag~="selected"]` is the style hook.
+
 - `ctx.interaction.registerKeyHandler` handler may return `false` to decline a key. Keymap then offers key to next older binding, and core keeps its own meaning. Before, any matching handler took key and called `preventDefault`. New type `KeyHandler`. A plugin that binds `Delete` or an arrow must decline every target it does not own.
 
 - `ctx.view.dom.targetUnder` and `ctx.view.onDomEvent` now resolve a drawn connector line. `TargetKind` gains `'connector'`, and `DomTarget` gains `connectorId`, the id the provider gave. A connector stands for no Entry, so `entryIds` is empty.
