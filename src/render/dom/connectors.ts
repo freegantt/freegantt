@@ -7,7 +7,7 @@ import { KeyedLayer } from './sync-keyed.js';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
-type ConnectorGeom = { d: string; flagTokens: string; className: string; label: string };
+type ConnectorGeom = { d: string; flagTokens: string; className: string; label: string; tabStop: boolean };
 
 export interface ConnectorsAttachment {
   /** Call once per frame with the frame's connectors and the content's full extent. */
@@ -26,8 +26,16 @@ function pathData(path: readonly PathCommand[]): string {
     .join('');
 }
 
-function toGeom(connector: FrameConnector): ConnectorGeom {
+/** Which connector is the one tab stop? The selected one. With none selected, the first labelled
+ *  one in frame order. An unlabelled connector is decoration, so it never takes focus. */
+function tabStopId(connectors: readonly FrameConnector[]): string | undefined {
+  const labelled = connectors.filter((connector) => connector.label !== undefined && connector.label !== '');
+  return (labelled.find((connector) => connector.flags.selected === true) ?? labelled[0])?.id;
+}
+
+function toGeom(connector: FrameConnector, stopId: string | undefined): ConnectorGeom {
   return {
+    tabStop: connector.id === stopId,
     d: pathData(connector.path),
     flagTokens: connector.flagTokens,
     className: connector.class === undefined ? CONNECTOR_CLASS : `${CONNECTOR_CLASS} ${connector.class}`,
@@ -50,6 +58,11 @@ function patch(node: SVGPathElement, geom: ConnectorGeom): void {
     node.setAttribute('role', 'img');
     node.setAttribute('aria-label', geom.label);
   }
+  // Roving tab index: a labelled connector takes focus from a click or a key, and one is the tab stop.
+  if (geom.label === '') node.removeAttribute('tabindex');
+  else node.setAttribute('tabindex', geom.tabStop ? '0' : '-1');
+  if (geom.flagTokens.split(' ').includes('selected')) node.setAttribute('aria-current', 'true');
+  else node.removeAttribute('aria-current');
 }
 
 /** Mounts one SVG layer above the bar layer. The layer ignores the pointer, so a bar under a line
@@ -69,6 +82,7 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
       // The svg box is the content box, so a line near an edge never widens the pane's scroll range.
       svg.setAttribute('width', String(contentWidth));
       svg.setAttribute('height', String(Math.max(contentHeight, paneHeight)));
+      const stopId = tabStopId(connectors);
       paths.sync(svg, connectors, {
         key: (connector) => connector.id,
         create: (connector) => {
@@ -76,7 +90,7 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
           node.dataset[CONNECTOR_ID_KEY] = connector.id;
           return node;
         },
-        toGeom,
+        toGeom: (connector) => toGeom(connector, stopId),
         patch,
       });
     },
