@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 - A decoration provider can return `{ kind: 'rowSpan', rowId, start, end, class? }`. The Gantt paints a box inside that row between the two Instants, on `underBars` or `overBars`. The node has the class `fg-row-span` and the consumer's `class`, and it takes no pointer events and no focus. A row outside the window paints nothing. The new type `RowSpan` is the resolved shape. The optional `text` is a plain string the Gantt paints at the span's end, inside the same node.
 - The harness has a "Planned vs actual" page. A plugin reads two consumer Fields and draws a row span of the planned dates under each actual bar.
+- New `workingCalendar({ workdays, holidays })` returns an immutable `WorkingCalendar`. It answers `isWorkday(day, time)`, `addWorkdays(instant, count, time)` and `workdaysBetween(a, b, time)` in the Dataset zone, and `calendar.offTime()` returns a cover that `timeShading([{ covers: calendar.offTime() }])` shades. The library ships no holiday list. New types `WorkingCalendarOptions`, `OffTimeCover` and `Workday`, and `InvalidWorkingCalendarError` for a bad weekday or holiday. The generic harness page shades its weekends and two holidays from one calendar.
 
 ### Fixed
 

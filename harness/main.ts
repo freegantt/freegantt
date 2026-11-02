@@ -11,7 +11,7 @@ import {
   definePlugin,
   diamond,
   timeShading,
-  daysOfWeek,
+  workingCalendar,
 } from 'freegantt';
 import type {
   Entry,
@@ -545,16 +545,18 @@ renderersToggle.addEventListener('change', () => {
 });
 renderersToggle.dispatchEvent(new Event('change'));
 
-// #404: timeShading() is the shipped built-in — 'freegantt' alone, no harness plugin behind it, and
-// no page CSS (--fg-time-shading-fill covers the paint). Installed from the start; the checkbox
-// removes it live through the same `uninstallPlugin` verb every other plugin toggle on this page
-// already uses (I8: no remount).
-gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
+// One working calendar states the days off once. `timeShading()` shades them under the bars from
+// `calendar.offTime()`; the same object answers `isWorkday`, `addWorkdays` and `workdaysBetween`.
+// 'freegantt' alone, no harness plugin behind it. Installed from the start; the checkbox removes it
+// live through the same `uninstallPlugin` verb every other plugin toggle on this page uses (I8).
+const calendar = workingCalendar({ workdays: [1, 2, 3, 4, 5], holidays: ['2026-12-25', '2026-12-28'] });
+const offTimeShading = () => timeShading([{ covers: calendar.offTime(), class: 'off-time' }]);
+gantt.installPlugin(offTimeShading());
 
 const timeShadingToggle = document.querySelector<HTMLInputElement>('#time-shading-toggle')!;
 timeShadingToggle.addEventListener('change', () => {
   if (timeShadingToggle.checked) {
-    gantt.installPlugin(timeShading([{ covers: daysOfWeek(6, 7), class: 'weekend' }]));
+    gantt.installPlugin(offTimeShading());
     writeLog('timeShading: installed');
   } else {
     gantt.uninstallPlugin('freegantt.timeShading');
