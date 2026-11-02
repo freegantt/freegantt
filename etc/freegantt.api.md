@@ -147,7 +147,7 @@ export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' |
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-remove-refused' | 'entry-clear-dates-refused' | 'entry-step-refused' | 'entry-drop-refused' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused' | 'unsupported-lag-unit' | 'duplicate-dependency-id' | 'dependency-store-not-installed';
 
 // @public
 export interface Capabilities {
@@ -677,6 +677,52 @@ export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TPro
 export function definePlugin<TProps = unknown, TPlugin extends DataPlugin<TProps> = DataPlugin<TProps>>(plugin: TPlugin): TPlugin;
 
 // @public
+export interface Dependency {
+    // (undocumented)
+    readonly fromId: EntryId;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lag: DependencyLag;
+    // (undocumented)
+    readonly toId: EntryId;
+    // (undocumented)
+    readonly type: DependencyType;
+}
+
+// @public
+export interface DependencyInput {
+    // (undocumented)
+    readonly fromId: EntryId | string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lag: Duration;
+    // (undocumented)
+    readonly toId: EntryId | string;
+    // (undocumented)
+    readonly type: DependencyType;
+}
+
+// @public
+export interface DependencyLag {
+    // (undocumented)
+    readonly unit: 'day';
+    // (undocumented)
+    readonly value: number;
+}
+
+// @public
+export class DependencyStoreNotInstalledError extends FreeGanttError {
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
+}
+
+// @public
+export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
+// @public
 export class DerivedFieldNotWritableError extends FreeGanttError {
     constructor(key: string, entryId: string, operation: string);
     // (undocumented)
@@ -723,6 +769,15 @@ export interface DomTarget {
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
+}
+
+// @public
+export class DuplicateDependencyIdError extends FreeGanttError {
+    constructor(dependencyId: string, operation: string);
+    // (undocumented)
+    readonly dependencyId: string;
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public
@@ -863,6 +918,9 @@ export interface Entry<TProps = Record<string, unknown>> {
 }
 
 // @public
+export const ENTRY_DEPENDENCIES_ID = "freegantt.entryDependencies";
+
+// @public
 export interface EntryActivate {
     // (undocumented)
     readonly cause: 'click' | 'key' | 'dblclick';
@@ -877,6 +935,18 @@ export interface EntryDelta<TProps = Record<string, unknown>> {
     readonly remove?: readonly (EntryId | string)[];
     readonly upsert?: readonly EntryIngestInput<TProps>[];
 }
+
+// @public
+export interface EntryDependencies extends DataPlugin {
+    add(dependency: DependencyInput): void;
+    all(): readonly Dependency[];
+    predecessorsOf(entry: EntryId | string): readonly Dependency[];
+    remove(id: string): void;
+    replaceAll(dependencies: readonly DependencyInput[]): void;
+}
+
+// @public
+export function entryDependencies(): EntryDependencies;
 
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "RemovableEntryKey" needs to be exported by the entry point index.d.ts
@@ -2839,6 +2909,15 @@ export class UnreadableCellValueError extends FreeGanttError {
     // (undocumented)
     readonly field: FieldKey;
     readonly text: string | undefined;
+}
+
+// @public
+export class UnsupportedLagUnitError extends FreeGanttError {
+    constructor(unit: string, operation: string);
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly unit: string;
 }
 
 // @public

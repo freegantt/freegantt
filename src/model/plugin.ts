@@ -38,7 +38,7 @@ export interface PluginStore<T extends object> extends PluginStoreView<T> {
   /**
    * Makes the store hold exactly `rows`: it writes a changed row, adds a new one, and removes a row
    * that `rows` leaves out. It records no undo step and erases no Redo, as `entries.syncAll` does,
-   * because a host refresh is not the user's own edit. Nothing changes, and no change set lands, when
+   * because a refresh from outside is not the user's own edit. Nothing changes, and no change set lands, when
    * every row is the same object the store holds (a row compares by identity).
    *
    * It is all or nothing. An id with no Entry throws `EntryNotFoundError` and writes nothing. It

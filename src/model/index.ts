@@ -144,6 +144,9 @@ export {
   RendererAlreadyRegisteredError,
   EmptyCoversError,
   CustomRowSourceNotFilterableOrSortableError,
+  UnsupportedLagUnitError,
+  DuplicateDependencyIdError,
+  DependencyStoreNotInstalledError,
 } from './errors.js';
 // S5.12: the Error report the `error` event carries on both buses, plus the raise seam
 // every layer that has no bus of its own is handed.
