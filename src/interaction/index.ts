@@ -7,3 +7,4 @@ export type { EntryGestureContext, EntryGesture, DraftOptions, EntryHit } from '
 export type { ColumnGestureContext } from '../view/index.js';
 export { createPointerGesture } from './pointer-gesture.js';
 export type { PointerGestureCallbacks, PointerGestureController } from './pointer-gesture.js';
+export { attachConnect } from './connect.js';

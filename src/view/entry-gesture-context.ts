@@ -30,11 +30,14 @@ export interface DraftOptions {
 /** What `hitTest` found: a bar in the timeline pane, or a row in the grid pane (#185).
  *
  *  On a bar hit, `edge` is set only for a hit on the shared resize-handle pair — sourced from the
- *  handle's own `data-edge` attribute — never for a hit on the bar body.
+ *  handle's own `data-edge` attribute — never for a hit on the bar body. `port` is set instead for a
+ *  hit on a connector port. A port is not part of the bar: a resize, a move and a click ignore it.
  *
  *  A row hit names the row alone. Which Entries the row owns is `entriesForRow`'s answer, so
  *  `interaction/` never turns a row into an Entry by itself. */
-export type EntryHit = { kind: 'bar'; barId: BarId; edge?: 'start' | 'end' } | { kind: 'row'; rowId: RowId };
+export type EntryHit =
+  | { kind: 'bar'; barId: BarId; edge?: 'start' | 'end'; port?: 'start' | 'end' }
+  | { kind: 'row'; rowId: RowId };
 
 /** One armed gesture (D-GH-1): `session()` resolves what moves once, at arm time, so
  *  `interaction/entry-gestures.ts`'s pointer machine holds this one object instead of separately

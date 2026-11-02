@@ -16,13 +16,19 @@ const PLUGIN: PluginId = 'demo.plugin';
 
 interface Harness {
   registrations: PluginRegistrations;
-  counts: { frames: number; bars: number; capabilities: number; variantStyles: number };
+  counts: {
+    frames: number;
+    bars: number;
+    capabilities: number;
+    variantStyles: number;
+    connectChanges: number;
+  };
   /** Every Grid column `ColumnChrome` was asked for, in order — that seam is a delegation. */
   columns: GridColumnInput[];
 }
 
 function harness(): Harness {
-  const counts = { frames: 0, bars: 0, capabilities: 0, variantStyles: 0 };
+  const counts = { frames: 0, bars: 0, capabilities: 0, variantStyles: 0, connectChanges: 0 };
   const columns: GridColumnInput[] = [];
   const ports: PluginRegistrationPorts = {
     requestFrame: () => {
@@ -36,6 +42,9 @@ function harness(): Harness {
     },
     refreshVariantStyles: () => {
       counts.variantStyles += 1;
+    },
+    connectHandlersChanged: () => {
+      counts.connectChanges += 1;
     },
     registerGridColumn: (column): Disposer => {
       columns.push(column);
@@ -84,6 +93,20 @@ describe('PluginRegistrations — what each seam invalidates', () => {
 
     dispose();
     expect(counts).toMatchObject({ bars: 2, frames: 2, capabilities: 2, variantStyles: 2 });
+  });
+
+  it('a connect handler tells the shell when the first one arrives and the last one leaves', () => {
+    const { registrations, counts } = harness();
+
+    const disposeFirst = registrations.registerConnectHandler(() => {});
+    const disposeSecond = registrations.registerConnectHandler(() => {});
+    expect(registrations.connectHandlers.any).toBe(true);
+    expect(counts.connectChanges).toBe(2);
+
+    disposeFirst();
+    disposeSecond();
+    expect(registrations.connectHandlers.any).toBe(false);
+    expect(counts.connectChanges).toBe(4);
   });
 
   it('a Grid column asks for nothing here — `ColumnChrome` owns that seam’s own refresh', () => {

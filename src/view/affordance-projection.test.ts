@@ -157,3 +157,34 @@ describe('projectAffordances (D-S3-6)', () => {
     });
   });
 });
+
+describe('projectAffordances — connect', () => {
+  it('names the hovered bar connectable only when its connect capability resolves true', () => {
+    const open = projectAffordances({
+      hoveredBarId: BAR_A,
+      soleSelectedEntryId: undefined,
+      barIdsForEntry: oneBarEach,
+      canGesture: (capability) => capability === 'connect',
+    });
+    const closed = projectAffordances({
+      hoveredBarId: BAR_A,
+      soleSelectedEntryId: undefined,
+      barIdsForEntry: oneBarEach,
+      canGesture: () => false,
+    });
+
+    expect(open.connectableBarId).toBe(BAR_A);
+    expect(closed.connectableBarId).toBeUndefined();
+  });
+
+  it('names nothing connectable for a selected bar that is not hovered', () => {
+    const result = projectAffordances({
+      hoveredBarId: undefined,
+      soleSelectedEntryId: A,
+      barIdsForEntry: oneBarEach,
+      canGesture: () => true,
+    });
+
+    expect(result.connectableBarId).toBeUndefined();
+  });
+});

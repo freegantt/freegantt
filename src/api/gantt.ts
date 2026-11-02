@@ -79,7 +79,12 @@ import type {
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
 // `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
 // constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
-import { attachEntryGestures, attachKeyboardEditing, attachColumnGestures } from '../interaction/index.js';
+import {
+  attachEntryGestures,
+  attachKeyboardEditing,
+  attachColumnGestures,
+  attachConnect,
+} from '../interaction/index.js';
 
 /** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13). */
 export interface DateLineInput {
@@ -442,6 +447,7 @@ export class Gantt<TProps = unknown> {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,
         columnGestures: attachColumnGestures,
+        connect: attachConnect,
         // S3.3: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset`
         // interface ("a view never opens a transaction"). This class holds the full `api/Dataset`,
         // so a committed gesture draft reaches the store through here, not through the shell.

@@ -686,3 +686,31 @@ describe('resolveCapabilities — reorder and canPlace (#425)', () => {
     expect(caps.canPlace(child, entryId('other'))).toBe(false);
   });
 });
+
+describe('resolveCapabilities — connect', () => {
+  const resolve = (capabilities?: Capabilities) =>
+    resolveCapabilities({
+      fieldFor: () => undefined,
+      ...(capabilities === undefined ? {} : { capabilities }),
+    });
+
+  it('is offered by default, because a connect drag writes no Field of core’s', () => {
+    expect(resolve().can('connect', entry())).toBe(true);
+  });
+
+  it('follows the consumer’s own rule, per Entry', () => {
+    const rules = resolve({ connect: (candidate) => candidate.id !== 'e1' });
+
+    expect(rules.can('connect', entry())).toBe(false);
+    expect(rules.can('connect', entry({ id: 'e2' }))).toBe(true);
+  });
+
+  it('a variant can close it too', () => {
+    const rules = resolveCapabilities({
+      fieldFor: () => undefined,
+      variantCapabilitiesFor: variantAllows('leaf', { connect: false }),
+    });
+
+    expect(rules.can('connect', entry())).toBe(false);
+  });
+});

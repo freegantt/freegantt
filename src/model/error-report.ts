@@ -79,6 +79,9 @@ export type BuiltInReportCode =
   // there escapes into a native `pointerup` listener and no caller can reach it. `severity:
   // 'error'`, not `'warning'`: the gesture is caught, but the edit the user made is gone.
   | 'gesture-commit-failed'
+  // A plugin's connect handler threw while core ran the drop. The other handlers still run, and the
+  // `connect` event still fires.
+  | 'connect-handler-failed'
   | 'scale-options-ignored'
   | 'rollup-corrected'
   // ADR 0020: a hierarchy source answered with an id no Entry holds, or with a chain that loops
