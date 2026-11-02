@@ -262,3 +262,4 @@ where they do something beyond re-export.
 | file | exports | what it is for |
 | --- | --- | --- |
 | `scheduling/index.ts` | — | The first-party default plugin's pure engine + the `EditExtender` occupancy. |
+| `scheduling/working-calendar.ts` | `workingCalendar(), WorkingCalendar, WorkingCalendarOptions, OffTimeCover, Workday, InvalidWorkingCalendarError` | An immutable set of workdays and holidays. It answers `isWorkday`, `addWorkdays` and `workdaysBetween` with integer day arithmetic, and `offTime()` returns a `TimeCover`-shaped cover for `timeShading()`. |
