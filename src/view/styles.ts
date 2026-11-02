@@ -458,6 +458,7 @@ ${DARK_COLOR_TOKENS}
 .fg-connectors-svg { position: absolute; top: 0; left: 0; overflow: hidden; }
 .fg-connector { fill: none; stroke: currentColor; stroke-width: 1.5px; pointer-events: stroke; cursor: pointer; }
 .fg-connector:focus { outline: none; }
+.fg-connector-text { fill: currentColor; font-size: 11px; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--fg-pane-bg); stroke-width: 3px; pointer-events: none; user-select: none; }
 .fg-connector[data-flag~="selected"], .fg-connector:focus-visible { stroke: var(--fg-selection-color); stroke-width: 3px; }
 .fg-connector[data-flag~="inactive"] { stroke-dasharray: 4 3; opacity: 0.6; }
 .fg-connector[data-flag~="cycle"] { stroke: var(--fg-warn); }

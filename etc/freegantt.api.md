@@ -371,6 +371,7 @@ export interface ConnectorInput {
     // (undocumented)
     id: string;
     label?: string;
+    showLabel?: boolean;
     // (undocumented)
     to: ConnectorEnd;
 }
@@ -993,6 +994,7 @@ export function entryDependencies(options?: EntryDependenciesOptions): EntryDepe
 export interface EntryDependenciesOptions {
     readonly connectByDrag?: boolean;
     readonly labelField?: string;
+    readonly showLabels?: boolean;
 }
 
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts

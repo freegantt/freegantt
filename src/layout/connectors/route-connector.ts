@@ -67,3 +67,24 @@ export function routeConnector(from: ConnectorAnchor, to: ConnectorAnchor): Poin
     end,
   ]);
 }
+
+/** The point halfway along the line, measured by length. An empty line has none. */
+export function midpointOf(points: readonly Point[]): Point | undefined {
+  const first = points[0];
+  if (first === undefined) return undefined;
+  const lengths = points.slice(1).map((point, index) => {
+    const previous = points[index]!;
+    return Math.hypot(point.x - previous.x, point.y - previous.y);
+  });
+  let remaining = lengths.reduce((sum, length) => sum + length, 0) / 2;
+  for (const [index, length] of lengths.entries()) {
+    if (remaining <= length) {
+      const from = points[index]!;
+      const to = points[index + 1]!;
+      const along = length === 0 ? 0 : remaining / length;
+      return { x: from.x + (to.x - from.x) * along, y: from.y + (to.y - from.y) * along };
+    }
+    remaining -= length;
+  }
+  return first;
+}

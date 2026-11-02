@@ -205,6 +205,7 @@ describe('connectors', () => {
         to: { entryId: entryId('b'), edge: toEdge },
         flags: {},
         label: 'Task a → Task b',
+        showLabel: false,
       },
     ]);
   });

@@ -4,7 +4,7 @@ import { Dataset } from '../../api/dataset.js';
 import { entryDependencies } from './entry-dependencies.js';
 import type { DependencyRemoval } from './entry-dependencies.js';
 
-type Connector = { id: string; flags: { selected?: boolean }; label: string };
+type Connector = { id: string; flags: { selected?: boolean }; label: string; showLabel: boolean };
 type DomHandler = (event: unknown, target: unknown) => void;
 type KeyHandler = (event: { target: unknown }) => void | false;
 
@@ -250,6 +250,19 @@ describe('removing a Dependency with the keyboard', () => {
 });
 
 describe('connector label', () => {
+  it('asks core to draw the label as text only with showLabels', () => {
+    expect(
+      mount()
+        .connectors()
+        .map((c) => c.showLabel),
+    ).toEqual([false, false]);
+    expect(
+      mount({ showLabels: true })
+        .connectors()
+        .map((c) => c.showLabel),
+    ).toEqual([true, true]);
+  });
+
   it('reads "<from> → <to>" from the name Field by default', () => {
     expect(
       mount()

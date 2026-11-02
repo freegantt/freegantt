@@ -51,6 +51,17 @@ function frameOf(
 }
 
 describe('connectors in the frame', () => {
+  it('puts a text anchor at the middle of the line only when the provider shows the label', () => {
+    const shown = { ...finishToStart, label: 'A → B', showLabel: true };
+    const hidden = { ...finishToStart, label: 'A → B' };
+
+    expect(frameOf([() => [shown]]).connectors[0]?.labelAnchor).toEqual({ x: 1484, y: 48 });
+    expect(frameOf([() => [hidden]]).connectors[0]?.labelAnchor).toBeUndefined();
+    expect(
+      frameOf([() => [{ ...finishToStart, showLabel: true }]]).connectors[0]?.labelAnchor,
+    ).toBeUndefined();
+  });
+
   it('is empty when no provider is registered', () => {
     expect(frameOf([]).connectors).toEqual([]);
   });
