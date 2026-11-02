@@ -5,6 +5,7 @@ declare global {
   interface Window {
     __dataset: import('freegantt').Dataset;
     __gantt: import('freegantt').Gantt;
+    __dependencies: import('freegantt').EntryDependencies;
   }
 }
 
@@ -151,4 +152,89 @@ test('dragging from a start port to a start port creates a Start-to-start Depend
 
   await page.evaluate(() => window.__gantt.commands.run('freegantt.undo'));
   await expect(created).toHaveCount(0);
+});
+
+// Select, move through and delete a connector. A connector line is thin, so a click aims at the
+// middle of its stroke, which only a browser can measure.
+
+const lineOf = (page: Page, id: string) => page.locator(`#gantt [data-connector-id="dependency:${id}"]`);
+
+/** The screen point at the middle of a line's stroke. */
+async function strokeMiddleOf(
+  locator: import('@playwright/test').Locator,
+): Promise<{ x: number; y: number }> {
+  return locator.evaluate((node) => {
+    const path = node as unknown as SVGGeometryElement;
+    const point = path.getPointAtLength(path.getTotalLength() / 2);
+    const matrix = path.getScreenCTM()!;
+    return { x: point.x * matrix.a + matrix.e, y: point.y * matrix.d + matrix.f };
+  });
+}
+
+test('every connector reads in the accessibility tree, and one is the tab stop', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await expect(page.getByRole('img', { name: 'Foundation 1 → Foundation 2' })).toHaveCount(1);
+  await expect(page.locator('#gantt [data-connector-id][tabindex="0"]')).toHaveCount(1);
+});
+
+test('a click on a connector focuses it and leaves the Entry selection alone', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const before = await page.evaluate(() => window.__gantt.selectedEntryIds);
+
+  const point = await strokeMiddleOf(lineOf(page, 'dep-fs'));
+  await page.mouse.click(point.x, point.y);
+
+  await expect(lineOf(page, 'dep-fs')).toBeFocused();
+  expect(await page.evaluate(() => window.__gantt.selectedEntryIds)).toEqual(before);
+});
+
+test('arrow keys move focus between connectors', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const ids = await connectorIds(page);
+  const order = await page
+    .locator('#gantt [data-connector-id]')
+    .evaluateAll((nodes) => nodes.map((node) => (node as SVGElement).dataset['connectorId']!));
+  expect(ids.length).toBeGreaterThan(1);
+
+  await page.locator(`#gantt [data-connector-id="${order[0]}"]`).focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.locator(`#gantt [data-connector-id="${order[1]}"]`)).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(page.locator(`#gantt [data-connector-id="${order[0]}"]`)).toBeFocused();
+});
+
+test('Delete on a focused connector removes its Dependency, and one undo restores it', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await lineOf(page, 'dep-fs').focus();
+
+  await page.keyboard.press('Delete');
+
+  await expect(lineOf(page, 'dep-fs')).toHaveCount(0);
+  await expect(page.locator('#dependency-readout')).not.toContainText('dep-fs');
+  await expect(page.locator('#removal-readout')).toContainText('dep-fs');
+  expect(await page.evaluate(() => window.__dataset.entries.has('foundation-1'))).toBe(true);
+
+  await page.evaluate(() => window.__gantt.commands.run('freegantt.undo'));
+  await expect(lineOf(page, 'dep-fs')).toHaveCount(1);
+  await expect(page.locator('#dependency-readout')).toContainText('dep-fs');
+});
+
+test('Delete on a focused bar still removes the Entry, not a Dependency', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const dependenciesBefore = await page.evaluate(() => window.__dependencies.all().length);
+  await page.locator('#gantt .fg-bar[data-bar-id^="structure-4"]').focus();
+
+  await page.keyboard.press('Delete');
+
+  await expect(page.locator('#gantt .fg-bar[data-bar-id^="structure-4"]')).toHaveCount(0);
+  expect(await page.evaluate(() => window.__dependencies.all().length)).toBeLessThanOrEqual(
+    dependenciesBefore,
+  );
+  expect(await page.evaluate(() => window.__dataset.entries.has('structure-4'))).toBe(false);
 });

@@ -12,7 +12,7 @@ import type { PlannedRow } from '../rows/row-source.js';
 import type { FrameConnector } from './frame-connector.js';
 import { boundsOf, boundsTouchWindow, clipPath } from './clip-path.js';
 import type { ConnectorWindow } from './clip-path.js';
-import { routeConnector } from './route-connector.js';
+import { midpointOf, routeConnector } from './route-connector.js';
 import type { ConnectorAnchor, Point } from './route-connector.js';
 
 export interface ConnectorRunInput {
@@ -35,6 +35,7 @@ interface RoutedConnector {
   flagTokens: string;
   points: readonly Point[];
   bounds: ConnectorWindow;
+  labelAnchor?: Point;
 }
 
 /** Call: `mergeSameId(inputs)`. The first provider owns an id. A later one can only add `true` flags. */
@@ -138,7 +139,15 @@ export class ConnectorRouter {
     if (from === undefined || to === undefined) return undefined;
     const points = routeConnector(from, to);
     const flags = trueFlagsOf(connector.flags);
-    return { input: connector, flags, flagTokens: flagTokensOf(flags), points, bounds: boundsOf(points) };
+    const labelAnchor = connector.showLabel === true && connector.label ? midpointOf(points) : undefined;
+    return {
+      input: connector,
+      flags,
+      flagTokens: flagTokensOf(flags),
+      points,
+      bounds: boundsOf(points),
+      ...(labelAnchor !== undefined ? { labelAnchor } : {}),
+    };
   }
 
   /** The end's own bar edge. An end in a collapsed group attaches to its nearest ancestor with a row.
@@ -184,6 +193,7 @@ export class ConnectorRouter {
       flagTokens: connector.flagTokens,
       ...(input.class !== undefined ? { class: input.class } : {}),
       ...(input.label !== undefined ? { label: input.label } : {}),
+      ...(connector.labelAnchor !== undefined ? { labelAnchor: connector.labelAnchor } : {}),
     };
   }
 }

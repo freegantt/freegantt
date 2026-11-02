@@ -117,6 +117,9 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
+export type BeforeDependencyRemoveHandler = (removal: DependencyRemoval) => void | false | Promise<void | false>;
+
+// @public
 export interface BlockedMoveDiagnostic {
     // (undocumented)
     readonly code: 'blocked-move';
@@ -342,7 +345,7 @@ export interface ConnectEnds {
 export type ConnectHandler = (ends: ConnectEnds) => void;
 
 // @public
-export const CONNECTOR_FLAG_KEYS: readonly ["inactive", "cycle"];
+export const CONNECTOR_FLAG_KEYS: readonly ["inactive", "cycle", "selected"];
 
 // @public
 export type ConnectorEdge = 'start' | 'end';
@@ -368,6 +371,7 @@ export interface ConnectorInput {
     // (undocumented)
     id: string;
     label?: string;
+    showLabel?: boolean;
     // (undocumented)
     to: ConnectorEnd;
 }
@@ -703,6 +707,12 @@ export interface Dependency {
 }
 
 // @public
+export interface DependencyEvents {
+    beforeDependencyRemove: BeforeDependencyRemoveHandler;
+    dependencyRemove: DependencyRemoveHandler;
+}
+
+// @public
 export interface DependencyInput {
     // (undocumented)
     readonly fromId: EntryId | string;
@@ -723,6 +733,15 @@ export interface DependencyLag {
     // (undocumented)
     readonly value: number;
 }
+
+// @public
+export interface DependencyRemoval {
+    // (undocumented)
+    readonly dependency: Dependency;
+}
+
+// @public (undocumented)
+export type DependencyRemoveHandler = (removal: DependencyRemoval) => void;
 
 // @public
 export class DependencyStoreNotInstalledError extends FreeGanttError {
@@ -773,6 +792,7 @@ export interface DomEventOptions {
 
 // @public
 export interface DomTarget {
+    connectorId?: string;
     element: HTMLElement;
     // (undocumented)
     entry?: Entry | undefined;
@@ -961,6 +981,7 @@ export interface EntryDelta<TProps = Record<string, unknown>> {
 export interface EntryDependencies extends DataPlugin {
     add(dependency: DependencyInput): void;
     all(): readonly Dependency[];
+    on<Name extends keyof DependencyEvents>(name: Name, handler: DependencyEvents[Name]): Disposer;
     predecessorsOf(entry: EntryId | string): readonly Dependency[];
     remove(id: string): void;
     replaceAll(dependencies: readonly DependencyInput[]): void;
@@ -972,6 +993,8 @@ export function entryDependencies(options?: EntryDependenciesOptions): EntryDepe
 // @public
 export interface EntryDependenciesOptions {
     readonly connectByDrag?: boolean;
+    readonly labelField?: string;
+    readonly showLabels?: boolean;
 }
 
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
@@ -1530,6 +1553,7 @@ export interface GanttDom {
     readonly bounds: DOMRect;
     cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined;
     cellText(cell: HTMLElement): string;
+    connectorFor(id: string): HTMLElement | undefined;
     owns(node: Node): boolean;
     readonly paneBounds: Record<PaneName, DOMRect>;
     paneOf(node: Node): PaneName | undefined;
@@ -1887,6 +1911,9 @@ export interface KeyEventLike {
     // (undocumented)
     target: EventTarget | null;
 }
+
+// @public
+export type KeyHandler = (event: KeyEventLike) => void | false;
 
 // @public
 export function lastCoveredInstant(span: {
@@ -2301,7 +2328,7 @@ export interface Refusable {
 }
 
 // @public
-export type RegisterKeyHandler = (chord: string, handler: (event: KeyEventLike) => void, options?: {
+export type RegisterKeyHandler = (chord: string, handler: KeyHandler, options?: {
     captureInEditable?: boolean;
 }) => () => void;
 
@@ -2752,7 +2779,7 @@ export type SuccessorMoves = 'pushAndPull' | 'pushOnly';
 export function summary(overrides?: Partial<EntryVariant>): EntryVariant;
 
 // @public
-export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter';
+export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter' | 'connector';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';

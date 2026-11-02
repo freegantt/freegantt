@@ -59,7 +59,7 @@ import { toGridColumn } from './grid-columns.js';
 
 /** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
  *  stands for (review A4). `target` is `undefined` when the event landed inside this Gantt, but on
- *  none of the five things `targetUnder` names. A pane's own padding and an empty stretch of
+ *  none of the six things `targetUnder` names. A pane's own padding and an empty stretch of
  *  timeline are two such places. An event outside this Gantt never reaches the handler at all. */
 export type DomEventHandler<K extends keyof DocumentEventMap> = (
   event: DocumentEventMap[K],
@@ -181,6 +181,10 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  run. A plugin that builds its own `Popup` (over `view.overlay` below) is that caller. Its
      *  Escape dismissal then wins by the keymap's own newest-first order, the same way
      *  `extensions/popup.ts`'s own dismissal does.
+     *
+     *  The handler may return `false` to decline. The key then goes to the next older binding, and
+     *  core keeps its own meaning for a key the plugin does not want. A plugin that binds `Delete`
+     *  or an arrow must decline every target it does not own.
      *
      *  Two things differ from `registerKeybinding`. This one is callable any time the plugin is
      *  installed, not only while `setup` runs. That is because a popup opens and closes for as long

@@ -65,4 +65,51 @@ describe('connector paint', () => {
     expect(svg?.getAttribute('width')).toBe('500');
     expect(svg?.getAttribute('height')).toBe('300');
   });
+
+  describe('label text', () => {
+    it('draws the label as aria-hidden text at the anchor when the frame carries one', () => {
+      const { layer, attachment } = mount();
+      attachment.sync([{ ...related, labelAnchor: { x: 15, y: 30 } }], 500, 200, 100);
+      const text = layer.querySelector('text.fg-connector-text');
+      expect(text?.textContent).toBe('A relates to B');
+      expect(text?.getAttribute('x')).toBe('15');
+      expect(text?.getAttribute('y')).toBe('30');
+      expect(text?.getAttribute('aria-hidden')).toBe('true');
+    });
+
+    it('draws no text node when the frame carries no anchor, and drops the text a later frame omits', () => {
+      const { layer, attachment } = mount();
+      attachment.sync([related], 500, 200, 100);
+      expect(layer.querySelectorAll('text')).toHaveLength(0);
+      attachment.sync([{ ...related, labelAnchor: { x: 15, y: 30 } }], 500, 200, 100);
+      expect(layer.querySelectorAll('text')).toHaveLength(1);
+      attachment.sync([related], 500, 200, 100);
+      expect(layer.querySelectorAll('text')).toHaveLength(0);
+    });
+  });
+
+  describe('focus', () => {
+    const second: FrameConnector = { ...related, id: 'second', flags: {}, flagTokens: '' };
+    const tabIndexOf = (layer: HTMLElement, id: string): string | null =>
+      layer.querySelector(`[data-connector-id="${id}"]`)?.getAttribute('tabindex') ?? null;
+
+    it('makes the first labelled connector the one tab stop when none is selected', () => {
+      const { layer, attachment } = mount();
+      const plain = { ...related, id: 'plain', label: '', flags: {}, flagTokens: '' };
+      attachment.sync([plain, second, { ...second, id: 'third' }], 500, 200, 100);
+      expect(tabIndexOf(layer, 'plain')).toBeNull();
+      expect(tabIndexOf(layer, 'second')).toBe('0');
+      expect(tabIndexOf(layer, 'third')).toBe('-1');
+    });
+
+    it('moves the tab stop to the selected connector and marks it current', () => {
+      const { layer, attachment } = mount();
+      const selected = { ...second, id: 'third', flags: { selected: true }, flagTokens: 'selected' };
+      attachment.sync([second, selected], 500, 200, 100);
+      expect(tabIndexOf(layer, 'second')).toBe('-1');
+      expect(tabIndexOf(layer, 'third')).toBe('0');
+      expect(layer.querySelector('[data-connector-id="third"]')?.getAttribute('aria-current')).toBe('true');
+      expect(layer.querySelector('[data-connector-id="second"]')?.hasAttribute('aria-current')).toBe(false);
+    });
+  });
 });

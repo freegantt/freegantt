@@ -213,7 +213,7 @@ export type { GanttDom, DomTarget, PaneName, DomEventHandler, DomEventOptions } 
 // `RegisterKeyHandler` as a second argument, and a plugin author passes the same bound method it
 // already had: `ctx.interaction.registerKeyHandler`.
 export { createPopup } from '../extensions/popup.js';
-export type { RegisterKeyHandler, KeyEventLike } from '../extensions/keymap.js';
+export type { RegisterKeyHandler, KeyHandler, KeyEventLike } from '../extensions/keymap.js';
 export type {
   Popup,
   PopupOptions,
@@ -249,9 +249,13 @@ export type { ShadingRule, CoverPredicate } from '../extensions/features/time-sh
 // draws a connector for each one and needs no scheduling plugin.
 export { entryDependencies, ENTRY_DEPENDENCIES_ID } from '../extensions/features/entry-dependencies.js';
 export type {
+  BeforeDependencyRemoveHandler,
   Dependency,
+  DependencyEvents,
   DependencyInput,
   DependencyLag,
+  DependencyRemoval,
+  DependencyRemoveHandler,
   DependencyType,
   EntryDependencies,
   EntryDependenciesOptions,
