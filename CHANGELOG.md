@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- `schedule()` reads two more constraint kinds. `{ kind: 'finishNoLaterThan', date }` is a ceiling: the engine never moves an Entry to meet it. When a dependency pushes the finish past it, the dependency wins and the new `constraint-violated` diagnostic names the constraint and the Entry. `{ kind: 'mustStartOn', date }` is a hard date. It wins over a dependency, and a dependency it breaks gives a `blocked-move` diagnostic with the new reason `'mustStartOn'`. The order is: manually scheduled, `mustStartOn`, dependency, `startNoEarlierThan`. `defaultPolicy.precedence` and `ScheduleRuleKind` gain `'mustStartOn'`. New types `ScheduleConstraintKind` and `ConstraintViolationDiagnostic`.
 - `schedule({ calendar })` counts workdays. `calendar` is `{ time, calendar?, ofEntry? }`: the Dataset's `ZonedTime`, a `WorkingCalendar` for every Entry, and a map from Entry id to its own `WorkingCalendar`. A day lag skips the days off, a negative lag too. A moved Entry keeps its length in workdays. A lag counts in the calendar of its successor, the default of Primavera P6. A week, month or year lag gives `unsupported-lag-unit` when a calendar applies. With no calendar, a day is 24 hours as before. New type `ScheduleCalendar`.
 - `scheduling({ calendar, calendars, calendarField })` counts lags and moves in workdays. Pass the same `WorkingCalendar` that `timeShading()` shades from, and the shading and the schedule agree. `calendars` is a record of named calendars. `calendarField` is the key of a Field whose value names one. An Entry with no value, or an unknown name, uses `calendar`, then 24-hour days. All three are optional.
 - A decoration provider can return `{ kind: 'rowSpan', rowId, start, end, class? }`. The Gantt paints a box inside that row between the two Instants, on `underBars` or `overBars`. The node has the class `fg-row-span` and the consumer's `class`, and it takes no pointer events and no focus. A row outside the window paints nothing. The new type `RowSpan` is the resolved shape. The optional `text` is a plain string the Gantt paints at the span's end, inside the same node.
@@ -29,6 +30,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 - `scheduling().on('scheduleDiagnostics', handler)` reports cycles, blocked moves and unreadable Dependencies after each commit. `scheduling().diagnostics()` reads the latest. The connectors of a cycle carry the `cycle` flag.
 - New error `SchedulingNotInstalledError` (`code: 'scheduling-not-installed'`) for a `scheduling()` call before a Dataset installs it.
 - The harness has a "Scheduling" page. It installs `scheduling()` on a chain of six tasks joined by all four Dependency types and one negative lag. Drag a task later and its successors move. Drag it earlier and they follow. One undo restores them all. A Manual column toggles `manuallyScheduled`, and a loop of three tasks shows its members from the diagnostics.
+
+### Changed
+
+- A `startNoEarlierThan` floor now moves an Entry that has no incoming dependency. A floor later than the start moves the Entry later. Before, such a floor changed nothing.
 
 ### Fixed
 

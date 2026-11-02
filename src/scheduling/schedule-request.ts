@@ -23,14 +23,28 @@ export interface ScheduleDependency {
 export type ProposedEntryDates = Partial<Record<ScheduleField, Instant>>;
 
 /**
- * A date rule on one Entry. The engine reads one kind today. A new kind joins this union
- * with its own `kind` tag.
+ * A date rule on one Entry. The precedence is: manually scheduled, then `mustStartOn`, then a
+ * dependency, then `startNoEarlierThan`.
  */
-export type ScheduleConstraint = {
-  /** The Entry never starts before `date`. A dependency can still move it later. */
-  readonly kind: 'startNoEarlierThan';
-  readonly date: Instant;
-};
+export type ScheduleConstraint =
+  | {
+      /** The Entry never starts before `date`. A dependency can still move it later. */
+      readonly kind: 'startNoEarlierThan';
+      readonly date: Instant;
+    }
+  | {
+      /** The Entry should finish by `date`. The engine never moves it to meet the date. A dependency that pushes the finish past it wins, and a diagnostic names the constraint. */
+      readonly kind: 'finishNoLaterThan';
+      readonly date: Instant;
+    }
+  | {
+      /** The Entry starts on `date`. It wins over a dependency, and a dependency it breaks gives a diagnostic. */
+      readonly kind: 'mustStartOn';
+      readonly date: Instant;
+    };
+
+/** The name of a constraint rule. */
+export type ScheduleConstraintKind = ScheduleConstraint['kind'];
 
 /**
  * How a successor follows its predecessors. `pushAndPull` moves it to the earliest date its
@@ -49,7 +63,7 @@ export interface ScheduleRequest {
   readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
   /** Entries the engine must never move. */
   readonly manuallyScheduled?: ReadonlySet<EntryId>;
-  /** One constraint per Entry. An Entry with no incoming dependency never moves, so its constraint does not apply. */
+  /** One constraint per Entry. A `startNoEarlierThan` floor moves an Entry that has no dependency, too. */
   readonly constraints?: ReadonlyMap<EntryId, ScheduleConstraint>;
   /**
    * The working calendars. With none, a day is 24 hours. With one, a lag counts workdays and a moved

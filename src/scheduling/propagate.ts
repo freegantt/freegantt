@@ -11,7 +11,7 @@ import type {
   SuccessorMoves,
 } from './schedule-request.js';
 import type { BlockedMoveDiagnostic, ScheduleDiagnostic } from './schedule-result.js';
-import type { SchedulingPolicy } from './scheduling-policy.js';
+import type { SchedulingPolicy, ScheduleRuleKind } from './scheduling-policy.js';
 
 export const FIELDS: readonly ScheduleField[] = Object.freeze(['start', 'end'] as const);
 
@@ -109,7 +109,7 @@ function edgesToRead(
   return readsAll ? incoming : incoming.filter(predecessorChanged);
 }
 
-/** Applies every demand that reaches one Entry, or reports why it cannot. */
+/** Places one Entry by its dependencies and its constraint, then reports a constraint it breaks. */
 export function moveSuccessor(
   run: Run,
   index: number,
@@ -118,23 +118,41 @@ export function moveSuccessor(
 ): void {
   const node = run.nodes[index] as Node;
   if (!isDated(node)) return;
+  const constraint = run.constraints.get(node.id);
+  if (constraint?.kind === 'mustStartOn' && holdsMustStart(run, node)) {
+    holdStart(run, node, incoming, constraint.date);
+  } else {
+    followDependencies(run, node, incoming, fullRecompute, constraint);
+  }
+  if (constraint) reportBrokenConstraint(run, node, incoming, constraint);
+}
+
+/** Applies every demand that reaches one Entry, or reports why it cannot. */
+function followDependencies(
+  run: Run,
+  node: Node & { start: Instant; end: Instant },
+  incoming: readonly Edge[],
+  fullRecompute: boolean,
+  constraint: ScheduleConstraint | undefined,
+): void {
   const demands: Demand[] = [];
   for (const edge of edgesToRead(run, node, incoming, fullRecompute)) {
     const demand = demandOf(edge, run.nodes);
     if (demand) demands.push(demand);
   }
-  if (demands.length === 0) return;
-
   const violations = demands.filter((demand) => demand.delta > 0);
   if (manualBeatsDependency(run, node)) {
     if (violations.length > 0) report(run, node, violations, 'manuallyScheduled');
     return;
   }
+  // A start floor moves an Entry later even when no dependency reaches it. It never moves it earlier alone.
+  const floorDate = startFloorOf(constraint);
+  const floorDelta =
+    floorDate && diffMs(node.days.settle('start', floorDate), node.days.settle('start', node.start));
+  if (demands.length === 0 && !(floorDelta && floorDelta > 0)) return;
+
   const moves = movableFields(run.policy, node);
   const dependencyDeltas = deltasByField(demands, undefined, true);
-  const floor = run.constraints.get(node.id);
-  const floorDelta =
-    floor && diffMs(node.days.settle('start', floor.date), node.days.settle('start', node.start));
   const deltas = deltasByField(demands, floorDelta, mayPull(run, node));
   const shift = chooseShift(moves, deltas);
   const blockedField = FIELDS.find((field) => (dependencyDeltas[field] ?? 0) > 0 && shift[field] === 0);
@@ -152,13 +170,78 @@ export function moveSuccessor(
     report(run, node, violations, node.proposedFields.has(blockedField) ? 'proposed' : 'policy');
 }
 
+/** The date before which the constraint stops a start. A `mustStartOn` date that loses to a dependency stops the start too. */
+function startFloorOf(constraint: ScheduleConstraint | undefined): Instant | undefined {
+  return constraint?.kind === 'finishNoLaterThan' ? undefined : constraint?.date;
+}
+
 function manualBeatsDependency(run: Run, node: Node): boolean {
-  if (!run.manuallyScheduled.has(node.id)) return false;
-  const rank = (kind: 'manuallyScheduled' | 'dependency'): number => {
+  return run.manuallyScheduled.has(node.id) && ranksAbove(run, 'manuallyScheduled', 'dependency');
+}
+
+/** Does a must-start-on date hold on this Entry? A manually scheduled Entry or a policy that ranks the dependency higher overrules it. */
+function holdsMustStart(run: Run, node: Node): boolean {
+  if (run.manuallyScheduled.has(node.id) && ranksAbove(run, 'manuallyScheduled', 'mustStartOn')) return false;
+  return ranksAbove(run, 'mustStartOn', 'dependency');
+}
+
+function ranksAbove(run: Run, winner: ScheduleRuleKind, loser: ScheduleRuleKind): boolean {
+  const rank = (kind: ScheduleRuleKind): number => {
     const position = run.policy.precedence.indexOf(kind);
     return position < 0 ? Number.POSITIVE_INFINITY : position;
   };
-  return rank('manuallyScheduled') < rank('dependency');
+  return rank(winner) < rank(loser);
+}
+
+/** Puts the start on the constraint date, then reports each dependency that wants it later. */
+function holdStart(
+  run: Run,
+  node: Node & { start: Instant; end: Instant },
+  incoming: readonly Edge[],
+  date: Instant,
+): void {
+  const moves = movableFields(run.policy, node);
+  const delta = diffMs(node.days.settle('start', date), node.days.settle('start', node.start));
+  const shift = chooseShift(moves, { start: delta });
+  const placed = shiftedSpan(node, moves, shift);
+  const inverted = (shift.start > 0 || shift.end < 0) && placed.start > placed.end;
+  if (!inverted && (shift.start !== 0 || shift.end !== 0)) {
+    node.start = placed.start;
+    node.end = placed.end;
+    node.changed = true;
+  }
+  const violations = demandsOf(incoming, run.nodes).filter((demand) => demand.delta > 0);
+  if (violations.length > 0) report(run, node, violations, 'mustStartOn');
+}
+
+function demandsOf(incoming: readonly Edge[], nodes: readonly Node[]): Demand[] {
+  return incoming.flatMap((edge) => demandOf(edge, nodes) ?? []);
+}
+
+/** Reports a ceiling the finish passes, or a must-start-on date the Entry could not reach. */
+function reportBrokenConstraint(
+  run: Run,
+  node: Node,
+  incoming: readonly Edge[],
+  constraint: ScheduleConstraint,
+): void {
+  if (!isDated(node) || constraint.kind === 'startNoEarlierThan') return;
+  const broken =
+    constraint.kind === 'finishNoLaterThan'
+      ? diffMs(node.days.settle('end', node.end), node.days.settle('end', constraint.date)) > 0
+      : diffMs(node.days.settle('start', node.start), node.days.settle('start', constraint.date)) !== 0;
+  if (!broken) return;
+  // A dependency holds the finish when it asks for no earlier date than the Entry has.
+  const holding =
+    constraint.kind === 'finishNoLaterThan'
+      ? demandsOf(incoming, run.nodes).filter((demand) => demand.delta >= 0)
+      : [];
+  run.diagnostics.push({
+    code: 'constraint-violated',
+    constraint: constraint.kind,
+    entryId: node.id,
+    dependencyIds: holding.map((demand) => demand.dependencyId),
+  });
 }
 
 /**
