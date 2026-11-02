@@ -29,3 +29,4 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | D8 | Holidays | The calendar is data that the consumer developer sets. No end-user holiday entry. Holidays accept `InstantInput`, like `dates()`. |
 | D3b | Successor default | Research: Project, P6 and Syncify all pull. Default is push and pull. "Push only" is a consumer option. |
 | D4 | User date breaks a link | Scheduled Entry: the user's date becomes a "start no earlier than" floor and the link still wins. Manually scheduled Entry: the date stays and a diagnostic marks the broken link. Consumer option: "the user's date always wins". |
+| D2 | ADR 0041 | Accepted with no keyboard connect in core. A keyboard user adds a Dependency in the consumer's Entry edit form, through the `entryDependencies()` host API. |
