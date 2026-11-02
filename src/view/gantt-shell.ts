@@ -935,6 +935,7 @@ export class GanttShell {
       // `removed`. A sync (#517) is not a baseline: it keeps a kept id's collapse state and
       // selection, so only a load resets here.
       if (changeSet.origin === 'load') this.#treeCollapse.resetToStartState();
+      else if (changeSet.origin === 'sync') this.#treeCollapse.forgetRowsTheDataDropped();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       // A write can close a cell a painted affordance already sits on — a lock, for one (I14).
