@@ -70,3 +70,9 @@ document.querySelector<HTMLButtonElement>('#remove-entry-btn')!.addEventListener
   dataset.entries.remove('foundation-2');
 });
 dataset.on('change', showDependencies);
+
+// A Delete on a selected connector raises two plugin events. The page logs the second one.
+const removalReadout = document.querySelector<HTMLSpanElement>('#removal-readout')!;
+dependencies.on('dependencyRemove', ({ dependency }) => {
+  removalReadout.textContent = `Removed by key: ${dependency.id}`;
+});
