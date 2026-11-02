@@ -773,6 +773,7 @@ export interface DomEventOptions {
 
 // @public
 export interface DomTarget {
+    connectorId?: string;
     element: HTMLElement;
     // (undocumented)
     entry?: Entry | undefined;
@@ -2739,7 +2740,7 @@ export type SuccessorMoves = 'pushAndPull' | 'pushOnly';
 export function summary(overrides?: Partial<EntryVariant>): EntryVariant;
 
 // @public
-export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter';
+export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter' | 'connector';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';

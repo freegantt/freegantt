@@ -59,7 +59,7 @@ import { toGridColumn } from './grid-columns.js';
 
 /** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
  *  stands for (review A4). `target` is `undefined` when the event landed inside this Gantt, but on
- *  none of the five things `targetUnder` names. A pane's own padding and an empty stretch of
+ *  none of the six things `targetUnder` names. A pane's own padding and an empty stretch of
  *  timeline are two such places. An event outside this Gantt never reaches the handler at all. */
 export type DomEventHandler<K extends keyof DocumentEventMap> = (
   event: DocumentEventMap[K],

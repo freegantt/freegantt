@@ -26,6 +26,8 @@
 import {
   BAR_CLASS,
   COLUMN_HEADER_CLASS,
+  CONNECTOR_CLASS,
+  CONNECTOR_ID_KEY,
   ENTRY_ID_ATTRIBUTE,
   ENTRY_ID_KEY,
   FIELD_ATTRIBUTE,
@@ -45,7 +47,7 @@ import { SPLITTER_CLASS } from './pane-layout.js';
 import type { PaneLayout, PaneName } from './pane-layout.js';
 import type { FrameLayoutView } from '../layout/index.js';
 
-/** What one node in a Gantt's own DOM stands for. `kind` is `model/`'s `TargetKind`, the same five
+/** What one node in a Gantt's own DOM stands for. `kind` is `model/`'s `TargetKind`, the same six
  *  words `CommandTarget` already uses. One vocabulary, so a plugin that resolves a right-click and
  *  a command that filters on `when` say the same thing.
  *
@@ -67,6 +69,8 @@ export interface DomTarget {
    *  for a grouping header row. Never `undefined`, so a reader counts it without a fallback. */
   entryIds: readonly EntryId[];
   field?: FieldKey;
+  /** The provider's id for the connector. Filled for `'connector'` only. */
+  connectorId?: string;
 }
 
 /** This Gantt's own DOM, as questions (S5.3; review N1/A3). Reached by a plugin through
@@ -118,7 +122,7 @@ export interface GanttDom {
 /** Ordered by nothing: `Element.closest` answers with the *nearest* ancestor that matches any of
  *  these, so DOM depth decides. A cell is inside a row, so a cell wins over its row. A bar sits in
  *  the bar layer, and is inside no row at all. */
-const TARGET_SELECTOR = `.${BAR_CLASS}, .${ROW_LABEL_CLASS}, .${ROW_CELL_CLASS}, .${COLUMN_HEADER_CLASS}, .${SPLITTER_CLASS}, .${ROW_CLASS}`;
+const TARGET_SELECTOR = `.${BAR_CLASS}, .${CONNECTOR_CLASS}, .${ROW_LABEL_CLASS}, .${ROW_CELL_CLASS}, .${COLUMN_HEADER_CLASS}, .${SPLITTER_CLASS}, .${ROW_CLASS}`;
 
 /** What one `ContainerDom` reads to answer a pointer. `layout` is the frame's own questions
  *  (#185, #199, #212). A node states its own identity and nothing more. So every set a target names
@@ -150,6 +154,7 @@ export class ContainerDom implements GanttDom {
   #memoBarId: string | undefined;
   #memoEntryId: string | undefined;
   #memoField: string | undefined;
+  #memoConnectorId: string | undefined;
   #memoRowPlanRevision: number | undefined;
   #memoTarget: DomTarget | undefined;
 
@@ -168,6 +173,7 @@ export class ContainerDom implements GanttDom {
     const barIdAttr = element.dataset[BAR_ID_KEY];
     const entryIdAttr = element.dataset[ENTRY_ID_KEY];
     const fieldAttr = element.dataset[FIELD_KEY];
+    const connectorIdAttr = element.dataset[CONNECTOR_ID_KEY];
     const rowPlanRevision = this.#ports.layout.rowPlanRevision;
     if (
       this.#memoTarget !== undefined &&
@@ -175,6 +181,7 @@ export class ContainerDom implements GanttDom {
       this.#memoBarId === barIdAttr &&
       this.#memoEntryId === entryIdAttr &&
       this.#memoField === fieldAttr &&
+      this.#memoConnectorId === connectorIdAttr &&
       this.#memoRowPlanRevision === rowPlanRevision
     ) {
       return this.#memoTarget;
@@ -184,6 +191,7 @@ export class ContainerDom implements GanttDom {
     this.#memoBarId = barIdAttr;
     this.#memoEntryId = entryIdAttr;
     this.#memoField = fieldAttr;
+    this.#memoConnectorId = connectorIdAttr;
     this.#memoRowPlanRevision = rowPlanRevision;
     this.#memoTarget = target;
     return target;
@@ -233,6 +241,15 @@ export class ContainerDom implements GanttDom {
         element,
         entryIds: entry === undefined ? NO_ENTRY_IDS : [entry.id],
         ...entryPart(entry),
+      });
+    }
+    if (element.classList.contains(CONNECTOR_CLASS)) {
+      const connectorId = element.dataset[CONNECTOR_ID_KEY];
+      return freezeTarget({
+        kind: 'connector',
+        element,
+        entryIds: NO_ENTRY_IDS,
+        ...(connectorId === undefined ? {} : { connectorId }),
       });
     }
     if (element.classList.contains(SPLITTER_CLASS)) {

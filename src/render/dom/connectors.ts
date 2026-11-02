@@ -2,6 +2,7 @@
 // each `FrameConnector` into one SVG path, keyed by connector id.
 
 import type { FrameConnector, PathCommand } from '../../layout/index.js';
+import { CONNECTOR_CLASS, CONNECTOR_ID_KEY } from './dom-contract.js';
 import { KeyedLayer } from './sync-keyed.js';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
@@ -29,7 +30,7 @@ function toGeom(connector: FrameConnector): ConnectorGeom {
   return {
     d: pathData(connector.path),
     flagTokens: connector.flagTokens,
-    className: connector.class === undefined ? 'fg-connector' : `fg-connector ${connector.class}`,
+    className: connector.class === undefined ? CONNECTOR_CLASS : `${CONNECTOR_CLASS} ${connector.class}`,
     label: connector.label ?? '',
   };
 }
@@ -72,7 +73,7 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
         key: (connector) => connector.id,
         create: (connector) => {
           const node = document.createElementNS(SVG_NAMESPACE, 'path');
-          node.dataset['connectorId'] = connector.id;
+          node.dataset[CONNECTOR_ID_KEY] = connector.id;
           return node;
         },
         toGeom,
