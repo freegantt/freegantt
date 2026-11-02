@@ -175,9 +175,11 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'A Manual column toggles manuallyScheduled: the plugin never moves that task and reports the broken link',
       'Drag a task before its predecessor ends: the Dependency wins and the task lands after it; the date stays as a floor',
       'A loop of Dependencies is listed by its members, and its connectors carry the cycle flag',
+      'One working calendar shades weekends and two holidays and drives the schedule: drag a predecessor so a successor crosses a holiday and it skips the shaded days',
     ],
     config: [
-      'new Dataset({ entries, plugins: [entryDependencies(), scheduling({ successorMoves: "pushAndPull" })] })',
+      'new Dataset({ entries, plugins: [entryDependencies(), scheduling({ calendar, successorMoves: "pushAndPull" })] })',
+      "timeShading([{ covers: calendar.offTime() }]) // the same calendar object shades what scheduling() skips",
       "gridColumns: ['name', 'start', 'end', { field: 'manuallyScheduled', toggle: true }]",
       "scheduling.on('scheduleDiagnostics', (findings) => …) / scheduling.diagnostics()",
       'scheduling.constraintOf(id) / scheduling.clearConstraint(id)',
