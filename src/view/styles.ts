@@ -449,6 +449,13 @@ ${DARK_COLOR_TOKENS}
 .fg-time-shading { background: var(--fg-time-shading-fill); }
 .fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
 .fg-bars { position: relative; }
+/* Connectors: one zero-height layer above .fg-bars, one svg inside it sized to the content. The layer
+   and svg ignore the pointer, so a bar under a line keeps its gestures. */
+.fg-connectors { position: relative; pointer-events: none; }
+.fg-connectors-svg { position: absolute; top: 0; left: 0; overflow: hidden; }
+.fg-connector { fill: none; stroke: currentColor; stroke-width: 1.5px; }
+.fg-connector[data-flag~="inactive"] { stroke-dasharray: 4 3; opacity: 0.6; }
+.fg-connector[data-flag~="cycle"] { stroke: var(--fg-warn); }
 /* touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
 /* T1-1: the colour-mix lives on the bar itself, not .fg-container — a renderer's own
