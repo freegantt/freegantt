@@ -9,6 +9,7 @@ import { placeFrame } from './frame.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { DecorationRunner } from './decorations.js';
+import { ConnectorRouter } from './connectors/connector-router.js';
 import type { PlannedRow, RowSource, UnindexedRow } from './rows/row-source.js';
 import { resolveOpenRows, stampIndex } from './rows/resolve-rows.js';
 import { applyCollapse } from './rows/collapse.js';
@@ -100,6 +101,8 @@ export class FrameLayout implements FrameLayoutView {
   /** Registered decoration providers' own memory, kept alive the same way `#memory` is —
    *  `run()` recomputes only when the window actually changed since the last `computeFrame` call. */
   #decorations = new DecorationRunner();
+  /** Registered connector providers' routed paths, kept alive the same way. */
+  #connectors = new ConnectorRouter();
   #plan: readonly PlannedRow[] = [];
   /** First planned row index for an entry, kept beside `#plan` so `rowIndexForEntry` never scans it
    *  (#528). Built once per replan in `#planRows`, not per lookup. */
@@ -137,7 +140,7 @@ export class FrameLayout implements FrameLayoutView {
     // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below, and
     // `rowPlanRevision` (bumped inside `ensureRowPlan`, not here) stays put too.
     this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
-    return placeFrame(input, this.#plan, this.#memory, this.#decorations);
+    return placeFrame(input, this.#plan, this.#memory, this.#decorations, this.#connectors);
   }
 
   /** Brings `#plan` — and `#memory`, the height index and `rowMemory` a Bar read answers from — up

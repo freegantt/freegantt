@@ -5,12 +5,12 @@
 //  (a) reading the whole doc, not just the `data-flag` table, let a key named in an unrelated row
 //      (a `--fg-warn` token row that happens to say "conflict") stand in for a deleted table row;
 //  (b) checking one direction only (code -> doc) let an orphaned doc row — naming a key no
-//      BAR_FLAG_KEYS/LINK_FLAG_KEYS lists any more — pass unnoticed.
+//      BAR_FLAG_KEYS/CONNECTOR_FLAG_KEYS lists any more — pass unnoticed.
 //
-// The question the real-doc tests below ask: does every `BarFlags`/`LinkFlags` key have a
+// The question the real-doc tests below ask: does every `BarFlags`/`ConnectorFlags` key have a
 // documented selector, and does every documented selector name a real key? An interface has no
 // runtime keys, so nothing but this test could catch a key that ships with no doc row
-// (`LinkFlags.inactive` shipped undocumented once already, #475) or a doc row for a key nothing
+// (`ConnectorFlags.inactive` shipped undocumented once already, #475) or a doc row for a key nothing
 // declares any more.
 //
 // `data-state` (`hovered`, `selected`, `pending`, `dragging`, `ghost`, …) is a separate attribute,
@@ -24,7 +24,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { BAR_FLAG_KEYS, LINK_FLAG_KEYS } from '../../src/layout/index.js';
+import { BAR_FLAG_KEYS, CONNECTOR_FLAG_KEYS } from '../../src/layout/index.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const doc = fs.readFileSync(path.join(root, 'docs/10-styling-and-theming.md'), 'utf8');
@@ -42,14 +42,14 @@ function section(fromDoc: string, heading: string, stop: RegExp): string {
 
 /** Every `data-flag` key a `### \`data-flag\`` table names for `part`, read only from that section
  *  of `fromDoc` — never the surrounding file. */
-function documentedFlagKeys(fromDoc: string, part: '.fg-bar' | '.fg-link'): Set<string> {
+function documentedFlagKeys(fromDoc: string, part: '.fg-bar' | '.fg-connector'): Set<string> {
   const dataFlagSection = section(fromDoc, '### `data-flag`', /^### /m);
   const re = new RegExp(`\\${part}\\[data-flag~="([\\w-]+)"\\]`, 'g');
   return new Set([...dataFlagSection.matchAll(re)].map((m) => m[1]!));
 }
 
 const documentedBarKeys = documentedFlagKeys(doc, '.fg-bar');
-const documentedLinkKeys = documentedFlagKeys(doc, '.fg-link');
+const documentedConnectorKeys = documentedFlagKeys(doc, '.fg-connector');
 
 describe('the data-flag doc contract', () => {
   it('lists every BAR_FLAG_KEYS key as a .fg-bar selector', () => {
@@ -60,11 +60,11 @@ describe('the data-flag doc contract', () => {
     ).toEqual([]);
   });
 
-  it('lists every LINK_FLAG_KEYS key as a .fg-link selector', () => {
-    const missing = LINK_FLAG_KEYS.filter((key) => !documentedLinkKeys.has(key));
+  it('lists every CONNECTOR_FLAG_KEYS key as a .fg-connector selector', () => {
+    const missing = CONNECTOR_FLAG_KEYS.filter((key) => !documentedConnectorKeys.has(key));
     expect(
       missing,
-      `add a ".fg-link[data-flag~=\\"KEY\\"]" row to the data-flag table in docs/10-styling-and-theming.md for: ${missing.join(', ')}`,
+      `add a ".fg-connector[data-flag~=\\"KEY\\"]" row to the data-flag table in docs/10-styling-and-theming.md for: ${missing.join(', ')}`,
     ).toEqual([]);
   });
 
@@ -81,13 +81,13 @@ describe('the data-flag doc contract', () => {
     ).toEqual([]);
   });
 
-  it('never documents a .fg-link data-flag key LINK_FLAG_KEYS does not name', () => {
-    const orphaned = [...documentedLinkKeys].filter(
-      (key) => !(LINK_FLAG_KEYS as readonly string[]).includes(key),
+  it('never documents a .fg-connector data-flag key CONNECTOR_FLAG_KEYS does not name', () => {
+    const orphaned = [...documentedConnectorKeys].filter(
+      (key) => !(CONNECTOR_FLAG_KEYS as readonly string[]).includes(key),
     );
     expect(
       orphaned,
-      `docs/10-styling-and-theming.md documents these .fg-link data-flag keys but LINK_FLAG_KEYS (src/layout/frame.ts) does not name them:\n${orphaned.join('\n')}`,
+      `docs/10-styling-and-theming.md documents these .fg-connector data-flag keys but CONNECTOR_FLAG_KEYS (src/layout/frame.ts) does not name them:\n${orphaned.join('\n')}`,
     ).toEqual([]);
   });
 });

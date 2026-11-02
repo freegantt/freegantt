@@ -115,6 +115,11 @@ where they do something beyond re-export.
 | `layout/gesture-draft.ts` | `draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()` | Pure gesture math for drag previews. All date computation stays here so `interaction/` performs no arithmetic. |
 | `layout/decoration.ts` | `DecorationLayer, DecorationProvider, RangeBand, RowStripe` | The decoration seam's own types — range bands and row stripes as pixel-resolved shapes. |
 | `layout/decorations.ts` | `DecorationRunner` | Runs registered decoration providers into the frame's under-bar and over-bar layers. |
+| `layout/connector-input.ts` | `ConnectorInput, ConnectorEnd, ConnectorProvider, ConnectorFlags, CONNECTOR_FLAG_KEYS, PathCommand` | The connector seam's own types. A provider names two bar edges and core does the rest. |
+| `layout/connectors/connector-router.ts` | `ConnectorRouter` | Runs registered connector providers into the frame's connectors. It finds both bars for any Entry, routes once per revision and clips per frame. |
+| `layout/connectors/route-connector.ts` | `routeConnector(), CONNECTOR_STUB_PX` | The orthogonal path between two bar edges. |
+| `layout/connectors/clip-path.ts` | `clipPath(), boundsOf(), boundsTouchWindow()` | Clips a connector path to the window. |
+| `layout/connectors/frame-connector.ts` | `FrameConnector` | One connector as the frame carries it. |
 | `layout/frame-row.ts` | `FrameRow` | The painted-row shape `computeFrame` emits and a cell renderer reads. |
 | `layout/pick-defined.ts` | `pickDefined()` | Copies only defined keys from a patch onto a settings object. |
 | `layout/entry-rule.ts` | `compileEntryRule(), EntryRule, EntryPredicate, FieldMatch, EntryRulePorts` | One match syntax for "which Entry does this rule claim?" — a variant's `when` and a row source's `childrenAsSegments` both compile through this, so `bars/` and `rows/` never import each other over it. |
@@ -148,6 +153,7 @@ where they do something beyond re-export.
 | `render/dom/sync-keyed.ts` | `syncKeyed(), SyncKeyedSpec, KeyedLayer, NestedKeyedLayers` | The whole reconciler. Look-up-or-create per key → patch only if geometry changed → prune vanished keys. Scope is hard-bounded to attr/class/style/text + keyed children. |
 | `render/dom/pixel-property.ts` | `readPixelProperty(), PixelPropertyPolicy` | One reader for every `--fg-*` pixel custom property, with an explicit validity policy so "zero is nonsense" and "zero is a choice" are stated, not implied. |
 | `render/dom/date-line.ts` | `attachDateLines(), DateLineAttachment` | Renders the today-line and authored date lines as positioned decoration elements. |
+| `render/dom/connectors.ts` | `ConnectorsAttachment` | Turns `FrameConnector` into keyed SVG paths in one layer above the bars. |
 | `render/dom/decorations.ts` | `DecorationsAttachment` | Turns `RangeBand`/`RowStripe` into keyed DOM nodes. |
 | `render/dom/dom-contract.ts` | `BAR_CLASS, ROW_CLASS, …` | Class names and data attributes this backend writes. Nothing outside `render/dom` may retype them; `view/gantt-dom.ts` resolves a node from these constants alone. |
 | `render/dom/element-description.ts` | `buildElement()` | Turns one `ElementDescription` into a live DOM subtree. Stays inside the reconciler's hard-bounded scope. |
