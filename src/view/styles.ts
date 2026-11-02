@@ -546,6 +546,16 @@ ${DARK_COLOR_TOKENS}
 /* One shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */
+/* A connector port sits just outside a bar edge, so it never competes with the resize handle. Its
+   box is the hit area. The dot is the look. Shown only on the hovered bar, and only while a plugin
+   handles the connect drag. */
+.fg-connector-port { position: absolute; top: 0; left: 0; width: 14px; cursor: crosshair; touch-action: none; display: flex; align-items: center; justify-content: center; }
+.fg-connector-port::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fg-pane-bg); border: 1.5px solid var(--fg-bar-fill); box-sizing: border-box; }
+.fg-connector-port[hidden], .fg-connect-preview[hidden] { display: none; }
+.fg-connector-port[data-active]::before { background: var(--fg-selection-color); transform: scale(1.4); }
+.fg-connect-preview { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; color: var(--fg-selection-color); }
+.fg-connect-preview line { stroke: currentColor; stroke-width: 1.5px; stroke-dasharray: 4 3; }
+.fg-connect-preview[data-pending] { opacity: ${DEFAULT_PENDING_OPACITY}; }
 .fg-bar-handle { position: absolute; top: 0; left: -4px; width: 8px; cursor: ew-resize; touch-action: none; z-index: ${INTERNAL_Z.paneChrome}; }
 /* In flow, below the sticky header — the same origin .fg-bars and .fg-row-bands sit at. Absolute at
    the pane's own top-left instead, the sizer declared a scroll extent one header short of where the

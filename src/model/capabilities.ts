@@ -38,10 +38,9 @@ export type WriteRule = boolean | ((entry: Entry, field: FieldKey) => boolean | 
  *  "opening" the Entry. A write is not one of them. It is the thing a gesture, a cell editor, or a
  *  keyboard nudge sets out to do, and `canWrite` decides it. `activate` writes nothing either, so it
  *  reads the same one-resolution ladder (I14) with no `canWrite` question to ask. */
-export type GestureCapability = 'move' | 'resize' | 'select' | 'activate' | 'reorder';
+export type GestureCapability = 'move' | 'resize' | 'select' | 'activate' | 'reorder' | 'connect';
 
-/** Live (S3/S5). `linkCreate` stays off this type until S7 (I11: no unimplemented public
- *  key).
+/** Live (S3/S5/S7).
  *
  *  **Two levels read one type** (ADR 0018). `GanttOptions.capabilities` is the consumer's own
  *  answer; `EntryVariant.can` is the variant's, one level under it. */
@@ -57,6 +56,11 @@ export interface Capabilities {
    *  index, or both (#425). Default: yes, when the Entry may write `siblingIndex`; a drop that
    *  changes the parent also needs `parentId`. */
   reorder?: CapabilityRule;
+  /** May the user drag a connector from this Entry's bar edge to another bar. It gates the connector
+   *  port and the drag alike. Default `true`. It has an effect only while a plugin registers a
+   *  connect handler with `ctx.view.onConnect`. The drag writes nothing itself, so no Field lock
+   *  closes it. Call: `capabilities: { connect: (entry) => entry.read('locked') !== true }`. */
+  connect?: CapabilityRule;
   /** #256: the consumer's own answer to "may this cell's value change" — for a cell
    *  `Field.editable` already leaves open. It narrows an `'anywhere'` Field per entry; it never
    *  reopens an `'api'` or a `'never'` Field, no matter what it answers.

@@ -41,6 +41,8 @@ import type { TextRuler } from './text-ruler.js';
 import { readPixelProperty } from './pixel-property.js';
 import { attachConnectors } from './connectors.js';
 import type { ConnectorsAttachment } from './connectors.js';
+import { attachConnectAffordance } from './connect-affordance.js';
+import type { ConnectAffordance } from './connect-affordance.js';
 import { attachDecorations } from './decorations.js';
 import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
@@ -399,6 +401,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
   let endHandle: HTMLElement | undefined;
+  // The connect gesture's ports and preview line. Built when the first connectable bar is hovered.
+  let connectAffordance: ConnectAffordance | undefined;
   // S3.8: Cursor line singletons, created once at mount() and moved/parked by applyState.
   let cursorLine: HTMLElement | undefined;
   let cursorLineLabel: HTMLElement | undefined;
@@ -1461,6 +1465,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       tickLines = attachTickLines(timelineHost, barLayer);
       // Above the bars, so a line crosses over the bar it joins. The layer takes no pointer events.
       connectors = attachConnectors(timelineHost, barLayer);
+      connectAffordance = attachConnectAffordance(barLayer, (id) => barGeomByBarId.get(id));
       dateLines = attachDateLines(timelineHost, headerLayer, contentSizer);
       timelineHost.append(cursorLine);
       headerLayer.append(cursorLineLabel);
@@ -1646,6 +1651,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintColumnResizePreview(state.columnResizePreview);
       paintColumnReorderPreview(state.columnReorderPreview);
       paintRowDrop(state.rowDrop);
+      connectAffordance?.paint(state.connectableBarId, state.connectDraft);
     },
     hitTest(at: ClientPoint): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -1655,6 +1661,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // S3.4: the shared handle pair sits above the bar layer in paint order, so a hit on a
       // handle is checked first — `paintedHandleBars` names the bar each handle sits on (
       // #200), a parked (hidden) handle is never returned by elementFromPoint.
+      const port = connectAffordance?.portAt(el instanceof Element ? el : null);
+      if (port !== undefined) return { kind: 'bar', barId: port.barId, port: port.edge };
       const handle = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_HANDLE_CLASS}`) : null;
       if (handle && paintedHandleBars !== undefined) {
         const edge = handle.dataset['edge'];
@@ -1728,6 +1736,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       contentSizer = undefined;
       startHandle = undefined;
       endHandle = undefined;
+      connectAffordance?.destroy();
+      connectAffordance = undefined;
       cursorLine = undefined;
       cursorLineLabel = undefined;
       cursorLineHeight = 0;

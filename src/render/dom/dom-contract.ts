@@ -25,6 +25,11 @@ export const VISUALLY_HIDDEN_CLASS = 'fg-visually-hidden';
 export const ROW_TWISTY_CLASS = 'fg-row-twisty';
 /** The shared resize-handle pair over the currently resizable bar. Carries `data-edge`. */
 export const BAR_HANDLE_CLASS = 'fg-bar-handle';
+/** One connector port beside a bar edge, shown on the hovered bar while a connect handler exists.
+ *  Carries `data-edge`. */
+export const CONNECTOR_PORT_CLASS = 'fg-connector-port';
+/** The line a connect drag draws from its source edge to the pointer. */
+export const CONNECT_PREVIEW_CLASS = 'fg-connect-preview';
 
 /** `dataset` keys, spelled the way `HTMLElement.dataset` reads them (camelCase). */
 export const TESTID_KEY = 'testid';
