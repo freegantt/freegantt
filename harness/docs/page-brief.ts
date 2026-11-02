@@ -109,6 +109,18 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       { label: 'docs/08 — A bar is an Entry', href: BAR_IS_AN_ENTRY },
     ],
   },
+  'planned-vs-actual': {
+    features: [
+      'A planned span under each actual bar, drawn by a plugin that reads two consumer Fields',
+      'The span sits on the underBars layer, takes no clicks, and hides from screen readers',
+    ],
+    config: [
+      "fields: [{ key: 'plannedStart' }, { key: 'plannedEnd' }]",
+      "ctx.view.registerDecoration('underBars', ({ rows }) => rows.map(…))",
+      "{ kind: 'rowSpan', rowId, start, end, class }",
+    ],
+    specLinks: [],
+  },
   performance: {
     features: [
       '50,000 entries in one Dataset, with the load and first-paint times on the page',
