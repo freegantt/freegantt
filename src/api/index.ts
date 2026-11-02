@@ -253,6 +253,16 @@ export type {
   DependencyType,
   EntryDependencies,
 } from '../extensions/features/entry-dependencies.js';
+// `scheduling()`: the first-party plugin that keeps Dependencies true. It needs `entryDependencies()`.
+// Without it, connectors draw and nothing moves.
+export { scheduling, SCHEDULING_ID } from '../extensions/features/scheduling.js';
+export type {
+  EditedDate,
+  EntryConstraint,
+  ScheduleDiagnosticsHandler,
+  Scheduling,
+  SchedulingOptions,
+} from '../extensions/features/scheduling.js';
 export { daysOfWeek, hours, dates, spans, notCovered } from '../extensions/features/time-shading-covers.js';
 export type { TimeCover, DayOfWeek } from '../extensions/features/time-shading-covers.js';
 // The working calendar: a pure value the scheduling plugin owns. `calendar.offTime()` is a `TimeCover`
@@ -333,6 +343,7 @@ export {
   UnsupportedLagUnitError,
   DuplicateDependencyIdError,
   DependencyStoreNotInstalledError,
+  SchedulingNotInstalledError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.

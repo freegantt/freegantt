@@ -12,7 +12,7 @@ import {
   UnsupportedLagUnitError,
   entryId,
 } from '../../model/index.js';
-import type { Duration, EntryId, PluginStore } from '../../model/index.js';
+import type { Duration, EntryId, PluginStore, PluginStoreView } from '../../model/index.js';
 
 /** The plugin id other plugins name in `requires`. */
 export const ENTRY_DEPENDENCIES_ID = 'freegantt.entryDependencies';
@@ -71,10 +71,13 @@ interface DependencyRow {
   readonly predecessors: readonly PredecessorRow[];
 }
 
+/** The rows `entryDependencies()` stores. A plugin that requires it reads them through `readDependencies`. */
+export type DependencyStoreView = PluginStoreView<DependencyRow>;
+
 type BarEdge = 'start' | 'end';
 
 /** Each type joins one edge of the predecessor to one edge of the successor. */
-function edgesOf(type: DependencyType): readonly [from: BarEdge, to: BarEdge] {
+export function edgesOf(type: DependencyType): readonly [from: BarEdge, to: BarEdge] {
   switch (type) {
     case 'FS':
       return ['end', 'start'];
@@ -101,6 +104,12 @@ function toDependency(toId: EntryId, row: PredecessorRow): Dependency {
   return { id: row.id, fromId: row.fromId, toId, type: row.type, lag: row.lag };
 }
 
+/** Every Dependency in a store view, grouped by successor. A missing store holds none. */
+export function readDependencies(store: DependencyStoreView | undefined): readonly Dependency[] {
+  if (!store) return [];
+  return [...store.all].flatMap(([toId, row]) => row.predecessors.map((p) => toDependency(toId, p)));
+}
+
 function assertEntryExists(dataset: Dataset, id: EntryId | string, operation: string): void {
   if (!dataset.entries.has(id)) throw new EntryNotFoundError(entryId(id), operation);
 }
@@ -115,8 +124,7 @@ export function entryDependencies(): EntryDependencies {
   }
 
   function all(): readonly Dependency[] {
-    const { store } = installation('entryDependencies.all');
-    return [...store.all].flatMap(([toId, row]) => row.predecessors.map((p) => toDependency(toId, p)));
+    return readDependencies(installation('entryDependencies.all').store);
   }
 
   function assertIdIsFree(id: string, operation: string): void {
