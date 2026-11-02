@@ -2414,6 +2414,12 @@ export interface ScheduleChange {
 }
 
 // @public
+export type ScheduleConstraint = {
+    readonly kind: 'startNoEarlierThan';
+    readonly date: Instant;
+};
+
+// @public
 export interface ScheduleDependency {
     // (undocumented)
     readonly fromId: EntryId;
@@ -2441,12 +2447,14 @@ export type ScheduleField = 'start' | 'end';
 
 // @public (undocumented)
 export interface ScheduleRequest {
+    readonly constraints?: ReadonlyMap<EntryId, ScheduleConstraint>;
     // (undocumented)
     readonly dependencies: readonly ScheduleDependency[];
     readonly entries: readonly ScheduleEntry[];
     readonly manuallyScheduled?: ReadonlySet<EntryId>;
     readonly policy?: SchedulingPolicy;
     readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
+    readonly successorMoves?: SuccessorMoves;
 }
 
 // @public (undocumented)
@@ -2581,6 +2589,9 @@ export interface StoreRowUpdated {
     // (undocumented)
     to: unknown;
 }
+
+// @public
+export type SuccessorMoves = 'pushAndPull' | 'pushOnly';
 
 // @public
 export function summary(overrides?: Partial<EntryVariant>): EntryVariant;
