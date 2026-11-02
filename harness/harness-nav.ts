@@ -13,7 +13,8 @@ export type HarnessPageId =
   | 'hierarchy-and-timeline'
   | 'planned-vs-actual'
   | 'performance'
-  | 'related-to';
+  | 'related-to'
+  | 'dependencies';
 
 interface HarnessPage {
   readonly id: HarnessPageId;
@@ -29,6 +30,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'planned-vs-actual', label: 'Planned vs actual', file: 'planned-vs-actual.html' },
   { id: 'performance', label: 'Performance', file: 'performance.html' },
   { id: 'related-to', label: 'Related to', file: 'related-to.html' },
+  { id: 'dependencies', label: 'Dependencies', file: 'dependencies.html' },
 ];
 
 /** A build can ship some of the demo pages. `VITE_HARNESS_PAGES=generic-demo,performance` keeps

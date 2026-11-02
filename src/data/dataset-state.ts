@@ -9,6 +9,8 @@ import type {
   Dataset,
   DatasetEventMap,
   EntryId,
+  PluginId,
+  PluginStoreName,
   FlatEntryInput,
   Field,
   FieldEditable,
@@ -28,11 +30,12 @@ import type {
   ExtenderWrapper,
   RemovalExtender,
   RemovalExtenderWrapper,
+  RemovalRowCleaner,
   HierarchySource,
   HierarchySourceWrapper,
   ReplayOptions,
 } from '../model/index.js';
-import { changeSetId, DuplicateFieldKeyError } from '../model/index.js';
+import { changeSetId, DuplicateFieldKeyError, entryId } from '../model/index.js';
 import { now } from '../time/index.js';
 import { rolledUpEditsFor as rolledUpEditsForCommit } from './build-commit-change-set.js';
 import { EntryStore } from './entry-store.js';
@@ -41,8 +44,14 @@ import { storedParentSource } from './hierarchy-source.js';
 import { toEditsReading } from './entry-reader.js';
 import type { EditsReading } from './entry-reader.js';
 import type { EntryReadContext } from './entry-reader.js';
-import { EMPTY_ENTRY_IDS, identityExtender, identityRemovalExtender } from './edit-extension.js';
-import { PluginStores } from './plugin-store.js';
+import {
+  EMPTY_ENTRY_IDS,
+  NO_ROW_WRITES,
+  identityExtender,
+  identityRemovalExtender,
+} from './edit-extension.js';
+import type { StagedRowWrite } from './edit-extension.js';
+import { PluginStores, pluginStoreName } from './plugin-store.js';
 import { EventBus } from './event-bus.js';
 import { buildSiblingIndexDroppedReport, createErrorRaiser, raiseErrorOn } from './error-reporting.js';
 import { applyConstructionRollUp, runTransaction } from './transaction.js';
@@ -149,6 +158,8 @@ export class DatasetState implements Dataset {
   #editExtender: EditExtender;
   /** The removal hook's current occupant. It returns no id until a plugin composes onto it. */
   #removalExtender: RemovalExtender = identityRemovalExtender;
+  /** Every plugin's removal row cleaner, in install order. Each one names the store it writes. */
+  readonly #rowCleaners: { readonly store: PluginStoreName; readonly clean: RemovalRowCleaner }[] = [];
   /** `runTransaction`'s notification channel. Internal only, same reasoning as
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
@@ -293,6 +304,22 @@ export class DatasetState implements Dataset {
     }
   }
 
+  /** The commit path's door onto the row cleaners: calls each one once, with `runningExtensionHook`
+   *  set, so a store write from inside it throws like the extension hook does. It builds the request
+   *  only when a plugin installed a cleaner. */
+  rowCleanupsFor(buildRequest: () => EditRequest): readonly StagedRowWrite[] {
+    if (this.#rowCleaners.length === 0) return NO_ROW_WRITES;
+    const request = buildRequest();
+    this.runningExtensionHook = true;
+    try {
+      return this.#rowCleaners.flatMap(({ store, clean }) =>
+        clean(request).map((write) => ({ store, id: entryId(write.id), row: write.row })),
+      );
+    } finally {
+      this.runningExtensionHook = false;
+    }
+  }
+
   /** The one door onto the extension hook (D4): calls the current occupant and hands back
    *  what it returns. `api/dataset.ts`'s `extraEditsFor(dataset, request)` (the friend function this
    *  mirrors, ADR 0007) and `api/gantt.ts`'s drag-preview wiring both call this — one seam, not two —
@@ -376,6 +403,12 @@ export class DatasetState implements Dataset {
    *  no priority machinery and `EditExtenderConflictError` never gets written. */
   setExtender(wrap: ExtenderWrapper): void {
     this.#editExtender = wrap(this.#editExtender);
+  }
+
+  /** Call: `ctx.edits.cleanRowsOnRemoval((request) => rowsWithoutRemovedPredecessors(request))`.
+   *  The cleaner writes to the store `pluginId` reserved. */
+  addRowCleaner(pluginId: PluginId, clean: RemovalRowCleaner): void {
+    this.#rowCleaners.push({ store: pluginStoreName(pluginId), clean });
   }
 
   /** Call: `ctx.edits.setRemovalExtender((next) => (request) => new Set([...next(request), ...mine(request)]))`.

@@ -16,6 +16,8 @@ import type {
   EntryStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
+  RemovalRowCleaner,
+  StoreRowWrite,
   FieldLockRuleWrapper,
   PlaceRuleWrapper,
   PluginId,
@@ -27,7 +29,14 @@ import type { DisposableStore } from '../extensions/disposables.js';
 
 // Re-exported so a plugin author names the store types from the same module as the contract that
 // hands them over, rather than hunting for the module they are declared in.
-export type { PluginStore, PluginStoreView, ExtenderWrapper, RemovalExtenderWrapper };
+export type {
+  PluginStore,
+  PluginStoreView,
+  ExtenderWrapper,
+  RemovalExtenderWrapper,
+  RemovalRowCleaner,
+  StoreRowWrite,
+};
 // A plugin author writing a hierarchy source names both: the wrapper its plugin's own
 // `hierarchySource` member takes, and the source it composes onto (`api/plugin.ts`). Here for the
 // same reason the store types are — beside the contract that hands them over.
@@ -89,6 +98,9 @@ export interface DatasetEvents {
  *  parent, asked once for a cross-parent move and once for a gesture preview, so a bar drag, a grid
  *  row drag and `entries.update()`/`add()` all meet the same resolution.
  *
+ *  `cleanRowsOnRemoval` lets a plugin change rows of its own store when an Entry goes, in the same
+ *  changeset as the removal.
+ *
  *  `setRemoveRule` is the fourth seam (#611): it answers whether `entries.remove()` may take an
  *  Entry, asked once for the id the caller named and once for every member of its subtree — the
  *  narrowest answer wins, so removing an unlocked parent that holds one locked descendant refuses
@@ -109,6 +121,9 @@ export interface DatasetEvents {
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
   setExtender(wrap: ExtenderWrapper<TProps>): void;
   setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
+  /** Cleans this plugin's own store when Entries go. See `RemovalRowCleaner`. Several calls all
+   *  run, in call order. */
+  cleanRowsOnRemoval(cleaner: RemovalRowCleaner<TProps>): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
   setRemoveRule(wrap: RemoveRuleWrapper): void;

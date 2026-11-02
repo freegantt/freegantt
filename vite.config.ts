@@ -34,6 +34,7 @@ export default defineConfig({
         'planned-vs-actual': page('planned-vs-actual.html'),
         performance: page('performance.html'),
         'related-to': page('related-to.html'),
+        dependencies: page('dependencies.html'),
       },
     },
   },
