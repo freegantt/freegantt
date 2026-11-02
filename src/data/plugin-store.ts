@@ -24,6 +24,7 @@ import type {
 import { EntryNotFoundError, MutationDuringExtensionHookError, entryId } from '../model/index.js';
 import { isNoOpStoreRowWrite } from './change-set.js';
 import { runTransaction } from './transaction.js';
+import type { StagedRowWrite } from './edit-extension.js';
 import type { TransactionData, TxToken } from './transaction.js';
 
 /** The one place `PluginId` becomes a `StoreName`. `reserve()` and `read()` both go through it, which
@@ -192,6 +193,15 @@ export class PluginStores {
     for (const name of names) {
       if (this.#read(name, id) !== undefined) this.#stage(name, id, undefined);
     }
+  }
+
+  /** Stages one row write a removal row cleaner answered. The cleaner ran inside the extension hook,
+   *  where a plugin cannot write, so core writes on its behalf. An unreserved store is refused. */
+  stageCleanedRow(_token: TxToken, write: StagedRowWrite): void {
+    if (!this.#reserved.has(write.store)) {
+      throw new Error(`PluginStores: ${write.store} has no reserved store`);
+    }
+    this.#stage(write.store, write.id, write.row);
   }
 
   /**
