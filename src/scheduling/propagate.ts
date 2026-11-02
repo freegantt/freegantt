@@ -4,7 +4,12 @@
 import type { EntryId, Instant } from '../model/index.js';
 import { addMs, diffMs } from '../time/index.js';
 import { applyLag } from './apply-lag.js';
-import type { ScheduleDependency, ScheduleField } from './schedule-request.js';
+import type {
+  ScheduleConstraint,
+  ScheduleDependency,
+  ScheduleField,
+  SuccessorMoves,
+} from './schedule-request.js';
 import type { BlockedMoveDiagnostic, ScheduleDiagnostic } from './schedule-result.js';
 import type { SchedulingPolicy } from './scheduling-policy.js';
 
@@ -29,18 +34,23 @@ export interface Edge {
   readonly to: number;
 }
 
-/** A dependency that asks its successor to move one field later. `delta` is always positive. */
+/** What one dependency asks of its successor on one field. A negative `delta` means the successor could start or finish earlier. */
 interface Demand {
   readonly dependencyId: string;
   readonly field: ScheduleField;
   readonly delta: number;
 }
 
+/** The distance each field must shift. A field that no rule reaches is absent. */
+type FieldDeltas = Partial<Record<ScheduleField, number>>;
+
 /** Everything one run reads, resolved once. */
 export interface Run {
   readonly nodes: readonly Node[];
   readonly policy: SchedulingPolicy;
-  readonly pinned: ReadonlySet<EntryId>;
+  readonly manuallyScheduled: ReadonlySet<EntryId>;
+  readonly constraints: ReadonlyMap<EntryId, ScheduleConstraint>;
+  readonly successorMoves: SuccessorMoves;
   readonly diagnostics: ScheduleDiagnostic[];
 }
 
@@ -60,7 +70,7 @@ function isDated(node: Node): node is Node & { start: Instant; end: Instant } {
   return node.start !== undefined && node.end !== undefined;
 }
 
-/** What a predecessor asks of its successor, or `undefined` when the dependency holds or a date is missing. */
+/** What a predecessor asks of its successor, or `undefined` when a date is missing. */
 function demandOf(edge: Edge, nodes: readonly Node[]): Demand | undefined {
   const predecessor = nodes[edge.from] as Node;
   const successor = nodes[edge.to] as Node;
@@ -70,8 +80,30 @@ function demandOf(edge: Edge, nodes: readonly Node[]): Demand | undefined {
   const field: ScheduleField = type === 'FS' || type === 'SS' ? 'start' : 'end';
   const required = applyLag(anchor, lag);
   if (required === undefined) return undefined;
-  const delta = diffMs(required, successor[field]);
-  return delta > 0 ? { dependencyId: id, field, delta } : undefined;
+  return { dependencyId: id, field, delta: diffMs(required, successor[field]) };
+}
+
+/** Whether this run lets the Entry move earlier. A user edit sets a floor, so an edited Entry never moves earlier. */
+function mayPull(run: Run, node: Node): boolean {
+  return run.successorMoves === 'pushAndPull' && node.proposedFields.size === 0;
+}
+
+/**
+ * The dependencies worth reading for one Entry. A pull needs every incoming dependency once any
+ * predecessor changed, because an unchanged predecessor may be the one that holds the Entry back.
+ */
+function edgesToRead(
+  run: Run,
+  node: Node,
+  incoming: readonly Edge[],
+  fullRecompute: boolean,
+): readonly Edge[] {
+  const predecessorChanged = (edge: Edge): boolean => (run.nodes[edge.from] as Node).changed;
+  const readsAll =
+    fullRecompute ||
+    node.proposedFields.size > 0 ||
+    (run.successorMoves === 'pushAndPull' && incoming.some(predecessorChanged));
+  return readsAll ? incoming : incoming.filter(predecessorChanged);
 }
 
 /** Applies every demand that reaches one Entry, or reports why it cannot. */
@@ -82,61 +114,75 @@ export function moveSuccessor(
   fullRecompute: boolean,
 ): void {
   const node = run.nodes[index] as Node;
+  if (!isDated(node)) return;
   const demands: Demand[] = [];
-  for (const edge of incoming) {
-    if (!fullRecompute && !(run.nodes[edge.from] as Node).changed && node.proposedFields.size === 0) continue;
+  for (const edge of edgesToRead(run, node, incoming, fullRecompute)) {
     const demand = demandOf(edge, run.nodes);
     if (demand) demands.push(demand);
   }
-  if (demands.length === 0 || !isDated(node)) return;
+  if (demands.length === 0) return;
 
-  if (pinBeatsDependency(run, node)) {
-    report(run, node, demands, 'pinned');
+  const violations = demands.filter((demand) => demand.delta > 0);
+  if (manualBeatsDependency(run, node)) {
+    if (violations.length > 0) report(run, node, violations, 'manuallyScheduled');
     return;
   }
   const moves = movableFields(run.policy, node);
-  const deltas = deltasByField(demands);
+  const dependencyDeltas = deltasByField(demands, undefined, true);
+  const floor = run.constraints.get(node.id);
+  const deltas = deltasByField(demands, floor && diffMs(floor.date, node.start), mayPull(run, node));
   const shift = chooseShift(moves, deltas);
-  const blockedField = FIELDS.find((field) => deltas[field] > 0 && shift[field] === 0);
-  if (shift.start > 0 && node.start + shift.start > node.end + shift.end) {
-    report(run, node, demands, 'inverted');
+  const blockedField = FIELDS.find((field) => (dependencyDeltas[field] ?? 0) > 0 && shift[field] === 0);
+  if ((shift.start > 0 || shift.end < 0) && node.start + shift.start > node.end + shift.end) {
+    if (violations.length > 0) report(run, node, violations, 'inverted');
     return;
   }
-  if (shift.start > 0 || shift.end > 0) {
+  if (shift.start !== 0 || shift.end !== 0) {
     node.start = addMs(node.start, shift.start);
     node.end = addMs(node.end, shift.end);
     node.changed = true;
   }
-  if (blockedField) report(run, node, demands, node.proposedFields.has(blockedField) ? 'proposed' : 'policy');
+  if (blockedField)
+    report(run, node, violations, node.proposedFields.has(blockedField) ? 'proposed' : 'policy');
 }
 
-function pinBeatsDependency(run: Run, node: Node): boolean {
-  if (!run.pinned.has(node.id)) return false;
-  const rank = (kind: 'pinned' | 'dependency'): number => {
+function manualBeatsDependency(run: Run, node: Node): boolean {
+  if (!run.manuallyScheduled.has(node.id)) return false;
+  const rank = (kind: 'manuallyScheduled' | 'dependency'): number => {
     const position = run.policy.precedence.indexOf(kind);
     return position < 0 ? Number.POSITIVE_INFINITY : position;
   };
-  return rank('pinned') < rank('dependency');
+  return rank('manuallyScheduled') < rank('dependency');
 }
 
-function deltasByField(demands: readonly Demand[]): Record<ScheduleField, number> {
-  const deltas = { start: 0, end: 0 };
-  for (const demand of demands) deltas[demand.field] = Math.max(deltas[demand.field], demand.delta);
+/**
+ * The largest distance each field must shift to meet every dependency and the start floor.
+ * Without `pull`, a distance below zero counts as zero, so the Entry only moves later.
+ */
+function deltasByField(
+  demands: readonly Demand[],
+  startFloorDelta: number | undefined,
+  pull: boolean,
+): FieldDeltas {
+  const deltas: { start?: number; end?: number } = {};
+  const raise = (field: ScheduleField, delta: number): void => {
+    const wanted = pull ? delta : Math.max(0, delta);
+    deltas[field] = deltas[field] === undefined ? wanted : Math.max(deltas[field], wanted);
+  };
+  for (const demand of demands) raise(demand.field, demand.delta);
+  if (startFloorDelta !== undefined) raise('start', startFloorDelta);
   return deltas;
 }
 
 /** A free span shifts whole by the largest demand. A half-free span shifts only its free date. */
-function chooseShift(
-  moves: readonly ScheduleField[],
-  deltas: Record<ScheduleField, number>,
-): Record<ScheduleField, number> {
+function chooseShift(moves: readonly ScheduleField[], deltas: FieldDeltas): Record<ScheduleField, number> {
   if (moves.includes('start') && moves.includes('end')) {
-    const whole = Math.max(deltas.start, deltas.end);
+    const whole = Math.max(deltas.start ?? Number.NEGATIVE_INFINITY, deltas.end ?? Number.NEGATIVE_INFINITY);
     return { start: whole, end: whole };
   }
   return {
-    start: moves.includes('start') ? deltas.start : 0,
-    end: moves.includes('end') ? deltas.end : 0,
+    start: moves.includes('start') ? (deltas.start ?? 0) : 0,
+    end: moves.includes('end') ? (deltas.end ?? 0) : 0,
   };
 }
 

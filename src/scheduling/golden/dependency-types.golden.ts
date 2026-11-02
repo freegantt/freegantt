@@ -87,12 +87,13 @@ export const dependencyTypeScenarios: readonly GoldenScenario[] = Object.freeze(
     },
   },
   {
-    name: 'a satisfied dependency moves nothing',
+    name: 'push only leaves a satisfied dependency alone',
     entries: [
       ['a', 0, 2],
       ['b', 5, 6],
     ],
     dependencies: [['d1', 'a', 'b', 'FS', 0]],
+    successorMoves: 'pushOnly',
     expected: { patch: [] },
   },
   {

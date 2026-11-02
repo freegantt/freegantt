@@ -108,24 +108,24 @@ describe('schedule — contract', () => {
 
   it('never mutates its request and answers the same twice', () => {
     const request = toRequest(goldenScenarios[0] as (typeof goldenScenarios)[number]);
-    const frozen = structuredClone({ ...request, proposed: undefined, pinned: undefined });
+    const frozen = structuredClone({ ...request, proposed: undefined, manuallyScheduled: undefined });
     const first = schedule(request);
-    expect({ ...request, proposed: undefined, pinned: undefined }).toEqual(frozen);
+    expect({ ...request, proposed: undefined, manuallyScheduled: undefined }).toEqual(frozen);
     expect(schedule(request)).toEqual(first);
   });
 
-  it('lets precedence put a dependency above a pin', () => {
+  it('lets precedence put a dependency above a manual schedule', () => {
     const request = toRequest({
-      name: 'pin',
+      name: 'manual',
       entries: [
         ['a', 0, 2],
         ['b', 0, 1],
       ],
       dependencies: [['d1', 'a', 'b', 'FS', 0]],
-      pinned: ['b'],
+      manuallyScheduled: ['b'],
       expected: { patch: [] },
     });
-    const policy: SchedulingPolicy = { ...defaultPolicy, precedence: ['dependency', 'pinned'] };
+    const policy: SchedulingPolicy = { ...defaultPolicy, precedence: ['dependency', 'manuallyScheduled'] };
     expect(schedule({ ...request, policy })).toEqual({
       patch: [
         { id: 'b', field: 'start', from: day(0), to: day(2) },
@@ -135,15 +135,15 @@ describe('schedule — contract', () => {
     });
   });
 
-  it('lets a policy with no pinned rule ignore pins', () => {
+  it('lets a policy with no manuallyScheduled rule ignore manually scheduled Entries', () => {
     const request = toRequest({
-      name: 'pin',
+      name: 'manual',
       entries: [
         ['a', 0, 2],
         ['b', 0, 1],
       ],
       dependencies: [['d1', 'a', 'b', 'FS', 0]],
-      pinned: ['b'],
+      manuallyScheduled: ['b'],
       expected: { patch: [] },
     });
     const policy: SchedulingPolicy = { ...defaultPolicy, precedence: ['dependency'] };
