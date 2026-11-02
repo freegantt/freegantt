@@ -162,7 +162,7 @@ test('[S6-A3] two Gantts sharing only x move together in x and stay private in y
 
 // S6 (plans/03-slices.md): #yonly-a/#yonly-b share only the y ScrollAxis. A vertical
 // scroll on either moves both; a horizontal scroll on one stays private.
-test('[S6-A4] two Gantts sharing only y move together in y and stay private in x (D-S6-1)', async ({
+test('[S6-A3] two Gantts sharing only y move together in y and stay private in x (D-S6-1)', async ({
   page,
 }) => {
   await page.goto('/e2e/scroll-sync.html');

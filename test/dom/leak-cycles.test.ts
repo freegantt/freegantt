@@ -233,7 +233,7 @@ function mountWithPluginsAndDestroy(): void {
 
 const CYCLES = 100;
 
-describe('[S6-R4] mount/destroy leaks nothing over 100 cycles (#403)', () => {
+describe('[S6-A4] mount/destroy leaks nothing over 100 cycles (#403)', () => {
   let census: ReturnType<typeof installCensus>;
 
   beforeEach(() => {
@@ -292,7 +292,7 @@ describe('[S6-R4] mount/destroy leaks nothing over 100 cycles (#403)', () => {
  *  "one binding set, one lifetime" has to mean if it means anything. The pairs below share both
  *  axes, so both get asked; the last test mounts the first consumer's own shape instead, x shared
  *  with y private. */
-describe('[S6-R4] a destroyed Gantt leaves nothing bound to a shared axis (#403, D-S6-1)', () => {
+describe('[S6-A4] a destroyed Gantt leaves nothing bound to a shared axis (#403, D-S6-1)', () => {
   function mountOn(scale: TimeScaleModel, scroll: ScrollAxes): { gantt: Gantt; container: HTMLElement } {
     const container = document.createElement('div');
     document.body.append(container);
