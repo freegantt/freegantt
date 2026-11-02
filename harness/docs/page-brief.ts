@@ -134,6 +134,18 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
     ],
     specLinks: [],
   },
+  'related-to': {
+    features: [
+      'A plugin that keeps its own list of related Entries and draws a line between each pair',
+      'A line that stays drawn when one end, or both ends, scroll out of the window',
+      'Each line has an accessible name, and no line draws when no plugin registers a provider',
+    ],
+    config: [
+      'ctx.view.registerConnector(() => related.map((r) => ({ id, from, to })))',
+      "from: { entryId, edge: 'end' }, to: { entryId, edge: 'start' }",
+    ],
+    specLinks: [{ label: 'docs/10 — Styling and theming', href: STYLING_GUIDE }],
+  },
 };
 
 function labelledLine(label: string): HTMLParagraphElement {

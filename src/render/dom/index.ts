@@ -39,6 +39,8 @@ import type { TickLineAttachment } from './tick-lines.js';
 import { createTextRuler } from './text-ruler.js';
 import type { TextRuler } from './text-ruler.js';
 import { readPixelProperty } from './pixel-property.js';
+import { attachConnectors } from './connectors.js';
+import type { ConnectorsAttachment } from './connectors.js';
 import { attachDecorations } from './decorations.js';
 import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
@@ -392,6 +394,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   let dateLines: DateLineAttachment | undefined;
   let tickLines: TickLineAttachment | undefined;
   let decorations: DecorationsAttachment | undefined;
+  let connectors: ConnectorsAttachment | undefined;
   // One shared handle pair, created once at mount() and moved/parked by applyState — never
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
@@ -1456,6 +1459,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // selected-row band, and time shading, and under every bar — the design's own paint order
       // (`rowBands` -> `decorations` -> `tickLines` -> `bars`).
       tickLines = attachTickLines(timelineHost, barLayer);
+      // Above the bars, so a line crosses over the bar it joins. The layer takes no pointer events.
+      connectors = attachConnectors(timelineHost, barLayer);
       dateLines = attachDateLines(timelineHost, headerLayer, contentSizer);
       timelineHost.append(cursorLine);
       headerLayer.append(cursorLineLabel);
@@ -1524,6 +1529,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         frame.contentHeight,
         frame.visible.height,
       );
+      connectors?.sync(frame.connectors, frame.contentWidth, frame.contentHeight, frame.visible.height);
       cursorLineHeight = Math.max(frame.contentHeight, frame.visible.height);
       if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
       if (gridLayer) {
@@ -1683,6 +1689,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       tickLines = undefined;
       decorations?.destroy();
       decorations = undefined;
+      connectors?.destroy();
+      connectors = undefined;
       gridLayer?.replaceChildren();
       timelineHost?.replaceChildren();
       bandLayer.clear();

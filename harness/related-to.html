@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — related to</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+      <main>
+        <div class="page-head">
+          <h1>Related to</h1>
+          <p>
+            A small plugin keeps a list of related Entries and draws a line from one bar to the other. Scroll
+            down so one end leaves the window. The line stays drawn while its path crosses the window.
+          </p>
+        </div>
+        <div id="page-brief"></div>
+        <section class="workbench" aria-label="Related to workbench">
+          <div id="toolbar"></div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="connector-readout">Connectors: —</span>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./related-to.ts"></script>
+  </body>
+</html>

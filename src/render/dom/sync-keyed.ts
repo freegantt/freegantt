@@ -13,29 +13,39 @@ function shallowEqual<TGeom extends Record<string, unknown>>(a: TGeom, b: TGeom)
   return true;
 }
 
-export interface SyncKeyedSpec<TItem, TKey, TGeom extends Record<string, unknown>> {
+export interface SyncKeyedSpec<
+  TItem,
+  TKey,
+  TGeom extends Record<string, unknown>,
+  TNode extends Element = HTMLElement,
+> {
   key(item: TItem, index: number): TKey;
   /** Called once per key, the first time it's seen; DOM attrs fixed for the node's lifetime (e.g. a
    * bar's `dataset.barId`) belong here, not in `patch`. */
-  create(item: TItem, key: TKey): HTMLElement;
+  create(item: TItem, key: TKey): TNode;
   toGeom(item: TItem): TGeom;
   /** Called only when `toGeom(item)` differs from the cached geometry — attr/class/style/text only. */
-  patch(node: HTMLElement, geom: TGeom): void;
+  patch(node: TNode, geom: TGeom): void;
 }
 
 /** Look up-or-create a node per key, patch it only when its geometry actually changed, then prune
  * nodes whose key is no longer present. `nodes`/`geoms` are the caller's persistent per-layer caches
  * — they must survive across calls for the reconciliation to do anything (a fresh Map every call
  * would patch and never prune). */
-export function syncKeyed<TItem, TKey, TGeom extends Record<string, unknown>>(
-  layer: HTMLElement,
+export function syncKeyed<
+  TItem,
+  TKey,
+  TGeom extends Record<string, unknown>,
+  TNode extends Element = HTMLElement,
+>(
+  layer: Element,
   items: readonly TItem[],
-  nodes: Map<TKey, HTMLElement>,
+  nodes: Map<TKey, TNode>,
   geoms: Map<TKey, TGeom>,
-  spec: SyncKeyedSpec<TItem, TKey, TGeom>,
+  spec: SyncKeyedSpec<TItem, TKey, TGeom, TNode>,
 ): void {
   const seen = new Set<TKey>();
-  let previousNode: HTMLElement | null = null;
+  let previousNode: TNode | null = null;
   items.forEach((item, index) => {
     const key = spec.key(item, index);
     seen.add(key);
@@ -70,15 +80,20 @@ export function syncKeyed<TItem, TKey, TGeom extends Record<string, unknown>>(
 
 /** One keyed layer: the node/geom cache pair `syncKeyed` needs, held together instead of as two
  * parallel `Map`s a caller must keep in sync by hand (§9-D). */
-export class KeyedLayer<TItem, TKey, TGeom extends Record<string, unknown>> {
-  #nodes = new Map<TKey, HTMLElement>();
+export class KeyedLayer<
+  TItem,
+  TKey,
+  TGeom extends Record<string, unknown>,
+  TNode extends Element = HTMLElement,
+> {
+  #nodes = new Map<TKey, TNode>();
   #geoms = new Map<TKey, TGeom>();
 
-  sync(container: HTMLElement, items: readonly TItem[], spec: SyncKeyedSpec<TItem, TKey, TGeom>): void {
+  sync(container: Element, items: readonly TItem[], spec: SyncKeyedSpec<TItem, TKey, TGeom, TNode>): void {
     syncKeyed(container, items, this.#nodes, this.#geoms, spec);
   }
 
-  node(key: TKey): HTMLElement | undefined {
+  node(key: TKey): TNode | undefined {
     return this.#nodes.get(key);
   }
 

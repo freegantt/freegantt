@@ -67,7 +67,7 @@ export type {
   GeometryFrame,
   FrameRow,
   FrameBar,
-  FrameLink,
+  FrameConnector,
   FrameDecoration,
   FrameHeader,
   FrameHeaderBand,
@@ -81,13 +81,15 @@ export type {
   ResolvedDecoration,
   BarFlags,
   BarSpanKind,
-  LinkFlags,
+  ConnectorFlags,
   LayoutInput,
 } from './frame.js';
-// The closed key set behind `BarFlags`/`LinkFlags` (#475) — a consumer writing a stylesheet
+// The closed key set behind `BarFlags`/`ConnectorFlags` (#475) — a consumer writing a stylesheet
 // selector or a `barRenderer` reads the same list `flagTokens` iterates, the way `ZOOM_PRESETS`
 // publishes the zoom ladder.
-export { BAR_FLAG_KEYS, LINK_FLAG_KEYS } from './frame.js';
+export { BAR_FLAG_KEYS, CONNECTOR_FLAG_KEYS } from './frame.js';
+export { ConnectorRouter } from './connectors/connector-router.js';
+export type { ConnectorEdge, ConnectorEnd, ConnectorInput, ConnectorProvider } from './connector-input.js';
 export { DecorationRunner } from './decorations.js';
 export type { RegisteredDecorationProvider, DecorationsByLayer } from './decorations.js';
 export type {

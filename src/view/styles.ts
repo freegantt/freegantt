@@ -451,6 +451,13 @@ ${DARK_COLOR_TOKENS}
 /* A row span's text sits at the span's end, inside its box. Text longer than the span is clipped. */
 .fg-row-span { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
 .fg-bars { position: relative; }
+/* Connectors: one zero-height layer above .fg-bars, one svg inside it sized to the content. The layer
+   and svg ignore the pointer, so a bar under a line keeps its gestures. */
+.fg-connectors { position: relative; pointer-events: none; }
+.fg-connectors-svg { position: absolute; top: 0; left: 0; overflow: hidden; }
+.fg-connector { fill: none; stroke: currentColor; stroke-width: 1.5px; }
+.fg-connector[data-flag~="inactive"] { stroke-dasharray: 4 3; opacity: 0.6; }
+.fg-connector[data-flag~="cycle"] { stroke: var(--fg-warn); }
 /* touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
 /* T1-1: the colour-mix lives on the bar itself, not .fg-container — a renderer's own
