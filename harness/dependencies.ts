@@ -18,7 +18,7 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'dependen
 const dependencies = entryDependencies();
 const dataset = new Dataset({ entries: dependencyEntryInputs, timeZone: 'UTC', plugins: [dependencies] });
 
-// A host that loads Dependencies from a server calls replaceAll with the whole list. It records no
+// An app that loads Dependencies from a server calls replaceAll with the whole list. It records no
 // undo step, and it throws for an unknown Entry id without changing anything.
 dependencies.replaceAll(firstDependencies);
 
