@@ -33,3 +33,4 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | D7 | Engine type names | Accepted. Each new term gets a glossary entry in `CONTEXT.md`. |
 | D7a | "Pinned" retires | The word is **Manually scheduled** (Microsoft Project's Task Mode word). Code: `manuallyScheduled: boolean`. `ScheduleRequest.pinned`, `BlockReason 'pinned'` and `ScheduleRuleKind 'pinned'` become `manuallyScheduled`. The glossary lists "pinned" under _Avoid_, because the grid already has pinned columns. P6 and Syncify have no manual mode; their "Mandatory Start/Finish" is a Constraint, not this flag. |
 | D9 | `ConnectorEnd.entryId` | Stays `EntryId`. `EntryId | string` collapses to `string` and drops the brand. A plugin that reads plain strings from a file calls `entryId()` once at the read. No code change. |
+| D10 | rowSpan `text` | Kept. The follow-up worker shows it on the "Planned vs actual" harness page (for example "+4d"). |
