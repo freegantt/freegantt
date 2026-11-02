@@ -6,7 +6,7 @@ import type { Instant, TimeSpan, TimeUnit } from '../model/index.js';
 import { createZonedTime } from '../time/index.js';
 import type { DecorationInput, DecorationLayer, DecorationProvider } from './decoration.js';
 import type { FrameRow } from './frame-row.js';
-import type { RangeBand, RowStripe } from './decoration.js';
+import type { RangeBand, ResolvedDecoration, RowSpan, RowStripe } from './decoration.js';
 
 /** What `PluginContext.view.registerDecoration(layer, provider)` records — the pairing
  *  `DecorationRunner.run` needs to sort each provider's output into the right paint layer. */
@@ -16,8 +16,8 @@ export interface RegisteredDecorationProvider {
 }
 
 export interface DecorationsByLayer {
-  underBars: readonly (RangeBand | RowStripe)[];
-  overBars: readonly (RangeBand | RowStripe)[];
+  underBars: readonly ResolvedDecoration[];
+  overBars: readonly ResolvedDecoration[];
 }
 
 export interface RunDecorationsInput {
@@ -36,7 +36,18 @@ const EMPTY: DecorationsByLayer = Object.freeze({ underBars: [], overBars: [] })
 // Narrows on the discriminant field itself ('rowId' in input), not a `.kind` literal comparison —
 // `freegantt/no-kind-literal` bans the latter in layout/ (CLAUDE.md, plans/01 §2.5): kind-dependent
 // behaviour goes through a seam, and this converter is that seam for a `DecorationInput`.
-function toPixels(input: DecorationInput, xForInstant: (at: Instant) => number): RangeBand | RowStripe {
+function toPixels(input: DecorationInput, xForInstant: (at: Instant) => number): ResolvedDecoration {
+  if ('rowId' in input && 'start' in input) {
+    const x = xForInstant(input.start);
+    const span: RowSpan = {
+      kind: 'rowSpan',
+      rowId: input.rowId,
+      x,
+      width: Math.max(0, xForInstant(input.end) - x),
+    };
+    if (input.class !== undefined) span.class = input.class;
+    return span;
+  }
   if ('rowId' in input) {
     const stripe: RowStripe = { kind: 'rowStripe', rowId: input.rowId };
     if (input.class !== undefined) stripe.class = input.class;
@@ -104,8 +115,8 @@ export class DecorationRunner {
       tickUnit: input.tickUnit,
       tickIncrement: input.tickIncrement,
     };
-    const underBars: (RangeBand | RowStripe)[] = [];
-    const overBars: (RangeBand | RowStripe)[] = [];
+    const underBars: ResolvedDecoration[] = [];
+    const overBars: ResolvedDecoration[] = [];
     for (const { layer, provider } of input.providers) {
       const target = layer === 'underBars' ? underBars : overBars;
       for (const item of provider(ctx)) target.push(toPixels(item, input.xForInstant));

@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
+### Added
+
+- A decoration provider can return `{ kind: 'rowSpan', rowId, start, end, class? }`. The Gantt paints a box inside that row between the two Instants, on `underBars` or `overBars`. The node has the class `fg-row-span` and the consumer's `class`, and it takes no pointer events and no focus. A row outside the window paints nothing. The new type `RowSpan` is the resolved shape.
+
 ## [0.1.0] - 2026-09-30
 
 The first release. Install it with `npm install freegantt`.

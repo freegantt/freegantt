@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { rowId } from '../model/index.js';
-import type { TimeSpan } from '../model/index.js';
+import type { Instant, TimeSpan } from '../model/index.js';
 import { addDays, createTimeScale, instant } from '../time/index.js';
 import { DecorationRunner } from './decorations.js';
 import type { RegisteredDecorationProvider, RunDecorationsInput } from './decorations.js';
@@ -41,6 +41,34 @@ describe('DecorationRunner', () => {
       { kind: 'rangeBand', x: xForInstant(start), width: xForInstant(dayEnd) },
     ]);
     expect(result.overBars).toEqual([]);
+  });
+
+  it('converts a rowSpan to pixels through the bound scale at two zoom levels', () => {
+    const dayStart = addDays(ZONE, start, 1);
+    const dayStop = addDays(ZONE, start, 3);
+    const provider: DecorationProvider = () => [
+      { kind: 'rowSpan', rowId: row.id, start: dayStart, end: dayStop, class: 'planned' },
+    ];
+    for (const pxPerMs of [0.001, 0.002]) {
+      const zoomed = createTimeScale({ timeZone: ZONE, range: { start, end }, pxPerMs });
+      const input = {
+        ...baseInput([{ layer: 'overBars', provider }]),
+        xForInstant: (at: Instant): number => zoomed.xForInstant(at),
+      };
+      const result = new DecorationRunner().run(input);
+      const dayMs = 24 * 60 * 60 * 1000;
+      expect(result.overBars).toEqual([
+        { kind: 'rowSpan', rowId: row.id, x: dayMs * pxPerMs, width: 2 * dayMs * pxPerMs, class: 'planned' },
+      ]);
+    }
+  });
+
+  it('gives a rowSpan whose end precedes its start no width', () => {
+    const provider: DecorationProvider = () => [
+      { kind: 'rowSpan', rowId: row.id, start: dayEnd, end: start },
+    ];
+    const result = new DecorationRunner().run(baseInput([{ layer: 'underBars', provider }]));
+    expect(result.underBars).toMatchObject([{ kind: 'rowSpan', width: 0 }]);
   });
 
   it('a class on the input reaches the resolved decoration', () => {
