@@ -31,6 +31,8 @@ Never raise the budget or weaken the guard.
 
 | Worker | Owns |
 |---|---|
+| S7.8 (calendar in propagation) | `src/scheduling/`, `src/extensions/features/scheduling*`, its harness page |
+| S7.4 (connector select, delete, label) | `src/extensions/features/entry-dependencies*`, `src/render/` connector parts, the Dependencies harness page |
 | F1 (engine follow-up) | `src/scheduling/`, its `src/api/index.ts` lines, `CONTEXT.md` |
 | F2 (row span text) | the "Planned vs actual" harness page and its e2e |
 | S7.2 (Dependency store) | `src/extensions/features/entry-dependencies*`, its `src/api/index.ts` lines, its harness page |
