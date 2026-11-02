@@ -983,7 +983,7 @@ Rules:
 | I1 | Layer imports match §1 exactly | dependency lint in CI |
 | I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances); `freegantt/no-module-level-state` lint rule (S2.7) |
 | I3 | The first-party scheduling plugin's propagation contains no recursion | 5,000-dependency chain fixture + review rule |
-| I4 | Its `schedule()` never mutates its input; policy never moves a proposed field | dev-mode asserts + property test |
+| I4 | Its `schedule()` never mutates its input; policy never moves a proposed field; an extension overrides a proposed field only when its result marks the override (ADR 0042) | dev-mode asserts + property test |
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |
 | I6 | One transaction per gesture, at commit | interaction tests |
 | I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test (`[S2-A1]`, `src/data/history.property.test.ts`) |
