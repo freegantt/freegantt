@@ -448,7 +448,8 @@ ${DARK_COLOR_TOKENS}
    an opaque bar. */
 .fg-time-shading { background: var(--fg-time-shading-fill); }
 .fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
-.fg-row-span { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; }
+/* A row span's text sits at the span's end, inside its box. Text longer than the span is clipped. */
+.fg-row-span { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
 .fg-bars { position: relative; }
 /* touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */

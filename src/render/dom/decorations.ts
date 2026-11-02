@@ -9,7 +9,7 @@ import { KeyedLayer } from './sync-keyed.js';
 type DecorationGeom =
   | { paint: 'band'; x: number; width: number; height: number; className: string }
   | { paint: 'stripe'; top: number; height: number; className: string }
-  | { paint: 'span'; x: number; width: number; top: number; height: number; className: string };
+  | { paint: 'span'; x: number; width: number; top: number; height: number; className: string; text: string };
 
 export interface DecorationsAttachment {
   /** Call once per frame with both layers' resolved output, the current row set (a rowStripe's own
@@ -49,6 +49,7 @@ function toGeom(
       top: row?.top ?? 0,
       height: row?.height ?? 0,
       className: item.class ?? '',
+      text: item.text ?? '',
     };
   }
   if (item.kind === 'rowStripe') {
@@ -64,6 +65,7 @@ function patch(node: HTMLElement, geom: DecorationGeom): void {
     node.style.transform = `translate(${geom.x}px, ${geom.top}px)`;
     node.style.width = `${geom.width}px`;
     node.style.height = `${geom.height}px`;
+    node.textContent = geom.text;
     return;
   }
   if (geom.paint === 'stripe') {

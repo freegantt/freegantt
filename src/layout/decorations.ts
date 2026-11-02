@@ -46,6 +46,7 @@ function toPixels(input: DecorationInput, xForInstant: (at: Instant) => number):
       width: Math.max(0, xForInstant(input.end) - x),
     };
     if (input.class !== undefined) span.class = input.class;
+    if (input.text !== undefined) span.text = input.text;
     return span;
   }
   if ('rowId' in input) {
