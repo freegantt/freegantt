@@ -87,3 +87,68 @@ test('removing an Entry removes its Dependencies, and undo restores both', async
   await expect(page.locator('#dependency-readout')).toContainText('dep-fs');
   await expect(page.locator('#gantt [data-connector-id="dependency:dep-fs"]')).toHaveCount(1);
 });
+
+// The connect drag in a real browser. Only a browser has ports beside the bar edges and a pointer
+// that can reach them.
+
+const barOf = (page: Page, id: string) => page.locator(`#gantt .fg-bar[data-bar-id^="${id}"]`);
+const portOf = (page: Page, edge: 'start' | 'end') =>
+  page.locator(`#gantt .fg-connector-port[data-edge="${edge}"]:not([hidden])`);
+
+async function centerOf(locator: import('@playwright/test').Locator): Promise<{ x: number; y: number }> {
+  const box = await locator.boundingBox();
+  if (box === null) throw new Error('the node has no box');
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** Drags from the `fromEdge` port of `fromId` to the `toEdge` port of `toId`, then releases. */
+async function dragBetweenPorts(
+  page: Page,
+  from: { id: string; edge: 'start' | 'end' },
+  to: { id: string; edge: 'start' | 'end' },
+): Promise<void> {
+  await barOf(page, from.id).hover();
+  const origin = await centerOf(portOf(page, from.edge));
+  await page.mouse.move(origin.x, origin.y);
+  await page.mouse.down();
+  const overTarget = await centerOf(barOf(page, to.id));
+  await page.mouse.move(overTarget.x, overTarget.y, { steps: 8 });
+  const target = await centerOf(portOf(page, to.edge));
+  await page.mouse.move(target.x, target.y, { steps: 4 });
+  await page.mouse.up();
+}
+
+test('dragging from an end port to a start port creates a Finish-to-start Dependency, and undo removes it', async ({
+  page,
+}) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const created = page.locator('#gantt [data-connector-id="dependency:structure-2:FS:structure-3"]');
+  await expect(created).toHaveCount(0);
+
+  await dragBetweenPorts(page, { id: 'structure-2', edge: 'end' }, { id: 'structure-3', edge: 'start' });
+
+  await expect(created).toHaveCount(1);
+  await expect(page.locator('#dependency-readout')).toContainText('structure-2:FS:structure-3 (FS, 0d)');
+
+  await page.evaluate(() => window.__gantt.commands.run('freegantt.undo'));
+  await expect(created).toHaveCount(0);
+  await expect(page.locator('#dependency-readout')).not.toContainText('structure-2:FS:structure-3');
+});
+
+test('dragging from a start port to a start port creates a Start-to-start Dependency, and undo removes it', async ({
+  page,
+}) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const created = page.locator('#gantt [data-connector-id="dependency:structure-2:SS:structure-4"]');
+  await expect(created).toHaveCount(0);
+
+  await dragBetweenPorts(page, { id: 'structure-2', edge: 'start' }, { id: 'structure-4', edge: 'start' });
+
+  await expect(created).toHaveCount(1);
+  await expect(page.locator('#dependency-readout')).toContainText('structure-2:SS:structure-4 (SS, 0d)');
+
+  await page.evaluate(() => window.__gantt.commands.run('freegantt.undo'));
+  await expect(created).toHaveCount(0);
+});
