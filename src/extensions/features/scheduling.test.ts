@@ -7,7 +7,7 @@ import { entryDependencies } from './entry-dependencies.js';
 import type { DependencyInput, DependencyType } from './entry-dependencies.js';
 import { SCHEDULING_ID, scheduling } from './scheduling.js';
 import type { SchedulingOptions } from './scheduling.js';
-import { workingCalendar } from '../../scheduling/index.js';
+import { workingCalendar } from '../../api/schedule-facade.js';
 
 /** Midnight UTC of January 1 plus `offset` days. */
 const day = (offset: number): number => Date.UTC(2026, 0, 1 + offset);
