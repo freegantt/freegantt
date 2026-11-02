@@ -276,6 +276,7 @@ rename.
 | `.fg-decorations-over` | Decoration layer above the bars. |
 | `.fg-range-band` | A range decoration (weekend shading, and the like). |
 | `.fg-row-stripe` | A row-height decoration stripe. |
+| `.fg-row-span` | A decoration box inside one row, between two Instants. It paints its optional `text` at its end. |
 | `.fg-time-shading` | `timeShading()`'s own band, beside `.fg-range-band` — the Part `--fg-time-shading-fill` paints. |
 | `.fg-popup` | Shared popup surface for tooltips, the context menu, and the reorder wash. |
 | `.fg-tooltip` | `tooltips()` content, inside `.fg-popup`. |

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — planned vs actual</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+    <style>
+      /* The planned span is a consumer class. The library paints a box the height of the row;
+         this page draws a thin line along the row's bottom edge, under the actual bar. */
+      .demo-planned-span {
+        border-bottom: 4px solid var(--fg-header-subtext);
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+
+      <main>
+        <div class="page-head">
+          <h1>Planned vs actual</h1>
+          <p>
+            Each row keeps its actual dates on the bar. Two consumer Fields hold its planned dates. A plugin
+            reads them and returns one row span per row. The grey line under a bar shows the plan.
+          </p>
+        </div>
+
+        <div id="page-brief"></div>
+
+        <section class="workbench" aria-label="Planned vs actual workbench">
+          <div id="gantt"></div>
+        </section>
+      </main>
+    </div>
+
+    <script type="module" src="./planned-vs-actual.ts"></script>
+  </body>
+</html>

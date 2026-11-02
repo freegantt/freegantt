@@ -7,7 +7,12 @@
 import { mountThemePicker } from './page-theme.js';
 
 export type HarnessPageId =
-  'planner' | 'generic-demo' | 'editing-and-data' | 'hierarchy-and-timeline' | 'performance';
+  | 'planner'
+  | 'generic-demo'
+  | 'editing-and-data'
+  | 'hierarchy-and-timeline'
+  | 'planned-vs-actual'
+  | 'performance';
 
 interface HarnessPage {
   readonly id: HarnessPageId;
@@ -20,6 +25,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'generic-demo', label: 'Generic demo', file: 'generic.html' },
   { id: 'editing-and-data', label: 'Editing & data', file: 'editing-and-data.html' },
   { id: 'hierarchy-and-timeline', label: 'Hierarchy & timeline', file: 'hierarchy-and-timeline.html' },
+  { id: 'planned-vs-actual', label: 'Planned vs actual', file: 'planned-vs-actual.html' },
   { id: 'performance', label: 'Performance', file: 'performance.html' },
 ];
 

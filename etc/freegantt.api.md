@@ -586,6 +586,13 @@ export type DecorationInput = {
     kind: 'rowStripe';
     rowId: RowId;
     class?: string;
+} | {
+    kind: 'rowSpan';
+    rowId: RowId;
+    start: Instant;
+    end: Instant;
+    class?: string;
+    text?: string;
 };
 
 // @public
@@ -2264,6 +2271,22 @@ export interface RowSourceCommon {
     filterPolicy?: FilterPolicy | undefined;
     // (undocumented)
     sort?: RowSort | undefined;
+}
+
+// @public
+export interface RowSpan {
+    // (undocumented)
+    class?: string;
+    // (undocumented)
+    kind: 'rowSpan';
+    // (undocumented)
+    rowId: RowId;
+    // (undocumented)
+    text?: string;
+    // (undocumented)
+    width: number;
+    // (undocumented)
+    x: number;
 }
 
 // @public
