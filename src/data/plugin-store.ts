@@ -239,9 +239,9 @@ export class PluginStores {
     }
   }
 
-  /** Stages one row write a removal row cleaner answered. The cleaner ran inside the extension hook,
+  /** Stages one row write an edit row writer answered. The writer ran inside the extension hook,
    *  where a plugin cannot write, so core writes on its behalf. An unreserved store is refused. */
-  stageCleanedRow(_token: TxToken, write: StagedRowWrite): void {
+  stageWrittenRow(_token: TxToken, write: StagedRowWrite): void {
     if (!this.#reserved.has(write.store)) {
       throw new Error(`PluginStores: ${write.store} has no reserved store`);
     }

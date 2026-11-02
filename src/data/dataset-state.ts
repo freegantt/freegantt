@@ -30,7 +30,7 @@ import type {
   ExtenderWrapper,
   RemovalExtender,
   RemovalExtenderWrapper,
-  RemovalRowCleaner,
+  EditRowWriter,
   HierarchySource,
   HierarchySourceWrapper,
   ReplayOptions,
@@ -158,8 +158,8 @@ export class DatasetState implements Dataset {
   #editExtender: EditExtender;
   /** The removal hook's current occupant. It returns no id until a plugin composes onto it. */
   #removalExtender: RemovalExtender = identityRemovalExtender;
-  /** Every plugin's removal row cleaner, in install order. Each one names the store it writes. */
-  readonly #rowCleaners: { readonly store: PluginStoreName; readonly clean: RemovalRowCleaner }[] = [];
+  /** Every plugin's edit row writer, in install order. Each one names the store it writes. */
+  readonly #rowWriters: { readonly store: PluginStoreName; readonly write: EditRowWriter }[] = [];
   /** `runTransaction`'s notification channel. Internal only, same reasoning as
    *  `editExtender` above — `data/` is unreachable through the package's `exports` map; `on`/`off`
    *  below are the public surface. */
@@ -304,16 +304,16 @@ export class DatasetState implements Dataset {
     }
   }
 
-  /** The commit path's door onto the row cleaners: calls each one once, with `runningExtensionHook`
+  /** The commit path's door onto the row writers: calls each one once, with `runningExtensionHook`
    *  set, so a store write from inside it throws like the extension hook does. It builds the request
-   *  only when a plugin installed a cleaner. */
-  rowCleanupsFor(buildRequest: () => EditRequest): readonly StagedRowWrite[] {
-    if (this.#rowCleaners.length === 0) return NO_ROW_WRITES;
+   *  only when a plugin installed a writer. */
+  rowWritesFor(buildRequest: () => EditRequest): readonly StagedRowWrite[] {
+    if (this.#rowWriters.length === 0) return NO_ROW_WRITES;
     const request = buildRequest();
     this.runningExtensionHook = true;
     try {
-      return this.#rowCleaners.flatMap(({ store, clean }) =>
-        clean(request).map((write) => ({ store, id: entryId(write.id), row: write.row })),
+      return this.#rowWriters.flatMap(({ store, write: writeRows }) =>
+        writeRows(request).map((write) => ({ store, id: entryId(write.id), row: write.row })),
       );
     } finally {
       this.runningExtensionHook = false;
@@ -405,10 +405,10 @@ export class DatasetState implements Dataset {
     this.#editExtender = wrap(this.#editExtender);
   }
 
-  /** Call: `ctx.edits.cleanRowsOnRemoval((request) => rowsWithoutRemovedPredecessors(request))`.
-   *  The cleaner writes to the store `pluginId` reserved. */
-  addRowCleaner(pluginId: PluginId, clean: RemovalRowCleaner): void {
-    this.#rowCleaners.push({ store: pluginStoreName(pluginId), clean });
+  /** Call: `ctx.edits.writeRowsWithEdit((request) => rowsWithoutRemovedPredecessors(request))`.
+   *  The writer writes to the store `pluginId` reserved. */
+  addRowWriter(pluginId: PluginId, write: EditRowWriter): void {
+    this.#rowWriters.push({ store: pluginStoreName(pluginId), write });
   }
 
   /** Call: `ctx.edits.setRemovalExtender((next) => (request) => new Set([...next(request), ...mine(request)]))`.

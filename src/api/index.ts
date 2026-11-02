@@ -12,7 +12,7 @@ export type {
   PluginStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
-  RemovalRowCleaner,
+  EditRowWriter,
   StoreRowWrite,
   HierarchySource,
   HierarchySourceWrapper,

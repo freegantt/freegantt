@@ -39,14 +39,14 @@ export const EMPTY_ENTRY_IDS: ReadonlySet<EntryId> = Object.freeze(new Set<Entry
  *  checks for this occupant, so a Dataset with no removal extender builds no `EditRequest` for it. */
 export const identityRemovalExtender: RemovalExtender = () => EMPTY_ENTRY_IDS;
 
-/** One row write a plugin's removal row cleaner answered, tagged with the store it targets. */
+/** One row write a plugin's edit row writer answered, tagged with the store it targets. */
 export interface StagedRowWrite {
   readonly store: PluginStoreName;
   readonly id: EntryId;
   readonly row: object | undefined;
 }
 
-/** What a Dataset with no row cleaner answers: no write, from one shared frozen list. */
+/** What a Dataset with no row writer answers: no write, from one shared frozen list. */
 export const NO_ROW_WRITES: readonly StagedRowWrite[] = Object.freeze([]);
 
 /**

@@ -32,7 +32,7 @@ export type {
   ExtenderWrapper,
   RemovalExtender,
   RemovalExtenderWrapper,
-  RemovalRowCleaner,
+  EditRowWriter,
   StoreRowWrite,
 } from './edit-request.js';
 // The span invariant's one home (ADR 0012). A value export, and the only one `model/` holds outside
