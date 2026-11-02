@@ -1531,6 +1531,7 @@ export interface GanttDom {
     readonly bounds: DOMRect;
     cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined;
     cellText(cell: HTMLElement): string;
+    connectorFor(id: string): HTMLElement | undefined;
     owns(node: Node): boolean;
     readonly paneBounds: Record<PaneName, DOMRect>;
     paneOf(node: Node): PaneName | undefined;

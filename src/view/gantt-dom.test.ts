@@ -286,6 +286,14 @@ describe('ContainerDom — finding an element from an id', () => {
     gantt.destroy();
   });
 
+  it('connectorFor finds the painted connector of one provider id, and nothing for an unknown id', () => {
+    const gantt = paintOneGantt();
+
+    expect(gantt.dom.connectorFor('line-1')).toBe(gantt.container.querySelector('[data-connector-id]'));
+    expect(gantt.dom.connectorFor('line-2')).toBeUndefined();
+    gantt.destroy();
+  });
+
   it('cellFor finds the painted cell of one entry and one Field', () => {
     const gantt = paintOneGantt();
 

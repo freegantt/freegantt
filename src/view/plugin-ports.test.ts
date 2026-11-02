@@ -42,6 +42,7 @@ function makeDom(container: HTMLElement): GanttShellPorts['dom'] {
     owns: (node) => container.contains(node),
     targetUnder: (node) => (container.contains(node) ? target : undefined),
     barFor: () => undefined,
+    connectorFor: () => undefined,
     cellFor: () => undefined,
     cellText: () => '',
     bounds: new DOMRect(),
