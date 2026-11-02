@@ -24,7 +24,7 @@ import type {
   ClientPoint,
 } from '../../layout/index.js';
 import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
-import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
+import type { RenderBackend, RenderSurfaces, InteractionState, HitResult, RowHit } from '../backend.js';
 import {
   DEFAULT_DATE_LINE_LABEL_PLACEMENT,
   entryIdOfBar,
@@ -616,6 +616,21 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       endHandle.style.height = `${endGeom.height}px`;
     }
     paintedHandleBars = bars;
+  }
+
+  /** Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
+   *  through to the grid pane — a row click selects the same way a bar click does. The hit names
+   *  the row itself (#185): which Entries that row owns is the caller's question, and a row that
+   *  owns several used to lose all but the first to a made-up Bar id. A twisty click is not a
+   *  row hit at all: collapse stays on the twisty, never selection, and a miss there still counts
+   *  as a genuine grid miss (no clear). */
+  function rowHitUnder(el: Element | null): RowHit | null {
+    if (el === null || el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
+    const row = el.closest<HTMLElement>(`.${ROW_CLASS}`);
+    if (!row || !gridLayer?.contains(row)) return null;
+    const id = rowIdFromDataset(row.dataset[ROW_ID_KEY]);
+    // A header row carries no Entry, so it is never selectable — `entriesForRow` answers none.
+    return id === undefined ? null : { kind: 'row', rowId: id };
   }
 
   /** S3.8: parks the Cursor line when `x` is undefined; otherwise translates the stroke
@@ -1675,20 +1690,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const id = barIdFromDataset(bar.dataset[BAR_ID_KEY]);
         return id ? { kind: 'bar', barId: id } : null;
       }
-      // Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
-      // through to the grid pane — a row click selects the same way a bar click does. The hit names
-      // the row itself (#185): which Entries that row owns is the caller's question, and a row that
-      // owns several used to lose all but the first to a made-up Bar id. A twisty click is not a
-      // row hit at all: collapse stays on the twisty, never selection, and a miss there still counts
-      // as a genuine grid miss (no clear).
-      if (el instanceof Element && el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
-      const row = el instanceof Element ? el.closest<HTMLElement>(`.${ROW_CLASS}`) : null;
-      if (row && gridLayer?.contains(row)) {
-        const id = rowIdFromDataset(row.dataset[ROW_ID_KEY]);
-        // A header row carries no Entry, so it is never selectable — `entriesForRow` answers none.
-        if (id !== undefined) return { kind: 'row', rowId: id };
-      }
-      return null;
+      return rowHitUnder(el);
     },
     destroy() {
       dateLines?.destroy();
