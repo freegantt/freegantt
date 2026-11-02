@@ -1,6 +1,6 @@
 ---
-status: proposed — drafted 2026-11-02. The owner accepts it, not the author. Closes issue [#136](https://github.com/freegantt/freegantt/issues/136). Design in `plans/s7-dependencies-and-scheduling/README.md`.
-decided: a Gantt-side plugin registers a connector source with `ctx.view.registerConnector`. The source returns `ConnectorInput` values. Each value names two ends, `{ entryId, edge }`. `layout/` routes, culls and clips the connector. The plugin never sees pixels or the window.
+status: accepted — ruled 2026-11-02 by the owner. Closes issue [#136](https://github.com/freegantt/freegantt/issues/136). Design in `plans/s7-dependencies-and-scheduling/README.md`.
+decided: a Gantt-side plugin registers a connector provider with `ctx.view.registerConnector`. The provider returns `ConnectorInput` values. Each value names two ends, `{ entryId, edge }`. `layout/` routes, culls and clips the connector. The plugin never sees pixels or the window.
 open: none.
 ---
 
@@ -29,7 +29,7 @@ view(ctx) {
 ```
 
 ```ts
-// layout/connector-source.ts — imports model/ only
+// layout/connector-input.ts — imports model/ only
 export interface ConnectorEnd { entryId: EntryId; edge: 'start' | 'end' }
 export interface ConnectorInput {
   id: string;
@@ -39,7 +39,7 @@ export interface ConnectorInput {
   class?: string;
   label?: string;
 }
-export type ConnectorSource = () => readonly ConnectorInput[];
+export type ConnectorProvider = () => readonly ConnectorInput[];
 ```
 
 ### Names
@@ -51,7 +51,7 @@ export type ConnectorSource = () => readonly ConnectorInput[];
 
 ### What core does
 
-- `LayoutInput.connectorSources` mirrors `decorationProviders`.
+- `LayoutInput.connectorProviders` mirrors `decorationProviders`.
 - `layout/` finds both end bars for any Entry, culled or not. It routes the connector, then clips the path to the window.
 - `layout/` memoizes inputs by `datasetRevision`. It memoizes paths by revision, scale and row set. A scroll only filters paths.
 - An end in a collapsed group attaches to its nearest visible ancestor.
@@ -60,9 +60,9 @@ export type ConnectorSource = () => readonly ConnectorInput[];
 
 A Gantt-side plugin reads a plugin store through the existing `ctx.dataset.pluginStore(id)`. No `ctx.store.read` door arrives.
 
-### Two sources, one id
+### Two providers, one id
 
-The first source in registration order owns the input. A later source with the same id adds its `true` flags and changes nothing else. `scheduling()` emits `{ id, flags: { cycle: true } }` and never restates ends or labels.
+The first provider in registration order owns the input. A later provider with the same id adds its `true` flags and changes nothing else. `scheduling()` emits `{ id, flags: { cycle: true } }` and never restates ends or labels.
 
 ## Rejected alternatives
 
@@ -72,7 +72,7 @@ The first source in registration order owns the input. A later source with the s
 
 ## Consequences
 
-- `layout/` gains `connector-source.ts` and `connectors/route.ts`. `view/plugin-ports.ts` gains `view.registerConnector`. `api/` re-exports `ConnectorInput`.
+- `layout/` gains `connector-input.ts` and the `connectors/` folder (routing, clipping and the frame type). `view/plugin-ports.ts` gains `view.registerConnector`. `api/` re-exports `ConnectorInput`.
 - A plugin cannot draw its own path shape. Routing options live in `layout/`. A later amendment can let an input carry an explicit path.
-- A source that holds state outside the Dataset does not refresh `layout/`. The plugin keeps its rows in a plugin store, as `timeShading()` documents for its covers.
+- A provider that holds state outside the Dataset does not refresh `layout/`. The plugin keeps its rows in a plugin store, as `timeShading()` documents for its covers.
 - `plans/01` §4 and `plans/03` § S7 drop the `registerLinkEmitter` and `ctx.store.read` text.
