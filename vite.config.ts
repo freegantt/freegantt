@@ -32,6 +32,7 @@ export default defineConfig({
         'editing-and-data': page('editing-and-data.html'),
         'hierarchy-and-timeline': page('hierarchy-and-timeline.html'),
         performance: page('performance.html'),
+        'related-to': page('related-to.html'),
       },
     },
   },
