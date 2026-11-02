@@ -12,6 +12,8 @@ export type {
   PluginStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
+  RemovalRowCleaner,
+  StoreRowWrite,
   HierarchySource,
   HierarchySourceWrapper,
   FieldLockQuery,
@@ -241,6 +243,16 @@ export type {
 // write one by hand for a calendar no builder covers.
 export { timeShading } from '../extensions/features/time-shading.js';
 export type { ShadingRule, CoverPredicate } from '../extensions/features/time-shading.js';
+// `entryDependencies()`: the first-party store for Dependencies (FS, SS, FF, SF, lag in days). It
+// draws a connector for each one and needs no scheduling plugin.
+export { entryDependencies, ENTRY_DEPENDENCIES_ID } from '../extensions/features/entry-dependencies.js';
+export type {
+  Dependency,
+  DependencyInput,
+  DependencyLag,
+  DependencyType,
+  EntryDependencies,
+} from '../extensions/features/entry-dependencies.js';
 export { daysOfWeek, hours, dates, spans, notCovered } from '../extensions/features/time-shading-covers.js';
 export type { TimeCover, DayOfWeek } from '../extensions/features/time-shading-covers.js';
 // The working calendar: a pure value the scheduling plugin owns. `calendar.offTime()` is a `TimeCover`
@@ -318,6 +330,9 @@ export {
   UnknownCommandError,
   RendererAlreadyRegisteredError,
   CustomRowSourceNotFilterableOrSortableError,
+  UnsupportedLagUnitError,
+  DuplicateDependencyIdError,
+  DependencyStoreNotInstalledError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.

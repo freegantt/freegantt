@@ -146,6 +146,20 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
     ],
     specLinks: [{ label: 'docs/10 — Styling and theming', href: STYLING_GUIDE }],
   },
+  dependencies: {
+    features: [
+      'One plugin stores the Dependencies: FS, SS, FF and SF, with a lag in days (one is negative)',
+      'The Gantt draws a connector for each Dependency, named "<from> → <to>" for a screen reader',
+      'Replace the whole set: scroll, zoom and collapsed groups stay as they are',
+      'Remove an Entry and every Dependency that names it goes too, in the same undo step',
+    ],
+    config: [
+      'const dependencies = entryDependencies(); new Dataset({ entries, plugins: [dependencies] })',
+      "dependencies.replaceAll([{ id, fromId, toId, type: 'FS', lag: { value: -1, unit: 'day' } }])",
+      'dependencies.add(dependency) / dependencies.remove(id) / dependencies.all()',
+    ],
+    specLinks: [],
+  },
 };
 
 function labelledLine(label: string): HTMLParagraphElement {
