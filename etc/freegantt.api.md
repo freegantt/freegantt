@@ -828,7 +828,7 @@ export interface Duration {
 }
 
 // @public
-export type EditedDate = 'userDateWins';
+export type EditedDate = 'dependencyWins' | 'userDateWins';
 
 // @public
 export type EditExtender<TProps = Record<string, unknown>> = (request: EditRequest<TProps>) => EntryEdits;
