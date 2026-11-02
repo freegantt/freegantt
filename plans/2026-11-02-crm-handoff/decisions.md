@@ -35,3 +35,5 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | D9 | `ConnectorEnd.entryId` | Stays `EntryId`. `EntryId | string` collapses to `string` and drops the brand. A plugin that reads plain strings from a file calls `entryId()` once at the read. No code change. |
 | D10 | rowSpan `text` | Kept. The follow-up worker shows it on the "Planned vs actual" harness page (for example "+4d"). |
 | D11 | Bundle growth | Coordinator default 11A while the owner is away (2026-11-02): accept the growth with a row in `bundle-size-exceptions.md`. No lazy loading. The owner can reverse it. |
+| C1 | Removal cascade gap (S7.2) | Coordinator: core adds a generic seam that lets a plugin stage writes to its own store for a removal, in the same transaction and changeset. Other store writes inside the extension hook still throw. |
+| C2 | `replaceAll` undo | Coordinator: README decision 5 stands (owner-accepted): `replaceAll` writes like `entries.syncAll`, with no undo step. `add`/`remove` are undoable. |
