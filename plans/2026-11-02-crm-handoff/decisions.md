@@ -38,3 +38,4 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | C1 | Removal cascade gap (S7.2) | Coordinator: core adds a generic seam that lets a plugin stage writes to its own store for a removal, in the same transaction and changeset. Other store writes inside the extension hook still throw. |
 | C2 | `replaceAll` undo | Coordinator: README decision 5 stands (owner-accepted): `replaceAll` writes like `entries.syncAll`, with no undo step. `add`/`remove` are undoable. |
 | C3 | `replaceAll` door (S7.2) | Coordinator: core adds `PluginStore.syncAll(rows)`, mirroring `entries.syncAll`: one 'sync' ChangeSet, no undo step, all-or-nothing. C1's seam shipped as `ctx.edits.cleanRowsOnRemoval(cleaner)`. |
+| D11, C1, C3 | Owner confirmation | The owner confirmed 11A, C1 and C3 (2026-11-02). |
