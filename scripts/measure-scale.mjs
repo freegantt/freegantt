@@ -27,9 +27,9 @@ const OUT_DIR = 'measurements';
  *  not a single flick. */
 const SCROLL_STEPS = 240;
 const STEP_PX = 40;
-/** R2 asks for at least 50 hovers. */
+/** At least 50 hovers, so the percentiles rest on more than a few samples. */
 const HOVER_COUNT = 60;
-/** R2 asks for one transaction that changes at least 1,000 entries. */
+/** One transaction that changes at least 1,000 entries. */
 const BULK_EDIT_ENTRIES = 1000;
 const BULK_EDIT_SHIFT_MS = 86_400_000;
 /** Frames watched after the transaction, so a late relayout still lands in the reading. */
@@ -216,7 +216,7 @@ async function measureHover(page) {
     });
   });
   if (targets.length === 0) throw new Error('measure:scale: no bar in view to hover');
-  // The view holds fewer bars than R2 wants hovers, so each bar takes several fresh hovers.
+  // The view holds fewer bars than the hover count, so each bar takes several fresh hovers.
   for (let hover = 0; hover < HOVER_COUNT; hover++) {
     const { index, x, y } = targets[hover % targets.length];
     // Rest off every bar first, and wait for the last hover to clear, so each move is a fresh hover.
