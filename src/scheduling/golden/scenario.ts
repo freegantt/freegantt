@@ -29,7 +29,7 @@ export interface GoldenScenario {
   readonly dependencies: readonly GoldenDependency[];
   /** What the user just set, per Entry id, in days. */
   readonly proposed?: Readonly<Record<string, Partial<Record<ScheduleField, number>>>>;
-  readonly pinned?: readonly string[];
+  readonly manuallyScheduled?: readonly string[];
   readonly expected: {
     readonly patch: readonly GoldenChange[];
     readonly diagnostics?: readonly GoldenDiagnostic[];
@@ -63,7 +63,7 @@ export function toRequest(scenario: GoldenScenario): ScheduleRequest {
       lag: { value: lagDays, unit: 'day' },
     })),
     proposed,
-    pinned: new Set((scenario.pinned ?? []).map(entryId)),
+    manuallyScheduled: new Set((scenario.manuallyScheduled ?? []).map(entryId)),
   };
 }
 

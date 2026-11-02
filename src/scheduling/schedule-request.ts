@@ -30,7 +30,7 @@ export interface ScheduleRequest {
    */
   readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
   /** Entries the engine must never move. */
-  readonly pinned?: ReadonlySet<EntryId>;
+  readonly manuallyScheduled?: ReadonlySet<EntryId>;
   /** Defaults to `defaultPolicy`. */
   readonly policy?: SchedulingPolicy;
 }

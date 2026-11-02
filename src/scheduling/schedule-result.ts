@@ -19,8 +19,8 @@ export interface CycleDiagnostic {
 
 /** Why a dependency could not move its successor. */
 export type BlockReason =
-  /** The Entry is pinned. */
-  | 'pinned'
+  /** The Entry is manually scheduled. */
+  | 'manuallyScheduled'
   /** The user proposed a date the move would change. */
   | 'proposed'
   /** The policy lets no date of this Entry move. */

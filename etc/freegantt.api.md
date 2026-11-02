@@ -131,8 +131,8 @@ export interface BlockedMoveDiagnostic {
 
 // @public
 export type BlockReason =
-/** The Entry is pinned. */
-'pinned'
+/** The Entry is manually scheduled. */
+'manuallyScheduled'
 /** The user proposed a date the move would change. */
 | 'proposed'
 /** The policy lets no date of this Entry move. */
@@ -2444,7 +2444,7 @@ export interface ScheduleRequest {
     // (undocumented)
     readonly dependencies: readonly ScheduleDependency[];
     readonly entries: readonly ScheduleEntry[];
-    readonly pinned?: ReadonlySet<EntryId>;
+    readonly manuallyScheduled?: ReadonlySet<EntryId>;
     readonly policy?: SchedulingPolicy;
     readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
 }
@@ -2457,7 +2457,7 @@ export interface ScheduleResult {
 }
 
 // @public
-export type ScheduleRuleKind = 'pinned' | 'dependency';
+export type ScheduleRuleKind = 'manuallyScheduled' | 'dependency';
 
 // @public (undocumented)
 export interface SchedulingPolicy {
