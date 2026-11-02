@@ -43,3 +43,6 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | F1-a | Engine defaults (F1) | An edited Entry never pulls earlier: its new date is its floor. A floor on an Entry with no incoming Dependency does not move it; S7.9 decides how a violated constraint reports. |
 | C5 | Manually scheduled storage | Coordinator: `scheduling()` declares a boolean Field `manuallyScheduled`, because a grid toggle column binds to a Field (ruling D6). This replaces README decision 14 for that flag only. Constraints stay in the plugin store. |
 | C6 | Constraint write (S7.7) | Coordinator: `cleanRowsOnRemoval` widens into one seam that stages a plugin's own store rows for any edit, in the same ChangeSet. One door, renamed to fit. |
+| D12 | I4 and ruling D4 | Owner 1B (2026-11-02): an extension may replace a Field the user proposed only when its result marks that Field as an override. The dev check still throws on an unmarked overwrite. Needs a plans/01 §11 I4 amendment and an ADR. |
+| D13 | Connect a locked Entry | Owner: keep. A locked Entry allows 'connect' unless `capabilities.connect` says no. |
+| D14 | S7.3b names | Owner: `connectByDrag` and the id form `<from>:<type>:<to>` are fine. |
