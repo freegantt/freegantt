@@ -34,7 +34,10 @@ import type { Dependency, DependencyStoreView } from './entry-dependencies.js';
 /** The plugin id other plugins name in `requires`. */
 export const SCHEDULING_ID = 'freegantt.scheduling';
 
-/** A date rule on one Entry. Today: "start no earlier than" a date. */
+/**
+ * A date rule on one Entry: "start no earlier than", "finish no later than" or "must start on" a date.
+ * An Entry holds one. The order of rules is: manually scheduled, must start on, Dependency, start no earlier than.
+ */
 export type EntryConstraint = ScheduleConstraint;
 
 /**
@@ -72,6 +75,11 @@ export type ScheduleDiagnosticsHandler = (diagnostics: readonly ScheduleDiagnost
 export interface Scheduling extends DataPlugin {
   /** The constraint of one Entry, or `undefined` when it has none. */
   constraintOf(entry: EntryId | string): EntryConstraint | undefined;
+  /**
+   * Sets the constraint of one Entry and moves the Entry and its successors to meet it, in one undo step.
+   * A "finish no later than" date moves nothing: when the Entry finishes later, `diagnostics()` names it.
+   */
+  setConstraint(entry: EntryId | string, constraint: EntryConstraint): void;
   /** Removes the constraint of one Entry. One undo step covers it. An Entry with none changes nothing. */
   clearConstraint(entry: EntryId | string): void;
   /** The findings of the latest commit: cycles, blocked moves, Dependencies the engine cannot read. */
@@ -107,6 +115,8 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   // and the next commit overwrites it again before `change` reads it.
   let pending: readonly ScheduleDiagnostic[] | undefined;
   const handlers = new Set<ScheduleDiagnosticsHandler>();
+  // True while `setConstraint` writes the moves it computed. Those writes need no second engine run.
+  let applyingConstraint = false;
 
   function installation(operation: string): Installation {
     if (!installed) throw new SchedulingNotInstalledError(operation);
@@ -169,12 +179,24 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     return starts;
   }
 
-  /** Every user start becomes the "start no earlier than" row of its Entry. A cleared start clears the row. */
+  /** Does the Entry hold a date the user set on purpose, so that an edit must not replace it? */
+  function holdsHardConstraint(id: EntryId): boolean {
+    const kind = installed?.store.get(id)?.kind;
+    return kind === 'mustStartOn' || kind === 'finishNoLaterThan';
+  }
+
+  /**
+   * Every user start becomes the "start no earlier than" row of its Entry. A cleared start clears the row.
+   * An Entry with a "must start on" or "finish no later than" row keeps it, so a drag cannot erase it unseen.
+   */
   function constraintRowsFor(request: EditRequest): readonly StoreRowWrite<EntryConstraint>[] {
-    return [...startProposals(request)].map(([id, start]) => ({
-      id,
-      row: start === undefined ? undefined : { kind: 'startNoEarlierThan', date: start },
-    }));
+    if (applyingConstraint) return [];
+    return [...startProposals(request)]
+      .filter(([id]) => !holdsHardConstraint(id))
+      .map(([id, start]) => ({
+        id,
+        row: start === undefined ? undefined : { kind: 'startNoEarlierThan', date: start },
+      }));
   }
 
   function touchesDates(request: EditRequest): boolean {
@@ -253,15 +275,17 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     if (overruled.size === 0) return { result: first, overruled, dates };
     const remaining = new Map([...dates].filter(([id]) => !overruled.has(id)));
     const floors = new Map(store.all);
-    for (const id of overruled)
+    for (const id of overruled) {
+      if (holdsHardConstraint(id)) continue;
       floors.set(id, { kind: 'startNoEarlierThan', date: dates.get(id)?.start as Instant });
+    }
     return { result: runEngine(request, remaining, floors), overruled, dates };
   }
 
   /** Runs the engine against the edit and answers the cascade, keeping the findings for `change`. */
   function extend(request: EditRequest): EntryEdits {
     const store = installed?.store;
-    if (!store || !touchesDates(request)) {
+    if (!store || applyingConstraint || !touchesDates(request)) {
       pending = undefined;
       return new Map();
     }
@@ -317,6 +341,48 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     return calendar ? { calendar } : {};
   }
 
+  /** Every Entry that follows `id` through a Dependency, `id` included. */
+  function followersOf(id: EntryId): Set<EntryId> {
+    const followers = new Set<EntryId>([id]);
+    const successors = new Map<EntryId, EntryId[]>();
+    for (const { fromId, toId } of dependencies()) {
+      const list = successors.get(fromId) ?? [];
+      list.push(toId);
+      successors.set(fromId, list);
+    }
+    const waiting = [id];
+    for (let next = waiting.pop(); next !== undefined; next = waiting.pop()) {
+      for (const successor of successors.get(next) ?? []) {
+        if (followers.has(successor)) continue;
+        followers.add(successor);
+        waiting.push(successor);
+      }
+    }
+    return followers;
+  }
+
+  /** Writes the moves a new constraint causes: the Entry and its followers, and only when the Entry itself moves. */
+  function moveToConstraint(current: Installation, id: EntryId): void {
+    const entries = current.dataset.entries.all;
+    const { patch } = schedule({
+      entries,
+      dependencies: dependencies(),
+      manuallyScheduled: new Set(
+        entries.filter((entry) => entry.read(MANUALLY_SCHEDULED) === true).map((entry) => entry.id),
+      ),
+      constraints: current.store.all,
+      ...auditCalendarOption(current.dataset, entries),
+      ...(options.successorMoves === undefined ? {} : { successorMoves: options.successorMoves }),
+    });
+    if (!patch.some((change) => change.id === id)) return;
+    const followers = followersOf(id);
+    const edits = new Map<EntryId, { start?: Instant; end?: Instant }>();
+    for (const change of patch)
+      if (followers.has(change.id))
+        edits.set(change.id, { ...edits.get(change.id), [change.field]: change.to });
+    for (const [entry, edit] of edits) current.dataset.entries.update(entry, edit);
+  }
+
   return {
     id: SCHEDULING_ID,
     requires: [ENTRY_DEPENDENCIES_ID],
@@ -343,7 +409,9 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), extend(request)));
       // When do the findings change? After each commit, from the edit that made it.
       const stopListening = ctx.events.on('change', ({ changeSet }) => {
-        publish((changeSet.origin === 'user' ? pending : undefined) ?? auditCurrentState());
+        const fromEdit = changeSet.origin === 'user' ? pending : undefined;
+        pending = undefined;
+        publish(fromEdit ?? auditCurrentState());
       });
       return () => {
         stopListening();
@@ -380,6 +448,20 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
 
     constraintOf(entry) {
       return installation('scheduling.constraintOf').store.get(entryId(entry));
+    },
+
+    setConstraint(entry, constraint) {
+      const current = installation('scheduling.setConstraint');
+      const id = entryId(entry);
+      current.dataset.transaction(() => {
+        current.store.set(id, constraint);
+        applyingConstraint = true;
+        try {
+          moveToConstraint(current, id);
+        } finally {
+          applyingConstraint = false;
+        }
+      });
     },
 
     clearConstraint(entry) {
