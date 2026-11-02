@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
+### Added
+
+- `ctx.view.registerConnector(provider)` draws a line between two bars. The provider returns `ConnectorInput` values: an `id`, a `from` and a `to` end (`{ entryId, edge: 'start' | 'end' }`), and optional `flags`, `class` and `label`. Core finds both bars for any Entry, routes an orthogonal path and clips it to the window, so a line stays drawn while one end is off screen. An end inside a collapsed group attaches to its nearest visible ancestor. `GeometryFrame.connectors` holds the lines, and the timeline pane draws them as SVG paths with `data-connector-id`, `data-flag` and an accessible name from `label`. `CONNECTOR_FLAG_KEYS` and the types `ConnectorInput`, `ConnectorEnd`, `ConnectorEdge`, `ConnectorFlags` and `ConnectorProvider` are public. The harness has a new "Related to" page.
+
 ## [0.1.0] - 2026-09-30
 
 The first release. Install it with `npm install freegantt`.

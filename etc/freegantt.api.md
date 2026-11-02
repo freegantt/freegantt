@@ -306,6 +306,40 @@ export class ComputedFieldCannotBeWrittenError extends FreeGanttError {
 }
 
 // @public
+export const CONNECTOR_FLAG_KEYS: readonly ["inactive", "cycle"];
+
+// @public
+export type ConnectorEdge = 'start' | 'end';
+
+// @public
+export interface ConnectorEnd {
+    // (undocumented)
+    edge: ConnectorEdge;
+    // (undocumented)
+    entryId: EntryId;
+}
+
+// @public (undocumented)
+export type ConnectorFlags = Partial<Record<(typeof CONNECTOR_FLAG_KEYS)[number], boolean>>;
+
+// @public
+export interface ConnectorInput {
+    class?: string;
+    // (undocumented)
+    flags?: ConnectorFlags;
+    // (undocumented)
+    from: ConnectorEnd;
+    // (undocumented)
+    id: string;
+    label?: string;
+    // (undocumented)
+    to: ConnectorEnd;
+}
+
+// @public
+export type ConnectorProvider = () => readonly ConnectorInput[];
+
+// @public
 export class ContainerNotFoundError extends FreeGanttError {
     constructor(container: string);
     // (undocumented)
@@ -1921,6 +1955,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         variantFor(entry: Entry): ResolvedVariant;
         resolvedColumns(): readonly GridColumn[];
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
+        registerConnector(provider: ConnectorProvider): Disposer;
         registerGridColumn(column: GridColumnInput): Disposer;
     };
 }

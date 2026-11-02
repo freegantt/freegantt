@@ -18,6 +18,7 @@ import { createRegistrationTable } from '../layout/registration-table.js';
 import type {
   DecorationLayer,
   DecorationProvider,
+  ConnectorProvider,
   EntryVariant,
   RegisteredDecorationProvider,
   RendererFor,
@@ -51,6 +52,7 @@ export interface PluginRegistrationPorts {
 export interface PluginRegistrar {
   registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer;
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
+  registerConnector(provider: ConnectorProvider): Disposer;
   registerVariant(variant: EntryVariant, pluginId: PluginId): Disposer;
   registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
 }
@@ -76,6 +78,12 @@ export class PluginRegistrations implements PluginRegistrar {
    *  that right, and had to be read to prove it. */
   #decorations = createRegistrationTable<number, RegisteredDecorationProvider>();
   #nextDecorationKey = 0;
+
+  /** Every connector provider, in registration order. The first provider to state an id owns it. */
+  #connectors = createRegistrationTable<number, ConnectorProvider>();
+  #nextConnectorKey = 0;
+  /** The list `connectorProviders()` hands out. Frames read it on scroll, so it allocates nothing. */
+  #activeConnectors: readonly ConnectorProvider[] | undefined;
 
   /** The list `decorationProviders()` hands out, held between registration changes (#188). Every
    *  frame reads that list, and frames fire on scroll, so the hot path must allocate nothing
@@ -107,6 +115,19 @@ export class PluginRegistrations implements PluginRegistrar {
       () => this.#decorations.register(key, { layer, provider }),
       () => {
         this.#activeDecorations = undefined;
+        this.#ports.requestFrame();
+      },
+    );
+  }
+
+  /** A connector changes what paints, so the repaint runs on both edges, and the held list goes
+   *  with it. */
+  registerConnector(provider: ConnectorProvider): Disposer {
+    const key = this.#nextConnectorKey++;
+    return this.#onBothEdges(
+      () => this.#connectors.register(key, provider),
+      () => {
+        this.#activeConnectors = undefined;
         this.#ports.requestFrame();
       },
     );
@@ -149,6 +170,12 @@ export class PluginRegistrations implements PluginRegistrar {
   decorationProviders(): readonly RegisteredDecorationProvider[] {
     this.#activeDecorations ??= this.#decorations.active();
     return this.#activeDecorations;
+  }
+
+  /** Every live connector provider, in registration order — `LayoutInput.connectorProviders`. */
+  connectorProviders(): readonly ConnectorProvider[] {
+    this.#activeConnectors ??= this.#connectors.active();
+    return this.#activeConnectors;
   }
 
   #withRepaint(register: () => Disposer): Disposer {

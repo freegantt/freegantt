@@ -3151,6 +3151,7 @@ export class GanttShell {
         collapsed: this.#treeCollapse.ids,
         variants: this.#registrations.variants,
         decorationProviders: this.#registrations.decorationProviders(),
+        connectorProviders: this.#registrations.connectorProviders(),
         datasetRevision: this.#options.dataset.datasetRevision,
         entryRulePorts: this.#entryRulePorts,
         // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
