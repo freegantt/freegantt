@@ -136,13 +136,18 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
   },
   'related-to': {
     features: [
-      'A plugin that keeps its own list of related Entries and draws a line between each pair',
+      'A plugin that keeps its related Entries in a plugin store and draws a line between each pair',
+      'Drag from a connector port on one bar to a port on another bar to add a pair; one undo removes it',
+      'A beforeConnect handler that waits 600 ms holds the drop and the preview line (Escape ends the wait)',
+      'A locked Entry resolves the connect capability to false, so its bar shows no port',
       'A line that stays drawn when one end, or both ends, scroll out of the window',
       'Each line has an accessible name, and no line draws when no plugin registers a provider',
     ],
     config: [
       'ctx.view.registerConnector(() => related.map((r) => ({ id, from, to })))',
       "from: { entryId, edge: 'end' }, to: { entryId, edge: 'start' }",
+      'ctx.view.onConnect(({ from, to }) => relate(from, to))',
+      'capabilities: { connect: (entry) => (entry.read("locked") === true ? false : undefined) }',
     ],
     specLinks: [{ label: 'docs/10 — Styling and theming', href: STYLING_GUIDE }],
   },
