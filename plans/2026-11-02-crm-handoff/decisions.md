@@ -16,3 +16,14 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | 10a | `links.endpoints` | Drop it only after the S7.1 implementer confirms one Entry draws one Bar on segmented rows too. |
 | — | Worker E question | Option A: `load()` stays the new-baseline door (#496). `syncAll()` drops collapse ids for removed rows. |
 | — | Worker G points | Open gate rows print as open and do not fail the exit code. The A5 id sits in the pack-audit script output. (Coordinator default; the owner has not objected.) |
+
+## Wave-2 follow-up rulings (2026-11-02)
+
+| # | Decision | Ruling |
+|---|---|---|
+| D1 | ADR 0040 | Accepted. The ADR now uses the code's names: `ConnectorProvider`, `connectorProviders`, `layout/connector-input.ts`. |
+| D3 | Successor moves earlier | The consumer selects it with a `scheduling()` option. The default is the common behavior of Project and P6 (research confirms which). |
+| D3a | Other behaviors | Each researched behavior is a consumer option. The common path is the default. |
+| D5 | Lag units | Days only for now. A month or year lag gives a diagnostic. |
+| D6 | Manually scheduled | A per-Entry "manually scheduled" field that the consumer can show as a column toggle. The engine treats it as a pin. A policy that overwrites a proposed field stays a dev-mode error. |
+| D8 | Holidays | The calendar is data that the consumer developer sets. No end-user holiday entry. Holidays accept `InstantInput`, like `dates()`. |
