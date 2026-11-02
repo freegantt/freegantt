@@ -32,7 +32,7 @@ export type {
   ExtenderWrapper,
   RemovalExtender,
   RemovalExtenderWrapper,
-  RemovalRowCleaner,
+  EditRowWriter,
   StoreRowWrite,
 } from './edit-request.js';
 // The span invariant's one home (ADR 0012). A value export, and the only one `model/` holds outside
@@ -147,6 +147,7 @@ export {
   UnsupportedLagUnitError,
   DuplicateDependencyIdError,
   DependencyStoreNotInstalledError,
+  SchedulingNotInstalledError,
 } from './errors.js';
 // S5.12: the Error report the `error` event carries on both buses, plus the raise seam
 // every layer that has no bus of its own is handed.
