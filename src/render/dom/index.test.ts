@@ -2789,6 +2789,94 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('paints a rowSpan inside its row, hidden from assistive tech, with no hit target, on the layer the provider chose', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    const row = frame.rows[0]!;
+
+    backend.sync({
+      ...frame,
+      underBars: [],
+      overBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, class: 'planned', text: 'was 3 Sep' }],
+    });
+
+    const bars = timeline.querySelector('.fg-bars')!;
+    const span = timeline.querySelector<HTMLElement>('.fg-row-span')!;
+    expect(span.classList.contains('planned')).toBe(true);
+    expect(span.getAttribute('aria-hidden')).toBe('true');
+    expect(span.hasAttribute('tabindex')).toBe(false);
+    expect(span.hasAttribute('data-row-id')).toBe(false);
+    expect(span.style.transform).toBe(`translate(40px, ${row.top}px)`);
+    expect(span.style.width).toBe('25px');
+    expect(span.textContent).toBe('was 3 Sep');
+    expect(span.style.height).toBe(`${row.height}px`);
+    expect(bars.compareDocumentPosition(span) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25 }],
+      overBars: [],
+    });
+    const under = timeline.querySelector<HTMLElement>('.fg-row-span')!;
+    expect(bars.compareDocumentPosition(under) & Node.DOCUMENT_POSITION_PRECEDING).toBeGreaterThan(0);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('paints no rowSpan for a row outside the window', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+
+    // The second entry's row exists in no painted frame — the mounted window holds the first only.
+    const outsideRow = computeFrame({
+      entries: sampleEntries.slice(1, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    }).rows[0]!;
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: outsideRow.id, x: 0, width: 10 }],
+      overBars: [],
+    });
+    expect(timeline.querySelector('.fg-row-span')).toBeNull();
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it("a per-column columnRenderer's own resolved output beats the Gantt-wide one for that column only (S5.7, D-S5-17)", () => {
     // GanttShell's own `resolveGridCellRenderer` binding (view/gantt-shell.ts) is what actually decides
     // "per-column wins over Gantt-wide" — this stands in for that resolution the way every other test

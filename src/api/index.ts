@@ -424,6 +424,7 @@ export type {
   DecorationInput,
   RangeBand,
   RowStripe,
+  RowSpan,
 } from '../layout/index.js';
 // ADR 0018: `EntryVariant.bars`'s own vocabulary — a plugin author naming `BarProducer`
 // explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left

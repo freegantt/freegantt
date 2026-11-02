@@ -77,6 +77,8 @@ export type {
   PathCommand,
   RangeBand,
   RowStripe,
+  RowSpan,
+  ResolvedDecoration,
   BarFlags,
   BarSpanKind,
   LinkFlags,

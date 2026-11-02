@@ -15,8 +15,8 @@ import type { EntryRulePorts } from './entry-rule.js';
 import type { BarAnchor, Bar, VariantBars } from './bars/bar.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
-import type { RangeBand, RowStripe } from './decoration.js';
-export type { RangeBand, RowStripe } from './decoration.js';
+import type { ResolvedDecoration } from './decoration.js';
+export type { RangeBand, ResolvedDecoration, RowSpan, RowStripe } from './decoration.js';
 import { DecorationRunner } from './decorations.js';
 import type { RegisteredDecorationProvider } from './decorations.js';
 export type { RegisteredDecorationProvider } from './decorations.js';
@@ -279,7 +279,7 @@ export interface FrameLink {
   flags: LinkFlags;
 }
 
-export type FrameDecoration = DateLineDecoration | RangeBand | RowStripe;
+export type FrameDecoration = DateLineDecoration | ResolvedDecoration;
 
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
@@ -351,9 +351,9 @@ export interface GeometryFrame {
   links: readonly FrameLink[];
   decorations: readonly FrameDecoration[];
   /** Registered decoration providers' output, painted below the bar layer. */
-  underBars: readonly (RangeBand | RowStripe)[];
+  underBars: readonly ResolvedDecoration[];
   /** Registered decoration providers' output, painted above the bar layer. */
-  overBars: readonly (RangeBand | RowStripe)[];
+  overBars: readonly ResolvedDecoration[];
   /** Paint description for Grid columns, in display order. Matches `rows[].cells` 1:1. */
   columns: readonly FrameColumn[];
 }
