@@ -249,9 +249,13 @@ export type { ShadingRule, CoverPredicate } from '../extensions/features/time-sh
 // draws a connector for each one and needs no scheduling plugin.
 export { entryDependencies, ENTRY_DEPENDENCIES_ID } from '../extensions/features/entry-dependencies.js';
 export type {
+  BeforeDependencyRemoveHandler,
   Dependency,
+  DependencyEvents,
   DependencyInput,
   DependencyLag,
+  DependencyRemoval,
+  DependencyRemoveHandler,
   DependencyType,
   EntryDependencies,
   EntryDependenciesOptions,
