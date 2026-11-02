@@ -117,6 +117,30 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
+export interface BlockedMoveDiagnostic {
+    // (undocumented)
+    readonly code: 'blocked-move';
+    // (undocumented)
+    readonly dependencyIds: readonly string[];
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly reason: BlockReason;
+    readonly wouldChange: readonly ScheduleChange[];
+}
+
+// @public
+export type BlockReason =
+/** The Entry is pinned. */
+'pinned'
+/** The user proposed a date the move would change. */
+| 'proposed'
+/** The policy lets no date of this Entry move. */
+| 'policy'
+/** The move would put the end before the start. */
+| 'inverted';
+
+// @public
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.moveEntryUp' | 'freegantt.moveEntryDown' | 'freegantt.indentEntry' | 'freegantt.outdentEntry' | 'freegantt.deleteSelection' | 'freegantt.clearDates' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.switchToggle' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
@@ -419,6 +443,13 @@ export class CustomRowSourceNotFilterableOrSortableError extends FreeGanttError 
     readonly operation: string;
 }
 
+// @public
+export interface CycleDiagnostic {
+    // (undocumented)
+    readonly code: 'cycle';
+    readonly entryIds: readonly EntryId[];
+}
+
 // @public (undocumented)
 export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, Dataset<TProps>>;
 
@@ -636,6 +667,9 @@ export type DecorationLayer = 'underBars' | 'overBars';
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
 
 // @public
+export const defaultPolicy: SchedulingPolicy;
+
+// @public
 export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TProps> = ChromePlugin<TProps>>(plugin: TPlugin): TPlugin;
 
 // @public
@@ -750,6 +784,12 @@ export interface EditRequest<TProps = Record<string, unknown>> {
     proposed: ProposedEdits;
     readonly removedEntryIds: ReadonlySet<EntryId>;
     writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;
+}
+
+// @public
+export interface EditResolution {
+    // (undocumented)
+    readonly moves: readonly ScheduleField[];
 }
 
 // @public
@@ -1630,6 +1670,14 @@ export function instant(value: Date | number | string): Instant;
 export type InstantInput = Instant | Date | number | string;
 
 // @public
+export interface InvalidDependencyDiagnostic {
+    // (undocumented)
+    readonly code: 'unknown-entry' | 'unsupported-lag-unit';
+    // (undocumented)
+    readonly dependencyId: string;
+}
+
+// @public
 export class InvalidInstantError extends FreeGanttError {
     constructor(value: unknown, reason: InvalidInstantReason, operation: string);
     // (undocumented)
@@ -2116,6 +2164,9 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
 export type ProposedEdits = ReadonlyMap<EntryId, ProposedEdit>;
 
 // @public
+export type ProposedEntryDates = Partial<Record<ScheduleField, Instant>>;
+
+// @public
 export interface ProposedSpan extends ProposedDates {
     // (undocumented)
     readonly end: Instant;
@@ -2345,6 +2396,73 @@ export interface RowStripe {
     kind: 'rowStripe';
     // (undocumented)
     rowId: RowId;
+}
+
+// @public
+export function schedule(request: ScheduleRequest): ScheduleResult;
+
+// @public
+export interface ScheduleChange {
+    // (undocumented)
+    readonly field: ScheduleField;
+    // (undocumented)
+    readonly from: Instant;
+    // (undocumented)
+    readonly id: EntryId;
+    // (undocumented)
+    readonly to: Instant;
+}
+
+// @public
+export interface ScheduleDependency {
+    // (undocumented)
+    readonly fromId: EntryId;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lag: Duration;
+    // (undocumented)
+    readonly toId: EntryId;
+    // (undocumented)
+    readonly type: ScheduleDependencyType;
+}
+
+// @public
+export type ScheduleDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
+// @public (undocumented)
+export type ScheduleDiagnostic = CycleDiagnostic | BlockedMoveDiagnostic | InvalidDependencyDiagnostic;
+
+// @public
+export type ScheduleEntry = Pick<Entry, 'id' | 'start' | 'end' | 'hasChildren'>;
+
+// @public
+export type ScheduleField = 'start' | 'end';
+
+// @public (undocumented)
+export interface ScheduleRequest {
+    // (undocumented)
+    readonly dependencies: readonly ScheduleDependency[];
+    readonly entries: readonly ScheduleEntry[];
+    readonly pinned?: ReadonlySet<EntryId>;
+    readonly policy?: SchedulingPolicy;
+    readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
+}
+
+// @public (undocumented)
+export interface ScheduleResult {
+    // (undocumented)
+    readonly diagnostics: readonly ScheduleDiagnostic[];
+    readonly patch: readonly ScheduleChange[];
+}
+
+// @public
+export type ScheduleRuleKind = 'pinned' | 'dependency';
+
+// @public (undocumented)
+export interface SchedulingPolicy {
+    readonly precedence: readonly ScheduleRuleKind[];
+    resolveEdit(touched: ReadonlySet<ScheduleField>, entry: ScheduleEntry): EditResolution;
 }
 
 // @public

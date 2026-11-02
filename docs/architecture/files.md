@@ -263,9 +263,22 @@ where they do something beyond re-export.
 | `extensions/plugin-order.ts` | `resolveSetupOrder(), assertNoDuplicateIds(), OrderedPlugin` | The one place that answers "in what order do plugins set up?". A plugin's two halves share one `requires` list between them, so the sort belongs to neither install site alone. Generic over the plugin shape — it reads `id` and `requires` and nothing else. |
 | `extensions/index.ts` | barrel | Re-exports the runtime, commands, keymap, and the shipped built-ins. |
 
-### not yet written
+### `scheduling/` — pure — the propagation engine, no DOM
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `scheduling/index.ts` | — | The first-party default plugin's pure engine + the `EditExtender` occupancy. |
+| `scheduling/apply-lag.ts` | `applyLag()` | Turns a lag into a distance in time. Every day count in the engine goes through it. |
+| `scheduling/dependency-order.ts` | `orderByDependency(), OrderStep` | Orders Entries so each predecessor comes first, and finds loops. It uses no recursion. |
+| `scheduling/golden/conflict.golden.ts` | `conflictScenarios` | Hand-worked answers for pins, parents, loops, and unreadable dependencies. |
+| `scheduling/golden/dependency-types.golden.ts` | `dependencyTypeScenarios` | Hand-worked answers for each dependency type, each lag sign, and chains. |
+| `scheduling/golden/edit.golden.ts` | `editScenarios` | Hand-worked answers for a user edit: a move, a resize, and a conflict. |
+| `scheduling/golden/index.ts` | `goldenScenarios` | Joins the three scenario lists into one list for the engine tests. |
+| `scheduling/golden/scenario.ts` | `GoldenScenario, GoldenEntry, GoldenDependency, GoldenChange, GoldenDiagnostic, day(), toRequest(), toExpectedResult()` | The scenario shape, in whole days. It converts a scenario to a request and to the expected result. |
+| `scheduling/index.ts` | barrel | Re-exports the engine, the policy, the request and result types, and the working calendar. |
+| `scheduling/propagate.ts` | `moveSuccessor(), movableFields(), FIELDS, Node, Edge, Run` | Moves one Entry to satisfy the dependencies that reach it. It uses no recursion. |
+| `scheduling/schedule-entry.ts` | `ScheduleEntry, ScheduleField` | The slice of an Entry that the engine reads. |
+| `scheduling/schedule-request.ts` | `ScheduleRequest, ScheduleDependency, ScheduleDependencyType, ProposedEntryDates` | The plain data that `schedule()` takes. |
+| `scheduling/schedule-result.ts` | `ScheduleResult, ScheduleChange, ScheduleDiagnostic, CycleDiagnostic, BlockedMoveDiagnostic, BlockReason, InvalidDependencyDiagnostic` | The patch and the diagnostics that `schedule()` answers. |
+| `scheduling/schedule.ts` | `schedule()` | The pure, deterministic propagation engine. It never changes its input. |
+| `scheduling/scheduling-policy.ts` | `SchedulingPolicy, EditResolution, ScheduleRuleKind, defaultPolicy` | The policy seam. It decides which fields move and how the engine resolves a conflicting edit. |
 | `scheduling/working-calendar.ts` | `workingCalendar(), WorkingCalendar, WorkingCalendarOptions, OffTimeCover, Workday, InvalidWorkingCalendarError` | An immutable set of workdays and holidays. It answers `isWorkday`, `addWorkdays` and `workdaysBetween` with integer day arithmetic, and `offTime()` returns a `TimeCover`-shaped cover for `timeShading()`. |
