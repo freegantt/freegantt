@@ -32,6 +32,7 @@ flowchart TB
   API --> VIEW
   API --> DATA
   API --> INT
+  API --> SCH
   EXT --> VIEW
   EXT --> INT
   INT --> VIEW
@@ -64,6 +65,8 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 `interaction/ --> MODEL` (S3, D-S3-4/D-S3-5, `plans/s3-direct-manipulation/README.md` P3): a gesture controller names `Entry`, `EntryId` and `BarId` — all three live in `model/` — as type-only params, the same rationale `view/`'s own `model/` edge already carries. One arrow, nothing else: `interaction/` still may not reach `time/`, `layout/` or `render/` — every date/pixel computation a gesture needs is a pure `layout/` function the shell hands back through `EntryGestureContext`.
 
 `api/ --> INT` (S3, `plans/s3-direct-manipulation/README.md` §0): `interaction/` sits one layer *above* `view/` (`INT --> VIEW`, not the reverse), so nothing inside `view/` may import it to wire the default pointer-gesture attachments into `GanttShell` — and `extensions/`, the other layer that reaches both `view/` and `interaction/`, does not exist until S5. `api/gantt.ts` is the composition root that supplies `attachEntryGestures` to `GanttShell` by constructor injection (the shell itself takes it structurally-typed, with no import of its own), the same role it already plays wiring `view/`, `data/`, `model/`, `time/` and `layout/` together for a plain `new Gantt(...)`.
+
+`api/ --> SCH` (S7, 2026-11-02): `api/` is the only public door, so the first-party scheduling exports (`workingCalendar`, `schedule()`, later `scheduling()`) re-export through it. `package.json` `sideEffects` lists only `src/view/styles.ts`, so a consumer who imports no scheduling export ships none of `scheduling/`. `scheduling/` itself still imports `time/` and `model/` only, and `data/` still has no edge to it.
 
 **Enforcement (D12):** an import-boundary lint rule in CI (dependency-cruiser or `no-restricted-imports`). Any arrow not in this diagram fails the build. Notably:
 
