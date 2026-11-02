@@ -274,8 +274,10 @@ where they do something beyond re-export.
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `scheduling/apply-lag.ts` | `applyLag()` | Turns a lag into a distance in time. Every day count in the engine goes through it. |
+| `scheduling/apply-lag.ts` | `applyLag()` | Turns a lag into a distance in time. Every sub-day lag goes through it; `day-counting.ts` wraps it for workdays. |
+| `scheduling/day-counting.ts` | `dayCountingFor(), DayCounting, ScheduleCalendar, Span` | Counts days for one Entry: in workdays with a working calendar, in 24-hour days without one. A lag lands through it and a moved Entry keeps its length through it. |
 | `scheduling/dependency-order.ts` | `orderByDependency(), OrderStep` | Orders Entries so each predecessor comes first, and finds loops. It uses no recursion. |
+| `scheduling/golden/calendar.golden.ts` | `calendarScenarios` | Hand-worked answers for a working calendar: a lag over a weekend and a holiday, a negative lag, two calendars, and none. |
 | `scheduling/golden/conflict.golden.ts` | `conflictScenarios` | Hand-worked answers for manually scheduled Entries, parents, loops, and unreadable dependencies. |
 | `scheduling/golden/dependency-types.golden.ts` | `dependencyTypeScenarios` | Hand-worked answers for each dependency type, each lag sign, and chains. |
 | `scheduling/golden/edit.golden.ts` | `editScenarios` | Hand-worked answers for a user edit: a move, a resize, and a conflict. |
