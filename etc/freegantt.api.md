@@ -500,6 +500,7 @@ export class Dataset<TProps = unknown> {
 
 // @public
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
+    cleanRowsOnRemoval(cleaner: RemovalRowCleaner<TProps>): void;
     // (undocumented)
     rulesChanged(): void;
     // (undocumented)
@@ -2215,6 +2216,9 @@ export type RemovalExtender<TProps = Record<string, unknown>> = (request: EditRe
 export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (next: RemovalExtender<TProps>) => RemovalExtender<TProps>;
 
 // @public
+export type RemovalRowCleaner<TProps = Record<string, unknown>, T extends object = object> = (request: EditRequest<TProps>) => readonly StoreRowWrite<T>[];
+
+// @public
 export interface RemoveQuery {
     // (undocumented)
     readonly currentParent: FieldLockQuery | undefined;
@@ -2580,6 +2584,14 @@ export interface StoreRowUpdated {
     store: PluginStoreName;
     // (undocumented)
     to: unknown;
+}
+
+// @public
+export interface StoreRowWrite<T extends object = object> {
+    // (undocumented)
+    readonly id: EntryId | string;
+    // (undocumented)
+    readonly row: T | undefined;
 }
 
 // @public
