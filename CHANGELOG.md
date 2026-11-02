@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- `entryDependencies()` owns connector selection. A click or focus on a connector selects its Dependency and sets the `selected` flag. A click or focus elsewhere clears it. The Entry Selection does not change. A connector is focusable: arrows move focus to the next or previous connector, and `Delete` removes the focused Dependency, with one undo step. On any other target the keys keep their core meaning. `entryDependencies().on('beforeDependencyRemove', handler)` may veto: return `false`, or a Promise of `false`. `on('dependencyRemove', handler)` fires after the remove. Both fire for the keyboard remove only, not for `remove(id)`. `on` returns the call that removes the handler. New types `DependencyEvents`, `DependencyRemoval`, `BeforeDependencyRemoveHandler` and `DependencyRemoveHandler`.
+- `entryDependencies({ labelField })` names each Entry in the connector label "<from> → <to>" from that Field. Default `name`. The label is the connector's accessible name always.
+
 - `ctx.view.dom.connectorFor(id)` returns the mounted connector line for a provider id, or `undefined` when the frame draws none. A plugin moves focus to it, like `barFor` for a bar.
 
 - Connector line takes pointer on its stroke only, and a connector with a `label` takes focus. One labelled connector is the tab stop: the one with the `selected` flag, else the first in frame order. Others have `tabindex="-1"`. `CONNECTOR_FLAG_KEYS` gains `'selected'`. It sets `data-flag="selected"` and `aria-current="true"`, and `.fg-connector[data-flag~="selected"]` is the style hook.

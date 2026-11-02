@@ -55,7 +55,9 @@ function connectorsOf(
         return () => {};
       },
       onConnect: () => () => {},
+      onDomEvent: () => () => {},
     },
+    interaction: { registerKeyHandler: () => () => {} },
   } as unknown as PluginContext;
   for (const plugin of plugins) plugin.view?.(stub);
   return providers.flatMap((provider) => provider());
