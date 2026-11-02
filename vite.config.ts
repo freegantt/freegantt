@@ -31,6 +31,7 @@ export default defineConfig({
         generic: page('generic.html'),
         'editing-and-data': page('editing-and-data.html'),
         'hierarchy-and-timeline': page('hierarchy-and-timeline.html'),
+        'planned-vs-actual': page('planned-vs-actual.html'),
         performance: page('performance.html'),
       },
     },
