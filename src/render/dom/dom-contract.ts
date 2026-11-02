@@ -25,6 +25,8 @@ export const VISUALLY_HIDDEN_CLASS = 'fg-visually-hidden';
 export const ROW_TWISTY_CLASS = 'fg-row-twisty';
 /** The shared resize-handle pair over the currently resizable bar. Carries `data-edge`. */
 export const BAR_HANDLE_CLASS = 'fg-bar-handle';
+/** One drawn connector line. Carries `data-connector-id`. */
+export const CONNECTOR_CLASS = 'fg-connector';
 /** One connector port beside a bar edge, shown on the hovered bar while a connect handler exists.
  *  Carries `data-edge`. */
 export const CONNECTOR_PORT_CLASS = 'fg-connector-port';
@@ -34,6 +36,8 @@ export const CONNECT_PREVIEW_CLASS = 'fg-connect-preview';
 /** `dataset` keys, spelled the way `HTMLElement.dataset` reads them (camelCase). */
 export const TESTID_KEY = 'testid';
 export const BAR_ID_KEY = 'barId';
+/** The id a provider gave this connector. */
+export const CONNECTOR_ID_KEY = 'connectorId';
 /** The Row this node is — the row's own identity, which `view/gantt-dom.ts` asks the layout about to
  *  learn every Entry the row owns (#199). `ENTRY_ID_KEY` below is a different question. */
 export const ROW_ID_KEY = 'rowId';
