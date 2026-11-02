@@ -186,6 +186,8 @@ export type {
   EntryResize,
   EntryFieldEdit,
   EntryActivate,
+  ConnectEnds,
+  ConnectHandler,
 } from '../view/index.js';
 // S3: `Gantt.capabilities`'s own type and the per-gesture rule shape (`view/capability.ts`).
 // #256: `WriteRule` is the shape of `capabilities.edit`, which answers one cell rather than one

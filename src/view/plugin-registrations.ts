@@ -26,6 +26,8 @@ import type {
   VariantRegistry,
 } from '../layout/index.js';
 import type { Disposer, GridColumnInput, PluginId } from '../model/index.js';
+import { ConnectHandlers } from './connect-proposal.js';
+import type { ConnectHandler } from './connect-proposal.js';
 import { RendererRegistry } from './renderer-registry.js';
 
 /** What these registrations borrow from `GanttShell` to make a registration visible. Each one is a
@@ -41,6 +43,9 @@ export interface PluginRegistrationPorts {
    *  0022 §5). A registered variant's `css` reaches the document on the same edge its `bars` and
    *  `can` already do. */
   refreshVariantStyles(): void;
+  /** The first connect handler arrived, or the last one left. The shell attaches or detaches the
+   *  connect controller, and re-derives which bars show a connector port. */
+  connectHandlersChanged(): void;
   /** `ColumnChrome.registerPluginColumn`. The one seam that keeps its own refresh — see
    *  `registerGridColumn` below for why it cannot move here. */
   registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
@@ -53,6 +58,7 @@ export interface PluginRegistrar {
   registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer;
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
   registerConnector(provider: ConnectorProvider): Disposer;
+  registerConnectHandler(handler: ConnectHandler): Disposer;
   registerVariant(variant: EntryVariant, pluginId: PluginId): Disposer;
   registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
 }
@@ -82,6 +88,9 @@ export class PluginRegistrations implements PluginRegistrar {
   /** Every connector provider, in registration order. The first provider to state an id owns it. */
   #connectors = createRegistrationTable<number, ConnectorProvider>();
   #nextConnectorKey = 0;
+
+  /** Who handles a connect drag. With none registered, no port draws and no event fires. */
+  readonly connectHandlers: ConnectHandlers;
   /** The list `connectorProviders()` hands out. Frames read it on scroll, so it allocates nothing. */
   #activeConnectors: readonly ConnectorProvider[] | undefined;
 
@@ -93,6 +102,7 @@ export class PluginRegistrations implements PluginRegistrar {
   constructor(ports: PluginRegistrationPorts, variants: VariantRegistry) {
     this.#ports = ports;
     this.variants = variants;
+    this.connectHandlers = new ConnectHandlers(() => ports.connectHandlersChanged());
   }
 
   /** S5.4. A renderer claim changes what every painted bar, cell or header shows, and
@@ -131,6 +141,12 @@ export class PluginRegistrations implements PluginRegistrar {
         this.#ports.requestFrame();
       },
     );
+  }
+
+  /** A connect handler turns a connect drag into the plugin's own data. The first one switches the
+   *  gesture on, and the last one switches it off. */
+  registerConnectHandler(handler: ConnectHandler): Disposer {
+    return this.connectHandlers.register(handler);
   }
 
   /** ADR 0018: one variant is one object. So one registration changes what a row wears, what it

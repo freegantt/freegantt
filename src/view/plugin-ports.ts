@@ -49,6 +49,7 @@ import type {
   RegisterKeyHandler,
 } from '../extensions/keymap.js';
 import type { PluginRegistrar } from './plugin-registrations.js';
+import type { ConnectHandler } from './connect-proposal.js';
 import type { WriteVerdict } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import { buildElement } from '../render/dom/element-description.js';
@@ -334,6 +335,13 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  id: `related:${r.id}`, from: { entryId: r.aId, edge: 'end' }, to: { entryId: r.bId,
      *  edge: 'start' } })))`. Core reads the provider again after each dataset change. */
     registerConnector(provider: ConnectorProvider): Disposer;
+    /** Registers a handler for the connect drag. The user drags from a connector port on one bar
+     *  edge and drops on a port of another bar. After `beforeConnect` allows it, the handler gets
+     *  the two ends and writes the plugin's own data. Core names no meaning for the pair. While no
+     *  plugin registers a handler, no port draws and no `beforeConnect` or `connect` event fires.
+     *  Legal only while `setup` runs. Disposing this plugin removes the handler. Call:
+     *  `ctx.view.onConnect(({ from, to }) => related.add(from.entryId, to.entryId))`. */
+    onConnect(handler: ConnectHandler): Disposer;
     /** Registers `column` on this Gantt's grid, appended after the consumer's own
      *  `gridColumns` in registration order. A duplicate `field` the consumer's own list already
      *  names is dropped (config beats a plugin). The Field it names still resolves through the
@@ -518,6 +526,7 @@ export function buildPluginPorts(
         registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
       registerConnector: (provider) =>
         registerWhileOpen(() => shell.registrations.registerConnector(provider)),
+      onConnect: (handler) => registerWhileOpen(() => shell.registrations.registerConnectHandler(handler)),
       variantFor: (entry) => shell.variantFor(entry),
       resolvedColumns: () => shell.resolvedColumns().map(toGridColumn),
       registerGridColumn: (column) =>
