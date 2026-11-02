@@ -29,6 +29,7 @@ import type {
 import type {
   DecorationLayer,
   DecorationProvider,
+  ConnectorProvider,
   EntryVariant,
   FrameBar,
   RendererFor,
@@ -327,6 +328,12 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  kind: 'rangeBand', start: day, end: ctx.time.addDays(day, 1) })))`. The returned `Disposer`
      *  removes the provider sooner (#155). */
     registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
+    /** Registers a connector provider. It names the two bar edges a line joins. Core finds the
+     *  bars, routes the path and clips it to the window. Legal only while `setup` runs. Disposing
+     *  this plugin removes the provider. Call: `ctx.view.registerConnector(() => related.map((r) => ({
+     *  id: `related:${r.id}`, from: { entryId: r.aId, edge: 'end' }, to: { entryId: r.bId,
+     *  edge: 'start' } })))`. Core reads the provider again after each dataset change. */
+    registerConnector(provider: ConnectorProvider): Disposer;
     /** Registers `column` on this Gantt's grid, appended after the consumer's own
      *  `gridColumns` in registration order. A duplicate `field` the consumer's own list already
      *  names is dropped (config beats a plugin). The Field it names still resolves through the
@@ -509,6 +516,8 @@ export function buildPluginPorts(
           .map((column) => ({ header: column.header, value: column.format(entry) })),
       registerDecoration: (layer, provider) =>
         registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
+      registerConnector: (provider) =>
+        registerWhileOpen(() => shell.registrations.registerConnector(provider)),
       variantFor: (entry) => shell.variantFor(entry),
       resolvedColumns: () => shell.resolvedColumns().map(toGridColumn),
       registerGridColumn: (column) =>
