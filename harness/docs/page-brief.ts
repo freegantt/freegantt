@@ -157,9 +157,12 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'The Gantt draws a connector for each Dependency, named "<from> → <to>" for a screen reader',
       'Replace the whole set: scroll, zoom and collapsed groups stay as they are',
       'Remove an Entry and every Dependency that names it goes too, in the same undo step',
+      'Drag from a port on one bar to a port on another: end→start adds FS, start→start SS, end→end FF, start→end SF',
+      'Undo removes a dragged Dependency in one step',
     ],
     config: [
       'const dependencies = entryDependencies(); new Dataset({ entries, plugins: [dependencies] })',
+      'entryDependencies({ connectByDrag: false }) // an app that only shows Dependencies: no port, no drag',
       "dependencies.replaceAll([{ id, fromId, toId, type: 'FS', lag: { value: -1, unit: 'day' } }])",
       'dependencies.add(dependency) / dependencies.remove(id) / dependencies.all()',
     ],

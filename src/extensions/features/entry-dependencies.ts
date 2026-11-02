@@ -87,6 +87,12 @@ function edgesOf(type: DependencyType): readonly [from: BarEdge, to: BarEdge] {
   }
 }
 
+/** Which type joins these two edges? The inverse of `edgesOf`. */
+function typeOfEdges(from: BarEdge, to: BarEdge): DependencyType {
+  if (from === 'end') return to === 'start' ? 'FS' : 'FF';
+  return to === 'start' ? 'SS' : 'SF';
+}
+
 function toPredecessorRow(input: DependencyInput, operation: string): PredecessorRow {
   if (input.lag.unit !== 'day') throw new UnsupportedLagUnitError(input.lag.unit, operation);
   return {
@@ -105,8 +111,16 @@ function assertEntryExists(dataset: Dataset, id: EntryId | string, operation: st
   if (!dataset.entries.has(id)) throw new EntryNotFoundError(entryId(id), operation);
 }
 
+/** What `entryDependencies()` accepts. */
+export interface EntryDependenciesOptions {
+  /** Does a connect drag between two bars add a Dependency? Default `true`. Pass `false` for an app
+   * that only shows Dependencies: no port draws, and the user cannot drag one in. */
+  readonly connectByDrag?: boolean;
+}
+
 /** A plugin that stores Dependencies. Call: `new Dataset({ entries, plugins: [entryDependencies()] })`. */
-export function entryDependencies(): EntryDependencies {
+export function entryDependencies(options: EntryDependenciesOptions = {}): EntryDependencies {
+  const { connectByDrag = true } = options;
   let installed: { dataset: Dataset; store: PluginStore<DependencyRow> } | undefined;
 
   function installation(operation: string): NonNullable<typeof installed> {
@@ -121,6 +135,23 @@ export function entryDependencies(): EntryDependencies {
 
   function assertIdIsFree(id: string, operation: string): void {
     if (all().some((dependency) => dependency.id === id)) throw new DuplicateDependencyIdError(id, operation);
+  }
+
+  function add(dependency: DependencyInput): void {
+    const operation = 'entryDependencies.add';
+    const { dataset, store } = installation(operation);
+    assertEntryExists(dataset, dependency.fromId, operation);
+    assertEntryExists(dataset, dependency.toId, operation);
+    assertIdIsFree(dependency.id, operation);
+    const row = toPredecessorRow(dependency, operation);
+    const current = store.get(dependency.toId)?.predecessors ?? [];
+    store.set(dependency.toId, { predecessors: [...current, row] });
+  }
+
+  function predecessorsOf(entry: EntryId | string): readonly Dependency[] {
+    const { store } = installation('entryDependencies.predecessorsOf');
+    const toId = entryId(entry);
+    return (store.get(toId)?.predecessors ?? []).map((p) => toDependency(toId, p));
   }
 
   return {
@@ -161,6 +192,26 @@ export function entryDependencies(): EntryDependencies {
           };
         }),
       );
+
+      // What does a connect drag do? It adds a Dependency of zero lag, typed by the two edges.
+      // One undo step removes it. A repeat of an existing Dependency and a drop on the same Entry add nothing.
+      if (connectByDrag) {
+        ctx.view.onConnect(({ from, to }) => {
+          if (from.entryId === to.entryId) return;
+          const type = typeOfEdges(from.edge, to.edge);
+          const alreadyStored = predecessorsOf(to.entryId).some(
+            (stored) => stored.fromId === from.entryId && stored.type === type,
+          );
+          if (alreadyStored) return;
+          add({
+            id: `${from.entryId}:${type}:${to.entryId}`,
+            fromId: from.entryId,
+            toId: to.entryId,
+            type,
+            lag: { value: 0, unit: 'day' },
+          });
+        });
+      }
     },
 
     replaceAll(dependencies) {
@@ -179,16 +230,7 @@ export function entryDependencies(): EntryDependencies {
       store.syncAll(new Map([...rows].map(([toId, predecessors]) => [toId, { predecessors }])));
     },
 
-    add(dependency) {
-      const operation = 'entryDependencies.add';
-      const { dataset, store } = installation(operation);
-      assertEntryExists(dataset, dependency.fromId, operation);
-      assertEntryExists(dataset, dependency.toId, operation);
-      assertIdIsFree(dependency.id, operation);
-      const row = toPredecessorRow(dependency, operation);
-      const current = store.get(dependency.toId)?.predecessors ?? [];
-      store.set(dependency.toId, { predecessors: [...current, row] });
-    },
+    add,
 
     remove(id) {
       const { store } = installation('entryDependencies.remove');
@@ -201,10 +243,6 @@ export function entryDependencies(): EntryDependencies {
 
     all,
 
-    predecessorsOf(entry) {
-      const { store } = installation('entryDependencies.predecessorsOf');
-      const toId = entryId(entry);
-      return (store.get(toId)?.predecessors ?? []).map((p) => toDependency(toId, p));
-    },
+    predecessorsOf,
   };
 }
