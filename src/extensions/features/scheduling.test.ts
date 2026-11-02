@@ -194,7 +194,7 @@ describe('a Dataset without scheduling()', () => {
     expect(connectorsOf([dependencies], dataset)).toHaveLength(1);
   });
 
-  it('refuses a host call before a Dataset installs the plugin', () => {
+  it('refuses a plugin call before a Dataset installs the plugin', () => {
     expect(() => scheduling().constraintOf('a')).toThrow(SchedulingNotInstalledError);
   });
 

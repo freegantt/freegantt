@@ -77,7 +77,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   let latest: readonly ScheduleDiagnostic[] = [];
   // The findings of the last edit the extender computed. A drag preview overwrites it every frame,
   // and the next commit overwrites it again before `change` reads it.
-  let pending: readonly ScheduleDiagnostic[] = [];
+  let pending: readonly ScheduleDiagnostic[] | undefined;
   const handlers = new Set<ScheduleDiagnosticsHandler>();
 
   function installation(operation: string): Installation {
@@ -156,7 +156,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   function extend(request: EditRequest): EntryEdits {
     const store = installed?.store;
     if (!store || !touchesDates(request)) {
-      pending = [];
+      pending = undefined;
       return new Map();
     }
     const result = schedule({
@@ -215,14 +215,14 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       ctx.edits.setExtender((next) => (request) => mergeEntryEdits(next(request), extend(request)));
       // When do the findings change? After each commit, from the edit that made it.
       const stopListening = ctx.events.on('change', ({ changeSet }) => {
-        publish(changeSet.origin === 'user' ? pending : auditCurrentState());
+        publish((changeSet.origin === 'user' ? pending : undefined) ?? auditCurrentState());
       });
       return () => {
         stopListening();
         installed = undefined;
         handlers.clear();
         latest = [];
-        pending = [];
+        pending = undefined;
       };
     },
 

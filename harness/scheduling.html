@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — scheduling</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+      <main>
+        <div class="page-head">
+          <h1>Scheduling</h1>
+          <p>
+            The <code>scheduling()</code> plugin keeps Dependencies true. Drag a task later and its successors
+            move. Drag it earlier and they follow. One undo restores every task. The loop at the bottom has no
+            valid order, so the page lists its members.
+          </p>
+        </div>
+        <div id="page-brief"></div>
+        <section class="workbench" aria-label="Scheduling workbench">
+          <div id="toolbar"></div>
+          <div class="workbench-actions">
+            <button type="button" id="break-cycle-btn">Break cycle</button>
+            <button type="button" id="restore-cycle-btn">Restore cycle</button>
+          </div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="diagnostics-readout">Findings: —</span>
+          </div>
+          <div class="statusbar">
+            <span class="readout">Cycle members:</span>
+            <ul id="cycle-members" aria-label="Cycle members"></ul>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./scheduling.ts"></script>
+  </body>
+</html>
