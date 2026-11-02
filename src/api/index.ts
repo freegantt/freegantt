@@ -12,7 +12,7 @@ export type {
   PluginStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
-  RemovalRowCleaner,
+  EditRowWriter,
   StoreRowWrite,
   HierarchySource,
   HierarchySourceWrapper,
@@ -29,7 +29,7 @@ export type {
   RemoveRuleWrapper,
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
-export { mergeEntryEdits } from './dataset-plugin.js';
+export { mergeEntryEdits, overridingProposed } from './dataset-plugin.js';
 // ADR 0026 retired the several-Segment case it names: the rigid move a plugin's cascade
 // writes honestly, for the one span an Entry has.
 export { moveEntryTo } from './dataset-plugin.js';
@@ -256,6 +256,16 @@ export type {
   EntryDependencies,
   EntryDependenciesOptions,
 } from '../extensions/features/entry-dependencies.js';
+// `scheduling()`: the first-party plugin that keeps Dependencies true. It needs `entryDependencies()`.
+// Without it, connectors draw and nothing moves.
+export { scheduling, SCHEDULING_ID } from '../extensions/features/scheduling.js';
+export type {
+  EditedDate,
+  EntryConstraint,
+  ScheduleDiagnosticsHandler,
+  Scheduling,
+  SchedulingOptions,
+} from '../extensions/features/scheduling.js';
 export { daysOfWeek, hours, dates, spans, notCovered } from '../extensions/features/time-shading-covers.js';
 export type { TimeCover, DayOfWeek } from '../extensions/features/time-shading-covers.js';
 // The working calendar: a pure value the scheduling plugin owns. `calendar.offTime()` is a `TimeCover`
@@ -336,6 +346,7 @@ export {
   UnsupportedLagUnitError,
   DuplicateDependencyIdError,
   DependencyStoreNotInstalledError,
+  SchedulingNotInstalledError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.

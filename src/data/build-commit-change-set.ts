@@ -124,17 +124,18 @@ function fieldsWrittenBy(edit: ProposedEdit): ReadonlySet<string> {
 }
 
 /** I4: the extension hook may not propose a Field the transaction body already proposed on the same
- *  Entry (#232). `start`/`end` are ordinary Fields here (ADR 0026 retired the Segment that used to
+ *  Entry (#232), unless its result marks the Field as an override (ADR 0042). `start`/`end` are ordinary Fields here (ADR 0026 retired the Segment that used to
  *  make them a derived pair), so `fieldsWrittenBy` alone — no envelope carve-out — already answers
  *  what each side authored. */
-function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extenderEdits: ProposedEdits): void {
+function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extender: EditsReading): void {
   if (!isDevMode()) return;
-  for (const [id, edit] of extenderEdits) {
+  for (const [id, edit] of extender.stored) {
     const bodyEdit = proposed.get(id);
     if (!bodyEdit) continue;
     const bodyFields = fieldsWrittenBy(bodyEdit);
+    const overridden = extender.overrides.get(id);
     for (const field of fieldsWrittenBy(edit)) {
-      if (bodyFields.has(field)) {
+      if (bodyFields.has(field) && !overridden?.has(field)) {
         throw new Error(
           `buildCommitChangeSet: the extension hook proposed field "${field}" on entry "${String(id)}", ` +
             'which the transaction body already proposed (I4)',
@@ -228,7 +229,7 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
   });
   const extenderReading = data.extraEditsReadingFor(editRequest);
   const extenderEdits: ProposedEdits = extenderReading.stored;
-  guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
+  guardExtensionHookDoesNotOverwriteBody(proposed, extenderReading);
 
   // One merge of the body's and the extender's edits, diffed once below (#232) — two separate diffs
   // of `proposed` and `extenderEdits` used to let one field reach the `ChangeSet` twice, with two

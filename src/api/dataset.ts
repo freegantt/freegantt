@@ -231,9 +231,9 @@ export class Dataset<TProps = unknown> {
           gate.assertOpen();
           this.#state.setRemovalExtender(wrap);
         },
-        cleanRowsOnRemoval: (cleaner) => {
+        writeRowsWithEdit: (writer) => {
           gate.assertOpen();
-          this.#state.addRowCleaner(pluginId, cleaner);
+          this.#state.addRowWriter(pluginId, writer);
         },
         setLockRule: (wrap) => {
           gate.assertOpen();
@@ -257,7 +257,7 @@ export class Dataset<TProps = unknown> {
       // Erased at install, the same trust boundary as `hierarchySourceWrappersOf`. `data/` holds each
       // extender over the erased `Record<string, unknown>` props. `DatasetEditHook` declares its
       // setters as methods, so TypeScript checks their parameters bivariantly and accepts the erased
-      // hook where the typed one is due. `cleanRowsOnRemoval` takes a callback, one level shallower than a
+      // hook where the typed one is due. `writeRowsWithEdit` takes a callback, one level shallower than a
       // wrapper, so it needs the cast below. The plugin author's typed `props` read reaches no further
       // than the entry it reads.
       const context: DatasetPluginContextOf<Dataset<TProps>> = {

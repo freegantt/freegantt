@@ -85,7 +85,8 @@ export type BuiltInThrownCode =
   | 'remove-refused'
   | 'unsupported-lag-unit'
   | 'duplicate-dependency-id'
-  | 'dependency-store-not-installed';
+  | 'dependency-store-not-installed'
+  | 'scheduling-not-installed';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -1161,6 +1162,21 @@ export class DependencyStoreNotInstalledError extends FreeGanttError {
       `${operation}: this entryDependencies() plugin is not installed on a Dataset. Pass it in new Dataset({ plugins }) first.`,
     );
     this.name = 'DependencyStoreNotInstalledError';
+    this.operation = operation;
+  }
+}
+
+/** `code: 'scheduling-not-installed'` — a call on a `scheduling()` plugin that no Dataset has
+ *  installed yet. Put the plugin in `new Dataset({ plugins })` first. */
+export class SchedulingNotInstalledError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'scheduling-not-installed' satisfies BuiltInThrownCode,
+      `${operation}: this scheduling() plugin is not installed on a Dataset. Pass it in new Dataset({ plugins }) first.`,
+    );
+    this.name = 'SchedulingNotInstalledError';
     this.operation = operation;
   }
 }

@@ -147,7 +147,7 @@ export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' |
 export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-remove-refused' | 'entry-clear-dates-refused' | 'entry-step-refused' | 'entry-drop-refused' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'connect-handler-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused' | 'unsupported-lag-unit' | 'duplicate-dependency-id' | 'dependency-store-not-installed';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused' | 'unsupported-lag-unit' | 'duplicate-dependency-id' | 'dependency-store-not-installed' | 'scheduling-not-installed';
 
 // @public
 export interface Capabilities {
@@ -512,7 +512,6 @@ export class Dataset<TProps = unknown> {
 
 // @public
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
-    cleanRowsOnRemoval(cleaner: RemovalRowCleaner<TProps>): void;
     // (undocumented)
     rulesChanged(): void;
     // (undocumented)
@@ -527,6 +526,7 @@ export interface DatasetEditHook<TProps = Record<string, unknown>> {
     setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
     // (undocumented)
     setRemoveRule(wrap: RemoveRuleWrapper): void;
+    writeRowsWithEdit(writer: EditRowWriter<TProps>): void;
 }
 
 // @public
@@ -840,6 +840,9 @@ export interface Duration {
 }
 
 // @public
+export type EditedDate = 'dependencyWins' | 'userDateWins';
+
+// @public
 export type EditExtender<TProps = Record<string, unknown>> = (request: EditRequest<TProps>) => EntryEdits;
 
 // @public
@@ -859,6 +862,9 @@ export interface EditResolution {
     // (undocumented)
     readonly moves: readonly ScheduleField[];
 }
+
+// @public
+export type EditRowWriter<TProps = Record<string, unknown>, T extends object = object> = (request: EditRequest<TProps>) => readonly StoreRowWrite<T>[];
 
 // @public
 export interface ElementDescription {
@@ -941,6 +947,9 @@ export interface EntryActivate {
     // (undocumented)
     readonly target: TargetKind;
 }
+
+// @public
+export type EntryConstraint = ScheduleConstraint;
 
 // @public
 export interface EntryDelta<TProps = Record<string, unknown>> {
@@ -1989,6 +1998,9 @@ export interface OffTimeCover {
 export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined;
 
 // @public
+export function overridingProposed(fields: readonly FieldKey[], edit: EntryEdit): EntryEdit;
+
+// @public
 export interface Overscan {
     // (undocumented)
     horizontalPx?: number;
@@ -2307,9 +2319,6 @@ export type RemovalExtender<TProps = Record<string, unknown>> = (request: EditRe
 export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (next: RemovalExtender<TProps>) => RemovalExtender<TProps>;
 
 // @public
-export type RemovalRowCleaner<TProps = Record<string, unknown>, T extends object = object> = (request: EditRequest<TProps>) => readonly StoreRowWrite<T>[];
-
-// @public
 export interface RemoveQuery {
     // (undocumented)
     readonly currentParent: FieldLockQuery | undefined;
@@ -2535,6 +2544,9 @@ export type ScheduleDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
 export type ScheduleDiagnostic = CycleDiagnostic | BlockedMoveDiagnostic | InvalidDependencyDiagnostic;
 
 // @public
+export type ScheduleDiagnosticsHandler = (diagnostics: readonly ScheduleDiagnostic[]) => void;
+
+// @public
 export type ScheduleEntry = Pick<Entry, 'id' | 'start' | 'end' | 'hasChildren'>;
 
 // @public
@@ -2561,6 +2573,33 @@ export interface ScheduleResult {
 
 // @public
 export type ScheduleRuleKind = 'manuallyScheduled' | 'dependency';
+
+// @public
+export interface Scheduling extends DataPlugin {
+    clearConstraint(entry: EntryId | string): void;
+    constraintOf(entry: EntryId | string): EntryConstraint | undefined;
+    diagnostics(): readonly ScheduleDiagnostic[];
+    on(name: 'scheduleDiagnostics', handler: ScheduleDiagnosticsHandler): Disposer;
+}
+
+// @public
+export function scheduling(options?: SchedulingOptions): Scheduling;
+
+// @public
+export const SCHEDULING_ID = "freegantt.scheduling";
+
+// @public
+export class SchedulingNotInstalledError extends FreeGanttError {
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
+}
+
+// @public (undocumented)
+export interface SchedulingOptions {
+    readonly editedDate?: EditedDate;
+    readonly successorMoves?: SuccessorMoves;
+}
 
 // @public (undocumented)
 export interface SchedulingPolicy {

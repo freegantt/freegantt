@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DatasetState } from './dataset-state.js';
 import { pluginStoreName } from './plugin-store.js';
 import { MutationDuringExtensionHookError, entryId } from '../model/index.js';
-import type { ChangeSet, DatasetEventMap, PluginStore, RemovalRowCleaner } from '../model/index.js';
+import type { ChangeSet, DatasetEventMap, PluginStore, EditRowWriter } from '../model/index.js';
 
 const NOTES = 'demo.notes';
 
@@ -24,7 +24,7 @@ function newState(): { state: DatasetState; notes: PluginStore<NoteRow> } {
 
 /** Drops the removed ids from every note that names one. */
 const forgetRemoved =
-  (notes: PluginStore<NoteRow>): RemovalRowCleaner =>
+  (notes: PluginStore<NoteRow>): EditRowWriter =>
   (request) =>
     [...notes.all]
       .filter(([, row]) => row.about.some((id) => request.removedEntryIds.has(entryId(id))))
@@ -41,10 +41,10 @@ function recordChangeSets(state: DatasetState): ChangeSet[] {
   return committed;
 }
 
-describe('a removal row cleaner', () => {
+describe('an edit row writer', () => {
   it('lands its row writes in the same changeset as the removal', () => {
     const { state, notes } = newState();
-    state.addRowCleaner(NOTES, forgetRemoved(notes));
+    state.addRowWriter(NOTES, forgetRemoved(notes));
     const committed = recordChangeSets(state);
 
     state.entries.remove('a');
@@ -63,7 +63,7 @@ describe('a removal row cleaner', () => {
 
   it('restores the removal and the rows with one undo, and removes both again with redo', () => {
     const { state, notes } = newState();
-    state.addRowCleaner(NOTES, forgetRemoved(notes));
+    state.addRowWriter(NOTES, forgetRemoved(notes));
 
     state.entries.remove('a');
     state.undo();
@@ -89,7 +89,7 @@ describe('a removal row cleaner', () => {
     });
     const notes = state.pluginStores.reserve<NoteRow>(NOTES);
     notes.set('k', { about: ['z'] });
-    state.addRowCleaner(NOTES, (request) => [
+    state.addRowWriter(NOTES, (request) => [
       { id: 'k', row: { about: [] } },
       { id: 'z', row: { about: [...request.removedEntryIds].map(String).sort() } },
     ]);
@@ -100,23 +100,37 @@ describe('a removal row cleaner', () => {
     expect(notes.get('z')).toEqual({ about: ['k', 'p'] });
   });
 
-  it('aborts the whole removal when the cleaner throws', () => {
+  it('lands its row writes with a plain edit and one undo restores the edit and the row', () => {
     const { state, notes } = newState();
-    state.addRowCleaner(NOTES, () => {
-      throw new Error('cleaner failed');
+    state.addRowWriter(NOTES, (request) =>
+      [...request.proposed.keys()].map((id) => ({ id, row: { about: ['edited'] } })),
+    );
+
+    state.entries.update('a', { name: 'renamed' });
+
+    expect(notes.get('a')).toEqual({ about: ['edited'] });
+    state.undo();
+    expect(notes.get('a')).toBeUndefined();
+    expect(state.entries.get('a')?.name).toBe('a');
+  });
+
+  it('aborts the whole removal when the writer throws', () => {
+    const { state, notes } = newState();
+    state.addRowWriter(NOTES, () => {
+      throw new Error('writer failed');
     });
     const committed = recordChangeSets(state);
 
-    expect(() => state.entries.remove('a')).toThrow('cleaner failed');
+    expect(() => state.entries.remove('a')).toThrow('writer failed');
 
     expect(committed).toHaveLength(0);
     expect(state.entries.has('a')).toBe(true);
     expect(notes.get('c')).toEqual({ about: ['a', 'b'] });
   });
 
-  it('refuses a store write from inside the cleaner', () => {
+  it('refuses a store write from inside the writer', () => {
     const { state, notes } = newState();
-    state.addRowCleaner(NOTES, () => {
+    state.addRowWriter(NOTES, () => {
       notes.set('b', { about: [] });
       return [];
     });
@@ -125,10 +139,10 @@ describe('a removal row cleaner', () => {
     expect(state.entries.has('a')).toBe(true);
   });
 
-  it('builds no request when no plugin installs a cleaner', () => {
+  it('builds no request when no plugin installs a writer', () => {
     const { state } = newState();
 
-    const writes = state.rowCleanupsFor(() => {
+    const writes = state.rowWritesFor(() => {
       throw new Error('the request must not be built');
     });
 

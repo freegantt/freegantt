@@ -92,8 +92,8 @@ export interface TransactionalPluginStores {
   /** Stages the removal of every row `id` holds, in every store — `EntryStore.stageRemove` calls it
    *  as it stages the entry's own removal, so a write staged earlier never outlives its Entry. */
   stageEntryRemoval(token: TxToken, id: EntryId): void;
-  /** Stages one row write a removal row cleaner answered — see `PluginStores.stageCleanedRow`. */
-  stageCleanedRow(token: TxToken, write: StagedRowWrite): void;
+  /** Stages one row write an edit row writer answered — see `PluginStores.stageWrittenRow`. */
+  stageWrittenRow(token: TxToken, write: StagedRowWrite): void;
   endTransaction(token: TxToken, changeSet: ChangeSet | undefined): void;
   /** `id`'s committed row in `store`, with no write set overlaid — what replay reads as a store row's
    *  current value before it decides whether to overwrite it (`data/replay-changes.ts`). */
@@ -118,10 +118,10 @@ export interface TransactionData {
    *  ids it removes. It calls `buildRequest` only when a plugin installed a removal extender.
    *  `DatasetState.removalsFor` is its one implementation. */
   removalsFor(buildRequest: () => EditRequest): ReadonlySet<EntryId>;
-  /** The commit path's door onto the plugins' removal row cleaners: calls each once and returns the
-   *  rows they write. It calls `buildRequest` only when a plugin installed a cleaner.
-   *  `DatasetState.rowCleanupsFor` is its one implementation. */
-  rowCleanupsFor(buildRequest: () => EditRequest): readonly StagedRowWrite[];
+  /** The commit path's door onto the plugins' edit row writers: calls each once and returns the
+   *  rows they write. It calls `buildRequest` only when a plugin installed a writer.
+   *  `DatasetState.rowWritesFor` is its one implementation. */
+  rowWritesFor(buildRequest: () => EditRequest): readonly StagedRowWrite[];
   /** 0 = no transaction open. Only `runTransaction` reads or writes this (D-S2-8's nesting rule).
    *  `EntryStore` read it for a while, to tell a standalone `update()` from one joining a caller's
    *  open transaction — and that made the derived-write refusal a consumer's to opt out of, because
@@ -350,10 +350,10 @@ export function commitChangeSet(
 
 /**
  * Asks the removal hook once, then stages each id it returns with the subtree walk `entries.remove`
- * uses. Every later commit stage reads those removals as if the body staged them. An id the store
+ * uses. Then asks each edit row writer for its rows, on every transaction, and stages them. Every later commit stage reads those removals as if the body staged them. An id the store
  * does not know, or one this transaction already removes, is skipped in silence.
  */
-function stageRemovalExtenderRemovals(data: TransactionData, token: TxToken): void {
+function stageRemovalsAndRowWrites(data: TransactionData, token: TxToken): void {
   const buildRequest = (): EditRequest =>
     createEditRequest({
       entries: data.entries.committedById(),
@@ -368,10 +368,10 @@ function stageRemovalExtenderRemovals(data: TransactionData, token: TxToken): vo
   for (const id of data.removalsFor(buildRequest)) {
     if (data.entries.has(id)) data.entries.stageSubtreeRemoval(token, id);
   }
-  // Asked after every removal is final, so a cleaner sees the whole closure. A write for an Entry
+  // Asked after every removal is final, so a writer sees the whole closure. A write for an Entry
   // that goes is skipped: that Entry's rows are already staged for removal.
-  for (const write of data.rowCleanupsFor(buildRequest)) {
-    if (data.entries.has(write.id)) data.pluginStores.stageCleanedRow(token, write);
+  for (const write of data.rowWritesFor(buildRequest)) {
+    if (data.entries.has(write.id)) data.pluginStores.stageWrittenRow(token, write);
   }
 }
 
@@ -415,7 +415,7 @@ export function runTransaction<T>(
 
   let built: BuiltCommit;
   try {
-    stageRemovalExtenderRemovals(data, token);
+    stageRemovalsAndRowWrites(data, token);
     built = buildCommitChangeSet(data, origin);
   } catch (error) {
     endStores(data, token, undefined);
