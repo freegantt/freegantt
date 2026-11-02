@@ -2,4 +2,5 @@
 // (plans/01 §7, ADR 0002). DOM-free, but not mandatory core — occupies data/'s extension hook
 // only when installed. Lands in S7. schedule() is pure and deterministic; propagation is a
 // worklist loop — no recursion, ever.
-export {};
+export { workingCalendar, InvalidWorkingCalendarError } from './working-calendar.js';
+export type { WorkingCalendar, WorkingCalendarOptions, OffTimeCover, Workday } from './working-calendar.js';

@@ -1644,6 +1644,11 @@ export class InvalidSnapIncrementError extends FreeGanttError {
 }
 
 // @public
+export class InvalidWorkingCalendarError extends FreeGanttError {
+    constructor(reason: string);
+}
+
+// @public
 export function invertChangeSet(changeSet: ChangeSet): ChangeSet;
 
 // @public
@@ -1799,6 +1804,14 @@ export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 
 // @public (undocumented)
 export function now(): Instant;
+
+// @public
+export interface OffTimeCover {
+    // (undocumented)
+    coveredSpans(window: TimeSpan, time: ZonedTime): readonly TimeSpan[];
+    // (undocumented)
+    hideWhenCoarserThan: TimeUnit;
+}
 
 // @public
 export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined;
@@ -2710,6 +2723,26 @@ export function wholeEntryBar(entry: Entry, variant: string): Bar;
 
 // @public
 export function wholeSpanUnlessSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
+
+// @public
+export type Workday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+// @public
+export interface WorkingCalendar {
+    addWorkdays(instant: InstantInput, count: number, time: ZonedTime): Instant;
+    isWorkday(day: InstantInput, time: ZonedTime): boolean;
+    offTime(): OffTimeCover;
+    workdaysBetween(a: InstantInput, b: InstantInput, time: ZonedTime): number;
+}
+
+// @public
+export function workingCalendar(options: WorkingCalendarOptions): WorkingCalendar;
+
+// @public (undocumented)
+export interface WorkingCalendarOptions {
+    holidays?: readonly string[];
+    workdays: readonly Workday[];
+}
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteRefusalReason" needs to be exported by the entry point index.d.ts
 //
