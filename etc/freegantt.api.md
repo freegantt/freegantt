@@ -958,7 +958,12 @@ export interface EntryDependencies extends DataPlugin {
 }
 
 // @public
-export function entryDependencies(): EntryDependencies;
+export function entryDependencies(options?: EntryDependenciesOptions): EntryDependencies;
+
+// @public
+export interface EntryDependenciesOptions {
+    readonly connectByDrag?: boolean;
+}
 
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
 // Warning: (ae-forgotten-export) The symbol "RemovableEntryKey" needs to be exported by the entry point index.d.ts

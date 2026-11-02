@@ -9,6 +9,7 @@ import {
 } from '../../api/index.js';
 import { entryId } from '../../model/index.js';
 import type { ChangeSet, Duration } from '../../model/index.js';
+import type { ConnectEnds } from '../../api/index.js';
 import { ENTRY_DEPENDENCIES_ID, entryDependencies } from './entry-dependencies.js';
 import type { DependencyInput, DependencyType } from './entry-dependencies.js';
 
@@ -40,6 +41,7 @@ function connectorsOf(plugin: ReturnType<typeof entryDependencies>, dataset: Dat
         provider = next;
         return () => {};
       },
+      onConnect: () => () => {},
     },
   } as unknown as PluginContext;
   plugin.view?.(stub);
@@ -230,5 +232,97 @@ describe('not installed', () => {
     const { dataset } = setup();
 
     expect(Object.keys(dataset.pluginStore())).toEqual([ENTRY_DEPENDENCIES_ID]);
+  });
+});
+
+/** Runs the view half against a stub and returns the handler `ctx.view.onConnect` received, if any. */
+function connectHandlerOf(plugin: ReturnType<typeof entryDependencies>, dataset: Dataset) {
+  let handler: ((ends: ConnectEnds) => void) | undefined;
+  const stub = {
+    dataset,
+    view: {
+      registerConnector: () => () => {},
+      onConnect(next: (ends: ConnectEnds) => void) {
+        handler = next;
+        return () => {};
+      },
+    },
+  } as unknown as PluginContext;
+  plugin.view?.(stub);
+  return handler;
+}
+
+const ends = (
+  fromId: string,
+  fromEdge: 'start' | 'end',
+  toId: string,
+  toEdge: 'start' | 'end',
+): ConnectEnds => ({
+  from: { entryId: entryId(fromId), edge: fromEdge },
+  to: { entryId: entryId(toId), edge: toEdge },
+});
+
+describe('entryDependencies() connect drag', () => {
+  it.each([
+    ['end', 'start', 'FS'],
+    ['start', 'start', 'SS'],
+    ['end', 'end', 'FF'],
+    ['start', 'end', 'SF'],
+  ] as const)('a drag from %s to %s adds a %s Dependency with no lag', (fromEdge, toEdge, type) => {
+    const { plugin, dataset } = setup();
+
+    connectHandlerOf(plugin, dataset)?.(ends('a', fromEdge, 'b', toEdge));
+
+    expect(
+      plugin.all().map(({ fromId, toId, lag, type: stored }) => ({ fromId, toId, lag, stored })),
+    ).toEqual([{ fromId: entryId('a'), toId: entryId('b'), lag: DAYS(0), stored: type }]);
+  });
+
+  it('one undo removes the Dependency a drag added', () => {
+    const { plugin, dataset } = setup();
+
+    connectHandlerOf(plugin, dataset)?.(ends('a', 'end', 'b', 'start'));
+    dataset.undo();
+
+    expect(plugin.all()).toEqual([]);
+  });
+
+  it('a drag from an Entry to itself adds nothing', () => {
+    const { plugin, dataset } = setup();
+
+    connectHandlerOf(plugin, dataset)?.(ends('a', 'end', 'a', 'start'));
+
+    expect(plugin.all()).toEqual([]);
+  });
+
+  it('a drag that repeats the same ends and type adds nothing, whatever the lag', () => {
+    const { plugin, dataset } = setup();
+    plugin.add({ ...dependency('own', 'a', 'b'), lag: DAYS(3) });
+
+    const handler = connectHandlerOf(plugin, dataset);
+    handler?.(ends('a', 'end', 'b', 'start'));
+    handler?.(ends('a', 'end', 'b', 'start'));
+
+    expect(plugin.all().map((d) => d.id)).toEqual(['own']);
+  });
+
+  it('a drag of another type between the same Entries adds a second Dependency', () => {
+    const { plugin, dataset } = setup();
+    plugin.add(dependency('own', 'a', 'b'));
+
+    connectHandlerOf(plugin, dataset)?.(ends('a', 'start', 'b', 'start'));
+
+    expect(plugin.all().map((d) => d.type)).toEqual(['FS', 'SS']);
+  });
+
+  it('connectByDrag: false registers no connect handler', () => {
+    const plugin = entryDependencies({ connectByDrag: false });
+    const dataset = new Dataset({
+      entries: [{ id: 'a', name: 'A', start: 0, end: 1 }],
+      timeZone: 'UTC',
+      plugins: [plugin],
+    });
+
+    expect(connectHandlerOf(plugin, dataset)).toBeUndefined();
   });
 });
