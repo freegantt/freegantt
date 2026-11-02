@@ -2506,6 +2506,15 @@ export interface RowStripe {
 export function schedule(request: ScheduleRequest): ScheduleResult;
 
 // @public
+export interface ScheduleCalendar {
+    readonly calendar?: WorkingCalendar;
+    // (undocumented)
+    readonly ofEntry?: ReadonlyMap<EntryId, WorkingCalendar>;
+    // (undocumented)
+    readonly time: ZonedTime;
+}
+
+// @public
 export interface ScheduleChange {
     // (undocumented)
     readonly field: ScheduleField;
@@ -2554,6 +2563,7 @@ export type ScheduleField = 'start' | 'end';
 
 // @public (undocumented)
 export interface ScheduleRequest {
+    readonly calendar?: ScheduleCalendar;
     readonly constraints?: ReadonlyMap<EntryId, ScheduleConstraint>;
     // (undocumented)
     readonly dependencies: readonly ScheduleDependency[];
@@ -2597,6 +2607,9 @@ export class SchedulingNotInstalledError extends FreeGanttError {
 
 // @public (undocumented)
 export interface SchedulingOptions {
+    readonly calendar?: WorkingCalendar;
+    readonly calendarField?: string;
+    readonly calendars?: Readonly<Record<string, WorkingCalendar>>;
     readonly editedDate?: EditedDate;
     readonly successorMoves?: SuccessorMoves;
 }
