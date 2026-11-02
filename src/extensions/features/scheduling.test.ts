@@ -7,11 +7,13 @@ import { entryDependencies } from './entry-dependencies.js';
 import type { DependencyInput, DependencyType } from './entry-dependencies.js';
 import { SCHEDULING_ID, scheduling } from './scheduling.js';
 import type { SchedulingOptions } from './scheduling.js';
+import { workingCalendar } from '../../scheduling/index.js';
 
 /** Midnight UTC of January 1 plus `offset` days. */
 const day = (offset: number): number => Date.UTC(2026, 0, 1 + offset);
 interface ScheduleProps {
   manuallyScheduled: boolean;
+  calendar?: string;
 }
 const days = (value: number): Duration => ({ value, unit: 'day' });
 
@@ -223,5 +225,48 @@ describe('a Dataset without scheduling()', () => {
   it('names entryDependencies() in requires', () => {
     expect(scheduling().id).toBe(SCHEDULING_ID);
     expect(scheduling().requires).toEqual(['freegantt.entryDependencies']);
+  });
+});
+
+describe('scheduling({ calendar }) counts workdays', () => {
+  const office = workingCalendar({ workdays: [1, 2, 3, 4, 5] });
+  const shop = workingCalendar({ workdays: [1, 2, 3, 4, 5, 6] });
+
+  /** Thursday January 1 2026 is day 0. Task a ends on Friday after the move below, and b follows by one day. */
+  function twoTasks(options: SchedulingOptions, bCalendar?: string) {
+    const dependencies = entryDependencies();
+    const dataset = new Dataset<ScheduleProps>({
+      entries: [
+        { id: 'a', name: 'a', start: day(0), end: day(1) },
+        { id: 'b', name: 'b', start: day(1), end: day(2), ...(bCalendar ? { calendar: bCalendar } : {}) },
+      ],
+      fields: [{ key: 'calendar', type: 'text' }],
+      timeZone: 'UTC',
+      plugins: [dependencies, scheduling(options)],
+    });
+    dependencies.replaceAll([{ id: 'd1', fromId: 'a', toId: 'b', type: 'FS', lag: days(1) }]);
+    dataset.entries.update('a', { start: day(7), end: day(8) });
+    return dataset;
+  }
+
+  it('skips the weekend when a lag counts workdays', () => {
+    const dataset = twoTasks({ calendar: office });
+
+    expect([startOf(dataset, 'b'), dataset.entries.get('b')?.end]).toEqual([day(11), day(12)]);
+  });
+
+  it('counts 24-hour days when no calendar is given', () => {
+    const dataset = twoTasks({});
+
+    expect(startOf(dataset, 'b')).toBe(day(9));
+  });
+
+  it('follows the calendar an Entry names in calendarField', () => {
+    const calendars = { office, shop };
+    const options = { calendar: office, calendars, calendarField: 'calendar' };
+
+    expect(startOf(twoTasks(options, 'shop'), 'b')).toBe(day(9));
+    expect(startOf(twoTasks(options, 'unknown'), 'b')).toBe(day(11));
+    expect(startOf(twoTasks(options), 'b')).toBe(day(11));
   });
 });
