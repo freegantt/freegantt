@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
+### Added
+
+- `schedule()` and `defaultPolicy` are new exports. `schedule({ entries, dependencies, proposed, pinned })` is a pure function. It moves successors later to meet each `FS`, `SS`, `FF` and `SF` dependency, with a positive or negative lag in fixed-length units, and answers `{ patch, diagnostics }`. A cycle names its exact member Entries. A pinned Entry never moves, and the engine reports the move it skipped. It never writes a date you proposed. New types `ScheduleRequest`, `ScheduleResult`, `ScheduleChange`, `ScheduleDiagnostic`, `ScheduleDependency` and `SchedulingPolicy`. It needs no plugin.
+
 ## [0.1.0] - 2026-09-30
 
 The first release. Install it with `npm install freegantt`.
