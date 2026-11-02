@@ -97,7 +97,7 @@ view(ctx) {
 ```
 
 ```ts
-// layout/connector-source.ts — imports model/ only
+// layout/connector-input.ts — imports model/ only
 export interface ConnectorEnd { entryId: EntryId; edge: 'start' | 'end' }
 export interface ConnectorInput {
   id: string;
@@ -107,10 +107,10 @@ export interface ConnectorInput {
   class?: string;
   label?: string;
 }
-export type ConnectorSource = () => readonly ConnectorInput[];
+export type ConnectorProvider = () => readonly ConnectorInput[];
 ```
 
-- **Layers:** `layout/` gains `connector-source.ts` and `connectors/route.ts`. Both import `model/` and the existing bar types. `LayoutInput.connectorSources` mirrors `decorationProviders`. `view/plugin-registrations.ts` holds the list, as it does for decorations. `view/plugin-ports.ts` adds `view.registerConnector`. `api/` re-exports `ConnectorInput`.
+- **Layers:** `layout/` gains `connector-input.ts` and the `connectors/` folder. Both import `model/` and the existing bar types. `LayoutInput.connectorProviders` mirrors `decorationProviders`. `view/plugin-registrations.ts` holds the list, as it does for decorations. `view/plugin-ports.ts` adds `view.registerConnector`. `api/` re-exports `ConnectorInput`.
 - **No plugin types in `layout/`:** an input names Entries and edges. It carries no pixels and no `Dependency` type. The source closes over `ctx.dataset`, as a decoration provider does.
 - **Culling:** `layout/` finds both end bars for any Entry, culled or not. It routes the connector. It then clips the path to the window. The plugin never sees the window.
 - **Cost control:** the inputs depend on `datasetRevision` only. `layout/` memoizes them by that revision. It memoizes routed paths by revision, scale and row set. A scroll only filters paths against the window.
@@ -182,7 +182,7 @@ S7.5 and S7.6 can start at once. They do not touch connectors.
 
 ### S7.1 Connector seam (handoff B)
 
-- Add `registerConnector`, `ConnectorInput`, `LayoutInput.connectorSources` and `layout/connectors/route.ts`.
+- Add `registerConnector`, `ConnectorInput`, `LayoutInput.connectorProviders` and the `layout/connectors/` folder.
 - Route orthogonal paths from bar edges. Attach to the nearest visible ancestor for a hidden end.
 - Find both end bars for any Entry. Clip each path to the window.
 - Memoize inputs by `datasetRevision` and paths by revision, scale and row set.
