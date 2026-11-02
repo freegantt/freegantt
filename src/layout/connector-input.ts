@@ -27,8 +27,11 @@ export interface ConnectorInput {
   flags?: ConnectorFlags;
   /** Lands on the connector node beside `.fg-connector`. */
   class?: string;
-  /** The connector's accessible name. Core draws no label text. */
+  /** The connector's accessible name. */
   label?: string;
+  /** Draws `label` as text at the middle of the line. The label stays the accessible name either way.
+   *  A connector with no label draws no text. */
+  showLabel?: boolean;
 }
 
 /** Registered with `ctx.view.registerConnector`. Core calls it again after each dataset change. */

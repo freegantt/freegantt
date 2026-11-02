@@ -152,11 +152,13 @@ export interface EntryDependenciesOptions {
   /** Which Field names an Entry in a connector label "<from> → <to>". Default `name`. The label is
    *  always the accessible name of the connector. */
   readonly labelField?: string;
+  /** Draw the label as text on each connector. Default `false`: the label then serves screen readers only. */
+  readonly showLabels?: boolean;
 }
 
 /** A plugin that stores Dependencies. Call: `new Dataset({ entries, plugins: [entryDependencies()] })`. */
 export function entryDependencies(options: EntryDependenciesOptions = {}): EntryDependencies {
-  const { connectByDrag = true, labelField = 'name' } = options;
+  const { connectByDrag = true, labelField = 'name', showLabels = false } = options;
   const listeners: { [Name in keyof DependencyEvents]: Set<DependencyEvents[Name]> } = {
     beforeDependencyRemove: new Set(),
     dependencyRemove: new Set(),
@@ -279,6 +281,7 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
             to: { entryId: dependency.toId, edge: toEdge },
             flags: selection.isSelected(dependency.id) ? { selected: true } : {},
             label: `${labelOf(dependency.fromId)} → ${labelOf(dependency.toId)}`,
+            showLabel: showLabels,
           };
         }),
       );
