@@ -220,7 +220,7 @@ dependencies.remove('d2');
 - Add `beforeConnect` and `connect`. `beforeConnect` joins the async-veto names in `view/event-bus.ts`.
 - The payload names two `{ entryId, edge }` ends. It never names `FS`, `SS`, `FF` or `SF` (decision 7).
 - `entryDependencies()` registers the handler. It maps the edge pair to `FS`, `SS`, `FF` or `SF` and writes the row.
-- Keyboard connect lives in core: pick a source, move to a target, confirm.
+- No keyboard connect in core. A keyboard user adds a Dependency in the Entry edit form, through the `entryDependencies()` host API.
 - **Harness:** drag from a connector port. A veto handler that waits 600 ms shows the async hold. A read-only Entry shows no port.
 - **Not installed:** no handler, so no ports and no event.
 
