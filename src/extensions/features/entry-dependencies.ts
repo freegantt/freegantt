@@ -132,7 +132,7 @@ export function entryDependencies(): EntryDependencies {
 
       // What happens to a Dependency when an Entry goes? The row of a removed successor goes with the
       // Entry. A row that names a removed predecessor loses that one Dependency in the same change set.
-      ctx.edits.cleanRowsOnRemoval((request) =>
+      ctx.edits.writeRowsWithEdit((request) =>
         [...store.all]
           .filter(([, row]) => row.predecessors.some((p) => request.removedEntryIds.has(p.fromId)))
           .map(([toId, row]) => {

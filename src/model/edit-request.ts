@@ -117,19 +117,19 @@ export interface StoreRowWrite<T extends object = object> {
 }
 
 /**
- * Answers which rows of the plugin's own store change when this transaction removes Entries. Core
- * calls it once per transaction, after the removals are final and before the `EditExtender`, and
- * never on a drag preview.
+ * Answers which rows of the plugin's own store change with this transaction. A removal and an edit
+ * both call it. Core calls it once per transaction, after the removals are final and before the
+ * `EditExtender`, and never on a drag preview.
  *
- * Core stages the answer in the same transaction. The removal and the row writes land in one
- * `ChangeSet`, and one undo restores both. A throw aborts the whole removal. The cleaner reads
+ * Core stages the answer in the same transaction. The edit and the row writes land in one
+ * `ChangeSet`, and one undo restores both. A throw aborts the whole transaction. The writer reads
  * rows, and it never writes: a store write inside it throws `MutationDuringExtensionHookError`.
  * A write for an Entry this transaction removes is skipped, because that Entry's rows already go.
  *
  * ```ts
- * ctx.edits.cleanRowsOnRemoval((request) => rowsNaming(request.removedEntryIds).map(withoutThoseNames));
+ * ctx.edits.writeRowsWithEdit((request) => rowsAbout(request.proposed).map(withTheNewRow));
  * ```
  */
-export type RemovalRowCleaner<TProps = Record<string, unknown>, T extends object = object> = (
+export type EditRowWriter<TProps = Record<string, unknown>, T extends object = object> = (
   request: EditRequest<TProps>,
 ) => readonly StoreRowWrite<T>[];

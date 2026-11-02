@@ -500,7 +500,6 @@ export class Dataset<TProps = unknown> {
 
 // @public
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
-    cleanRowsOnRemoval(cleaner: RemovalRowCleaner<TProps>): void;
     // (undocumented)
     rulesChanged(): void;
     // (undocumented)
@@ -515,6 +514,7 @@ export interface DatasetEditHook<TProps = Record<string, unknown>> {
     setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
     // (undocumented)
     setRemoveRule(wrap: RemoveRuleWrapper): void;
+    writeRowsWithEdit(writer: EditRowWriter<TProps>): void;
 }
 
 // @public
@@ -847,6 +847,9 @@ export interface EditResolution {
     // (undocumented)
     readonly moves: readonly ScheduleField[];
 }
+
+// @public
+export type EditRowWriter<TProps = Record<string, unknown>, T extends object = object> = (request: EditRequest<TProps>) => readonly StoreRowWrite<T>[];
 
 // @public
 export interface ElementDescription {
@@ -2285,9 +2288,6 @@ export type RemovalExtender<TProps = Record<string, unknown>> = (request: EditRe
 
 // @public
 export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (next: RemovalExtender<TProps>) => RemovalExtender<TProps>;
-
-// @public
-export type RemovalRowCleaner<TProps = Record<string, unknown>, T extends object = object> = (request: EditRequest<TProps>) => readonly StoreRowWrite<T>[];
 
 // @public
 export interface RemoveQuery {

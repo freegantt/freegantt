@@ -16,7 +16,7 @@ import type {
   EntryStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
-  RemovalRowCleaner,
+  EditRowWriter,
   StoreRowWrite,
   FieldLockRuleWrapper,
   PlaceRuleWrapper,
@@ -34,7 +34,7 @@ export type {
   PluginStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
-  RemovalRowCleaner,
+  EditRowWriter,
   StoreRowWrite,
 };
 // A plugin author writing a hierarchy source names both: the wrapper its plugin's own
@@ -98,7 +98,7 @@ export interface DatasetEvents {
  *  parent, asked once for a cross-parent move and once for a gesture preview, so a bar drag, a grid
  *  row drag and `entries.update()`/`add()` all meet the same resolution.
  *
- *  `cleanRowsOnRemoval` lets a plugin change rows of its own store when an Entry goes, in the same
+ *  `writeRowsWithEdit` lets a plugin change rows of its own store with each edit and removal, in the same
  *  changeset as the removal.
  *
  *  `setRemoveRule` is the fourth seam (#611): it answers whether `entries.remove()` may take an
@@ -121,9 +121,9 @@ export interface DatasetEvents {
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
   setExtender(wrap: ExtenderWrapper<TProps>): void;
   setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
-  /** Cleans this plugin's own store when Entries go. See `RemovalRowCleaner`. Several calls all
+  /** Writes rows of this plugin's own store in the same change set as each edit and removal. See `EditRowWriter`. Several calls all
    *  run, in call order. */
-  cleanRowsOnRemoval(cleaner: RemovalRowCleaner<TProps>): void;
+  writeRowsWithEdit(writer: EditRowWriter<TProps>): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
   setRemoveRule(wrap: RemoveRuleWrapper): void;
