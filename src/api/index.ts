@@ -243,6 +243,10 @@ export { timeShading } from '../extensions/features/time-shading.js';
 export type { ShadingRule, CoverPredicate } from '../extensions/features/time-shading.js';
 export { daysOfWeek, hours, dates, spans, notCovered } from '../extensions/features/time-shading-covers.js';
 export type { TimeCover, DayOfWeek } from '../extensions/features/time-shading-covers.js';
+// The working calendar: a pure value the scheduling plugin owns. `calendar.offTime()` is a `TimeCover`
+// by shape, so `timeShading([{ covers: calendar.offTime() }])` shades its days off.
+export { workingCalendar, InvalidWorkingCalendarError } from '../scheduling/index.js';
+export type { WorkingCalendar, WorkingCalendarOptions, OffTimeCover, Workday } from '../scheduling/index.js';
 // TimeScaleModel/ScrollAxis are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through
 // view/, which has no other interest in them (issue #91 §9-I).
