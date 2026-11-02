@@ -53,3 +53,13 @@ test('a row span widens with the zoom, because layout resolves it through the ti
   await page.evaluate(() => (window as unknown as { __gantt: { zoomIn(): void } }).__gantt.zoomIn());
   await expect.poll(widthOfFirstSpan).toBeGreaterThan(before);
 });
+
+test('a late Entry shows its slip at the span end and an on-time Entry shows none', async ({ page }) => {
+  await page.goto('/planned-vs-actual.html');
+  await expect(page.locator('#gantt .fg-row-span').first()).toBeAttached();
+
+  const spanTexts = await page.locator('#gantt .fg-row-span').allTextContents();
+  // Design ends four days late. Survey ends on time.
+  expect(spanTexts).toContain('+4d');
+  expect(spanTexts[0]).toBe('');
+});
