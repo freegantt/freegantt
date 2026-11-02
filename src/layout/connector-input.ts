@@ -6,7 +6,7 @@ import type { EntryId } from '../model/index.js';
 
 /** Every `ConnectorFlags` key — the connector-side twin of `BAR_FLAG_KEYS`. `render/` turns each
  *  true key into one `data-flag` token. */
-export const CONNECTOR_FLAG_KEYS = ['inactive', 'cycle'] as const;
+export const CONNECTOR_FLAG_KEYS = ['inactive', 'cycle', 'selected'] as const;
 
 export type ConnectorFlags = Partial<Record<(typeof CONNECTOR_FLAG_KEYS)[number], boolean>>;
 
@@ -27,8 +27,11 @@ export interface ConnectorInput {
   flags?: ConnectorFlags;
   /** Lands on the connector node beside `.fg-connector`. */
   class?: string;
-  /** The connector's accessible name. Core draws no label text. */
+  /** The connector's accessible name. */
   label?: string;
+  /** Draws `label` as text at the middle of the line. The label stays the accessible name either way.
+   *  A connector with no label draws no text. */
+  showLabel?: boolean;
 }
 
 /** Registered with `ctx.view.registerConnector`. Core calls it again after each dataset change. */

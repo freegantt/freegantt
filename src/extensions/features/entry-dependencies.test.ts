@@ -42,7 +42,9 @@ function connectorsOf(plugin: ReturnType<typeof entryDependencies>, dataset: Dat
         return () => {};
       },
       onConnect: () => () => {},
+      onDomEvent: () => () => {},
     },
+    interaction: { registerKeyHandler: () => () => {} },
   } as unknown as PluginContext;
   plugin.view?.(stub);
   if (!provider) throw new Error('entryDependencies() never called ctx.view.registerConnector');
@@ -201,7 +203,9 @@ describe('connectors', () => {
         id: 'dependency:d1',
         from: { entryId: entryId('a'), edge: fromEdge },
         to: { entryId: entryId('b'), edge: toEdge },
+        flags: {},
         label: 'Task a → Task b',
+        showLabel: false,
       },
     ]);
   });
@@ -246,7 +250,9 @@ function connectHandlerOf(plugin: ReturnType<typeof entryDependencies>, dataset:
         handler = next;
         return () => {};
       },
+      onDomEvent: () => () => {},
     },
+    interaction: { registerKeyHandler: () => () => {} },
   } as unknown as PluginContext;
   plugin.view?.(stub);
   return handler;

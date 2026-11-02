@@ -159,8 +159,13 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'Remove an Entry and every Dependency that names it goes too, in the same undo step',
       'Drag from a port on one bar to a port on another: end→start adds FS, start→start SS, end→end FF, start→end SF',
       'Undo removes a dragged Dependency in one step',
+      'Click a connector, or Tab to one, to select it; click anywhere else to clear. The Entry selection stays as it is',
+      'Arrow keys move to the next or previous connector; Delete removes the Dependency, and one undo restores it',
     ],
     config: [
+      'dependencies.on("beforeDependencyRemove", ({ dependency }) => confirmDialog(dependency)) // return false to keep it',
+      'dependencies.on("dependencyRemove", ({ dependency }) => log(dependency.id))',
+      'entryDependencies({ labelField: "name", showLabels: true }) // draw "<from> → <to>" on each line',
       'const dependencies = entryDependencies(); new Dataset({ entries, plugins: [dependencies] })',
       'entryDependencies({ connectByDrag: false }) // an app that only shows Dependencies: no port, no drag',
       "dependencies.replaceAll([{ id, fromId, toId, type: 'FS', lag: { value: -1, unit: 'day' } }])",

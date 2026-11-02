@@ -89,6 +89,15 @@ function paintOneGantt(
         revision: 0,
         datasetRevision: 0,
         variants: variantRegistry,
+        connectorProviders: [
+          () => [
+            {
+              id: 'line-1',
+              from: { entryId: entries[0]!.id, edge: 'end' },
+              to: { entryId: entries[1]!.id, edge: 'start' },
+            },
+          ],
+        ],
         columns: [
           { field: 'name', header: 'Name', align: 'start', format: (entry) => entry.name },
           { field: 'cost', header: 'Budget', align: 'end', width: 90, format: () => '$500' },
@@ -128,6 +137,18 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
     expect(target?.kind).toBe('bar');
     expect(target?.element).toBe(bar);
     expect(target?.entry?.id).toBe(entries[0]!.id);
+    gantt.destroy();
+  });
+
+  it('resolves a painted connector to a connector target carrying its provider id', () => {
+    const gantt = paintOneGantt();
+    const line = gantt.container.querySelector<HTMLElement>('[data-connector-id]')!;
+
+    const target = gantt.dom.targetUnder(line);
+
+    expect(target?.kind).toBe('connector');
+    expect(target?.connectorId).toBe('line-1');
+    expect(target?.entryIds).toEqual([]);
     gantt.destroy();
   });
 
@@ -245,7 +266,7 @@ describe('ContainerDom — what render/dom emits is what targetUnder reads', () 
     other.destroy();
   });
 
-  it('answers nothing for a node inside this Gantt that is none of the five kinds', () => {
+  it('answers nothing for a node inside this Gantt that is none of the six kinds', () => {
     const gantt = paintOneGantt();
 
     expect(gantt.dom.targetUnder(gantt.container)).toBeUndefined();
@@ -262,6 +283,14 @@ describe('ContainerDom — finding an element from an id', () => {
     expect(bar).toBe(gantt.container.querySelectorAll('[data-bar-id]')[1]);
     // A plain string, not `as EntryId` — `barFor` is loose on this scalar id (#305).
     expect(gantt.dom.barFor('no-such-entry')).toBeUndefined();
+    gantt.destroy();
+  });
+
+  it('connectorFor finds the painted connector of one provider id, and nothing for an unknown id', () => {
+    const gantt = paintOneGantt();
+
+    expect(gantt.dom.connectorFor('line-1')).toBe(gantt.container.querySelector('[data-connector-id]'));
+    expect(gantt.dom.connectorFor('line-2')).toBeUndefined();
     gantt.destroy();
   });
 

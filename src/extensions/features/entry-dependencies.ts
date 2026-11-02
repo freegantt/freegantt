@@ -12,7 +12,8 @@ import {
   UnsupportedLagUnitError,
   entryId,
 } from '../../model/index.js';
-import type { Duration, EntryId, PluginStore, PluginStoreView } from '../../model/index.js';
+import type { Disposer, Duration, EntryId, PluginStore, PluginStoreView } from '../../model/index.js';
+import { connectorIdOf, connectorSelection } from './entry-dependencies-selection.js';
 
 /** The plugin id other plugins name in `requires`. */
 export const ENTRY_DEPENDENCIES_ID = 'freegantt.entryDependencies';
@@ -44,6 +45,26 @@ export interface DependencyInput {
   readonly lag: Duration;
 }
 
+/** What the remove events carry: the Dependency as it was stored. */
+export interface DependencyRemoval {
+  readonly dependency: Dependency;
+}
+
+/** Answer `false`, or a Promise of `false`, to keep the Dependency. Any other answer allows the remove. */
+export type BeforeDependencyRemoveHandler = (
+  removal: DependencyRemoval,
+) => void | false | Promise<void | false>;
+
+export type DependencyRemoveHandler = (removal: DependencyRemoval) => void;
+
+/** The events `entryDependencies().on` takes, each with its handler type. */
+export interface DependencyEvents {
+  /** Fires before a user remove. The remove waits for every answer. */
+  beforeDependencyRemove: BeforeDependencyRemoveHandler;
+  /** Fires after a user remove committed. */
+  dependencyRemove: DependencyRemoveHandler;
+}
+
 /** What `entryDependencies()` returns: the plugin, and the calls a consumer writes Dependencies with. */
 export interface EntryDependencies extends DataPlugin {
   /** Makes the Dependencies equal `dependencies`. Records no undo step. An unknown Entry id throws,
@@ -57,6 +78,9 @@ export interface EntryDependencies extends DataPlugin {
   all(): readonly Dependency[];
   /** The Dependencies that make `entry` a successor. */
   predecessorsOf(entry: EntryId | string): readonly Dependency[];
+  /** Calls `handler` for a remove the user makes with the keyboard. A call to `remove(id)` raises no
+   *  event, because the consumer's own code made it. Returns the call that removes the handler. */
+  on<Name extends keyof DependencyEvents>(name: Name, handler: DependencyEvents[Name]): Disposer;
 }
 
 /** The predecessors of one Entry. The store key is the successor, so the row omits `toId`. */
@@ -125,11 +149,20 @@ export interface EntryDependenciesOptions {
   /** Does a connect drag between two bars add a Dependency? Default `true`. Pass `false` for an app
    * that only shows Dependencies: no port draws, and the user cannot drag one in. */
   readonly connectByDrag?: boolean;
+  /** Which Field names an Entry in a connector label "<from> → <to>". Default `name`. The label is
+   *  always the accessible name of the connector. */
+  readonly labelField?: string;
+  /** Draw the label as text on each connector. Default `false`: the label then serves screen readers only. */
+  readonly showLabels?: boolean;
 }
 
 /** A plugin that stores Dependencies. Call: `new Dataset({ entries, plugins: [entryDependencies()] })`. */
 export function entryDependencies(options: EntryDependenciesOptions = {}): EntryDependencies {
-  const { connectByDrag = true } = options;
+  const { connectByDrag = true, labelField = 'name', showLabels = false } = options;
+  const listeners: { [Name in keyof DependencyEvents]: Set<DependencyEvents[Name]> } = {
+    beforeDependencyRemove: new Set(),
+    dependencyRemove: new Set(),
+  };
   let installed: { dataset: Dataset; store: PluginStore<DependencyRow> } | undefined;
 
   function installation(operation: string): NonNullable<typeof installed> {
@@ -154,6 +187,46 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
     const row = toPredecessorRow(dependency, operation);
     const current = store.get(dependency.toId)?.predecessors ?? [];
     store.set(dependency.toId, { predecessors: [...current, row] });
+  }
+
+  /** Asks every `beforeDependencyRemove` handler. Any `false` keeps the Dependency. A Promise holds the
+   *  remove until it settles. */
+  function allowsRemove(removal: DependencyRemoval): boolean | Promise<boolean> {
+    const answers = [...listeners.beforeDependencyRemove].map((handler) => handler(removal));
+    if (answers.includes(false)) return false;
+    const pending = answers.filter((answer) => answer instanceof Promise);
+    if (pending.length === 0) return true;
+    return Promise.all(pending).then((settled) => !settled.includes(false));
+  }
+
+  /** The keyboard remove: ask, remove with one undo step, then tell. The Dependency may be gone
+   *  when a slow answer arrives, and then nothing happens. */
+  function removeByUser(id: string): void {
+    const dependency = all().find((stored) => stored.id === id);
+    if (!dependency) return;
+    const removal = { dependency };
+    const commit = (): void => {
+      if (!all().some((stored) => stored.id === id)) return;
+      remove(id);
+      for (const handler of [...listeners.dependencyRemove]) handler(removal);
+    };
+    const verdict = allowsRemove(removal);
+    if (typeof verdict === 'boolean') {
+      if (verdict) commit();
+      return;
+    }
+    void verdict.then((allowed) => {
+      if (allowed) commit();
+    });
+  }
+
+  function remove(id: string): void {
+    const { store } = installation('entryDependencies.remove');
+    const owner = all().find((dependency) => dependency.id === id);
+    if (!owner) return;
+    const kept = (store.get(owner.toId)?.predecessors ?? []).filter((p) => p.id !== id);
+    if (kept.length === 0) store.remove(owner.toId);
+    else store.set(owner.toId, { predecessors: kept });
   }
 
   function predecessorsOf(entry: EntryId | string): readonly Dependency[] {
@@ -182,21 +255,33 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
 
       return () => {
         installed = undefined;
+        for (const handlers of Object.values(listeners)) handlers.clear();
       };
     },
 
     view(ctx) {
-      const nameOf = (id: EntryId): string => ctx.dataset.entries.get(id)?.name ?? '';
+      const labelOf = (id: EntryId): string => {
+        const value: unknown = ctx.dataset.entries.get(id)?.read(labelField);
+        return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
+      };
+      // Which connector did the user select, and what do the keys do to it?
+      const selection = connectorSelection(ctx, {
+        dependencyIds: () => all().map((dependency) => dependency.id),
+        removeByUser,
+      });
       // What lines does the Gantt draw? One per Dependency, from an edge of the predecessor's bar to
-      // an edge of the successor's bar. The accessible name reads "<from name> → <to name>".
+      // an edge of the successor's bar. The accessible name reads "<from label> → <to label>".
+      // The selected Dependency carries the `selected` flag.
       ctx.view.registerConnector(() =>
         all().map((dependency) => {
           const [fromEdge, toEdge] = edgesOf(dependency.type);
           return {
-            id: `dependency:${dependency.id}`,
+            id: connectorIdOf(dependency.id),
             from: { entryId: dependency.fromId, edge: fromEdge },
             to: { entryId: dependency.toId, edge: toEdge },
-            label: `${nameOf(dependency.fromId)} → ${nameOf(dependency.toId)}`,
+            flags: selection.isSelected(dependency.id) ? { selected: true } : {},
+            label: `${labelOf(dependency.fromId)} → ${labelOf(dependency.toId)}`,
+            showLabel: showLabels,
           };
         }),
       );
@@ -240,17 +325,18 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
 
     add,
 
-    remove(id) {
-      const { store } = installation('entryDependencies.remove');
-      const owner = all().find((dependency) => dependency.id === id);
-      if (!owner) return;
-      const kept = (store.get(owner.toId)?.predecessors ?? []).filter((p) => p.id !== id);
-      if (kept.length === 0) store.remove(owner.toId);
-      else store.set(owner.toId, { predecessors: kept });
-    },
+    remove,
 
     all,
 
     predecessorsOf,
+
+    on(name, handler) {
+      const handlers: Set<typeof handler> = listeners[name];
+      handlers.add(handler);
+      return () => {
+        handlers.delete(handler);
+      };
+    },
   };
 }

@@ -452,10 +452,14 @@ ${DARK_COLOR_TOKENS}
 .fg-row-span { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
 .fg-bars { position: relative; }
 /* Connectors: one zero-height layer above .fg-bars, one svg inside it sized to the content. The layer
-   and svg ignore the pointer, so a bar under a line keeps its gestures. */
+   and svg ignore the pointer, so a bar under a line keeps its gestures. Only the stroke of a line takes
+   the pointer, so a click on a line selects it and a click beside it reaches what lies below. */
 .fg-connectors { position: relative; pointer-events: none; }
 .fg-connectors-svg { position: absolute; top: 0; left: 0; overflow: hidden; }
-.fg-connector { fill: none; stroke: currentColor; stroke-width: 1.5px; }
+.fg-connector { fill: none; stroke: currentColor; stroke-width: 1.5px; pointer-events: stroke; cursor: pointer; }
+.fg-connector:focus { outline: none; }
+.fg-connector-text { fill: currentColor; font-size: 11px; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--fg-pane-bg); stroke-width: 3px; pointer-events: none; user-select: none; }
+.fg-connector[data-flag~="selected"], .fg-connector:focus-visible { stroke: var(--fg-selection-color); stroke-width: 3px; }
 .fg-connector[data-flag~="inactive"] { stroke-dasharray: 4 3; opacity: 0.6; }
 .fg-connector[data-flag~="cycle"] { stroke: var(--fg-warn); }
 /* touch-action: none on the bar itself, not just the resize handles — a touch drag must
