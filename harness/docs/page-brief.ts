@@ -165,7 +165,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'Drag a task later and its successors move; drag it earlier and they follow',
       'One undo restores every task the drag moved',
       'A Manual column toggles manuallyScheduled: the plugin never moves that task and reports the broken link',
-      'A task dated by hand keeps its date; the Dependency it breaks shows as a finding',
+      'Drag a task before its predecessor ends: the Dependency wins and the task lands after it; the date stays as a floor',
       'A loop of Dependencies is listed by its members, and its connectors carry the cycle flag',
     ],
     config: [
