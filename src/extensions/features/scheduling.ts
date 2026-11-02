@@ -8,11 +8,13 @@ import type { Dataset } from '../../api/dataset.js';
 import { mergeEntryEdits, overridingProposed } from '../../api/dataset-plugin.js';
 import { schedule } from '../../api/schedule-facade.js';
 import type {
+  ScheduleCalendar,
   ScheduleConstraint,
   ScheduleDiagnostic,
   ScheduleEntry,
   ScheduleResult,
   SuccessorMoves,
+  WorkingCalendar,
 } from '../../api/schedule-facade.js';
 import { SchedulingNotInstalledError, entryId } from '../../model/index.js';
 import type {
@@ -47,6 +49,20 @@ export interface SchedulingOptions {
   readonly successorMoves?: SuccessorMoves;
   /** What a user date does when it breaks a Dependency. Defaults to `dependencyWins`. */
   readonly editedDate?: EditedDate;
+  /**
+   * The working calendar of every Entry. Pass the object that `timeShading()` shades from, so the shading
+   * and the schedule agree. A lag counts workdays and a moved Entry keeps its length in workdays.
+   * Omit it and a day is 24 hours.
+   */
+  readonly calendar?: WorkingCalendar;
+  /** Named calendars, for Entries that follow a calendar other than `calendar`. */
+  readonly calendars?: Readonly<Record<string, WorkingCalendar>>;
+  /**
+   * The key of a consumer Field whose value names a calendar in `calendars`. An Entry with no value, or
+   * a name `calendars` lacks, uses `calendar`, then 24-hour days.
+   * A lag counts in the calendar of its successor, the default of Primavera P6.
+   */
+  readonly calendarField?: string;
 }
 
 /** What `scheduleDiagnostics` handlers receive: every finding of the latest commit. */
@@ -114,6 +130,24 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     const ids = new Set<EntryId>();
     for (const id of request.entries.keys()) if (isManuallyScheduled(request, id)) ids.add(id);
     return ids;
+  }
+
+  /** The calendars one run counts days with, or `undefined` when the options name none. */
+  function scheduleCalendar(
+    dataset: Dataset,
+    calendarNames: Iterable<readonly [EntryId, unknown]>,
+  ): ScheduleCalendar | undefined {
+    const { calendar, calendars, calendarField } = options;
+    if (!calendar && !calendars) return undefined;
+    const ofEntry = new Map<EntryId, WorkingCalendar>();
+    if (calendars && calendarField !== undefined) {
+      for (const [id, name] of calendarNames) {
+        const named =
+          typeof name === 'string' && Object.hasOwn(calendars, name) ? calendars[name] : undefined;
+        if (named) ofEntry.set(id, named);
+      }
+    }
+    return { time: dataset.time, ...(calendar ? { calendar } : {}), ofEntry };
   }
 
   function scheduleEntries(request: EditRequest): ScheduleEntry[] {
@@ -191,8 +225,18 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       proposed,
       manuallyScheduled: manuallyScheduledIds(request),
       constraints,
+      ...calendarOption(request),
       ...(options.successorMoves === undefined ? {} : { successorMoves: options.successorMoves }),
     });
+  }
+
+  function calendarOption(request: EditRequest): { calendar?: ScheduleCalendar } {
+    const dataset = installed?.dataset;
+    if (!dataset) return {};
+    const key = options.calendarField;
+    const names = [...request.entries.values()].map((entry) => [entry.id, key && entry.props[key]] as const);
+    const calendar = scheduleCalendar(dataset, names);
+    return calendar ? { calendar } : {};
   }
 
   /** The engine's answer to an edit. A Dependency that overrules a user start reruns it with that start as a floor. */
@@ -256,8 +300,21 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         entries.filter((entry) => entry.read(MANUALLY_SCHEDULED) === true).map((entry) => entry.id),
       ),
       constraints: installed.store.all,
+      ...auditCalendarOption(installed.dataset, entries),
       ...(options.successorMoves === undefined ? {} : { successorMoves: options.successorMoves }),
     }).diagnostics;
+  }
+
+  function auditCalendarOption(
+    dataset: Dataset,
+    entries: readonly { readonly id: EntryId; read(key: string): unknown }[],
+  ): { calendar?: ScheduleCalendar } {
+    const key = options.calendarField;
+    const calendar = scheduleCalendar(
+      dataset,
+      entries.map((entry) => [entry.id, key && entry.read(key)] as const),
+    );
+    return calendar ? { calendar } : {};
   }
 
   return {
