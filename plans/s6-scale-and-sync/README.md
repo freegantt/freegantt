@@ -269,7 +269,7 @@ gate: no automated checklist defined yet for slice S6.
 
 Every other slice's acceptance rows carry a bracketed id (`[S1-A4]`, `[S5-A6]`) that the gate greps for in a test title. **S6's five rows carry no ids.** Minting them is the first build step of this slice, because nothing else can be proved until the gate can name what it is proving.
 
-Proposed ids: `[S6-A1]` budgets, `[S6-A2]` the 10k fixture, `[S6-A3]` the linked demo, `[S6-A4]` the leak check, `[S6-A5]` the pack audit.
+The ids now exist in `plans/03` §S6: `[S6-A1]` budgets, `[S6-A2]` the 10k fixture, `[S6-A3]` the linked demo, `[S6-A4]` the leak check, `[S6-A5]` the pack audit. `pnpm gate` checks them. It runs A3, A4 and A5, and it fails if an id has no matching test. It prints A1 and A2 as open, by id, until their proof lands.
 
 ### 5.5 S1.11 sends R2's throughput measurement to S7
 
