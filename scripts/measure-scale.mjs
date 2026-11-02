@@ -21,12 +21,19 @@ import { chromium } from '@playwright/test';
 
 const PORT = process.env['FG_MEASURE_PORT'] ?? '5174';
 const ORIGIN = `http://localhost:${PORT}`;
-const PAGE = '/large-dataset.html';
+const PAGE = '/e2e/large-dataset.html';
 const OUT_DIR = 'measurements';
 /** Enough motion to see a pattern rather than one lucky frame — #95 asks for seconds of scrolling,
  *  not a single flick. */
 const SCROLL_STEPS = 240;
 const STEP_PX = 40;
+/** R2 asks for at least 50 hovers. */
+const HOVER_COUNT = 60;
+/** R2 asks for one transaction that changes at least 1,000 entries. */
+const BULK_EDIT_ENTRIES = 1000;
+const BULK_EDIT_SHIFT_MS = 86_400_000;
+/** Frames watched after the transaction, so a late relayout still lands in the reading. */
+const BULK_EDIT_FRAMES_AFTER = 30;
 /** #95 step 5. Four times slower than this machine, so jank a fast laptop hides becomes visible. */
 const CPU_THROTTLE = 4;
 
@@ -131,6 +138,97 @@ const scrollAndTime = ({ axis, steps, stepPx }) => {
   })();
 };
 
+/** Arms one hover probe: answers the milliseconds from the next pointer move to the end of the frame
+ *  that paints bar `barIndex` as hovered. The end of the frame is a task posted after the animation
+ *  frame callback, because the callback itself runs before paint. */
+const armHoverProbe = (barIndex) =>
+  new Promise((resolve) => {
+    const bar = document.querySelectorAll('.fg-bar')[barIndex];
+    if (!bar) throw new Error(`no bar at index ${barIndex}`);
+    let moved;
+    const onMove = (event) => {
+      moved = event.timeStamp;
+      document.removeEventListener('pointermove', onMove, true);
+    };
+    document.addEventListener('pointermove', onMove, true);
+    const observer = new MutationObserver(() => {
+      if (!bar.getAttribute('data-state')?.split(' ').includes('hovered')) return;
+      observer.disconnect();
+      requestAnimationFrame(() => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => resolve(performance.now() - (moved ?? performance.now()));
+        channel.port2.postMessage(undefined);
+      });
+    });
+    observer.observe(bar, { attributes: true, attributeFilter: ['data-state'] });
+  });
+
+/** Shifts `count` entries by `shiftMs` in one transaction. Answers the transaction time and the
+ *  longest frame from just before the transaction to `framesAfter` frames past it. */
+const bulkEdit = async ({ count, shiftMs, framesAfter }) => {
+  const dataset = window.__dataset;
+  const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+  await nextFrame();
+  const started = performance.now();
+  dataset.transaction(() => {
+    for (let i = 0; i < count; i++) {
+      const entry = dataset.entries.get(`seeded-${i}`);
+      if (!entry) throw new Error(`no entry seeded-${i}`);
+      dataset.entries.update(entry.id, {
+        start: new Date(Number(entry.read('start')) + shiftMs),
+        end: new Date(Number(entry.read('end')) + shiftMs),
+      });
+    }
+  });
+  const transactionMs = performance.now() - started;
+  const frames = [];
+  let previous = started;
+  for (let i = 0; i < framesAfter; i++) {
+    await nextFrame();
+    const now = performance.now();
+    frames.push(now - previous);
+    previous = now;
+  }
+  return { transactionMs, longestFrameMs: Math.max(...frames) };
+};
+
+/** Moves the pointer onto `HOVER_COUNT` different visible bars, one at a time, and times each. */
+async function measureHover(page) {
+  const samples = [];
+  await page.evaluate(() => {
+    const pane = document.querySelector('.fg-timeline-pane');
+    pane.scrollTop = 0;
+    pane.scrollLeft = 0;
+    pane.dispatchEvent(new Event('scroll'));
+  });
+  await page.locator('.fg-bar').first().waitFor();
+  // Only a bar whose visible part sits inside the timeline pane can take a pointer.
+  const targets = await page.evaluate(() => {
+    const pane = document.querySelector('.fg-timeline-pane').getBoundingClientRect();
+    return [...document.querySelectorAll('.fg-bar')].flatMap((bar, index) => {
+      const box = bar.getBoundingClientRect();
+      const left = Math.max(box.left, pane.left);
+      const right = Math.min(box.right, pane.right - 20);
+      const top = Math.max(box.top, pane.top);
+      const bottom = Math.min(box.bottom, pane.bottom - 20);
+      if (right - left < 4 || bottom - top < 4) return [];
+      return [{ index, x: (left + right) / 2, y: (top + bottom) / 2 }];
+    });
+  });
+  if (targets.length === 0) throw new Error('measure:scale: no bar in view to hover');
+  // The view holds fewer bars than R2 wants hovers, so each bar takes several fresh hovers.
+  for (let hover = 0; hover < HOVER_COUNT; hover++) {
+    const { index, x, y } = targets[hover % targets.length];
+    // Rest off every bar first, and wait for the last hover to clear, so each move is a fresh hover.
+    await page.mouse.move(2, 2);
+    await page.locator('.fg-bar[data-state~="hovered"]').first().waitFor({ state: 'detached' });
+    const probe = page.evaluate(armHoverProbe, index);
+    await page.mouse.move(x, y);
+    samples.push(await probe);
+  }
+  return samples;
+}
+
 async function readMetrics(client) {
   const { metrics } = await client.send('Performance.getMetrics');
   const value = (name) => metrics.find((metric) => metric.name === name)?.value ?? 0;
@@ -209,6 +307,25 @@ async function main() {
 
     await browser.stopTracing();
 
+    const hover = percentiles(await measureHover(page));
+    const bulkTracePath = `${OUT_DIR}/${timestamp}-bulk-edit-trace.json`;
+    await browser.startTracing(page, { path: bulkTracePath, screenshots: false });
+    const bulk = await page.evaluate(bulkEdit, {
+      count: BULK_EDIT_ENTRIES,
+      shiftMs: BULK_EDIT_SHIFT_MS,
+      framesAfter: BULK_EDIT_FRAMES_AFTER,
+    });
+    await browser.stopTracing();
+
+    await client.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
+    const hoverThrottled = percentiles(await measureHover(page));
+    const bulkThrottled = await page.evaluate(bulkEdit, {
+      count: BULK_EDIT_ENTRIES,
+      shiftMs: -BULK_EDIT_SHIFT_MS,
+      framesAfter: BULK_EDIT_FRAMES_AFTER,
+    });
+    await client.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+
     // A heap reading means nothing while unreachable objects are still counted, so collect first.
     await client.send('HeapProfiler.collectGarbage');
     const settled = await readMetrics(client);
@@ -233,6 +350,14 @@ async function main() {
     reportPass('vertical', vertical);
     reportPass('horizontal', horizontal);
     reportPass(`vertical at ${CPU_THROTTLE}x CPU slowdown`, throttled);
+    console.log('\nHover latency, pointer move to painted hover — p50 / p95 / max in ms');
+    reportPass('unthrottled', hover);
+    reportPass(`at ${CPU_THROTTLE}x CPU slowdown`, hoverThrottled);
+    console.log(`\nBulk edit, ${BULK_EDIT_ENTRIES} entries in one transaction`);
+    report('transaction, no throttle (ms)', bulk.transactionMs);
+    report('longest frame after, no throttle (ms)', bulk.longestFrameMs);
+    report(`transaction, ${CPU_THROTTLE}x (ms)`, bulkThrottled.transactionMs);
+    report(`longest frame after, ${CPU_THROTTLE}x (ms)`, bulkThrottled.longestFrameMs);
     console.log('\nCost of the scroll');
     report('script per frame, no throttle (ms)', scriptPerFrame(after, before, vertical, horizontal));
     report(
@@ -247,7 +372,7 @@ async function main() {
     report('DOM nodes', settled.nodes);
     report('JS event listeners', settled.listeners);
     report('JS heap used (MB)', settled.heapUsedMb);
-    console.log(`\nTrace for the Performance panel: ${tracePath}`);
+    console.log(`\nTraces for the Performance panel: ${tracePath}, ${bulkTracePath}`);
     console.log('A number here is this machine, not reference hardware. Say which machine in the issue.\n');
 
     await writeFile(
@@ -261,6 +386,10 @@ async function main() {
           vertical,
           horizontal,
           throttled,
+          hover,
+          hoverThrottled,
+          bulk,
+          bulkThrottled,
           before,
           after,
           settled,
