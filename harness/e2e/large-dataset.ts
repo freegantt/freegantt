@@ -9,3 +9,11 @@ const dataset = new Dataset({ entries: seededEntryInputs({ count: 10_000 }), tim
 const scale = new TimeScaleModel({ fit: 'preset' });
 
 new Gantt({ container: '#gantt', dataset, scale });
+
+// `pnpm measure:scale` shifts dates through this handle to time one bulk transaction.
+declare global {
+  interface Window {
+    __dataset: Dataset;
+  }
+}
+window.__dataset = dataset;
