@@ -1,9 +1,11 @@
 // scheduling/ — what a caller hands `schedule()`. Plain data only: the engine reads no store.
 import type { EntryId, Duration, Instant } from '../model/index.js';
+import type { ScheduleCalendar } from './day-counting.js';
 import type { ScheduleEntry, ScheduleField } from './schedule-entry.js';
 import type { SchedulingPolicy } from './scheduling-policy.js';
 
 export type { ScheduleEntry, ScheduleField } from './schedule-entry.js';
+export type { ScheduleCalendar } from './day-counting.js';
 
 /** Which end of a dependency drives which end of its successor. */
 export type ScheduleDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
@@ -49,6 +51,12 @@ export interface ScheduleRequest {
   readonly manuallyScheduled?: ReadonlySet<EntryId>;
   /** One constraint per Entry. An Entry with no incoming dependency never moves, so its constraint does not apply. */
   readonly constraints?: ReadonlyMap<EntryId, ScheduleConstraint>;
+  /**
+   * The working calendars. With none, a day is 24 hours. With one, a lag counts workdays and a moved
+   * Entry keeps its length in workdays. A lag counts in the calendar of its successor. That is the
+   * default of Primavera P6. A week, a month and a year lag give an `unsupported-lag-unit` finding.
+   */
+  readonly calendar?: ScheduleCalendar;
   /** Defaults to `pushAndPull`. */
   readonly successorMoves?: SuccessorMoves;
   /** Defaults to `defaultPolicy`. */

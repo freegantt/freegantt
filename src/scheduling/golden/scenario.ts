@@ -1,14 +1,16 @@
 // scheduling/golden — a scenario states a schedule in whole days and the answer a person worked out by hand.
 // The runner converts days to instants, calls `schedule()`, and compares with the expected answer.
 import { entryId, type EntryId, type Instant } from '../../model/index.js';
-import { MS } from '../../time/index.js';
+import { MS, createZonedTime } from '../../time/index.js';
 import type {
+  ScheduleCalendar,
   ScheduleConstraint,
   ScheduleDependencyType,
   ScheduleField,
   ScheduleRequest,
   SuccessorMoves,
 } from '../schedule-request.js';
+import { workingCalendar, type WorkingCalendarOptions } from '../working-calendar.js';
 import type { BlockReason, ScheduleChange, ScheduleDiagnostic, ScheduleResult } from '../schedule-result.js';
 
 /** `[id, startDay, endDay]`, or `[id, startDay, endDay, 'parent']` for an Entry that has children. */
@@ -29,6 +31,19 @@ export type GoldenDiagnostic =
     }
   | { readonly code: 'unknown-entry' | 'unsupported-lag-unit'; readonly dependencyId: string };
 
+/**
+ * Day 0 is Thursday 1970-01-01, so day 4 is the first Monday and day 11 the next one. A calendar
+ * holiday reads as a `'YYYY-MM-DD'` date in that week.
+ */
+export interface GoldenCalendars {
+  /** The named calendars. */
+  readonly named: Readonly<Record<string, WorkingCalendarOptions>>;
+  /** The calendar of every Entry that `ofEntry` does not name. */
+  readonly calendar?: string;
+  /** Per Entry id, the name of its calendar. */
+  readonly ofEntry?: Readonly<Record<string, string>>;
+}
+
 export interface GoldenScenario {
   readonly name: string;
   readonly entries: readonly GoldenEntry[];
@@ -39,6 +54,8 @@ export interface GoldenScenario {
   /** Per Entry id, the day before which the Entry may not start. */
   readonly startNoEarlierThan?: Readonly<Record<string, number>>;
   readonly successorMoves?: SuccessorMoves;
+  /** Absent means 24-hour days. */
+  readonly calendars?: GoldenCalendars;
   readonly expected: {
     readonly patch: readonly GoldenChange[];
     readonly diagnostics?: readonly GoldenDiagnostic[];
@@ -47,6 +64,24 @@ export interface GoldenScenario {
 
 export function day(count: number): Instant {
   return (count * MS.DAY) as Instant;
+}
+
+function toCalendar(calendars: GoldenCalendars): ScheduleCalendar {
+  const built = new Map(
+    Object.entries(calendars.named).map(([name, options]) => [name, workingCalendar(options)]),
+  );
+  const named = (name: string) => built.get(name);
+  const calendar = calendars.calendar === undefined ? undefined : named(calendars.calendar);
+  return {
+    time: createZonedTime('UTC'),
+    ...(calendar === undefined ? {} : { calendar }),
+    ofEntry: new Map(
+      Object.entries(calendars.ofEntry ?? {}).flatMap(([id, name]) => {
+        const own = named(name);
+        return own === undefined ? [] : [[entryId(id), own] as const];
+      }),
+    ),
+  };
 }
 
 export function toRequest(scenario: GoldenScenario): ScheduleRequest {
@@ -80,6 +115,7 @@ export function toRequest(scenario: GoldenScenario): ScheduleRequest {
     proposed,
     manuallyScheduled: new Set((scenario.manuallyScheduled ?? []).map(entryId)),
     constraints,
+    ...(scenario.calendars === undefined ? {} : { calendar: toCalendar(scenario.calendars) }),
     ...(scenario.successorMoves === undefined ? {} : { successorMoves: scenario.successorMoves }),
   };
 }

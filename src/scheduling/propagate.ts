@@ -3,7 +3,7 @@
 // Entries in dependency order, so each call sees final dates for every predecessor.
 import type { EntryId, Instant } from '../model/index.js';
 import { addMs, diffMs } from '../time/index.js';
-import { applyLag } from './apply-lag.js';
+import type { DayCounting, Span } from './day-counting.js';
 import type {
   ScheduleConstraint,
   ScheduleDependency,
@@ -19,6 +19,8 @@ export const FIELDS: readonly ScheduleField[] = Object.freeze(['start', 'end'] a
 export interface Node {
   readonly id: EntryId;
   readonly hasChildren: boolean;
+  /** How this Entry counts days: in workdays when it has a working calendar, in 24-hour days when it has none. */
+  readonly days: DayCounting;
   readonly original: { readonly start: Instant | undefined; readonly end: Instant | undefined };
   start: Instant | undefined;
   end: Instant | undefined;
@@ -78,9 +80,10 @@ function demandOf(edge: Edge, nodes: readonly Node[]): Demand | undefined {
   const { type, lag, id } = edge.dependency;
   const anchor = type === 'FS' || type === 'FF' ? predecessor.end : predecessor.start;
   const field: ScheduleField = type === 'FS' || type === 'SS' ? 'start' : 'end';
-  const required = applyLag(anchor, lag);
+  // The successor's calendar counts the lag, as the default of Primavera P6 does.
+  const required = successor.days.lagLanding(anchor, lag, field);
   if (required === undefined) return undefined;
-  return { dependencyId: id, field, delta: diffMs(required, successor[field]) };
+  return { dependencyId: id, field, delta: diffMs(required, successor.days.settle(field, successor[field])) };
 }
 
 /** Whether this run lets the Entry move earlier. A user edit sets a floor, so an edited Entry never moves earlier. */
@@ -130,16 +133,19 @@ export function moveSuccessor(
   const moves = movableFields(run.policy, node);
   const dependencyDeltas = deltasByField(demands, undefined, true);
   const floor = run.constraints.get(node.id);
-  const deltas = deltasByField(demands, floor && diffMs(floor.date, node.start), mayPull(run, node));
+  const floorDelta =
+    floor && diffMs(node.days.settle('start', floor.date), node.days.settle('start', node.start));
+  const deltas = deltasByField(demands, floorDelta, mayPull(run, node));
   const shift = chooseShift(moves, deltas);
   const blockedField = FIELDS.find((field) => (dependencyDeltas[field] ?? 0) > 0 && shift[field] === 0);
-  if ((shift.start > 0 || shift.end < 0) && node.start + shift.start > node.end + shift.end) {
+  const placed = shiftedSpan(node, moves, shift);
+  if ((shift.start > 0 || shift.end < 0) && placed.start > placed.end) {
     if (violations.length > 0) report(run, node, violations, 'inverted');
     return;
   }
   if (shift.start !== 0 || shift.end !== 0) {
-    node.start = addMs(node.start, shift.start);
-    node.end = addMs(node.end, shift.end);
+    node.start = placed.start;
+    node.end = placed.end;
     node.changed = true;
   }
   if (blockedField)
@@ -174,15 +180,44 @@ function deltasByField(
   return deltas;
 }
 
+/** How far each date shifts. `anchor` is the date that meets the largest demand when the whole span shifts. */
+interface Shift {
+  readonly start: number;
+  readonly end: number;
+  readonly anchor: ScheduleField;
+}
+
 /** A free span shifts whole by the largest demand. A half-free span shifts only its free date. */
-function chooseShift(moves: readonly ScheduleField[], deltas: FieldDeltas): Record<ScheduleField, number> {
+function chooseShift(moves: readonly ScheduleField[], deltas: FieldDeltas): Shift {
   if (moves.includes('start') && moves.includes('end')) {
-    const whole = Math.max(deltas.start ?? Number.NEGATIVE_INFINITY, deltas.end ?? Number.NEGATIVE_INFINITY);
-    return { start: whole, end: whole };
+    const startDelta = deltas.start ?? Number.NEGATIVE_INFINITY;
+    const endDelta = deltas.end ?? Number.NEGATIVE_INFINITY;
+    const whole = Math.max(startDelta, endDelta);
+    return { start: whole, end: whole, anchor: startDelta >= endDelta ? 'start' : 'end' };
   }
   return {
     start: moves.includes('start') ? (deltas.start ?? 0) : 0,
     end: moves.includes('end') ? (deltas.end ?? 0) : 0,
+    anchor: moves.includes('end') ? 'end' : 'start',
+  };
+}
+
+/** The dates after a shift. A whole span keeps its length in the Entry's own days. */
+function shiftedSpan(
+  node: Node & { start: Instant; end: Instant },
+  moves: readonly ScheduleField[],
+  shift: Shift,
+): Span {
+  if (shift.start === 0 && shift.end === 0) return { start: node.start, end: node.end };
+  if (moves.includes('start') && moves.includes('end'))
+    return node.days.follow(
+      node,
+      shift.anchor,
+      addMs(node.days.settle(shift.anchor, node[shift.anchor]), shift[shift.anchor]),
+    );
+  return {
+    start: shift.start === 0 ? node.start : addMs(node.days.settle('start', node.start), shift.start),
+    end: shift.end === 0 ? node.end : addMs(node.days.settle('end', node.end), shift.end),
   };
 }
 
@@ -192,7 +227,12 @@ function report(
   demands: readonly Demand[],
   reason: BlockedMoveDiagnostic['reason'],
 ): void {
-  const whole = Math.max(...demands.map((demand) => demand.delta));
+  const driver = demands.reduce((most, demand) => (demand.delta > most.delta ? demand : most));
+  const wouldMove = shiftedSpan(node, ['start', 'end'], {
+    start: driver.delta,
+    end: driver.delta,
+    anchor: driver.field,
+  });
   const diagnostic: BlockedMoveDiagnostic = {
     code: 'blocked-move',
     reason,
@@ -202,7 +242,7 @@ function report(
       id: node.id,
       field,
       from: node[field],
-      to: addMs(node[field], whole),
+      to: wouldMove[field],
     })),
   };
   run.diagnostics.push(diagnostic);

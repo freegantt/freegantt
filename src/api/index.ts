@@ -571,6 +571,7 @@ export type {
   ScheduleRuleKind,
   ScheduleRequest,
   ScheduleDependency,
+  ScheduleCalendar,
   ScheduleConstraint,
   ScheduleDependencyType,
   SuccessorMoves,

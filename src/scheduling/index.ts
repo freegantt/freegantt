@@ -12,6 +12,7 @@ export type {
   ScheduleDependency,
   ScheduleConstraint,
   ScheduleDependencyType,
+  ScheduleCalendar,
   SuccessorMoves,
   ScheduleEntry,
   ScheduleField,
