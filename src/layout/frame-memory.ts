@@ -48,6 +48,9 @@ export class FrameMemory {
   #heightAt: ((index: number) => number) | undefined;
   /** Bumped when this memory builds a fresh height index. */
   heightIndexRevision = 0;
+  /** Bumped each time produced Bars are dropped. A reader that caches geometry built from Bars
+   *  compares it to know the cache is stale. */
+  producedRevision = 0;
 
   get heights(): RowHeightIndex {
     return this.#heights ?? new PrefixSumHeightIndex(0, () => 0);
@@ -83,12 +86,14 @@ export class FrameMemory {
 
     if (this.#heights === undefined || countChanged || metricsChanged) {
       this.#produced.clear();
+      this.producedRevision++;
       this.#heights = new PrefixSumHeightIndex(bind.plan.length, (index) => this.heightOfRow(index));
       this.#cachedRowCount = bind.plan.length;
       this.#cachedRowHeight = bind.rowHeight;
       this.heightIndexRevision++;
     } else if (revisionChanged) {
       this.#produced.clear();
+      this.producedRevision++;
       this.#heights.invalidateFrom(0);
     }
     this.#datasetRevision = bind.datasetRevision;
@@ -114,6 +119,7 @@ export class FrameMemory {
 
   forgetProduced(rowId: string): void {
     this.#produced.delete(rowId);
+    this.producedRevision++;
   }
 
   invalidateFrom(index: number): void {

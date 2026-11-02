@@ -18,6 +18,10 @@ export type { FrameRow };
 import type { RangeBand, RowStripe } from './decoration.js';
 export type { RangeBand, RowStripe } from './decoration.js';
 import { DecorationRunner } from './decorations.js';
+import { ConnectorRouter } from './connectors/connector-router.js';
+import type { ConnectorProvider } from './connector-input.js';
+import type { ConnectorWindow } from './connectors/clip-path.js';
+import type { FrameConnector } from './connectors/frame-connector.js';
 import type { RegisteredDecorationProvider } from './decorations.js';
 export type { RegisteredDecorationProvider } from './decorations.js';
 
@@ -217,10 +221,9 @@ export const BAR_FLAG_KEYS = ['conflict', 'cycle'] as const;
 
 export type BarFlags = Partial<Record<(typeof BAR_FLAG_KEYS)[number], boolean>>;
 
-/** Every `LinkFlags` key — the link-side twin of `BAR_FLAG_KEYS` (#475). */
-export const LINK_FLAG_KEYS = ['inactive', 'cycle'] as const;
-
-export type LinkFlags = Partial<Record<(typeof LINK_FLAG_KEYS)[number], boolean>>;
+export { CONNECTOR_FLAG_KEYS } from './connector-input.js';
+export type { ConnectorFlags, PathCommand } from './connector-input.js';
+export type { FrameConnector } from './connectors/frame-connector.js';
 
 export interface FrameBar {
   id: BarId;
@@ -261,22 +264,6 @@ export interface FrameBar {
    * (plans/01 §4: "no user render output in the frame"). Composed here because it needs the dataset
    * zone and inclusive-end formatting, both `time/`-only. */
   a11yLabel: string;
-}
-
-/** One straight part of an SVG-style path, used by link geometry (§4). */
-export type PathCommand =
-  | { cmd: 'M'; x: number; y: number }
-  | { cmd: 'L'; x: number; y: number }
-  | { cmd: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number };
-
-export interface FrameLink {
-  /** Plain `string`, never a brand (#136, supersedes #16): `Dependency`/`DependencyId` belong to the
-   *  `entryDependencies()` plugin, and `layout/` may import `time/` and `model/` only — a branded id
-   *  here would make the frame's own type depend on a plugin. The emitter that fills `links` names
-   *  the id; `layout/` only aggregates. */
-  id: string;
-  path: readonly PathCommand[];
-  flags: LinkFlags;
 }
 
 export type FrameDecoration = DateLineDecoration | RangeBand | RowStripe;
@@ -348,7 +335,8 @@ export interface GeometryFrame {
    * as its content width (S1.5 README §3.2). Always the full extent, never the window's. */
   contentWidth: number;
   bars: FrameBar[];
-  links: readonly FrameLink[];
+  /** Registered connector providers' output, routed and clipped to the window. `[]` when none registered. */
+  connectors: readonly FrameConnector[];
   decorations: readonly FrameDecoration[];
   /** Registered decoration providers' output, painted below the bar layer. */
   underBars: readonly (RangeBand | RowStripe)[];
@@ -408,6 +396,9 @@ export interface LayoutInput {
   /** Registered decoration providers, `ctx.view.registerDecoration`'s own record.
    *  Omitted or empty → both `underBars`/`overBars` are `[]`. */
   decorationProviders?: readonly RegisteredDecorationProvider[];
+  /** Registered connector providers, `ctx.view.registerConnector`'s own record.
+   *  Omitted or empty → `connectors` is `[]`. */
+  connectorProviders?: readonly ConnectorProvider[];
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  and the unknown-key sink. The shell builds one of these once, at construction (`#421 C1`), the
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
@@ -555,9 +546,10 @@ export function computeFrame(
   input: LayoutInput,
   memory?: FrameMemory,
   decorations?: DecorationRunner,
+  connectorRouter?: ConnectorRouter,
 ): GeometryFrame {
   const plan = resolveLayoutRows(input);
-  return placeFrame(input, plan, memoryFor(input, plan, memory), decorations);
+  return placeFrame(input, plan, memoryFor(input, plan, memory), decorations, connectorRouter);
 }
 
 /** Pixel sizes this frame paints with, the Overscan that widens the cull window, and that window.
@@ -744,13 +736,28 @@ function contentTickLinesOf(
   );
 }
 
-/** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
+/** Call: `connectorWindowOf(input, settings)`. The region a connector may paint in: the cull window,
+ *  with the vertical overscan counted in rows. A zero extent disables culling on that axis. */
+function connectorWindowOf(input: LayoutInput, settings: FramePaintSettings): ConnectorWindow {
+  const { visible, rowHeight } = input;
+  const horizontal = settings.horizontalCull;
+  const verticalPad = settings.overscan.verticalRows * rowHeight;
+  return {
+    left: horizontal === undefined ? -Infinity : horizontal.left,
+    right: horizontal === undefined ? Infinity : horizontal.right,
+    top: visible.height > 0 ? visible.y - verticalPad : -Infinity,
+    bottom: visible.height > 0 ? visible.y + visible.height + verticalPad : Infinity,
+  };
+}
+
+/** Call: `placeFrame(input, plan, memory, decorations, connectorRouter)`. Geometry only — the caller already
  *  resolved rows. */
 export function placeFrame(
   input: LayoutInput,
   plan: readonly PlannedRow[],
   memory?: FrameMemory,
   decorations?: DecorationRunner,
+  connectorRouter?: ConnectorRouter,
 ): GeometryFrame {
   const { scale, preset, visible, revision, locale } = input;
   const mem = memory ?? memoryFor(input, plan);
@@ -816,6 +823,18 @@ export function placeFrame(
     xForInstant: (at) => scale.xForInstant(at),
   });
 
+  const connectors = (connectorRouter ?? new ConnectorRouter()).run({
+    providers: input.connectorProviders ?? [],
+    datasetRevision: input.datasetRevision,
+    plan,
+    memory: mem,
+    scale,
+    rowHeight: input.rowHeight,
+    barBox: (bar) => barSpan(bar, scale, settings.minBarWidthPx),
+    paintKey: `${settings.minBarWidthPx}|${settings.barHeightPx}`,
+    window: connectorWindowOf(input, settings),
+  });
+
   return {
     revision,
     visible,
@@ -827,7 +846,7 @@ export function placeFrame(
     contentHeight: mem.heights.totalHeight,
     contentWidth: scale.contentWidth,
     bars,
-    links: [],
+    connectors,
     decorations: resolveDateLines({
       scale,
       todayLine: input.todayLine ?? true,
