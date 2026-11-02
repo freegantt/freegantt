@@ -1,12 +1,12 @@
 // scheduling/ — what a caller hands `schedule()`. Plain data only: the engine reads no store.
-import type { Entry, EntryId, Duration, Instant } from '../model/index.js';
+import type { EntryId, Duration, Instant } from '../model/index.js';
+import type { ScheduleEntry, ScheduleField } from './schedule-entry.js';
 import type { SchedulingPolicy } from './scheduling-policy.js';
+
+export type { ScheduleEntry, ScheduleField } from './schedule-entry.js';
 
 /** Which end of a dependency drives which end of its successor. */
 export type ScheduleDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
-
-/** The two dates the engine may move. */
-export type ScheduleField = 'start' | 'end';
 
 /** One rule: the successor may not start or finish before the predecessor allows, plus the lag. A negative lag overlaps the two. */
 export interface ScheduleDependency {
@@ -16,9 +16,6 @@ export interface ScheduleDependency {
   readonly type: ScheduleDependencyType;
   readonly lag: Duration;
 }
-
-/** What the engine reads of an Entry. A live `Entry` fits. */
-export type ScheduleEntry = Pick<Entry, 'id' | 'start' | 'end' | 'hasChildren'>;
 
 /** The dates a user just set on one Entry. A key that is absent was not touched. */
 export type ProposedEntryDates = Partial<Record<ScheduleField, Instant>>;

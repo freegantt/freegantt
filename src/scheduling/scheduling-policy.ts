@@ -1,6 +1,6 @@
 // scheduling/ — the decisions where scheduling methods differ. The engine knows graphs and lag.
 // The policy knows what an Entry may do.
-import type { ScheduleEntry, ScheduleField } from './schedule-request.js';
+import type { ScheduleEntry, ScheduleField } from './schedule-entry.js';
 
 const SCHEDULE_FIELDS: readonly ScheduleField[] = Object.freeze(['start', 'end'] as const);
 
