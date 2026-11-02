@@ -18,7 +18,7 @@ interface BrowserCensus {
   heapMb: number;
 }
 
-test('[S6-R4] repeated mount/destroy of a linked pair holds no nodes or listeners (#403)', async ({
+test('[S6-A4] repeated mount/destroy of a linked pair holds no nodes or listeners (#403)', async ({
   page,
   browserName,
 }) => {

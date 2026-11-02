@@ -40,6 +40,8 @@ export function idExistsInSource(id, { dirs = ['src', 'e2e'], cwd = root } = {})
 export const RUNNERS = {
   vitest: (id) => run(`pnpm vitest run -t "\\[${id}\\]"`),
   e2e: (id) => run(`pnpm test:e2e -g "\\[${id}\\]"`),
+  // The pack audit is a script, not a test file: it installs the real tarball, which no test run can.
+  pack: () => run('pnpm check-pack-install'),
 };
 
 /** Builds one gate check for an acceptance id: (1) the id must exist in a test title, fixed-string
@@ -55,6 +57,13 @@ export function tagged(id, runners, label, { runnerImpls = RUNNERS, existsOption
       return runners.every((runner) => runnerImpls[runner](id));
     },
   };
+}
+
+/** A row with no proof yet. It prints as open, by id, and it never prints a tick: an open row must
+ * not look like a pass (plans/s6-scale-and-sync README §5.4). It does not fail the exit code,
+ * because the owner waived these rows for S7 work; the printed line is the record. */
+export function openRow(id, label) {
+  return { label: `[${id}] ${label}`, open: true, run: () => false };
 }
 
 /** `[S5-A1]` is the dogfood gate, and its claim has two halves that only mean something
@@ -240,6 +249,23 @@ const GATES = {
     ],
     human: ['HUMAN: the gallery, opened cold, explains the library to someone who has never seen it'],
   },
+  S6: {
+    name: 'S6 → S7',
+    checks: [
+      openRow('S6-A1', 'performance budgets defined from the spike and enforced in CI (#95)'),
+      openRow('S6-A2', '10k-entry fixture: smooth scroll, sub-frame hover, one-transaction bulk edit (#95)'),
+      tagged(
+        'S6-A3',
+        ['e2e'],
+        'linked scroll works with both axes shared, x shared while y is private, y shared while x is private',
+      ),
+      tagged('S6-A4', ['vitest', 'e2e'], '100 mount/destroy cycles leak no nodes, listeners or observables'),
+      tagged('S6-A5', ['pack'], 'npm pack output audited: internals unreachable, types complete', {
+        existsOptions: { dirs: ['scripts'] },
+      }),
+    ],
+    human: [],
+  },
 };
 
 // Guarded so `test/guards/slice-gate.test.ts` can import `tagged`/`idExistsInSource` without this
@@ -259,6 +285,10 @@ if (isMain) {
   console.log(`${gate.name} gate`);
   let allPassed = true;
   for (const check of gate.checks) {
+    if (check.open) {
+      console.log(`  ☐ ${check.label} — OPEN, no proof yet`);
+      continue;
+    }
     const ok = check.run();
     allPassed &&= ok;
     console.log(`  ${ok ? '✔' : '✗'} ${check.label}`);
