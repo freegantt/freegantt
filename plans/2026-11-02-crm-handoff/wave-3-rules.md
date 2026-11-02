@@ -31,6 +31,8 @@ Never raise the budget or weaken the guard.
 
 | Worker | Owns |
 |---|---|
+| S7.9 (constraints) | propagation and constraint code in `src/scheduling/`, constraint parts of `scheduling.ts` |
+| S7.10 (float, critical) | new analysis files in `src/scheduling/`, float parts of `scheduling.ts`, its harness page, `CONTEXT.md` |
 | S7.8 (calendar in propagation) | `src/scheduling/`, `src/extensions/features/scheduling*`, its harness page |
 | S7.4 (connector select, delete, label) | `src/extensions/features/entry-dependencies*`, `src/render/` connector parts, the Dependencies harness page |
 | F1 (engine follow-up) | `src/scheduling/`, its `src/api/index.ts` lines, `CONTEXT.md` |
