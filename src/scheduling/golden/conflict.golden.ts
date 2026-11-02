@@ -1,9 +1,9 @@
-// Hand-worked answers for pins, parents, cycles and unreadable dependencies.
+// Hand-worked answers for manually scheduled Entries, parents, cycles and unreadable dependencies.
 import type { GoldenScenario } from './scenario.js';
 
 export const conflictScenarios: readonly GoldenScenario[] = Object.freeze([
   {
-    name: 'a pinned successor never moves and the engine reports the move it skipped',
+    name: 'a manually scheduled successor never moves and the engine reports the move it skipped',
     entries: [
       ['a', 0, 2],
       ['b', 0, 1],
@@ -13,7 +13,7 @@ export const conflictScenarios: readonly GoldenScenario[] = Object.freeze([
       ['d1', 'a', 'b', 'FS', 0],
       ['d2', 'b', 'c', 'FS', 0],
     ],
-    pinned: ['b'],
+    manuallyScheduled: ['b'],
     expected: {
       patch: [
         ['c', 'start', 0, 1],
@@ -22,7 +22,7 @@ export const conflictScenarios: readonly GoldenScenario[] = Object.freeze([
       diagnostics: [
         {
           code: 'blocked-move',
-          reason: 'pinned',
+          reason: 'manuallyScheduled',
           entryId: 'b',
           dependencyIds: ['d1'],
           wouldChange: [
@@ -34,7 +34,7 @@ export const conflictScenarios: readonly GoldenScenario[] = Object.freeze([
     },
   },
   {
-    name: 'moving the predecessor of a pinned Entry moves nothing past it',
+    name: 'moving the predecessor of a manually scheduled Entry moves nothing past it',
     entries: [
       ['a', 0, 1],
       ['b', 1, 2],
@@ -44,14 +44,14 @@ export const conflictScenarios: readonly GoldenScenario[] = Object.freeze([
       ['d1', 'a', 'b', 'FS', 0],
       ['d2', 'b', 'c', 'FS', 0],
     ],
-    pinned: ['b'],
+    manuallyScheduled: ['b'],
     proposed: { a: { start: 2 } },
     expected: {
       patch: [['a', 'end', 1, 3]],
       diagnostics: [
         {
           code: 'blocked-move',
-          reason: 'pinned',
+          reason: 'manuallyScheduled',
           entryId: 'b',
           dependencyIds: ['d1'],
           wouldChange: [

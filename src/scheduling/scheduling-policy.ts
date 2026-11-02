@@ -5,7 +5,7 @@ import type { ScheduleEntry, ScheduleField } from './schedule-entry.js';
 const SCHEDULE_FIELDS: readonly ScheduleField[] = Object.freeze(['start', 'end'] as const);
 
 /** A rule that can win a conflict. */
-export type ScheduleRuleKind = 'pinned' | 'dependency';
+export type ScheduleRuleKind = 'manuallyScheduled' | 'dependency';
 
 /** Which dates the engine may move on one Entry. */
 export interface EditResolution {
@@ -24,12 +24,12 @@ export interface SchedulingPolicy {
 
 /**
  * The neutral policy. A user edit moves the dates the user did not touch. A parent never moves,
- * because its span comes from its children. A pinned Entry beats a dependency.
+ * because its span comes from its children. A manually scheduled Entry beats a dependency.
  */
 export const defaultPolicy: SchedulingPolicy = Object.freeze<SchedulingPolicy>({
   resolveEdit(touched, entry) {
     if (entry.hasChildren) return { moves: [] };
     return { moves: SCHEDULE_FIELDS.filter((field) => !touched.has(field)) };
   },
-  precedence: ['pinned', 'dependency'],
+  precedence: ['manuallyScheduled', 'dependency'],
 });

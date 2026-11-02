@@ -269,10 +269,11 @@ where they do something beyond re-export.
 | --- | --- | --- |
 | `scheduling/apply-lag.ts` | `applyLag()` | Turns a lag into a distance in time. Every day count in the engine goes through it. |
 | `scheduling/dependency-order.ts` | `orderByDependency(), OrderStep` | Orders Entries so each predecessor comes first, and finds loops. It uses no recursion. |
-| `scheduling/golden/conflict.golden.ts` | `conflictScenarios` | Hand-worked answers for pins, parents, loops, and unreadable dependencies. |
+| `scheduling/golden/conflict.golden.ts` | `conflictScenarios` | Hand-worked answers for manually scheduled Entries, parents, loops, and unreadable dependencies. |
 | `scheduling/golden/dependency-types.golden.ts` | `dependencyTypeScenarios` | Hand-worked answers for each dependency type, each lag sign, and chains. |
 | `scheduling/golden/edit.golden.ts` | `editScenarios` | Hand-worked answers for a user edit: a move, a resize, and a conflict. |
-| `scheduling/golden/index.ts` | `goldenScenarios` | Joins the three scenario lists into one list for the engine tests. |
+| `scheduling/golden/follow.golden.ts` | `followScenarios` | Hand-worked answers for how a successor follows: earlier or only later, and the start floor. |
+| `scheduling/golden/index.ts` | `goldenScenarios` | Joins the scenario lists into one list for the engine tests. |
 | `scheduling/golden/scenario.ts` | `GoldenScenario, GoldenEntry, GoldenDependency, GoldenChange, GoldenDiagnostic, day(), toRequest(), toExpectedResult()` | The scenario shape, in whole days. It converts a scenario to a request and to the expected result. |
 | `scheduling/index.ts` | barrel | Re-exports the engine, the policy, the request and result types, and the working calendar. |
 | `scheduling/propagate.ts` | `moveSuccessor(), movableFields(), FIELDS, Node, Edge, Run` | Moves one Entry to satisfy the dependencies that reach it. It uses no recursion. |
