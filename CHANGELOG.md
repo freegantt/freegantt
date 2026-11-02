@@ -6,6 +6,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
+### Added
+
+- New `workingCalendar({ workdays, holidays })` returns an immutable `WorkingCalendar`. It answers `isWorkday(day, time)`, `addWorkdays(instant, count, time)` and `workdaysBetween(a, b, time)` in the Dataset zone, and `calendar.offTime()` returns a cover that `timeShading([{ covers: calendar.offTime() }])` shades. The library ships no holiday list. New types `WorkingCalendarOptions`, `OffTimeCover` and `Workday`, and `InvalidWorkingCalendarError` for a bad weekday or holiday. The generic harness page shades its weekends and two holidays from one calendar.
+
 ## [0.1.0] - 2026-09-30
 
 The first release. Install it with `npm install freegantt`.
