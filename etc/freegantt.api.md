@@ -1979,6 +1979,9 @@ export interface OffTimeCover {
 export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined;
 
 // @public
+export function overridingProposed(fields: readonly FieldKey[], edit: EntryEdit): EntryEdit;
+
+// @public
 export interface Overscan {
     // (undocumented)
     horizontalPx?: number;

@@ -29,7 +29,7 @@ export type {
   RemoveRuleWrapper,
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
-export { mergeEntryEdits } from './dataset-plugin.js';
+export { mergeEntryEdits, overridingProposed } from './dataset-plugin.js';
 // ADR 0026 retired the several-Segment case it names: the rigid move a plugin's cascade
 // writes honestly, for the one span an Entry has.
 export { moveEntryTo } from './dataset-plugin.js';
