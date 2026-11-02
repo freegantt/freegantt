@@ -4,6 +4,7 @@
 
 export interface GateCheck {
   label: string;
+  open?: true;
   run(): boolean;
 }
 
@@ -13,7 +14,7 @@ export function run(cmd: string, cwd?: string): boolean;
 
 export function idExistsInSource(id: string, options?: { dirs?: string[]; cwd?: string }): boolean;
 
-export const RUNNERS: Record<'vitest' | 'e2e', RunnerImpl>;
+export const RUNNERS: Record<'vitest' | 'e2e' | 'pack', RunnerImpl>;
 
 export function tagged(
   id: string,
@@ -21,5 +22,7 @@ export function tagged(
   label: string,
   options?: { runnerImpls?: Record<string, RunnerImpl>; existsOptions?: { dirs?: string[]; cwd?: string } },
 ): GateCheck;
+
+export function openRow(id: string, label: string): GateCheck;
 
 export function provenByLintAndTests(check: GateCheck, lint?: () => boolean): GateCheck;
