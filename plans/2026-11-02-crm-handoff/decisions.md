@@ -50,3 +50,4 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | D16 | Redraw door | Owner A: `ctx.view.refreshConnectors()` for screen-only provider state. ADR 0040 amended. |
 | D17 | A new Dependency reschedules | Owner A: the extension hook also runs for a transaction that writes only a plugin store, so `scheduling()` moves the successor in the same ChangeSet. One undo removes the link and the move. |
 | D18 | Connector routing | Owner "A + avoid": target-row gap route, SS/FF fix, 12 px stub, and verticals that avoid bars, capped at 200 spanned rows by default, consumer can change. |
+| D19 | Connector polish | Owner "A A" (third A taken from the owner's own arrow request): lines behind bars with the selected line on top; `fitDataset` adds a margin; `connectorArrow` option, default `end`. |
