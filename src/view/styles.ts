@@ -554,11 +554,12 @@ ${DARK_COLOR_TOKENS}
    the outer half, clear of the bar body. The resize handle (z-index above) wins the middle 8px of
    the box. A coarse pointer, like a finger, gets a wider box. Shown on the hovered bar, and on every
    connectable bar during a drag, only while a plugin handles the connect drag. */
-.fg-container { --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; }
-.fg-connector-port { position: absolute; top: 0; left: 0; width: var(--fg-connector-port-width); margin-left: calc(var(--fg-connector-port-width) / -2); cursor: crosshair; touch-action: none; display: flex; align-items: center; }
-@media (pointer: coarse) { .fg-connector-port { width: var(--fg-connector-port-coarse-width); margin-left: calc(var(--fg-connector-port-coarse-width) / -2); } }
-.fg-connector-port[data-edge="start"] { justify-content: flex-start; }
-.fg-connector-port[data-edge="end"] { justify-content: flex-end; }
+/* A port sits outside the bar, past the resize handle, so a grab on the dot connects and never resizes. */
+.fg-container { --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; --fg-connector-port-gap: 4px; }
+.fg-connector-port { --fg-port-width: var(--fg-connector-port-width); position: absolute; top: 0; left: 0; width: var(--fg-port-width); box-sizing: border-box; padding: 0 2px; cursor: crosshair; touch-action: none; display: flex; align-items: center; }
+@media (pointer: coarse) { .fg-connector-port { --fg-port-width: var(--fg-connector-port-coarse-width); } }
+.fg-connector-port[data-edge="start"] { justify-content: flex-end; margin-left: calc(-1 * (var(--fg-port-width) + var(--fg-connector-port-gap))); }
+.fg-connector-port[data-edge="end"] { justify-content: flex-start; margin-left: var(--fg-connector-port-gap); }
 .fg-connector-port::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--fg-pane-bg); border: 1.5px solid var(--fg-bar-fill); box-sizing: border-box; }
 .fg-connector-port[hidden], .fg-connect-preview[hidden], .fg-connect-target[hidden] { display: none; }
 .fg-connector-port[data-active]::before { background: var(--fg-selection-color); transform: scale(1.4); }

@@ -10,7 +10,7 @@ const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 /** How far the visible dot's center sits outside its bar edge. The dot stays clear of the bar body
  *  and of the resize handle. The port box around it is wider (see `.fg-connector-port`). */
-const DOT_CENTER_OFFSET_PX = 5;
+const DOT_CENTER_OFFSET_PX = 11;
 
 type Edge = 'start' | 'end';
 type BarBox = Pick<FrameBar, 'x' | 'y' | 'width' | 'height'>;

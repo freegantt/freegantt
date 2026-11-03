@@ -59,6 +59,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Fixed
 
+- A grab on a connector port now always starts a connect drag. The port sat on top of the bar's resize handle, so a grab on the dot started a resize. The port now sits outside the bar, past the handle, and the new `--fg-connector-port-gap` token (default `4px`) sets that space.
 - `entries.syncAll()` drops the collapse state of a row the new list removes. `gantt.collapsed` no longer lists an id that names no row, and `collapseChange` announces the drop. A kept row stays collapsed, and scroll position and zoom stay as they were. `entries.load()` is unchanged: it starts the view over by design.
 
 ## [0.1.0] - 2026-09-30
