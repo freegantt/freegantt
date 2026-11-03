@@ -1,5 +1,5 @@
 ---
-status: accepted — ruled 2026-11-02 by the owner. Closes issue [#136](https://github.com/freegantt/freegantt/issues/136). Design in `plans/s7-dependencies-and-scheduling/README.md`.
+status: accepted — ruled 2026-11-02 by the owner, amended the same day (`refreshConnectors`). Closes issue [#136](https://github.com/freegantt/freegantt/issues/136). Design in `plans/s7-dependencies-and-scheduling/README.md`.
 decided: a Gantt-side plugin registers a connector provider with `ctx.view.registerConnector`. The provider returns `ConnectorInput` values. Each value names two ends, `{ entryId, edge }`. `layout/` routes, culls and clips the connector. The plugin never sees pixels or the window.
 open: none.
 ---
@@ -74,5 +74,6 @@ The first provider in registration order owns the input. A later provider with t
 
 - `layout/` gains `connector-input.ts` and the `connectors/` folder (routing, clipping and the frame type). `view/plugin-ports.ts` gains `view.registerConnector`. `api/` re-exports `ConnectorInput`.
 - A plugin cannot draw its own path shape. Routing options live in `layout/`. A later amendment can let an input carry an explicit path.
-- A provider that holds state outside the Dataset does not refresh `layout/`. The plugin keeps its rows in a plugin store, as `timeShading()` documents for its covers.
+- A provider that holds data keeps its rows in a plugin store, as `timeShading()` documents for its covers. A Dataset change then refreshes `layout/`.
+- Amended 2026-11-02 by the owner: a provider whose state is screen state only, for example a selected connector, calls `ctx.view.refreshConnectors()` after that state changes. Core then asks every provider again. Screen state stays out of the Dataset, undo and sync.
 - `plans/01` §4 and `plans/03` § S7 drop the `registerLinkEmitter` and `ctx.store.read` text.

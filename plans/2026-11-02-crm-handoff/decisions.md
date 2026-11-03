@@ -47,3 +47,5 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | D13 | Connect a locked Entry | Owner: keep. A locked Entry allows 'connect' unless `capabilities.connect` says no. |
 | D14 | S7.3b names | Owner: `connectByDrag` and the id form `<from>:<type>:<to>` are fine. |
 | D15 | Connect drop target | Owner: the port is too small and connecting is hard. Snap: a drop anywhere on a bar connects to its nearer edge. The port hit area grows. |
+| D16 | Redraw door | Owner A: `ctx.view.refreshConnectors()` for screen-only provider state. ADR 0040 amended. |
+| D17 | A new Dependency reschedules | Owner A: the extension hook also runs for a transaction that writes only a plugin store, so `scheduling()` moves the successor in the same ChangeSet. One undo removes the link and the move. |
