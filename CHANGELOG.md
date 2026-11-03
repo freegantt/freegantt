@@ -69,6 +69,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 
 ### Fixed
 
+- `schedule()` keeps the other edge when a proposal names one edge. A proposed `end` alone resizes the bar from its end, and a proposed `start` alone resizes it from its start. A proposal with both edges moves the bar. A grid edit of `end` no longer moves the start.
 - The grid header no longer draws a divider through the column names when the timeline header has two bands. The grid header draws one divider at its bottom edge.
 - A grab on a connector port now always starts a connect drag. The port sat on top of the bar's resize handle, so a grab on the dot started a resize. The port now sits outside the bar, past the handle, and the new `--fg-connector-port-gap` token (default `4px`) sets that space.
 - `entries.syncAll()` drops the collapse state of a row the new list removes. `gantt.collapsed` no longer lists an id that names no row, and `collapseChange` announces the drop. A kept row stays collapsed, and scroll position and zoom stay as they were. `entries.load()` is unchanged: it starts the view over by design.

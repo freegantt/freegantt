@@ -48,10 +48,10 @@ describe('schedule — deep chains', () => {
   it('pushes a 5,000-link chain from one edit', () => {
     const request: ScheduleRequest = {
       ...chain(5000),
-      proposed: new Map([[entryId('e0'), { start: day(1) }]]),
+      proposed: new Map([[entryId('e0'), { start: day(1), end: day(2) }]]),
     };
     const result = schedule(request);
-    expect(result.patch).toHaveLength(1 + 2 * 5000);
+    expect(result.patch).toHaveLength(2 * 5000);
     expect(result.patch.at(-1)).toEqual({ id: 'e5000', field: 'end', from: day(1), to: day(5002) });
   });
 
@@ -153,13 +153,16 @@ describe('schedule — contract', () => {
   it('throws when a policy moves a date the user proposed', () => {
     const request = toRequest({
       name: 'bad policy',
-      entries: [['a', 0, 2]],
-      dependencies: [],
-      proposed: { a: { start: 1 } },
+      entries: [
+        ['a', 0, 2],
+        ['b', 0, 1],
+      ],
+      dependencies: [['d1', 'a', 'b', 'FS', 0]],
+      proposed: { b: { start: 1 } },
       expected: { patch: [] },
     });
     const policy: SchedulingPolicy = { ...defaultPolicy, resolveEdit: () => ({ moves: ['start', 'end'] }) };
-    expect(() => schedule({ ...request, policy })).toThrow(/proposed start of Entry "a"/);
+    expect(() => schedule({ ...request, policy })).toThrow(/proposed start of Entry "b"/);
   });
 });
 

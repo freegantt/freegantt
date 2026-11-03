@@ -45,9 +45,9 @@ export const conflictScenarios: readonly GoldenScenario[] = Object.freeze([
       ['d2', 'b', 'c', 'FS', 0],
     ],
     manuallyScheduled: ['b'],
-    proposed: { a: { start: 2 } },
+    proposed: { a: { start: 2, end: 3 } },
     expected: {
-      patch: [['a', 'end', 1, 3]],
+      patch: [],
       diagnostics: [
         {
           code: 'blocked-move',

@@ -27,10 +27,9 @@ export const followScenarios: readonly GoldenScenario[] = Object.freeze([
       ['d1', 'a', 'b', 'FS', 0],
       ['d2', 'b', 'c', 'FS', 0],
     ],
-    proposed: { a: { start: 0 } },
+    proposed: { a: { start: 0, end: 2 } },
     expected: {
       patch: [
-        ['a', 'end', 6, 2],
         ['b', 'start', 6, 2],
         ['b', 'end', 7, 3],
         ['c', 'start', 7, 3],
@@ -49,10 +48,9 @@ export const followScenarios: readonly GoldenScenario[] = Object.freeze([
       ['d1', 'a', 'b', 'FS', 0],
       ['d2', 'x', 'b', 'FS', 0],
     ],
-    proposed: { a: { start: 0 } },
+    proposed: { a: { start: 0, end: 2 } },
     expected: {
       patch: [
-        ['a', 'end', 6, 2],
         ['b', 'start', 6, 5],
         ['b', 'end', 7, 6],
       ],
@@ -80,9 +78,9 @@ export const followScenarios: readonly GoldenScenario[] = Object.freeze([
       ['b', 6, 7],
     ],
     dependencies: [['d1', 'a', 'b', 'FS', 0]],
-    proposed: { a: { start: 0 } },
+    proposed: { a: { start: 0, end: 2 } },
     successorMoves: 'pushOnly',
-    expected: { patch: [['a', 'end', 6, 2]] },
+    expected: { patch: [] },
   },
   {
     name: 'the start floor stops a successor that would move earlier',
