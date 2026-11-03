@@ -118,6 +118,7 @@ where they do something beyond re-export.
 | `layout/connector-input.ts` | `ConnectorInput, ConnectorEnd, ConnectorProvider, ConnectorFlags, CONNECTOR_FLAG_KEYS, PathCommand` | The connector seam's own types. A provider names two bar edges and core does the rest. |
 | `layout/connectors/connector-router.ts` | `ConnectorRouter` | Runs registered connector providers into the frame's connectors. It finds both bars for any Entry, routes once per revision and clips per frame. |
 | `layout/connectors/bar-index.ts` | `BarIndex, VerticalPlacer` | Finds an x for a vertical connector segment that crosses no bar in the rows between. |
+| `layout/connectors/connector-arrow.ts` | `ConnectorArrow, DEFAULT_CONNECTOR_ARROW` | The consumer's choice of arrowhead on a connector: at the arrival end, or none. |
 | `layout/connectors/connector-routing.ts` | `ConnectorRouting, resolveConnectorRouting()` | The consumer's choices for bar avoidance: on or off, and the row cap. |
 | `layout/connectors/route-connector.ts` | `routeConnector(), CONNECTOR_STUB_PX` | The orthogonal path between two bar edges. |
 | `layout/connectors/clip-path.ts` | `clipPath(), boundsOf(), boundsTouchWindow()` | Clips a connector path to the window. |
@@ -156,7 +157,7 @@ where they do something beyond re-export.
 | `render/dom/pixel-property.ts` | `readPixelProperty(), PixelPropertyPolicy` | One reader for every `--fg-*` pixel custom property, with an explicit validity policy so "zero is nonsense" and "zero is a choice" are stated, not implied. |
 | `render/dom/date-line.ts` | `attachDateLines(), DateLineAttachment` | Renders the today-line and authored date lines as positioned decoration elements. |
 | `render/dom/connect-affordance.ts` | `ConnectAffordance` | Draws the connector ports beside the hovered bar's edges and the connect drag's preview line. It builds nothing until the first connectable bar is hovered. |
-| `render/dom/connectors.ts` | `ConnectorsAttachment` | Turns `FrameConnector` into keyed SVG paths in one layer above the bars. |
+| `render/dom/connectors.ts` | `ConnectorsAttachment` | Turns `FrameConnector` into keyed SVG paths in one layer below the bars, plus a layer above them for the selected line, the label text and the arrowhead marker. |
 | `render/dom/decorations.ts` | `DecorationsAttachment` | Turns `RangeBand`/`RowStripe` into keyed DOM nodes. |
 | `render/dom/dom-contract.ts` | `BAR_CLASS, ROW_CLASS, …` | Class names and data attributes this backend writes. Nothing outside `render/dom` may retype them; `view/gantt-dom.ts` resolves a node from these constants alone. |
 | `render/dom/element-description.ts` | `buildElement()` | Turns one `ElementDescription` into a live DOM subtree. Stays inside the reconciler's hard-bounded scope. |
