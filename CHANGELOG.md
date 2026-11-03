@@ -76,6 +76,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - Resize handles and connect ports follow a drag. While you move or resize a bar, its two handles and its two ports sit on the preview edges of the bar. Before, they stayed at the committed place. On release or Escape they go back.
 - A decoration that reuses a node no longer keeps the old width or text. Before, a scroll that dropped a row span could leave a row stripe or a range band with the span's width and text.
 - `'invalid-working-calendar'` is now in the `BuiltInThrownCode` union. Before, an exhaustive `switch (error.code)` missed the code `workingCalendar()` throws.
+- The project finish from the float analysis now counts the end of an Entry in a Dependency loop. Before, a loop member that ended last gave a finish that was too early, and every float was too small.
 
 ## [0.1.0] - 2026-09-30
 
