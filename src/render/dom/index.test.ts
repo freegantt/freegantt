@@ -1398,8 +1398,8 @@ describe('render/dom backend', () => {
 
     backend.applyState({
       preview: [
-        { barId: a!.id, dx: 10, dy: 0, dWidth: 0, extra: false },
-        { barId: b!.id, dx: 5, dy: 0, dWidth: 0, extra: true },
+        { entryId: a!.entryId, barId: a!.id, dx: 10, dy: 0, dWidth: 0, extra: false },
+        { entryId: b!.entryId, barId: b!.id, dx: 5, dy: 0, dWidth: 0, extra: true },
       ],
     });
     expect(nodeA.dataset['state']).toBe('dragging');
@@ -1433,7 +1433,9 @@ describe('render/dom backend', () => {
     const [a] = frame.bars;
     const node = timeline.querySelector<HTMLElement>(`[data-bar-id="${a!.id}"]`)!;
 
-    backend.applyState({ preview: [{ barId: a!.id, dx: 0, dy: 32, dWidth: 0, extra: false }] });
+    backend.applyState({
+      preview: [{ entryId: a!.entryId, barId: a!.id, dx: 0, dy: 32, dWidth: 0, extra: false }],
+    });
     expect(node.style.transform).toBe(`translate(${a!.x}px, ${a!.y + 32}px)`);
 
     backend.applyState({});
@@ -2471,6 +2473,7 @@ describe('render/dom backend', () => {
 
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       const id = frame.bars[0]!.id;
+      const owner = frame.bars[0]!.entryId;
       expect(bar.dataset['label']).toBe('inside');
 
       // [S3-A3]'s own ceiling, applied to this flip: no node created or removed, and the canvas ruler
@@ -2483,7 +2486,9 @@ describe('render/dom backend', () => {
       const measureTextCallsBeforePreview = measureTextCalls;
 
       // Shrinks the bar past the fit line entirely off the hot path — no frame, no canvas call.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }],
+      });
       expect(bar.dataset['label']).toBe('outside');
       observer.disconnect();
       expect(mutations).toBe(0);
@@ -2515,6 +2520,7 @@ describe('render/dom backend', () => {
 
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       const id = frame.bars[0]!.id;
+      const owner = frame.bars[0]!.entryId;
       expect(bar.dataset['label']).toBe('inside');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
@@ -2523,13 +2529,17 @@ describe('render/dom backend', () => {
       // label child survived, so `.fg-bar-label`'s default rule (overflow: hidden; text-overflow:
       // ellipsis) kept painting it, clipped, inside the now-too-narrow bar — the exact 'inside' look
       // #435 exists to avoid.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }],
+      });
       expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
       // Widens it back past the fit line, relative to the committed 200px base (a preview delta is
       // always against `syncBars`'s own geometry, not the previous preview) — 100px still fits.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -100, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: -100, extra: false }],
+      });
       expect(bar.dataset['label']).toBe('inside');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
@@ -2555,6 +2565,7 @@ describe('render/dom backend', () => {
 
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       const id = frame.bars[0]!.id;
+      const owner = frame.bars[0]!.entryId;
       expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
@@ -2566,7 +2577,9 @@ describe('render/dom backend', () => {
         for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
       });
       observer.observe(timeline, { childList: true, subtree: true });
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: 180, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: 180, extra: false }],
+      });
       observer.disconnect();
       expect(mutations).toBe(0);
       expect(bar.dataset['label']).toBe('inside');
