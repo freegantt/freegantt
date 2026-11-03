@@ -2946,6 +2946,50 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('clears the width and text of a rowSpan node that a stripe or a band reuses', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    const row = frame.rows[0]!;
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, text: 'was 3 Sep' }],
+      overBars: [],
+    });
+    backend.sync({ ...frame, underBars: [{ kind: 'rowStripe', rowId: row.id }], overBars: [] });
+
+    const stripe = timeline.querySelector<HTMLElement>('.fg-row-stripe')!;
+    expect(stripe.style.width).toBe('');
+    expect(stripe.textContent).toBe('');
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, text: 'was 3 Sep' }],
+      overBars: [],
+    });
+    backend.sync({ ...frame, underBars: [{ kind: 'rangeBand', x: 0, width: 10 }], overBars: [] });
+
+    const band = timeline.querySelector<HTMLElement>('.fg-range-band')!;
+    expect(band.style.width).toBe('10px');
+    expect(band.textContent).toBe('');
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it("a per-column columnRenderer's own resolved output beats the Gantt-wide one for that column only (S5.7, D-S5-17)", () => {
     // GanttShell's own `resolveGridCellRenderer` binding (view/gantt-shell.ts) is what actually decides
     // "per-column wins over Gantt-wide" — this stands in for that resolution the way every other test
