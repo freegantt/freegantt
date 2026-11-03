@@ -53,7 +53,7 @@ window.__scheduling = plan;
 const readout = document.querySelector<HTMLSpanElement>('#driving-path-readout')!;
 
 // What does the button print? The names of the chain that holds the selected task in place.
-document.querySelector<HTMLButtonElement>('#log-driving-path-btn')!.addEventListener('click', () => {
+document.querySelector<HTMLButtonElement>('#show-driving-path-btn')!.addEventListener('click', () => {
   const [selected] = gantt.selectedEntryIds;
   if (selected === undefined) {
     readout.textContent = 'Driving path: select a task';

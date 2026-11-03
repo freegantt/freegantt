@@ -45,13 +45,13 @@ test('delaying the short branch past its float makes it critical, and undo resto
   await expect(bar(page, 'foundation')).not.toHaveAttribute('data-variant', 'critical');
 });
 
-test('Log driving path prints the chain that holds the selected task', async ({ page }) => {
+test('Show driving path prints the chain that holds the selected task', async ({ page }) => {
   await openPage(page);
   const readout = page.locator('#driving-path-readout');
   await expect(readout).toHaveText('Driving path: select a task');
   await page.evaluate(() => {
     window.__gantt.selectedEntryIds = ['inspection'];
   });
-  await page.getByRole('button', { name: 'Log driving path' }).click();
+  await page.getByRole('button', { name: 'Show driving path' }).click();
   await expect(readout).toHaveText('Driving path: Survey → Utilities → Permits → Inspection');
 });

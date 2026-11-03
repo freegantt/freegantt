@@ -197,7 +197,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'scheduling() writes a float (in days) and a critical flag on each task, in the same undo step as the edit that changed them',
       'One variant rule paints the critical bars; core draws nothing for float',
       'Drag a critical task later and every task after it stays critical; drag the short branch and it turns critical when its float runs out',
-      'Select a task and press Log driving path: the page prints the chain of predecessors that holds it in place',
+      'Select a task and press Show driving path: the readout beside it shows the chain of predecessors that holds it in place',
     ],
     config: [
       'new Dataset({ entries, plugins: [entryDependencies(), scheduling()] })',
