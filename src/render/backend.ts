@@ -3,6 +3,7 @@
 
 import type {
   EntryId,
+  FrameConnector,
   GeometryFrame,
   BarId,
   BarPreview,
@@ -129,6 +130,9 @@ export interface RenderBackend<THost = unknown> {
   mount(surfaces: RenderSurfaces<THost>): void;
   sync(frame: GeometryFrame): void;
   applyState(state: InteractionState): void;
+  /** Paints these connectors on the frame `sync` last painted, and nothing else. A drag preview calls it
+   *  on every animation frame: a connector that did not change keeps its node. */
+  paintConnectors(connectors: readonly FrameConnector[]): void;
   hitTest(at: ClientPoint): HitResult | null;
   destroy(): void;
 }

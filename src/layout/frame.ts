@@ -18,6 +18,8 @@ export type { FrameRow };
 import type { ResolvedDecoration } from './decoration.js';
 export type { RangeBand, ResolvedDecoration, RowSpan, RowStripe } from './decoration.js';
 import { DecorationRunner } from './decorations.js';
+import { previewedBox } from './bar-preview.js';
+import type { BarPreview } from './bar-preview.js';
 import { ConnectorRouter } from './connectors/connector-router.js';
 import type { ConnectorProvider } from './connector-input.js';
 import type { ConnectorRouting } from './connectors/connector-routing.js';
@@ -408,6 +410,9 @@ export interface LayoutInput {
   connectorRouting?: ConnectorRouting;
   /** Whether connectors wear an arrowhead. Omitted → `'end'`. */
   connectorArrow?: ConnectorArrow;
+  /** The drag in flight: where each moved bar shows. Connectors end on these places. Omitted outside a
+   *  drag → connectors end on the committed places. */
+  barPreviews?: readonly BarPreview[];
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  and the unknown-key sink. The shell builds one of these once, at construction (`#421 C1`), the
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
@@ -759,6 +764,32 @@ function connectorWindowOf(input: LayoutInput, settings: FramePaintSettings): Co
   };
 }
 
+/** Call: `placeConnectors(input, plan, memory, connectorRouter)`. The frame's connectors alone, for a
+ *  drag preview that moves no bar through a frame. `input.barPreviews` moves the ends of the connectors. */
+export function placeConnectors(
+  input: LayoutInput,
+  plan: readonly PlannedRow[],
+  memory: FrameMemory,
+  connectorRouter?: ConnectorRouter,
+): readonly FrameConnector[] {
+  const settings = framePaintSettingsOf(input);
+  return (connectorRouter ?? new ConnectorRouter()).run({
+    providers: input.connectorProviders ?? [],
+    routing: input.connectorRouting,
+    datasetRevision: input.datasetRevision,
+    plan,
+    memory,
+    scale: input.scale,
+    rowHeight: input.rowHeight,
+    barBox: (bar) => barSpan(bar, input.scale, settings.minBarWidthPx),
+    previews: input.barPreviews ?? [],
+    previewedBarBox: (bar, preview) =>
+      previewedBox(barSpan(bar, input.scale, settings.minBarWidthPx), preview),
+    paintKey: `${settings.minBarWidthPx}|${settings.barHeightPx}`,
+    window: connectorWindowOf(input, settings),
+  });
+}
+
 /** Call: `placeFrame(input, plan, memory, decorations, connectorRouter)`. Geometry only — the caller already
  *  resolved rows. */
 export function placeFrame(
@@ -832,18 +863,7 @@ export function placeFrame(
     xForInstant: (at) => scale.xForInstant(at),
   });
 
-  const connectors = (connectorRouter ?? new ConnectorRouter()).run({
-    providers: input.connectorProviders ?? [],
-    routing: input.connectorRouting,
-    datasetRevision: input.datasetRevision,
-    plan,
-    memory: mem,
-    scale,
-    rowHeight: input.rowHeight,
-    barBox: (bar) => barSpan(bar, scale, settings.minBarWidthPx),
-    paintKey: `${settings.minBarWidthPx}|${settings.barHeightPx}`,
-    window: connectorWindowOf(input, settings),
-  });
+  const connectors = placeConnectors(input, plan, mem, connectorRouter);
 
   return {
     revision,

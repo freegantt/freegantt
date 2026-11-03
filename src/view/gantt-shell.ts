@@ -44,6 +44,8 @@ import type {
   TimeScale,
   ResolvedColumn,
   RowPlanInput,
+  BarPreview,
+  LayoutInput,
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
@@ -594,6 +596,10 @@ export class GanttShell {
   #panes: Panes;
   #backend: RenderBackend<HTMLElement>;
   #revision = 0;
+  /** The drag preview the connectors last painted from. Compared by identity to skip a repaint. */
+  #paintedBarPreviews: readonly BarPreview[] | undefined;
+  /** The Dataset revision the live drag preview was taken against. */
+  #previewDatasetRevision = 0;
   #viewport: Viewport;
   #viewportHandle: ViewportHandle;
   #scrollAttachment: ScrollAttachment;
@@ -1344,11 +1350,13 @@ export class GanttShell {
       locale: () => this.#frameSettings.effectiveLocale,
       applyGestureState: (preview, pendingBarIds, cursor, rowDrop) => {
         setOptional(this.#interactionState, 'preview', preview);
+        this.#previewDatasetRevision = this.#options.dataset.datasetRevision;
         setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
         setOptional(this.#interactionState, 'cursorX', cursor?.x);
         setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
         setOptional(this.#interactionState, 'rowDrop', rowDrop);
         this.#backend.applyState(this.#interactionState);
+        this.#paintConnectorsForPreview();
       },
       rowDropZoneAt: (contentY, sourceRowIndex, previous) =>
         rowDropZoneAt(
@@ -3262,6 +3270,53 @@ export class GanttShell {
     };
   }
 
+  /** The frame's input: the settings the Gantt holds, plus what changed since the last frame. That is
+   *  the viewport's geometry, the Dataset's entries, and the registries a plugin writes into.
+   *  `render()` and the drag preview build it the same way, so a preview line never disagrees with a frame. */
+  #layoutInput(revision: number, barPreviews: readonly BarPreview[] | undefined): LayoutInput {
+    // #167: the settings half of a `LayoutInput` stands between frames and answers for itself.
+    return this.#frameSettings.toLayoutInput({
+      entries: this.#options.dataset.entries.all,
+      scale: this.#viewport.timeScale,
+      preset: this.#viewport.preset,
+      visible: this.#viewport.visible,
+      overscan: this.#viewport.overscan,
+      revision,
+      columns: this.#renderedColumns(),
+      collapsed: this.#treeCollapse.ids,
+      variants: this.#registrations.variants,
+      decorationProviders: this.#registrations.decorationProviders(),
+      connectorProviders: this.#registrations.connectorProviders(),
+      datasetRevision: this.#options.dataset.datasetRevision,
+      entryRulePorts: this.#entryRulePorts,
+      // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
+      // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
+      barLabelFor: (entry) => this.#labelFor(entry),
+      // A locked Entry is one whose bar does not move. Fresh every frame, so `rulesChanged()`
+      // repaints it.
+      entryLocked: (entry) => this.#options.barMovesOf?.(entry.id) === false,
+      ...(barPreviews !== undefined ? { barPreviews } : {}),
+    });
+  }
+
+  /** The drag preview that still describes the committed Dataset. A commit changes the Dataset, so the
+   *  preview taken against the old one no longer applies, and a frame then routes from the new Dataset. */
+  #barPreviewsForFrame(): readonly BarPreview[] | undefined {
+    const preview = this.#interactionState.preview;
+    return this.#previewDatasetRevision === this.#options.dataset.datasetRevision ? preview : undefined;
+  }
+
+  /** Moves the connector ends to the drag preview, or back to the committed places when the preview
+   *  ends. It lays out the connectors alone: the bars already follow the preview on their hot path. */
+  #paintConnectorsForPreview(): void {
+    const barPreviews = this.#barPreviewsForFrame();
+    if (barPreviews === this.#paintedBarPreviews) return;
+    this.#paintedBarPreviews = barPreviews;
+    this.#backend.paintConnectors(
+      this.#layout.computeConnectors(this.#layoutInput(this.#revision, barPreviews)),
+    );
+  }
+
   render(): void {
     // #448: checked here, not in `#paintFor`. The question is "does this renderer ever paint",
     // answered against every Entry the Dataset holds. It is not "did this frame's own windowed
@@ -3269,32 +3324,9 @@ export class GanttShell {
     if (this.#frameSettings.barRenderer !== undefined) {
       this.#reportBarRendererShadowed(this.#frameSettings.barRenderer, this.#options.dataset.entries.all);
     }
-    const frame = this.#layout.computeFrame(
-      // #167: the settings half of a `LayoutInput` stands between frames and answers for itself.
-      // What this shell contributes is what changed since the last frame — the viewport's geometry,
-      // the dataset's entries, and the registries a plugin writes into.
-      this.#frameSettings.toLayoutInput({
-        entries: this.#options.dataset.entries.all,
-        scale: this.#viewport.timeScale,
-        preset: this.#viewport.preset,
-        visible: this.#viewport.visible,
-        overscan: this.#viewport.overscan,
-        revision: this.#revision++,
-        columns: this.#renderedColumns(),
-        collapsed: this.#treeCollapse.ids,
-        variants: this.#registrations.variants,
-        decorationProviders: this.#registrations.decorationProviders(),
-        connectorProviders: this.#registrations.connectorProviders(),
-        datasetRevision: this.#options.dataset.datasetRevision,
-        entryRulePorts: this.#entryRulePorts,
-        // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
-        // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
-        barLabelFor: (entry) => this.#labelFor(entry),
-        // A locked Entry is one whose bar does not move. Fresh every frame, so `rulesChanged()`
-        // repaints it.
-        entryLocked: (entry) => this.#options.barMovesOf?.(entry.id) === false,
-      }),
-    );
+    const barPreviews = this.#barPreviewsForFrame();
+    this.#paintedBarPreviews = barPreviews;
+    const frame = this.#layout.computeFrame(this.#layoutInput(this.#revision++, barPreviews));
     // Which pattern the grid pane announces, and how big it says it is. Both are
     // facts about the whole row set, so they are read here rather than per row. Only the windowed
     // rows reach `render/dom` at all (I3).

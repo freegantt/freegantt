@@ -71,6 +71,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - The grid header no longer draws a divider through the column names when the timeline header has two bands. The grid header draws one divider at its bottom edge.
 - A grab on a connector port now always starts a connect drag. The port sat on top of the bar's resize handle, so a grab on the dot started a resize. The port now sits outside the bar, past the handle, and the new `--fg-connector-port-gap` token (default `4px`) sets that space.
 - `entries.syncAll()` drops the collapse state of a row the new list removes. `gantt.collapsed` no longer lists an id that names no row, and `collapseChange` announces the drop. A kept row stays collapsed, and scroll position and zoom stay as they were. `entries.load()` is unchanged: it starts the view over by design.
+- Connectors follow a drag. While you move or resize a bar, each line ends on the preview place of the bar, and on the preview place of each successor the drag pushes. On release the lines no longer jump, and Escape sends them back.
 
 ## [0.1.0] - 2026-09-30
 
