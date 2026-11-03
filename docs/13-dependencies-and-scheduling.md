@@ -2,7 +2,7 @@
 
 This guide shows an app author how to draw lines between bars and keep those lines true.
 Two plugins do the work. `entryDependencies()` stores the Dependencies and draws a connector for each. `scheduling()` moves the Entries so every Dependency holds.
-Each plugin works alone, but `scheduling()` needs `entryDependencies()`.
+`entryDependencies()` works alone. `scheduling()` needs `entryDependencies()`.
 
 <!-- doc-example-setup
 declare const container: HTMLElement;
