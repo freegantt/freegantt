@@ -75,6 +75,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - Connectors follow a drag. While you move or resize a bar, each line ends on the preview place of the bar, and on the preview place of each successor the drag pushes. On release the lines no longer jump, and Escape sends them back.
 - Resize handles and connect ports follow a drag. While you move or resize a bar, its two handles and its two ports sit on the preview edges of the bar. Before, they stayed at the committed place. On release or Escape they go back.
 - A decoration that reuses a node no longer keeps the old width or text. Before, a scroll that dropped a row span could leave a row stripe or a range band with the span's width and text.
+- `'invalid-working-calendar'` is now in the `BuiltInThrownCode` union. Before, an exhaustive `switch (error.code)` missed the code `workingCalendar()` throws.
 
 ## [0.1.0] - 2026-09-30
 
