@@ -137,6 +137,27 @@ test('dragging from an end port to a start port creates a Finish-to-start Depend
   await expect(page.locator('#dependency-readout')).not.toContainText('structure-2:FS:structure-3');
 });
 
+test('a connect drag onto a bar that starts too early moves that bar, and undo puts it back', async ({
+  page,
+}) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const startOf = (id: string) => page.evaluate((entry) => window.__dataset.entries.get(entry)?.start, id);
+  const before = await startOf('structure-3');
+  const predecessorEnd = await page.evaluate(() => window.__dataset.entries.get('structure-2')?.end);
+  expect(predecessorEnd).toBeGreaterThan(before!);
+
+  await dragBetweenPorts(page, { id: 'structure-2', edge: 'end' }, { id: 'structure-3', edge: 'start' });
+
+  await expect.poll(() => startOf('structure-3')).toBe(predecessorEnd);
+
+  await page.evaluate(() => window.__gantt.commands.run('freegantt.undo'));
+  await expect(
+    page.locator('#gantt [data-connector-id="dependency:structure-2:FS:structure-3"]'),
+  ).toHaveCount(0);
+  await expect.poll(() => startOf('structure-3')).toBe(before);
+});
+
 test('dragging from a start port to a start port creates a Start-to-start Dependency, and undo removes it', async ({
   page,
 }) => {
