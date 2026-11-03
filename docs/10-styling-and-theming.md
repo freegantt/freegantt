@@ -64,8 +64,9 @@ not a consumer's to set" below for the four channels.
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. A Bar that carries its own `box` skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
 | `--fg-connector-arrow-size` | `8px` | Edge of the connector arrowhead. The Gantt reads it when the arrowhead first shows, so set it before `connectorArrow` is `'end'`. |
-| `--fg-connector-arrow-color` | line colour | Fill of the connector arrowhead. By default it follows the line, so a selected or cycle connector gets its own arrowhead colour. |
+| `--fg-connector-arrow-color` | `context-stroke` | Fill of the connector arrowhead. By default it follows the line, so a selected or cycle connector gets its own arrowhead colour. |
 | `--fg-connector-port-width` | `20px` | `.fg-connector-port` width. The box sits outside the bar, past the resize handle, and the dot sits at its bar side |
+| `--fg-port-width` | `var(--fg-connector-port-coarse-width)` | The width one port uses now. The sheet sets it from `--fg-connector-port-width`, or from the coarse width on a coarse pointer. Set the two tokens above, not this one. |
 | `--fg-connector-port-gap` | `4px` | The space between the bar edge and its port. It keeps the resize handle free; set it to half the handle width |
 | `--fg-connector-port-coarse-width` | `32px` | `.fg-connector-port` width on a coarse pointer, such as a finger |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row |
@@ -269,6 +270,7 @@ rename.
 | `.fg-bar` | One Bar. Every look wears this class, diamonds included. |
 | `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
+| `.fg-connector-copy` | The copy of the selected connector above the bars. It takes no pointer events. |
 | `.fg-connector-arrow` | The arrowhead shape inside the connector layer. `connectorArrow: 'none'` removes it. |
 | `.fg-connector-port` | One connector port on a bar edge. It shows on the hovered bar, and on every connectable bar during a drag, while a plugin handles the connect drag. It carries `data-edge`, and `data-active` while a drop here would connect. |
 | `.fg-connect-target` | The outline on the bar a connect drop would join. It only outlines: the pointer passes through it. |
