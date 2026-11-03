@@ -63,7 +63,8 @@ not a consumer's to set" below for the four channels.
 | `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired — see below) |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. A Bar that carries its own `box` skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
-| `--fg-connector-port-width` | `20px` | `.fg-connector-port` width. The box centers on the bar edge, and the dot sits in its outer half |
+| `--fg-connector-port-width` | `20px` | `.fg-connector-port` width. The box sits outside the bar, past the resize handle, and the dot sits at its bar side |
+| `--fg-connector-port-gap` | `4px` | The space between the bar edge and its port. It keeps the resize handle free; set it to half the handle width |
 | `--fg-connector-port-coarse-width` | `32px` | `.fg-connector-port` width on a coarse pointer, such as a finger |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row |
 | `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
