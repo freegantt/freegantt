@@ -76,6 +76,9 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - `entries.syncAll()` drops the collapse state of a row the new list removes. `gantt.collapsed` no longer lists an id that names no row, and `collapseChange` announces the drop. A kept row stays collapsed, and scroll position and zoom stay as they were. `entries.load()` is unchanged: it starts the view over by design.
 - Connectors follow a drag. While you move or resize a bar, each line ends on the preview place of the bar, and on the preview place of each successor the drag pushes. On release the lines no longer jump, and Escape sends them back.
 - Resize handles and connect ports follow a drag. While you move or resize a bar, its two handles and its two ports sit on the preview edges of the bar. Before, they stayed at the committed place. On release or Escape they go back.
+- `scheduling().setConstraint()` no longer leaves a "start no earlier than" floor on the Entries it moves. Before, a start floor on `a` also pinned `b` and `c` to their new dates. After `clearConstraint('a')`, a drag of `a` back now pulls them back under `pushAndPull`.
+- A drag that a Dependency overrules no longer moves unrelated Entries. Before, when the overruled bar was the only edit, `scheduling()` recomputed the whole plan and pulled every late successor to its earliest date. Now the run starts from the overruled bar alone.
+- `scheduling()` runs one push after several Dependency replacements in one turn. Before, each replacement queued its own full schedule run and its own write.
 
 ## [0.1.0] - 2026-09-30
 
