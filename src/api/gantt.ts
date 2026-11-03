@@ -30,6 +30,7 @@ import type {
 import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
   BarLabels,
+  ConnectorRouting,
   BarRenderer,
   GridCellRenderer,
   HeaderRenderer,
@@ -217,6 +218,10 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  a bar's content. Short form is a `BarLabelPolicy` (see its own doc for the five values);
    *  default `'fitBar'`. */
   barLabels?: BarLabels;
+  /** Live. How connector routes dodge bars: `{ avoidBars, maxAvoidRows }`. Default
+   *  `{ avoidBars: true, maxAvoidRows: 200 }`. A vertical across more rows than `maxAvoidRows`
+   *  keeps its default place. */
+  connectorRouting?: ConnectorRouting;
   /** Live (S5.4). Customization ladder level 3 (`plans/02` §4). One function, over every
    *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.
    *
@@ -403,6 +408,7 @@ export class Gantt<TProps = unknown> {
         'rowSource',
         'collapsed',
         'barLabels',
+        'connectorRouting',
         'barRenderer',
         'gridCellRenderer',
         'headerRenderer',
@@ -652,6 +658,15 @@ export class Gantt<TProps = unknown> {
    *  as `formatStartAndEnd`, takes this instead of assembling a second `{ timeZone, locale }`. */
   get formatContext(): FormatContext {
     return this.#shell.formatContext;
+  }
+
+  /** Live. `gantt.connectorRouting = { avoidBars: false }`. Reroutes every connector. */
+  get connectorRouting(): ConnectorRouting {
+    return this.#shell.connectorRouting;
+  }
+
+  set connectorRouting(value: ConnectorRouting) {
+    this.#shell.connectorRouting = value;
   }
 
   /** Live. `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once

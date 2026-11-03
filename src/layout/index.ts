@@ -89,6 +89,7 @@ export type {
 // publishes the zoom ladder.
 export { BAR_FLAG_KEYS, CONNECTOR_FLAG_KEYS } from './frame.js';
 export { ConnectorRouter } from './connectors/connector-router.js';
+export type { ConnectorRouting } from './connectors/connector-routing.js';
 export type { ConnectorEdge, ConnectorEnd, ConnectorInput, ConnectorProvider } from './connector-input.js';
 export { DecorationRunner } from './decorations.js';
 export type { RegisteredDecorationProvider, DecorationsByLayer } from './decorations.js';
