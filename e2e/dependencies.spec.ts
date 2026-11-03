@@ -98,6 +98,29 @@ test('removing an Entry removes its Dependencies, and undo restores both', async
   await expect(page.locator('#gantt [data-connector-id="dependency:dep-fs"]')).toHaveCount(1);
 });
 
+test('Replace and Remove Foundation 2 are safe to click twice after the Entry is gone', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await page.locator('#remove-entry-btn').click();
+  await expect(page.locator('#remove-entry-btn')).toBeDisabled();
+  await page.locator('#replace-dependencies-btn').click();
+  await expect(page.locator('#dependency-readout')).toContainText('next-fs');
+  await page.locator('#replace-dependencies-btn').click();
+
+  // The first set returns without the Dependencies that name the removed Entry.
+  await expect(page.locator('#dependency-readout')).toContainText('dep-ff');
+  await expect(page.locator('#dependency-readout')).not.toContainText('dep-fs');
+  await page.locator('#replace-dependencies-btn').click();
+  await expect(page.locator('#dependency-readout')).toContainText('next-fs');
+  expect(errors).toEqual([]);
+
+  await page.evaluate(() => window.__gantt.commands.run('freegantt.undo'));
+  await expect(page.locator('#remove-entry-btn')).toBeEnabled();
+});
+
 // The connect drag in a real browser. Only a browser has ports beside the bar edges and a pointer
 // that can reach them.
 

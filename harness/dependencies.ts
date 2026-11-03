@@ -56,11 +56,17 @@ function showDependencies(): void {
 }
 showDependencies();
 
-// Which set is on screen? The button swaps between the two.
+// Which set is on screen? The button swaps between the two. `replaceAll` throws for an unknown Entry
+// id, so the app drops each Dependency whose Entry is gone before it loads the set.
 let showingFirst = true;
 document.querySelector<HTMLButtonElement>('#replace-dependencies-btn')!.addEventListener('click', () => {
+  const next = showingFirst ? secondDependencies : firstDependencies;
+  dependencies.replaceAll(
+    next.filter(
+      (dependency) => dataset.entries.get(dependency.fromId) && dataset.entries.get(dependency.toId),
+    ),
+  );
   showingFirst = !showingFirst;
-  dependencies.replaceAll(showingFirst ? firstDependencies : secondDependencies);
   showDependencies();
 });
 
@@ -74,11 +80,15 @@ document.querySelector<HTMLButtonElement>('#collapse-foundation-btn')!.addEventL
 });
 
 // Removing an Entry removes every Dependency that names it, in the same change set. Undo in the
-// toolbar brings the Entry and its Dependencies back together.
-document.querySelector<HTMLButtonElement>('#remove-entry-btn')!.addEventListener('click', () => {
+// toolbar brings the Entry and its Dependencies back together. The button waits while the Entry is gone.
+const removeEntryButton = document.querySelector<HTMLButtonElement>('#remove-entry-btn')!;
+removeEntryButton.addEventListener('click', () => {
   dataset.entries.remove('foundation-2');
 });
-dataset.on('change', showDependencies);
+dataset.on('change', () => {
+  showDependencies();
+  removeEntryButton.disabled = !dataset.entries.get('foundation-2');
+});
 
 // A Delete on a selected connector raises two plugin events. The page logs the second one.
 const removalReadout = document.querySelector<HTMLSpanElement>('#removal-readout')!;
