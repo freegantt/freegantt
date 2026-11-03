@@ -23,7 +23,7 @@ import type {
   RowId,
   ClientPoint,
 } from '../../layout/index.js';
-import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
+import type { ColumnAlign, ConnectorArrow, FrameColumn, FrameConnector } from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult, RowHit } from '../backend.js';
 import {
   DEFAULT_DATE_LINE_LABEL_PLACEMENT,
@@ -397,6 +397,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   let tickLines: TickLineAttachment | undefined;
   let decorations: DecorationsAttachment | undefined;
   let connectors: ConnectorsAttachment | undefined;
+  /** What the last `sync` told the connector layer besides the connectors, so a drag preview repaints
+   *  the lines on the same surface. */
+  let connectorSurface:
+    { arrow: ConnectorArrow; contentWidth: number; contentHeight: number; paneHeight: number } | undefined;
   // One shared handle pair, created once at mount() and moved/parked by applyState — never
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
@@ -1550,12 +1554,18 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         frame.contentHeight,
         frame.visible.height,
       );
+      connectorSurface = {
+        arrow: frame.connectorArrow,
+        contentWidth: frame.contentWidth,
+        contentHeight: frame.contentHeight,
+        paneHeight: frame.visible.height,
+      };
       connectors?.sync(
         frame.connectors,
-        frame.connectorArrow,
-        frame.contentWidth,
-        frame.contentHeight,
-        frame.visible.height,
+        connectorSurface.arrow,
+        connectorSurface.contentWidth,
+        connectorSurface.contentHeight,
+        connectorSurface.paneHeight,
       );
       cursorLineHeight = Math.max(frame.contentHeight, frame.visible.height);
       if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
@@ -1574,6 +1584,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const y = Math.max(0, frame.contentHeight - 1);
         contentSizer.style.transform = `translate(${x}px, ${y}px)`;
       }
+    },
+    paintConnectors(next: readonly FrameConnector[]) {
+      if (connectorSurface === undefined) return;
+      const { arrow, contentWidth, contentHeight, paneHeight } = connectorSurface;
+      connectors?.sync(next, arrow, contentWidth, contentHeight, paneHeight);
     },
     applyState(state: InteractionState) {
       // Diff against what was last painted, touch only the bars whose token set

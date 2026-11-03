@@ -406,3 +406,56 @@ test('the arrowhead shows with connectorArrow end and goes with none', async ({ 
   await page.getByLabel('Arrowheads').check();
   await expect(arrowed).toHaveCount(await lines.count());
 });
+
+// A line follows the drag preview. The dragged bar and the successor the plugin pushes show at their
+// preview places, so the lines end there too. Escape sends everything back.
+
+test('connectors follow a bar drag and the successor it pushes, and go back on Escape', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const edges = () =>
+    page.evaluate(() => {
+      const layer = document.querySelector('#gantt .fg-connectors-svg')!.getBoundingClientRect();
+      const line = document.querySelector('#gantt [data-connector-id="dependency:dep-fs"]')!;
+      const numbers = line
+        .getAttribute('d')!
+        .match(/-?\d+(\.\d+)?/g)!
+        .map(Number);
+      const barBox = (prefix: string) =>
+        document.querySelector(`#gantt .fg-bar[data-bar-id^="${prefix}"]`)!.getBoundingClientRect();
+      const first = barBox('foundation-1');
+      const second = barBox('foundation-2');
+      return {
+        lineStart: numbers[0]!,
+        lineEnd: numbers[numbers.length - 2]!,
+        firstEnd: first.right - layer.left,
+        secondStart: second.left - layer.left,
+      };
+    });
+
+  const committed = await edges();
+  expect(committed.lineStart).toBeCloseTo(committed.firstEnd, 0);
+  expect(committed.lineEnd).toBeCloseTo(committed.secondStart, 0);
+
+  const bar = (await page.locator('#gantt .fg-bar[data-bar-id^="foundation-1"]').boundingBox())!;
+  await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bar.x + bar.width / 2 + 400, bar.y + bar.height / 2, { steps: 12 });
+  await nextFrame(page);
+
+  const dragging = await edges();
+  expect(dragging.firstEnd).toBeGreaterThan(committed.firstEnd + 100);
+  expect(dragging.secondStart).toBeGreaterThan(committed.secondStart + 50);
+  expect(dragging.lineStart).toBeCloseTo(dragging.firstEnd, 0);
+  expect(dragging.lineEnd).toBeCloseTo(dragging.secondStart, 0);
+
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await nextFrame(page);
+
+  const restored = await edges();
+  expect(restored.lineStart).toBeCloseTo(committed.lineStart, 0);
+  expect(restored.lineEnd).toBeCloseTo(committed.lineEnd, 0);
+  expect(restored.firstEnd).toBeCloseTo(committed.firstEnd, 0);
+});
