@@ -82,7 +82,12 @@ export type BuiltInThrownCode =
   | 'custom-row-source-not-filterable-or-sortable'
   | 'sibling-index-out-of-range'
   | 'place-refused'
-  | 'remove-refused';
+  | 'remove-refused'
+  | 'unsupported-lag-unit'
+  | 'duplicate-dependency-id'
+  | 'dependency-store-not-installed'
+  | 'scheduling-not-installed'
+  | 'invalid-working-calendar';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries
@@ -1110,6 +1115,69 @@ export class CustomRowSourceNotFilterableOrSortableError extends FreeGanttError 
       `${operation}: the current row source is 'custom'. It resolves its own rows through "resolve", so it has no "filter" or "sort" to replace. Apply your own filtering or sorting inside "resolve" instead.`,
     );
     this.name = 'CustomRowSourceNotFilterableOrSortableError';
+    this.operation = operation;
+  }
+}
+
+/** `code: 'unsupported-lag-unit'` — a Dependency lag in a unit other than `day`. A week, month or
+ *  year has no fixed length in days, so the store refuses it. `operation` names the caller. */
+export class UnsupportedLagUnitError extends FreeGanttError {
+  readonly unit: string;
+  readonly operation: string;
+
+  constructor(unit: string, operation: string) {
+    super(
+      'unsupported-lag-unit' satisfies BuiltInThrownCode,
+      `${operation}: a dependency lag counts days only, not "${unit}". Write the lag as a number of days.`,
+    );
+    this.name = 'UnsupportedLagUnitError';
+    this.unit = unit;
+    this.operation = operation;
+  }
+}
+
+/** `code: 'duplicate-dependency-id'` — a Dependency id that another Dependency already holds. */
+export class DuplicateDependencyIdError extends FreeGanttError {
+  readonly dependencyId: string;
+  readonly operation: string;
+
+  constructor(dependencyId: string, operation: string) {
+    super(
+      'duplicate-dependency-id' satisfies BuiltInThrownCode,
+      `${operation}: two dependencies share the id "${dependencyId}". Give each dependency its own id.`,
+    );
+    this.name = 'DuplicateDependencyIdError';
+    this.dependencyId = dependencyId;
+    this.operation = operation;
+  }
+}
+
+/** `code: 'dependency-store-not-installed'` — a call on an `entryDependencies()` plugin that no
+ *  Dataset has installed yet. Put the plugin in `new Dataset({ plugins })` first. */
+export class DependencyStoreNotInstalledError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'dependency-store-not-installed' satisfies BuiltInThrownCode,
+      `${operation}: this entryDependencies() plugin is not installed on a Dataset. Pass it in new Dataset({ plugins }) first.`,
+    );
+    this.name = 'DependencyStoreNotInstalledError';
+    this.operation = operation;
+  }
+}
+
+/** `code: 'scheduling-not-installed'` — a call on a `scheduling()` plugin that no Dataset has
+ *  installed yet. Put the plugin in `new Dataset({ plugins })` first. */
+export class SchedulingNotInstalledError extends FreeGanttError {
+  readonly operation: string;
+
+  constructor(operation: string) {
+    super(
+      'scheduling-not-installed' satisfies BuiltInThrownCode,
+      `${operation}: this scheduling() plugin is not installed on a Dataset. Pass it in new Dataset({ plugins }) first.`,
+    );
+    this.name = 'SchedulingNotInstalledError';
     this.operation = operation;
   }
 }

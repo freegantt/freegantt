@@ -14,9 +14,10 @@ import type {
   HierarchySource,
   ProposedEdits,
   StoredEntry,
+  StoreRowUpdated,
   WriteTarget,
 } from '../model/index.js';
-import { EMPTY_ENTRY_IDS } from './edit-extension.js';
+import { EMPTY_ENTRY_IDS, NO_STORE_ROWS } from './edit-extension.js';
 import {
   buildEffectiveEntries,
   childIdsByParent,
@@ -29,6 +30,8 @@ import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hiera
 import { editableAnswerFor, fieldLockQueryFor, resolveWriteTarget } from './write-rule.js';
 
 export interface CreateEditRequestOptions {
+  /** `true` on the drag-preview path, `false` on the commit path. */
+  readonly isPreview: boolean;
   readonly entries: ReadonlyMap<EntryId, StoredEntry>;
   readonly proposed: ProposedEdits;
   readonly added: readonly StoredEntry[];
@@ -41,6 +44,8 @@ export interface CreateEditRequestOptions {
   /** The per-entry lock rule's current occupant (#473) — `editableOf` below reads it, the same
    *  resolver `entries.update()` and the grid read (I14). */
   readonly lockRule: FieldLockRule;
+  /** The plugin store rows the transaction changes — `NO_STORE_ROWS` on a preview. */
+  readonly storeRows?: readonly StoreRowUpdated[];
 }
 
 /** Builds the object `EditExtender` reads (D4). The effective child index `hasChildren` and
@@ -51,6 +56,7 @@ export interface CreateEditRequestOptions {
  *  index already holds the answer, and no `Map` is walked to reach it. */
 export function createEditRequest(options: CreateEditRequestOptions): EditRequest {
   const { entries, proposed, added, removed, hierarchySource, committedChildIds, fields, lockRule } = options;
+  const storeRows = options.storeRows ?? NO_STORE_ROWS;
 
   const addedEntryIds = added.length === 0 ? EMPTY_ENTRY_IDS : new Set(added.map((entry) => entry.id));
   const removedEntryIds = removed.length === 0 ? EMPTY_ENTRY_IDS : new Set(removed.map((entry) => entry.id));
@@ -112,11 +118,13 @@ export function createEditRequest(options: CreateEditRequestOptions): EditReques
   }
 
   return {
+    isPreview: options.isPreview,
     entries,
     proposed,
     entryAfterEdits,
     addedEntryIds,
     removedEntryIds,
+    changedStoreRows: storeRows,
     hasChildren,
     writeTarget,
     editableOf,

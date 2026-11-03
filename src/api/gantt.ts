@@ -30,6 +30,8 @@ import type {
 import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
   BarLabels,
+  ConnectorRouting,
+  ConnectorArrow,
   BarRenderer,
   GridCellRenderer,
   HeaderRenderer,
@@ -79,7 +81,12 @@ import type {
 // api/ is the composition root that reaches interaction/ in (plans/01 §1: `API --> INT`,
 // `plans/s3-direct-manipulation/README.md` §0) — `view/` cannot, so `GanttShell` takes this by
 // constructor injection rather than importing it itself (see `AttachEntryGestures` in gantt-shell.ts).
-import { attachEntryGestures, attachKeyboardEditing, attachColumnGestures } from '../interaction/index.js';
+import {
+  attachEntryGestures,
+  attachKeyboardEditing,
+  attachColumnGestures,
+  attachConnect,
+} from '../interaction/index.js';
 
 /** Public, loose. What `GanttOptions.dateLines` and `Gantt.dateLines` both take (S1.13). */
 export interface DateLineInput {
@@ -212,6 +219,13 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  a bar's content. Short form is a `BarLabelPolicy` (see its own doc for the five values);
    *  default `'fitBar'`. */
   barLabels?: BarLabels;
+  /** Live. How connector routes dodge bars: `{ avoidBars, maxAvoidRows }`. Default
+   *  `{ avoidBars: true, maxAvoidRows: 200 }`. A vertical across more rows than `maxAvoidRows`
+   *  keeps its default place. */
+  connectorRouting?: ConnectorRouting;
+  /** Live. Where a connector wears an arrowhead: `'end'` draws one at the arrival end, pointing into
+   *  the target bar. `'none'` draws none. Default `'end'`. */
+  connectorArrow?: ConnectorArrow;
   /** Live (S5.4). Customization ladder level 3 (`plans/02` §4). One function, over every
    *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.
    *
@@ -277,6 +291,7 @@ export type GanttScaleOptions =
       preset?: never;
       range?: never;
       fit?: never;
+      fitDatasetPaddingPx?: never;
     }
   | {
       scale?: undefined;
@@ -285,6 +300,9 @@ export type GanttScaleOptions =
       /** Loose input (S1.12), read through the dataset's zone at construction/assignment. */
       range?: 'fitDataset' | { start: InstantInput; end: InstantInput };
       fit?: TimeScaleFit;
+      /** Live. Pixels of empty axis before the first bar and after the last bar under
+       *  `range: 'fitDataset'`. Default `24`: room for a connector stub and its arrowhead. `0` removes it. */
+      fitDatasetPaddingPx?: number;
     };
 
 export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
@@ -384,6 +402,7 @@ export class Gantt<TProps = unknown> {
         'overscan',
         'preset',
         'fit',
+        'fitDatasetPaddingPx',
         'theme',
         'a11yLabel',
         'locale',
@@ -398,6 +417,8 @@ export class Gantt<TProps = unknown> {
         'rowSource',
         'collapsed',
         'barLabels',
+        'connectorRouting',
+        'connectorArrow',
         'barRenderer',
         'gridCellRenderer',
         'headerRenderer',
@@ -442,6 +463,7 @@ export class Gantt<TProps = unknown> {
         entryGestures: attachEntryGestures,
         keyboardEditing: attachKeyboardEditing,
         columnGestures: attachColumnGestures,
+        connect: attachConnect,
         // S3.3: `GanttShell`'s own `dataset` option is `model/`'s narrow `Dataset`
         // interface ("a view never opens a transaction"). This class holds the full `api/Dataset`,
         // so a committed gesture draft reaches the store through here, not through the shell.
@@ -646,6 +668,24 @@ export class Gantt<TProps = unknown> {
    *  as `formatStartAndEnd`, takes this instead of assembling a second `{ timeZone, locale }`. */
   get formatContext(): FormatContext {
     return this.#shell.formatContext;
+  }
+
+  /** Live. `gantt.connectorRouting = { avoidBars: false }`. Reroutes every connector. */
+  get connectorRouting(): ConnectorRouting {
+    return this.#shell.connectorRouting;
+  }
+
+  set connectorRouting(value: ConnectorRouting) {
+    this.#shell.connectorRouting = value;
+  }
+
+  /** Live. `gantt.connectorArrow = 'none'`. Redraws every connector without an arrowhead. */
+  get connectorArrow(): ConnectorArrow {
+    return this.#shell.connectorArrow;
+  }
+
+  set connectorArrow(value: ConnectorArrow) {
+    this.#shell.connectorArrow = value;
   }
 
   /** Live. `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once
@@ -902,6 +942,16 @@ export class Gantt<TProps = unknown> {
 
   set fit(f: TimeScaleFit) {
     this.#shell.fit = f;
+  }
+
+  /** Pixels of empty axis before the first bar and after the last bar under `range: 'fitDataset'`.
+   *  A pinned `range` has no such margin. */
+  get fitDatasetPaddingPx(): number {
+    return this.#shell.fitDatasetPaddingPx;
+  }
+
+  set fitDatasetPaddingPx(px: number) {
+    this.#shell.fitDatasetPaddingPx = px;
   }
 
   get locale(): Intl.LocalesArgument | undefined {

@@ -20,7 +20,7 @@ flowchart TB
 
   subgraph pureside["Pure — no DOM, runs anywhere"]
     direction TB
-    LAY["<b>layout/</b><br/>row resolution · item production<br/>bar geometry · link routing · height index"]
+    LAY["<b>layout/</b><br/>row resolution · item production<br/>bar geometry · connector routing · height index"]
     SCH["<b>scheduling/</b><br/>first-party default plugin:<br/>propagation · lag · cycle detection<br/>diagnostics · policy seam"]
     DATA["<b>data/</b><br/>stores · transactions · undo/redo<br/>changesets · reactivity façade"]
     TIME["<b>time/</b><br/>Instant · plain time · zones<br/>TimeScale · view presets · ticks"]
@@ -32,6 +32,7 @@ flowchart TB
   API --> VIEW
   API --> DATA
   API --> INT
+  API --> SCH
   EXT --> VIEW
   EXT --> INT
   INT --> VIEW
@@ -64,6 +65,8 @@ There is deliberately no `data/ --> scheduling/` edge: `data/` has no static dep
 `interaction/ --> MODEL` (S3, D-S3-4/D-S3-5, `plans/s3-direct-manipulation/README.md` P3): a gesture controller names `Entry`, `EntryId` and `BarId` — all three live in `model/` — as type-only params, the same rationale `view/`'s own `model/` edge already carries. One arrow, nothing else: `interaction/` still may not reach `time/`, `layout/` or `render/` — every date/pixel computation a gesture needs is a pure `layout/` function the shell hands back through `EntryGestureContext`.
 
 `api/ --> INT` (S3, `plans/s3-direct-manipulation/README.md` §0): `interaction/` sits one layer *above* `view/` (`INT --> VIEW`, not the reverse), so nothing inside `view/` may import it to wire the default pointer-gesture attachments into `GanttShell` — and `extensions/`, the other layer that reaches both `view/` and `interaction/`, does not exist until S5. `api/gantt.ts` is the composition root that supplies `attachEntryGestures` to `GanttShell` by constructor injection (the shell itself takes it structurally-typed, with no import of its own), the same role it already plays wiring `view/`, `data/`, `model/`, `time/` and `layout/` together for a plain `new Gantt(...)`.
+
+`api/ --> SCH` (S7, 2026-11-02): `api/` is the only public door, so the first-party scheduling exports (`workingCalendar`, `schedule()`, later `scheduling()`) re-export through it. `package.json` `sideEffects` lists only `src/view/styles.ts`, so a consumer who imports no scheduling export ships none of `scheduling/`. `scheduling/` itself still imports `time/` and `model/` only, and `data/` still has no edge to it.
 
 **Enforcement (D12):** an import-boundary lint rule in CI (dependency-cruiser or `no-restricted-imports`). Any arrow not in this diagram fails the build. Notably:
 
@@ -263,7 +266,7 @@ An Entry has children, or it does not. That structure answers derivation and the
 | `scheduling/` | a parent spans its children via rollup vs. a leaf that is directly schedulable, *when a scheduling plugin is installed* | `SchedulingPolicy` (§7), plugin-owned |
 | `layout/` | item emission — bar vs. summary; whether items are emitted at all | the resolved Variant's `items` (ADR 0018) |
 | `render/` | appearance — default renderer; `data-variant` on the element for CSS (the Variant this Gantt resolved, not an Entry classification) | the Variant's `paint`, then the renderer registry (`02` §4) |
-| `interaction/` | which gestures the entry affords (move / resize / link / edit …) | the Variant's `can`, then the capability resolver (§9) |
+| `interaction/` | which gestures the entry affords (move / resize / connect / edit …) | the Variant's `can`, then the capability resolver (§9) |
 
 Rules:
 
@@ -467,14 +470,14 @@ interface GeometryFrame {
     a11yLabel: string;
   }>;
   /** `id` was `DependencyId` (a `model/` brand) pre-#13; `Dependency` is now owned by the
-   *  `entryDependencies()` plugin, not `scheduling()` (S5.0 grill, #111), so link geometry needs a
-   *  plugin-contributed emission seam — `ctx.layout.registerLinkEmitter(emitter)`, aggregating like
-   *  `decorationProviders` rather than replacing like a Variant's own `items`. `id` stays a plain
-   *  `string`: a brand would make `layout/` depend on plugin-owned types. The emitter reads the
-   *  Dataset-side plugin's store through the Gantt-side `ctx.store.read(pluginId)`, D-S5-30's own
-   *  name on the second surface. Full design in #136 (supersedes #16); it lands in S7, after S5.10
-   *  ships `PluginStore`. Shape lands in S1 (#30), contents in S7. */
-  links: readonly Array<{ id: string; path: PathCommand[]; flags: LinkFlags }>;
+   *  `entryDependencies()` plugin, not `scheduling()` (S5.0 grill, #111). A Connector is what core
+   *  draws between two bars. A plugin states which ones exist: `ctx.view.registerConnector(source)`
+   *  returns `ConnectorInput` values, each naming two `{ entryId, edge }` ends, and `layout/` routes,
+   *  culls and clips them (ADR 0040). The sources aggregate like `decorationProviders`. `id` stays a
+   *  plain `string`: a brand would make `layout/` depend on plugin-owned types. A Gantt-side plugin
+   *  reads the Dataset-side plugin's store through `ctx.dataset.pluginStore(id)`. Shape lands in S1
+   *  (#30), contents in S7. */
+  connectors: readonly Array<{ id: string; path: PathCommand[]; flags: ConnectorFlags }>;
   decorations: readonly Array<DateLine | RangeBand | RowStripe>;
 }
 
@@ -640,7 +643,7 @@ function schedule(request: ScheduleRequest): ScheduleResult;   // pure, determin
 
 **Engine (deterministic and pure — slice S7, as the default plugin's internals):**
 
-- Propagation over the dependency graph in topological order via an **explicit worklist loop, never recursion** — long chains blow the JS stack otherwise; a 5,000-link chain fixture forecloses it permanently. Module-header invariant: *this file contains no recursive call; chain depth is unbounded by design.*
+- Propagation over the dependency graph in topological order via an **explicit worklist loop, never recursion** — long chains blow the JS stack otherwise; a 5,000-dependency chain fixture forecloses it permanently. Module-header invariant: *this file contains no recursive call; chain depth is unbounded by design.*
 - Lag applied per dependency `type`; negative lag (overlap) is legal.
 - **Cycle detection names the members**: if the worklist drains with entries unvisited, those entries are the cycle — `{ code: 'cycle', entryIds }`, never "a cycle exists somewhere."
 - An entry pinned in the plugin's own per-entry storage (the pin flag is no longer `Entry.scheduling` — that field is gone, see §2.2; where it lives instead is part of the #12 contract) is never moved; the engine reports what it *would* have done as a diagnostic.
@@ -675,7 +678,7 @@ The shipped `defaultPolicy` is deliberately minimal and neutral: dependencies pu
 ```ts
 interface RenderSurfaces<THost> {
   grid: THost;      // the grid pane's row layer
-  timeline: THost;  // the timeline pane's content layer: header bands, bars, links, decorations
+  timeline: THost;  // the timeline pane's content layer: header bands, bars, connectors, decorations
   gridHeader?: THost; // column header row in the grid pane; omitted by tests that only paint body cells
 }
 
@@ -690,7 +693,7 @@ interface RenderBackend {
 
 `mount` takes two required surfaces plus an optional grid header (S1.8, D-S1.8-1/D-S1.8-2): the grid pane's row layer, the timeline pane's content layer, and — when column headers are shown — the grid pane's header row. They are elements `view/pane-layout.ts` builds, not one container this backend reserves a gutter inside. `render/dom` puts body rows in `grid`, column headers in `gridHeader` when present, and header/bar/sizer layers in `timeline`, at `x = 0` — no gutter offset; the grid pane's own width is the gutter now. `render/null` takes the same signature and ignores all three.
 
-Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for link paths), `null` (tests, SSR of data, future export path). A dense canvas backend is a *possible future implementation* of this interface, built only if measurement demands it (D2).
+Backends: `dom` (default — absolutely-positioned virtualized rows, SVG for connector paths), `null` (tests, SSR of data, future export path). A dense canvas backend is a *possible future implementation* of this interface, built only if measurement demands it (D2).
 
 **DOM rendering approach:** bars and rows are plain positioned elements — CSS-themeable (custom properties + parts), accessible (focusable bars, grid semantics — D11), framework-friendly. Updates go through a small keyed reconciler that diffs a plain-object element description against the config last applied to that same element (stored on the node) — no shadow tree, no per-frame vDOM allocation, because the changeset already says what changed. Hard scope boundary in the module header: attribute/class/style/text diffing and keyed child recycling only; anything needing lifecycle hooks or a component model means we are rebuilding a framework and should adopt one instead.
 
@@ -752,7 +755,7 @@ flowchart TB
 
 ## 9. `interaction/` — gestures as drafts (D10)
 
-S3 ships two attachments over one pointer stream and one keyboard stream, not named `Drag`/`Resize`/`Select` classes. `createPointerGesture` owns the shared invariants (threshold, capture, Escape, touch long-press). `attachEntryGestures` is the pointer attachment: click-to-select, drag-move, and edge-resize on that one stream. `attachKeyboardEditing` is the keyboard attachment: arrow nudge and row-to-row selection. `LinkCreate` waits for S7.
+S3 ships two attachments over one pointer stream and one keyboard stream, not named `Drag`/`Resize`/`Select` classes. `createPointerGesture` owns the shared invariants (threshold, capture, Escape, touch long-press). `attachEntryGestures` is the pointer attachment: click-to-select, drag-move, and edge-resize on that one stream. `attachKeyboardEditing` is the keyboard attachment: arrow nudge and row-to-row selection. `Connect` waits for S7.
 
 Read-only viewport gestures live in `view/` (`attachWheelNavigation`, `attachKeyboardNavigation`) — they write nothing to the dataset, so the arm-threshold / escape-cancel / one-transaction invariants do not apply to them (D-S3-14).
 
@@ -979,8 +982,8 @@ Rules:
 |---|---|---|
 | I1 | Layer imports match §1 exactly | dependency lint in CI |
 | I2 | No module-level singletons; two Gantt instances coexist independently | isolation test (mounts two Gantt instances); `freegantt/no-module-level-state` lint rule (S2.7) |
-| I3 | The first-party scheduling plugin's propagation contains no recursion | 5,000-link chain fixture + review rule |
-| I4 | Its `schedule()` never mutates its input; policy never moves a proposed field | dev-mode asserts + property test |
+| I3 | The first-party scheduling plugin's propagation contains no recursion | 5,000-dependency chain fixture + review rule |
+| I4 | Its `schedule()` never mutates its input; policy never moves a proposed field; an extension overrides a proposed field only when its result marks the override (ADR 0042) | dev-mode asserts + property test |
 | I5 | Hot path allocates nothing and never rebuilds a frame | perf test on `applyState` |
 | I6 | One transaction per gesture, at commit | interaction tests |
 | I7 | Undo reverts user + engine effects atomically (when a scheduling plugin is installed) | round-trip property test (`[S2-A1]`, `src/data/history.property.test.ts`) |

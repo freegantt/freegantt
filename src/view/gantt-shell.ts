@@ -33,6 +33,8 @@ import type {
   ReportUnknownFieldMatch,
   ResolvedRenderer,
   BarLabels,
+  ConnectorRouting,
+  ConnectorArrow,
   BarRenderer,
   GridCellRenderer,
   HeaderRenderer,
@@ -42,6 +44,8 @@ import type {
   TimeScale,
   ResolvedColumn,
   RowPlanInput,
+  BarPreview,
+  LayoutInput,
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
@@ -140,6 +144,8 @@ import { FrameSettings } from './frame-settings.js';
 import type { FrameSettingsPatch, FrameSettingsPorts } from './frame-settings.js';
 import { projectAffordances } from './affordance-projection.js';
 import type { EntryGestureContext, EntryHit } from './entry-gesture-context.js';
+import type { ConnectGestureContext } from './connect-context.js';
+import { proposeConnect } from './connect-proposal.js';
 import type { ColumnGestureContext } from './column-gesture-context.js';
 import { DEFAULT_GRID_COLUMNS, resolveGanttFields } from './grid-columns.js';
 import type { ResolveColumnsBind } from './grid-columns.js';
@@ -195,6 +201,14 @@ export type AttachColumnGestures = (
   ctx: ColumnGestureContext,
 ) => Detachable;
 
+/** Same DI shape again — `interaction/connect.ts`'s `attachConnect` drives the connector port
+ *  drag. The shell attaches it only while a plugin registers a connect handler. */
+export type AttachConnect = (
+  pane: HTMLElement,
+  container: HTMLElement,
+  ctx: ConnectGestureContext,
+) => Detachable;
+
 /** Theming's only preset axis — `'auto'` follows `prefers-color-scheme` (no
  * `data-fg-theme` attribute written), `'light'`/`'dark'` pin it. ADR 0029: the app pushes the
  * answer; it writes `gantt.theme` or pins `data-fg-theme` on an ancestor. The library never calls
@@ -243,6 +257,8 @@ export interface GanttShellWiring {
   keyboardEditing?: AttachKeyboardEditing;
   /** Injected, same reason as `entryGestures`. */
   columnGestures?: AttachColumnGestures;
+  /** Injected, same reason as `entryGestures`. */
+  connect?: AttachConnect;
   /** How a committed gesture draft reaches the store. `model/dataset.ts`'s `Dataset`
    *  (this shell's own `dataset` option) has no `transaction()` — "a view never opens a
    *  transaction". So `api/gantt.ts`, which holds the full `api/Dataset` the model interface narrows
@@ -322,6 +338,7 @@ export interface GanttShellOptions {
   preset?: PresetRef;
   range?: 'fitDataset' | TimeSpan;
   fit?: TimeScaleFit;
+  fitDatasetPaddingPx?: number;
   /** `Viewport` is never shared, so this always applies to this shell's own viewport. */
   overscan?: Overscan;
   /** Live. Default `'auto'`: follows `prefers-color-scheme`. */
@@ -370,6 +387,10 @@ export interface GanttShellOptions {
   /** Live. Where the default bar label paints — ignored once `barRenderer`'s output takes over
    *  a bar's content. Default `'fitBar'`. */
   barLabels?: BarLabels;
+  /** Live. How connector routes dodge bars. Default `{ avoidBars: true, maxAvoidRows: 200 }`. */
+  connectorRouting?: ConnectorRouting;
+  /** Live. Whether connectors wear an arrowhead. Default `'end'`. */
+  connectorArrow?: ConnectorArrow;
   /** Live. A function, or a per-kind map — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
@@ -491,17 +512,19 @@ function paneLayoutFrom(
   });
 }
 
-/** Call: `defaultTimeScale(options.preset, options.range, options.fit)`. The private TimeScale
+/** Call: `defaultTimeScale(options.preset, options.range, options.fit, options.fitDatasetPaddingPx)`. The private TimeScale
  *  this Gantt builds when the consumer named no shared `scale`. */
 function defaultTimeScale(
   preset: PresetRef | undefined,
   range: GanttShellOptions['range'],
   fit: TimeScaleFit | undefined,
+  fitDatasetPaddingPx: number | undefined,
 ): TimeScaleModel {
   return new TimeScaleModel({
     ...(preset !== undefined ? { preset } : {}),
     ...(range !== undefined ? { range } : {}),
     ...(fit !== undefined ? { fit } : {}),
+    ...(fitDatasetPaddingPx !== undefined ? { fitDatasetPaddingPx } : {}),
   });
 }
 
@@ -573,6 +596,10 @@ export class GanttShell {
   #panes: Panes;
   #backend: RenderBackend<HTMLElement>;
   #revision = 0;
+  /** The drag preview the connectors last painted from. Compared by identity to skip a repaint. */
+  #paintedBarPreviews: readonly BarPreview[] | undefined;
+  /** The Dataset revision the live drag preview was taken against. */
+  #previewDatasetRevision = 0;
   #viewport: Viewport;
   #viewportHandle: ViewportHandle;
   #scrollAttachment: ScrollAttachment;
@@ -586,6 +613,8 @@ export class GanttShell {
   #splitterAttachment!: SplitterAttachment;
   #datasetChanges: DatasetChangeSubscription;
   #entryGestures: Detachable | undefined;
+  /** The connect controller. It exists only while a plugin registers a connect handler. */
+  #connect: Detachable | undefined;
   #keyboardEditing: Detachable | undefined;
   #columnGestures: Detachable | undefined;
   /** Grid-column resolution, live resize/reorder preview, and the `gridColumns` commit sequence
@@ -808,7 +837,8 @@ export class GanttShell {
     // Does a shared `scale` also name preset, range, or fit that this Gantt must ignore?
     this.#warnWhenSharedScaleIgnoresOwnOptions();
     this.#viewport = viewportFrom(
-      options.scale ?? defaultTimeScale(options.preset, options.range, options.fit),
+      options.scale ??
+        defaultTimeScale(options.preset, options.range, options.fit, options.fitDatasetPaddingPx),
       options.scroll,
       options.overscan,
     );
@@ -935,6 +965,7 @@ export class GanttShell {
       // `removed`. A sync (#517) is not a baseline: it keeps a kept id's collapse state and
       // selection, so only a load resets here.
       if (changeSet.origin === 'load') this.#treeCollapse.resetToStartState();
+      else if (changeSet.origin === 'sync') this.#treeCollapse.forgetRowsTheDataDropped();
       this.#bindColumns();
       this.#viewportHandle.setEntries(options.dataset.entries.all);
       // A write can close a cell a painted affordance already sits on — a lock, for one (I14).
@@ -1041,6 +1072,7 @@ export class GanttShell {
       gestureContext,
     );
     this.#teardown.add(() => this.#entryGestures?.detach());
+    this.#teardown.add(() => this.#connect?.detach());
     // Scoped to the timeline pane, not the whole container. A bar's nudge/resize
     // is that pane's own job now. The grid pane's arrows belong to `#rovingFocus` instead.
     this.#keyboardEditing = options.wiring.keyboardEditing?.(this.#panes.timeline, gestureContext);
@@ -1098,7 +1130,10 @@ export class GanttShell {
   #warnWhenSharedScaleIgnoresOwnOptions(): void {
     const options = this.#options;
     const hasOwnOptions =
-      options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
+      options.preset !== undefined ||
+      options.range !== undefined ||
+      options.fit !== undefined ||
+      options.fitDatasetPaddingPx !== undefined;
     if (options.scale && hasOwnOptions) {
       // No longer behind `isDevMode()`, which resolved to `false` in every consumer's
       // build and deleted this line from the shipped library. The `console.warn` is now the fallback
@@ -1315,11 +1350,13 @@ export class GanttShell {
       locale: () => this.#frameSettings.effectiveLocale,
       applyGestureState: (preview, pendingBarIds, cursor, rowDrop) => {
         setOptional(this.#interactionState, 'preview', preview);
+        this.#previewDatasetRevision = this.#options.dataset.datasetRevision;
         setOptional(this.#interactionState, 'pendingBarIds', pendingBarIds);
         setOptional(this.#interactionState, 'cursorX', cursor?.x);
         setOptional(this.#interactionState, 'cursorLabel', cursor?.label);
         setOptional(this.#interactionState, 'rowDrop', rowDrop);
         this.#backend.applyState(this.#interactionState);
+        this.#paintConnectorsForPreview();
       },
       rowDropZoneAt: (contentY, sourceRowIndex, previous) =>
         rowDropZoneAt(
@@ -1463,6 +1500,63 @@ export class GanttShell {
     };
   }
 
+  /** Attaches the connect controller with the first connect handler, and detaches it with the last
+   *  one. The ports follow, because `#canGesture('connect', …)` is false while no handler exists. */
+  #syncConnect(): void {
+    const wanted = this.#registrations.connectHandlers.any;
+    if (wanted && this.#connect === undefined) {
+      this.#connect = this.#options.wiring.connect?.(
+        this.#panes.timeline,
+        this.#container,
+        this.#connectGestureContext(),
+      );
+    } else if (!wanted && this.#connect !== undefined) {
+      this.#connect.detach();
+      this.#connect = undefined;
+    }
+    this.#refreshAffordances();
+  }
+
+  /** What does the connect controller ask this shell? */
+  #connectGestureContext(): ConnectGestureContext {
+    const gestureContext = this.#entryGestureContext();
+    return {
+      hitTest: (at) => gestureContext.hitTest(at),
+      entryFor: (barId) => gestureContext.entryFor(barId),
+      canConnect: (entry) => this.#canGesture('connect', entry.id),
+      nearerEdgeOf: (barId, contentX) => this.#nearerEdgeOf(barId, contentX),
+      connectableBarIds: () => this.#connectableBarIds(),
+      contentXAtPaneOffset: (offsetX) => gestureContext.contentXAtPaneOffset(offsetX),
+      contentYAtClientY: (clientY) => gestureContext.contentYAtClientY(clientY),
+      paint: (draft) => {
+        setOptional(this.#interactionState, 'connectDraft', draft);
+        this.#backend.applyState(this.#interactionState);
+      },
+      propose: (ends, signal) =>
+        proposeConnect(
+          ends,
+          {
+            emitBefore: (payload) => this.#emit('beforeConnect', payload),
+            emitAfter: (payload) => {
+              this.#emit('connect', payload);
+            },
+            handlers: () => this.#registrations.connectHandlers.list(),
+            reportHandlerFailure: (error) =>
+              this.#raiseError(
+                {
+                  code: 'connect-handler-failed',
+                  message: `A connect handler threw: ${error instanceof Error ? error.message : String(error)}`,
+                  severity: 'error',
+                  by: 'core',
+                },
+                () => console.error('FreeGantt: a connect handler threw', error),
+              ),
+          },
+          signal,
+        ),
+    };
+  }
+
   /** What does a column-gesture attachment ask this shell? */
   #columnGestureContext(): ColumnGestureContext {
     return {
@@ -1583,6 +1677,24 @@ export class GanttShell {
    *  order, with the width it had. */
   showGridColumn(field: FieldKey): void {
     this.#columnChrome.commitHidden(field, false);
+  }
+
+  /** Live. Reassigning reroutes every connector. */
+  get connectorRouting(): ConnectorRouting {
+    return this.#frameSettings.connectorRouting;
+  }
+
+  set connectorRouting(connectorRouting: ConnectorRouting) {
+    this.#frameSettings.set({ connectorRouting });
+  }
+
+  /** Live. Reassigning redraws every connector. */
+  get connectorArrow(): ConnectorArrow {
+    return this.#frameSettings.connectorArrow;
+  }
+
+  set connectorArrow(connectorArrow: ConnectorArrow) {
+    this.#frameSettings.set({ connectorArrow });
   }
 
   /** Live. Reassigning repaints every bar with no remount (I8) — same posture as `barRenderer`
@@ -2193,6 +2305,8 @@ export class GanttShell {
         : {}),
       ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
       ...(options.barLabels !== undefined ? { barLabels: options.barLabels } : {}),
+      ...(options.connectorRouting !== undefined ? { connectorRouting: options.connectorRouting } : {}),
+      ...(options.connectorArrow !== undefined ? { connectorArrow: options.connectorArrow } : {}),
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
@@ -2253,6 +2367,7 @@ export class GanttShell {
       invalidateBars: () => this.#layout.invalidateFrom(0),
       refreshCapabilities: () => this.#refreshCapabilities(),
       refreshVariantStyles: () => this.#variantStyles.refresh(),
+      connectHandlersChanged: () => this.#syncConnect(),
       registerGridColumn: (column, pluginId) => this.#columnChrome.registerPluginColumn(column, pluginId),
     };
   }
@@ -2551,6 +2666,8 @@ export class GanttShell {
    *  (S3.5) and the affordance ids below. Never asked twice for the same gesture (I14). `edge`
    *  (#142) narrows a `'resize'` question to one handle; every other capability ignores it. */
   #canGesture(capability: GestureCapability, id: EntryId, edge?: 'start' | 'end'): boolean {
+    // With no connect handler there is nothing to drop on, so the same answer closes the port.
+    if (capability === 'connect' && !this.#registrations.connectHandlers.any) return false;
     const entry = this.#options.dataset.entries.get(id);
     return entry !== undefined && this.#capabilities.can(capability, entry, edge);
   }
@@ -2652,9 +2769,25 @@ export class GanttShell {
     setOptional(this.#interactionState, 'hoveredBarId', ids.hoveredBarId);
     setOptional(this.#interactionState, 'hoveredRowId', this.#hoveredRow());
     setOptional(this.#interactionState, 'movableBarId', ids.movableBarId);
+    setOptional(this.#interactionState, 'connectableBarId', ids.connectableBarId);
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);
     this.#backend.applyState(this.#interactionState);
+  }
+
+  /** Which half of the bar the pointer sits in. A drop on a bar joins its nearer edge. */
+  #nearerEdgeOf(barId: BarId, contentX: number): 'start' | 'end' | undefined {
+    const bar = this.#lastBarById.get(barId);
+    if (bar === undefined) return undefined;
+    return contentX < bar.x + bar.width / 2 ? 'start' : 'end';
+  }
+
+  #connectableBarIds(): readonly BarId[] {
+    const ids: BarId[] = [];
+    for (const bar of this.#lastBarById.values()) {
+      if (this.#canGesture('connect', bar.entryId)) ids.push(bar.id);
+    }
+    return ids;
   }
 
   #entryFor(barId: BarId): Entry | undefined {
@@ -2809,6 +2942,14 @@ export class GanttShell {
 
   get fit(): TimeScaleFit {
     return this.#viewport.fit;
+  }
+
+  get fitDatasetPaddingPx(): number {
+    return this.#viewport.fitDatasetPaddingPx;
+  }
+
+  set fitDatasetPaddingPx(px: number) {
+    this.#viewport.fitDatasetPaddingPx = px;
   }
 
   set fit(f: TimeScaleFit) {
@@ -3129,6 +3270,53 @@ export class GanttShell {
     };
   }
 
+  /** The frame's input: the settings the Gantt holds, plus what changed since the last frame. That is
+   *  the viewport's geometry, the Dataset's entries, and the registries a plugin writes into.
+   *  `render()` and the drag preview build it the same way, so a preview line never disagrees with a frame. */
+  #layoutInput(revision: number, barPreviews: readonly BarPreview[] | undefined): LayoutInput {
+    // #167: the settings half of a `LayoutInput` stands between frames and answers for itself.
+    return this.#frameSettings.toLayoutInput({
+      entries: this.#options.dataset.entries.all,
+      scale: this.#viewport.timeScale,
+      preset: this.#viewport.preset,
+      visible: this.#viewport.visible,
+      overscan: this.#viewport.overscan,
+      revision,
+      columns: this.#renderedColumns(),
+      collapsed: this.#treeCollapse.ids,
+      variants: this.#registrations.variants,
+      decorationProviders: this.#registrations.decorationProviders(),
+      connectorProviders: this.#registrations.connectorProviders(),
+      datasetRevision: this.#options.dataset.datasetRevision,
+      entryRulePorts: this.#entryRulePorts,
+      // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
+      // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
+      barLabelFor: (entry) => this.#labelFor(entry),
+      // A locked Entry is one whose bar does not move. Fresh every frame, so `rulesChanged()`
+      // repaints it.
+      entryLocked: (entry) => this.#options.barMovesOf?.(entry.id) === false,
+      ...(barPreviews !== undefined ? { barPreviews } : {}),
+    });
+  }
+
+  /** The drag preview that still describes the committed Dataset. A commit changes the Dataset, so the
+   *  preview taken against the old one no longer applies, and a frame then routes from the new Dataset. */
+  #barPreviewsForFrame(): readonly BarPreview[] | undefined {
+    const preview = this.#interactionState.preview;
+    return this.#previewDatasetRevision === this.#options.dataset.datasetRevision ? preview : undefined;
+  }
+
+  /** Moves the connector ends to the drag preview, or back to the committed places when the preview
+   *  ends. It lays out the connectors alone: the bars already follow the preview on their hot path. */
+  #paintConnectorsForPreview(): void {
+    const barPreviews = this.#barPreviewsForFrame();
+    if (barPreviews === this.#paintedBarPreviews) return;
+    this.#paintedBarPreviews = barPreviews;
+    this.#backend.paintConnectors(
+      this.#layout.computeConnectors(this.#layoutInput(this.#revision, barPreviews)),
+    );
+  }
+
   render(): void {
     // #448: checked here, not in `#paintFor`. The question is "does this renderer ever paint",
     // answered against every Entry the Dataset holds. It is not "did this frame's own windowed
@@ -3136,31 +3324,9 @@ export class GanttShell {
     if (this.#frameSettings.barRenderer !== undefined) {
       this.#reportBarRendererShadowed(this.#frameSettings.barRenderer, this.#options.dataset.entries.all);
     }
-    const frame = this.#layout.computeFrame(
-      // #167: the settings half of a `LayoutInput` stands between frames and answers for itself.
-      // What this shell contributes is what changed since the last frame — the viewport's geometry,
-      // the dataset's entries, and the registries a plugin writes into.
-      this.#frameSettings.toLayoutInput({
-        entries: this.#options.dataset.entries.all,
-        scale: this.#viewport.timeScale,
-        preset: this.#viewport.preset,
-        visible: this.#viewport.visible,
-        overscan: this.#viewport.overscan,
-        revision: this.#revision++,
-        columns: this.#renderedColumns(),
-        collapsed: this.#treeCollapse.ids,
-        variants: this.#registrations.variants,
-        decorationProviders: this.#registrations.decorationProviders(),
-        datasetRevision: this.#options.dataset.datasetRevision,
-        entryRulePorts: this.#entryRulePorts,
-        // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
-        // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
-        barLabelFor: (entry) => this.#labelFor(entry),
-        // A locked Entry is one whose bar does not move. Fresh every frame, so `rulesChanged()`
-        // repaints it.
-        entryLocked: (entry) => this.#options.barMovesOf?.(entry.id) === false,
-      }),
-    );
+    const barPreviews = this.#barPreviewsForFrame();
+    this.#paintedBarPreviews = barPreviews;
+    const frame = this.#layout.computeFrame(this.#layoutInput(this.#revision++, barPreviews));
     // Which pattern the grid pane announces, and how big it says it is. Both are
     // facts about the whole row set, so they are read here rather than per row. Only the windowed
     // rows reach `render/dom` at all (I3).

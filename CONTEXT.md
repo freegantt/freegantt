@@ -88,11 +88,23 @@ _Avoid_: `descendants(row).filter(r => !hasChildren(r))` for "leaves" — that i
 
 **Dependency**:
 A first-class entity linking a predecessor Entry to a successor Entry with a type (`FS`/`SS`/`FF`/`SF`) and optional lag. Never embedded as an array on an Entry. Owned by the `entryDependencies()` plugin, not `model/` (ADR 0002; S5.0 grill, issue #111) — it exists only when that plugin is installed and lives in its reserved store, not on `Entry` or in core. The default scheduling plugin reads it through a read-only cross-plugin store view; it does not own it.
-_Avoid_: Link (reserved for the rendered geometry of a dependency, i.e. what appears in `GeometryFrame.links`), Relationship
+_Avoid_: Link (the drawn line is a **Connector**), Relationship
 
 **`entryDependencies()`**:
-The first-party plugin that owns the `Dependency` store, the link-create gesture, and dependency-arrow rendering. It runs standalone — installed with no scheduling plugin, it gives arrows with no auto-move. The default scheduling plugin `requires` it and reads its store one-way; `entryDependencies()` never names the scheduling plugin (S5.0 grill, issue #111; `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md` D-S5-31).
+The first-party plugin that owns the `Dependency` store, the handler for the **Connect gesture**, and the **Connectors** that draw each Dependency. It runs standalone — installed with no scheduling plugin, it gives arrows with no auto-move. The default scheduling plugin `requires` it and reads its store one-way; `entryDependencies()` never names the scheduling plugin (issue #111; `plans/s5-extensibility-and-editing/s5.10-dataset-plugins.md`).
 _Avoid_: `dependencies()` (collides with npm's "dependencies" at the call site), Link (see Dependency)
+
+**Connector**:
+The line core draws between two bars. It is geometry, not data: `GeometryFrame.connectors` holds one `FrameConnector` for each. A Gantt-side plugin states which Connectors exist by registering a source with `ctx.view.registerConnector`. `layout/` routes, culls and clips each one (ADR 0040). A **Dependency** is one thing a Connector can draw. A "related to" plugin draws Connectors with no Dependency.
+_Avoid_: Link, Arrow (a Connector may have no arrowhead), Attachment (see Attachment)
+
+**ConnectorInput**:
+The value a plugin returns to ask for one Connector: an `id`, two ends `from` and `to`, `flags`, and an optional `class` and `label`. Each end is `{ entryId, edge }`, where `edge` is `'start'` or `'end'`. It carries no pixels and no Dependency type. It pairs with `DecorationInput`. When two sources return the same `id`, the first owns the input and a later one adds only `true` flags.
+_Avoid_: LinkSpec, ConnectorSpec
+
+**Connect gesture**:
+The pointer drag or key sequence that joins two ends. Core owns it: a `Connect` controller in `interaction/`, a `'connect'` capability, and the events `beforeConnect` and `connect` (ADR 0041). It exists only when a plugin registers a handler with `ctx.view.onConnect`. The payload names two `{ entryId, edge }` ends and never a Dependency type. The plugin maps the edges to its own meaning.
+_Avoid_: Link-create gesture, Link drag
 
 **Segment**:
 A Bar on a row that draws more than one Bar. A row with one Bar draws a Bar; a row with several draws Segments, and that row is **segmented**. A Segment is a **reading of a Bar, never a type**: nothing stores one, no id names one, and `FrameBar` carries no field that says so — which is why the word costs the library nothing. A row draws several Bars two ways: a row source draws a parent's children on the parent's own row (`childrenAsSegments`, below), or a Variant's own `bars` producer answers with more than one Bar for one Entry.
@@ -218,8 +230,7 @@ app lists `'locked'` in `gridColumns`, the user may toggle it, and a locked row 
 A locked parent's own summary bar does not move (see **Bar move rule**). The Rollup still changes the
 locked parent's dates. The lock never blocks the Rollup. A plugin can change the core lock: core
 installs it first, so a plugin wraps it.
-_Avoid_: Pinned (the scheduling plugin's own whole-Entry state, a separate refusal with a separate
-owner — see **Pinned**, above), Read-only, Frozen, Disabled
+_Avoid_: Pinned (a retired word for the scheduling plugin's whole-Entry state — see **Manually scheduled**), Read-only, Frozen, Disabled
 
 **Place rule**:
 The plugin seam that answers whether an Entry may land under a given parent, set with `ctx.edits
@@ -262,22 +273,64 @@ _Avoid_: The scheduling engine (ambiguous between "the seam" and "FreeGantt's de
 
 **SchedulingPolicy**:
 The pluggable seam, within the default scheduling plugin, that resolves how a proposed edit interacts with an Entry's existing schedule (e.g. whether the engine may move it). Parent dates come from the Rollup in core, not from this policy. Semantics that are not structure live in the policy, never in the engine itself.
-_Avoid_: Rule, constraint (Diagnostics, not policy, is where constraint violations surface)
+_Avoid_: Rule, constraint (a **Constraint** is a date rule on one Entry, not a policy)
 
 **Diagnostic**:
 A non-authoritative report the scheduling engine attaches to a `ScheduleResult` when it cannot satisfy a request (e.g. a dependency cycle, naming the Entry ids involved). The engine never silently rewrites what the user asked for — a conflict becomes a Diagnostic, not a mutation.
 _Avoid_: Error, warning
 
-**Pinned**:
-A whole-Entry boolean state, set by the user, that tells the scheduling engine never to move that Entry — an upstream change that would otherwise push it instead produces a Diagnostic reporting what the engine _would_ have done. It lives in the default scheduling plugin's own per-entry storage (exact contract tracked in issue #12), not on `Entry`/`model/`, the same way `Dependency` does — a Dataset with no scheduling plugin installed has no notion of "pinned" at all.
-_Avoid_: Locked, frozen, fixed (a lock is the UI refusal — see **Locked entry**)
+**Manually scheduled**:
+A whole-Entry boolean state, set by the user, that tells the scheduling engine never to move that Entry. A broken Dependency on it gives a **Blocked move diagnostic** that names the Dependency. The Entry keeps its dates. It lives in the default scheduling plugin's own per-Entry storage, not on `Entry`. A Dataset with no scheduling plugin has no such state. A consumer can show it as a column toggle.
+_Avoid_: Pinned (the grid already has pinned columns), Locked (a lock is the UI refusal — see **Locked entry**), Frozen, Fixed
+
+**Constraint**:
+A date rule on one Entry. `startNoEarlierThan` is the first kind: the Entry never starts before its date. A **Dependency** beats a Constraint, so the Entry moves later than the date when a predecessor demands it. An Entry with no incoming Dependency never moves, so its Constraint does not apply. A request carries at most one Constraint for each Entry.
+_Avoid_: Rule, Policy (see **SchedulingPolicy**), Mandatory date
+
+**Schedule request**:
+The plain data a caller hands `schedule()`: the Entries, the Dependencies, and optionally the dates the user just set, the manually scheduled Entries, the Constraints, the **Successor moves** option and a **SchedulingPolicy**. The engine reads no store.
+_Avoid_: Job, Input
+
+**Schedule result**:
+What `schedule()` answers: a patch of **Schedule changes** and a list of Diagnostics. The result never contains a date the user proposed.
+_Avoid_: Output, Plan
+
+**Schedule change**:
+One date the engine moves: an Entry id, the field (`start` or `end`), the old Instant and the new Instant. The caller writes the patch to the Dataset.
+_Avoid_: Edit (an edit is what the user makes), Delta
+
+**Successor moves**:
+The request option that says how a successor follows its predecessors. `pushAndPull` is the default: the successor moves to the earliest date that its Dependencies and Constraint allow, earlier too. `pushOnly` moves it later and never earlier.
+_Avoid_: Direction, As soon as possible (a Constraint name in other tools)
+
+**Float**:
+The days a scheduled Entry can start later without moving the project finish. It counts workdays when the request has a working calendar, and 24-hour days when it has none. It is negative when the schedule is already late. A summary Entry, an Entry with a missing date and a member of a loop of Dependencies have no Float. The default scheduling plugin stores it in the `float` Field. The analysis is plain critical path method: the backward pass ignores Constraints.
+_Avoid_: Slack (the word stays for one Dependency's gap, not an Entry), Buffer
+
+**Critical**:
+An Entry is critical when its **Float** is zero or less. The default scheduling plugin stores it in the `critical` Field. Core paints nothing from it: a consumer styles critical bars with an `EntryVariant` rule such as `{ when: { critical: true } }`.
+_Avoid_: Hot, Urgent
+
+**Driving path**:
+The chain of predecessors that holds one Entry in place, as Entry ids in order with the Entry last. At each step the driving predecessor is the one whose Dependency puts its successor exactly where the successor is now, with no slack. `scheduling().drivingPath(entryId)` answers it. An Entry that no Dependency holds gives itself alone.
+_Avoid_: Critical path (the critical path is every critical Entry, not the chain behind one Entry), Longest path
+
+**Cycle diagnostic**:
+A **Diagnostic** that names the Entries in one loop of Dependencies. The engine moves none of them.
+
+**Blocked move diagnostic**:
+A **Diagnostic** for a Dependency that wants an Entry to move while the engine does not move it. It names the Entry, the Dependencies, the reason (manually scheduled, proposed, policy or inverted) and the changes the engine would have made.
+_Avoid_: Conflict, Error
+
+**Invalid dependency diagnostic**:
+A **Diagnostic** for a Dependency that the engine skips because it cannot read it: it names an unknown Entry, or its lag unit has no fixed length (`month`, `year`).
 
 **Progress**:
-How complete an Entry is, as a fraction `0..1`. Scheduling-plugin data, not a core Field and not a key on `Entry` (ADR 0008) — a Dataset with no scheduling plugin installed has no Progress, the same way it has no pin flag. The plugin declares it as a Field and may roll it up with `weightedMeanByDuration`.
+How complete an Entry is, as a fraction `0..1`. Scheduling-plugin data, not a core Field and not a key on `Entry` (ADR 0008) — a Dataset with no scheduling plugin installed has no Progress, the same way it has no manually scheduled flag. The plugin declares it as a Field and may roll it up with `weightedMeanByDuration`.
 _Avoid_: Percent complete as a core Entry key, treating Progress as shipped with `name`/`start`/`end`
 
-**Working calendar**, **Constraint**, **Resource** / **Assignment**, **Baseline**:
-Reserved, not yet implemented — named seams for later slices (`plans/01` §4). `Working calendar` (which days/hours count as workable), `Constraint` (date restrictions, defined by `SchedulingPolicy`'s own vocabulary), `Resource`/`Assignment` (staffing), and `Baseline` (schedule snapshots) all belong to the default scheduling plugin's domain, not `model/` — like `Dependency` and the pin flag (ADR 0002), a Dataset with no scheduling plugin installed has none of these.
+**Working calendar**, **Resource** / **Assignment**, **Baseline**:
+Reserved, not yet implemented — named seams for later slices (`plans/01` §4). `Working calendar` (which days/hours count as workable; `workingCalendar()` returns a `WorkingCalendar`, owned by the scheduling plugin and exported through `api/index.ts`; it answers `isWorkday`, `addWorkdays` and `workdaysBetween`, and `calendar.offTime()` returns a `TimeCover`-shaped object for `timeShading()`; it is optional everywhere, so with no calendar `scheduling()` counts 24-hour days), `Resource`/`Assignment` (staffing), and `Baseline` (schedule snapshots) all belong to the default scheduling plugin's domain, not `model/` — like `Dependency` and the manually scheduled flag (ADR 0002), a Dataset with no scheduling plugin installed has none of these.
 _Avoid_: Calendar alone (ambiguous with a UI date picker or an imported ICS calendar — the qualifier is load-bearing)
 
 ### Derived layout
@@ -354,7 +407,7 @@ How one row is drawn, and what may be done to it — one object, one name, insta
 _Avoid_: Look (retired with `EntryLook`, ADR 0018), Kind (retired, ADR 0013), a stored Variant, a reserved Variant name, `data-kind`
 
 **GeometryFrame**:
-The complete, backend-neutral description of one rendered state: the visible Rows, the Bars' boxes, the Dependency paths, and decorations, all as plain numbers. It is what a render backend consumes and the only thing it consumes — no consumer render output, no hit-region index, no DOM.
+The complete, backend-neutral description of one rendered state: the visible Rows, the Bars' boxes, the Connectors, and decorations, all as plain numbers. It is what a render backend consumes and the only thing it consumes — no consumer render output, no hit-region index, no DOM.
 _Avoid_: Scene, render tree, viewport model
 
 ### Mounted instances
@@ -400,7 +453,7 @@ The left-hand pane of a Pane layout: row labels and, from S4, Field-driven colum
 _Avoid_: Label column, gutter (gutter was the pre-S1.8 shape, where the row-label width lived inside the render backend's paint layer instead of being a pane in its own right — D-S1.8-2 retired it)
 
 **Timeline pane**:
-The right-hand pane of a Pane layout and the single native scroller for both axes (D-D, D-S1.8-1): header bands, bars, links, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the container or the Grid pane.
+The right-hand pane of a Pane layout and the single native scroller for both axes: header bands, bars, Connectors, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the container or the Grid pane.
 _Avoid_: Chart area, canvas (canvas reads as the future canvas render backend, a different concept)
 
 **Splitter**:
@@ -733,7 +786,7 @@ One of the `fg-*` class names the library's DOM structure carries — level 2 of
 _Avoid_: Pane (Grid pane/Timeline pane/Splitter are specific Parts, already named in "Mounted instances" — Part is the general term for the whole class vocabulary), BEM block (rejected, Q2 — renaming shipped classes to a BEM shape was churn with no behavior change)
 
 **State attribute**:
-A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BAR_FLAG_KEYS`, D-S1.10-2: `conflict`, `cycle` — link tokens are named but nothing generates them yet, `layout/frame.ts` always emits `links: []`; on `.fg-date-line` the Today line wrapper writes `today`), `data-variant` (the Variant this Gantt resolved for the row — `summary`, `leaf`, or a consumer's or a plugin's own — never a stored Entry classification, ADR 0018), `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and, since the bug hunt ("grid row highlight and row click"), on `.fg-row` as well (`selected` only — a row has no hover/pending/drag/ghost paint of its own; its own `--fg-row-selected-bg` Token, a flat background so it does not fight cell layout and so axe reads one opaque colour), `data-movable` (grab cursor), `aria-expanded` on `.fg-row-twisty` (collapsed vs expanded), `data-matched` on `.fg-row` (`false` when a filter kept the ancestor only), `data-placement` on `.fg-date-line-label` (`'belowHeader'` when `Gantt.dateLineLabelPlacement` resolves to it, absent otherwise — #318), `data-testid`/`data-row-id`/`data-bar-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
+A `data-*` attribute a Part carries so a consumer can select on state without JS — `data-flag` (space-joined, generated from `BAR_FLAG_KEYS`: `conflict`, `cycle` — Connector tokens are named but nothing generates them yet, `layout/frame.ts` always emits `connectors: []`; on `.fg-date-line` the Today line wrapper writes `today`), `data-variant` (the Variant this Gantt resolved for the row — `summary`, `leaf`, or a consumer's or a plugin's own — never a stored Entry classification, ADR 0018), `data-state` on `.fg-bar` (`hovered`, `selected`, `pending`, `dragging`, `ghost`) and, since the bug hunt ("grid row highlight and row click"), on `.fg-row` as well (`selected` only — a row has no hover/pending/drag/ghost paint of its own; its own `--fg-row-selected-bg` Token, a flat background so it does not fight cell layout and so axe reads one opaque colour), `data-movable` (grab cursor), `aria-expanded` on `.fg-row-twisty` (collapsed vs expanded), `data-matched` on `.fg-row` (`false` when a filter kept the ancestor only), `data-placement` on `.fg-date-line-label` (`'belowHeader'` when `Gantt.dateLineLabelPlacement` resolves to it, absent otherwise — #318), `data-testid`/`data-row-id`/`data-bar-id` (stable E2E hooks, U6). Distinct from a Token (a value) and a Part (a structural class): a State attribute is level 2's other half, the thing a consumer's selector matches against rather than reads.
 _Avoid_: Data attribute (too generic — say State attribute when it's part of the level-2 vocabulary), modifier class (there is no modifier-class convention here — state lives in `data-*`, never a second class)
 
 **a11y label**:
@@ -743,7 +796,7 @@ _Avoid_: aria-label (that is the DOM attribute `render/dom` maps this to — `a1
 ### Extension
 
 **Capability**:
-What the user may do to a given Entry, resolved once and gating both the act itself and any affordance that hints at it. It answers two questions, and each writer needs the ones that apply to it: whether a gesture (move, resize, select, link, reorder) is **offered** for that Entry, and whether the values that gesture would write **may change** — the second is **Writability** (#256). `select` Capability has no visual affordance, and I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selectedEntryIds` setter does not consult it. A **Capability rule** is one entry in an `Capabilities` table, and **two doors carry that table** (ADR 0018): the consumer's own `capabilities` config on the Gantt, and the resolved Variant's own `capabilities`. They do not compete — they are one chain, resolved in `view/capability.ts`: the consumer's `capabilities` wins over the variant's own `capabilities`, which wins over the library rule. A gesture rule is a boolean or a per-entry predicate (`CapabilityRule`); the write rule (`edit`) takes the cell and may answer "no opinion" (`WriteRule`). A predicate at **either** level answers `undefined` for "no opinion" and the answer falls to the next level, so a variant that speaks for one look does not also answer for every other row; a bare boolean pins every row it reaches. Pick the door by who owns the rule: `can` when it belongs to the look (a milestone never resizes, wherever it is drawn), `capabilities` when it belongs to this Gantt (a read-only board resizes nothing, whatever a row looks like) — and only `capabilities` is live and Gantt-wide, which is why the variant level cannot replace it. `gantt.setCapabilityRule(name, rule)` and `gantt.clearCapabilityRule(name)` write one; assigning `gantt.capabilities` replaces them all (#195). **One word carries this concept, at every level.** It used to take three — `Capability` in `setCapabilityRule`/`CapabilityRule`, `Interactions` as the type and the Gantt key, and `can` on a Variant — and `setCapabilityRule(capability: keyof Interactions)` showed the cost in one line: a parameter named for one concept, typed by another. `interactions` also collided with the `interaction/` layer, which is the #7 "chart" shape. So `Interactions` became `Capabilities`, `GanttOptions.interactions` and `gantt.interactions` became `capabilities`, and `EntryVariant.can` became `capabilities` too. The word **interactions** is now free, and it means the `interaction/` layer and nothing else. `ResolvedCapabilities` (`view/capability.ts`, internal) is the separate thing this ladder _produces_ — `can`/`canWrite`/`entriesMovedBy`, the answers — and it stands to `Capabilities` as `ResolvedVariant` stands to `EntryVariant`.
+What the user may do to a given Entry, resolved once and gating both the act itself and any affordance that hints at it. It answers two questions, and each writer needs the ones that apply to it: whether a gesture (move, resize, select, connect, reorder) is **offered** for that Entry, and whether the values that gesture would write **may change** — the second is **Writability** (#256). `select` Capability has no visual affordance, and I14's refuse half still applies (pointer and keyboard skip an incapable entry); the public `Gantt.selectedEntryIds` setter does not consult it. A **Capability rule** is one entry in an `Capabilities` table, and **two doors carry that table** (ADR 0018): the consumer's own `capabilities` config on the Gantt, and the resolved Variant's own `capabilities`. They do not compete — they are one chain, resolved in `view/capability.ts`: the consumer's `capabilities` wins over the variant's own `capabilities`, which wins over the library rule. A gesture rule is a boolean or a per-entry predicate (`CapabilityRule`); the write rule (`edit`) takes the cell and may answer "no opinion" (`WriteRule`). A predicate at **either** level answers `undefined` for "no opinion" and the answer falls to the next level, so a variant that speaks for one look does not also answer for every other row; a bare boolean pins every row it reaches. Pick the door by who owns the rule: `can` when it belongs to the look (a milestone never resizes, wherever it is drawn), `capabilities` when it belongs to this Gantt (a read-only board resizes nothing, whatever a row looks like) — and only `capabilities` is live and Gantt-wide, which is why the variant level cannot replace it. `gantt.setCapabilityRule(name, rule)` and `gantt.clearCapabilityRule(name)` write one; assigning `gantt.capabilities` replaces them all (#195). **One word carries this concept, at every level.** It used to take three — `Capability` in `setCapabilityRule`/`CapabilityRule`, `Interactions` as the type and the Gantt key, and `can` on a Variant — and `setCapabilityRule(capability: keyof Interactions)` showed the cost in one line: a parameter named for one concept, typed by another. `interactions` also collided with the `interaction/` layer, which is the #7 "chart" shape. So `Interactions` became `Capabilities`, `GanttOptions.interactions` and `gantt.interactions` became `capabilities`, and `EntryVariant.can` became `capabilities` too. The word **interactions** is now free, and it means the `interaction/` layer and nothing else. `ResolvedCapabilities` (`view/capability.ts`, internal) is the separate thing this ladder _produces_ — `can`/`canWrite`/`entriesMovedBy`, the answers — and it stands to `Capabilities` as `ResolvedVariant` stands to `EntryVariant`.
 _Avoid_: Permission, ability
 
 **Writability**:
@@ -854,7 +907,7 @@ The two verbs a plugin uses to raise the one event pair it owns (`ctx.interactio
 _Avoid_: Emit (retired on the plugin surface 2026-09-04 — "emit" says a thing went out, and says nothing about whether a decision comes back; `EventBus.emit` keeps the word for the bus's own mechanism)
 
 **EditExtender**, **PluginStore**:
-Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a plugin's `data` half occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's pin flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field — one row per Entry, keyed by its id; a write for an id with no Entry throws. Landed in S5.10 (#15, #156). The plugin shapes live in `api/plugin.ts` and the `data` half's context in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
+Names from the extension hook's contract design (ADR 0002's consequences, issue #15, built on #12): a plugin's `data` half occupies the extension hook via an `EditExtender`, and per-plugin per-entry data (e.g. the scheduling plugin's manually scheduled flag, `Dependency`) lives in a reserved `PluginStore` rather than on `Entry` or in a consumer/plugin-shared field — one row per Entry, keyed by its id; a write for an id with no Entry throws. Landed in #15 and #156. The plugin shapes live in `api/plugin.ts` and the `data` half's context in `api/dataset-plugin.ts`, `PluginStore` in `data/plugin-store.ts`, and `EditExtender` in `model/entry.ts`. A store's rows serialize under `plugins: { [id]: … }` at `schema: 3`. Named `ProjectPlugin` before ADR 0004.
 
 **PluginRuntime**:
 The `extensions/plugin-runtime.ts` class that installs, diffs (by `id`) and disposes one Gantt's `view` halves (S5.1, D-S5-1/D-S5-3). That list is the Dataset's own plugins plus this Gantt's chrome, sorted under one `requires` graph (ADR 0019). One instance per `GanttShell`, never shared across Gantt instances (I2). Owns each plugin's `RegistrationGate` — closed the moment that plugin's own `view()` returns, so a `register*` call reached afterward throws `RegistrationClosedError` (D-S5-4) — and commits an `install()` atomically: a `view()` throw unwinds only the batch just added, leaving the previously installed set untouched.

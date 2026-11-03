@@ -31,7 +31,10 @@ export type {
   EntryResize,
   EntryFieldEdit,
   EntryActivate,
+  ConnectEnds,
 } from './event-bus.js';
+export type { ConnectHandler } from './connect-proposal.js';
+export type { ConnectGestureContext, ConnectDraft } from './connect-context.js';
 export type { ResolvedTheme } from './theme.js';
 export type {
   CapabilityRule,

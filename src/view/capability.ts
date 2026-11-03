@@ -139,7 +139,7 @@ function gestureIsOffered(): boolean {
  *  sets both dates and needs both. That is the hole #256 found: a locked `start` hid its own handle,
  *  and a move rewrote it anyway. A parent bar sets no date of its own, so it asks what its
  *  move writes instead (`moveWritesSomething`). `resize` sets the dragged edge's own Field. `select`
- *  sets nothing. `activate` (#434) sets nothing either — it opens or fires, and never itself writes
+ *  sets nothing. `connect` sets nothing in core: the plugin that handles the drop owns the write. `activate` (#434) sets nothing either — it opens or fires, and never itself writes
  *  a Field. `reorder` (#425) sets `siblingIndex`, and a drop that also re-parents needs `parentId` too
  *  — `canPlace` below asks that second half.
  *
@@ -157,8 +157,10 @@ function mayWriteWhatItSets(
   moveWritesSomething: (entry: Entry) => boolean,
 ): boolean {
   switch (capability) {
+    // A connect drag proposes a connection. The plugin that handles it owns the write.
     case 'select':
     case 'activate':
+    case 'connect':
       return true;
     case 'move':
       return moveWritesSomething(entry);
@@ -169,7 +171,7 @@ function mayWriteWhatItSets(
     case 'reorder':
       return canWrite(entry, 'siblingIndex').ok;
     default:
-      // S7's `linkCreate` must name the cells it writes here, rather than inherit an answer.
+      // A new gesture must name the cells it writes here, rather than inherit an answer.
       return assertEveryGestureNamesItsWrites(capability);
   }
 }

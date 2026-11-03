@@ -29,6 +29,7 @@ const KNOWN_CODES: Record<BuiltInReportCode, true> = {
   'extender-preview-failed': true,
   'rollup-preview-failed': true,
   'gesture-commit-failed': true,
+  'connect-handler-failed': true,
   'scale-options-ignored': true,
   'rollup-corrected': true,
   'unknown-parent': true,

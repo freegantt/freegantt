@@ -4,21 +4,16 @@
 // Every date computation goes through `time/` (I10); this file never touches an Instant except by
 // calling one of those functions.
 
-import type {
-  Entry,
-  EntryId,
-  Instant,
-  BarId,
-  ProposedEdit,
-  ProposedEdits,
-  TimeUnit,
-} from '../model/index.js';
+import type { Entry, EntryId, Instant, ProposedEdit, ProposedEdits, TimeUnit } from '../model/index.js';
 import { barId, spansTime } from '../model/index.js';
 import { addMs, diffMs, formatDate, stepBy, snapInstant, stepsBetween } from '../time/index.js';
 import type { SnapUnit } from '../time/index.js';
 import { barSpan } from './frame.js';
 import type { Bar } from './bars/bar.js';
 import type { TimeScale } from '../time/index.js';
+import type { BarPreview } from './bar-preview.js';
+
+export type { BarPreview } from './bar-preview.js';
 
 export interface DraftInput {
   zone: string;
@@ -146,20 +141,6 @@ export function spanAfterEdit(
   return { start: edit.start ?? entry.start, end: edit.end ?? entry.end };
 }
 
-/** What the hot-path paint needs to preview a draft with no frame rebuild: a pixel offset
- *  and width delta per affected bar, read off the bound `TimeScale` against each entry's committed
- *  span. `extra` marks an entry the extension hook added rather than the caller's own selection —
- *  always `false` until the extender is wired in. `dy` is a vertical drag's own rigid
- *  offset (#425) — always `0` here; `view/gesture-pipeline.ts`'s `#computePreview` overwrites it on
- *  every entry a `place` drop paints, since this function knows nothing about rows. */
-export interface BarPreview {
-  barId: BarId;
-  dx: number;
-  dy: number;
-  dWidth: number;
-  extra: boolean;
-}
-
 export interface PreviewOffsetsInput {
   /** The caller's own draft. */
   proposed: ProposedEdits;
@@ -221,6 +202,7 @@ export function previewOffsets(input: PreviewOffsetsInput): readonly BarPreview[
     // nothing, mid-drag. No painted geometry on either side means no offset to paint.
     if (before.width === 0 || after.width === 0) return;
     out.push({
+      entryId: id,
       barId: id0,
       dx: after.x - before.x,
       dy: 0,

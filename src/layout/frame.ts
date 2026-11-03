@@ -15,9 +15,18 @@ import type { EntryRulePorts } from './entry-rule.js';
 import type { BarAnchor, Bar, VariantBars } from './bars/bar.js';
 import type { FrameRow } from './frame-row.js';
 export type { FrameRow };
-import type { RangeBand, RowStripe } from './decoration.js';
-export type { RangeBand, RowStripe } from './decoration.js';
+import type { ResolvedDecoration } from './decoration.js';
+export type { RangeBand, ResolvedDecoration, RowSpan, RowStripe } from './decoration.js';
 import { DecorationRunner } from './decorations.js';
+import { previewedBox } from './bar-preview.js';
+import type { BarPreview } from './bar-preview.js';
+import { ConnectorRouter } from './connectors/connector-router.js';
+import type { ConnectorProvider } from './connector-input.js';
+import type { ConnectorRouting } from './connectors/connector-routing.js';
+import { DEFAULT_CONNECTOR_ARROW } from './connectors/connector-arrow.js';
+import type { ConnectorArrow } from './connectors/connector-arrow.js';
+import type { ConnectorWindow } from './connectors/clip-path.js';
+import type { FrameConnector } from './connectors/frame-connector.js';
 import type { RegisteredDecorationProvider } from './decorations.js';
 export type { RegisteredDecorationProvider } from './decorations.js';
 
@@ -48,6 +57,16 @@ export const DEFAULT_BAR_HEIGHT_PX = 18;
  *  a Bar that carries its own `box` (ADR 0022), also possibly shifted or width-capped. Named once
  *  so `barSpan`'s return type and `FrameBar.span` read one type instead of repeating the union. */
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
+
+/** The vertical band a bar paints in: centred in the row that starts at `rowTop`. */
+export function barBandAt(
+  rowTop: number,
+  rowHeight: number,
+  barHeightPx: number,
+): { top: number; bottom: number } {
+  const top = rowTop + (rowHeight - barHeightPx) / 2;
+  return { top, bottom: top + barHeightPx };
+}
 
 /** A Bar's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart.
@@ -217,10 +236,9 @@ export const BAR_FLAG_KEYS = ['conflict', 'cycle'] as const;
 
 export type BarFlags = Partial<Record<(typeof BAR_FLAG_KEYS)[number], boolean>>;
 
-/** Every `LinkFlags` key — the link-side twin of `BAR_FLAG_KEYS` (#475). */
-export const LINK_FLAG_KEYS = ['inactive', 'cycle'] as const;
-
-export type LinkFlags = Partial<Record<(typeof LINK_FLAG_KEYS)[number], boolean>>;
+export { CONNECTOR_FLAG_KEYS } from './connector-input.js';
+export type { ConnectorFlags, PathCommand } from './connector-input.js';
+export type { FrameConnector } from './connectors/frame-connector.js';
 
 export interface FrameBar {
   id: BarId;
@@ -263,23 +281,7 @@ export interface FrameBar {
   a11yLabel: string;
 }
 
-/** One straight part of an SVG-style path, used by link geometry (§4). */
-export type PathCommand =
-  | { cmd: 'M'; x: number; y: number }
-  | { cmd: 'L'; x: number; y: number }
-  | { cmd: 'C'; x1: number; y1: number; x2: number; y2: number; x: number; y: number };
-
-export interface FrameLink {
-  /** Plain `string`, never a brand (#136, supersedes #16): `Dependency`/`DependencyId` belong to the
-   *  `entryDependencies()` plugin, and `layout/` may import `time/` and `model/` only — a branded id
-   *  here would make the frame's own type depend on a plugin. The emitter that fills `links` names
-   *  the id; `layout/` only aggregates. */
-  id: string;
-  path: readonly PathCommand[];
-  flags: LinkFlags;
-}
-
-export type FrameDecoration = DateLineDecoration | RangeBand | RowStripe;
+export type FrameDecoration = DateLineDecoration | ResolvedDecoration;
 
 /** One header tick, positioned and labelled — the render seam's only route for header state (#19). */
 export interface FrameHeaderTick {
@@ -348,12 +350,15 @@ export interface GeometryFrame {
    * as its content width (S1.5 README §3.2). Always the full extent, never the window's. */
   contentWidth: number;
   bars: FrameBar[];
-  links: readonly FrameLink[];
+  /** Registered connector providers' output, routed and clipped to the window. `[]` when none registered. */
+  connectors: readonly FrameConnector[];
+  /** Whether `render/` draws an arrowhead on each connector in `connectors`. */
+  connectorArrow: ConnectorArrow;
   decorations: readonly FrameDecoration[];
   /** Registered decoration providers' output, painted below the bar layer. */
-  underBars: readonly (RangeBand | RowStripe)[];
+  underBars: readonly ResolvedDecoration[];
   /** Registered decoration providers' output, painted above the bar layer. */
-  overBars: readonly (RangeBand | RowStripe)[];
+  overBars: readonly ResolvedDecoration[];
   /** Paint description for Grid columns, in display order. Matches `rows[].cells` 1:1. */
   columns: readonly FrameColumn[];
 }
@@ -408,6 +413,16 @@ export interface LayoutInput {
   /** Registered decoration providers, `ctx.view.registerDecoration`'s own record.
    *  Omitted or empty → both `underBars`/`overBars` are `[]`. */
   decorationProviders?: readonly RegisteredDecorationProvider[];
+  /** Registered connector providers, `ctx.view.registerConnector`'s own record.
+   *  Omitted or empty → `connectors` is `[]`. */
+  connectorProviders?: readonly ConnectorProvider[];
+  /** How connector routes dodge bars. Omitted → avoid on, capped at 200 rows. */
+  connectorRouting?: ConnectorRouting;
+  /** Whether connectors wear an arrowhead. Omitted → `'end'`. */
+  connectorArrow?: ConnectorArrow;
+  /** The drag in flight: where each moved bar shows. Connectors end on these places. Omitted outside a
+   *  drag → connectors end on the committed places. */
+  barPreviews?: readonly BarPreview[];
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  and the unknown-key sink. The shell builds one of these once, at construction (`#421 C1`), the
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
@@ -555,9 +570,10 @@ export function computeFrame(
   input: LayoutInput,
   memory?: FrameMemory,
   decorations?: DecorationRunner,
+  connectorRouter?: ConnectorRouter,
 ): GeometryFrame {
   const plan = resolveLayoutRows(input);
-  return placeFrame(input, plan, memoryFor(input, plan, memory), decorations);
+  return placeFrame(input, plan, memoryFor(input, plan, memory), decorations, connectorRouter);
 }
 
 /** Pixel sizes this frame paints with, the Overscan that widens the cull window, and that window.
@@ -683,7 +699,7 @@ function placeVisibleRowsAndBars(
         label,
         x,
         // Every row is one lane (singleLane): the bar centres in the row's own band.
-        y: top + (rowHeight - settings.barHeightPx) / 2,
+        y: barBandAt(top, rowHeight, settings.barHeightPx).top,
         width,
         height: settings.barHeightPx,
         flags: {},
@@ -744,13 +760,55 @@ function contentTickLinesOf(
   );
 }
 
-/** Call: `placeFrame(input, plan, memory, decorations)`. Geometry only — the caller already
+/** Call: `connectorWindowOf(input, settings)`. The region a connector may paint in: the cull window,
+ *  with the vertical overscan counted in rows. A zero extent disables culling on that axis. */
+function connectorWindowOf(input: LayoutInput, settings: FramePaintSettings): ConnectorWindow {
+  const { visible, rowHeight } = input;
+  const horizontal = settings.horizontalCull;
+  const verticalPad = settings.overscan.verticalRows * rowHeight;
+  return {
+    left: horizontal === undefined ? -Infinity : horizontal.left,
+    right: horizontal === undefined ? Infinity : horizontal.right,
+    top: visible.height > 0 ? visible.y - verticalPad : -Infinity,
+    bottom: visible.height > 0 ? visible.y + visible.height + verticalPad : Infinity,
+  };
+}
+
+/** Call: `placeConnectors(input, plan, memory, connectorRouter)`. The frame's connectors alone, for a
+ *  drag preview that moves no bar through a frame. `input.barPreviews` moves the ends of the connectors. */
+export function placeConnectors(
+  input: LayoutInput,
+  plan: readonly PlannedRow[],
+  memory: FrameMemory,
+  connectorRouter?: ConnectorRouter,
+): readonly FrameConnector[] {
+  const settings = framePaintSettingsOf(input);
+  return (connectorRouter ?? new ConnectorRouter()).run({
+    providers: input.connectorProviders ?? [],
+    routing: input.connectorRouting,
+    datasetRevision: input.datasetRevision,
+    plan,
+    memory,
+    scale: input.scale,
+    rowHeight: input.rowHeight,
+    barBox: (bar) => barSpan(bar, input.scale, settings.minBarWidthPx),
+    previews: input.barPreviews ?? [],
+    barBand: (rowTop) => barBandAt(rowTop, input.rowHeight, settings.barHeightPx),
+    previewedBarBox: (bar, preview) =>
+      previewedBox(barSpan(bar, input.scale, settings.minBarWidthPx), preview),
+    paintKey: `${settings.minBarWidthPx}|${settings.barHeightPx}`,
+    window: connectorWindowOf(input, settings),
+  });
+}
+
+/** Call: `placeFrame(input, plan, memory, decorations, connectorRouter)`. Geometry only — the caller already
  *  resolved rows. */
 export function placeFrame(
   input: LayoutInput,
   plan: readonly PlannedRow[],
   memory?: FrameMemory,
   decorations?: DecorationRunner,
+  connectorRouter?: ConnectorRouter,
 ): GeometryFrame {
   const { scale, preset, visible, revision, locale } = input;
   const mem = memory ?? memoryFor(input, plan);
@@ -816,6 +874,8 @@ export function placeFrame(
     xForInstant: (at) => scale.xForInstant(at),
   });
 
+  const connectors = placeConnectors(input, plan, mem, connectorRouter);
+
   return {
     revision,
     visible,
@@ -827,7 +887,8 @@ export function placeFrame(
     contentHeight: mem.heights.totalHeight,
     contentWidth: scale.contentWidth,
     bars,
-    links: [],
+    connectors,
+    connectorArrow: input.connectorArrow ?? DEFAULT_CONNECTOR_ARROW,
     decorations: resolveDateLines({
       scale,
       todayLine: input.todayLine ?? true,

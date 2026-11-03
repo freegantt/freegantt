@@ -11,6 +11,7 @@
 
 import {
   DEFAULT_BAR_HEIGHT_PX,
+  DEFAULT_CONNECTOR_ARROW,
   DEFAULT_DATE_LINE_LABEL_PLACEMENT,
   DEFAULT_MIN_BAR_WIDTH_PX,
   DEFAULT_ROW_SOURCE,
@@ -18,6 +19,8 @@ import {
 } from '../layout/index.js';
 import type {
   BarLabels,
+  ConnectorRouting,
+  ConnectorArrow,
   BarRenderer,
   GridCellRenderer,
   DateLine,
@@ -116,6 +119,8 @@ interface FrameSettingsValues {
   todayLineMarginTicks: number;
   rowSource: RowSource;
   barLabels: BarLabels;
+  connectorRouting: ConnectorRouting;
+  connectorArrow: ConnectorArrow;
   barRenderer: BarRenderer | undefined;
   gridCellRenderer: GridCellRenderer | undefined;
   headerRenderer: HeaderRenderer | undefined;
@@ -146,6 +151,8 @@ function defaultSettings(): FrameSettingsValues {
     todayLineMarginTicks: DEFAULT_TODAY_LINE_MARGIN_TICKS,
     rowSource: DEFAULT_ROW_SOURCE,
     barLabels: 'fitBar',
+    connectorRouting: {},
+    connectorArrow: DEFAULT_CONNECTOR_ARROW,
     barRenderer: undefined,
     gridCellRenderer: undefined,
     headerRenderer: undefined,
@@ -170,6 +177,8 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
   todayLineMarginTicks: 'none',
   rowSource: 'invalidateBars',
   barLabels: 'repaint',
+  connectorRouting: 'repaint',
+  connectorArrow: 'repaint',
   barRenderer: 'repaint',
   gridCellRenderer: 'repaint',
   headerRenderer: 'repaint',
@@ -182,6 +191,8 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
  *  Spelled in `LayoutInput`'s own words, which is why `rows` appears here and `rowSource` does not. */
 type SettingLayoutInputKey =
   | 'rowHeight'
+  | 'connectorRouting'
+  | 'connectorArrow'
   | 'tickBoxFloorPx'
   | 'minBarWidthPx'
   | 'barHeightPx'
@@ -246,6 +257,14 @@ export class FrameSettings {
 
   get rowSource(): RowSource {
     return this.#values.rowSource;
+  }
+
+  get connectorRouting(): ConnectorRouting {
+    return this.#values.connectorRouting;
+  }
+
+  get connectorArrow(): ConnectorArrow {
+    return this.#values.connectorArrow;
   }
 
   get barLabels(): BarLabels {
@@ -324,6 +343,8 @@ export class FrameSettings {
       barHeightPx: this.#metrics.barHeightPx,
       todayLine: this.#values.todayLine,
       dateLines: this.#values.dateLines,
+      connectorRouting: this.#values.connectorRouting,
+      connectorArrow: this.#values.connectorArrow,
       ...this.rowPlanSettings(),
       ...(this.effectiveLocale !== undefined ? { locale: this.effectiveLocale } : {}),
     };

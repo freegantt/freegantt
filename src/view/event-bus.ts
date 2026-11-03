@@ -6,7 +6,7 @@
 // The bus mechanism itself moved to `data/event-bus.ts` in S2.1 — `view/` imports it from
 // there rather than owning a second copy.
 
-import type { TimeScaleFit } from '../layout/index.js';
+import type { ConnectorEnd, TimeScaleFit } from '../layout/index.js';
 import type {
   Disposer,
   Entry,
@@ -177,12 +177,21 @@ export interface EntryResize extends EntryGestureEvent {
   readonly edge: 'start' | 'end';
 }
 
-/** S3.5: the only two event names whose handler may veto asynchronously, by returning a
+/** What `beforeConnect`, a connect handler and `connect` all carry: the two bar edges the user
+ *  joined, in drag order. It names edges only. What a pair of edges means (a dependency type, a
+ *  "related to" row) is the plugin's own business. */
+export interface ConnectEnds {
+  readonly from: ConnectorEnd;
+  readonly to: ConnectorEnd;
+}
+
+/** The only event names whose handler may veto asynchronously, by returning a
  *  `Promise<void | false>` instead of resolving `false` synchronously — `EventBus<GanttEventMap,
  *  AsyncCancelableEvent>` is what actually grants that return shape at `on`/`off`/`emit`'s call sites
  *  (`data/event-bus.ts`'s `TAsyncKeys`). Every other event (grid width, selection) stays sync-only:
  *  `plans/02` §3's async-veto path is scoped to a data gesture's own before-event, not every veto. */
-export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'beforeEntryEdit';
+export type AsyncCancelableEvent =
+  'beforeEntryMove' | 'beforeEntryResize' | 'beforeEntryEdit' | 'beforeConnect';
 
 /** Declared events fire (I11). `navigationChange` has no `before*` pair: Preset/Fit/Pan writes are
  *  reconfiguration, not a vetoable gesture (S1.9). */
@@ -230,6 +239,13 @@ export interface GanttEventMap {
    *  Selection and of `capabilities.select` (I14). Mutates nothing, so there is no `before*` pair,
    *  the same reason `navigationChange`/`themeChange` have none. */
   entryActivate: EntryActivate;
+  /** A connect drag dropped on a bar edge of another Entry. Sync or async veto: returning `false`,
+   *  or a Promise that settles `false`, joins nothing. A returned Promise holds the preview line
+   *  until it settles. Fires only while a plugin registers a connect handler with
+   *  `ctx.view.onConnect`. */
+  beforeConnect: ConnectEnds;
+  /** Fires after every connect handler ran. Same payload as `beforeConnect`. */
+  connect: ConnectEnds;
   /** S5.12: every refusal and every recovered fault a Gantt observes — a vetoed drag, a
    *  renderer that threw, a plugin disposer that threw. The same name and the same payload the
    *  Dataset raises (`DatasetEventMap.error`), because a consumer knows one shape either way; the

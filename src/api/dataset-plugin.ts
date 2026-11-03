@@ -16,6 +16,8 @@ import type {
   EntryStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
+  EditRowWriter,
+  StoreRowWrite,
   FieldLockRuleWrapper,
   PlaceRuleWrapper,
   PluginId,
@@ -27,7 +29,14 @@ import type { DisposableStore } from '../extensions/disposables.js';
 
 // Re-exported so a plugin author names the store types from the same module as the contract that
 // hands them over, rather than hunting for the module they are declared in.
-export type { PluginStore, PluginStoreView, ExtenderWrapper, RemovalExtenderWrapper };
+export type {
+  PluginStore,
+  PluginStoreView,
+  ExtenderWrapper,
+  RemovalExtenderWrapper,
+  EditRowWriter,
+  StoreRowWrite,
+};
 // A plugin author writing a hierarchy source names both: the wrapper its plugin's own
 // `hierarchySource` member takes, and the source it composes onto (`api/plugin.ts`). Here for the
 // same reason the store types are — beside the contract that hands them over.
@@ -52,7 +61,10 @@ export type { BarMoveRuleWrapper };
 // beside `DatasetEditHook`, the contract that hands a plugin the occupant it has to merge with. It
 // takes and returns `EntryEdits` — one `EntryEdit` per Entry, the same object `entries.update()`
 // takes (#209), so the only type a plugin author names to write a cascade is one they already know.
-export { mergeEntryEdits } from '../data/edit-extension.js';
+// The one legal way to replace a Field the user proposed (ADR 0042), also beside `mergeEntryEdits`: an
+// extender result marks the Fields it overrides with `overridingProposed(['start'], { start })`. An
+// unmarked write to a proposed Field still throws in dev mode.
+export { mergeEntryEdits, overridingProposed } from '../data/edit-extension.js';
 // The move a plugin's cascade is honest about: a spanning Entry translated rigidly to a
 // new `start`, `end` shifted by the same delta so the Entry's own duration never changes. This is
 // how a plugin author writes a cascade move, rather than hand-rolling the same rigid translate
@@ -89,6 +101,9 @@ export interface DatasetEvents {
  *  parent, asked once for a cross-parent move and once for a gesture preview, so a bar drag, a grid
  *  row drag and `entries.update()`/`add()` all meet the same resolution.
  *
+ *  `writeRowsWithEdit` lets a plugin change rows of its own store with each edit and removal, in the same
+ *  changeset as the removal.
+ *
  *  `setRemoveRule` is the fourth seam (#611): it answers whether `entries.remove()` may take an
  *  Entry, asked once for the id the caller named and once for every member of its subtree — the
  *  narrowest answer wins, so removing an unlocked parent that holds one locked descendant refuses
@@ -109,6 +124,9 @@ export interface DatasetEvents {
 export interface DatasetEditHook<TProps = Record<string, unknown>> {
   setExtender(wrap: ExtenderWrapper<TProps>): void;
   setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
+  /** Writes rows of this plugin's own store in the same change set as each edit and removal. See `EditRowWriter`. Several calls all
+   *  run, in call order. */
+  writeRowsWithEdit(writer: EditRowWriter<TProps>): void;
   setLockRule(wrap: FieldLockRuleWrapper): void;
   setPlaceRule(wrap: PlaceRuleWrapper): void;
   setRemoveRule(wrap: RemoveRuleWrapper): void;

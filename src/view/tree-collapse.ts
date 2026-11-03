@@ -115,6 +115,18 @@ export class TreeCollapse {
     this.#ctx.announce({ from, to: this.#startIds });
   }
 
+  /** After a sync: forgets collapse ids that name no current row. A removed row's collapse state has
+   *  no meaning, and `gantt.collapsed` must not list a row the data no longer has. Kept rows stay
+   *  collapsed. Skips `confirm`'s veto for the same reason `resetToStartState` does: the sync
+   *  already committed. */
+  forgetRowsTheDataDropped(): void {
+    const kept = this.#ids.filter((id) => this.#ctx.expandableOfRow(id) !== undefined);
+    if (kept.length === this.#ids.length) return;
+    const from = this.#ids;
+    this.#ids = kept;
+    this.#ctx.announce({ from, to: kept });
+  }
+
   /** Call: `this.#treeCollapse.handleArrow('right')`. */
   handleArrow(direction: 'left' | 'right'): boolean {
     const selected = this.#ctx.selected();

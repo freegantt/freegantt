@@ -10,12 +10,18 @@ import type { EntryId } from './ids.js';
 import type { EntryEdits, ProposedEdits, StoredEntry } from './stored-entry.js';
 import type { FieldKey } from './field-key.js';
 import type { FieldEditable } from './field.js';
+import type { StoreRowUpdated } from './change-set.js';
 import type { WriteTarget } from './write-verdict.js';
 
 /** What the extension hook reads (D4). It carries the same three members on a preview call
  *  and on the real commit call, which is why an extender can never refuse a write — see the
  *  refusal note: a lock plugin vetoes in `beforeChange`, never here. */
 export interface EditRequest<TProps = Record<string, unknown>> {
+  /** Is this a drag-preview frame that never commits? `true` on the ghost a drag draws on every frame,
+   *  `false` on the real commit. The preview shows bar positions only, so an extender may skip work whose
+   *  result is not a date, such as a derived field it writes again on commit. It must still answer the
+   *  same dates on both. */
+  readonly isPreview: boolean;
   /** Current store snapshot, before this transaction's edits — what a cascade reads to compute a
    *  delta (what moved, and by how much). Unlike `entryAfterEdits` below, this never reflects this
    *  transaction's own body edits. */
@@ -41,6 +47,12 @@ export interface EditRequest<TProps = Record<string, unknown>> {
    *  removes the whole subtree and core fills the descendant walk. Read one off `entries` above,
    *  which still holds it: `entryAfterEdits(id)` answers `undefined` for every id in here (#235). */
   readonly removedEntryIds: ReadonlySet<EntryId>;
+  /** The plugin store rows this transaction changes, one per row, with the row before (`from`) and after
+   *  (`to`) the commit. A row written as the same object the store holds is not in the list. Empty on a drag
+   *  preview, and empty whenever the transaction writes no plugin store. A store write with no Entry
+   *  edit still reaches the hook, so an extender can answer a store write with Entry edits in the same
+   *  ChangeSet. Read the whole store, as the commit leaves it, through the store's own view. */
+  readonly changedStoreRows: readonly StoreRowUpdated[];
   /** Has this row a child, as this transaction's own body and adds leave it? Same tree
    *  `entryAfterEdits(id)` reads. */
   hasChildren(id: EntryId | string): boolean;
@@ -108,3 +120,28 @@ export type RemovalExtender<TProps = Record<string, unknown>> = (
 export type RemovalExtenderWrapper<TProps = Record<string, unknown>> = (
   next: RemovalExtender<TProps>,
 ) => RemovalExtender<TProps>;
+
+/** One write to the calling plugin's own store: `row` replaces the row of `id`, and `undefined`
+ *  removes it. `id` must name an Entry that survives the transaction. */
+export interface StoreRowWrite<T extends object = object> {
+  readonly id: EntryId | string;
+  readonly row: T | undefined;
+}
+
+/**
+ * Answers which rows of the plugin's own store change with this transaction. A removal and an edit
+ * both call it. Core calls it once per transaction, after the removals are final and before the
+ * `EditExtender`, and never on a drag preview.
+ *
+ * Core stages the answer in the same transaction. The edit and the row writes land in one
+ * `ChangeSet`, and one undo restores both. A throw aborts the whole transaction. The writer reads
+ * rows, and it never writes: a store write inside it throws `MutationDuringExtensionHookError`.
+ * A write for an Entry this transaction removes is skipped, because that Entry's rows already go.
+ *
+ * ```ts
+ * ctx.edits.writeRowsWithEdit((request) => rowsAbout(request.proposed).map(withTheNewRow));
+ * ```
+ */
+export type EditRowWriter<TProps = Record<string, unknown>, T extends object = object> = (
+  request: EditRequest<TProps>,
+) => readonly StoreRowWrite<T>[];

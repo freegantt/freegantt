@@ -35,4 +35,15 @@ export interface PluginStore<T extends object> extends PluginStoreView<T> {
   set(id: EntryId | string, value: T): void;
   /** Removes `id`'s row. An id with no row writes nothing. */
   remove(id: EntryId | string): void;
+  /**
+   * Makes the store hold exactly `rows`: it writes a changed row, adds a new one, and removes a row
+   * that `rows` leaves out. It records no undo step and erases no Redo, as `entries.syncAll` does,
+   * because a refresh from outside is not the user's own edit. Nothing changes, and no change set lands, when
+   * every row is the same object the store holds (a row compares by identity).
+   *
+   * It is all or nothing. An id with no Entry throws `EntryNotFoundError` and writes nothing. It
+   * throws `TransactionAlreadyOpenError` inside a transaction, and `MutationDuringNotificationError`
+   * inside a change handler.
+   */
+  syncAll(rows: ReadonlyMap<EntryId | string, T>): void;
 }

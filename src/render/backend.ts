@@ -3,6 +3,7 @@
 
 import type {
   EntryId,
+  FrameConnector,
   GeometryFrame,
   BarId,
   BarPreview,
@@ -10,6 +11,23 @@ import type {
   RowId,
   RowDropSide,
 } from '../layout/index.js';
+
+/** One connect drag, as a backend paints it: a line from the source bar's edge to the pointer. */
+export interface ConnectDraft {
+  /** The bar whose edge the drag started on. */
+  fromBarId: BarId;
+  fromEdge: 'start' | 'end';
+  /** The pointer, in content space. The line ends here. */
+  cursorX: number;
+  cursorY: number;
+  /** The bar a drop here would join, and the edge it would join. Both absent when a drop does nothing. */
+  targetBarId?: BarId;
+  targetEdge?: 'start' | 'end';
+  /** Every bar that accepts a connection. Each shows its two ports for the whole drag. */
+  connectableBarIds: readonly BarId[];
+  /** True while an async `beforeConnect` handler holds the drop. */
+  pending: boolean;
+}
 
 export interface InteractionState {
   hoveredBarId?: BarId;
@@ -33,6 +51,11 @@ export interface InteractionState {
    *  one edge can close while the other stays open — a Field's `editable`, or `capabilities.edit` (#256). A backend hides the closed edge's
    *  handle and leaves the other one painting. Present exactly when `resizableEntryId` is. */
   resizableEdges?: { start: boolean; end: boolean };
+  /** The hovered bar, and only when its `connect` capability resolved true and a plugin handles the
+   *  drop. A backend draws a connector port at each of its two edges. Undefined parks the ports. */
+  connectableBarId?: BarId;
+  /** A connect drag in flight. Undefined outside one. */
+  connectDraft?: ConnectDraft;
   /** The hovered bar, and only when its `move` capability resolved true — what gets `cursor: grab`
    *  (S3). */
   movableBarId?: BarId;
@@ -79,6 +102,9 @@ export interface BarHit {
   /** S3.4: set when the hit landed on a resize handle rather than the bar body — which edge
    *  a resize gesture should grab. Sourced from the handle's own `data-edge` attribute. */
   edge?: 'start' | 'end';
+  /** Set when the hit landed on a connector port rather than the bar: which bar edge the port sits
+   *  on. A port is outside the bar, so a port hit never carries `edge`. */
+  port?: 'start' | 'end';
 }
 
 export interface RowHit {
@@ -104,6 +130,9 @@ export interface RenderBackend<THost = unknown> {
   mount(surfaces: RenderSurfaces<THost>): void;
   sync(frame: GeometryFrame): void;
   applyState(state: InteractionState): void;
+  /** Paints these connectors on the frame `sync` last painted, and nothing else. A drag preview calls it
+   *  on every animation frame: a connector that did not change keeps its node. */
+  paintConnectors(connectors: readonly FrameConnector[]): void;
   hitTest(at: ClientPoint): HitResult | null;
   destroy(): void;
 }

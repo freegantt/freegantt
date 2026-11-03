@@ -34,7 +34,7 @@ export type AggregatorName = 'min' | 'max' | 'sum' | 'count' | 'none' | (string 
 export type Anchor = DOMRect | HTMLElement;
 
 // @public
-export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'beforeEntryEdit';
+export type AsyncCancelableEvent = 'beforeEntryMove' | 'beforeEntryResize' | 'beforeEntryEdit' | 'beforeConnect';
 
 // @public
 export function attemptMutation(body: () => void): boolean;
@@ -117,17 +117,50 @@ export interface BarRendererContext {
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
 // @public
+export type BeforeDependencyRemoveHandler = (removal: DependencyRemoval) => void | false | Promise<void | false>;
+
+// @public
+export interface BlockedMoveDiagnostic {
+    // (undocumented)
+    readonly code: 'blocked-move';
+    // (undocumented)
+    readonly dependencyIds: readonly string[];
+    // (undocumented)
+    readonly entryId: EntryId;
+    // (undocumented)
+    readonly reason: BlockReason;
+    readonly wouldChange: readonly ScheduleChange[];
+}
+
+// @public
+export type BlockReason =
+/** The Entry is manually scheduled. */
+'manuallyScheduled'
+/** The Entry has a `mustStartOn` constraint, and the constraint wins over the dependency. */
+| 'mustStartOn'
+/** The user proposed a date the move would change. */
+| 'proposed'
+/** The policy lets no date of this Entry move. */
+| 'policy'
+/** The move would put the end before the start. */
+| 'inverted';
+
+// @public
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.moveEntryUp' | 'freegantt.moveEntryDown' | 'freegantt.indentEntry' | 'freegantt.outdentEntry' | 'freegantt.deleteSelection' | 'freegantt.clearDates' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.switchToggle' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-remove-refused' | 'entry-clear-dates-refused' | 'entry-step-refused' | 'entry-drop-refused' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-remove-refused' | 'entry-clear-dates-refused' | 'entry-step-refused' | 'entry-drop-refused' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'connect-handler-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
-export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused';
+export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused' | 'unsupported-lag-unit' | 'duplicate-dependency-id' | 'dependency-store-not-installed' | 'scheduling-not-installed' | 'invalid-working-calendar';
+
+// @public
+export function calculateFloat(request: FloatRequest): FloatResult;
 
 // @public
 export interface Capabilities {
     activate?: CapabilityRule;
+    connect?: CapabilityRule;
     edit?: WriteRule;
     // (undocumented)
     move?: CapabilityRule;
@@ -306,6 +339,71 @@ export class ComputedFieldCannotBeWrittenError extends FreeGanttError {
 }
 
 // @public
+export interface ConnectEnds {
+    // (undocumented)
+    readonly from: ConnectorEnd;
+    // (undocumented)
+    readonly to: ConnectorEnd;
+}
+
+// @public
+export type ConnectHandler = (ends: ConnectEnds) => void;
+
+// @public
+export const CONNECTOR_FLAG_KEYS: readonly ["inactive", "cycle", "selected"];
+
+// @public
+export type ConnectorArrow = 'end' | 'none';
+
+// @public
+export type ConnectorEdge = 'start' | 'end';
+
+// @public
+export interface ConnectorEnd {
+    // (undocumented)
+    edge: ConnectorEdge;
+    // (undocumented)
+    entryId: EntryId;
+}
+
+// @public (undocumented)
+export type ConnectorFlags = Partial<Record<(typeof CONNECTOR_FLAG_KEYS)[number], boolean>>;
+
+// @public
+export interface ConnectorInput {
+    class?: string;
+    // (undocumented)
+    flags?: ConnectorFlags;
+    // (undocumented)
+    from: ConnectorEnd;
+    // (undocumented)
+    id: string;
+    label?: string;
+    showLabel?: boolean;
+    // (undocumented)
+    to: ConnectorEnd;
+}
+
+// @public
+export type ConnectorProvider = () => readonly ConnectorInput[];
+
+// @public
+export interface ConnectorRouting {
+    avoidBars?: boolean;
+    maxAvoidRows?: number;
+}
+
+// @public
+export interface ConstraintViolationDiagnostic {
+    // (undocumented)
+    readonly code: 'constraint-violated';
+    readonly constraint: Exclude<ScheduleConstraintKind, 'startNoEarlierThan'>;
+    readonly dependencyIds: readonly string[];
+    // (undocumented)
+    readonly entryId: EntryId;
+}
+
+// @public
 export class ContainerNotFoundError extends FreeGanttError {
     constructor(container: string);
     // (undocumented)
@@ -385,6 +483,13 @@ export class CustomRowSourceNotFilterableOrSortableError extends FreeGanttError 
     readonly operation: string;
 }
 
+// @public
+export interface CycleDiagnostic {
+    // (undocumented)
+    readonly code: 'cycle';
+    readonly entryIds: readonly EntryId[];
+}
+
 // @public (undocumented)
 export type DataPlugin<TProps = unknown> = DataPluginOf<PluginContext<TProps>, Dataset<TProps>>;
 
@@ -449,6 +554,7 @@ export interface DatasetEditHook<TProps = Record<string, unknown>> {
     setRemovalExtender(wrap: RemovalExtenderWrapper<TProps>): void;
     // (undocumented)
     setRemoveRule(wrap: RemoveRuleWrapper): void;
+    writeRowsWithEdit(writer: EditRowWriter<TProps>): void;
 }
 
 // @public
@@ -586,6 +692,13 @@ export type DecorationInput = {
     kind: 'rowStripe';
     rowId: RowId;
     class?: string;
+} | {
+    kind: 'rowSpan';
+    rowId: RowId;
+    start: Instant;
+    end: Instant;
+    class?: string;
+    text?: string;
 };
 
 // @public
@@ -595,10 +708,74 @@ export type DecorationLayer = 'underBars' | 'overBars';
 export type DecorationProvider = (ctx: DecorationContext) => readonly DecorationInput[];
 
 // @public
+export const defaultPolicy: SchedulingPolicy;
+
+// @public
 export function definePlugin<TProps = unknown, TPlugin extends ChromePlugin<TProps> = ChromePlugin<TProps>>(plugin: TPlugin): TPlugin;
 
 // @public
 export function definePlugin<TProps = unknown, TPlugin extends DataPlugin<TProps> = DataPlugin<TProps>>(plugin: TPlugin): TPlugin;
+
+// @public
+export interface Dependency {
+    // (undocumented)
+    readonly fromId: EntryId;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lag: DependencyLag;
+    // (undocumented)
+    readonly toId: EntryId;
+    // (undocumented)
+    readonly type: DependencyType;
+}
+
+// @public
+export interface DependencyEvents {
+    beforeDependencyRemove: BeforeDependencyRemoveHandler;
+    dependencyRemove: DependencyRemoveHandler;
+}
+
+// @public
+export interface DependencyInput {
+    // (undocumented)
+    readonly fromId: EntryId | string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lag: Duration;
+    // (undocumented)
+    readonly toId: EntryId | string;
+    // (undocumented)
+    readonly type: DependencyType;
+}
+
+// @public
+export interface DependencyLag {
+    // (undocumented)
+    readonly unit: 'day';
+    // (undocumented)
+    readonly value: number;
+}
+
+// @public
+export interface DependencyRemoval {
+    // (undocumented)
+    readonly dependency: Dependency;
+}
+
+// @public (undocumented)
+export type DependencyRemoveHandler = (removal: DependencyRemoval) => void;
+
+// @public
+export class DependencyStoreNotInstalledError extends FreeGanttError {
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
+}
+
+// @public
+export type DependencyType = 'FS' | 'SS' | 'FF' | 'SF';
 
 // @public
 export class DerivedFieldNotWritableError extends FreeGanttError {
@@ -639,6 +816,7 @@ export interface DomEventOptions {
 
 // @public
 export interface DomTarget {
+    connectorId?: string;
     element: HTMLElement;
     // (undocumented)
     entry?: Entry | undefined;
@@ -647,6 +825,15 @@ export interface DomTarget {
     field?: FieldKey;
     // (undocumented)
     kind: TargetKind;
+}
+
+// @public
+export class DuplicateDependencyIdError extends FreeGanttError {
+    constructor(dependencyId: string, operation: string);
+    // (undocumented)
+    readonly dependencyId: string;
+    // (undocumented)
+    readonly operation: string;
 }
 
 // @public
@@ -697,19 +884,33 @@ export interface Duration {
 }
 
 // @public
+export type EditedDate = 'dependencyWins' | 'userDateWins';
+
+// @public
 export type EditExtender<TProps = Record<string, unknown>> = (request: EditRequest<TProps>) => EntryEdits;
 
 // @public
 export interface EditRequest<TProps = Record<string, unknown>> {
     readonly addedEntryIds: ReadonlySet<EntryId>;
+    readonly changedStoreRows: readonly StoreRowUpdated[];
     editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     entries: ReadonlyMap<EntryId, StoredEntry<TProps>>;
     entryAfterEdits(id: EntryId | string): StoredEntry<TProps> | undefined;
     hasChildren(id: EntryId | string): boolean;
+    readonly isPreview: boolean;
     proposed: ProposedEdits;
     readonly removedEntryIds: ReadonlySet<EntryId>;
     writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;
 }
+
+// @public
+export interface EditResolution {
+    // (undocumented)
+    readonly moves: readonly ScheduleField[];
+}
+
+// @public
+export type EditRowWriter<TProps = Record<string, unknown>, T extends object = object> = (request: EditRequest<TProps>) => readonly StoreRowWrite<T>[];
 
 // @public
 export interface ElementDescription {
@@ -781,6 +982,9 @@ export interface Entry<TProps = Record<string, unknown>> {
 }
 
 // @public
+export const ENTRY_DEPENDENCIES_ID = "freegantt.entryDependencies";
+
+// @public
 export interface EntryActivate {
     // (undocumented)
     readonly cause: 'click' | 'key' | 'dblclick';
@@ -791,9 +995,32 @@ export interface EntryActivate {
 }
 
 // @public
+export type EntryConstraint = ScheduleConstraint;
+
+// @public
 export interface EntryDelta<TProps = Record<string, unknown>> {
     readonly remove?: readonly (EntryId | string)[];
     readonly upsert?: readonly EntryIngestInput<TProps>[];
+}
+
+// @public
+export interface EntryDependencies extends DataPlugin {
+    add(dependency: DependencyInput): void;
+    all(): readonly Dependency[];
+    on<Name extends keyof DependencyEvents>(name: Name, handler: DependencyEvents[Name]): Disposer;
+    predecessorsOf(entry: EntryId | string): readonly Dependency[];
+    remove(id: string): void;
+    replaceAll(dependencies: readonly DependencyInput[]): void;
+}
+
+// @public
+export function entryDependencies(options?: EntryDependenciesOptions): EntryDependencies;
+
+// @public
+export interface EntryDependenciesOptions {
+    readonly connectByDrag?: boolean;
+    readonly labelField?: string;
+    readonly showLabels?: boolean;
 }
 
 // Warning: (ae-forgotten-export) The symbol "EntryEnvelope" needs to be exported by the entry point index.d.ts
@@ -821,6 +1048,12 @@ export interface EntryFieldEdit {
     readonly from: unknown;
     // (undocumented)
     readonly to: unknown;
+}
+
+// @public
+export interface EntryFloat {
+    readonly critical: boolean;
+    readonly totalFloat: number;
 }
 
 // @public
@@ -1087,6 +1320,9 @@ export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldVa
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 // @public
+export function findDrivingPath(request: FloatRequest, entryId: EntryId | string): readonly EntryId[];
+
+// @public
 export interface FixedBarBox {
     // (undocumented)
     readonly anchor: BarAnchor;
@@ -1107,6 +1343,21 @@ export type FlatEntryInput<TProps = Record<string, unknown>> = string extends ke
 } & {
     [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
 };
+
+// @public
+export interface FloatRequest {
+    readonly calendar?: ScheduleCalendar;
+    // (undocumented)
+    readonly dependencies: readonly ScheduleDependency[];
+    // (undocumented)
+    readonly entries: readonly ScheduleEntry[];
+}
+
+// @public (undocumented)
+export interface FloatResult {
+    readonly entries: ReadonlyMap<EntryId, EntryFloat>;
+    readonly projectFinish: Instant | undefined;
+}
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -1241,6 +1492,10 @@ export class Gantt<TProps = unknown> {
     set collapsed(ids: readonly (RowId | string)[]);
     collapseStateOf(id: RowId | string): CollapseState | undefined;
     get commands(): CommandRegistry<TProps>;
+    get connectorArrow(): ConnectorArrow;
+    set connectorArrow(value: ConnectorArrow);
+    get connectorRouting(): ConnectorRouting;
+    set connectorRouting(value: ConnectorRouting);
     get convenienceChords(): ConvenienceChords;
     set convenienceChords(next: ConvenienceChords);
     get dataset(): Dataset<TProps>;
@@ -1258,6 +1513,8 @@ export class Gantt<TProps = unknown> {
     filterRows(filter: RowFilter | undefined): void;
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
+    get fitDatasetPaddingPx(): number;
+    set fitDatasetPaddingPx(px: number);
     get formatContext(): FormatContext;
     formatFieldValue(entry: Entry<TProps>, key: FieldKey): string;
     get gridCellRenderer(): GridCellRenderer | undefined;
@@ -1352,6 +1609,7 @@ export interface GanttDom {
     readonly bounds: DOMRect;
     cellFor(id: EntryId | string, field: FieldKey): HTMLElement | undefined;
     cellText(cell: HTMLElement): string;
+    connectorFor(id: string): HTMLElement | undefined;
     owns(node: Node): boolean;
     readonly paneBounds: Record<PaneName, DOMRect>;
     paneOf(node: Node): PaneName | undefined;
@@ -1364,6 +1622,7 @@ export type GanttEventHandler<K extends keyof GanttEventMap> = (payload: GanttEv
 // @public
 export interface GanttEventMap {
     beforeCollapseChange: CollapseChange;
+    beforeConnect: ConnectEnds;
     beforeEntryEdit: EntryFieldEdit;
     beforeEntryMove: EntryMove & Refusable;
     beforeEntryResize: EntryResize & Refusable;
@@ -1373,6 +1632,7 @@ export interface GanttEventMap {
     beforeSelectionChange: SelectionChange;
     // (undocumented)
     collapseChange: CollapseChange;
+    connect: ConnectEnds;
     entryActivate: EntryActivate;
     entryEdit: EntryFieldEdit;
     // (undocumented)
@@ -1408,6 +1668,8 @@ export interface GanttOptionsBase<TProps = unknown> {
     barRenderer?: BarRenderer;
     capabilities?: Capabilities;
     collapsed?: readonly (RowId | string)[];
+    connectorArrow?: ConnectorArrow;
+    connectorRouting?: ConnectorRouting;
     container: HTMLElement | string;
     convenienceChords?: ConvenienceChords;
     dataset: Dataset<TProps>;
@@ -1442,6 +1704,7 @@ export type GanttScaleOptions = {
     preset?: never;
     range?: never;
     fit?: never;
+    fitDatasetPaddingPx?: never;
 } | {
     scale?: undefined;
     preset?: PresetRef;
@@ -1450,6 +1713,7 @@ export type GanttScaleOptions = {
         end: InstantInput;
     };
     fit?: TimeScaleFit;
+    fitDatasetPaddingPx?: number;
 };
 
 // @public
@@ -1589,6 +1853,14 @@ export function instant(value: Date | number | string): Instant;
 export type InstantInput = Instant | Date | number | string;
 
 // @public
+export interface InvalidDependencyDiagnostic {
+    // (undocumented)
+    readonly code: 'unknown-entry' | 'unsupported-lag-unit';
+    // (undocumented)
+    readonly dependencyId: string;
+}
+
+// @public
 export class InvalidInstantError extends FreeGanttError {
     constructor(value: unknown, reason: InvalidInstantReason, operation: string);
     // (undocumented)
@@ -1634,6 +1906,11 @@ export class InvalidSnapIncrementError extends FreeGanttError {
     readonly increment: number;
     // (undocumented)
     readonly unit: TimeUnit;
+}
+
+// @public
+export class InvalidWorkingCalendarError extends FreeGanttError {
+    constructor(reason: string);
 }
 
 // @public
@@ -1694,6 +1971,9 @@ export interface KeyEventLike {
     // (undocumented)
     target: EventTarget | null;
 }
+
+// @public
+export type KeyHandler = (event: KeyEventLike) => void | false;
 
 // @public
 export function lastCoveredInstant(span: {
@@ -1794,7 +2074,18 @@ export function notCovered(cover: TimeCover | readonly TimeCover[]): TimeCover;
 export function now(): Instant;
 
 // @public
+export interface OffTimeCover {
+    // (undocumented)
+    coveredSpans(window: TimeSpan, time: ZonedTime): readonly TimeSpan[];
+    // (undocumented)
+    hideWhenCoarserThan: TimeUnit;
+}
+
+// @public
 export function overlap(a: TimeSpan, b: TimeSpan): TimeSpan | undefined;
+
+// @public
+export function overridingProposed(fields: readonly FieldKey[], edit: EntryEdit): EntryEdit;
 
 // @public
 export interface Overscan {
@@ -1921,6 +2212,9 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         variantFor(entry: Entry): ResolvedVariant;
         resolvedColumns(): readonly GridColumn[];
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
+        registerConnector(provider: ConnectorProvider): Disposer;
+        refreshConnectors(): void;
+        onConnect(handler: ConnectHandler): Disposer;
         registerGridColumn(column: GridColumnInput): Disposer;
     };
 }
@@ -1967,6 +2261,7 @@ export class PluginSetupError extends FreeGanttError {
 export interface PluginStore<T extends object> extends PluginStoreView<T> {
     remove(id: EntryId | string): void;
     set(id: EntryId | string, value: T): void;
+    syncAll(rows: ReadonlyMap<EntryId | string, T>): void;
 }
 
 // @public
@@ -2061,6 +2356,9 @@ export type ProposedEdit<TProps = Record<string, unknown>> = {
 export type ProposedEdits = ReadonlyMap<EntryId, ProposedEdit>;
 
 // @public
+export type ProposedEntryDates = Partial<Record<ScheduleField, Instant>>;
+
+// @public
 export interface ProposedSpan extends ProposedDates {
     // (undocumented)
     readonly end: Instant;
@@ -2091,7 +2389,7 @@ export interface Refusable {
 }
 
 // @public
-export type RegisterKeyHandler = (chord: string, handler: (event: KeyEventLike) => void, options?: {
+export type RegisterKeyHandler = (chord: string, handler: KeyHandler, options?: {
     captureInEditable?: boolean;
 }) => () => void;
 
@@ -2267,6 +2565,22 @@ export interface RowSourceCommon {
 }
 
 // @public
+export interface RowSpan {
+    // (undocumented)
+    class?: string;
+    // (undocumented)
+    kind: 'rowSpan';
+    // (undocumented)
+    rowId: RowId;
+    // (undocumented)
+    text?: string;
+    // (undocumented)
+    width: number;
+    // (undocumented)
+    x: number;
+}
+
+// @public
 export interface RowStripe {
     // (undocumented)
     class?: string;
@@ -2274,6 +2588,135 @@ export interface RowStripe {
     kind: 'rowStripe';
     // (undocumented)
     rowId: RowId;
+}
+
+// @public
+export function schedule(request: ScheduleRequest): ScheduleResult;
+
+// @public
+export interface ScheduleCalendar {
+    readonly calendar?: WorkingCalendar;
+    // (undocumented)
+    readonly ofEntry?: ReadonlyMap<EntryId, WorkingCalendar>;
+    // (undocumented)
+    readonly time: ZonedTime;
+}
+
+// @public
+export interface ScheduleChange {
+    // (undocumented)
+    readonly field: ScheduleField;
+    // (undocumented)
+    readonly from: Instant;
+    // (undocumented)
+    readonly id: EntryId;
+    // (undocumented)
+    readonly to: Instant;
+}
+
+// @public
+export type ScheduleConstraint = {
+    readonly kind: 'startNoEarlierThan';
+    readonly date: Instant;
+} | {
+    readonly kind: 'finishNoLaterThan';
+    readonly date: Instant;
+} | {
+    readonly kind: 'mustStartOn';
+    readonly date: Instant;
+};
+
+// @public
+export type ScheduleConstraintKind = ScheduleConstraint['kind'];
+
+// @public
+export interface ScheduleDependency {
+    // (undocumented)
+    readonly fromId: EntryId;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lag: Duration;
+    // (undocumented)
+    readonly toId: EntryId;
+    // (undocumented)
+    readonly type: ScheduleDependencyType;
+}
+
+// @public
+export type ScheduleDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
+
+// @public (undocumented)
+export type ScheduleDiagnostic = CycleDiagnostic | BlockedMoveDiagnostic | ConstraintViolationDiagnostic | InvalidDependencyDiagnostic;
+
+// @public
+export type ScheduleDiagnosticsHandler = (diagnostics: readonly ScheduleDiagnostic[]) => void;
+
+// @public
+export type ScheduleEntry = Pick<Entry, 'id' | 'start' | 'end' | 'hasChildren'>;
+
+// @public
+export type ScheduleField = 'start' | 'end';
+
+// @public (undocumented)
+export interface ScheduleRequest {
+    readonly calendar?: ScheduleCalendar;
+    readonly constraints?: ReadonlyMap<EntryId, ScheduleConstraint>;
+    // (undocumented)
+    readonly dependencies: readonly ScheduleDependency[];
+    readonly entries: readonly ScheduleEntry[];
+    readonly manuallyScheduled?: ReadonlySet<EntryId>;
+    readonly policy?: SchedulingPolicy;
+    readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
+    readonly successorMoves?: SuccessorMoves;
+}
+
+// @public (undocumented)
+export interface ScheduleResult {
+    // (undocumented)
+    readonly diagnostics: readonly ScheduleDiagnostic[];
+    readonly patch: readonly ScheduleChange[];
+}
+
+// @public
+export type ScheduleRuleKind = 'manuallyScheduled' | 'mustStartOn' | 'dependency';
+
+// @public
+export interface Scheduling extends DataPlugin {
+    clearConstraint(entry: EntryId | string): void;
+    constraintOf(entry: EntryId | string): EntryConstraint | undefined;
+    diagnostics(): readonly ScheduleDiagnostic[];
+    drivingPath(entry: EntryId | string): readonly EntryId[];
+    on(name: 'scheduleDiagnostics', handler: ScheduleDiagnosticsHandler): Disposer;
+    setConstraint(entry: EntryId | string, constraint: EntryConstraint): void;
+}
+
+// @public
+export function scheduling(options?: SchedulingOptions): Scheduling;
+
+// @public
+export const SCHEDULING_ID = "freegantt.scheduling";
+
+// @public
+export class SchedulingNotInstalledError extends FreeGanttError {
+    constructor(operation: string);
+    // (undocumented)
+    readonly operation: string;
+}
+
+// @public (undocumented)
+export interface SchedulingOptions {
+    readonly calendar?: WorkingCalendar;
+    readonly calendarField?: string;
+    readonly calendars?: Readonly<Record<string, WorkingCalendar>>;
+    readonly editedDate?: EditedDate;
+    readonly successorMoves?: SuccessorMoves;
+}
+
+// @public (undocumented)
+export interface SchedulingPolicy {
+    readonly precedence: readonly ScheduleRuleKind[];
+    resolveEdit(touched: ReadonlySet<ScheduleField>, entry: ScheduleEntry): EditResolution;
 }
 
 // @public
@@ -2394,10 +2837,21 @@ export interface StoreRowUpdated {
 }
 
 // @public
+export interface StoreRowWrite<T extends object = object> {
+    // (undocumented)
+    readonly id: EntryId | string;
+    // (undocumented)
+    readonly row: T | undefined;
+}
+
+// @public
+export type SuccessorMoves = 'pushAndPull' | 'pushOnly';
+
+// @public
 export function summary(overrides?: Partial<EntryVariant>): EntryVariant;
 
 // @public
-export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter';
+export type TargetKind = 'row' | 'gridCell' | 'bar' | 'header' | 'splitter' | 'connector';
 
 // @public
 export type Theme = 'auto' | 'light' | 'dark';
@@ -2466,6 +2920,9 @@ export class TimeScaleModel {
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
     // (undocumented)
+    get fitDatasetPaddingPx(): number;
+    set fitDatasetPaddingPx(px: number);
+    // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
     // (undocumented)
@@ -2478,6 +2935,7 @@ export class TimeScaleModel {
 // @public
 export interface TimeScaleModelOptions {
     fit?: TimeScaleFit;
+    fitDatasetPaddingPx?: number;
     preset?: PresetRef;
     range?: 'fitDataset' | TimeSpan;
 }
@@ -2640,6 +3098,15 @@ export class UnreadableCellValueError extends FreeGanttError {
 }
 
 // @public
+export class UnsupportedLagUnitError extends FreeGanttError {
+    constructor(unit: string, operation: string);
+    // (undocumented)
+    readonly operation: string;
+    // (undocumented)
+    readonly unit: string;
+}
+
+// @public
 export class UnsupportedUnitError extends FreeGanttError {
     constructor(unit: string, operation: string);
     // (undocumented)
@@ -2687,6 +3154,26 @@ export function wholeEntryBar(entry: Entry, variant: string): Bar;
 
 // @public
 export function wholeSpanUnlessSegments(entry: Entry, variant: string, childrenAsSegments?: boolean): readonly Bar[];
+
+// @public
+export type Workday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+// @public
+export interface WorkingCalendar {
+    addWorkdays(instant: InstantInput, count: number, time: ZonedTime): Instant;
+    isWorkday(day: InstantInput, time: ZonedTime): boolean;
+    offTime(): OffTimeCover;
+    workdaysBetween(a: InstantInput, b: InstantInput, time: ZonedTime): number;
+}
+
+// @public
+export function workingCalendar(options: WorkingCalendarOptions): WorkingCalendar;
+
+// @public (undocumented)
+export interface WorkingCalendarOptions {
+    holidays?: readonly string[];
+    workdays: readonly Workday[];
+}
 
 // Warning: (ae-forgotten-export) The symbol "FieldWriteRefusalReason" needs to be exported by the entry point index.d.ts
 //

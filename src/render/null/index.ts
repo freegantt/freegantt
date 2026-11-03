@@ -16,6 +16,7 @@ export function createNullBackend(): NullBackend {
       lastFrame = frame;
     },
     applyState(_state: InteractionState) {},
+    paintConnectors() {},
     hitTest(): HitResult | null {
       return null;
     },

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — dependencies</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+      <main>
+        <div class="page-head">
+          <h1>Dependencies</h1>
+          <p>
+            The <code>entryDependencies()</code> plugin stores the Dependencies between Entries. The Gantt
+            draws one connector for each. This page shows all four types and one negative lag. Replace the
+            whole set, and scroll, zoom and collapsed groups stay as they are. The Arrowheads box switches the
+            arrowhead at the arrival end of each connector. Hover a bar and drag from one of its ports to a
+            port on another bar to add a Dependency. Click a connector, or Tab to one, to select it. Arrow
+            keys move to the next connector. Delete removes the Dependency, and one undo restores it.
+          </p>
+        </div>
+        <div id="page-brief"></div>
+        <section class="workbench" aria-label="Dependencies workbench">
+          <div id="toolbar"></div>
+          <div class="workbench-actions">
+            <button type="button" id="replace-dependencies-btn">Replace dependencies</button>
+            <button type="button" id="collapse-foundation-btn">Collapse Foundation</button>
+            <button type="button" id="remove-entry-btn">Remove Foundation 2</button>
+            <label><input type="checkbox" id="connector-arrow-toggle" checked /> Arrowheads</label>
+          </div>
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="dependency-readout">Dependencies: —</span>
+            <span class="readout" id="removal-readout" aria-live="polite">Removed by key: none</span>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./dependencies.ts"></script>
+  </body>
+</html>

@@ -112,7 +112,8 @@ function hitsOnAddedLines(added: readonly AddedLine[]): LabelHit[] {
 }
 
 function git(args: string[]): string {
-  return execFileSync('git', args, { cwd: root, encoding: 'utf8' });
+  // A long-lived branch diffs past the 1 MB default buffer, and the call then fails with ENOBUFS.
+  return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
 
 function resolveBaseRef(): string {

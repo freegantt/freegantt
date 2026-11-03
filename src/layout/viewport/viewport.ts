@@ -226,6 +226,18 @@ export class Viewport {
     });
   }
 
+  get fitDatasetPaddingPx(): number {
+    return this.scale.fitDatasetPaddingPx;
+  }
+
+  /** Live — delegates straight to `TimeScaleModel.fitDatasetPaddingPx`. Re-clamps like `set fit`. */
+  set fitDatasetPaddingPx(px: number) {
+    this.batch(() => {
+      this.scale.fitDatasetPaddingPx = px;
+      this.#reclampToContentWidth();
+    });
+  }
+
   /** Pushes the just-resolved `TimeScale.contentWidth` into both this Viewport's own tracked
    *  `#contentSize` (what `visible`'s local clamp reads) and the x-axis scroll binding —
    *  content width is horizontal only, so `y` never needs this push. Every anchored scale write
