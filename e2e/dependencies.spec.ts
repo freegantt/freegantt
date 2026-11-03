@@ -238,3 +238,51 @@ test('Delete on a focused bar still removes the Entry, not a Dependency', async 
   );
   expect(await page.evaluate(() => window.__dataset.entries.has('structure-4'))).toBe(false);
 });
+
+// A selection is screen-only state, so the connector shows it at once, with no other redraw.
+
+const selectedLines = (page: Page) => page.locator('#gantt [data-connector-id][aria-current="true"]');
+
+test('a click on a connector shows it selected at once, and a click on empty chart clears it', async ({
+  page,
+}) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await expect(selectedLines(page)).toHaveCount(0);
+
+  const point = await strokeMiddleOf(lineOf(page, 'dep-fs'));
+  await page.mouse.click(point.x, point.y);
+
+  await expect(selectedLines(page)).toHaveCount(1);
+  await expect(lineOf(page, 'dep-fs')).toHaveAttribute('aria-current', 'true');
+  await expect(lineOf(page, 'dep-fs')).toHaveAttribute('data-flag', /selected/);
+
+  // The timeline's far right edge holds no bar and no connector.
+  const pane = await page.locator('#gantt .fg-timeline-pane').boundingBox();
+  await page.mouse.click(pane!.x + pane!.width - 30, pane!.y + 8);
+
+  await expect(selectedLines(page)).toHaveCount(0);
+  await expect(lineOf(page, 'dep-fs')).not.toHaveAttribute('data-flag', /selected/);
+});
+
+test('arrow keys move the selected style with the focus', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const order = await page
+    .locator('#gantt [data-connector-id]')
+    .evaluateAll((nodes) => nodes.map((node) => (node as SVGElement).dataset['connectorId']!));
+
+  await page.locator(`#gantt [data-connector-id="${order[0]}"]`).focus();
+  await expect(page.locator(`#gantt [data-connector-id="${order[0]}"]`)).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+
+  await page.keyboard.press('ArrowDown');
+
+  await expect(page.locator(`#gantt [data-connector-id="${order[1]}"]`)).toHaveAttribute(
+    'aria-current',
+    'true',
+  );
+  await expect(selectedLines(page)).toHaveCount(1);
+});
