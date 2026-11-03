@@ -59,7 +59,7 @@ export const followScenarios: readonly GoldenScenario[] = Object.freeze([
     },
   },
   {
-    name: 'an Entry with no incoming dependency never moves, even with a floor and slack',
+    name: 'a start floor later than the start moves an Entry that has no incoming dependency',
     entries: [
       ['a', 3, 4],
       ['b', 9, 10],
@@ -68,8 +68,8 @@ export const followScenarios: readonly GoldenScenario[] = Object.freeze([
     startNoEarlierThan: { a: 8 },
     expected: {
       patch: [
-        ['b', 'start', 9, 4],
-        ['b', 'end', 10, 5],
+        ['a', 'start', 3, 8],
+        ['a', 'end', 4, 9],
       ],
     },
   },

@@ -136,6 +136,8 @@ export interface BlockedMoveDiagnostic {
 export type BlockReason =
 /** The Entry is manually scheduled. */
 'manuallyScheduled'
+/** The Entry has a `mustStartOn` constraint, and the constraint wins over the dependency. */
+| 'mustStartOn'
 /** The user proposed a date the move would change. */
 | 'proposed'
 /** The policy lets no date of this Entry move. */
@@ -378,6 +380,16 @@ export interface ConnectorInput {
 
 // @public
 export type ConnectorProvider = () => readonly ConnectorInput[];
+
+// @public
+export interface ConstraintViolationDiagnostic {
+    // (undocumented)
+    readonly code: 'constraint-violated';
+    readonly constraint: Exclude<ScheduleConstraintKind, 'startNoEarlierThan'>;
+    readonly dependencyIds: readonly string[];
+    // (undocumented)
+    readonly entryId: EntryId;
+}
 
 // @public
 export class ContainerNotFoundError extends FreeGanttError {
@@ -2557,7 +2569,16 @@ export interface ScheduleChange {
 export type ScheduleConstraint = {
     readonly kind: 'startNoEarlierThan';
     readonly date: Instant;
+} | {
+    readonly kind: 'finishNoLaterThan';
+    readonly date: Instant;
+} | {
+    readonly kind: 'mustStartOn';
+    readonly date: Instant;
 };
+
+// @public
+export type ScheduleConstraintKind = ScheduleConstraint['kind'];
 
 // @public
 export interface ScheduleDependency {
@@ -2577,7 +2598,7 @@ export interface ScheduleDependency {
 export type ScheduleDependencyType = 'FS' | 'SS' | 'FF' | 'SF';
 
 // @public (undocumented)
-export type ScheduleDiagnostic = CycleDiagnostic | BlockedMoveDiagnostic | InvalidDependencyDiagnostic;
+export type ScheduleDiagnostic = CycleDiagnostic | BlockedMoveDiagnostic | ConstraintViolationDiagnostic | InvalidDependencyDiagnostic;
 
 // @public
 export type ScheduleDiagnosticsHandler = (diagnostics: readonly ScheduleDiagnostic[]) => void;
@@ -2609,7 +2630,7 @@ export interface ScheduleResult {
 }
 
 // @public
-export type ScheduleRuleKind = 'manuallyScheduled' | 'dependency';
+export type ScheduleRuleKind = 'manuallyScheduled' | 'mustStartOn' | 'dependency';
 
 // @public
 export interface Scheduling extends DataPlugin {
@@ -2617,6 +2638,7 @@ export interface Scheduling extends DataPlugin {
     constraintOf(entry: EntryId | string): EntryConstraint | undefined;
     diagnostics(): readonly ScheduleDiagnostic[];
     on(name: 'scheduleDiagnostics', handler: ScheduleDiagnosticsHandler): Disposer;
+    setConstraint(entry: EntryId | string, constraint: EntryConstraint): void;
 }
 
 // @public

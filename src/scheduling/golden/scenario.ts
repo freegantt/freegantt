@@ -29,6 +29,12 @@ export type GoldenDiagnostic =
       readonly dependencyIds: readonly string[];
       readonly wouldChange: readonly GoldenChange[];
     }
+  | {
+      readonly code: 'constraint-violated';
+      readonly constraint: 'finishNoLaterThan' | 'mustStartOn';
+      readonly entryId: string;
+      readonly dependencyIds: readonly string[];
+    }
   | { readonly code: 'unknown-entry' | 'unsupported-lag-unit'; readonly dependencyId: string };
 
 /**
@@ -53,6 +59,10 @@ export interface GoldenScenario {
   readonly manuallyScheduled?: readonly string[];
   /** Per Entry id, the day before which the Entry may not start. */
   readonly startNoEarlierThan?: Readonly<Record<string, number>>;
+  /** Per Entry id, the day by which the Entry should finish. */
+  readonly finishNoLaterThan?: Readonly<Record<string, number>>;
+  /** Per Entry id, the day on which the Entry must start. */
+  readonly mustStartOn?: Readonly<Record<string, number>>;
   readonly successorMoves?: SuccessorMoves;
   /** Absent means 24-hour days. */
   readonly calendars?: GoldenCalendars;
@@ -92,12 +102,12 @@ export function toRequest(scenario: GoldenScenario): ScheduleRequest {
       ...(fields.end === undefined ? {} : { end: day(fields.end) }),
     });
   }
-  const constraints = new Map<EntryId, ScheduleConstraint>(
-    Object.entries(scenario.startNoEarlierThan ?? {}).map(([id, date]) => [
-      entryId(id),
-      { kind: 'startNoEarlierThan', date: day(date) },
-    ]),
-  );
+  const constraints = new Map<EntryId, ScheduleConstraint>();
+  const kinds = ['startNoEarlierThan', 'finishNoLaterThan', 'mustStartOn'] as const;
+  for (const kind of kinds) {
+    for (const [id, date] of Object.entries(scenario[kind] ?? {}))
+      constraints.set(entryId(id), { kind, date: day(date) });
+  }
   return {
     entries: scenario.entries.map(([id, start, end, parent]) => ({
       id: entryId(id),
@@ -134,6 +144,8 @@ function toDiagnostic(diagnostic: GoldenDiagnostic): ScheduleDiagnostic {
         entryId: entryId(diagnostic.entryId),
         wouldChange: diagnostic.wouldChange.map(toChange),
       };
+    case 'constraint-violated':
+      return { ...diagnostic, entryId: entryId(diagnostic.entryId) };
     default:
       return diagnostic;
   }
