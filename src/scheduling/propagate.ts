@@ -154,7 +154,7 @@ function followDependencies(
   const moves = movableFields(run.policy, node);
   const dependencyDeltas = deltasByField(demands, undefined, true);
   const deltas = deltasByField(demands, floorDelta, mayPull(run, node));
-  const shift = chooseShift(moves, deltas);
+  const shift = chooseShift(node, moves, deltas);
   const blockedField = FIELDS.find((field) => (dependencyDeltas[field] ?? 0) > 0 && shift[field] === 0);
   const placed = shiftedSpan(node, moves, shift);
   if ((shift.start > 0 || shift.end < 0) && placed.start > placed.end) {
@@ -202,7 +202,7 @@ function holdStart(
 ): void {
   const moves = movableFields(run.policy, node);
   const delta = diffMs(node.days.settle('start', date), node.days.settle('start', node.start));
-  const shift = chooseShift(moves, { start: delta });
+  const shift = chooseShift(node, moves, { start: delta });
   const placed = shiftedSpan(node, moves, shift);
   const inverted = (shift.start > 0 || shift.end < 0) && placed.start > placed.end;
   if (!inverted && (shift.start !== 0 || shift.end !== 0)) {
@@ -270,19 +270,39 @@ interface Shift {
   readonly anchor: ScheduleField;
 }
 
-/** A free span shifts whole by the largest demand. A half-free span shifts only its free date. */
-function chooseShift(moves: readonly ScheduleField[], deltas: FieldDeltas): Shift {
+/**
+ * A free span shifts whole by the largest demand. A half-free span shifts only its free date.
+ * The demands compare in the unit the span keeps its length in, so a weekend never decides the winner.
+ */
+function chooseShift(
+  node: Node & { start: Instant; end: Instant },
+  moves: readonly ScheduleField[],
+  deltas: FieldDeltas,
+): Shift {
   if (moves.includes('start') && moves.includes('end')) {
     const startDelta = deltas.start ?? Number.NEGATIVE_INFINITY;
     const endDelta = deltas.end ?? Number.NEGATIVE_INFINITY;
-    const whole = Math.max(startDelta, endDelta);
-    return { start: whole, end: whole, anchor: startDelta >= endDelta ? 'start' : 'end' };
+    const anchor =
+      demandInDays(node, 'start', startDelta) >= demandInDays(node, 'end', endDelta) ? 'start' : 'end';
+    const whole = anchor === 'start' ? startDelta : endDelta;
+    return { start: whole, end: whole, anchor };
   }
   return {
     start: moves.includes('start') ? (deltas.start ?? 0) : 0,
     end: moves.includes('end') ? (deltas.end ?? 0) : 0,
     anchor: moves.includes('end') ? 'end' : 'start',
   };
+}
+
+/** How many of the Entry's own days a demand on one date asks for. */
+function demandInDays(
+  node: Node & { start: Instant; end: Instant },
+  field: ScheduleField,
+  delta: number,
+): number {
+  if (delta === Number.NEGATIVE_INFINITY) return delta;
+  const settled = node.days.settle(field, node[field]);
+  return node.days.daysBetween(settled, addMs(settled, delta));
 }
 
 /** The dates after a shift. A whole span keeps its length in the Entry's own days. */

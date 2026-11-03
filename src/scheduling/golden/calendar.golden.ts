@@ -96,6 +96,25 @@ export const calendarScenarios: readonly GoldenScenario[] = Object.freeze([
     },
   },
   {
+    name: 'a finish demand that needs more workdays than a start demand wins across a weekend',
+    entries: [
+      ['p', 3, 4],
+      ['q', 7, 8],
+      ['s', 1, 6],
+    ],
+    dependencies: [
+      ['d1', 'p', 's', 'FS', 0],
+      ['d2', 'q', 's', 'FF', 0],
+    ],
+    calendars: weekdays(),
+    expected: {
+      patch: [
+        ['s', 'start', 1, 5],
+        ['s', 'end', 6, 8],
+      ],
+    },
+  },
+  {
     name: 'with no calendar a lag counts 24-hour days',
     entries: [
       ['a', 0, 1],
