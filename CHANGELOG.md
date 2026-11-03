@@ -79,6 +79,13 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - `scheduling().setConstraint()` no longer leaves a "start no earlier than" floor on the Entries it moves. Before, a start floor on `a` also pinned `b` and `c` to their new dates. After `clearConstraint('a')`, a drag of `a` back now pulls them back under `pushAndPull`.
 - A drag that a Dependency overrules no longer moves unrelated Entries. Before, when the overruled bar was the only edit, `scheduling()` recomputed the whole plan and pulled every late successor to its earliest date. Now the run starts from the overruled bar alone.
 - `scheduling()` runs one push after several Dependency replacements in one turn. Before, each replacement queued its own full schedule run and its own write.
+- A decoration that reuses a node no longer keeps the old width or text. Before, a scroll that dropped a row span could leave a row stripe or a range band with the span's width and text.
+- `'invalid-working-calendar'` is now in the `BuiltInThrownCode` union. Before, an exhaustive `switch (error.code)` missed the code `workingCalendar()` throws.
+- The project finish from the float analysis now counts the end of an Entry in a Dependency loop. Before, a loop member that ended last gave a finish that was too early, and every float was too small.
+- `entryDependencies()` removes its arrow and Delete key handlers when the Gantt is destroyed. Before, a key on a connector after that called a disposed plugin and threw `DependencyStoreNotInstalledError`.
+- A Delete on a connector now reports a failed `beforeDependencyRemove` answer on the Gantt's `error` event, with code `dependency-remove-failed`. Before, a rejected answer was an unhandled rejection. The Dependency stays.
+- The Dependencies harness page no longer throws when you click "Remove Foundation 2" twice or click "Replace" after the removal. The button waits while the Entry is gone, `Replace` drops each Dependency whose Entry is gone, and the page flag names the set on screen.
+- The related-to harness plugin removes a pair when its `to` Entry goes, in the same change set, so one undo restores both. Before, the pair stayed in the store, and its line came back if an Entry with that id returned.
 
 ## [0.1.0] - 2026-09-30
 

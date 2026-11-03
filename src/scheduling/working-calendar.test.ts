@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import type { Instant } from '../model/index.js';
+import type { BuiltInThrownCode, Instant } from '../model/index.js';
 import { MS, addMs, createZonedTime } from '../time/index.js';
 import { InvalidWorkingCalendarError, workingCalendar } from './working-calendar.js';
 
@@ -105,6 +105,9 @@ describe('workingCalendar()', () => {
     });
 
     it('refuses an empty weekday set, a bad weekday and a bad holiday', () => {
+      // The code sits in the closed union, so a consumer's exhaustive `switch (error.code)` sees it.
+      const builtInCode: BuiltInThrownCode = 'invalid-working-calendar';
+      expect(new InvalidWorkingCalendarError('x').code).toBe(builtInCode);
       expect(() => workingCalendar({ workdays: [] })).toThrow(InvalidWorkingCalendarError);
       expect(() => workingCalendar({ workdays: [8 as 7] })).toThrow(InvalidWorkingCalendarError);
       expect(() => workingCalendar({ workdays: WEEKDAYS, holidays: ['25/12/2026'] })).toThrow(

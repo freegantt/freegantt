@@ -133,6 +133,15 @@ describe('calculateFloat — loops and gaps', () => {
     expect(floatsOf(request)).toEqual({ C: 0, Z: 0 });
   });
 
+  it('counts the end of a loop member in the project finish', () => {
+    const request: FloatRequest = {
+      entries: [entryOf('A', 0, 2), entryOf('B', 2, 9), entryOf('Z', 0, 5)],
+      dependencies: [link('A', 'B'), link('B', 'A')],
+    };
+    expect(calculateFloat(request).projectFinish).toBe(day(9));
+    expect(floatsOf(request)).toEqual({ Z: 4 });
+  });
+
   it('skips a summary Entry and an Entry with a missing date', () => {
     const undated: ScheduleEntry = { id: id('U'), start: undefined, end: undefined, hasChildren: false };
     const request: FloatRequest = {

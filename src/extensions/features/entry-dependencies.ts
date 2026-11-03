@@ -237,7 +237,7 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
 
   /** The keyboard remove: ask, remove with one undo step, then tell. The Dependency may be gone
    *  when a slow answer arrives, and then nothing happens. */
-  function removeByUser(id: string): void {
+  function removeByUser(id: string, reportFailure: (cause: unknown) => void): void {
     const dependency = all().find((stored) => stored.id === id);
     if (!dependency) return;
     const removal = { dependency };
@@ -251,9 +251,12 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
       if (verdict) commit();
       return;
     }
-    void verdict.then((allowed) => {
-      if (allowed) commit();
-    });
+    // A rejected answer or a throw in `commit` has no caller to catch it, so it goes to `error`.
+    verdict
+      .then((allowed) => {
+        if (allowed) commit();
+      })
+      .catch(reportFailure);
   }
 
   function remove(id: string): void {
@@ -303,7 +306,16 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
       // Which connector did the user select, and what do the keys do to it?
       const selection = connectorSelection(ctx, {
         dependencyIds: () => all().map((dependency) => dependency.id),
-        removeByUser,
+        removeByUser: (id) =>
+          removeByUser(id, (cause) =>
+            ctx.raiseError({
+              code: 'dependency-remove-failed',
+              message:
+                'entryDependencies(): a beforeDependencyRemove handler or a dependencyRemove listener failed.',
+              severity: 'error',
+              cause,
+            }),
+          ),
       });
       // What lines does the Gantt draw? One per Dependency, from an edge of the predecessor's bar to
       // an edge of the successor's bar. The accessible name reads "<from label> → <to label>".
@@ -341,6 +353,8 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
           });
         });
       }
+
+      return () => selection.disposeKeys();
     },
 
     replaceAll(dependencies) {

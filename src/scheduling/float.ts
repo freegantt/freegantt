@@ -6,7 +6,7 @@ import type { EntryId, Instant } from '../model/index.js';
 import { diffMs } from '../time/index.js';
 import type { Span } from './day-counting.js';
 import { anchorField, buildFloatGraph, drivenField } from './float-graph.js';
-import type { FloatEdge, FloatGraph, FloatRequest } from './float-graph.js';
+import type { FloatEdge, FloatGraph, FloatNode, FloatRequest } from './float-graph.js';
 
 export type { FloatRequest } from './float-graph.js';
 
@@ -32,7 +32,7 @@ export interface FloatResult {
  */
 export function calculateFloat(request: FloatRequest): FloatResult {
   const graph = buildFloatGraph(request);
-  if (graph.order.length === 0) return { projectFinish: undefined, entries: new Map() };
+  if (graph.nodes.length === 0) return { projectFinish: undefined, entries: new Map() };
 
   const projectFinish = latestFinish(graph);
   const late = latestSpans(graph, projectFinish);
@@ -48,11 +48,11 @@ export function calculateFloat(request: FloatRequest): FloatResult {
   return { projectFinish, entries };
 }
 
+// A loop member gets no float, but its end still bounds the project, so it counts here.
 function latestFinish(graph: FloatGraph): Instant {
-  let latest = graph.nodes[graph.order[0] as number]?.end as Instant;
-  for (const index of graph.order) {
-    const end = graph.nodes[index]?.end as Instant;
-    if (end > latest) latest = end;
+  let latest = (graph.nodes[0] as FloatNode).end;
+  for (const node of graph.nodes) {
+    if (node.end > latest) latest = node.end;
   }
   return latest;
 }
