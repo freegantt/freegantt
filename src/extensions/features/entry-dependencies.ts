@@ -12,7 +12,15 @@ import {
   UnsupportedLagUnitError,
   entryId,
 } from '../../model/index.js';
-import type { Disposer, Duration, EntryId, PluginStore, PluginStoreView } from '../../model/index.js';
+import type {
+  Disposer,
+  Duration,
+  EntryId,
+  PluginStore,
+  PluginStoreName,
+  PluginStoreView,
+  StoreRowUpdated,
+} from '../../model/index.js';
 import { connectorIdOf, connectorSelection } from './entry-dependencies-selection.js';
 
 /** The plugin id other plugins name in `requires`. */
@@ -138,6 +146,34 @@ function toDependency(toId: EntryId, row: PredecessorRow): Dependency {
 export function readDependencies(store: DependencyStoreView | undefined): readonly Dependency[] {
   if (!store) return [];
   return [...store.all].flatMap(([toId, row]) => row.predecessors.map((p) => toDependency(toId, p)));
+}
+
+const DEPENDENCY_STORE_NAME: PluginStoreName = `plugin:${ENTRY_DEPENDENCIES_ID}`;
+
+/**
+ * The successors that gained a Dependency, or hold a changed one, in these store row changes. A row that
+ * only loses Dependencies adds none: a removed Dependency moves nobody. Rows of other stores are ignored.
+ */
+export function successorsOfAddedDependencies(rows: readonly StoreRowUpdated[]): Set<EntryId> {
+  const successors = new Set<EntryId>();
+  for (const { store, id, from, to } of rows) {
+    if (store !== DEPENDENCY_STORE_NAME) continue;
+    const before = new Set(
+      ((from as DependencyRow | undefined)?.predecessors ?? []).map((predecessor) =>
+        JSON.stringify(predecessor),
+      ),
+    );
+    const gained = ((to as DependencyRow | undefined)?.predecessors ?? []).some(
+      (predecessor) => !before.has(JSON.stringify(predecessor)),
+    );
+    if (gained) successors.add(id);
+  }
+  return successors;
+}
+
+/** Does any of these store row changes write the Dependency store? */
+export function writesDependencies(rows: readonly StoreRowUpdated[]): boolean {
+  return rows.some((row) => row.store === DEPENDENCY_STORE_NAME);
 }
 
 function assertEntryExists(dataset: Dataset, id: EntryId | string, operation: string): void {
