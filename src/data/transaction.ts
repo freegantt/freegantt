@@ -364,6 +364,7 @@ function stageRemovalsAndRowWrites(data: TransactionData, token: TxToken): void 
       committedChildIds: data.entries.committedChildIds(),
       fields: data.fields,
       lockRule: data.lockRule,
+      storeRows: data.pluginStores.pendingRows(data.entries.pendingRemoved().map((row) => row.entity.id)),
     });
   for (const id of data.removalsFor(buildRequest)) {
     if (data.entries.has(id)) data.entries.stageSubtreeRemoval(token, id);

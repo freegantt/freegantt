@@ -210,6 +210,9 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
   const removedEntities = data.entries.pendingRemoved();
   const added = addedEntities.map((row) => row.entity);
   const removed = removedEntities.map((row) => row.entity);
+  // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
+  // Read before the hook, so an extender sees which store rows this transaction changes.
+  const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
   // The extender's cascade is read against the state its own edit lands on — committed entries
   // overlaid with this transaction's body edits, plus the entries this transaction itself adds — not
   // against `byId` alone (#212 R2 fix-plan review, finding A). `byId` is pre-transaction: an entry the
@@ -226,6 +229,7 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
     committedChildIds: data.entries.committedChildIds(),
     fields: data.fields,
     lockRule: data.lockRule,
+    storeRows: pluginRows,
   });
   const extenderReading = data.extraEditsReadingFor(editRequest);
   const extenderEdits: ProposedEdits = extenderReading.stored;
@@ -292,9 +296,6 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
   // onto that entity instead, the same reason the sibling rank below folds onto the entity too.
   const rollupUpdatedForOthers = rollupUpdated.filter((row) => !addedIds.has(row.id));
   const rolledUpEntitiesForFold = foldRollUpRowsOntoAdded(addedEntitiesForFold, rollupUpdated, data.fields);
-
-  // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
-  const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
   // The renumber pass (ADR 0034): every write this transaction staged replays here, once, over the
   // committed groups it touched — after the Rollup, so a reparent's own group change is already
