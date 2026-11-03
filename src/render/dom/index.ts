@@ -1478,7 +1478,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // selected-row band, and time shading, and under every bar — the design's own paint order
       // (`rowBands` -> `decorations` -> `tickLines` -> `bars`).
       tickLines = attachTickLines(timelineHost, barLayer);
-      // Above the bars, so a line crosses over the bar it joins. The layer takes no pointer events.
+      // Below the bars, so a line passes behind the bars it crosses. The selected line and the label text
+      // sit in a second layer above the bars. Both layers take no pointer events.
       connectors = attachConnectors(timelineHost, barLayer);
       connectAffordance = attachConnectAffordance(barLayer, (id) => barGeomByBarId.get(id));
       dateLines = attachDateLines(timelineHost, headerLayer, contentSizer);

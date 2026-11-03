@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- Connector lines now pass behind the bars they cross. The selected line and the label text still draw above the bars. A click on a line between bars still selects it.
 - Connecting two bars is easier. A drop anywhere on a bar joins its nearer edge: the left half is `start`, the right half is `end`. A drop on a port still joins that port's edge. While you drag, the bar under the pointer gets an outline, its snap edge shows an active port, and every connectable bar shows its ports. The port hit area is 20 px wide (32 px on a coarse pointer) and as tall as the bar, and the dot is 10 px. The resize handle keeps the middle of the edge. The new `.fg-connect-target` outline class marks the target bar, and `ConnectDraft` gains `targetBarId` and `connectableBarIds`.
 - The harness "Dependencies" page installs `scheduling()`. A connect drag onto a bar that starts too early moves that bar, and one undo puts the bar back and removes the line.
 - `scheduling()` moves a successor in the same step as a new Dependency. `entryDependencies().add()` and the connect drag push a successor that starts too early, and its followers, with `pushOnly` rules. A manually scheduled Entry stays, and constraints apply. One undo removes the link and the move, and the float follows in the same step. A removed Dependency moves nothing. `replaceAll()` pushes too, in a sync change set with no undo step.

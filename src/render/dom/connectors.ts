@@ -67,28 +67,45 @@ function patch(node: SVGPathElement, geom: ConnectorGeom): void {
   else node.removeAttribute('aria-current');
 }
 
-/** Mounts one SVG layer above the bar layer. The layer ignores the pointer, so a bar under a line
- *  still takes its gesture. Call `sync` each frame. */
+function isSelected(connector: FrameConnector): boolean {
+  return connector.flags.selected === true;
+}
+
+/** Mounts two SVG layers. Lines lie below the bars, so a long line passes behind the bars it crosses.
+ *  A second layer above the bars repeats the selected line and draws the label text. Both layers
+ *  ignore the pointer, so a bar still takes its gesture. Call `sync` each frame. */
 export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElement): ConnectorsAttachment {
   const layer = document.createElement('div');
   layer.className = 'fg-connectors';
   const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
   svg.setAttribute('class', 'fg-connectors-svg');
   layer.append(svg);
-  timelineHost.insertBefore(layer, barLayer.nextSibling);
+  timelineHost.insertBefore(layer, barLayer);
+
+  const overLayer = document.createElement('div');
+  overLayer.className = 'fg-connectors fg-connectors-over';
+  const overSvg = document.createElementNS(SVG_NAMESPACE, 'svg');
+  overSvg.setAttribute('class', 'fg-connectors-svg');
+  overLayer.append(overSvg);
+  timelineHost.insertBefore(overLayer, barLayer.nextSibling);
 
   const paths = new KeyedLayer<FrameConnector, string, ConnectorGeom, SVGPathElement>();
-  // The drawn label text sits in its own group above the lines. The path keeps the accessible name,
+  // The selected line stays readable over a bar. This copy has no pointer events and no accessible
+  // name: the real line below keeps the click, the focus and the label.
+  const selectedCopies = new KeyedLayer<FrameConnector, string, ConnectorGeom, SVGPathElement>();
+  // The drawn label text sits above the bars. The path keeps the accessible name,
   // so a screen reader never hears the text twice.
   const textGroup = document.createElementNS(SVG_NAMESPACE, 'g');
-  svg.append(textGroup);
+  overSvg.append(textGroup);
   const texts = new KeyedLayer<FrameConnector, string, ConnectorTextGeom, SVGTextElement>();
 
   return {
     sync(connectors, contentWidth, contentHeight, paneHeight) {
       // The svg box is the content box, so a line near an edge never widens the pane's scroll range.
-      svg.setAttribute('width', String(contentWidth));
-      svg.setAttribute('height', String(Math.max(contentHeight, paneHeight)));
+      for (const target of [svg, overSvg]) {
+        target.setAttribute('width', String(contentWidth));
+        target.setAttribute('height', String(Math.max(contentHeight, paneHeight)));
+      }
       const stopId = tabStopId(connectors);
       paths.sync(svg, connectors, {
         key: (connector) => connector.id,
@@ -99,6 +116,17 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
         },
         toGeom: (connector) => toGeom(connector, stopId),
         patch,
+      });
+      selectedCopies.sync(overSvg, connectors.filter(isSelected), {
+        key: (connector) => connector.id,
+        create: () => document.createElementNS(SVG_NAMESPACE, 'path'),
+        toGeom: (connector) => toGeom(connector, undefined),
+        patch: (node, geom) => {
+          node.setAttribute('class', `${geom.className} fg-connector-copy`);
+          node.setAttribute('d', geom.d);
+          node.setAttribute('data-flag', geom.flagTokens);
+          node.setAttribute('aria-hidden', 'true');
+        },
       });
       texts.sync(
         textGroup,
@@ -126,7 +154,9 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
     },
     destroy() {
       layer.remove();
+      overLayer.remove();
       paths.clear();
+      selectedCopies.clear();
       texts.clear();
     },
   };
