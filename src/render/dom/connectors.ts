@@ -47,7 +47,20 @@ export interface ConnectorsAttachment {
   destroy(): void;
 }
 
+// I2-ok: a pure memo keyed on the frame's own path array. No Gantt can read another Gantt's state from it.
+const pathDataCache = new WeakMap<readonly PathCommand[], string>();
+
+/** A drag preview syncs every visible line on each animation frame. A line the drag did not move
+ *  keeps its path array, so its path string is built once. */
 function pathData(path: readonly PathCommand[]): string {
+  const cached = pathDataCache.get(path);
+  if (cached !== undefined) return cached;
+  const data = pathDataOf(path);
+  pathDataCache.set(path, data);
+  return data;
+}
+
+function pathDataOf(path: readonly PathCommand[]): string {
   return path
     .map((c) => (c.cmd === 'C' ? `C${c.x1} ${c.y1} ${c.x2} ${c.y2} ${c.x} ${c.y}` : `${c.cmd}${c.x} ${c.y}`))
     .join('');
