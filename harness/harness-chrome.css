@@ -371,6 +371,22 @@ nav.harness-site-nav a[aria-current='page'] {
   border-color: var(--rule);
 }
 
+/* A page's own action buttons take the theme colors. Unstyled, WebKit paints them grey with white
+   text in the dark theme, and axe fails the contrast. */
+.workbench-actions button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-control);
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.workbench-actions button:hover:not(:disabled) {
+  background: var(--surface-sunk);
+}
+
 .toolbar button:active:not(:disabled) {
   background: var(--rule);
 }
