@@ -362,7 +362,7 @@ test('a connector lies below the bars it crosses, and a click on the selected li
         const point = path.getPointAtLength(at);
         const hit = document.elementFromPoint(box.left + point.x, box.top + point.y);
         if (hit?.closest('.fg-bar')) {
-          return { x: box.left + point.x, y: box.top + point.y, id: path.dataset.connectorId! };
+          return { x: box.left + point.x, y: box.top + point.y, id: path.dataset['connectorId']! };
         }
       }
     }
