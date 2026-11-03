@@ -31,6 +31,7 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
   const domHandlers = new Map<string, DomHandler>();
   const keyHandlers = new Map<string, KeyHandler>();
   const focused: string[] = [];
+  let refreshes = 0;
   // A fake node stands for a connector line. `targetUnder` reads its id back.
   const lineOf = (connectorId: string) => {
     const line = document.createElement('div');
@@ -42,6 +43,9 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
   const ctx = {
     dataset,
     view: {
+      refreshConnectors: () => {
+        refreshes += 1;
+      },
       registerConnector: (next: () => readonly Connector[]) => {
         provider = next;
         return () => {};
@@ -71,6 +75,7 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
     plugin,
     dataset,
     focused,
+    refreshes: () => refreshes,
     connectors: () => provider?.() ?? [],
     selectedIds: () =>
       (provider?.() ?? []).filter((connector) => connector.flags.selected === true).map((c) => c.id),
