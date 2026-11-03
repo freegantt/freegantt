@@ -80,6 +80,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - `entryDependencies()` removes its arrow and Delete key handlers when the Gantt is destroyed. Before, a key on a connector after that called a disposed plugin and threw `DependencyStoreNotInstalledError`.
 - A Delete on a connector now reports a failed `beforeDependencyRemove` answer on the Gantt's `error` event, with code `dependency-remove-failed`. Before, a rejected answer was an unhandled rejection. The Dependency stays.
 - The Dependencies harness page no longer throws when you click "Remove Foundation 2" twice or click "Replace" after the removal. The button waits while the Entry is gone, `Replace` drops each Dependency whose Entry is gone, and the page flag names the set on screen.
+- The related-to harness plugin removes a pair when its `to` Entry goes, in the same change set, so one undo restores both. Before, the pair stayed in the store, and its line came back if an Entry with that id returned.
 
 ## [0.1.0] - 2026-09-30
 
