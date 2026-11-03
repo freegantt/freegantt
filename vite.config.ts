@@ -36,6 +36,7 @@ export default defineConfig({
         'related-to': page('related-to.html'),
         dependencies: page('dependencies.html'),
         scheduling: page('scheduling.html'),
+        'critical-path': page('critical-path.html'),
       },
     },
   },
