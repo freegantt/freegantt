@@ -311,6 +311,10 @@ ${DARK_COLOR_TOKENS}
    width: --fg-grid-content-width (#126) — falls back to 100% (today's layout, unchanged)
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
+/* The grid header is one row tall across every band. A divider between bands would run through the
+   column names, so the bands draw none and the header draws the one divider at its bottom edge. */
+.fg-grid-spacer .fg-band { border-bottom-color: transparent; }
+.fg-grid-spacer .fg-grid-header { box-shadow: inset 0 -1px 0 var(--fg-header-divider-color); }
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: ${INTERNAL_Z.paneChrome}; color: var(--fg-header-text); }
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
