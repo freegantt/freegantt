@@ -64,6 +64,11 @@ document.querySelector<HTMLButtonElement>('#replace-dependencies-btn')!.addEvent
   showDependencies();
 });
 
+// The arrowhead is a Gantt option. The checkbox sets it, and the Gantt redraws every connector.
+document.querySelector<HTMLInputElement>('#connector-arrow-toggle')!.addEventListener('change', (event) => {
+  gantt.connectorArrow = (event.target as HTMLInputElement).checked ? 'end' : 'none';
+});
+
 document.querySelector<HTMLButtonElement>('#collapse-foundation-btn')!.addEventListener('click', () => {
   gantt.collapse('foundation');
 });

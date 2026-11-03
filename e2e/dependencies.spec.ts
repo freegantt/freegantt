@@ -386,3 +386,23 @@ test('a connector lies below the bars it crosses, and a click on the selected li
   await expect(lineOf(page, 'dep-fs')).toHaveAttribute('data-flag', /selected/);
   await expect(page.locator('#gantt .fg-connectors-over path[data-flag~="selected"]')).toHaveCount(1);
 });
+
+// An arrowhead shows at the arrival end of every connector until the page switches it off.
+
+test('the arrowhead shows with connectorArrow end and goes with none', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const arrowed = page.locator('#gantt path[data-connector-id][marker-end]');
+  const lines = page.locator('#gantt path[data-connector-id]');
+
+  expect(await lines.count()).toBeGreaterThan(0);
+  await expect(arrowed).toHaveCount(await lines.count());
+  await expect(page.locator('#gantt marker .fg-connector-arrow')).toHaveCount(1);
+
+  await page.getByLabel('Arrowheads').uncheck();
+  await expect(arrowed).toHaveCount(0);
+  expect(await page.evaluate(() => window.__gantt.connectorArrow)).toBe('none');
+
+  await page.getByLabel('Arrowheads').check();
+  await expect(arrowed).toHaveCount(await lines.count());
+});
