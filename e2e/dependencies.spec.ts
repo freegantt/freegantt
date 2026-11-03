@@ -20,6 +20,15 @@ const connectorIds = (page: Page) =>
 const nextFrame = (page: Page) =>
   page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 
+// Scheduling pushes each successor to its source's end, so the links touch. Zoomed in, the line's
+// stroke is long enough to click.
+async function openZoomedIn(page: Page): Promise<void> {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  await page.evaluate(() => window.__gantt.zoomBy(3, 0));
+  await nextFrame(page);
+}
+
 test('the plugin draws a named connector for each Dependency', async ({ page }) => {
   await page.goto('/dependencies.html');
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
@@ -206,7 +215,7 @@ test('every connector reads in the accessibility tree, and one is the tab stop',
 });
 
 test('a click on a connector focuses it and leaves the Entry selection alone', async ({ page }) => {
-  await page.goto('/dependencies.html');
+  await openZoomedIn(page);
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
   const before = await page.evaluate(() => window.__gantt.selectedEntryIds);
 
@@ -272,7 +281,7 @@ const selectedLines = (page: Page) => page.locator('#gantt [data-connector-id][a
 test('a click on a connector shows it selected at once, and a click on empty chart clears it', async ({
   page,
 }) => {
-  await page.goto('/dependencies.html');
+  await openZoomedIn(page);
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
   await expect(selectedLines(page)).toHaveCount(0);
 
@@ -314,7 +323,7 @@ test('arrow keys move the selected style with the focus', async ({ page }) => {
 });
 
 test('a backward connector runs its long horizontal along the gap above the target row', async ({ page }) => {
-  await page.goto('/dependencies.html');
+  await openZoomedIn(page);
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const route = await page.evaluate(() => {
@@ -350,7 +359,7 @@ test('a backward connector runs its long horizontal along the gap above the targ
 test('a connector lies below the bars it crosses, and a click on the selected line still works', async ({
   page,
 }) => {
-  await page.goto('/dependencies.html');
+  await openZoomedIn(page);
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const crossing = await page.evaluate(() => {
@@ -411,7 +420,7 @@ test('the arrowhead shows with connectorArrow end and goes with none', async ({ 
 // preview places, so the lines end there too. Escape sends everything back.
 
 test('connectors follow a bar drag and the successor it pushes, and go back on Escape', async ({ page }) => {
-  await page.goto('/dependencies.html');
+  await openZoomedIn(page);
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   const edges = () =>
@@ -436,7 +445,8 @@ test('connectors follow a bar drag and the successor it pushes, and go back on E
 
   const committed = await edges();
   expect(committed.lineStart).toBeCloseTo(committed.firstEnd, 0);
-  expect(committed.lineEnd).toBeCloseTo(committed.secondStart, 0);
+  // The successor starts at the source's end, so the line drops 8 px inside the bar's left edge.
+  expect(committed.lineEnd).toBeCloseTo(committed.secondStart + 8, 0);
 
   const bar = (await page.locator('#gantt .fg-bar[data-bar-id^="foundation-1"]').boundingBox())!;
   await page.mouse.move(bar.x + bar.width / 2, bar.y + bar.height / 2);
@@ -448,7 +458,7 @@ test('connectors follow a bar drag and the successor it pushes, and go back on E
   expect(dragging.firstEnd).toBeGreaterThan(committed.firstEnd + 100);
   expect(dragging.secondStart).toBeGreaterThan(committed.secondStart + 50);
   expect(dragging.lineStart).toBeCloseTo(dragging.firstEnd, 0);
-  expect(dragging.lineEnd).toBeCloseTo(dragging.secondStart, 0);
+  expect(dragging.lineEnd).toBeCloseTo(dragging.secondStart + 8, 0);
 
   await page.keyboard.press('Escape');
   await page.mouse.up();
@@ -458,4 +468,39 @@ test('connectors follow a bar drag and the successor it pushes, and go back on E
   expect(restored.lineStart).toBeCloseTo(committed.lineStart, 0);
   expect(restored.lineEnd).toBeCloseTo(committed.lineEnd, 0);
   expect(restored.firstEnd).toBeCloseTo(committed.firstEnd, 0);
+});
+
+test('a connector to a bar that starts at the end of its source drops onto the top edge', async ({
+  page,
+}) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const route = await page.evaluate(() => {
+    const line = document.querySelector<SVGPathElement>('#gantt [data-connector-id="dependency:dep-touch"]')!;
+    const bar = document.querySelector('#gantt .fg-bar[data-bar-id^="tail-2"]')!;
+    const layer = bar.closest('.fg-bars-layer, .fg-timeline-content') ?? bar.parentElement!;
+    const origin = layer.getBoundingClientRect();
+    const box = bar.getBoundingClientRect();
+    const marker = document.getElementById(
+      /url\(#(.+)\)/.exec(line.getAttribute('marker-end') ?? '')?.[1] ?? '',
+    );
+    return {
+      d: line.getAttribute('d') ?? '',
+      barTop: box.top - origin.top,
+      hasArrowhead: marker !== null,
+    };
+  });
+  const points = [...route.d.matchAll(/(-?\d+(?:\.\d+)?)[ ,](-?\d+(?:\.\d+)?)/g)].map((m) => ({
+    x: Number(m[1]),
+    y: Number(m[2]),
+  }));
+  expect(route.hasArrowhead).toBe(true);
+  expect(points).toHaveLength(3);
+  const [bend, last] = [points[1]!, points[2]!];
+  // One bend: right along the source row, then straight down onto the successor.
+  expect(bend.y).toBe(points[0]!.y);
+  expect(last.x).toBe(bend.x);
+  expect(last.y).toBeGreaterThan(bend.y);
+  expect(last.y).toBeCloseTo(route.barTop, 0);
 });
