@@ -115,6 +115,51 @@ export const calendarScenarios: readonly GoldenScenario[] = Object.freeze([
     },
   },
   {
+    name: 'a finish-to-finish Entry keeps its length in workdays when its end moves',
+    entries: [
+      ['a', 0, 2],
+      ['b', 0, 1],
+    ],
+    dependencies: [['d1', 'a', 'b', 'FF', 0]],
+    calendars: weekdays(),
+    expected: {
+      patch: [
+        ['b', 'start', 0, 1],
+        ['b', 'end', 1, 2],
+      ],
+    },
+  },
+  {
+    name: 'a finish-to-finish Entry moved over a weekend keeps its length in workdays',
+    entries: [
+      ['a', 0, 5],
+      ['b', 0, 2],
+    ],
+    dependencies: [['d1', 'a', 'b', 'FF', 0]],
+    calendars: weekdays(),
+    expected: {
+      patch: [
+        ['b', 'start', 0, 1],
+        ['b', 'end', 2, 5],
+      ],
+    },
+  },
+  {
+    name: 'a start-to-finish Entry ends on the last workday before the predecessor start',
+    entries: [
+      ['a', 4, 6],
+      ['b', 0, 1],
+    ],
+    dependencies: [['d1', 'a', 'b', 'SF', 0]],
+    calendars: weekdays(),
+    expected: {
+      patch: [
+        ['b', 'start', 0, 1],
+        ['b', 'end', 1, 2],
+      ],
+    },
+  },
+  {
     name: 'with no calendar a lag counts 24-hour days',
     entries: [
       ['a', 0, 1],
