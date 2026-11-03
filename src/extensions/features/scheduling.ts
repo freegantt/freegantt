@@ -462,7 +462,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     drivingPath(entry) {
       const { dataset } = installation('scheduling.drivingPath');
       const entries = dataset.entries.all;
-      return findDrivingPath(floatRequest(entries, dataset), entryId(entry));
+      return findDrivingPath(floatRequest(entries, dataset), entry);
     },
 
     diagnostics() {
