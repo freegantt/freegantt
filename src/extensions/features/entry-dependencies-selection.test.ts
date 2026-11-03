@@ -66,13 +66,17 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
     interaction: {
       registerKeyHandler: (chord: string, handler: KeyHandler) => {
         keyHandlers.set(chord, handler);
-        return () => {};
+        return () => {
+          keyHandlers.delete(chord);
+        };
       },
     },
   } as unknown as PluginContext;
-  plugin.view?.(ctx);
+  const disposeView = plugin.view?.(ctx);
   return {
     plugin,
+    disposeView: () => (typeof disposeView === 'function' ? disposeView() : undefined),
+    keyChords: () => [...keyHandlers.keys()].sort(),
     dataset,
     focused,
     refreshes: () => refreshes,
@@ -97,6 +101,15 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
 const settled = (): Promise<void> => new Promise((resolve) => setTimeout(resolve));
 
 describe('connector selection', () => {
+  it('removes its five key handlers when the view half is disposed', () => {
+    const view = mount();
+    expect(view.keyChords()).toEqual(['ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'Delete']);
+
+    view.disposeView();
+
+    expect(view.keyChords()).toEqual([]);
+  });
+
   it('a click on a connector flags it as selected, and a click elsewhere clears the flag', () => {
     const view = mount();
 
