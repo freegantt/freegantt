@@ -361,7 +361,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         }),
       );
     }
-    return mergeEntryEdits(edits, floatEdits(request, edits));
+    return mergeEntryEdits(edits, floatEditsUnlessPreview(request, edits));
   }
 
   /**
@@ -422,6 +422,11 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   /** The analysis input for the Entries as they stand in the store. */
   function floatRequest(entries: readonly Entry[], dataset: Dataset): FloatRequest {
     return { entries, dependencies: dependencies(), ...auditCalendarOption(dataset, entries) };
+  }
+
+  /** A drag preview shows bar positions only, and the commit writes float again, so the preview skips the whole-plan pass. */
+  function floatEditsUnlessPreview(request: EditRequest, moved: ReadonlyMap<EntryId, EntryEdit>): EntryEdits {
+    return request.isPreview ? new Map() : floatEdits(request, moved);
   }
 
   /** Writes `float` and `critical` into the edit, so one undo restores them with the dates. */

@@ -65,6 +65,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 
 ### Changed
 
+- `scheduling()` skips its float pass on a drag-preview frame, so a drag on a long chain costs less per frame. Float and critical marks update on commit, as before.
 - A finish-to-start connector to a bar that starts at, or within two stubs (24 px) after, the end of its source now takes one bend. The line runs right from the source, then drops onto the successor's top edge (or rises onto its bottom edge), and the arrowhead points into the bar. A start-to-finish connector does the same, mirrored. It used to zig-zag back across both bars. `ConnectorAnchor` gains `barTop` and `barBottom`. A bar in the way of the new vertical keeps the old route.
 - A `startNoEarlierThan` floor now moves an Entry that has no incoming dependency. A floor later than the start moves the Entry later. Before, such a floor changed nothing.
 

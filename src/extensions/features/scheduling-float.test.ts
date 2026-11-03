@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { Dataset } from '../../api/dataset.js';
-import { SchedulingNotInstalledError } from '../../model/index.js';
-import type { Duration } from '../../model/index.js';
+import { Dataset, extraEditsFor } from '../../api/dataset.js';
+import { SchedulingNotInstalledError, entryId } from '../../model/index.js';
+import { instant } from '../../api/index.js';
+import type { Duration, ProposedEdit } from '../../model/index.js';
 import { entryDependencies } from './entry-dependencies.js';
 import type { DependencyInput } from './entry-dependencies.js';
 import { scheduling } from './scheduling.js';
@@ -75,6 +76,28 @@ describe('scheduling() float', () => {
       expect(floatOf(dataset, 'c')).toBe(2);
       expect(criticalOf(dataset, 'c')).toBe(false);
     });
+  });
+
+  it('writes no float on a drag-preview frame, and still writes it on commit', async () => {
+    const { dataset } = network();
+    await settled();
+    const edit = {
+      start: instant('2026-01-06T00:00:00Z'),
+      end: instant('2026-01-08T00:00:00Z'),
+    };
+    const draft: ProposedEdit = {
+      __brand: 'ProposedEdit',
+      props: {},
+      proposedKeys: new Set(Object.keys(edit)),
+      ...edit,
+    };
+    const preview = extraEditsFor(dataset, new Map([[entryId('c'), draft]]));
+    const written = [...preview.values()].flatMap((write) => Object.keys(write));
+    expect(written).not.toContain('float');
+    expect(written).not.toContain('critical');
+    dataset.entries.update('c', edit);
+    expect(floatOf(dataset, 'c')).toBe(0);
+    expect(criticalOf(dataset, 'c')).toBe(true);
   });
 
   it('follows a successor push through the whole chain', async () => {
