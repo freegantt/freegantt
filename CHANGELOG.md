@@ -12,6 +12,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 
 ### Added
 
+- A bar label outside its bar draws above the connector lines, with a halo in the pane color, so a line behind it never cuts the text. The new `--fg-bar-label-halo-color` token sets the halo color, and `transparent` turns it off.
 - The harness "Dependencies" page shows connector arrowheads and has an Arrowheads box that switches `connectorArrow`.
 - The new `connectorArrow: 'end' | 'none'` Gantt option changes live. The default `'end'` draws a filled arrowhead at the arrival end of every connector, pointing into the target bar's edge. `'none'` draws none. The arrowhead stays inside the 12 px stub, so no route changes. Two tokens style it: `--fg-connector-arrow-size` (default `8px`) and `--fg-connector-arrow-color` (default the line colour, so a selected connector gets the selected colour). New type `ConnectorArrow` and Part `.fg-connector-arrow`.
 - The new `fitDatasetPaddingPx` Gantt option (also on `TimeScaleModel`) sets the empty axis before the first bar and after the last bar under `range: 'fitDataset'`. It changes live. The default is `24` px, room for a connector stub and its arrowhead, so a hook into the first bar stays in view. `0` removes the margin. A pinned `range` has none. A `'fitDataset'` axis now starts 24 px before the first date and ends 24 px after the last.

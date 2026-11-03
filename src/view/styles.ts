@@ -484,8 +484,9 @@ ${DARK_COLOR_TOKENS}
 /* data-label='outside' (render/dom/index.ts's own resolveBarLabelPlacement) — the label leaves the
    bar's own box and paints on the pane beside it, in the pane's own ink rather than the bar fill's
    label colour, with no ellipsis: resolveBarLabelPlacement only ever chooses 'outside' when the full
-   label already fits past the bar's right edge. */
-.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); }
+   label already fits past the bar's right edge. Its halo in the pane color keeps a connector line
+   behind it from cutting the text. */
+.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); text-shadow: 0 0 1px var(--fg-bar-label-halo-color), 1px 0 0 var(--fg-bar-label-halo-color), -1px 0 0 var(--fg-bar-label-halo-color), 0 1px 0 var(--fg-bar-label-halo-color), 0 -1px 0 var(--fg-bar-label-halo-color), 1px 1px 0 var(--fg-bar-label-halo-color), -1px -1px 0 var(--fg-bar-label-halo-color), 1px -1px 0 var(--fg-bar-label-halo-color), -1px 1px 0 var(--fg-bar-label-halo-color); }
 /* What contains an 'inside' label too wide for its own bar? This clip, and only for that one case
    (#436). The clip keys on data-label rather than sitting on .fg-bar, because the attribute is
    exactly the set of bars whose one child the library placed: 'outside' is the child meant to leave
@@ -558,7 +559,7 @@ ${DARK_COLOR_TOKENS}
    the box. A coarse pointer, like a finger, gets a wider box. Shown on the hovered bar, and on every
    connectable bar during a drag, only while a plugin handles the connect drag. */
 /* A port sits outside the bar, past the resize handle, so a grab on the dot connects and never resizes. */
-.fg-container { --fg-connector-arrow-size: 8px; --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; --fg-connector-port-gap: 4px; }
+.fg-container { --fg-bar-label-halo-color: var(--fg-pane-bg); --fg-connector-arrow-size: 8px; --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; --fg-connector-port-gap: 4px; }
 .fg-connector-port { --fg-port-width: var(--fg-connector-port-width); position: absolute; top: 0; left: 0; width: var(--fg-port-width); box-sizing: border-box; padding: 0 2px; cursor: crosshair; touch-action: none; display: flex; align-items: center; }
 @media (pointer: coarse) { .fg-connector-port { --fg-port-width: var(--fg-connector-port-coarse-width); } }
 .fg-connector-port[data-edge="start"] { justify-content: flex-end; margin-left: calc(-1 * (var(--fg-port-width) + var(--fg-connector-port-gap))); }
