@@ -3,6 +3,8 @@ import fc from 'fast-check';
 import { entryId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 import { createTimeScale, dayPreset, instant } from '../../time/index.js';
+import { routeConnector } from './route-connector.js';
+import type { ConnectorAnchor } from './route-connector.js';
 import { entryDoubles } from '../entry-double.js';
 import { createVariantRegistry } from '../bars/variants.js';
 import { FrameLayout } from '../frame-layout.js';
@@ -71,8 +73,8 @@ describe('connectors in the frame', () => {
     expect(connector?.id).toBe('related:ab');
     expect(connector?.path).toEqual([
       { cmd: 'M', x: 1000, y: 16 },
-      { cmd: 'L', x: 1008, y: 16 },
-      { cmd: 'L', x: 1008, y: 48 },
+      { cmd: 'L', x: 1012, y: 16 },
+      { cmd: 'L', x: 1012, y: 48 },
       { cmd: 'L', x: 2000, y: 48 },
     ]);
   });
@@ -205,5 +207,128 @@ describe('connectors in the frame', () => {
       { cmd: 'M', x: 1000, y: 16 },
       { cmd: 'L', x: 2000, y: 16 },
     ]);
+  });
+});
+
+describe('connector route shapes', () => {
+  /** Four rows. `a` and `d` sit at the left, and the middle rows hold bars far to the right. */
+  const rows = entryDoubles([
+    { id: 'a', name: 'A', start: 0, end: MS_PER_BAR },
+    { id: 'm1', name: 'M1', start: 5 * MS_PER_BAR, end: 6 * MS_PER_BAR },
+    { id: 'm2', name: 'M2', start: 5 * MS_PER_BAR, end: 6 * MS_PER_BAR },
+    { id: 'd', name: 'D', start: MS_PER_BAR / 2, end: 3 * MS_PER_BAR },
+  ]);
+  const pathOf = (from: ConnectorInput['from'], to: ConnectorInput['to']) =>
+    frameOf([() => [{ id: 'c', from, to }]], { entries: rows }).connectors[0]?.path;
+  const end = (id: string) => ({ entryId: entryId(id), edge: 'end' as const });
+  const start = (id: string) => ({ entryId: entryId(id), edge: 'start' as const });
+
+  it('runs a backward finish-to-start along the near gap of the target row, going down', () => {
+    expect(pathOf(end('a'), start('d'))).toEqual([
+      { cmd: 'M', x: 1000, y: 16 },
+      { cmd: 'L', x: 1012, y: 16 },
+      { cmd: 'L', x: 1012, y: 96 },
+      { cmd: 'L', x: 488, y: 96 },
+      { cmd: 'L', x: 488, y: 112 },
+      { cmd: 'L', x: 500, y: 112 },
+    ]);
+  });
+
+  it('runs a backward finish-to-start along the near gap of the target row, going up', () => {
+    expect(pathOf(end('d'), start('a'))).toEqual([
+      { cmd: 'M', x: 3000, y: 112 },
+      { cmd: 'L', x: 3012, y: 112 },
+      { cmd: 'L', x: 3012, y: 32 },
+      { cmd: 'L', x: -12, y: 32 },
+      { cmd: 'L', x: -12, y: 16 },
+      { cmd: 'L', x: 0, y: 16 },
+    ]);
+  });
+
+  it('keeps the adjacent-row backward route on the shared gap', () => {
+    const adjacent = entryDoubles([
+      { id: 'a', name: 'A', start: 0, end: MS_PER_BAR },
+      { id: 'e', name: 'E', start: 0, end: MS_PER_BAR / 2 },
+    ]);
+    const [connector] = frameOf([() => [{ id: 'c', from: end('a'), to: start('e') }]], {
+      entries: adjacent,
+    }).connectors;
+    expect(connector?.path).toEqual([
+      { cmd: 'M', x: 1000, y: 16 },
+      { cmd: 'L', x: 1012, y: 16 },
+      { cmd: 'L', x: 1012, y: 32 },
+      { cmd: 'L', x: -12, y: 32 },
+      { cmd: 'L', x: -12, y: 48 },
+      { cmd: 'L', x: 0, y: 48 },
+    ]);
+  });
+
+  it('draws start-to-start with one vertical left of both bars', () => {
+    expect(pathOf(start('a'), start('d'))).toEqual([
+      { cmd: 'M', x: 0, y: 16 },
+      { cmd: 'L', x: -12, y: 16 },
+      { cmd: 'L', x: -12, y: 112 },
+      { cmd: 'L', x: 500, y: 112 },
+    ]);
+  });
+
+  it('draws finish-to-finish with one vertical right of both bars', () => {
+    expect(pathOf(end('a'), end('d'))).toEqual([
+      { cmd: 'M', x: 1000, y: 16 },
+      { cmd: 'L', x: 3012, y: 16 },
+      { cmd: 'L', x: 3012, y: 112 },
+      { cmd: 'L', x: 3000, y: 112 },
+    ]);
+  });
+
+  it('loops below the row when both ends sit on one row and the target lies behind', () => {
+    const segmented = entryDoubles([
+      { id: 'row', name: 'Row', start: 0, end: 3 * MS_PER_BAR },
+      { id: 's1', name: 'S1', parentId: 'row', start: 0, end: MS_PER_BAR },
+      { id: 's2', name: 'S2', parentId: 'row', start: 2 * MS_PER_BAR, end: 3 * MS_PER_BAR },
+    ]);
+    const [connector] = frameOf([() => [{ id: 'c', from: end('s2'), to: start('s1') }]], {
+      entries: segmented,
+      rows: { source: 'entries', childrenAsSegments: true },
+    }).connectors;
+    expect(connector?.path).toEqual([
+      { cmd: 'M', x: 3000, y: 16 },
+      { cmd: 'L', x: 3012, y: 16 },
+      { cmd: 'L', x: 3012, y: 32 },
+      { cmd: 'L', x: -12, y: 32 },
+      { cmd: 'L', x: -12, y: 16 },
+      { cmd: 'L', x: 0, y: 16 },
+    ]);
+  });
+});
+
+describe('routeConnector property', () => {
+  const ROW = 32;
+  const anchor = fc
+    .record({
+      x: fc.integer({ min: -500, max: 500 }),
+      row: fc.integer({ min: 0, max: 6 }),
+      edge: fc.constantFrom('start' as const, 'end' as const),
+    })
+    .map(({ x, row, edge }): ConnectorAnchor => ({
+      x,
+      y: row * ROW + ROW / 2,
+      edge,
+      rowTop: row * ROW,
+      rowBottom: row * ROW + ROW,
+    }));
+
+  it('is orthogonal and joins the source anchor to the target anchor', () => {
+    fc.assert(
+      fc.property(anchor, anchor, (from, to) => {
+        const points = routeConnector(from, to);
+        expect(points[0]).toEqual({ x: from.x, y: from.y });
+        expect(points.at(-1)).toEqual({ x: to.x, y: to.y });
+        points.slice(1).forEach((point, index) => {
+          const before = points[index]!;
+          expect(point.x === before.x || point.y === before.y).toBe(true);
+        });
+      }),
+    );
   });
 });
