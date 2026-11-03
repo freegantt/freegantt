@@ -459,3 +459,48 @@ test('connectors follow a bar drag and the successor it pushes, and go back on E
   expect(restored.lineEnd).toBeCloseTo(committed.lineEnd, 0);
   expect(restored.firstEnd).toBeCloseTo(committed.firstEnd, 0);
 });
+
+// The resize handles and the connect ports sit on their bar. A drag preview moves the bar, so they
+// move with it. Escape sends them back.
+
+test('resize handles and connect ports follow a bar drag, and go back on Escape', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  const barSelector = '#gantt .fg-bar[data-bar-id^="foundation-1"]';
+  await expect(page.locator(barSelector)).toBeVisible();
+
+  const endEdges = () =>
+    page.evaluate((selector) => {
+      const bar = document.querySelector(selector)!.getBoundingClientRect();
+      const handle = document
+        .querySelector('#gantt .fg-bar-handle[data-edge="end"]')!
+        .getBoundingClientRect();
+      const portNode = document.querySelector<HTMLElement>('#gantt .fg-connector-port[data-edge="end"]')!;
+      // A port shows only while the pointer hovers its bar, and WebKit drops that hover mid-drag.
+      const port = portNode.hidden ? undefined : portNode.getBoundingClientRect().left;
+      // Compare each box by its left edge. A handle and a port keep their own offset from the bar edge.
+      return { bar: bar.right, handle: handle.left, port };
+    }, barSelector);
+
+  const box = (await page.locator(barSelector).boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await nextFrame(page);
+  const committed = await endEdges();
+
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 400, box.y + box.height / 2, { steps: 12 });
+  await nextFrame(page);
+  const dragging = await endEdges();
+  expect(dragging.bar).toBeGreaterThan(committed.bar + 100);
+  expect(dragging.handle - dragging.bar).toBeCloseTo(committed.handle - committed.bar, 0);
+  if (dragging.port !== undefined) {
+    expect(dragging.port - dragging.bar).toBeCloseTo(committed.port! - committed.bar, 0);
+  }
+
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  await nextFrame(page);
+  const restored = await endEdges();
+  expect(restored.bar).toBeCloseTo(committed.bar, 0);
+  expect(restored.handle).toBeCloseTo(committed.handle, 0);
+  if (restored.port !== undefined) expect(restored.port).toBeCloseTo(committed.port!, 0);
+});
