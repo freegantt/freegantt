@@ -568,7 +568,7 @@ export type { ZonedTime, PlainParts } from '../time/index.js';
 // The pure propagation engine. `schedule()` takes plain data and answers a patch plus
 // diagnostics, so a caller can use it with no plugin installed. The scheduling plugin calls it
 // from its edit extender.
-export { schedule, defaultPolicy } from '../scheduling/index.js';
+export { schedule, calculateFloat, findDrivingPath, defaultPolicy } from '../scheduling/index.js';
 export type {
   SchedulingPolicy,
   EditResolution,
@@ -579,6 +579,9 @@ export type {
   ScheduleConstraint,
   ScheduleConstraintKind,
   ScheduleDependencyType,
+  FloatRequest,
+  FloatResult,
+  EntryFloat,
   SuccessorMoves,
   ScheduleEntry,
   ScheduleField,

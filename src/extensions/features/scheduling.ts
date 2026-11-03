@@ -6,8 +6,9 @@
 import type { DataPlugin } from '../../api/gantt.js';
 import type { Dataset } from '../../api/dataset.js';
 import { mergeEntryEdits, overridingProposed } from '../../api/dataset-plugin.js';
-import { schedule } from '../../api/schedule-facade.js';
+import { findDrivingPath, schedule } from '../../api/schedule-facade.js';
 import type {
+  FloatRequest,
   ScheduleCalendar,
   ScheduleConstraint,
   ScheduleDiagnostic,
@@ -24,12 +25,15 @@ import type {
   EntryEdits,
   EntryId,
   FieldKey,
+  Entry,
   Instant,
   PluginStore,
   StoreRowWrite,
 } from '../../model/index.js';
 import { ENTRY_DEPENDENCIES_ID, edgesOf, readDependencies } from './entry-dependencies.js';
 import type { Dependency, DependencyStoreView } from './entry-dependencies.js';
+import { CRITICAL_FIELD, FLOAT_FIELD, floatFields, floatWrites } from './scheduling-float.js';
+import type { HeldFloat } from './scheduling-float.js';
 
 /** The plugin id other plugins name in `requires`. */
 export const SCHEDULING_ID = 'freegantt.scheduling';
@@ -82,6 +86,12 @@ export interface Scheduling extends DataPlugin {
   setConstraint(entry: EntryId | string, constraint: EntryConstraint): void;
   /** Removes the constraint of one Entry. One undo step covers it. An Entry with none changes nothing. */
   clearConstraint(entry: EntryId | string): void;
+  /**
+   * The Entry ids, in order, of the chain of predecessors that sets this Entry's position. The Entry comes
+   * last. At each step the predecessor is the one whose Dependency holds the successor with no slack.
+   * An Entry that no Dependency holds gives itself alone. A loop member or an unknown Entry gives `[]`.
+   */
+  drivingPath(entry: EntryId | string): readonly EntryId[];
   /** The findings of the latest commit: cycles, blocked moves, Dependencies the engine cannot read. */
   diagnostics(): readonly ScheduleDiagnostic[];
   /** Calls `handler` after a commit changes the findings. Returns the call that removes the handler. */
@@ -117,6 +127,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   const handlers = new Set<ScheduleDiagnosticsHandler>();
   // True while `setConstraint` writes the moves it computed. Those writes need no second engine run.
   let applyingConstraint = false;
+  let refreshQueued = false;
 
   function installation(operation: string): Installation {
     if (!installed) throw new SchedulingNotInstalledError(operation);
@@ -310,7 +321,65 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         }),
       );
     }
-    return edits;
+    return mergeEntryEdits(edits, floatEdits(request, edits));
+  }
+
+  /** The analysis input for the Entries as they stand in the store. */
+  function floatRequest(entries: readonly Entry[], dataset: Dataset): FloatRequest {
+    return { entries, dependencies: dependencies(), ...auditCalendarOption(dataset, entries) };
+  }
+
+  /** Writes `float` and `critical` into the edit, so one undo restores them with the dates. */
+  function floatEdits(request: EditRequest, moved: ReadonlyMap<EntryId, EntryEdit>): EntryEdits {
+    const ids = [...request.entries.keys(), ...request.addedEntryIds].filter(
+      (id) => !request.removedEntryIds.has(id),
+    );
+    const entries: ScheduleEntry[] = [];
+    for (const id of ids) {
+      const entry = request.entryAfterEdits(id);
+      if (!entry) continue;
+      const edit = moved.get(id);
+      const time = installed?.dataset.time;
+      entries.push({
+        id,
+        start: edit?.start !== undefined && time ? time.toInstant(edit.start) : entry.start,
+        end: edit?.end !== undefined && time ? time.toInstant(edit.end) : entry.end,
+        hasChildren: request.hasChildren(id),
+      });
+    }
+    const writes = floatWrites(
+      { entries, dependencies: dependencies(), ...calendarOption(request) },
+      entries.map((entry) => entry.id),
+      (id) => request.entryAfterEdits(id)?.props ?? {},
+    );
+    return new Map([...writes].map(([id, write]) => [id, { ...write }]));
+  }
+
+  /**
+   * Brings `float` and `critical` up to date after a change that ran no edit: a load, a replaced
+   * Dependency set, an undo. It writes one sync change set, so it adds no undo step.
+   */
+  function refreshFloat(): void {
+    if (!installed) return;
+    const { dataset } = installed;
+    const entries = dataset.entries.all;
+    const held = new Map(entries.map((entry) => [entry.id, entry]));
+    const writes = floatWrites(floatRequest(entries, dataset), held.keys(), (id): HeldFloat => {
+      const entry = held.get(id);
+      return { float: entry?.read(FLOAT_FIELD), critical: entry?.read(CRITICAL_FIELD) };
+    });
+    if (writes.size === 0) return;
+    dataset.entries.syncChanges({ upsert: [...writes].map(([id, write]) => ({ id, ...write })) });
+  }
+
+  /** Runs `refreshFloat` once after the current change settles. Many changes in one turn share one run. */
+  function queueFloatRefresh(): void {
+    if (refreshQueued) return;
+    refreshQueued = true;
+    queueMicrotask(() => {
+      refreshQueued = false;
+      refreshFloat();
+    });
   }
 
   /** The findings of a state nobody edited: an undo, a load or a replaced Dependency set. */
@@ -399,6 +468,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         editable: 'anywhere',
         column: { header: 'Manual', align: 'center', width: 80 },
       },
+      ...floatFields(),
     ],
 
     data(ctx) {
@@ -417,7 +487,10 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         const fromEdit = changeSet.origin === 'user' ? pending : undefined;
         pending = undefined;
         publish(fromEdit ?? auditCurrentState());
+        queueFloatRefresh();
       });
+      // What do the first rows hold? The float of the Dataset as it was built.
+      queueFloatRefresh();
       return () => {
         stopListening();
         installed = undefined;
@@ -471,6 +544,12 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
 
     clearConstraint(entry) {
       installation('scheduling.clearConstraint').store.remove(entryId(entry));
+    },
+
+    drivingPath(entry) {
+      const { dataset } = installation('scheduling.drivingPath');
+      const entries = dataset.entries.all;
+      return findDrivingPath(floatRequest(entries, dataset), entry);
     },
 
     diagnostics() {

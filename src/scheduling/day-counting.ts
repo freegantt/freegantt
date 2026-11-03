@@ -1,7 +1,7 @@
 // scheduling/ — the one place the engine counts days. Without a working calendar a day is 24 hours.
 // With one, a day count skips the days off, and a bar keeps its length in workdays when it moves.
 import type { Duration, EntryId, Instant } from '../model/index.js';
-import { addMs, diffMs } from '../time/index.js';
+import { MS, addMs, diffMs } from '../time/index.js';
 import type { ZonedTime } from '../time/index.js';
 import { applyLag } from './apply-lag.js';
 import type { ScheduleField } from './schedule-entry.js';
@@ -36,6 +36,8 @@ export interface DayCounting {
   lagLanding(anchor: Instant, lag: Duration, field: ScheduleField): Instant | undefined;
   /** The date in the form `lagLanding` answers, so two dates that mean the same working time compare equal. */
   settle(field: ScheduleField, date: Instant): Instant;
+  /** How many days from `from` to `to`: workdays with a calendar, 24-hour days without one. Negative when `to` is earlier. */
+  daysBetween(from: Instant, to: Instant): number;
   /** The span after its `anchor` date lands on `to`. The span keeps its length: in workdays with a calendar, in time without one. */
   follow(span: Span, anchor: ScheduleField, to: Instant): Span;
 }
@@ -44,6 +46,7 @@ const elapsedDays: DayCounting = Object.freeze<DayCounting>({
   supports: (lag) => applyLag(0 as Instant, lag) !== undefined,
   lagLanding: (anchor, lag) => applyLag(anchor, lag),
   settle: (_field, date) => date,
+  daysBetween: (from, to) => diffMs(to, from) / MS.DAY,
   follow(span, anchor, to) {
     const shift = diffMs(to, span[anchor]);
     return { start: addMs(span.start, shift), end: addMs(span.end, shift) };
@@ -80,6 +83,8 @@ function countingFor(calendar: WorkingCalendar, time: ZonedTime): DayCounting {
     },
 
     settle,
+
+    daysBetween: (from, to) => calendar.workdaysBetween(from, to, time),
 
     follow(span, anchor, to) {
       const length = calendar.workdaysBetween(span.start, span.end, time);

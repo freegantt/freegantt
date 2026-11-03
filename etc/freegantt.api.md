@@ -155,6 +155,9 @@ export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 
 export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused' | 'unsupported-lag-unit' | 'duplicate-dependency-id' | 'dependency-store-not-installed' | 'scheduling-not-installed';
 
 // @public
+export function calculateFloat(request: FloatRequest): FloatResult;
+
+// @public
 export interface Capabilities {
     activate?: CapabilityRule;
     connect?: CapabilityRule;
@@ -1037,6 +1040,12 @@ export interface EntryFieldEdit {
 }
 
 // @public
+export interface EntryFloat {
+    readonly critical: boolean;
+    readonly totalFloat: number;
+}
+
+// @public
 export interface EntryGestureEvent extends ProposedSpan {
     // (undocumented)
     readonly entries: readonly ProposedDates[];
@@ -1300,6 +1309,9 @@ export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldVa
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 // @public
+export function findDrivingPath(request: FloatRequest, entryId: EntryId | string): readonly EntryId[];
+
+// @public
 export interface FixedBarBox {
     // (undocumented)
     readonly anchor: BarAnchor;
@@ -1320,6 +1332,21 @@ export type FlatEntryInput<TProps = Record<string, unknown>> = string extends ke
 } & {
     [K in Exclude<keyof TProps, keyof EntryEnvelope<TProps> | 'id' | 'props'>]?: TProps[K] | undefined;
 };
+
+// @public
+export interface FloatRequest {
+    readonly calendar?: ScheduleCalendar;
+    // (undocumented)
+    readonly dependencies: readonly ScheduleDependency[];
+    // (undocumented)
+    readonly entries: readonly ScheduleEntry[];
+}
+
+// @public (undocumented)
+export interface FloatResult {
+    readonly entries: ReadonlyMap<EntryId, EntryFloat>;
+    readonly projectFinish: Instant | undefined;
+}
 
 // @public
 export interface FormatContext extends FieldContext {
@@ -2637,6 +2664,7 @@ export interface Scheduling extends DataPlugin {
     clearConstraint(entry: EntryId | string): void;
     constraintOf(entry: EntryId | string): EntryConstraint | undefined;
     diagnostics(): readonly ScheduleDiagnostic[];
+    drivingPath(entry: EntryId | string): readonly EntryId[];
     on(name: 'scheduleDiagnostics', handler: ScheduleDiagnosticsHandler): Disposer;
     setConstraint(entry: EntryId | string, constraint: EntryConstraint): void;
 }

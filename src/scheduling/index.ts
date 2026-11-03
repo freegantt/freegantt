@@ -5,6 +5,9 @@
 export { workingCalendar, InvalidWorkingCalendarError } from './working-calendar.js';
 export type { WorkingCalendar, WorkingCalendarOptions, OffTimeCover, Workday } from './working-calendar.js';
 export { schedule } from './schedule.js';
+export { calculateFloat } from './float.js';
+export type { FloatRequest, FloatResult, EntryFloat } from './float.js';
+export { findDrivingPath } from './find-driving-path.js';
 export { defaultPolicy } from './scheduling-policy.js';
 export type { SchedulingPolicy, EditResolution, ScheduleRuleKind } from './scheduling-policy.js';
 export type {
