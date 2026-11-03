@@ -5,7 +5,8 @@
 // lives, so that no caller has to hold it: a caller states what to draw, and the index, its cache
 // key and its invalidation never cross the seam into `view/`.
 
-import { placeFrame } from './frame.js';
+import { placeConnectors, placeFrame } from './frame.js';
+import type { FrameConnector } from './connectors/frame-connector.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
 import { DecorationRunner } from './decorations.js';
@@ -141,6 +142,13 @@ export class FrameLayout implements FrameLayoutView {
     // `rowPlanRevision` (bumped inside `ensureRowPlan`, not here) stays put too.
     this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations, this.#connectors);
+  }
+
+  /** The connectors of a frame, with nothing else laid out. A drag preview asks for these on every
+   *  animation frame: only the connectors with an end on a moved bar route again. */
+  computeConnectors(input: LayoutInput): readonly FrameConnector[] {
+    this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
+    return placeConnectors(input, this.#plan, this.#memory, this.#connectors);
   }
 
   /** Brings `#plan` — and `#memory`, the height index and `rowMemory` a Bar read answers from — up
