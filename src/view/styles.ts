@@ -550,13 +550,20 @@ ${DARK_COLOR_TOKENS}
 /* One shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */
-/* A connector port sits just outside a bar edge, so it never competes with the resize handle. Its
-   box is the hit area. The dot is the look. Shown only on the hovered bar, and only while a plugin
-   handles the connect drag. */
-.fg-connector-port { position: absolute; top: 0; left: 0; width: 14px; cursor: crosshair; touch-action: none; display: flex; align-items: center; justify-content: center; }
-.fg-connector-port::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--fg-pane-bg); border: 1.5px solid var(--fg-bar-fill); box-sizing: border-box; }
-.fg-connector-port[hidden], .fg-connect-preview[hidden] { display: none; }
+/* A connector port is a wide hit box centered on a bar edge, so it is easy to grab. The dot sits in
+   the outer half, clear of the bar body. The resize handle (z-index above) wins the middle 8px of
+   the box. A coarse pointer, like a finger, gets a wider box. Shown on the hovered bar, and on every
+   connectable bar during a drag, only while a plugin handles the connect drag. */
+.fg-container { --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; }
+.fg-connector-port { position: absolute; top: 0; left: 0; width: var(--fg-connector-port-width); margin-left: calc(var(--fg-connector-port-width) / -2); cursor: crosshair; touch-action: none; display: flex; align-items: center; }
+@media (pointer: coarse) { .fg-connector-port { width: var(--fg-connector-port-coarse-width); margin-left: calc(var(--fg-connector-port-coarse-width) / -2); } }
+.fg-connector-port[data-edge="start"] { justify-content: flex-start; }
+.fg-connector-port[data-edge="end"] { justify-content: flex-end; }
+.fg-connector-port::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--fg-pane-bg); border: 1.5px solid var(--fg-bar-fill); box-sizing: border-box; }
+.fg-connector-port[hidden], .fg-connect-preview[hidden], .fg-connect-target[hidden] { display: none; }
 .fg-connector-port[data-active]::before { background: var(--fg-selection-color); transform: scale(1.4); }
+/* The bar a drop would join. It only outlines: the pointer passes through it. */
+.fg-connect-target { position: absolute; top: 0; left: 0; box-sizing: border-box; border: 2px solid var(--fg-selection-color); border-radius: 4px; pointer-events: none; }
 .fg-connect-preview { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; color: var(--fg-selection-color); }
 .fg-connect-preview line { stroke: currentColor; stroke-width: 1.5px; stroke-dasharray: 4 3; }
 .fg-connect-preview[data-pending] { opacity: ${DEFAULT_PENDING_OPACITY}; }
