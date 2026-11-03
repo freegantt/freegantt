@@ -6,7 +6,8 @@ import { definePlugin } from 'freegantt';
 import type { ConnectEnds, ConnectorEnd, DataPlugin, EntryId, PluginStore } from 'freegantt';
 
 /** What the store holds: one row per Entry, listing the ends it points at. The row belongs to the
- *  `from` Entry, so removing that Entry removes its pairs in the same change. */
+ *  `from` Entry, so removing that Entry removes its pairs in the same change. Removing a `to` Entry
+ *  removes the pairs that point at it, through `writeRowsWithEdit`. */
 interface RelatedRow {
   readonly pairs: readonly RelatedPair[];
 }
@@ -46,7 +47,18 @@ export function relatedTo(): RelatedToPlugin {
   return definePlugin({
     id: 'demo.relatedTo',
     data(ctx) {
-      store = ctx.store.reserve<RelatedRow>();
+      const reserved = ctx.store.reserve<RelatedRow>();
+      store = reserved;
+      // What happens to a pair when its `to` Entry goes? The pair goes in the same change set, so one
+      // undo brings the Entry and the pair back. The row of a removed `from` Entry goes with the Entry.
+      ctx.edits.writeRowsWithEdit((request) =>
+        [...reserved.all]
+          .filter(([, row]) => row.pairs.some((pair) => request.removedEntryIds.has(pair.to.entryId)))
+          .map(([fromId, row]) => {
+            const kept = row.pairs.filter((pair) => !request.removedEntryIds.has(pair.to.entryId));
+            return { id: fromId, row: kept.length > 0 ? { pairs: kept } : undefined };
+          }),
+      );
     },
     relate,
     view(ctx) {
