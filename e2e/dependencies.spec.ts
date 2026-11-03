@@ -344,3 +344,45 @@ test('a backward connector runs its long horizontal along the gap above the targ
   // The run sits half a row (16 px) above the target centre. A border can shift the box by a pixel.
   expect(Math.abs(route.targetCentreY - run - 16)).toBeLessThanOrEqual(1.5);
 });
+
+// A line passes behind the bars it crosses. Only the selected line shows above them.
+
+test('a connector lies below the bars it crosses, and a click on the selected line still works', async ({
+  page,
+}) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const crossing = await page.evaluate(() => {
+    const paths = Array.from(document.querySelectorAll<SVGPathElement>('#gantt path[data-connector-id]'));
+    for (const path of paths) {
+      const box = path.ownerSVGElement!.getBoundingClientRect();
+      const length = path.getTotalLength();
+      for (let at = 0; at < length; at += 2) {
+        const point = path.getPointAtLength(at);
+        const hit = document.elementFromPoint(box.left + point.x, box.top + point.y);
+        if (hit?.closest('.fg-bar')) {
+          return { x: box.left + point.x, y: box.top + point.y, id: path.dataset.connectorId! };
+        }
+      }
+    }
+    return undefined;
+  });
+  expect(crossing).toBeDefined();
+
+  const order = await page.evaluate(() => {
+    const children = Array.from(document.querySelector('#gantt .fg-bars')!.parentElement!.children);
+    return {
+      under: children.findIndex((child) => child.matches('.fg-connectors:not(.fg-connectors-over)')),
+      bars: children.findIndex((child) => child.matches('.fg-bars')),
+      over: children.findIndex((child) => child.matches('.fg-connectors-over')),
+    };
+  });
+  expect(order.under).toBeLessThan(order.bars);
+  expect(order.bars).toBeLessThan(order.over);
+
+  const point = await strokeMiddleOf(lineOf(page, 'dep-fs'));
+  await page.mouse.click(point.x, point.y);
+  await expect(lineOf(page, 'dep-fs')).toHaveAttribute('data-flag', /selected/);
+  await expect(page.locator('#gantt .fg-connectors-over path[data-flag~="selected"]')).toHaveCount(1);
+});

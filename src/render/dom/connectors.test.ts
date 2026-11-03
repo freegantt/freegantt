@@ -51,6 +51,25 @@ describe('connector paint', () => {
     expect(plain?.hasAttribute('aria-label')).toBe(false);
   });
 
+  it('mounts the line layer before the bar layer and the upper layer after it', () => {
+    const { layer, attachment } = mount();
+    attachment.sync([related], 500, 200, 100);
+    const children = Array.from(layer.children).map((child) => child.className);
+    expect(children).toEqual(['fg-connectors', '', 'fg-connectors fg-connectors-over']);
+  });
+
+  it('repeats only a selected connector above the bars, without a pointer target', () => {
+    const { layer, attachment } = mount();
+    const selected: FrameConnector = { ...related, flags: { selected: true }, flagTokens: 'selected' };
+    attachment.sync([selected, { ...related, id: 'other' }], 500, 200, 100);
+    const copies = layer.querySelectorAll('.fg-connectors-over path');
+    expect(copies).toHaveLength(1);
+    expect(copies[0]?.getAttribute('data-flag')).toBe('selected');
+    expect(copies[0]?.hasAttribute('data-connector-id')).toBe(false);
+    attachment.sync([related], 500, 200, 100);
+    expect(layer.querySelectorAll('.fg-connectors-over path')).toHaveLength(0);
+  });
+
   it('removes the path of a connector the next frame drops', () => {
     const { layer, attachment } = mount();
     attachment.sync([related], 500, 200, 100);
