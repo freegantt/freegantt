@@ -35,6 +35,9 @@ export const CONNECTOR_PORT_CLASS = 'fg-connector-port';
 /** The line a connect drag draws from its source edge to the pointer. */
 export const CONNECT_PREVIEW_CLASS = 'fg-connect-preview';
 
+/** The outline that marks the bar a connect drop would join. */
+export const CONNECT_TARGET_CLASS = 'fg-connect-target';
+
 /** `dataset` keys, spelled the way `HTMLElement.dataset` reads them (camelCase). */
 export const TESTID_KEY = 'testid';
 export const BAR_ID_KEY = 'barId';

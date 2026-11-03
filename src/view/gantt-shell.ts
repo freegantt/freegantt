@@ -1503,6 +1503,8 @@ export class GanttShell {
       hitTest: (at) => gestureContext.hitTest(at),
       entryFor: (barId) => gestureContext.entryFor(barId),
       canConnect: (entry) => this.#canGesture('connect', entry.id),
+      nearerEdgeOf: (barId, contentX) => this.#nearerEdgeOf(barId, contentX),
+      connectableBarIds: () => this.#connectableBarIds(),
       contentXAtPaneOffset: (offsetX) => gestureContext.contentXAtPaneOffset(offsetX),
       contentYAtClientY: (clientY) => gestureContext.contentYAtClientY(clientY),
       paint: (draft) => {
@@ -2730,6 +2732,21 @@ export class GanttShell {
     setOptional(this.#interactionState, 'resizableEntryId', ids.resizableEntryId);
     setOptional(this.#interactionState, 'resizableEdges', ids.resizableEdges);
     this.#backend.applyState(this.#interactionState);
+  }
+
+  /** Which half of the bar the pointer sits in. A drop on a bar joins its nearer edge. */
+  #nearerEdgeOf(barId: BarId, contentX: number): 'start' | 'end' | undefined {
+    const bar = this.#lastBarById.get(barId);
+    if (bar === undefined) return undefined;
+    return contentX < bar.x + bar.width / 2 ? 'start' : 'end';
+  }
+
+  #connectableBarIds(): readonly BarId[] {
+    const ids: BarId[] = [];
+    for (const bar of this.#lastBarById.values()) {
+      if (this.#canGesture('connect', bar.entryId)) ids.push(bar.id);
+    }
+    return ids;
   }
 
   #entryFor(barId: BarId): Entry | undefined {
