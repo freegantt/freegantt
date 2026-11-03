@@ -137,6 +137,9 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   // leave no floor rows.
   let applyingConstraint = false;
   let refreshQueued = false;
+  let pushQueued = false;
+  // The Dependency rows of every sync change set since the last push. One push answers them all.
+  const syncRowsWaiting: StoreRowUpdated[] = [];
 
   function installation(operation: string): Installation {
     if (!installed) throw new SchedulingNotInstalledError(operation);
@@ -476,8 +479,13 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
 
   /** Runs `pushAfterSync` once after the current change settles, then refreshes float over the moves. */
   function queuePushAfterSync(rows: readonly StoreRowUpdated[]): void {
+    syncRowsWaiting.push(...rows);
+    if (pushQueued) return;
+    pushQueued = true;
     queueMicrotask(() => {
-      pushAfterSync(rows);
+      pushQueued = false;
+      const waiting = syncRowsWaiting.splice(0);
+      pushAfterSync(waiting);
       queueFloatRefresh();
     });
   }
@@ -603,6 +611,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         handlers.clear();
         latest = [];
         pending = undefined;
+        syncRowsWaiting.length = 0;
       };
     },
 
