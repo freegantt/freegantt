@@ -481,6 +481,232 @@ settings need no second, parallel config path — the arguments already are
 the config. A name-keyed table would need one anyway, plus a place to keep
 names unique.
 
+## Draw a line between two bars
+
+A plugin states two ends. Core finds both bars, routes an orthogonal path and clips it to the window. This is the connector seam.
+`harness/plugins/related-to.ts` is a full example. It keeps pairs in its own store and draws one connector for each.
+
+```ts
+import { definePlugin } from 'freegantt';
+import type { ConnectEnds, EntryId } from 'freegantt';
+
+function relatedTo() {
+  const pairs = new Map<string, ConnectEnds>();
+
+  return definePlugin({
+    id: 'demo.relatedTo',
+    view(ctx) {
+      const nameOf = (id: EntryId): string => ctx.dataset.entries.get(id)?.name ?? '';
+
+      // What lines does the plugin want? Core asks again on every frame that needs them.
+      ctx.view.registerConnector(() =>
+        [...pairs].map(([id, { from, to }]) => ({
+          id,
+          from,
+          to,
+          label: `${nameOf(from.entryId)} is related to ${nameOf(to.entryId)}`,
+        })),
+      );
+
+      // What happens when the user drags from one port to another bar?
+      ctx.view.onConnect((ends) => {
+        pairs.set(`${ends.from.entryId}->${ends.to.entryId}`, ends);
+        ctx.view.refreshConnectors();
+      });
+    },
+  });
+}
+
+export { relatedTo };
+```
+
+- `ctx.view.registerConnector(provider)` returns a `Disposer`. The provider returns `ConnectorInput` values: an `id`, a `from` and a `to` end (`{ entryId, edge: 'start' | 'end' }`), and optional `flags`, `class`, `label` and `showLabel`.
+- The provider states what to draw. It never states a path. An end inside a collapsed group attaches to its nearest visible ancestor.
+- `flags` take `inactive`, `cycle` and `selected`. They set `data-flag` on the line. `selected` also sets `aria-current="true"`.
+- The `label` is the accessible name of the line. A line with a `label` takes focus. With `showLabel: true`, core also draws the text at the middle of the line.
+- The line takes pointer events on its stroke only. Core draws it behind the bars it crosses.
+
+### Redraw for screen-only state
+
+Core asks the provider again when the Dataset or the view changes. When a plugin changes state that only the provider reads, such as a selected connector, call `ctx.view.refreshConnectors()`.
+Several calls before the next frame give one redraw. The call writes nothing to the Dataset, makes no undo step and fires no change event.
+
+### Own the connect gesture
+
+`ctx.view.onConnect(handler)` switches the connect gesture on. While one plugin registers a handler, a hovered bar shows a port at each edge. With no handler, no port draws and no event fires.
+The Gantt fires `beforeConnect`, calls each handler, then fires `connect`. The payload is `{ from, to }`. It never names a type of link, so the plugin maps the pair to its own record.
+A drop on a bar body joins the nearer edge. A drop on the same Entry does nothing. The capability `connect` closes the gesture for chosen Entries. There is no keyboard connect.
+
+### Find a line in the DOM
+
+- `ctx.view.dom.connectorFor(id)` returns the mounted line for a provider id, or `undefined` when the frame draws none. Use it to move focus, as `barFor` does for a bar.
+- `ctx.view.dom.targetUnder(node)` and `ctx.view.onDomEvent` resolve a drawn line. The `DomTarget` has `kind: 'connector'` and `connectorId`, the id the provider gave. A connector stands for no Entry, so `entryIds` is empty.
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function logsConnectorClicks() {
+  return definePlugin({
+    id: 'demo.logsConnectorClicks',
+    view(ctx) {
+      ctx.view.onDomEvent('click', (event) => {
+        const target = ctx.view.dom.targetUnder(event.target as Node);
+        if (target?.kind === 'connector') console.log('Clicked connector', target.connectorId);
+      });
+    },
+  });
+}
+
+export { logsConnectorClicks };
+```
+
+## Bind a key and decline it
+
+`ctx.interaction.registerKeyHandler(chord, handler)` binds a key. A handler that does not own the key returns `false`. The keymap then offers the key to the next older binding, and core keeps its own meaning.
+A handler that returns nothing takes the key and calls `preventDefault`.
+
+A plugin that binds `Delete` or an arrow must decline every target it does not own. Otherwise it breaks the core meaning, such as removing an Entry:
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function deletesConnectors(remove: (connectorId: string) => void) {
+  return definePlugin({
+    id: 'demo.deletesConnectors',
+    view(ctx) {
+      ctx.interaction.registerKeyHandler('Delete', (event) => {
+        const target = ctx.view.dom.targetUnder(event.target as Node);
+        if (target?.kind !== 'connector' || target.connectorId === undefined) return false;
+        remove(target.connectorId);
+      });
+    },
+  });
+}
+
+export { deletesConnectors };
+```
+
+## Write rows of your own store with an edit
+
+A data plugin keeps rows in its own store (`ctx.store.reserve<T>()`). When an Entry edit or a removal should change those rows too, use `ctx.edits.writeRowsWithEdit(writer)`.
+The writer receives the `EditRequest` and answers `StoreRowWrite` values, `{ id, row }`. A `row` of `undefined` removes the row.
+
+```ts
+import { definePlugin } from 'freegantt';
+
+interface NoteRow {
+  readonly text: string;
+}
+
+function notes() {
+  return definePlugin({
+    id: 'demo.notes',
+    data(ctx) {
+      const store = ctx.store.reserve<NoteRow>();
+
+      // What happens to a note when its Entry goes? The note goes in the same change set.
+      ctx.edits.writeRowsWithEdit((request) =>
+        [...store.all.keys()]
+          .filter((id) => request.removedEntryIds.has(id))
+          .map((id) => ({ id, row: undefined })),
+      );
+    },
+  });
+}
+
+export { notes };
+```
+
+The edit and the row writes land in one change set, so one undo restores both. A throw in the writer aborts the transaction. A store write inside the writer still throws `MutationDuringExtensionHookError`.
+
+### React to a store write: `changedStoreRows`
+
+A transaction that writes only a plugin store still reaches the edit extender. `request.changedStoreRows` lists the rows that changed, each with its `store`, `id`, `from` and `to`.
+Read the whole store as the commit leaves it, then answer with Entry edits. The edits land in the same ChangeSet, so one undo reverts both.
+A drag preview and a transaction with no store write give an empty list. `scheduling()` uses this to push a successor when a Dependency is added.
+
+### Replace what the user proposed: `overridingProposed`
+
+An extender that writes a Field the same transaction proposed throws in dev mode. To replace the proposed value on purpose, mark the Field:
+
+```ts
+import { instant, overridingProposed } from 'freegantt';
+import type { EditExtender } from 'freegantt';
+
+const floor = instant('2026-03-02T00:00:00Z');
+
+// Which start wins? The floor replaces a proposed start that is too early.
+const holdsStartAtFloor: EditExtender = ({ proposed }) => {
+  const edits = new Map();
+  for (const [id, edit] of proposed) {
+    if (edit.start === undefined || edit.start >= floor) continue;
+    edits.set(id, overridingProposed(['start'], { start: floor }));
+  }
+  return edits;
+};
+
+export { holdsStartAtFloor };
+```
+
+The marked value wins in the same change set, and one undo restores the previous value. A reviewer finds every override by searching for the call.
+
+### Refresh a store from outside: `syncAll`
+
+`PluginStore.syncAll(rows)` makes the store hold exactly the rows of a `Map`. It writes, adds and removes rows in one change set with origin `'sync'`.
+It records no undo step, and Redo stays, as `entries.syncAll` does. An id with no Entry throws `EntryNotFoundError` and writes nothing.
+
+```ts
+import { definePlugin } from 'freegantt';
+
+interface NoteRow {
+  readonly text: string;
+}
+
+function syncedNotes() {
+  const sync = { run: (_rows: ReadonlyMap<string, NoteRow>): void => {} };
+  const plugin = definePlugin({
+    id: 'demo.syncedNotes',
+    data(ctx) {
+      const store = ctx.store.reserve<NoteRow>();
+      sync.run = (rows) => store.syncAll(rows);
+    },
+  });
+  return { plugin, refresh: (rows: ReadonlyMap<string, NoteRow>) => sync.run(rows) };
+}
+
+export { syncedNotes };
+```
+
+## Paint a span inside a row
+
+A decoration provider can return `{ kind: 'rowSpan', rowId, start, end, class?, text? }`. The Gantt paints a box inside that row between the two Instants, on `underBars` or `overBars`.
+The node has the class `fg-row-span` and your `class`. It takes no pointer events and no focus. A row outside the window paints nothing.
+The optional `text` is a plain string the Gantt paints at the span's end. `harness/plugins/planned-vs-actual.ts` draws the planned dates under each actual bar and writes the slip, for example "+4d", as `text`.
+
+```ts
+import { definePlugin, instant } from 'freegantt';
+
+function marksFirstWeek() {
+  return definePlugin({
+    id: 'demo.marksFirstWeek',
+    view(ctx) {
+      ctx.view.registerDecoration('underBars', ({ rows }) =>
+        rows.map((row) => ({
+          kind: 'rowSpan' as const,
+          rowId: row.id,
+          start: instant('2026-03-02T00:00:00Z'),
+          end: instant('2026-03-09T00:00:00Z'),
+          class: 'demo-first-week',
+          text: 'Week 1',
+        })),
+      );
+    },
+  });
+}
+
+export { marksFirstWeek };
+```
+
 ## Every registration seam
 
 All of these calls are legal only inside a plugin's own half. Each row
@@ -494,6 +720,10 @@ plugins claim the same key.
 | `variants.add(variant)` | `variant.name` | Newest registration wins, and the older one answers again on dispose | `src/layout/bars/variants.test.ts` |
 | `view.registerRenderer(point, renderer)` | `RendererPoint` (`'bar'` \| `'cell'` \| `'header'` \| `'tooltip'`) | Exclusive — the second claim throws `RendererAlreadyRegisteredError` | `src/view/renderer-registry.test.ts`, "register: a second plugin claiming the whole bar point throws, naming both plugin ids" |
 | `view.registerDecoration(layer, provider)` | `DecorationLayer` (`'underBars'` \| `'overBars'`) | Additive — every registered provider paints, in registration order | `src/view/plugin-registrations.test.ts` |
+| `view.registerConnector(provider)` | none | Additive — every provider's lines draw, and core routes them | `src/view/plugin-registrations.test.ts` |
+| `view.onConnect(handler)` | none | Additive — every handler runs, in registration order | `src/api/connect-gesture.test.ts` |
+| `interaction.registerKeyHandler(chord, handler)` | `chord` | Newest-first; a handler that returns `false` declines, and the next older binding runs | `src/api/connector-keyboard.test.ts` |
+| `edits.writeRowsWithEdit(writer)` | none | Additive — every writer runs, and its rows join the edit's change set | `src/api/dataset.test.ts` |
 | `view.registerGridColumn(column)` | none | Additive — an ordered, appendable list | `src/view/plugin-registrations.test.ts` |
 | `store.reserve<T>()` | the calling plugin's own `id` | Idempotent — the same plugin gets the same store back on repeat calls | `src/extensions/plugin-runtime.test.ts` |
 | `edits.setExtender(wrap)` | the one edit hook | Composes — the second extender receives the first and may call it | `src/data/edit-extension.test.ts` |
