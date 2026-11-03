@@ -456,6 +456,7 @@ export type {
   ConnectorFlags,
   ConnectorInput,
   ConnectorProvider,
+  ConnectorRouting,
 } from '../layout/index.js';
 
 // S5.6: a decoration provider's own vocabulary — a plugin author writes `ctx.view

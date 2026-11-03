@@ -385,6 +385,12 @@ export interface ConnectorInput {
 export type ConnectorProvider = () => readonly ConnectorInput[];
 
 // @public
+export interface ConnectorRouting {
+    avoidBars?: boolean;
+    maxAvoidRows?: number;
+}
+
+// @public
 export interface ConstraintViolationDiagnostic {
     // (undocumented)
     readonly code: 'constraint-violated';
@@ -1481,6 +1487,8 @@ export class Gantt<TProps = unknown> {
     set collapsed(ids: readonly (RowId | string)[]);
     collapseStateOf(id: RowId | string): CollapseState | undefined;
     get commands(): CommandRegistry<TProps>;
+    get connectorRouting(): ConnectorRouting;
+    set connectorRouting(value: ConnectorRouting);
     get convenienceChords(): ConvenienceChords;
     set convenienceChords(next: ConvenienceChords);
     get dataset(): Dataset<TProps>;
@@ -1651,6 +1659,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     barRenderer?: BarRenderer;
     capabilities?: Capabilities;
     collapsed?: readonly (RowId | string)[];
+    connectorRouting?: ConnectorRouting;
     container: HTMLElement | string;
     convenienceChords?: ConvenienceChords;
     dataset: Dataset<TProps>;

@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- `connectorRouting: { avoidBars, maxAvoidRows }` Gantt option, live. A vertical connector segment now slides sideways to miss bars in the rows it crosses, up to 48 px from its default place. `avoidBars` default `true`. A vertical across more than `maxAvoidRows` rows (default `200`) keeps its default place. New type `ConnectorRouting`.
+
 - Connector routes read better. A backward finish-to-start runs along the near gap of the target row, not the source row. Start-to-start and finish-to-finish draw one vertical outside both bars, with two bends. A same-row backward connector loops along the bottom gap of its row. The stub is 12 px, not 8.
 
 - The harness "Scheduling" page has a constraint form. It sets "start no earlier than", "finish no later than" or "must start on" on a chosen task, and it clears the constraint. A list names the task that breaks a ceiling, or keeps a must-start-on date and breaks a Dependency.

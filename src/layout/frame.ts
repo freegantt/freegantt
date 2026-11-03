@@ -20,6 +20,7 @@ export type { RangeBand, ResolvedDecoration, RowSpan, RowStripe } from './decora
 import { DecorationRunner } from './decorations.js';
 import { ConnectorRouter } from './connectors/connector-router.js';
 import type { ConnectorProvider } from './connector-input.js';
+import type { ConnectorRouting } from './connectors/connector-routing.js';
 import type { ConnectorWindow } from './connectors/clip-path.js';
 import type { FrameConnector } from './connectors/frame-connector.js';
 import type { RegisteredDecorationProvider } from './decorations.js';
@@ -399,6 +400,8 @@ export interface LayoutInput {
   /** Registered connector providers, `ctx.view.registerConnector`'s own record.
    *  Omitted or empty → `connectors` is `[]`. */
   connectorProviders?: readonly ConnectorProvider[];
+  /** How connector routes dodge bars. Omitted → avoid on, capped at 200 rows. */
+  connectorRouting?: ConnectorRouting;
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  and the unknown-key sink. The shell builds one of these once, at construction (`#421 C1`), the
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
@@ -825,6 +828,7 @@ export function placeFrame(
 
   const connectors = (connectorRouter ?? new ConnectorRouter()).run({
     providers: input.connectorProviders ?? [],
+    routing: input.connectorRouting,
     datasetRevision: input.datasetRevision,
     plan,
     memory: mem,

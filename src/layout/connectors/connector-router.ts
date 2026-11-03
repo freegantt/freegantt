@@ -12,11 +12,17 @@ import type { PlannedRow } from '../rows/row-source.js';
 import type { FrameConnector } from './frame-connector.js';
 import { boundsOf, boundsTouchWindow, clipPath } from './clip-path.js';
 import type { ConnectorWindow } from './clip-path.js';
+import { BarIndex } from './bar-index.js';
+import type { VerticalPlacer } from './bar-index.js';
+import { resolveConnectorRouting } from './connector-routing.js';
+import type { ConnectorRouting } from './connector-routing.js';
 import { midpointOf, routeConnector } from './route-connector.js';
 import type { ConnectorAnchor, Point } from './route-connector.js';
 
 export interface ConnectorRunInput {
   providers: readonly ConnectorProvider[];
+  /** Omitted → avoid bars, capped at the default row count. */
+  routing?: ConnectorRouting | undefined;
   datasetRevision: number;
   plan: readonly PlannedRow[];
   memory: FrameMemory;
@@ -100,6 +106,7 @@ export class ConnectorRouter {
 
   #routedFor(input: ConnectorRunInput, inputs: readonly ConnectorInput[]): readonly RoutedConnector[] {
     const { scale } = input;
+    const routing = resolveConnectorRouting(input.routing);
     const content = scale.spanForPixels({ x: 0, width: scale.contentWidth });
     const key = [
       input.datasetRevision,
@@ -110,6 +117,8 @@ export class ConnectorRouter {
       content.end,
       scale.contentWidth,
       scale.timeZone,
+      routing.avoidBars,
+      routing.maxAvoidRows,
     ].join('|');
     if (this.#routedInputs === inputs && this.#routedKey === key && this.#plan === input.plan) {
       return this.#routed;
@@ -117,8 +126,9 @@ export class ConnectorRouter {
     this.#indexRows(input.plan);
     this.#routedKey = key;
     this.#routedInputs = inputs;
+    const placeVertical = routing.avoidBars ? this.#barIndexFor(input, routing.maxAvoidRows) : undefined;
     this.#routed = inputs.flatMap((connector) => {
-      const routed = this.#route(connector, input);
+      const routed = this.#route(connector, input, placeVertical);
       return routed === undefined ? [] : [routed];
     });
     return this.#routed;
@@ -133,11 +143,28 @@ export class ConnectorRouter {
     });
   }
 
-  #route(connector: ConnectorInput, input: ConnectorRunInput): RoutedConnector | undefined {
+  /** One index per routing pass, so a row reads its bars once however many verticals cross it. */
+  #barIndexFor(input: ConnectorRunInput, maxRows: number): VerticalPlacer {
+    const index = new BarIndex((rowIndex) => {
+      const row = input.plan[rowIndex];
+      if (row === undefined) return [];
+      return input.memory.rowMemory(row.id).bars.map((bar) => {
+        const { x, width } = input.barBox(bar);
+        return { left: x, right: x + width };
+      });
+    }, maxRows);
+    return (request) => index.freeX(request);
+  }
+
+  #route(
+    connector: ConnectorInput,
+    input: ConnectorRunInput,
+    placeVertical: VerticalPlacer | undefined,
+  ): RoutedConnector | undefined {
     const from = this.#anchorOf(connector.from, input);
     const to = this.#anchorOf(connector.to, input);
     if (from === undefined || to === undefined) return undefined;
-    const points = routeConnector(from, to);
+    const points = routeConnector(from, to, placeVertical);
     const flags = trueFlagsOf(connector.flags);
     const labelAnchor = connector.showLabel === true && connector.label ? midpointOf(points) : undefined;
     return {
@@ -179,6 +206,7 @@ export class ConnectorRouter {
       x: end.edge === 'start' ? x : x + width,
       y: rowTop + input.rowHeight / 2,
       edge: end.edge,
+      rowIndex,
       rowTop,
       rowBottom: rowTop + memory.heights.heightAt(rowIndex),
     };
