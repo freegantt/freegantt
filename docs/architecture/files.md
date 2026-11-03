@@ -117,6 +117,8 @@ where they do something beyond re-export.
 | `layout/decorations.ts` | `DecorationRunner` | Runs registered decoration providers into the frame's under-bar and over-bar layers. |
 | `layout/connector-input.ts` | `ConnectorInput, ConnectorEnd, ConnectorProvider, ConnectorFlags, CONNECTOR_FLAG_KEYS, PathCommand` | The connector seam's own types. A provider names two bar edges and core does the rest. |
 | `layout/connectors/connector-router.ts` | `ConnectorRouter` | Runs registered connector providers into the frame's connectors. It finds both bars for any Entry, routes once per revision and clips per frame. |
+| `layout/connectors/bar-index.ts` | `BarIndex, VerticalPlacer` | Finds an x for a vertical connector segment that crosses no bar in the rows between. |
+| `layout/connectors/connector-routing.ts` | `ConnectorRouting, resolveConnectorRouting()` | The consumer's choices for bar avoidance: on or off, and the row cap. |
 | `layout/connectors/route-connector.ts` | `routeConnector(), CONNECTOR_STUB_PX` | The orthogonal path between two bar edges. |
 | `layout/connectors/clip-path.ts` | `clipPath(), boundsOf(), boundsTouchWindow()` | Clips a connector path to the window. |
 | `layout/connectors/frame-connector.ts` | `FrameConnector` | One connector as the frame carries it. |
