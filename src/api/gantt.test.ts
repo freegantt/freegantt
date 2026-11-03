@@ -1346,6 +1346,7 @@ describe('Gantt.visibleSpan (issue #461)', () => {
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fitDatasetPaddingPx: 0,
       });
 
       const beforeMeasure = gantt.visibleSpan;
@@ -1469,6 +1470,7 @@ describe('Gantt.visibleSpan (issue #461)', () => {
         dataset: new Dataset({ entries: narrowEntries, timeZone: 'UTC' }),
         fit: 'pane',
         range: 'fitDataset',
+        fitDatasetPaddingPx: 0,
       });
       // A pane far wider than one day's own content at any legible density.
       FakeResizeObserver.instances[0]!.fire({ width: 2000, height: 100 });

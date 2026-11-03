@@ -25,7 +25,9 @@ const wideDataset: DatasetBinding = {
 const noop = (): void => {};
 
 function boundViewport(width = 400, height = 200): { viewport: Viewport; calls: () => number } {
-  const viewport = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'day' }) });
+  const viewport = new Viewport({
+    scale: new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: 'preset', preset: 'day' }),
+  });
   let calls = 0;
   const handle = viewport.bind(wideDataset, () => calls++);
   handle.setPaneSize({ width, height });
@@ -85,7 +87,7 @@ describe('Viewport', () => {
   });
 
   it('unbind detaches both models', () => {
-    const sharedScale = new TimeScaleModel();
+    const sharedScale = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     const sharedY = new ScrollAxis();
     let otherCalls = 0;
     const other = new Viewport({ scale: sharedScale, scroll: { y: sharedY } });
@@ -348,7 +350,9 @@ describe('Viewport.zoomTo / zoomBy (S1.9, D-S1.9-5)', () => {
   });
 
   it('called before the first render (pane width 0) resolves to a defined, non-throwing value', () => {
-    const viewport = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'day' }) });
+    const viewport = new Viewport({
+      scale: new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: 'preset', preset: 'day' }),
+    });
     viewport.bind(wideDataset, noop);
     expect(() => viewport.zoomTo(viewport.timeScale.pxPerMs * 2)).not.toThrow();
   });
@@ -394,7 +398,9 @@ describe('Viewport.zoomIn / zoomOut (S1.12, D-S1.12-6)', () => {
   });
 
   it('[S1-A7] zoomIn / zoomOut are no-ops at the ends and canZoomIn / canZoomOut agree', () => {
-    const finest = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'hour' }) });
+    const finest = new Viewport({
+      scale: new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: 'preset', preset: 'hour' }),
+    });
     let finestCalls = 0;
     const finestHandle = finest.bind(wideDataset, () => finestCalls++);
     finestHandle.setPaneSize({ width: 400, height: 200 });
@@ -407,7 +413,9 @@ describe('Viewport.zoomIn / zoomOut (S1.12, D-S1.12-6)', () => {
     expect(finestCalls).toBe(0);
     expect(finest.preset.id).toBe('hour');
 
-    const coarsest = new Viewport({ scale: new TimeScaleModel({ fit: 'preset', preset: 'year' }) });
+    const coarsest = new Viewport({
+      scale: new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: 'preset', preset: 'year' }),
+    });
     let coarsestCalls = 0;
     const coarsestHandle = coarsest.bind(wideDataset, () => coarsestCalls++);
     coarsestHandle.setPaneSize({ width: 400, height: 200 });
@@ -531,7 +539,9 @@ describe('Viewport.reveal (S1.9, D-S1.9-6)', () => {
 
   describe('setEntries (S2.4, D-S2-20)', () => {
     it("an edit inside the bound span does not churn 'fitDataset' (D-S1.5-4)", () => {
-      const viewport = new Viewport({ scale: new TimeScaleModel({ range: 'fitDataset' }) });
+      const viewport = new Viewport({
+        scale: new TimeScaleModel({ fitDatasetPaddingPx: 0, range: 'fitDataset' }),
+      });
       let calls = 0;
       const handle = viewport.bind(wideDataset, () => calls++);
       const rangeBefore = viewport.timeScale.range;
@@ -545,7 +555,9 @@ describe('Viewport.reveal (S1.9, D-S1.9-6)', () => {
     });
 
     it("an edit outside the bound span re-fits 'fitDataset' and notifies", () => {
-      const viewport = new Viewport({ scale: new TimeScaleModel({ range: 'fitDataset' }) });
+      const viewport = new Viewport({
+        scale: new TimeScaleModel({ fitDatasetPaddingPx: 0, range: 'fitDataset' }),
+      });
       let calls = 0;
       const handle = viewport.bind(wideDataset, () => calls++);
       calls = 0;
@@ -568,7 +580,9 @@ describe('Viewport.visibleSpan (issue #461)', () => {
     width: number,
     height = 200,
   ): { viewport: Viewport; handle: ReturnType<Viewport['bind']>; calls: () => number } {
-    const viewport = new Viewport({ scale: new TimeScaleModel({ range: pinnedRange, fit: pxPerMs }) });
+    const viewport = new Viewport({
+      scale: new TimeScaleModel({ fitDatasetPaddingPx: 0, range: pinnedRange, fit: pxPerMs }),
+    });
     let calls = 0;
     const handle = viewport.bind(dataset, () => calls++);
     handle.setPaneSize({ width, height });
@@ -651,7 +665,7 @@ describe('Viewport.visibleSpan (issue #461)', () => {
 
   it('per Gantt, not per scale model: two Viewports sharing one ScrollAxis but different pane widths report different spans', () => {
     const sharedX = new ScrollAxis();
-    const sharedScale = new TimeScaleModel({ range: pinnedRange, fit: pxPerMs });
+    const sharedScale = new TimeScaleModel({ fitDatasetPaddingPx: 0, range: pinnedRange, fit: pxPerMs });
     const narrow = new Viewport({ scale: sharedScale, scroll: { x: sharedX } });
     const wide = new Viewport({ scale: sharedScale, scroll: { x: sharedX } });
     const narrowHandle = narrow.bind(dataset, noop);

@@ -10,6 +10,7 @@
 // by hand.
 
 import {
+  addMs,
   createTimeScale,
   dayPreset,
   diffMs,
@@ -48,7 +49,13 @@ export interface TimeScaleModelOptions {
   range?: 'fitDataset' | TimeSpan;
   /** Default `'pane'`. */
   fit?: TimeScaleFit;
+  /** Pixels of empty axis before the first bar and after the last bar, when `range` is `'fitDataset'`.
+   *  The default is `DEFAULT_FIT_DATASET_PADDING_PX`. `0` removes the margin. A pinned `TimeSpan` has none. */
+  fitDatasetPaddingPx?: number;
 }
+
+/** Wide enough for a 12 px connector stub and its arrowhead, so a hook into the first bar stays in view. */
+export const DEFAULT_FIT_DATASET_PADDING_PX = 24;
 
 /** One Gantt's contribution to resolution, supplied when it binds. `readonly`, and the model copies
  * it at bind time (S1.5, #6/#22 follow-up) — a caller holding a reference cannot change the model's
@@ -154,6 +161,7 @@ export class TimeScaleModel {
   #preset: ViewPreset;
   #range: 'fitDataset' | TimeSpan;
   #fit: TimeScaleFit;
+  #fitDatasetPaddingPx: number;
   /** The bindings, the options resolved from them, and the notification contract — one
    * object, shared with `ScrollAxis` in implementation and with nothing else (`bound-value.ts`).
    * This model supplies only what is its own: how to resolve, and what counts as a change. */
@@ -170,6 +178,7 @@ export class TimeScaleModel {
     this.#preset = options.preset ? resolvePreset(options.preset, 'preset') : dayPreset;
     this.#range = options.range ?? 'fitDataset';
     this.#fit = options.fit ?? 'pane';
+    this.#fitDatasetPaddingPx = options.fitDatasetPaddingPx ?? DEFAULT_FIT_DATASET_PADDING_PX;
     internals.set(this, { scaleOptions: this.#scaleOptions });
   }
 
@@ -217,6 +226,17 @@ export class TimeScaleModel {
     this.#scaleOptions.invalidate();
   }
 
+  get fitDatasetPaddingPx(): number {
+    return this.#fitDatasetPaddingPx;
+  }
+
+  /** Live. Pixels of empty axis on each side of the dataset under `range: 'fitDataset'`. */
+  set fitDatasetPaddingPx(px: number) {
+    if (this.#fitDatasetPaddingPx === px) return;
+    this.#fitDatasetPaddingPx = px;
+    this.#scaleOptions.invalidate();
+  }
+
   get scale(): TimeScale {
     const { options } = this.#scaleOptions.resolved;
     if (!this.#scale || this.#scaleBuiltFrom !== options) {
@@ -258,10 +278,23 @@ export class TimeScaleModel {
     timeZone ??= UNBOUND_ZONE;
     // With nothing bound — or nothing scheduled — this collapses to a zero span at the epoch, which
     // resolves to the preset's own density rather than a divide-by-zero.
-    const range =
+    const datasetSpan =
       this.#range === 'fitDataset' ? (span ?? { start: instant(0), end: instant(0) }) : this.#range;
-    const spanMs = diffMs(range.end, range.start);
-    const pxPerMs = this.#resolvePxPerMs(timeZone, range.start, width, spanMs);
+    // The margin takes pixels from the pane, so the dataset plus its margin fills the pane exactly.
+    const paddingPx = this.#range === 'fitDataset' && span !== undefined ? this.#fitDatasetPaddingPx : 0;
+    const spanMs = diffMs(datasetSpan.end, datasetSpan.start);
+    const pxPerMs = this.#resolvePxPerMs(
+      timeZone,
+      datasetSpan.start,
+      width > 0 ? Math.max(width - 2 * paddingPx, 0) : 0,
+      spanMs,
+    );
+    // The margin is fixed in pixels, so its length in time follows the final density.
+    const paddingMs = Math.ceil(paddingPx / pxPerMs);
+    const range =
+      paddingMs > 0
+        ? { start: addMs(datasetSpan.start, -paddingMs), end: addMs(datasetSpan.end, paddingMs) }
+        : datasetSpan;
     return { timeZone, range, pxPerMs };
   }
 

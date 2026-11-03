@@ -335,6 +335,7 @@ export interface GanttShellOptions {
   preset?: PresetRef;
   range?: 'fitDataset' | TimeSpan;
   fit?: TimeScaleFit;
+  fitDatasetPaddingPx?: number;
   /** `Viewport` is never shared, so this always applies to this shell's own viewport. */
   overscan?: Overscan;
   /** Live. Default `'auto'`: follows `prefers-color-scheme`. */
@@ -506,17 +507,19 @@ function paneLayoutFrom(
   });
 }
 
-/** Call: `defaultTimeScale(options.preset, options.range, options.fit)`. The private TimeScale
+/** Call: `defaultTimeScale(options.preset, options.range, options.fit, options.fitDatasetPaddingPx)`. The private TimeScale
  *  this Gantt builds when the consumer named no shared `scale`. */
 function defaultTimeScale(
   preset: PresetRef | undefined,
   range: GanttShellOptions['range'],
   fit: TimeScaleFit | undefined,
+  fitDatasetPaddingPx: number | undefined,
 ): TimeScaleModel {
   return new TimeScaleModel({
     ...(preset !== undefined ? { preset } : {}),
     ...(range !== undefined ? { range } : {}),
     ...(fit !== undefined ? { fit } : {}),
+    ...(fitDatasetPaddingPx !== undefined ? { fitDatasetPaddingPx } : {}),
   });
 }
 
@@ -825,7 +828,8 @@ export class GanttShell {
     // Does a shared `scale` also name preset, range, or fit that this Gantt must ignore?
     this.#warnWhenSharedScaleIgnoresOwnOptions();
     this.#viewport = viewportFrom(
-      options.scale ?? defaultTimeScale(options.preset, options.range, options.fit),
+      options.scale ??
+        defaultTimeScale(options.preset, options.range, options.fit, options.fitDatasetPaddingPx),
       options.scroll,
       options.overscan,
     );
@@ -1117,7 +1121,10 @@ export class GanttShell {
   #warnWhenSharedScaleIgnoresOwnOptions(): void {
     const options = this.#options;
     const hasOwnOptions =
-      options.preset !== undefined || options.range !== undefined || options.fit !== undefined;
+      options.preset !== undefined ||
+      options.range !== undefined ||
+      options.fit !== undefined ||
+      options.fitDatasetPaddingPx !== undefined;
     if (options.scale && hasOwnOptions) {
       // No longer behind `isDevMode()`, which resolved to `false` in every consumer's
       // build and deleted this line from the shipped library. The `console.warn` is now the fallback
@@ -2914,6 +2921,14 @@ export class GanttShell {
 
   get fit(): TimeScaleFit {
     return this.#viewport.fit;
+  }
+
+  get fitDatasetPaddingPx(): number {
+    return this.#viewport.fitDatasetPaddingPx;
+  }
+
+  set fitDatasetPaddingPx(px: number) {
+    this.#viewport.fitDatasetPaddingPx = px;
   }
 
   set fit(f: TimeScaleFit) {
