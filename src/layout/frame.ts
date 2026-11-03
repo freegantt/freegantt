@@ -58,6 +58,16 @@ export const DEFAULT_BAR_HEIGHT_PX = 18;
  *  so `barSpan`'s return type and `FrameBar.span` read one type instead of repeating the union. */
 export type BarSpanKind = 'exact' | 'clipped' | 'minimum' | 'fixed';
 
+/** The vertical band a bar paints in: centred in the row that starts at `rowTop`. */
+export function barBandAt(
+  rowTop: number,
+  rowHeight: number,
+  barHeightPx: number,
+): { top: number; bottom: number } {
+  const top = rowTop + (rowHeight - barHeightPx) / 2;
+  return { top, bottom: top + barHeightPx };
+}
+
 /** A Bar's horizontal extent in content pixels, at the bound `TimeScale` (S1.9). The one formula
  * both `computeFrame` and `GanttShell.reveal` need — extracted so the two can never drift apart.
  * Both callers hand it a real `Bar`, `box` included (#295): a boxed Bar — `diamond()`'s glyph is
@@ -689,7 +699,7 @@ function placeVisibleRowsAndBars(
         label,
         x,
         // Every row is one lane (singleLane): the bar centres in the row's own band.
-        y: top + (rowHeight - settings.barHeightPx) / 2,
+        y: barBandAt(top, rowHeight, settings.barHeightPx).top,
         width,
         height: settings.barHeightPx,
         flags: {},
@@ -783,6 +793,7 @@ export function placeConnectors(
     rowHeight: input.rowHeight,
     barBox: (bar) => barSpan(bar, input.scale, settings.minBarWidthPx),
     previews: input.barPreviews ?? [],
+    barBand: (rowTop) => barBandAt(rowTop, input.rowHeight, settings.barHeightPx),
     previewedBarBox: (bar, preview) =>
       previewedBox(barSpan(bar, input.scale, settings.minBarWidthPx), preview),
     paintKey: `${settings.minBarWidthPx}|${settings.barHeightPx}`,

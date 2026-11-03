@@ -321,6 +321,7 @@ describe('connector route shapes', () => {
 
 describe('routeConnector property', () => {
   const ROW = 32;
+  const BAR_INSET = 7;
   const anchor = fc
     .record({
       x: fc.integer({ min: -500, max: 500 }),
@@ -334,14 +335,19 @@ describe('routeConnector property', () => {
       rowIndex: row,
       rowTop: row * ROW,
       rowBottom: row * ROW + ROW,
+      barTop: row * ROW + BAR_INSET,
+      barBottom: row * ROW + ROW - BAR_INSET,
     }));
 
-  it('is orthogonal and joins the source anchor to the target anchor', () => {
+  it('is orthogonal and joins the source anchor to the target anchor or its bar edge', () => {
     fc.assert(
       fc.property(anchor, anchor, (from, to) => {
         const points = routeConnector(from, to);
         expect(points[0]).toEqual({ x: from.x, y: from.y });
-        expect(points.at(-1)).toEqual({ x: to.x, y: to.y });
+        const last = points.at(-1)!;
+        const onTargetAnchor = last.x === to.x && last.y === to.y;
+        const onTargetEdge = last.y === to.barTop || last.y === to.barBottom;
+        expect(onTargetAnchor || onTargetEdge).toBe(true);
         points.slice(1).forEach((point, index) => {
           const before = points[index]!;
           expect(point.x === before.x || point.y === before.y).toBe(true);
@@ -431,5 +437,75 @@ describe('bars in the way of a vertical', () => {
     ).connectors[0]?.path[1];
     expect(on).toEqual({ cmd: 'L', x: 1052, y: 16 });
     expect(off).toEqual({ cmd: 'L', x: 1012, y: 16 });
+  });
+});
+
+describe('a successor that starts at the end of its predecessor', () => {
+  const ROW = 32;
+  const BAR_INSET = 7;
+  const anchorOn = (row: number, x: number, edge: 'start' | 'end'): ConnectorAnchor => ({
+    x,
+    y: row * ROW + ROW / 2,
+    edge,
+    rowIndex: row,
+    rowTop: row * ROW,
+    rowBottom: row * ROW + ROW,
+    barTop: row * ROW + BAR_INSET,
+    barBottom: row * ROW + ROW - BAR_INSET,
+  });
+  const pt = (x: number, y: number) => ({ x, y });
+
+  it.each([
+    { gap: 0, x: 108 },
+    { gap: 6, x: 114 },
+    { gap: 20, x: 128 },
+  ])('turns once and ends on the top edge when the gap is $gap px, one row down', ({ gap, x }) => {
+    const points = routeConnector(anchorOn(0, 100, 'end'), anchorOn(1, 100 + gap, 'start'));
+    expect(points).toEqual([pt(100, 16), pt(x, 16), pt(x, ROW + BAR_INSET)]);
+  });
+
+  it('ends on the top edge of a bar three rows down', () => {
+    const points = routeConnector(anchorOn(0, 100, 'end'), anchorOn(3, 106, 'start'));
+    expect(points).toEqual([pt(100, 16), pt(114, 16), pt(114, 3 * ROW + BAR_INSET)]);
+  });
+
+  it('ends on the bottom edge when the successor sits above', () => {
+    const points = routeConnector(anchorOn(3, 100, 'end'), anchorOn(1, 100, 'start'));
+    expect(points).toEqual([pt(100, 3 * ROW + 16), pt(108, 3 * ROW + 16), pt(108, ROW + ROW - BAR_INSET)]);
+  });
+
+  it('mirrors for a start-to-end link', () => {
+    const points = routeConnector(anchorOn(0, 100, 'start'), anchorOn(1, 94, 'end'));
+    expect(points).toEqual([pt(100, 16), pt(86, 16), pt(86, ROW + BAR_INSET)]);
+  });
+
+  it('keeps the long route when the successor starts left of the predecessor end', () => {
+    const points = routeConnector(anchorOn(0, 100, 'end'), anchorOn(1, 99, 'start'));
+    expect(points).toHaveLength(6);
+  });
+
+  it('keeps the plain route when the gap holds two stubs', () => {
+    const points = routeConnector(anchorOn(0, 100, 'end'), anchorOn(1, 124, 'start'));
+    expect(points).toEqual([pt(100, 16), pt(112, 16), pt(112, 48), pt(124, 48)]);
+  });
+
+  it('keeps the route for a same-row link and for start-to-start', () => {
+    expect(routeConnector(anchorOn(0, 100, 'end'), anchorOn(0, 106, 'start'))).toHaveLength(6);
+    expect(routeConnector(anchorOn(0, 100, 'start'), anchorOn(1, 106, 'start'))).toHaveLength(4);
+  });
+
+  it('shares one vertical between two touching successors', () => {
+    const from = anchorOn(0, 100, 'end');
+    const first = routeConnector(from, anchorOn(1, 100, 'start'));
+    const second = routeConnector(from, anchorOn(2, 100, 'start'));
+    expect(first[1]?.x).toBe(second[1]?.x);
+  });
+
+  it('takes the long route when a bar blocks the vertical', () => {
+    const index = new BarIndex((row) => (row === 1 ? [{ left: 90, right: 200 }] : []), 200);
+    const points = routeConnector(anchorOn(0, 100, 'end'), anchorOn(2, 100, 'start'), (request) =>
+      index.freeX(request),
+    );
+    expect(points.at(-1)).toEqual(pt(100, 2 * ROW + 16));
   });
 });

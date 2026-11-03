@@ -14,6 +14,9 @@ export interface ConnectorAnchor extends Point {
   rowIndex: number;
   rowTop: number;
   rowBottom: number;
+  /** The painted bar's top and bottom edge, in content pixels. */
+  barTop: number;
+  barBottom: number;
 }
 
 /** How far a line leaves a bar edge before it turns. Room for an arrowhead and a gap. */
@@ -21,6 +24,15 @@ export const CONNECTOR_STUB_PX = 12;
 
 /** How far a vertical may slide away from its default x to dodge a bar. */
 export const CONNECTOR_SLIDE_PX = 4 * CONNECTOR_STUB_PX;
+
+/** A bar that starts this close to the end it follows leaves no room for two stubs. */
+const TOUCHING_REACH_PX = 2 * CONNECTOR_STUB_PX;
+
+/** The first bend sits at least this far from the source edge, so the line shows a lead-out. */
+const TOUCHING_LEAD_PX = 6;
+
+/** The vertical lands this far inside the target bar's edge, clear of the rounded corner. */
+const TOUCHING_INSET_PX = 8;
 
 /** The line leaves a `start` edge to the left and an `end` edge to the right. */
 function leaveDirection(edge: ConnectorEdge): 1 | -1 {
@@ -52,6 +64,8 @@ function sameLine(a: Point, b: Point, c: Point): boolean {
 /** Call: `routeConnector(fromAnchor, toAnchor)`. Returns the corner points, source first.
  *  - Edges of the same kind (start to start, end to end) share one vertical outside both bars.
  *  - A target past the stub gets one vertical at the source stub.
+ *  - A successor that touches the source edge (end to start, or start to end) gets one bend and
+ *    drops onto the bar's near top or bottom edge.
  *  - Any other pair runs along the near gap of the target row. */
 export function routeConnector(
   from: ConnectorAnchor,
@@ -70,6 +84,10 @@ export function routeConnector(
     const x = placeVertical(verticalBetween(from, to, outerX, outerX + leave * CONNECTOR_SLIDE_PX));
     return withoutRedundantPoints([start, { x, y: from.y }, { x, y: to.y }, end]);
   }
+  if (!sameRow && leave === -arrive) {
+    const touching = touchingRoute(from, to, placeVertical);
+    if (touching !== undefined) return touching;
+  }
   const hasRoom = leave === -arrive && leave * (arriveX - leaveX) >= 0;
   if (hasRoom) {
     const x = placeVertical(verticalBetween(from, to, leaveX, arriveX));
@@ -84,6 +102,33 @@ export function routeConnector(
     { x: arriveX, y: laneY },
     { x: arriveX, y: to.y },
     end,
+  ]);
+}
+
+/** An L that ends on the near horizontal edge of a bar that starts within two stubs of the source
+ *  edge, on its far side. A bar in the way of the vertical gives no L, so the caller routes around. */
+function touchingRoute(
+  from: ConnectorAnchor,
+  to: ConnectorAnchor,
+  placeVertical: VerticalPlacer,
+): Point[] | undefined {
+  const leave = leaveDirection(from.edge);
+  const reach = leave * (to.x - from.x);
+  if (reach < 0 || reach >= TOUCHING_REACH_PX) return undefined;
+  const lead = from.x + leave * TOUCHING_LEAD_PX;
+  const inside = to.x + leave * TOUCHING_INSET_PX;
+  const x = leave > 0 ? Math.max(lead, inside) : Math.min(lead, inside);
+  const freeX = placeVertical({
+    ...verticalBetween(from, to, x, x),
+    minX: x - CONNECTOR_SLIDE_PX,
+    maxX: x + CONNECTOR_SLIDE_PX,
+  });
+  if (freeX !== x) return undefined;
+  const edgeY = to.y > from.y ? to.barTop : to.barBottom;
+  return withoutRedundantPoints([
+    { x: from.x, y: from.y },
+    { x, y: from.y },
+    { x, y: edgeY },
   ]);
 }
 

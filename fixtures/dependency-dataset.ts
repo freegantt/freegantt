@@ -49,14 +49,16 @@ export const dependencyEntryInputs: readonly EntryInput[] = [...groupEntries, ..
 
 const days = (value: number) => ({ value, unit: 'day' as const });
 
-/** All four types, a backward finish-to-start, and `dep-ss` with a negative lag. */
+/** All four types, a backward (negative lag) and a touching finish-to-start, and `dep-ss` with a negative lag. */
 export const firstDependencies: readonly DependencyInput[] = [
   { id: 'dep-fs', fromId: 'foundation-1', toId: 'foundation-2', type: 'FS', lag: days(0) },
   { id: 'dep-ss', fromId: 'foundation-2', toId: 'foundation-3', type: 'SS', lag: days(-1) },
   { id: 'dep-ff', fromId: 'foundation-3', toId: 'foundation-4', type: 'FF', lag: days(2) },
   { id: 'dep-sf', fromId: 'foundation-4', toId: 'structure-1', type: 'SF', lag: days(1) },
-  // A backward finish-to-start: the target starts before the source ends, several rows below.
-  { id: 'dep-back', fromId: 'foundation-4', toId: 'tail-3', type: 'FS', lag: days(0) },
+  // A backward finish-to-start: a negative lag puts the target before the source's end, several rows below.
+  { id: 'dep-back', fromId: 'foundation-4', toId: 'tail-3', type: 'FS', lag: days(-3) },
+  // A finish-to-start whose target starts a day after the source ends, on the next row.
+  { id: 'dep-touch', fromId: 'tail-1', toId: 'tail-2', type: 'FS', lag: days(0) },
   { id: 'dep-far', fromId: 'foundation-1', toId: 'tail-30', type: 'FS', lag: days(0) },
 ];
 
