@@ -1,5 +1,5 @@
 ---
-status: accepted — ruled 2026-11-02 by the owner. Follows [ADR 0040](0040-a-plugin-states-a-connectors-two-ends-and-core-routes-it.md). Design in `plans/s7-dependencies-and-scheduling/README.md`.
+status: accepted — ruled 2026-11-02 by the owner, amended the same day (drop on the bar body). Follows [ADR 0040](0040-a-plugin-states-a-connectors-two-ends-and-core-routes-it.md). Design in `plans/s7-dependencies-and-scheduling/README.md`.
 decided: core owns a `Connect` controller in `interaction/`, a `'connect'` capability, and the events `beforeConnect` and `connect`. The controller is active only when a plugin registers a handler with `ctx.view.onConnect`. The payload names two `{ entryId, edge }` ends. The plugin maps the edges to a meaning.
 open: none.
 ---
@@ -33,6 +33,8 @@ Core has no keyboard connect. A keyboard user adds a Dependency in the Entry edi
 ### When the gesture exists
 
 The controller exists only when a plugin registers a handler with `ctx.view.onConnect`. With no handler, no port draws and no event fires.
+
+Amended 2026-11-02 by the owner: a drop on the target bar body connects to the nearer edge of that bar. A drop on a port picks that port's edge. A drop on the source bar or on no bar does nothing.
 
 ### What the payload says
 
