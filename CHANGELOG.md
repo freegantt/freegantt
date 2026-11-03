@@ -8,6 +8,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- harness "Dependencies" page has a backward finish-to-start link, `dep-back`, that shows the route along the gap above its target row.
+
 - `connectorRouting: { avoidBars, maxAvoidRows }` Gantt option, live. A vertical connector segment now slides sideways to miss bars in the rows it crosses, up to 48 px from its default place. `avoidBars` default `true`. A vertical across more than `maxAvoidRows` rows (default `200`) keeps its default place. New type `ConnectorRouting`.
 
 - Connector routes read better. A backward finish-to-start runs along the near gap of the target row, not the source row. Start-to-start and finish-to-finish draw one vertical outside both bars, with two bends. A same-row backward connector loops along the bottom gap of its row. The stub is 12 px, not 8.

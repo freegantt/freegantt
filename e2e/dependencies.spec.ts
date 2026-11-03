@@ -238,3 +238,35 @@ test('Delete on a focused bar still removes the Entry, not a Dependency', async 
   );
   expect(await page.evaluate(() => window.__dataset.entries.has('structure-4'))).toBe(false);
 });
+
+test('a backward connector runs its long horizontal along the gap above the target row', async ({ page }) => {
+  await page.goto('/dependencies.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  const route = await page.evaluate(() => {
+    const line = document.querySelector('#gantt [data-connector-id="dependency:dep-back"]')!;
+    const target = document.querySelector('#gantt .fg-bar[data-bar-id^="tail-3"]')!;
+    const layer = document.querySelector('#gantt .fg-connectors-svg')!;
+    const numbers = line
+      .getAttribute('d')!
+      .match(/-?\d+(\.\d+)?/g)!
+      .map(Number);
+    const points = Array.from({ length: numbers.length / 2 }, (_, i) => ({
+      x: numbers[2 * i]!,
+      y: numbers[2 * i + 1]!,
+    }));
+    const targetBox = target.getBoundingClientRect();
+    const layerBox = layer.getBoundingClientRect();
+    return {
+      points,
+      targetCentreY: targetBox.top + targetBox.height / 2 - layerBox.top,
+    };
+  });
+
+  // Four bends: stub, drop to the gap, run back, hook into the target.
+  expect(route.points).toHaveLength(6);
+  const run = route.points[2]!.y;
+  expect(route.points[3]!.y).toBe(run);
+  // The run sits half a row (16 px) above the target centre. A border can shift the box by a pixel.
+  expect(Math.abs(route.targetCentreY - run - 16)).toBeLessThanOrEqual(1.5);
+});
