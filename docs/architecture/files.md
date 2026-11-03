@@ -112,6 +112,7 @@ where they do something beyond re-export.
 | `layout/column.ts` | `FrameColumn, ResolvedColumn, FieldCompare` | Pure data types for the grid-column paint shape and its locale-bound formatter. |
 | `layout/column-renderers.ts` | `meter(), image()` | Shipped Grid-column renderers as DOM-free description trees. `meter()` paints a percent as a track; `image()` paints a stored URL as an img. The look lives in the always-on sheet — a Column renderer cannot carry a css string the way a variant can. |
 | `layout/date-line.ts` | `resolveDateLines()` | Resolves the today-line and authored date lines into positioned `DateLine` decorations. |
+| `layout/bar-preview.ts` | `BarPreview`, `previewedBox()` | Where a drag preview shows one bar. A frame, a connector and the backend paint read this one rule. |
 | `layout/gesture-draft.ts` | `draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()` | Pure gesture math for drag previews. All date computation stays here so `interaction/` performs no arithmetic. |
 | `layout/decoration.ts` | `DecorationLayer, DecorationProvider, RangeBand, RowStripe` | The decoration seam's own types — range bands and row stripes as pixel-resolved shapes. |
 | `layout/decorations.ts` | `DecorationRunner` | Runs registered decoration providers into the frame's under-bar and over-bar layers. |
