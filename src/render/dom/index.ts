@@ -456,6 +456,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   /** S3.3: bars this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
   let paintedPreview: ReadonlySet<BarId> = new Set();
+  /** The preview offsets each previewed bar wears now. The resize handles and the connect ports read
+   *  them, so they sit on the preview edge of their bar and not on its committed edge. */
+  let previewByBarId: ReadonlyMap<BarId, BarPreview> = new Map();
   /** S3.6: split of `paintedPreview` by `BarPreview.extra` — `dragging` is the caller's own
    *  gesture, `ghost` is an installed extension hook's cascade. Tracked separately from
    *  `paintedPreview` (which drives the transform, not the token) so a `data-state` repaint touches
@@ -585,6 +588,32 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     return a.start === b.start && a.end === b.end;
   }
 
+  /** The box a bar shows now: its committed geometry plus the offsets of its drag preview. */
+  function previewedBox(id: BarId): HandleGeom | undefined {
+    const geom = barGeomByBarId.get(id);
+    const preview = previewByBarId.get(id);
+    if (geom === undefined || preview === undefined) return geom;
+    return {
+      x: geom.x + preview.dx,
+      y: geom.y + preview.dy,
+      width: geom.width + preview.dWidth,
+      height: geom.height,
+    };
+  }
+
+  /** Puts each painted handle on the edge its bar shows now. Writes the transform only (I5). */
+  function placeResizeHandles(): void {
+    if (!startHandle || !endHandle || paintedHandleBars === undefined) return;
+    const startBox = previewedBox(paintedHandleBars.start);
+    const endBox = previewedBox(paintedHandleBars.end);
+    if (startBox !== undefined && !startHandle.hidden) {
+      startHandle.style.transform = `translate(${startBox.x}px, ${startBox.y}px)`;
+    }
+    if (endBox !== undefined && !endHandle.hidden) {
+      endHandle.style.transform = `translate(${endBox.x + endBox.width}px, ${endBox.y}px)`;
+    }
+  }
+
   /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both when
    *  it is undefined. Each handle reads its own bar: the start handle sits on the leftmost bar
    *  and the end handle on the rightmost (#200). `hidden` is a DOM property write, not
@@ -620,6 +649,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       endHandle.style.height = `${endGeom.height}px`;
     }
     paintedHandleBars = bars;
+    placeResizeHandles();
   }
 
   /** Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
@@ -825,6 +855,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     });
     next.forEach((preview, id) => applyBarPreview(id, preview));
     paintedPreview = new Set(next.keys());
+    previewByBarId = next;
+    placeResizeHandles();
 
     // S3.6: `dragging` (the caller's own draft) vs `ghost` (an installed extension hook's
     // `extra`, U7) — same diff-and-touch-only-changed shape `applyState`'s selected/pending sets use.
@@ -1485,7 +1517,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // Below the bars, so a line passes behind the bars it crosses. The selected line and the label text
       // sit in a second layer above the bars. Both layers take no pointer events.
       connectors = attachConnectors(timelineHost, barLayer);
-      connectAffordance = attachConnectAffordance(barLayer, (id) => barGeomByBarId.get(id));
+      connectAffordance = attachConnectAffordance(barLayer, previewedBox);
       dateLines = attachDateLines(timelineHost, headerLayer, contentSizer);
       timelineHost.append(cursorLine);
       headerLayer.append(cursorLineLabel);
@@ -1741,6 +1773,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedHandleBars = undefined;
       paintedMovable = undefined;
       paintedPreview = new Set();
+      previewByBarId = new Map();
       paintedDragging = new Set();
       paintedGhost = new Set();
       paintedSelectedEntryIds = new Set();
