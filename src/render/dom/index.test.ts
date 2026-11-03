@@ -1699,6 +1699,62 @@ describe('render/dom backend', () => {
     timeline.remove();
   });
 
+  it('resize handles and connect ports sit on the preview edges of their bar, and go back once the preview clears', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+    const [a] = frame.bars;
+    const handle = (edge: string) =>
+      timeline.querySelector<HTMLElement>(`.fg-bar-handle[data-edge="${edge}"]`)!;
+    const port = (edge: string) =>
+      timeline.querySelector<HTMLElement>(`.fg-connector-port[data-edge="${edge}"]`)!;
+    const gesture = { resizableEntryId: a!.entryId, connectableBarId: a!.id };
+    const at = (x: number, y: number) => `translate(${x}px, ${y}px)`;
+
+    backend.applyState(gesture);
+    expect(handle('end').style.transform).toBe(at(a!.x + a!.width, a!.y));
+
+    // A move shifts both edges, a resize shifts only the end edge, a row move shifts the row.
+    const cases = [
+      { dx: 40, dy: 0, dWidth: 0 },
+      { dx: 0, dy: 0, dWidth: 30 },
+      { dx: 0, dy: 32, dWidth: 0 },
+    ];
+    for (const offsets of cases) {
+      backend.applyState({
+        ...gesture,
+        preview: [{ entryId: a!.entryId, barId: a!.id, ...offsets, extra: false }],
+      });
+      const startAt = at(a!.x + offsets.dx, a!.y + offsets.dy);
+      const endAt = at(a!.x + offsets.dx + a!.width + offsets.dWidth, a!.y + offsets.dy);
+      expect(handle('start').style.transform).toBe(startAt);
+      expect(handle('end').style.transform).toBe(endAt);
+      expect(port('start').style.transform).toBe(startAt);
+      expect(port('end').style.transform).toBe(endAt);
+    }
+
+    backend.applyState(gesture);
+    expect(handle('start').style.transform).toBe(at(a!.x, a!.y));
+    expect(handle('end').style.transform).toBe(at(a!.x + a!.width, a!.y));
+    expect(port('start').style.transform).toBe(at(a!.x, a!.y));
+    expect(port('end').style.transform).toBe(at(a!.x + a!.width, a!.y));
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
   it('hitTest reports the edge of a resize handle, resolved against resizableEntryId (S3.4, D-S3-4)', () => {
     const backend = paintingBackend();
     const { grid, timeline } = mountSurfaces();
