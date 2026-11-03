@@ -28,9 +28,16 @@ import type {
   Entry,
   Instant,
   PluginStore,
+  StoreRowUpdated,
   StoreRowWrite,
 } from '../../model/index.js';
-import { ENTRY_DEPENDENCIES_ID, edgesOf, readDependencies } from './entry-dependencies.js';
+import {
+  ENTRY_DEPENDENCIES_ID,
+  edgesOf,
+  readDependencies,
+  successorsOfAddedDependencies,
+  writesDependencies,
+} from './entry-dependencies.js';
 import type { Dependency, DependencyStoreView } from './entry-dependencies.js';
 import { CRITICAL_FIELD, FLOAT_FIELD, floatFields, floatWrites } from './scheduling-float.js';
 import type { HeldFloat } from './scheduling-float.js';
@@ -296,10 +303,11 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   /** Runs the engine against the edit and answers the cascade, keeping the findings for `change`. */
   function extend(request: EditRequest): EntryEdits {
     const store = installed?.store;
-    if (!store || applyingConstraint || !touchesDates(request)) {
+    if (!store || applyingConstraint) {
       pending = undefined;
       return new Map();
     }
+    if (!touchesDates(request)) return extendForDependencyWrite(request);
     const { result, overruled, dates } = place(request, store);
     pending = result.diagnostics;
     const edits = new Map<EntryId, EntryEdit>();
@@ -322,6 +330,61 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       );
     }
     return mergeEntryEdits(edits, floatEdits(request, edits));
+  }
+
+  /**
+   * Answers a write to the Dependency store. Each successor of an added or changed Dependency moves later
+   * when it starts too early, with its followers. A removed Dependency moves nobody. Float follows in the
+   * same edit, so one undo restores the link, the moves and the float.
+   */
+  function extendForDependencyWrite(request: EditRequest): EntryEdits {
+    if (!writesDependencies(request.changedStoreRows)) {
+      pending = undefined;
+      return new Map();
+    }
+    const result = schedule({
+      entries: scheduleEntries(request),
+      dependencies: dependencies(),
+      manuallyScheduled: manuallyScheduledIds(request),
+      constraints: installed?.store.all ?? new Map(),
+      ...calendarOption(request),
+      successorMoves: 'pushOnly',
+    });
+    pending = result.diagnostics;
+    const followers = followersOf(successorsOfAddedDependencies(request.changedStoreRows));
+    const edits = new Map<EntryId, EntryEdit>();
+    for (const change of result.patch)
+      if (followers.has(change.id))
+        edits.set(change.id, { ...edits.get(change.id), [change.field]: change.to });
+    return mergeEntryEdits(edits, floatEdits(request, edits));
+  }
+
+  /**
+   * Moves the followers of Dependencies a sync change set added, when they start too early. A sync write
+   * carries no extension hook and no undo step, so the moves land in a sync change set of their own.
+   */
+  function pushAfterSync(rows: readonly StoreRowUpdated[]): void {
+    const current = installed;
+    const successors = successorsOfAddedDependencies(rows);
+    if (!current || successors.size === 0) return;
+    const entries = current.dataset.entries.all;
+    const { patch } = schedule({
+      entries,
+      dependencies: dependencies(),
+      manuallyScheduled: new Set(
+        entries.filter((entry) => entry.read(MANUALLY_SCHEDULED) === true).map((entry) => entry.id),
+      ),
+      constraints: current.store.all,
+      ...auditCalendarOption(current.dataset, entries),
+      successorMoves: 'pushOnly',
+    });
+    const followers = followersOf(successors);
+    const moves = new Map<EntryId, { start?: Instant; end?: Instant }>();
+    for (const change of patch)
+      if (followers.has(change.id))
+        moves.set(change.id, { ...moves.get(change.id), [change.field]: change.to });
+    if (moves.size === 0) return;
+    current.dataset.entries.syncChanges({ upsert: [...moves].map(([id, move]) => ({ id, ...move })) });
   }
 
   /** The analysis input for the Entries as they stand in the store. */
@@ -382,6 +445,14 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     });
   }
 
+  /** Runs `pushAfterSync` once after the current change settles, then refreshes float over the moves. */
+  function queuePushAfterSync(rows: readonly StoreRowUpdated[]): void {
+    queueMicrotask(() => {
+      pushAfterSync(rows);
+      queueFloatRefresh();
+    });
+  }
+
   /** The findings of a state nobody edited: an undo, a load or a replaced Dependency set. */
   function auditCurrentState(): readonly ScheduleDiagnostic[] {
     if (!installed) return [];
@@ -410,16 +481,16 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     return calendar ? { calendar } : {};
   }
 
-  /** Every Entry that follows `id` through a Dependency, `id` included. */
-  function followersOf(id: EntryId): Set<EntryId> {
-    const followers = new Set<EntryId>([id]);
+  /** Every Entry that follows one of `ids` through a Dependency, the `ids` included. */
+  function followersOf(ids: Iterable<EntryId>): Set<EntryId> {
+    const followers = new Set<EntryId>(ids);
     const successors = new Map<EntryId, EntryId[]>();
     for (const { fromId, toId } of dependencies()) {
       const list = successors.get(fromId) ?? [];
       list.push(toId);
       successors.set(fromId, list);
     }
-    const waiting = [id];
+    const waiting = [...followers];
     for (let next = waiting.pop(); next !== undefined; next = waiting.pop()) {
       for (const successor of successors.get(next) ?? []) {
         if (followers.has(successor)) continue;
@@ -449,7 +520,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       ...(successorMoves === undefined ? {} : { successorMoves }),
     });
     if (!patch.some((change) => change.id === id)) return;
-    const followers = followersOf(id);
+    const followers = followersOf([id]);
     const edits = new Map<EntryId, { start?: Instant; end?: Instant }>();
     for (const change of patch)
       if (followers.has(change.id))
@@ -488,6 +559,12 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         pending = undefined;
         publish(fromEdit ?? auditCurrentState());
         queueFloatRefresh();
+        // A replaced Dependency set is a sync write: no hook ran, so the moves follow in a sync write too.
+        if (changeSet.origin === 'sync') {
+          queuePushAfterSync(
+            changeSet.updated.filter((row): row is StoreRowUpdated => row.store !== 'entries'),
+          );
+        }
       });
       // What do the first rows hold? The float of the Dataset as it was built.
       queueFloatRefresh();
