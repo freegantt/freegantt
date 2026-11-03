@@ -122,6 +122,27 @@ describe('scheduling() moves successors', () => {
     expect(plugin.constraintOf('b')).toBeUndefined();
   });
 
+  it('moves nothing else when a Dependency overrules a drag', () => {
+    const dependencies = entryDependencies();
+    const plugin = scheduling();
+    const dataset = new Dataset<ScheduleProps>({
+      entries: [
+        { id: 'x', name: 'x', start: day(0), end: day(1) },
+        { id: 'y', name: 'y', start: day(6), end: day(7) },
+        { id: 'p', name: 'p', start: day(0), end: day(3) },
+        { id: 'q', name: 'q', start: day(5), end: day(6) },
+      ],
+      timeZone: 'UTC',
+      plugins: [dependencies, plugin],
+    });
+    dependencies.replaceAll([dependency('d1', 'x', 'y'), dependency('d2', 'p', 'q')]);
+
+    dataset.entries.update('q', { start: day(1), end: day(2) });
+
+    expect(startOf(dataset, 'q')).toBe(day(3));
+    expect(startOf(dataset, 'y')).toBe(day(6));
+  });
+
   it('keeps the moved span when the Dependency overrules a bar move', () => {
     const { dataset } = chain();
 
@@ -179,6 +200,18 @@ describe('scheduling() setConstraint', () => {
     dataset.undo();
     expect([startOf(dataset, 'a'), startOf(dataset, 'c')]).toEqual([day(0), day(2)]);
     expect(plugin.constraintOf('a')).toBeUndefined();
+  });
+
+  it('leaves no start floor on the followers that a constraint moved', () => {
+    const { dataset, plugin } = chain();
+    plugin.setConstraint('a', { kind: 'startNoEarlierThan', date: at(3) });
+    expect(plugin.constraintOf('b')).toBeUndefined();
+    expect(plugin.constraintOf('c')).toBeUndefined();
+
+    plugin.clearConstraint('a');
+    dataset.entries.update('a', { start: day(0), end: day(1) });
+
+    expect([startOf(dataset, 'b'), startOf(dataset, 'c')]).toEqual([day(1), day(2)]);
   });
 
   it('puts an Entry on its must-start-on date and reports the Dependency it breaks', () => {
