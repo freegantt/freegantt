@@ -883,6 +883,7 @@ export type EditExtender<TProps = Record<string, unknown>> = (request: EditReque
 // @public
 export interface EditRequest<TProps = Record<string, unknown>> {
     readonly addedEntryIds: ReadonlySet<EntryId>;
+    readonly changedStoreRows: readonly StoreRowUpdated[];
     editableOf(id: EntryId | string, field: FieldKey): FieldEditable;
     entries: ReadonlyMap<EntryId, StoredEntry<TProps>>;
     entryAfterEdits(id: EntryId | string): StoredEntry<TProps> | undefined;
