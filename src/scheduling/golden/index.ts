@@ -1,4 +1,5 @@
 import { calendarScenarios } from './calendar.golden.js';
+import { constraintScenarios } from './constraint.golden.js';
 import { conflictScenarios } from './conflict.golden.js';
 import { dependencyTypeScenarios } from './dependency-types.golden.js';
 import { editScenarios } from './edit.golden.js';
@@ -10,5 +11,6 @@ export const goldenScenarios: readonly GoldenScenario[] = Object.freeze([
   ...editScenarios,
   ...followScenarios,
   ...conflictScenarios,
+  ...constraintScenarios,
   ...calendarScenarios,
 ]);

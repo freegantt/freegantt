@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- The harness "Scheduling" page has a constraint form. It sets "start no earlier than", "finish no later than" or "must start on" on a chosen task, and it clears the constraint. A list names the task that breaks a ceiling, or keeps a must-start-on date and breaks a Dependency.
+- `scheduling().setConstraint(entry, constraint)` sets a `startNoEarlierThan`, `finishNoLaterThan` or `mustStartOn` constraint on one Entry. It moves the Entry and its successors to meet the constraint, in one undo step, and `diagnostics()` names a constraint the Entry breaks. A user drag keeps a `mustStartOn` or `finishNoLaterThan` constraint and replaces only a `startNoEarlierThan` floor. `EntryConstraint` now holds all three kinds.
+- `schedule()` reads two more constraint kinds. `{ kind: 'finishNoLaterThan', date }` is a ceiling: the engine never moves an Entry to meet it. When a dependency pushes the finish past it, the dependency wins and the new `constraint-violated` diagnostic names the constraint and the Entry. `{ kind: 'mustStartOn', date }` is a hard date. It wins over a dependency, and a dependency it breaks gives a `blocked-move` diagnostic with the new reason `'mustStartOn'`. The order is: manually scheduled, `mustStartOn`, dependency, `startNoEarlierThan`. `defaultPolicy.precedence` and `ScheduleRuleKind` gain `'mustStartOn'`. New types `ScheduleConstraintKind` and `ConstraintViolationDiagnostic`.
 - `schedule({ calendar })` counts workdays. `calendar` is `{ time, calendar?, ofEntry? }`: the Dataset's `ZonedTime`, a `WorkingCalendar` for every Entry, and a map from Entry id to its own `WorkingCalendar`. A day lag skips the days off, a negative lag too. A moved Entry keeps its length in workdays. A lag counts in the calendar of its successor, the default of Primavera P6. A week, month or year lag gives `unsupported-lag-unit` when a calendar applies. With no calendar, a day is 24 hours as before. New type `ScheduleCalendar`.
 - `scheduling({ calendar, calendars, calendarField })` counts lags and moves in workdays. Pass the same `WorkingCalendar` that `timeShading()` shades from, and the shading and the schedule agree. `calendars` is a record of named calendars. `calendarField` is the key of a Field whose value names one. An Entry with no value, or an unknown name, uses `calendar`, then 24-hour days. All three are optional.
 - harness "Dependencies" page selects a connector by click or Tab, moves with arrow keys, and removes it with Delete. One undo restores it. A readout names the Dependency removed by key. axe checks page.
@@ -37,6 +40,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 - `scheduling().on('scheduleDiagnostics', handler)` reports cycles, blocked moves and unreadable Dependencies after each commit. `scheduling().diagnostics()` reads the latest. The connectors of a cycle carry the `cycle` flag.
 - New error `SchedulingNotInstalledError` (`code: 'scheduling-not-installed'`) for a `scheduling()` call before a Dataset installs it.
 - The harness has a "Scheduling" page. It installs `scheduling()` on a chain of six tasks joined by all four Dependency types and one negative lag. Drag a task later and its successors move. Drag it earlier and they follow. One undo restores them all. A Manual column toggles `manuallyScheduled`, and a loop of three tasks shows its members from the diagnostics.
+
+### Changed
+
+- A `startNoEarlierThan` floor now moves an Entry that has no incoming dependency. A floor later than the start moves the Entry later. Before, such a floor changed nothing.
 
 ### Fixed
 

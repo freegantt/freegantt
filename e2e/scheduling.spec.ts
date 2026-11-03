@@ -147,3 +147,53 @@ test('a successor skips a holiday, and the skip matches the shaded days', async 
   const startX = designBox!.x + 1;
   expect(bands.some((band) => startX > band.x && startX < band.right)).toBe(false);
 });
+
+async function setConstraint(page: Page, entry: string, kind: string, date: string): Promise<void> {
+  await page.locator('#constraint-entry').selectOption(entry);
+  await page.locator('#constraint-kind').selectOption(kind);
+  await page.locator('#constraint-date').fill(date);
+  await page.locator('#set-constraint-btn').click();
+}
+
+test('a start floor moves a task that has no Dependency, with its successors, and one undo restores them', async ({
+  page,
+}) => {
+  await openScheduling(page);
+  const before = await startsOf(page);
+
+  await setConstraint(page, 'plan', 'startNoEarlierThan', '2026-03-09');
+
+  await expect.poll(() => startMs(page, 'plan')).toBe(Date.UTC(2026, 2, 9));
+  expect((await startsOf(page))[1]).toBeGreaterThan(before[1]!);
+  await expect(page.locator('#constraint-readout')).toHaveText(
+    'Constraint: start no earlier than 2026-03-09',
+  );
+  await page.evaluate(() => window.__dataset.undo());
+  expect(await startsOf(page)).toEqual(before);
+});
+
+test('a must-start-on date wins over a Dependency and the page names the broken link', async ({ page }) => {
+  await openScheduling(page);
+
+  // Plan ends on March 5. Design starts there, so March 3 breaks the Dependency.
+  await setConstraint(page, 'design', 'mustStartOn', '2026-03-03');
+
+  await expect.poll(() => startMs(page, 'design')).toBe(Date.UTC(2026, 2, 3));
+  await expect(page.locator('#constraint-findings li')).toHaveText([
+    'Design keeps "must start on" and breaks a Dependency',
+  ]);
+});
+
+test('a finish ceiling moves nothing and the page names the task that finishes late', async ({ page }) => {
+  await openScheduling(page);
+  const before = await startsOf(page);
+
+  await setConstraint(page, 'launch', 'finishNoLaterThan', '2026-03-03');
+
+  await expect(page.locator('#constraint-findings li')).toHaveText(['Launch breaks "finish no later than"']);
+  expect(await startsOf(page)).toEqual(before);
+
+  await page.locator('#clear-constraint-btn').click();
+
+  await expect(page.locator('#constraint-findings li')).toHaveCount(0);
+});

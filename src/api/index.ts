@@ -577,6 +577,7 @@ export type {
   ScheduleDependency,
   ScheduleCalendar,
   ScheduleConstraint,
+  ScheduleConstraintKind,
   ScheduleDependencyType,
   SuccessorMoves,
   ScheduleEntry,
@@ -587,6 +588,7 @@ export type {
   ScheduleDiagnostic,
   CycleDiagnostic,
   BlockedMoveDiagnostic,
+  ConstraintViolationDiagnostic,
   BlockReason,
   InvalidDependencyDiagnostic,
 } from '../scheduling/index.js';
