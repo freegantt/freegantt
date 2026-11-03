@@ -339,6 +339,12 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  id: `related:${r.id}`, from: { entryId: r.aId, edge: 'end' }, to: { entryId: r.bId,
      *  edge: 'start' } })))`. Core reads the provider again after each dataset change. */
     registerConnector(provider: ConnectorProvider): Disposer;
+    /** Asks every connector provider again and redraws the connectors. Call it when state that
+     *  only the screen shows changes, such as the selected connector. Several calls before the next
+     *  frame give one redraw. It writes nothing to the Dataset, makes no undo step and fires no
+     *  change event. Data belongs in a plugin store, which refreshes the connectors on its own.
+     *  Call: `ctx.view.refreshConnectors()`. */
+    refreshConnectors(): void;
     /** Registers a handler for the connect drag. The user drags from a connector port on one bar
      *  edge and drops on a port of another bar. After `beforeConnect` allows it, the handler gets
      *  the two ends and writes the plugin's own data. Core names no meaning for the pair. While no
@@ -530,6 +536,7 @@ export function buildPluginPorts(
         registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
       registerConnector: (provider) =>
         registerWhileOpen(() => shell.registrations.registerConnector(provider)),
+      refreshConnectors: () => shell.registrations.refreshConnectors(),
       onConnect: (handler) => registerWhileOpen(() => shell.registrations.registerConnectHandler(handler)),
       variantFor: (entry) => shell.variantFor(entry),
       resolvedColumns: () => shell.resolvedColumns().map(toGridColumn),

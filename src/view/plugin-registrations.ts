@@ -58,6 +58,7 @@ export interface PluginRegistrar {
   registerRenderer<P extends RendererPoint>(point: P, renderer: RendererFor<P>, pluginId: PluginId): Disposer;
   registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
   registerConnector(provider: ConnectorProvider): Disposer;
+  refreshConnectors(): void;
   registerConnectHandler(handler: ConnectHandler): Disposer;
   registerVariant(variant: EntryVariant, pluginId: PluginId): Disposer;
   registerGridColumn(column: GridColumnInput, pluginId: PluginId): Disposer;
@@ -141,6 +142,13 @@ export class PluginRegistrations implements PluginRegistrar {
         this.#ports.requestFrame();
       },
     );
+  }
+
+  /** Screen-only provider state changed, so every provider answers again. Dropping the held list
+   *  gives the layout a new list to ask. Frame requests merge, so calls before one frame draw once. */
+  refreshConnectors(): void {
+    this.#activeConnectors = undefined;
+    this.#ports.requestFrame();
   }
 
   /** A connect handler turns a connect drag into the plugin's own data. The first one switches the

@@ -45,8 +45,12 @@ export function connectorSelection(ctx: PluginContext, ports: ConnectorSelection
       : undefined;
   }
 
+  // The selection is screen-only state, so the plugin store never sees it. Core must ask the
+  // provider again, or the `selected` flag shows only after an unrelated redraw.
   function select(dependencyId: string | undefined): void {
+    if (dependencyId === selected) return;
     selected = dependencyId;
+    ctx.view.refreshConnectors();
   }
 
   function moveFocus(from: string, step: Step): void {

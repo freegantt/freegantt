@@ -2193,6 +2193,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         resolvedColumns(): readonly GridColumn[];
         registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
         registerConnector(provider: ConnectorProvider): Disposer;
+        refreshConnectors(): void;
         onConnect(handler: ConnectHandler): Disposer;
         registerGridColumn(column: GridColumnInput): Disposer;
     };
