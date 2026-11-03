@@ -480,6 +480,7 @@ export function extraEditsFor<TProps>(dataset: Dataset<TProps>, draft: ProposedE
   }
   return state.extraEditsFor(
     createEditRequest({
+      isPreview: true,
       entries: state.entries.committedById(),
       proposed: draft,
       added: [],

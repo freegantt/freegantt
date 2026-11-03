@@ -36,6 +36,7 @@ describe('identityExtender', () => {
     const entries = new Map([[t1.id, t1]]);
     const result = identityExtender(
       createEditRequest({
+        isPreview: false,
         entries,
         proposed,
         added: [],
@@ -55,6 +56,7 @@ describe('identityExtender', () => {
 describe('DatasetState.setExtender (D-S5-23)', () => {
   const requestEntries = new Map<EntryId, StoredEntry>();
   const request = createEditRequest({
+    isPreview: false,
     entries: requestEntries,
     proposed: new Map() as ProposedEdits,
     added: [],
@@ -133,6 +135,7 @@ describe('composing two extenders that write one Entry (#197)', () => {
     // a live row (ADR 0017).
     const entries = new Map([[target, state.entries.storedValues.get(target)!]]);
     const request = createEditRequest({
+      isPreview: false,
       entries,
       proposed: new Map() as ProposedEdits,
       added: [],
