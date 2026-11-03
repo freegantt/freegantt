@@ -625,6 +625,19 @@ A transaction that writes only a plugin store still reaches the edit extender. `
 Read the whole store as the commit leaves it, then answer with Entry edits. The edits land in the same ChangeSet, so one undo reverts both.
 A drag preview and a transaction with no store write give an empty list. `scheduling()` uses this to push a successor when a Dependency is added.
 
+### Skip work on a drag preview: `isPreview`
+
+`request.isPreview` is `true` on a drag-preview frame and `false` on a commit. A preview never commits, and it runs on every frame.
+An extender may skip work whose result is not a date or another bar position. The commit runs the extender again.
+Answer the same dates on both. `scheduling()` skips its float pass when `isPreview` is `true`.
+
+```ts
+const cascade: EditExtender = (request) => {
+  const dates = moveFollowers(request);
+  return request.isPreview ? dates : mergeEntryEdits(dates, derivedFields(request));
+};
+```
+
 ### Replace what the user proposed: `overridingProposed`
 
 An extender that writes a Field the same transaction proposed throws in dev mode. To replace the proposed value on purpose, mark the Field:
