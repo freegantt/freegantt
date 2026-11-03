@@ -77,6 +77,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - A decoration that reuses a node no longer keeps the old width or text. Before, a scroll that dropped a row span could leave a row stripe or a range band with the span's width and text.
 - `'invalid-working-calendar'` is now in the `BuiltInThrownCode` union. Before, an exhaustive `switch (error.code)` missed the code `workingCalendar()` throws.
 - The project finish from the float analysis now counts the end of an Entry in a Dependency loop. Before, a loop member that ended last gave a finish that was too early, and every float was too small.
+- `entryDependencies()` removes its arrow and Delete key handlers when the Gantt is destroyed. Before, a key on a connector after that called a disposed plugin and threw `DependencyStoreNotInstalledError`.
 
 ## [0.1.0] - 2026-09-30
 

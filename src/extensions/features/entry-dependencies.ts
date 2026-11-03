@@ -341,6 +341,8 @@ export function entryDependencies(options: EntryDependenciesOptions = {}): Entry
           });
         });
       }
+
+      return () => selection.disposeKeys();
     },
 
     replaceAll(dependencies) {
