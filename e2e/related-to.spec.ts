@@ -39,22 +39,23 @@ test('a connector stays drawn while one end is outside the window and its path c
 
   // Neither end of the pair is rendered now: the first Entry scrolled off the top, the last has
   // not scrolled into view. The long line between them still crosses the window.
-  const far = await page.evaluate(() => {
-    const ids = (
-      window as unknown as { __gantt: { dataset: { entries: { all: { id: string }[] } } } }
-    ).__gantt.dataset.entries.all.map((entry) => entry.id);
-    const rendered = new Set(
-      Array.from(document.querySelectorAll<HTMLElement>('#gantt .fg-bar')).map(
-        (bar) => bar.dataset['barId']!,
-      ),
-    );
-    return {
-      firstRendered: [...rendered].some((id) => id.startsWith(`${ids[0]}`)),
-      lastRendered: [...rendered].some((id) => id.startsWith(`${ids[ids.length - 1]}`)),
-    };
-  });
-  expect(far.firstRendered).toBe(false);
-  expect(far.lastRendered).toBe(false);
+  // The window repaints on the next frame, so wait until the scrolled-off bars are gone.
+  const renderedEnds = () =>
+    page.evaluate(() => {
+      const ids = (
+        window as unknown as { __gantt: { dataset: { entries: { all: { id: string }[] } } } }
+      ).__gantt.dataset.entries.all.map((entry) => entry.id);
+      const rendered = new Set(
+        Array.from(document.querySelectorAll<HTMLElement>('#gantt .fg-bar')).map(
+          (bar) => bar.dataset['barId']!,
+        ),
+      );
+      return {
+        firstRendered: [...rendered].some((id) => id.startsWith(`${ids[0]}`)),
+        lastRendered: [...rendered].some((id) => id.startsWith(`${ids[ids.length - 1]}`)),
+      };
+    });
+  await expect.poll(renderedEnds).toEqual({ firstRendered: false, lastRendered: false });
   expect(await connectorIds(page)).toContain(FAR_CONNECTOR);
 });
 
