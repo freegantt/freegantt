@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PluginContext } from '../../api/gantt.js';
 import { Dataset } from '../../api/dataset.js';
 import { SchedulingNotInstalledError, entryId } from '../../model/index.js';
-import type { Duration } from '../../model/index.js';
+import type { Duration, Instant } from '../../model/index.js';
 import { entryDependencies } from './entry-dependencies.js';
 import type { DependencyInput, DependencyType } from './entry-dependencies.js';
 import { SCHEDULING_ID, scheduling } from './scheduling.js';
@@ -15,6 +15,8 @@ interface ScheduleProps {
   manuallyScheduled: boolean;
   calendar?: string;
 }
+/** The Instant of midnight UTC, `offset` days after January 1. */
+const at = (offset: number): Instant => day(offset) as Instant;
 const days = (value: number): Duration => ({ value, unit: 'day' });
 
 function dependency(id: string, fromId: string, toId: string, type: DependencyType = 'FS'): DependencyInput {
@@ -164,14 +166,14 @@ describe('scheduling() setConstraint', () => {
   it('moves an Entry with no Dependency to its start floor, with its successors, in one undo step', () => {
     const { dataset, plugin } = chain();
 
-    plugin.setConstraint('a', { kind: 'startNoEarlierThan', date: day(5) });
+    plugin.setConstraint('a', { kind: 'startNoEarlierThan', date: at(5) });
 
     expect([startOf(dataset, 'a'), startOf(dataset, 'b'), startOf(dataset, 'c')]).toEqual([
       day(5),
       day(6),
       day(7),
     ]);
-    expect(plugin.constraintOf('a')).toEqual({ kind: 'startNoEarlierThan', date: day(5) });
+    expect(plugin.constraintOf('a')).toEqual({ kind: 'startNoEarlierThan', date: at(5) });
     dataset.undo();
     expect([startOf(dataset, 'a'), startOf(dataset, 'c')]).toEqual([day(0), day(2)]);
     expect(plugin.constraintOf('a')).toBeUndefined();
@@ -180,7 +182,7 @@ describe('scheduling() setConstraint', () => {
   it('puts an Entry on its must-start-on date and reports the Dependency it breaks', () => {
     const { dataset, plugin } = chain();
 
-    plugin.setConstraint('b', { kind: 'mustStartOn', date: day(0) });
+    plugin.setConstraint('b', { kind: 'mustStartOn', date: at(0) });
 
     expect(startOf(dataset, 'b')).toBe(day(0));
     expect(plugin.diagnostics()).toMatchObject([
@@ -193,7 +195,7 @@ describe('scheduling() setConstraint', () => {
     const seen: number[] = [];
     plugin.on('scheduleDiagnostics', (found) => seen.push(found.length));
 
-    plugin.setConstraint('c', { kind: 'finishNoLaterThan', date: day(2) });
+    plugin.setConstraint('c', { kind: 'finishNoLaterThan', date: at(2) });
 
     expect(startOf(dataset, 'c')).toBe(day(2));
     expect(plugin.diagnostics()).toMatchObject([
@@ -206,11 +208,11 @@ describe('scheduling() setConstraint', () => {
 
   it('keeps a must-start-on date when the user drags the Entry', () => {
     const { dataset, plugin } = chain();
-    plugin.setConstraint('c', { kind: 'mustStartOn', date: day(2) });
+    plugin.setConstraint('c', { kind: 'mustStartOn', date: at(2) });
 
     dataset.entries.update('c', { start: day(6), end: day(7) });
 
-    expect(plugin.constraintOf('c')).toEqual({ kind: 'mustStartOn', date: day(2) });
+    expect(plugin.constraintOf('c')).toEqual({ kind: 'mustStartOn', date: at(2) });
     expect(plugin.diagnostics()).toMatchObject([
       { code: 'constraint-violated', constraint: 'mustStartOn', entryId: 'c' },
     ]);
@@ -219,8 +221,8 @@ describe('scheduling() setConstraint', () => {
   it('throws for an Entry the Dataset lacks, and without scheduling installed', () => {
     const { plugin } = chain();
 
-    expect(() => plugin.setConstraint('zzz', { kind: 'mustStartOn', date: day(0) })).toThrow();
-    expect(() => scheduling().setConstraint('a', { kind: 'mustStartOn', date: day(0) })).toThrow(
+    expect(() => plugin.setConstraint('zzz', { kind: 'mustStartOn', date: at(0) })).toThrow();
+    expect(() => scheduling().setConstraint('a', { kind: 'mustStartOn', date: at(0) })).toThrow(
       SchedulingNotInstalledError,
     );
   });

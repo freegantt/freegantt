@@ -361,9 +361,14 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     return followers;
   }
 
-  /** Writes the moves a new constraint causes: the Entry and its followers, and only when the Entry itself moves. */
-  function moveToConstraint(current: Installation, id: EntryId): void {
+  /**
+   * Writes the moves a new constraint causes: the Entry and its followers, and only when the Entry itself moves.
+   * A ceiling moves nothing. A start floor only pushes later, so slack elsewhere in the plan stays as it is.
+   */
+  function moveToConstraint(current: Installation, id: EntryId, constraint: EntryConstraint): void {
+    if (constraint.kind === 'finishNoLaterThan') return;
     const entries = current.dataset.entries.all;
+    const successorMoves = constraint.kind === 'startNoEarlierThan' ? 'pushOnly' : options.successorMoves;
     const { patch } = schedule({
       entries,
       dependencies: dependencies(),
@@ -372,7 +377,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       ),
       constraints: current.store.all,
       ...auditCalendarOption(current.dataset, entries),
-      ...(options.successorMoves === undefined ? {} : { successorMoves: options.successorMoves }),
+      ...(successorMoves === undefined ? {} : { successorMoves }),
     });
     if (!patch.some((change) => change.id === id)) return;
     const followers = followersOf(id);
@@ -457,7 +462,7 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
         current.store.set(id, constraint);
         applyingConstraint = true;
         try {
-          moveToConstraint(current, id);
+          moveToConstraint(current, id, constraint);
         } finally {
           applyingConstraint = false;
         }

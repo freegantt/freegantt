@@ -20,8 +20,10 @@
           <p>
             The <code>scheduling()</code> plugin keeps Dependencies true. Drag a task later and its successors
             move. Drag it earlier and they follow. One undo restores every task. The loop at the bottom has no
-            valid order, so the page lists its members. One working calendar shades the weekends and two
-            holidays and drives the schedule: a successor never starts on a shaded day.
+            valid order, so the page lists its members. The constraint form sets one date rule on a task: a
+            start floor, a finish ceiling or a must-start-on date. A ceiling that a Dependency breaks shows a
+            finding. One working calendar shades the weekends and two holidays and drives the schedule: a
+            successor never starts on a shaded day.
           </p>
         </div>
         <div id="page-brief"></div>
@@ -31,9 +33,33 @@
             <button type="button" id="break-cycle-btn">Break cycle</button>
             <button type="button" id="restore-cycle-btn">Restore cycle</button>
           </div>
+          <form id="constraint-form" class="workbench-actions" aria-label="Constraint">
+            <label
+              >Task
+              <select id="constraint-entry" name="entry"></select
+            ></label>
+            <label>
+              Constraint
+              <select id="constraint-kind" name="kind">
+                <option value="startNoEarlierThan">Start no earlier than</option>
+                <option value="finishNoLaterThan">Finish no later than</option>
+                <option value="mustStartOn">Must start on</option>
+              </select>
+            </label>
+            <label
+              >Date <input type="date" id="constraint-date" name="date" value="2026-03-09" required
+            /></label>
+            <button type="submit" id="set-constraint-btn">Set constraint</button>
+            <button type="button" id="clear-constraint-btn">Clear constraint</button>
+            <span class="readout" id="constraint-readout">Constraint: —</span>
+          </form>
           <div id="gantt"></div>
           <div class="statusbar">
             <span class="readout" id="diagnostics-readout">Findings: —</span>
+          </div>
+          <div class="statusbar">
+            <span class="readout">Constraint findings:</span>
+            <ul id="constraint-findings" aria-label="Constraint findings"></ul>
           </div>
           <div class="statusbar">
             <span class="readout">Cycle members:</span>
