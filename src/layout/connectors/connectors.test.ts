@@ -207,3 +207,19 @@ describe('connectors in the frame', () => {
     ]);
   });
 });
+
+describe('asking the providers again', () => {
+  it('shows the new flags when the held provider list changes, and keeps old ones while it stays', () => {
+    let selected = false;
+    const provider: ConnectorProvider = () => [{ ...finishToStart, flags: { selected } }];
+    const layout = new FrameLayout();
+    const held = [provider];
+
+    expect(frameOf(held, {}, layout).connectors[0]?.flags.selected).toBeUndefined();
+    selected = true;
+    // Same list, same revision: the layout answers from memory.
+    expect(frameOf(held, {}, layout).connectors[0]?.flags.selected).toBeUndefined();
+    // A new list is what `refreshConnectors()` hands the layout.
+    expect(frameOf([...held], {}, layout).connectors[0]?.flags.selected).toBe(true);
+  });
+});

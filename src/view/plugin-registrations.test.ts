@@ -249,3 +249,18 @@ describe('PluginRegistrations — the tables it reads back', () => {
     expect(counts.frames).toBe(1);
   });
 });
+
+describe('refreshConnectors', () => {
+  it('hands the layout a new provider list and asks for a frame', () => {
+    const { registrations, counts } = harness();
+    registrations.registerConnector(() => []);
+    const before = registrations.connectorProviders();
+    const framesBefore = counts.frames;
+
+    registrations.refreshConnectors();
+
+    expect(registrations.connectorProviders()).not.toBe(before);
+    expect(registrations.connectorProviders()).toHaveLength(1);
+    expect(counts.frames).toBe(framesBefore + 1);
+  });
+});
