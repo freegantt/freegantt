@@ -74,15 +74,22 @@ async function centerOf(locator: import('@playwright/test').Locator): Promise<{ 
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+/** The screen point on the dot of a bar's edge port: 5 px outside the edge, at mid height. */
+async function edgeDotOf(page: Page, id: string, edge: 'start' | 'end'): Promise<{ x: number; y: number }> {
+  const box = await barOf(page, id).boundingBox();
+  if (box === null) throw new Error('the bar has no box');
+  return { x: edge === 'start' ? box.x - 5 : box.x + box.width + 5, y: box.y + box.height / 2 };
+}
+
 /** Drags from `fromId`'s end port to `toId`'s start port, and releases when `release` is true. */
 async function dragEndToStart(page: Page, fromId: string, toId: string, release = true): Promise<void> {
   await barOf(page, fromId).hover();
-  const from = await centerOf(portOf(page, 'end'));
+  const from = await edgeDotOf(page, fromId, 'end');
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   const overTarget = await centerOf(barOf(page, toId));
   await page.mouse.move(overTarget.x, overTarget.y, { steps: 8 });
-  const to = await centerOf(portOf(page, 'start'));
+  const to = await edgeDotOf(page, toId, 'start');
   await page.mouse.move(to.x, to.y, { steps: 4 });
   if (release) await page.mouse.up();
 }
@@ -108,7 +115,7 @@ test('dragging from one port to a port on another bar draws a new connector', as
 
   await dragEndToStart(page, 'seeded-8', 'seeded-9', false);
   await expect(page.locator('#gantt .fg-connect-preview')).toBeVisible();
-  await expect(portOf(page, 'start')).toHaveAttribute('data-active', '');
+  await expect(page.locator('#gantt .fg-connector-port[data-active]')).toHaveCount(1);
   await page.mouse.up();
 
   await expect(connectorBetween(page, 'seeded-8', 'seeded-9')).toHaveCount(1);
@@ -133,10 +140,10 @@ test('a drop on the same Entry’s own edge, or on no bar, adds nothing', async 
   await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
 
   await barOf(page, 'seeded-8').hover();
-  const from = await centerOf(portOf(page, 'end'));
+  const from = await edgeDotOf(page, 'seeded-8', 'end');
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  const own = await centerOf(portOf(page, 'start'));
+  const own = await edgeDotOf(page, 'seeded-8', 'start');
   await page.mouse.move(own.x, own.y, { steps: 6 });
   await page.mouse.up();
   await page.mouse.move(from.x, from.y);
@@ -196,4 +203,77 @@ test('a page with no connect handler draws no port', async ({ page }) => {
 
   await expect(page.locator('#gantt .fg-connector-port')).toHaveCount(0);
   await expect(page.locator('#gantt .fg-connect-preview')).toHaveCount(0);
+});
+
+// A drop anywhere on a bar joins its nearer edge. The result shows before release.
+
+/** Drags from `fromId`'s end port and drops on the body of `toId`, a quarter of the way in from `side`. */
+async function dragEndOntoBody(
+  page: Page,
+  fromId: string,
+  toId: string,
+  side: 'left' | 'right',
+): Promise<void> {
+  await barOf(page, fromId).hover();
+  const from = await edgeDotOf(page, fromId, 'end');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  const box = await barOf(page, toId).boundingBox();
+  if (box === null) throw new Error('the target bar has no box');
+  const x = side === 'left' ? box.x + box.width * 0.25 : box.x + box.width * 0.75;
+  await page.mouse.move(x, box.y + box.height / 2, { steps: 10 });
+  await expect(page.locator('#gantt .fg-connect-target')).toBeVisible();
+  await expect(page.locator('#gantt .fg-connector-port[data-active]')).toHaveCount(1);
+  await page.mouse.up();
+}
+
+test('a drop on the left half of a bar connects to its start edge', async ({ page }) => {
+  await page.goto('/related-to.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await dragEndOntoBody(page, 'seeded-8', 'seeded-9', 'left');
+
+  await expect(page.locator('#connect-log')).toHaveText(/seeded-8 \(end\) → seeded-9 \(start\)/);
+  await expect(page.locator('#gantt .fg-connect-target')).toBeHidden();
+});
+
+test('a drop on the right half of a bar connects to its end edge', async ({ page }) => {
+  await page.goto('/related-to.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await dragEndOntoBody(page, 'seeded-8', 'seeded-9', 'right');
+
+  await expect(page.locator('#connect-log')).toHaveText(/seeded-8 \(end\) → seeded-9 \(end\)/);
+});
+
+test('every connectable bar shows its ports for the whole drag', async ({ page }) => {
+  await page.goto('/related-to.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await dragEndToStart(page, 'seeded-8', 'seeded-9', false);
+
+  const shown = await visiblePorts(page).count();
+  expect(shown).toBeGreaterThan(4);
+  await page.mouse.up();
+});
+
+test('the port is at least 20 px wide, and the resize handle still arms next to it', async ({ page }) => {
+  await page.goto('/related-to.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  await barOf(page, 'seeded-8').hover();
+  const port = await portOf(page, 'end').boundingBox();
+  expect(port?.width).toBeGreaterThanOrEqual(20);
+
+  const before = await barOf(page, 'seeded-8').boundingBox();
+  if (before === null) throw new Error('the bar has no box');
+  const edge = { x: before.x + before.width, y: before.y + before.height / 2 };
+  await page.mouse.move(edge.x, edge.y);
+  await page.mouse.down();
+  await page.mouse.move(edge.x + 60, edge.y, { steps: 8 });
+  await page.mouse.up();
+
+  const after = await barOf(page, 'seeded-8').boundingBox();
+  expect(after?.width).toBeGreaterThan(before.width);
+  await expect(page.locator('#connect-log')).toHaveText('No connect yet.');
 });

@@ -22,9 +22,9 @@ const ENTRIES = new EntryStore(
   { timeZone: 'UTC' },
 );
 
-/** Pointer positions stand for hit targets: x 0 is A's end port, x 10 is B's start port, x 5 is the
- *  body of B, x 20 is nothing. `hitTest` is `render/dom`'s own job, so this suite fakes it. */
-const AT = { aEndPort: 0, bStartPort: 10, aStartPort: 2, bBody: 5, nothing: 20 } as const;
+/** Pointer positions stand for hit targets: x 0 is A's end port, x 10 is B's start port, x 4 and x 6 are the
+ *  left and right half of B's body, x 20 is nothing. `hitTest` is `render/dom`'s own job, so this suite fakes it. */
+const AT = { aEndPort: 0, bStartPort: 10, aStartPort: 2, bBodyLeft: 4, bBodyRight: 6, nothing: 20 } as const;
 
 function hitAt(x: number): EntryHit | undefined {
   switch (x) {
@@ -34,7 +34,8 @@ function hitAt(x: number): EntryHit | undefined {
       return { kind: 'bar', barId: barId(A), port: 'start' };
     case AT.bStartPort:
       return { kind: 'bar', barId: barId(B), port: 'start' };
-    case AT.bBody:
+    case AT.bBodyLeft:
+    case AT.bBodyRight:
       return { kind: 'bar', barId: barId(B) };
     default:
       return undefined;
@@ -67,6 +68,8 @@ function setup(
     hitTest: (at) => hitAt(at.x),
     entryFor: (id: BarId) => ENTRIES.get(entryIdOfBar(id)),
     canConnect: options.canConnect ?? (() => true),
+    nearerEdgeOf: (_barId, contentX) => (contentX < 5 ? 'start' : 'end'),
+    connectableBarIds: () => [barId(A), barId(B)],
     contentXAtPaneOffset: (offsetX) => offsetX,
     contentYAtClientY: (clientY) => clientY,
     paint: (draft) => paints.push(draft),
@@ -155,15 +158,44 @@ describe('Connect controller', () => {
     detach();
   });
 
-  it('a drop on a bar body, or on no bar, proposes nothing', () => {
+  it('a drop on the left half of a bar body joins its start edge', () => {
+    const { pane, proposals, paints, detach } = setup();
+    pressAndArm(pane, AT.aEndPort, AT.bBodyLeft);
+    expect(paints.at(-1)).toMatchObject({ targetBarId: barId(B), targetEdge: 'start' });
+    pane.dispatchEvent(pointer('pointerup', AT.bBodyLeft));
+    expect(proposals.map((p) => p.ends.to)).toEqual([{ entryId: B, edge: 'start' }]);
+    detach();
+  });
+
+  it('a drop on the right half of a bar body joins its end edge', () => {
     const { pane, proposals, detach } = setup();
+    pressAndArm(pane, AT.aEndPort, AT.bBodyRight);
+    pane.dispatchEvent(pointer('pointerup', AT.bBodyRight));
+    expect(proposals.map((p) => p.ends.to)).toEqual([{ entryId: B, edge: 'end' }]);
+    detach();
+  });
 
-    pressAndArm(pane, AT.aEndPort, AT.bBody);
-    pane.dispatchEvent(pointer('pointerup', AT.bBody));
+  it('a drop on no bar proposes nothing', () => {
+    const { pane, paints, proposals, detach } = setup();
     pressAndArm(pane, AT.aEndPort, AT.nothing);
+    expect(paints.at(-1)?.targetBarId).toBeUndefined();
     pane.dispatchEvent(pointer('pointerup', AT.nothing));
-
     expect(proposals).toEqual([]);
+    detach();
+  });
+
+  it('a drop on a bar that cannot connect proposes nothing', () => {
+    const { pane, proposals, detach } = setup({ canConnect: (entry) => entry.id === A });
+    pressAndArm(pane, AT.aEndPort, AT.bBodyLeft);
+    pane.dispatchEvent(pointer('pointerup', AT.bBodyLeft));
+    expect(proposals).toEqual([]);
+    detach();
+  });
+
+  it('lists every connectable bar for the whole drag', () => {
+    const { pane, paints, detach } = setup();
+    pressAndArm(pane, AT.aEndPort, AT.nothing);
+    expect(paints.at(-1)?.connectableBarIds).toEqual([barId(A), barId(B)]);
     detach();
   });
 
@@ -220,7 +252,7 @@ describe('Connect controller', () => {
       barSawPointer = true;
     });
 
-    pressAndArm(pane, AT.bBody, AT.nothing);
+    pressAndArm(pane, AT.bBodyLeft, AT.nothing);
 
     expect(paints).toEqual([]);
     expect(barSawPointer).toBe(true);
