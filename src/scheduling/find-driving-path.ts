@@ -1,4 +1,5 @@
 // scheduling/ — the chain of predecessors that sets one Entry's position. Pure and iterative.
+import { entryId as toEntryId } from '../model/index.js';
 import type { EntryId } from '../model/index.js';
 import { anchorField, buildFloatGraph, drivenField } from './float-graph.js';
 import type { FloatEdge, FloatGraph, FloatRequest } from './float-graph.js';
@@ -9,9 +10,9 @@ import type { FloatEdge, FloatGraph, FloatRequest } from './float-graph.js';
  * An Entry that no Dependency holds in place gives a path of itself alone.
  * An unknown Entry, a summary Entry, an undated Entry and a member of a loop give an empty path.
  */
-export function findDrivingPath(request: FloatRequest, entryId: EntryId): readonly EntryId[] {
+export function findDrivingPath(request: FloatRequest, entryId: EntryId | string): readonly EntryId[] {
   const graph = buildFloatGraph(request);
-  const start = graph.indexById.get(entryId);
+  const start = graph.indexById.get(toEntryId(entryId));
   if (start === undefined || graph.nodes[start]?.inLoop) return [];
 
   const incoming = graph.nodes.map(() => [] as FloatEdge[]);

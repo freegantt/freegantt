@@ -1274,7 +1274,7 @@ export type FieldValue<TProps, K extends FieldKey> = K extends keyof CoreFieldVa
 export type FilterPolicy = 'keepAncestors' | 'matchOnly';
 
 // @public
-export function findDrivingPath(request: FloatRequest, entryId: EntryId): readonly EntryId[];
+export function findDrivingPath(request: FloatRequest, entryId: EntryId | string): readonly EntryId[];
 
 // @public
 export interface FixedBarBox {
