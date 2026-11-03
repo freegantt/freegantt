@@ -1,17 +1,11 @@
 // scheduling/ — the propagation engine. Pure and deterministic: it never mutates its input, reads
 // no clock and holds no state, so a drag preview can call it every frame and drop the answer.
 // The engine copies the request into working Nodes and leaves the request as it was.
-import type { EntryId, Instant } from '../model/index.js';
-import { addMs, diffMs } from '../time/index.js';
-import { FIELDS, moveSuccessor, movableFields, type Edge, type Node, type Run } from './propagate.js';
+import type { EntryId } from '../model/index.js';
+import { FIELDS, moveSuccessor, type Edge, type Node, type Run } from './propagate.js';
 import { dayCountingFor } from './day-counting.js';
 import { orderByDependency } from './dependency-order.js';
-import type {
-  ProposedEntryDates,
-  ScheduleDependency,
-  ScheduleField,
-  ScheduleRequest,
-} from './schedule-request.js';
+import type { ProposedEntryDates, ScheduleDependency, ScheduleRequest } from './schedule-request.js';
 import type {
   CycleDiagnostic,
   ScheduleChange,
@@ -108,7 +102,7 @@ function readEdges(
   return edges;
 }
 
-/** Writes the user's dates into the working copy, then moves the dates the policy frees so the span keeps its length. */
+/** Writes the user's dates into the working copy. A date the user did not propose keeps its value. */
 function applyProposals(
   run: Run,
   proposed: ReadonlyMap<EntryId, ProposedEntryDates>,
@@ -120,24 +114,11 @@ function applyProposals(
     const node = run.nodes[index] as Node;
     const touched = FIELDS.filter((field) => dates[field] !== undefined);
     if (touched.length === 0) continue;
-    for (const field of touched) node.proposedFields.add(field);
-    const moves = movableFields(run.policy, node);
-    const lead = touched[0] as ScheduleField;
-    const before = node[lead];
-    const after = dates[lead] as Instant;
-    for (const field of touched) node[field] = dates[field];
-    node.changed = true;
-    if (before === undefined) continue;
-    const kept = node.original;
-    for (const field of moves) {
-      const current = node[field];
-      if (current === undefined) continue;
-      // A moved bar keeps its length in the Entry's own days. A resize frees no date to follow.
-      node[field] =
-        touched.length === 1 && kept.start !== undefined && kept.end !== undefined
-          ? node.days.follow({ start: kept.start, end: kept.end }, lead, node.days.settle(lead, after))[field]
-          : addMs(current, diffMs(after, before));
+    for (const field of touched) {
+      node.proposedFields.add(field);
+      node[field] = dates[field];
     }
+    node.changed = true;
   }
 }
 

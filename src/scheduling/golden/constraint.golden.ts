@@ -155,10 +155,10 @@ export const constraintScenarios: readonly GoldenScenario[] = Object.freeze([
     name: 'a start the user proposes stays and the engine reports the must-start-on date it breaks',
     entries: [['a', 0, 2]],
     dependencies: [],
-    proposed: { a: { start: 3 } },
+    proposed: { a: { start: 3, end: 5 } },
     mustStartOn: { a: 5 },
     expected: {
-      patch: [['a', 'end', 2, 5]],
+      patch: [],
       diagnostics: [
         { code: 'constraint-violated', constraint: 'mustStartOn', entryId: 'a', dependencyIds: [] },
       ],

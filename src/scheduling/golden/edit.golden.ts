@@ -9,14 +9,27 @@ export const editScenarios: readonly GoldenScenario[] = Object.freeze([
       ['b', 2, 3],
     ],
     dependencies: [['d1', 'a', 'b', 'FS', 0]],
-    proposed: { a: { start: 3 } },
+    proposed: { a: { start: 3, end: 5 } },
     expected: {
       patch: [
-        ['a', 'end', 2, 5],
         ['b', 'start', 2, 5],
         ['b', 'end', 3, 6],
       ],
     },
+  },
+  {
+    name: 'a resized end keeps the start',
+    entries: [['a', 0, 2]],
+    dependencies: [],
+    proposed: { a: { end: 5 } },
+    expected: { patch: [] },
+  },
+  {
+    name: 'a resized start keeps the end',
+    entries: [['a', 0, 4]],
+    dependencies: [],
+    proposed: { a: { start: 1 } },
+    expected: { patch: [] },
   },
   {
     name: 'a resized predecessor pushes its successor',
@@ -45,10 +58,9 @@ export const editScenarios: readonly GoldenScenario[] = Object.freeze([
       ['d1', 'a', 'b', 'FS', 0],
       ['d2', 'x', 'y', 'FS', 0],
     ],
-    proposed: { a: { start: 1 } },
+    proposed: { a: { start: 1, end: 2 } },
     expected: {
       patch: [
-        ['a', 'end', 1, 2],
         ['b', 'start', 1, 2],
         ['b', 'end', 2, 3],
       ],
@@ -61,9 +73,9 @@ export const editScenarios: readonly GoldenScenario[] = Object.freeze([
       ['b', 3, 4],
     ],
     dependencies: [['d1', 'a', 'b', 'FS', 0]],
-    proposed: { b: { start: 0 } },
+    proposed: { b: { start: 0, end: 1 } },
     expected: {
-      patch: [['b', 'end', 4, 1]],
+      patch: [],
       diagnostics: [
         {
           code: 'blocked-move',

@@ -57,8 +57,9 @@ export interface ScheduleRequest {
   readonly entries: readonly ScheduleEntry[];
   readonly dependencies: readonly ScheduleDependency[];
   /**
-   * What the user just set, per Entry. A start with no end means the bar moved. A start and an end
-   * mean the bar resized. An empty map asks for a full recompute.
+   * What the user just set, per Entry. A start alone resizes the bar from its start, and the end stays.
+   * An end alone resizes the bar from its end, and the start stays. A start and an end together
+   * move the bar, and the engine takes both dates as given. An empty map asks for a full recompute.
    */
   readonly proposed?: ReadonlyMap<EntryId, ProposedEntryDates>;
   /** Entries the engine must never move. */
