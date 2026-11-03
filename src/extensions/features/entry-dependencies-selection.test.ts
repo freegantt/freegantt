@@ -31,6 +31,7 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
   const domHandlers = new Map<string, DomHandler>();
   const keyHandlers = new Map<string, KeyHandler>();
   const focused: string[] = [];
+  const reports: { code: string; severity?: string; cause?: unknown }[] = [];
   let refreshes = 0;
   // A fake node stands for a connector line. `targetUnder` reads its id back.
   const lineOf = (connectorId: string) => {
@@ -42,6 +43,9 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
   const mounted = new Set(['dependency:d1', 'dependency:d2']);
   const ctx = {
     dataset,
+    raiseError: (report: { code: string; severity?: string; cause?: unknown }) => {
+      reports.push(report);
+    },
     view: {
       refreshConnectors: () => {
         refreshes += 1;
@@ -79,6 +83,7 @@ function mount(options: Parameters<typeof entryDependencies>[0] = {}) {
     keyChords: () => [...keyHandlers.keys()].sort(),
     dataset,
     focused,
+    reports,
     refreshes: () => refreshes,
     connectors: () => provider?.() ?? [],
     selectedIds: () =>
@@ -236,6 +241,20 @@ describe('removing a Dependency with the keyboard', () => {
     await settled();
 
     expect(view.plugin.all()).toHaveLength(2);
+  });
+
+  it('reports a rejected async answer and keeps the Dependency', async () => {
+    const view = mount();
+    const failure = new Error('server said no');
+    view.plugin.on('beforeDependencyRemove', () => Promise.reject(failure));
+
+    view.press('Delete', 'dependency:d1');
+    await settled();
+
+    expect(view.plugin.all()).toHaveLength(2);
+    expect(view.reports).toEqual([
+      expect.objectContaining({ code: 'dependency-remove-failed', severity: 'error', cause: failure }),
+    ]);
   });
 
   it('a consumer remove(id) call raises no event', () => {

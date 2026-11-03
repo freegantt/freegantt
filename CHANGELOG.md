@@ -78,6 +78,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - `'invalid-working-calendar'` is now in the `BuiltInThrownCode` union. Before, an exhaustive `switch (error.code)` missed the code `workingCalendar()` throws.
 - The project finish from the float analysis now counts the end of an Entry in a Dependency loop. Before, a loop member that ended last gave a finish that was too early, and every float was too small.
 - `entryDependencies()` removes its arrow and Delete key handlers when the Gantt is destroyed. Before, a key on a connector after that called a disposed plugin and threw `DependencyStoreNotInstalledError`.
+- A Delete on a connector now reports a failed `beforeDependencyRemove` answer on the Gantt's `error` event, with code `dependency-remove-failed`. Before, a rejected answer was an unhandled rejection. The Dependency stays.
 
 ## [0.1.0] - 2026-09-30
 
