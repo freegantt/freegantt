@@ -279,6 +279,7 @@ where they do something beyond re-export.
 | `scheduling/dependency-order.ts` | `orderByDependency(), OrderStep` | Orders Entries so each predecessor comes first, and finds loops. It uses no recursion. |
 | `scheduling/golden/calendar.golden.ts` | `calendarScenarios` | Hand-worked answers for a working calendar: a lag over a weekend and a holiday, a negative lag, two calendars, and none. |
 | `scheduling/golden/conflict.golden.ts` | `conflictScenarios` | Hand-worked answers for manually scheduled Entries, parents, loops, and unreadable dependencies. |
+| `scheduling/golden/constraint.golden.ts` | `constraintScenarios` | Hand-worked answers for each constraint kind and for the precedence between a constraint, a dependency and a manually scheduled Entry. |
 | `scheduling/golden/dependency-types.golden.ts` | `dependencyTypeScenarios` | Hand-worked answers for each dependency type, each lag sign, and chains. |
 | `scheduling/golden/edit.golden.ts` | `editScenarios` | Hand-worked answers for a user edit: a move, a resize, and a conflict. |
 | `scheduling/golden/follow.golden.ts` | `followScenarios` | Hand-worked answers for how a successor follows: earlier or only later, and the start floor. |
