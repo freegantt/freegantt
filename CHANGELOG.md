@@ -74,6 +74,7 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - `entries.syncAll()` drops the collapse state of a row the new list removes. `gantt.collapsed` no longer lists an id that names no row, and `collapseChange` announces the drop. A kept row stays collapsed, and scroll position and zoom stay as they were. `entries.load()` is unchanged: it starts the view over by design.
 - Connectors follow a drag. While you move or resize a bar, each line ends on the preview place of the bar, and on the preview place of each successor the drag pushes. On release the lines no longer jump, and Escape sends them back.
 - Resize handles and connect ports follow a drag. While you move or resize a bar, its two handles and its two ports sit on the preview edges of the bar. Before, they stayed at the committed place. On release or Escape they go back.
+- A decoration that reuses a node no longer keeps the old width or text. Before, a scroll that dropped a row span could leave a row stripe or a range band with the span's width and text.
 
 ## [0.1.0] - 2026-09-30
 
