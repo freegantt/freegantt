@@ -86,7 +86,8 @@ export type BuiltInThrownCode =
   | 'unsupported-lag-unit'
   | 'duplicate-dependency-id'
   | 'dependency-store-not-installed'
-  | 'scheduling-not-installed';
+  | 'scheduling-not-installed'
+  | 'invalid-working-calendar';
 
 /** Codes core throws for an invariant no consumer can reach. Not published: a code you cannot reach
  *  is a code you cannot catch, so it does not belong in a consumer's `switch`. Each one still carries

@@ -1,7 +1,7 @@
 // scheduling/working-calendar — which days count as workdays. A pure value: the weekday set and the
 // holiday dates a consumer states. The library ships no holiday list. Nothing in core reads it.
 
-import type { Instant, InstantInput, TimeSpan, TimeUnit } from '../model/index.js';
+import type { BuiltInThrownCode, Instant, InstantInput, TimeSpan, TimeUnit } from '../model/index.js';
 import { FreeGanttError } from '../model/index.js';
 import type { ZonedTime } from '../time/index.js';
 
@@ -39,7 +39,7 @@ export interface WorkingCalendar {
 /** `code: 'invalid-working-calendar'` — `workingCalendar()` got a weekday set or a holiday it cannot read. */
 export class InvalidWorkingCalendarError extends FreeGanttError {
   constructor(reason: string) {
-    super('invalid-working-calendar', `workingCalendar(): ${reason}`);
+    super('invalid-working-calendar' satisfies BuiltInThrownCode, `workingCalendar(): ${reason}`);
     this.name = 'InvalidWorkingCalendarError';
   }
 }
