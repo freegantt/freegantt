@@ -1,8 +1,8 @@
 // The Dependency store, as a consumer meets it. `entryDependencies()` is one plugin on the Dataset.
-// It keeps the Dependencies, and the Gantt draws a connector for each. No scheduling plugin is
-// installed, so nothing moves: the lines show what is stored.
+// It keeps the Dependencies, and the Gantt draws a connector for each. `scheduling()` sits beside it,
+// so a new Dependency pushes a successor that starts too early, in the same undo step.
 import { mountHarnessChrome } from './harness-nav.js';
-import { Dataset, Gantt, entryDependencies } from 'freegantt';
+import { Dataset, Gantt, entryDependencies, scheduling } from 'freegantt';
 import {
   dependencyEntryInputs,
   firstDependencies,
@@ -16,7 +16,11 @@ mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'dependen
 
 // Install the plugin on the Dataset, then keep the object: its methods write the Dependencies.
 const dependencies = entryDependencies();
-const dataset = new Dataset({ entries: dependencyEntryInputs, timeZone: 'UTC', plugins: [dependencies] });
+const dataset = new Dataset({
+  entries: dependencyEntryInputs,
+  timeZone: 'UTC',
+  plugins: [dependencies, scheduling({ successorMoves: 'pushOnly' })],
+});
 
 // An app that loads Dependencies from a server calls replaceAll with the whole list. It records no
 // undo step, and it throws for an unknown Entry id without changing anything.

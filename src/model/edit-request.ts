@@ -10,6 +10,7 @@ import type { EntryId } from './ids.js';
 import type { EntryEdits, ProposedEdits, StoredEntry } from './stored-entry.js';
 import type { FieldKey } from './field-key.js';
 import type { FieldEditable } from './field.js';
+import type { StoreRowUpdated } from './change-set.js';
 import type { WriteTarget } from './write-verdict.js';
 
 /** What the extension hook reads (D4). It carries the same three members on a preview call
@@ -41,6 +42,12 @@ export interface EditRequest<TProps = Record<string, unknown>> {
    *  removes the whole subtree and core fills the descendant walk. Read one off `entries` above,
    *  which still holds it: `entryAfterEdits(id)` answers `undefined` for every id in here (#235). */
   readonly removedEntryIds: ReadonlySet<EntryId>;
+  /** The plugin store rows this transaction changes, one per row, with the row before (`from`) and after
+   *  (`to`) the commit. A row written as the same object the store holds is not in the list. Empty on a drag
+   *  preview, and empty whenever the transaction writes no plugin store. A store write with no Entry
+   *  edit still reaches the hook, so an extender can answer a store write with Entry edits in the same
+   *  ChangeSet. Read the whole store, as the commit leaves it, through the store's own view. */
+  readonly changedStoreRows: readonly StoreRowUpdated[];
   /** Has this row a child, as this transaction's own body and adds leave it? Same tree
    *  `entryAfterEdits(id)` reads. */
   hasChildren(id: EntryId | string): boolean;
