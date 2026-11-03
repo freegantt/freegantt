@@ -13,6 +13,11 @@ export type { ConnectDraft };
 export interface ConnectGestureContext {
   /** Content-surface hit test, client-relative. A connector port answers with `port` set. */
   hitTest(at: ClientPoint): EntryHit | undefined;
+  /** Which edge of the bar a content-x sits nearer to: the left half is `start`, the right half is
+   *  `end`. Undefined once a stale bar id outlives its frame. */
+  nearerEdgeOf(barId: BarId, contentX: number): 'start' | 'end' | undefined;
+  /** Every visible bar whose Entry accepts a connection. Asked once per drag. */
+  connectableBarIds(): readonly BarId[];
   /** The Entry under a bar id, or undefined once a stale bar id outlives its frame. */
   entryFor(barId: BarId): Entry | undefined;
   /** The one resolution of the `connect` capability (I14). It gates the port and the drag alike. */

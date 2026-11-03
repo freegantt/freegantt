@@ -1,5 +1,5 @@
-// interaction/ — the Connect controller: a drag from a connector port on one bar edge to a port on
-// another bar. It shares the pointer rules of the other gestures through `createPointerGesture`:
+// interaction/ — the Connect controller: a drag from a connector port on one bar edge to another
+// bar. A drop anywhere on that bar joins its nearer edge, and a drop on a port joins that port's edge. It shares the pointer rules of the other gestures through `createPointerGesture`:
 // the arm threshold, a touch long-press, pointer capture, and Escape to cancel. Nothing is written
 // on pointer down. The drop only proposes (`ctx.propose`). The plugin that handles the drop owns
 // the write (ADR 0041).
@@ -22,8 +22,9 @@ interface GrabbedPort {
   readonly edge: Edge;
 }
 
-/** Where a drop would land: another Entry's port. */
-interface PortTarget {
+/** Where a drop would land: an edge of another Entry's bar. */
+interface DropTarget {
+  readonly barId: BarId;
   readonly entryId: EntryId;
   readonly edge: Edge;
 }
@@ -35,6 +36,8 @@ export function attachConnect(
 ): Detachable {
   /** Set on pointer down over a connectable port. Cleared when that pointer ends. */
   let grabbed: GrabbedPort | undefined;
+  /** The bars that accept a connection, read once when the drag first paints. */
+  let connectable: readonly BarId[] | undefined;
   /** The drop an async `beforeConnect` handler still holds. */
   let hold: { abort(): void } | undefined;
 
@@ -44,25 +47,33 @@ export function attachConnect(
     return { barId: hit.barId, edge: hit.port };
   }
 
-  /** The port the pointer sits on, unless it belongs to the Entry the drag started on. A drop on
-   *  the same Entry's own edge joins nothing. */
-  function targetUnder(e: PointerEvent): PortTarget | undefined {
-    const port = portUnder(e);
-    if (port === undefined || grabbed === undefined) return undefined;
-    const entryId = ctx.entryFor(port.barId)?.id;
-    if (entryId === undefined || entryId === grabbed.entryId) return undefined;
-    return { entryId, edge: port.edge };
+  /** The bar edge a drop here joins. A drop on the source Entry, or on no bar, joins nothing. A bar
+   *  whose Entry refuses `connect` is no target. A port answers its own edge. A bar body answers
+   *  its nearer edge. */
+  function targetUnder(e: PointerEvent, contentX: number): DropTarget | undefined {
+    const hit = ctx.hitTest({ x: e.clientX, y: e.clientY });
+    if (hit?.kind !== 'bar' || grabbed === undefined) return undefined;
+    const entry = ctx.entryFor(hit.barId);
+    if (entry === undefined || entry.id === grabbed.entryId || !ctx.canConnect(entry)) return undefined;
+    const edge = hit.port ?? ctx.nearerEdgeOf(hit.barId, contentX);
+    return edge === undefined ? undefined : { barId: hit.barId, entryId: entry.id, edge };
+  }
+
+  function contentXAt(e: PointerEvent): number {
+    return ctx.contentXAtPaneOffset(e.clientX - pane.getBoundingClientRect().left);
   }
 
   function draftAt(e: PointerEvent, pending: boolean): ConnectDraft | undefined {
     if (grabbed === undefined) return undefined;
-    const target = targetUnder(e);
+    const cursorX = contentXAt(e);
+    const target = targetUnder(e, cursorX);
     return {
       fromBarId: grabbed.barId,
       fromEdge: grabbed.edge,
-      cursorX: ctx.contentXAtPaneOffset(e.clientX - pane.getBoundingClientRect().left),
+      cursorX,
       cursorY: ctx.contentYAtClientY(e.clientY),
-      ...(target !== undefined ? { targetEdge: target.edge } : undefined),
+      ...(target !== undefined ? { targetBarId: target.barId, targetEdge: target.edge } : undefined),
+      connectableBarIds: (connectable ??= ctx.connectableBarIds()),
       pending,
     };
   }
@@ -76,7 +87,7 @@ export function attachConnect(
    *  until the veto settles. */
   function drop(e: PointerEvent): void {
     const from = grabbed;
-    const target = targetUnder(e);
+    const target = targetUnder(e, contentXAt(e));
     const draft = draftAt(e, true);
     grabbed = undefined;
     if (from === undefined || target === undefined || draft === undefined) {
@@ -85,7 +96,10 @@ export function attachConnect(
     }
     const abort = new AbortController();
     const answer = ctx.propose(
-      { from: { entryId: from.entryId, edge: from.edge }, to: target },
+      {
+        from: { entryId: from.entryId, edge: from.edge },
+        to: { entryId: target.entryId, edge: target.edge },
+      },
       abort.signal,
     );
     if (typeof answer === 'boolean') {
@@ -128,6 +142,7 @@ export function attachConnect(
     endHold(); // a new drag replaces a held drop
     ctx.paint(undefined);
     grabbed = { barId: port.barId, entryId: entry.id, edge: port.edge };
+    connectable = undefined;
     gesture.down(e);
     e.stopImmediatePropagation();
   }

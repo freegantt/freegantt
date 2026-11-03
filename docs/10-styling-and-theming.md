@@ -63,6 +63,8 @@ not a consumer's to set" below for the four channels.
 | `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired — see below) |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. A Bar that carries its own `box` skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
+| `--fg-connector-port-width` | `20px` | `.fg-connector-port` width. The box centers on the bar edge, and the dot sits in its outer half |
+| `--fg-connector-port-coarse-width` | `32px` | `.fg-connector-port` width on a coarse pointer, such as a finger |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row |
 | `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one |
@@ -264,7 +266,8 @@ rename.
 | `.fg-bar` | One Bar. Every look wears this class, diamonds included. |
 | `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
-| `.fg-connector-port` | One connector port beside a bar edge. It shows on the hovered bar while a plugin handles the connect drag. It carries `data-edge`, and `data-active` while a drop here would connect. |
+| `.fg-connector-port` | One connector port on a bar edge. It shows on the hovered bar, and on every connectable bar during a drag, while a plugin handles the connect drag. It carries `data-edge`, and `data-active` while a drop here would connect. |
+| `.fg-connect-target` | The outline on the bar a connect drop would join. It only outlines: the pointer passes through it. |
 | `.fg-connect-preview` | The line a connect drag draws from its source edge to the pointer. It carries `data-pending` while an async `beforeConnect` handler holds the drop. |
 | `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-bar-diamond` | `diamond()` glyph. CSS ships with the variant, not the base sheet. |

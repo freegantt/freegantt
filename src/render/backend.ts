@@ -19,8 +19,11 @@ export interface ConnectDraft {
   /** The pointer, in content space. The line ends here. */
   cursorX: number;
   cursorY: number;
-  /** The edge of the hovered bar that a drop here would join. Absent when the pointer is on no port. */
+  /** The bar a drop here would join, and the edge it would join. Both absent when a drop does nothing. */
+  targetBarId?: BarId;
   targetEdge?: 'start' | 'end';
+  /** Every bar that accepts a connection. Each shows its two ports for the whole drag. */
+  connectableBarIds: readonly BarId[];
   /** True while an async `beforeConnect` handler holds the drop. */
   pending: boolean;
 }

@@ -70,8 +70,9 @@ const barOf = (container: HTMLElement, id: string): HTMLElement =>
   container.querySelector<HTMLElement>(`.fg-bar[data-bar-id^="${id}"]`)!;
 const ports = (container: HTMLElement): HTMLElement[] =>
   Array.from(container.querySelectorAll<HTMLElement>('.fg-connector-port')).filter((port) => !port.hidden);
-const portAt = (container: HTMLElement, edge: 'start' | 'end'): HTMLElement =>
-  ports(container).find((port) => port.dataset['edge'] === edge)!;
+/** During a drag every connectable bar shows its ports, in bar order. `barIndex` picks the bar. */
+const portAt = (container: HTMLElement, edge: 'start' | 'end', barIndex = 0): HTMLElement =>
+  ports(container).filter((port) => port.dataset['edge'] === edge)[barIndex]!;
 
 function pointer(type: string, clientX: number): PointerEvent {
   return new PointerEvent(type, { clientX, clientY: 5, pointerId: 1, bubbles: true });
@@ -94,8 +95,8 @@ function dragAEndToBStart(m: Mounted): void {
   pointerOver(() => aEnd);
   m.timeline.dispatchEvent(pointer('pointerdown', 2));
   pointerOver(() => barOf(m.container, 'b'));
-  m.timeline.dispatchEvent(pointer('pointermove', 40)); // arms; B is hovered, so the ports move to B
-  const bStart = portAt(m.container, 'start');
+  m.timeline.dispatchEvent(pointer('pointermove', 40)); // arms; every connectable bar shows its ports
+  const bStart = portAt(m.container, 'start', 1);
   pointerOver(() => bStart);
   m.timeline.dispatchEvent(pointer('pointermove', 41));
   m.timeline.dispatchEvent(pointer('pointerup', 41));
@@ -120,6 +121,24 @@ describe('connect gesture — installed', () => {
     expect(m.connected).toEqual([
       { from: { entryId: 'a', edge: 'end' }, to: { entryId: 'b', edge: 'start' } },
     ]);
+    m.gantt.destroy();
+  });
+
+  it('a drop on the body of another bar connects, and the drag outlines that bar', () => {
+    const m = mount();
+    hover(m, 'a');
+    pointerOver(() => portAt(m.container, 'end'));
+    m.timeline.dispatchEvent(pointer('pointerdown', 2));
+    pointerOver(() => barOf(m.container, 'b'));
+    m.timeline.dispatchEvent(pointer('pointermove', 40));
+
+    const outline = m.container.querySelector<HTMLElement>('.fg-connect-target')!;
+    expect(outline.hidden).toBe(false);
+    expect(ports(m.container)).toHaveLength(4);
+
+    m.timeline.dispatchEvent(pointer('pointerup', 40));
+    expect(m.connected).toHaveLength(1);
+    expect(m.connected[0]?.to.entryId).toBe('b');
     m.gantt.destroy();
   });
 

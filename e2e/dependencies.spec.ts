@@ -93,13 +93,18 @@ test('removing an Entry removes its Dependencies, and undo restores both', async
 // that can reach them.
 
 const barOf = (page: Page, id: string) => page.locator(`#gantt .fg-bar[data-bar-id^="${id}"]`);
-const portOf = (page: Page, edge: 'start' | 'end') =>
-  page.locator(`#gantt .fg-connector-port[data-edge="${edge}"]:not([hidden])`);
 
 async function centerOf(locator: import('@playwright/test').Locator): Promise<{ x: number; y: number }> {
   const box = await locator.boundingBox();
   if (box === null) throw new Error('the node has no box');
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
+/** The screen point on the dot of a bar's edge port: 5 px outside the edge, at mid height. */
+async function edgeDotOf(page: Page, id: string, edge: 'start' | 'end'): Promise<{ x: number; y: number }> {
+  const box = await barOf(page, id).boundingBox();
+  if (box === null) throw new Error('the bar has no box');
+  return { x: edge === 'start' ? box.x - 5 : box.x + box.width + 5, y: box.y + box.height / 2 };
 }
 
 /** Drags from the `fromEdge` port of `fromId` to the `toEdge` port of `toId`, then releases. */
@@ -109,12 +114,12 @@ async function dragBetweenPorts(
   to: { id: string; edge: 'start' | 'end' },
 ): Promise<void> {
   await barOf(page, from.id).hover();
-  const origin = await centerOf(portOf(page, from.edge));
+  const origin = await edgeDotOf(page, from.id, from.edge);
   await page.mouse.move(origin.x, origin.y);
   await page.mouse.down();
   const overTarget = await centerOf(barOf(page, to.id));
   await page.mouse.move(overTarget.x, overTarget.y, { steps: 8 });
-  const target = await centerOf(portOf(page, to.edge));
+  const target = await edgeDotOf(page, to.id, to.edge);
   await page.mouse.move(target.x, target.y, { steps: 4 });
   await page.mouse.up();
 }
