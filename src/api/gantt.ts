@@ -287,6 +287,7 @@ export type GanttScaleOptions =
       preset?: never;
       range?: never;
       fit?: never;
+      fitDatasetPaddingPx?: never;
     }
   | {
       scale?: undefined;
@@ -295,6 +296,9 @@ export type GanttScaleOptions =
       /** Loose input (S1.12), read through the dataset's zone at construction/assignment. */
       range?: 'fitDataset' | { start: InstantInput; end: InstantInput };
       fit?: TimeScaleFit;
+      /** Live. Pixels of empty axis before the first bar and after the last bar under
+       *  `range: 'fitDataset'`. Default `24`: room for a connector stub and its arrowhead. `0` removes it. */
+      fitDatasetPaddingPx?: number;
     };
 
 export type GanttOptions<TProps = unknown> = GanttOptionsBase<TProps> & GanttScaleOptions;
@@ -394,6 +398,7 @@ export class Gantt<TProps = unknown> {
         'overscan',
         'preset',
         'fit',
+        'fitDatasetPaddingPx',
         'theme',
         'a11yLabel',
         'locale',
@@ -923,6 +928,16 @@ export class Gantt<TProps = unknown> {
 
   set fit(f: TimeScaleFit) {
     this.#shell.fit = f;
+  }
+
+  /** Pixels of empty axis before the first bar and after the last bar under `range: 'fitDataset'`.
+   *  A pinned `range` has no such margin. */
+  get fitDatasetPaddingPx(): number {
+    return this.#shell.fitDatasetPaddingPx;
+  }
+
+  set fitDatasetPaddingPx(px: number) {
+    this.#shell.fitDatasetPaddingPx = px;
   }
 
   get locale(): Intl.LocalesArgument | undefined {

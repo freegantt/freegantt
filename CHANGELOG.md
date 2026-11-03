@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- The new `fitDatasetPaddingPx` Gantt option (also on `TimeScaleModel`) sets the empty axis before the first bar and after the last bar under `range: 'fitDataset'`. It changes live. The default is `24` px, room for a connector stub and its arrowhead, so a hook into the first bar stays in view. `0` removes the margin. A pinned `range` has none. A `'fitDataset'` axis now starts 24 px before the first date and ends 24 px after the last.
 - Connector lines now pass behind the bars they cross. The selected line and the label text still draw above the bars. A click on a line between bars still selects it.
 - Connecting two bars is easier. A drop anywhere on a bar joins its nearer edge: the left half is `start`, the right half is `end`. A drop on a port still joins that port's edge. While you drag, the bar under the pointer gets an outline, its snap edge shows an active port, and every connectable bar shows its ports. The port hit area is 20 px wide (32 px on a coarse pointer) and as tall as the bar, and the dot is 10 px. The resize handle keeps the middle of the edge. The new `.fg-connect-target` outline class marks the target bar, and `ConnectDraft` gains `targetBarId` and `connectableBarIds`.
 - The harness "Dependencies" page installs `scheduling()`. A connect drag onto a bar that starts too early moves that bar, and one undo puts the bar back and removes the line.

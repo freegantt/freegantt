@@ -18,22 +18,57 @@ describe('TimeScaleModel', () => {
   const noop = () => {};
 
   it('resolves zone from the binding, never from the caller (D6)', () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(model, { timeZone: 'America/Chicago', entries, paneWidth: 800 }, noop);
     expect(model.scale.timeZone).toBe('America/Chicago');
   });
 
   it("fits the bound dataset's span into the measured viewport by default", () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
     expect(model.scale.xForInstant(entries[0]!.start!)).toBe(0);
     expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);
   });
 
+  describe('fitDatasetPaddingPx', () => {
+    it('leaves 24 px before the first bar and after the last bar by default', () => {
+      const model = new TimeScaleModel();
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+
+      expect(model.scale.xForInstant(entries[0]!.start!)).toBeCloseTo(24, 0);
+      expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(776, 0);
+      expect(model.scale.contentWidth).toBeCloseTo(800, 0);
+    });
+
+    it('takes a margin of the stated width, live', () => {
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 40 });
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+      expect(model.scale.xForInstant(entries[0]!.start!)).toBeCloseTo(40, 0);
+
+      model.fitDatasetPaddingPx = 0;
+      expect(model.scale.xForInstant(entries[0]!.start!)).toBe(0);
+    });
+
+    it('keeps the margin in pixels when a fixed unit width sets the density', () => {
+      const model = new TimeScaleModel({ fit: { unit: 'day', widthPx: 50 } });
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+
+      expect(model.scale.xForInstant(entries[0]!.start!)).toBeCloseTo(24, 0);
+    });
+
+    it('adds no margin to a pinned range', () => {
+      const range = { start: instant('2026-09-01T00:00:00Z'), end: instant('2026-09-10T00:00:00Z') };
+      const model = new TimeScaleModel({ range });
+      bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
+
+      expect(model.scale.range).toEqual(range);
+    });
+  });
+
   it('a one-date Entry still widens fitDataset, start and end folded in independently (ADR 0012 Gate)', () => {
     const startOnly = entryDouble({ id: 't3', start: instant('2026-09-08T00:00:00Z') });
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(model, { timeZone: 'UTC', entries: [...entries, startOnly], paneWidth: 800 }, noop);
 
     expect(model.scale.range.start).toBe(instant('2026-09-01T00:00:00Z'));
@@ -41,7 +76,7 @@ describe('TimeScaleModel', () => {
   });
 
   it('spans every bound dataset, so one scale can carry two Gantt instances (D9)', () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(model, { timeZone: 'UTC', entries: [entries[0]!], paneWidth: 800 }, noop);
     bindTimeScale(
       model,
@@ -59,7 +94,7 @@ describe('TimeScaleModel', () => {
   });
 
   it('re-resolves when a Gantt binds or unbinds', () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(model, { timeZone: 'UTC', entries: [entries[0]!], paneWidth: 800 }, noop);
     const handle = bindTimeScale(
       model,
@@ -78,7 +113,7 @@ describe('TimeScaleModel', () => {
 
   it('honours a pinned TimeSpan range instead of fitting the dataset', () => {
     const range = { start: instant('2026-01-01T00:00:00Z'), end: instant('2026-01-08T00:00:00Z') };
-    const model = new TimeScaleModel({ range });
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0, range });
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, noop);
 
     expect(model.scale.range).toEqual(range);
@@ -86,7 +121,7 @@ describe('TimeScaleModel', () => {
   });
 
   it("falls back to the preset's own density when the container is unmeasured, not to a degenerate scale", () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 0 }, noop);
 
     // dayPreset's preferredTickWidthPx already clears its own density floor (header readability
@@ -100,13 +135,13 @@ describe('TimeScaleModel', () => {
   });
 
   it('resolves a zero-span or empty dataset through the preset rather than dividing by zero', () => {
-    const empty = new TimeScaleModel();
+    const empty = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(empty, { timeZone: 'UTC', entries: [], paneWidth: 800 }, noop);
     expect(empty.scale.widthForDuration({ value: 1, unit: 'day' }, instant(0))).toBeCloseTo(
       dayPreset.preferredTickWidthPx,
     );
 
-    const zeroSpan = new TimeScaleModel();
+    const zeroSpan = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     const at = entries[0]!.start;
     bindTimeScale(
       zeroSpan,
@@ -119,7 +154,7 @@ describe('TimeScaleModel', () => {
   });
 
   it('fits the narrowest bound viewport, so the span fits in every Gantt', () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
     bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
 
@@ -127,21 +162,21 @@ describe('TimeScaleModel', () => {
   });
 
   it('is readable before anything binds', () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     expect(model.scale.timeZone).toBe('UTC');
     expect(model.scale.xForInstant(instant(MS.DAY))).toBeGreaterThan(0);
   });
 
   describe('notify (#6, #22)', () => {
     it("runs a binding's own onChange on bind — that IS its first render (#22)", () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       expect(calls).toBe(1);
     });
 
     it("never runs a binding's own onChange for its own unbind", () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
@@ -152,7 +187,7 @@ describe('TimeScaleModel', () => {
     });
 
     it("runs an existing binding's onChange when another Gantt binds or unbinds", () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
@@ -165,7 +200,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('stops running onChange once unbound', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       handle.unbind();
@@ -176,7 +211,7 @@ describe('TimeScaleModel', () => {
     });
 
     it("a width change that moves the narrowest pane runs every bound instance's onChange (D9)", () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let callsA = 0;
       let callsB = 0;
       const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => callsA++);
@@ -191,7 +226,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('a setPaneWidth that does not move the narrowest pane notifies nobody (D-S1.5-4)', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let callsA = 0;
       let callsB = 0;
       const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => callsA++);
@@ -207,7 +242,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('setPaneWidth invalidates and notifies when the width actually changes', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);
 
@@ -218,7 +253,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('setPaneWidth is a no-op (no notify, no invalidation) when the width is unchanged', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       const handle = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
@@ -228,7 +263,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('a binding driven to width 0 (display:none) is excluded from fitWidth, others keep theirs', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       // 600/1000 over this fixture's 5-day span stay clear of dayPreset's density floor (96px/day).
       const handleA = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 600 }, noop);
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 1000 }, noop);
@@ -243,7 +278,7 @@ describe('TimeScaleModel', () => {
 
   describe('batch', () => {
     it('delivers at most one notification for several writes', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       const b = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 500 }, noop);
       let calls = 0;
@@ -258,7 +293,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('no observer sees an intermediate state mid-batch', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       const seen: number[] = [];
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () =>
@@ -279,7 +314,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('flushes in a finally so a throwing run still notifies and leaves the model usable', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       const a = bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
@@ -302,7 +337,7 @@ describe('TimeScaleModel', () => {
 
   describe('fit (S1.9, D-S1.9-2)', () => {
     it("'preset' ignores a measured pane width and uses the preset's own density", () => {
-      const model = new TimeScaleModel({ fit: 'preset' });
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: 'preset' });
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
       // dayPreset's preferredTickWidthPx now already clears its own density floor (header
@@ -315,7 +350,7 @@ describe('TimeScaleModel', () => {
     it('an explicit pxPerMs is read back exactly, ignoring both the pane width and the preset', () => {
       // Small enough to clear the floor and stay under S1.12's MAX_CONTENT_PX ceiling for this
       // fixture's span — a value that only exercises the "read back exactly" behaviour.
-      const model = new TimeScaleModel({ fit: 0.01 });
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: 0.01 });
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
       expect(model.fit).toBe(0.01);
@@ -328,7 +363,7 @@ describe('TimeScaleModel', () => {
       // 200px clears dayPreset's own density floor, so what comes back is the stated width and not
       // the floor. The app author never writes a pixels-per-millisecond number, and never divides by
       // a day length that a DST day does not have.
-      const model = new TimeScaleModel({ fit: { unit: 'day', widthPx: 200 } });
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: { unit: 'day', widthPx: 200 } });
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, noop);
 
       expect(model.scale.widthForDuration({ value: 1, unit: 'day' }, entries[0]!.start!)).toBeCloseTo(200);
@@ -342,7 +377,7 @@ describe('TimeScaleModel', () => {
       // anchor is local midnight on Chicago's spring-forward day, which lasts 23 hours. The author
       // writes 200 and gets 200. The naive `200 / 86_400_000` would have painted it 4% narrow.
       const springForward = [entry('t1', '2026-03-08T06:00:00Z', '2026-03-11T05:00:00Z')];
-      const chicago = new TimeScaleModel({ fit: { unit: 'day', widthPx: 200 } });
+      const chicago = new TimeScaleModel({ fitDatasetPaddingPx: 0, fit: { unit: 'day', widthPx: 200 } });
       bindTimeScale(chicago, { timeZone: 'America/Chicago', entries: springForward, paneWidth: 800 }, noop);
 
       const shortDay = instant('2026-03-08T06:00:00Z');
@@ -353,7 +388,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('a fit write notifies iff the resolved scale changed', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
@@ -370,7 +405,7 @@ describe('TimeScaleModel', () => {
       // Every config key is live, so an app re-states its whole config on each render. A literal
       // cannot be compared by identity, and an invalidation per write would rebuild the scale for
       // nothing.
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 800 }, () => calls++);
       calls = 0;
@@ -393,7 +428,7 @@ describe('TimeScaleModel', () => {
 
   describe('preset/range live setters (S1.9)', () => {
     it('preset = notifies iff the resolved scale changed, and is a no-op at the current value', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 0 }, () => calls++);
       calls = 0;
@@ -411,7 +446,7 @@ describe('TimeScaleModel', () => {
       // Regression: 'pane' fit's pxPerMs = paneWidth / spanMs does not depend on the preset, so a
       // preset switch that leaves range/timeZone/pxPerMs all unchanged must still be visible to the
       // equality check — otherwise a bound Gantt never re-renders its header bands (U1).
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
       calls = 0;
@@ -422,7 +457,7 @@ describe('TimeScaleModel', () => {
     });
 
     it('preset = throws UnknownPresetError for an id outside the shipped set', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       expect(() => {
         model.preset = 'fortnight';
       }).toThrow(UnknownPresetError);
@@ -434,7 +469,7 @@ describe('TimeScaleModel', () => {
     // was this test's own example until #101 shipped it as a named preset; `twoHourShift` is a
     // stand-in that stays custom-only.
     it('preset = stays shipped-only — a ladder-only id is still UnknownPresetError, naming no ladder', () => {
-      const model = new TimeScaleModel();
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
       try {
         model.preset = 'twoHourShift';
         expect.unreachable('expected UnknownPresetError');
@@ -447,7 +482,7 @@ describe('TimeScaleModel', () => {
 
     it('range = notifies iff the resolved scale changed, and is a no-op at the current value', () => {
       const pinned = { start: instant('2026-01-01T00:00:00Z'), end: instant('2026-01-08T00:00:00Z') };
-      const model = new TimeScaleModel({ range: pinned });
+      const model = new TimeScaleModel({ fitDatasetPaddingPx: 0, range: pinned });
       let calls = 0;
       bindTimeScale(model, { timeZone: 'UTC', entries, paneWidth: 700 }, () => calls++);
       calls = 0;
@@ -464,7 +499,7 @@ describe('TimeScaleModel', () => {
   });
 
   it('mutating a ScaleBinding object after bind() cannot change the resolution', () => {
-    const model = new TimeScaleModel();
+    const model = new TimeScaleModel({ fitDatasetPaddingPx: 0 });
     const binding = { timeZone: 'UTC', entries, paneWidth: 800 };
     bindTimeScale(model, binding, noop);
     expect(model.scale.xForInstant(entries[1]!.end!)).toBeCloseTo(800);

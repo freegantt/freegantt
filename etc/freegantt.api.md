@@ -1507,6 +1507,8 @@ export class Gantt<TProps = unknown> {
     filterRows(filter: RowFilter | undefined): void;
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
+    get fitDatasetPaddingPx(): number;
+    set fitDatasetPaddingPx(px: number);
     get formatContext(): FormatContext;
     formatFieldValue(entry: Entry<TProps>, key: FieldKey): string;
     get gridCellRenderer(): GridCellRenderer | undefined;
@@ -1695,6 +1697,7 @@ export type GanttScaleOptions = {
     preset?: never;
     range?: never;
     fit?: never;
+    fitDatasetPaddingPx?: never;
 } | {
     scale?: undefined;
     preset?: PresetRef;
@@ -1703,6 +1706,7 @@ export type GanttScaleOptions = {
         end: InstantInput;
     };
     fit?: TimeScaleFit;
+    fitDatasetPaddingPx?: number;
 };
 
 // @public
@@ -2909,6 +2913,9 @@ export class TimeScaleModel {
     get fit(): TimeScaleFit;
     set fit(f: TimeScaleFit);
     // (undocumented)
+    get fitDatasetPaddingPx(): number;
+    set fitDatasetPaddingPx(px: number);
+    // (undocumented)
     get preset(): ViewPreset;
     set preset(ref: PresetRef);
     // (undocumented)
@@ -2921,6 +2928,7 @@ export class TimeScaleModel {
 // @public
 export interface TimeScaleModelOptions {
     fit?: TimeScaleFit;
+    fitDatasetPaddingPx?: number;
     preset?: PresetRef;
     range?: 'fitDataset' | TimeSpan;
 }
