@@ -632,9 +632,11 @@ An extender may skip work whose result is not a date or another bar position. Th
 Answer the same dates on both. `scheduling()` skips its float pass when `isPreview` is `true`.
 
 ```ts
-const cascade: EditExtender = (request) => {
-  const dates = moveFollowers(request);
-  return request.isPreview ? dates : mergeEntryEdits(dates, derivedFields(request));
+import type { EditExtender } from 'freegantt';
+
+const countsOnCommit: EditExtender = (request) => {
+  if (request.isPreview) return new Map();
+  return new Map([...request.proposed.keys()].map((id) => [id, { props: { touched: true } }]));
 };
 ```
 
