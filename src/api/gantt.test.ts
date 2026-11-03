@@ -2288,6 +2288,22 @@ describe('Gantt minGridWidth (#127)', () => {
   });
 });
 
+describe('Gantt connectorArrow', () => {
+  it('defaults to end, takes the option and changes live', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const defaultGantt = new Gantt({ container, dataset });
+    expect(defaultGantt.connectorArrow).toBe('end');
+    defaultGantt.destroy();
+
+    const gantt = new Gantt({ container: document.createElement('div'), dataset, connectorArrow: 'none' });
+    expect(gantt.connectorArrow).toBe('none');
+    gantt.connectorArrow = 'end';
+    expect(gantt.connectorArrow).toBe('end');
+    gantt.destroy();
+  });
+});
+
 describe('Gantt gridResizable (#432)', () => {
   /** Drags the real splitter from `fromX` to `toX` and releases — same helper as the
    *  `minGridWidth` suite above. */

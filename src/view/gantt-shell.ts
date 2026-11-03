@@ -34,6 +34,7 @@ import type {
   ResolvedRenderer,
   BarLabels,
   ConnectorRouting,
+  ConnectorArrow,
   BarRenderer,
   GridCellRenderer,
   HeaderRenderer,
@@ -386,6 +387,8 @@ export interface GanttShellOptions {
   barLabels?: BarLabels;
   /** Live. How connector routes dodge bars. Default `{ avoidBars: true, maxAvoidRows: 200 }`. */
   connectorRouting?: ConnectorRouting;
+  /** Live. Whether connectors wear an arrowhead. Default `'end'`. */
+  connectorArrow?: ConnectorArrow;
   /** Live. A function, or a per-kind map — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
@@ -1677,6 +1680,15 @@ export class GanttShell {
     this.#frameSettings.set({ connectorRouting });
   }
 
+  /** Live. Reassigning redraws every connector. */
+  get connectorArrow(): ConnectorArrow {
+    return this.#frameSettings.connectorArrow;
+  }
+
+  set connectorArrow(connectorArrow: ConnectorArrow) {
+    this.#frameSettings.set({ connectorArrow });
+  }
+
   /** Live. Reassigning repaints every bar with no remount (I8) — same posture as `barRenderer`
    *  just below. */
   get barLabels(): BarLabels {
@@ -2286,6 +2298,7 @@ export class GanttShell {
       ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
       ...(options.barLabels !== undefined ? { barLabels: options.barLabels } : {}),
       ...(options.connectorRouting !== undefined ? { connectorRouting: options.connectorRouting } : {}),
+      ...(options.connectorArrow !== undefined ? { connectorArrow: options.connectorArrow } : {}),
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),

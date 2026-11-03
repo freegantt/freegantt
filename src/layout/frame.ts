@@ -21,6 +21,8 @@ import { DecorationRunner } from './decorations.js';
 import { ConnectorRouter } from './connectors/connector-router.js';
 import type { ConnectorProvider } from './connector-input.js';
 import type { ConnectorRouting } from './connectors/connector-routing.js';
+import { DEFAULT_CONNECTOR_ARROW } from './connectors/connector-arrow.js';
+import type { ConnectorArrow } from './connectors/connector-arrow.js';
 import type { ConnectorWindow } from './connectors/clip-path.js';
 import type { FrameConnector } from './connectors/frame-connector.js';
 import type { RegisteredDecorationProvider } from './decorations.js';
@@ -338,6 +340,8 @@ export interface GeometryFrame {
   bars: FrameBar[];
   /** Registered connector providers' output, routed and clipped to the window. `[]` when none registered. */
   connectors: readonly FrameConnector[];
+  /** Whether `render/` draws an arrowhead on each connector in `connectors`. */
+  connectorArrow: ConnectorArrow;
   decorations: readonly FrameDecoration[];
   /** Registered decoration providers' output, painted below the bar layer. */
   underBars: readonly ResolvedDecoration[];
@@ -402,6 +406,8 @@ export interface LayoutInput {
   connectorProviders?: readonly ConnectorProvider[];
   /** How connector routes dodge bars. Omitted → avoid on, capped at 200 rows. */
   connectorRouting?: ConnectorRouting;
+  /** Whether connectors wear an arrowhead. Omitted → `'end'`. */
+  connectorArrow?: ConnectorArrow;
   /** What `childrenAsSegments` compiles through (`layout/entry-rule.ts`) — the Field registry read
    *  and the unknown-key sink. The shell builds one of these once, at construction (`#421 C1`), the
    *  same way it builds `variants`'s own `fieldFor`. Omitted → an entries source with a rule set
@@ -851,6 +857,7 @@ export function placeFrame(
     contentWidth: scale.contentWidth,
     bars,
     connectors,
+    connectorArrow: input.connectorArrow ?? DEFAULT_CONNECTOR_ARROW,
     decorations: resolveDateLines({
       scale,
       todayLine: input.todayLine ?? true,

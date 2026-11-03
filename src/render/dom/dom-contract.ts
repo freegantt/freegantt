@@ -29,6 +29,8 @@ export const BAR_HANDLE_CLASS = 'fg-bar-handle';
 export const CONNECTOR_CLASS = 'fg-connector';
 /** The label text a connector draws when its provider asks for it. */
 export const CONNECTOR_TEXT_CLASS = 'fg-connector-text';
+/** The arrowhead shape inside the connector layer's `<marker>`. */
+export const CONNECTOR_ARROW_CLASS = 'fg-connector-arrow';
 /** One connector port beside a bar edge, shown on the hovered bar while a connect handler exists.
  *  Carries `data-edge`. */
 export const CONNECTOR_PORT_CLASS = 'fg-connector-port';

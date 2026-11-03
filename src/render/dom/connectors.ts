@@ -1,20 +1,45 @@
 // render/dom — connector paint. Routing, culling and clipping happened in layout/. This file turns
 // each `FrameConnector` into one SVG path, keyed by connector id.
 
-import type { FrameConnector, PathCommand } from '../../layout/index.js';
-import { CONNECTOR_CLASS, CONNECTOR_ID_KEY, CONNECTOR_TEXT_CLASS } from './dom-contract.js';
+import type { ConnectorArrow, FrameConnector, PathCommand } from '../../layout/index.js';
+import {
+  CONNECTOR_ARROW_CLASS,
+  CONNECTOR_CLASS,
+  CONNECTOR_ID_KEY,
+  CONNECTOR_TEXT_CLASS,
+} from './dom-contract.js';
+import { readPixelProperty } from './pixel-property.js';
 import { KeyedLayer } from './sync-keyed.js';
 
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 
 type ConnectorTextGeom = { text: string; x: number; y: number };
 
-type ConnectorGeom = { d: string; flagTokens: string; className: string; label: string; tabStop: boolean };
+type ConnectorGeom = {
+  d: string;
+  flagTokens: string;
+  className: string;
+  label: string;
+  tabStop: boolean;
+  /** The `marker-end` value: a reference to the arrowhead, or `''` for none. */
+  markerEnd: string;
+};
+
+/** The arrowhead edge when `--fg-connector-arrow-size` names none. */
+const DEFAULT_ARROW_SIZE_PX = 8;
+
+/** A marker id no other Gantt on the page uses. An id is document-wide, so two Gantts need two. */
+function freeMarkerId(): string {
+  let index = 0;
+  while (document.getElementById(`fg-connector-arrow-${index}`) !== null) index += 1;
+  return `fg-connector-arrow-${index}`;
+}
 
 export interface ConnectorsAttachment {
   /** Call once per frame with the frame's connectors and the content's full extent. */
   sync(
     connectors: readonly FrameConnector[],
+    arrow: ConnectorArrow,
     contentWidth: number,
     contentHeight: number,
     paneHeight: number,
@@ -35,8 +60,9 @@ function tabStopId(connectors: readonly FrameConnector[]): string | undefined {
   return (labelled.find((connector) => connector.flags.selected === true) ?? labelled[0])?.id;
 }
 
-function toGeom(connector: FrameConnector, stopId: string | undefined): ConnectorGeom {
+function toGeom(connector: FrameConnector, stopId: string | undefined, markerEnd: string): ConnectorGeom {
   return {
+    markerEnd,
     tabStop: connector.id === stopId,
     d: pathData(connector.path),
     flagTokens: connector.flagTokens,
@@ -48,6 +74,8 @@ function toGeom(connector: FrameConnector, stopId: string | undefined): Connecto
 function patch(node: SVGPathElement, geom: ConnectorGeom): void {
   node.setAttribute('class', geom.className);
   node.setAttribute('d', geom.d);
+  if (geom.markerEnd === '') node.removeAttribute('marker-end');
+  else node.setAttribute('marker-end', geom.markerEnd);
   if (geom.flagTokens === '') node.removeAttribute('data-flag');
   else node.setAttribute('data-flag', geom.flagTokens);
   // A connector with a label is an image a screen reader names. One without is decoration.
@@ -89,6 +117,28 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
   overLayer.append(overSvg);
   timelineHost.insertBefore(overLayer, barLayer.nextSibling);
 
+  // One arrowhead shape for every connector. `orient="auto"` turns it along the final segment, and the
+  // fill follows the line's own stroke, so a selected or cycle connector gets its arrowhead colour.
+  const markerId = freeMarkerId();
+  const markerEnd = `url(#${markerId})`;
+  const defs = document.createElementNS(SVG_NAMESPACE, 'defs');
+  const marker = document.createElementNS(SVG_NAMESPACE, 'marker');
+  marker.setAttribute('id', markerId);
+  marker.setAttribute('viewBox', '0 0 10 10');
+  marker.setAttribute('refX', '10');
+  marker.setAttribute('refY', '5');
+  marker.setAttribute('markerUnits', 'userSpaceOnUse');
+  marker.setAttribute('orient', 'auto');
+  const arrowShape = document.createElementNS(SVG_NAMESPACE, 'path');
+  arrowShape.setAttribute('class', CONNECTOR_ARROW_CLASS);
+  arrowShape.setAttribute('d', 'M0 0L10 5L0 10Z');
+  marker.append(arrowShape);
+  defs.append(marker);
+  svg.append(defs);
+  // Read when the arrowhead first shows. The token is not live: a new size shows after the arrowhead
+  // goes off and on again.
+  let arrowSizePx: number | undefined;
+
   const paths = new KeyedLayer<FrameConnector, string, ConnectorGeom, SVGPathElement>();
   // The selected line stays readable over a bar. This copy has no pointer events and no accessible
   // name: the real line below keeps the click, the focus and the label.
@@ -100,7 +150,17 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
   const texts = new KeyedLayer<FrameConnector, string, ConnectorTextGeom, SVGTextElement>();
 
   return {
-    sync(connectors, contentWidth, contentHeight, paneHeight) {
+    sync(connectors, arrow, contentWidth, contentHeight, paneHeight) {
+      const lineEnd = arrow === 'end' ? markerEnd : '';
+      if (arrow === 'none') arrowSizePx = undefined;
+      else if (arrowSizePx === undefined && layer.isConnected) {
+        arrowSizePx = readPixelProperty(layer, '--fg-connector-arrow-size', {
+          fallback: DEFAULT_ARROW_SIZE_PX,
+          accepts: 'positive',
+        });
+        marker.setAttribute('markerWidth', String(arrowSizePx));
+        marker.setAttribute('markerHeight', String(arrowSizePx));
+      }
       // The svg box is the content box, so a line near an edge never widens the pane's scroll range.
       for (const target of [svg, overSvg]) {
         target.setAttribute('width', String(contentWidth));
@@ -114,18 +174,20 @@ export function attachConnectors(timelineHost: HTMLElement, barLayer: HTMLElemen
           node.dataset[CONNECTOR_ID_KEY] = connector.id;
           return node;
         },
-        toGeom: (connector) => toGeom(connector, stopId),
+        toGeom: (connector) => toGeom(connector, stopId, lineEnd),
         patch,
       });
       selectedCopies.sync(overSvg, connectors.filter(isSelected), {
         key: (connector) => connector.id,
         create: () => document.createElementNS(SVG_NAMESPACE, 'path'),
-        toGeom: (connector) => toGeom(connector, undefined),
+        toGeom: (connector) => toGeom(connector, undefined, lineEnd),
         patch: (node, geom) => {
           node.setAttribute('class', `${geom.className} fg-connector-copy`);
           node.setAttribute('d', geom.d);
           node.setAttribute('data-flag', geom.flagTokens);
           node.setAttribute('aria-hidden', 'true');
+          if (geom.markerEnd === '') node.removeAttribute('marker-end');
+          else node.setAttribute('marker-end', geom.markerEnd);
         },
       });
       texts.sync(

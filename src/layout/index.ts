@@ -90,6 +90,8 @@ export type {
 export { BAR_FLAG_KEYS, CONNECTOR_FLAG_KEYS } from './frame.js';
 export { ConnectorRouter } from './connectors/connector-router.js';
 export type { ConnectorRouting } from './connectors/connector-routing.js';
+export { DEFAULT_CONNECTOR_ARROW } from './connectors/connector-arrow.js';
+export type { ConnectorArrow } from './connectors/connector-arrow.js';
 export type { ConnectorEdge, ConnectorEnd, ConnectorInput, ConnectorProvider } from './connector-input.js';
 export { DecorationRunner } from './decorations.js';
 export type { RegisteredDecorationProvider, DecorationsByLayer } from './decorations.js';

@@ -353,6 +353,9 @@ export type ConnectHandler = (ends: ConnectEnds) => void;
 export const CONNECTOR_FLAG_KEYS: readonly ["inactive", "cycle", "selected"];
 
 // @public
+export type ConnectorArrow = 'end' | 'none';
+
+// @public
 export type ConnectorEdge = 'start' | 'end';
 
 // @public
@@ -1488,6 +1491,8 @@ export class Gantt<TProps = unknown> {
     set collapsed(ids: readonly (RowId | string)[]);
     collapseStateOf(id: RowId | string): CollapseState | undefined;
     get commands(): CommandRegistry<TProps>;
+    get connectorArrow(): ConnectorArrow;
+    set connectorArrow(value: ConnectorArrow);
     get connectorRouting(): ConnectorRouting;
     set connectorRouting(value: ConnectorRouting);
     get convenienceChords(): ConvenienceChords;
@@ -1662,6 +1667,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     barRenderer?: BarRenderer;
     capabilities?: Capabilities;
     collapsed?: readonly (RowId | string)[];
+    connectorArrow?: ConnectorArrow;
     connectorRouting?: ConnectorRouting;
     container: HTMLElement | string;
     convenienceChords?: ConvenienceChords;

@@ -31,6 +31,7 @@ import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
 import type {
   BarLabels,
   ConnectorRouting,
+  ConnectorArrow,
   BarRenderer,
   GridCellRenderer,
   HeaderRenderer,
@@ -222,6 +223,9 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `{ avoidBars: true, maxAvoidRows: 200 }`. A vertical across more rows than `maxAvoidRows`
    *  keeps its default place. */
   connectorRouting?: ConnectorRouting;
+  /** Live. Where a connector wears an arrowhead: `'end'` draws one at the arrival end, pointing into
+   *  the target bar. `'none'` draws none. Default `'end'`. */
+  connectorArrow?: ConnectorArrow;
   /** Live (S5.4). Customization ladder level 3 (`plans/02` §4). One function, over every
    *  bar **no variant paints**. `undefined` returned from it keeps the library's own bar output.
    *
@@ -414,6 +418,7 @@ export class Gantt<TProps = unknown> {
         'collapsed',
         'barLabels',
         'connectorRouting',
+        'connectorArrow',
         'barRenderer',
         'gridCellRenderer',
         'headerRenderer',
@@ -672,6 +677,15 @@ export class Gantt<TProps = unknown> {
 
   set connectorRouting(value: ConnectorRouting) {
     this.#shell.connectorRouting = value;
+  }
+
+  /** Live. `gantt.connectorArrow = 'none'`. Redraws every connector without an arrowhead. */
+  get connectorArrow(): ConnectorArrow {
+    return this.#shell.connectorArrow;
+  }
+
+  set connectorArrow(value: ConnectorArrow) {
+    this.#shell.connectorArrow = value;
   }
 
   /** Live. `gantt.barLabels = 'outside'`. Where the default bar label paints — ignored once
