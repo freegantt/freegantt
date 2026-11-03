@@ -46,3 +46,4 @@ Numbers follow `plans/s7-dependencies-and-scheduling/README.md` §5.
 | D12 | I4 and ruling D4 | Owner 1B (2026-11-02): an extension may replace a Field the user proposed only when its result marks that Field as an override. The dev check still throws on an unmarked overwrite. Needs a plans/01 §11 I4 amendment and an ADR. |
 | D13 | Connect a locked Entry | Owner: keep. A locked Entry allows 'connect' unless `capabilities.connect` says no. |
 | D14 | S7.3b names | Owner: `connectByDrag` and the id form `<from>:<type>:<to>` are fine. |
+| D15 | Connect drop target | Owner: the port is too small and connecting is hard. Snap: a drop anywhere on a bar connects to its nearer edge. The port hit area grows. |
