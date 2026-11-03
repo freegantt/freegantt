@@ -2,7 +2,7 @@
 // directly (extensions/ may reach api/ and model/ only). Not `api/index.ts`'s own barrel: that
 // file re-exports `scheduling` itself, so a feature file importing the barrel back would close a
 // cycle (no-circular) — the same reason `time-facade.ts` exists.
-export { schedule, workingCalendar } from '../scheduling/index.js';
+export { schedule, workingCalendar, calculateFloat, findDrivingPath } from '../scheduling/index.js';
 export type { WorkingCalendar } from '../scheduling/index.js';
 export type {
   ScheduleConstraint,
@@ -13,3 +13,4 @@ export type {
   ScheduleResult,
   SuccessorMoves,
 } from '../scheduling/index.js';
+export type { FloatRequest, FloatResult, EntryFloat } from '../scheduling/index.js';
