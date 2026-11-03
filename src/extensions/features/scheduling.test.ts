@@ -122,6 +122,27 @@ describe('scheduling() moves successors', () => {
     expect(plugin.constraintOf('b')).toBeUndefined();
   });
 
+  it('moves nothing else when a Dependency overrules a drag', () => {
+    const dependencies = entryDependencies();
+    const plugin = scheduling();
+    const dataset = new Dataset<ScheduleProps>({
+      entries: [
+        { id: 'x', name: 'x', start: day(0), end: day(1) },
+        { id: 'y', name: 'y', start: day(6), end: day(7) },
+        { id: 'p', name: 'p', start: day(0), end: day(3) },
+        { id: 'q', name: 'q', start: day(5), end: day(6) },
+      ],
+      timeZone: 'UTC',
+      plugins: [dependencies, plugin],
+    });
+    dependencies.replaceAll([dependency('d1', 'x', 'y'), dependency('d2', 'p', 'q')]);
+
+    dataset.entries.update('q', { start: day(1), end: day(2) });
+
+    expect(startOf(dataset, 'q')).toBe(day(3));
+    expect(startOf(dataset, 'y')).toBe(day(6));
+  });
+
   it('keeps the moved span when the Dependency overrules a bar move', () => {
     const { dataset } = chain();
 

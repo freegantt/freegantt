@@ -256,6 +256,22 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     return ids;
   }
 
+  /** The dates the engine would have given each overruled Entry, read from its blocked-move finding. */
+  function datesAllowedFor(
+    result: ScheduleResult,
+    overruled: ReadonlySet<EntryId>,
+  ): Map<EntryId, ProposedDates> {
+    const allowed = new Map<EntryId, ProposedDates>();
+    for (const finding of result.diagnostics) {
+      if (finding.code !== 'blocked-move' || finding.reason !== 'proposed' || !overruled.has(finding.entryId))
+        continue;
+      const dates: ProposedDates = {};
+      for (const change of finding.wouldChange) dates[change.field] = change.to;
+      allowed.set(finding.entryId, dates);
+    }
+    return allowed;
+  }
+
   function runEngine(
     request: EditRequest,
     proposed: ReadonlyMap<EntryId, ProposedDates>,
@@ -285,21 +301,31 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   function place(
     request: EditRequest,
     store: PluginStore<EntryConstraint>,
-  ): { result: ScheduleResult; overruled: ReadonlySet<EntryId>; dates: ReadonlyMap<EntryId, ProposedDates> } {
+  ): {
+    result: ScheduleResult;
+    overruled: ReadonlySet<EntryId>;
+    dates: ReadonlyMap<EntryId, ProposedDates>;
+    allowed: ReadonlyMap<EntryId, ProposedDates>;
+  } {
     const dates = proposedDates(request);
     const first = runEngine(request, dates, store.all);
     const overruled =
       options.editedDate === 'userDateWins'
         ? new Set<EntryId>()
         : overruledByDependency(first, request, dates);
-    if (overruled.size === 0) return { result: first, overruled, dates };
+    if (overruled.size === 0) return { result: first, overruled, dates, allowed: new Map() };
     const remaining = new Map([...dates].filter(([id]) => !overruled.has(id)));
+    // An empty proposal map makes the engine recompute the whole plan, which moves Entries the user did
+    // not touch. The overruled Entries propose the dates their Dependencies allow, so the run starts there.
+    const allowed =
+      remaining.size === 0 ? datesAllowedFor(first, overruled) : new Map<EntryId, ProposedDates>();
+    for (const [id, allowedDates] of allowed) remaining.set(id, allowedDates);
     const floors = new Map(store.all);
     for (const id of overruled) {
       if (holdsHardConstraint(id)) continue;
       floors.set(id, { kind: 'startNoEarlierThan', date: dates.get(id)?.start as Instant });
     }
-    return { result: runEngine(request, remaining, floors), overruled, dates };
+    return { result: runEngine(request, remaining, floors), overruled, dates, allowed };
   }
 
   /** Runs the engine against the edit and answers the cascade, keeping the findings for `change`. */
@@ -310,9 +336,10 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
       return new Map();
     }
     if (!touchesDates(request)) return extendForDependencyWrite(request);
-    const { result, overruled, dates } = place(request, store);
+    const { result, overruled, dates, allowed } = place(request, store);
     pending = result.diagnostics;
     const edits = new Map<EntryId, EntryEdit>();
+    for (const [id, moved] of allowed) edits.set(id, { ...moved });
     for (const change of result.patch)
       edits.set(change.id, { ...edits.get(change.id), [change.field]: change.to });
     // The engine placed an overruled Entry where its Dependency allows. The user's own dates sit in the
