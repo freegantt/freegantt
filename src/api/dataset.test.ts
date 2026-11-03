@@ -1483,6 +1483,33 @@ function proposedDraft(id: string, patch: Record<string, unknown>): ProposedEdit
   return new Map([[entryId(id), edit]]);
 }
 
+describe('EditRequest.isPreview', () => {
+  function datasetRecordingPreview(into: boolean[]): Dataset {
+    const records: DataPlugin = {
+      id: 'demo.records-preview',
+      data(ctx) {
+        ctx.edits.setExtender((next) => (request) => {
+          into.push(request.isPreview);
+          return next(request);
+        });
+      },
+    };
+    return new Dataset({ timeZone: 'UTC', entries: [{ id: 'a', name: 'A' }], plugins: [records] });
+  }
+
+  it('is true on the drag-preview path', () => {
+    const seen: boolean[] = [];
+    extraEditsFor(datasetRecordingPreview(seen), proposedDraft('a', { name: 'B' }));
+    expect(seen).toEqual([true]);
+  });
+
+  it('is false on the commit path', () => {
+    const seen: boolean[] = [];
+    datasetRecordingPreview(seen).entries.update('a', { name: 'B' });
+    expect(seen).toEqual([false]);
+  });
+});
+
 describe('the preview path and the commit path read one tree (#466)', () => {
   // Step 3's whole premise: `extraEditsFor` (preview, every drag frame) and `entries.update()`
   // (commit, once) build their `EditRequest` through the one `createEditRequest`. If either grew its

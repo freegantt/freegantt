@@ -221,6 +221,7 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
   // `writeTarget` are built — the commit path and the preview path (`gesture-pipeline.ts`) both call
   // it, so neither can answer those two questions differently.
   const editRequest = createEditRequest({
+    isPreview: false,
     entries: byId,
     proposed,
     added,

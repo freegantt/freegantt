@@ -897,6 +897,7 @@ export interface EditRequest<TProps = Record<string, unknown>> {
     entries: ReadonlyMap<EntryId, StoredEntry<TProps>>;
     entryAfterEdits(id: EntryId | string): StoredEntry<TProps> | undefined;
     hasChildren(id: EntryId | string): boolean;
+    readonly isPreview: boolean;
     proposed: ProposedEdits;
     readonly removedEntryIds: ReadonlySet<EntryId>;
     writeTarget(id: EntryId | string, field: FieldKey): WriteTarget;

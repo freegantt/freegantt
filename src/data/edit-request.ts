@@ -30,6 +30,8 @@ import { checkHierarchyAnswers, parentIdFrom, storedParentSource } from './hiera
 import { editableAnswerFor, fieldLockQueryFor, resolveWriteTarget } from './write-rule.js';
 
 export interface CreateEditRequestOptions {
+  /** `true` on the drag-preview path, `false` on the commit path. */
+  readonly isPreview: boolean;
   readonly entries: ReadonlyMap<EntryId, StoredEntry>;
   readonly proposed: ProposedEdits;
   readonly added: readonly StoredEntry[];
@@ -116,6 +118,7 @@ export function createEditRequest(options: CreateEditRequestOptions): EditReques
   }
 
   return {
+    isPreview: options.isPreview,
     entries,
     proposed,
     entryAfterEdits,

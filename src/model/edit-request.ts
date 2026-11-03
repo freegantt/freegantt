@@ -17,6 +17,11 @@ import type { WriteTarget } from './write-verdict.js';
  *  and on the real commit call, which is why an extender can never refuse a write — see the
  *  refusal note: a lock plugin vetoes in `beforeChange`, never here. */
 export interface EditRequest<TProps = Record<string, unknown>> {
+  /** Is this a drag-preview frame that never commits? `true` on the ghost a drag draws on every frame,
+   *  `false` on the real commit. The preview shows bar positions only, so an extender may skip work whose
+   *  result is not a date, such as a derived field it writes again on commit. It must still answer the
+   *  same dates on both. */
+  readonly isPreview: boolean;
   /** Current store snapshot, before this transaction's edits — what a cascade reads to compute a
    *  delta (what moved, and by how much). Unlike `entryAfterEdits` below, this never reflects this
    *  transaction's own body edits. */

@@ -356,6 +356,7 @@ export function commitChangeSet(
 function stageRemovalsAndRowWrites(data: TransactionData, token: TxToken): void {
   const buildRequest = (): EditRequest =>
     createEditRequest({
+      isPreview: false,
       entries: data.entries.committedById(),
       proposed: data.entries.pendingEdits(),
       added: data.entries.pendingAdded().map((row) => row.entity),

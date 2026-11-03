@@ -130,6 +130,7 @@ describe('a drag preview request', () => {
   it('shares one frozen empty list for the changed rows', () => {
     const request = (): EditRequest =>
       createEditRequest({
+        isPreview: false,
         entries: new Map(),
         proposed: new Map(),
         added: [],
