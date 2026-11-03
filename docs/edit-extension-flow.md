@@ -16,7 +16,7 @@ many — and the hook always sees the whole batch at once, never one edit at a t
 | `EntryEdit` | `Partial<EntryInput>` minus `id` | **The write shape.** One Entry's proposed field changes, dates loose — the same object `dataset.entries.update(id, edit)` takes |
 | `EntryEdits` | `ReadonlyMap<EntryId, EntryEdit>` | A batch of those, keyed by Entry — what an extender returns, whether the batch holds one entry or many |
 | `ProposedEdit` / `ProposedEdits` | dates as `Instant`, `proposedKeys` stated | **The read shape.** The same edit after core read it. A plugin author reads one off `request.proposed` and never builds one |
-| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds, hasChildren, writeTarget, editableOf }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state, the two sets below, and three structural questions by id — `hasChildren(id)`, `writeTarget(id, field)` (`WriteTarget`), and `editableOf(id, field)` (`FieldEditable`) — so a cascade can check before it writes instead of learning after the fact from a `derived-values-dropped` report or a `FieldNotEditableError` |
+| `EditRequest` | `{ entries, proposed, entryAfterEdits, addedEntryIds, removedEntryIds, changedStoreRows, hasChildren, writeTarget, editableOf }` | What goes into the hook: the pre-transaction entries (a `Map`), the caller's whole proposed batch as `ProposedEdits`, a per-id lookup for post-body state, the two sets below, and three structural questions by id — `hasChildren(id)`, `writeTarget(id, field)` (`WriteTarget`), and `editableOf(id, field)` (`FieldEditable`) — so a cascade can check before it writes instead of learning after the fact from a `derived-values-dropped` report or a `FieldNotEditableError` |
 | `EditExtender` | `(request: EditRequest) => EntryEdits` | The function occupying the hook — `identityExtender` when nothing is installed |
 
 There is no wrapper type around the extender's return value. An extender returns extra writes, in the
@@ -97,6 +97,19 @@ body made. An Entry the body both adds and removes ends up in neither set, the s
 publishes no row for it. An Entry the body removes and then re-adds ends up in `addedEntryIds` only,
 with one clean add row — not an update-after-delete. A drag preview frame gets two references to one
 shared empty set, so reading either costs nothing per frame.
+
+## A transaction that writes only a plugin store
+
+A plugin store is a table of rows that belongs to one plugin. A transaction may write that store and propose no Entry edit. The hook still runs.
+
+`request.changedStoreRows` lists the store rows the transaction changes. Each item holds the `store`, the Entry `id`, the `from` row and the `to` row. Read the whole store, as the commit leaves it, through the store's own view.
+The extender may answer with Entry edits. They land in the same ChangeSet as the store write, so one undo reverts both. `scheduling()` does this: a new Dependency is a store write, and the successor it pushes is the answer.
+
+Two cases give an empty list:
+- A drag preview. No store write happens in a preview frame.
+- A transaction with no store write.
+
+The opposite direction exists too. `ctx.edits.writeRowsWithEdit(writer)` lets a plugin change its own store rows in the same ChangeSet as an Entry edit or removal. See "Write rows of your own store with an edit" in `docs/06-plugin-authoring.md`.
 
 ## Flow
 
