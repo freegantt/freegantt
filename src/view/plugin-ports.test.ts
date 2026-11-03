@@ -89,6 +89,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       registerRenderer: (point) => registry.add(`renderer:${point}`),
       registerDecoration: (layer) => registry.add(`decoration:${layer}`),
       registerConnector: () => registry.add('connector'),
+      refreshConnectors: () => {},
       registerConnectHandler: () => registry.add('connect-handler'),
       registerVariant: (variant) => registry.add(`variant:${variant.name}`),
       registerGridColumn: () => registry.add('column'),
