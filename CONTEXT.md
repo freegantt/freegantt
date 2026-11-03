@@ -303,6 +303,18 @@ _Avoid_: Edit (an edit is what the user makes), Delta
 The request option that says how a successor follows its predecessors. `pushAndPull` is the default: the successor moves to the earliest date that its Dependencies and Constraint allow, earlier too. `pushOnly` moves it later and never earlier.
 _Avoid_: Direction, As soon as possible (a Constraint name in other tools)
 
+**Float**:
+The days a scheduled Entry can start later without moving the project finish. It counts workdays when the request has a working calendar, and 24-hour days when it has none. It is negative when the schedule is already late. A summary Entry, an Entry with a missing date and a member of a loop of Dependencies have no Float. The default scheduling plugin stores it in the `float` Field. The analysis is plain critical path method: the backward pass ignores Constraints.
+_Avoid_: Slack (the word stays for one Dependency's gap, not an Entry), Buffer
+
+**Critical**:
+An Entry is critical when its **Float** is zero or less. The default scheduling plugin stores it in the `critical` Field. Core paints nothing from it: a consumer styles critical bars with an `EntryVariant` rule such as `{ when: { critical: true } }`.
+_Avoid_: Hot, Urgent
+
+**Driving path**:
+The chain of predecessors that holds one Entry in place, as Entry ids in order with the Entry last. At each step the driving predecessor is the one whose Dependency puts its successor exactly where the successor is now, with no slack. `scheduling().drivingPath(entryId)` answers it. An Entry that no Dependency holds gives itself alone.
+_Avoid_: Critical path (the critical path is every critical Entry, not the chain behind one Entry), Longest path
+
 **Cycle diagnostic**:
 A **Diagnostic** that names the Entries in one loop of Dependencies. The engine moves none of them.
 
