@@ -181,6 +181,18 @@ describe('scheduling() setConstraint', () => {
     expect(plugin.constraintOf('a')).toBeUndefined();
   });
 
+  it('leaves no start floor on the followers that a constraint moved', () => {
+    const { dataset, plugin } = chain();
+    plugin.setConstraint('a', { kind: 'startNoEarlierThan', date: at(3) });
+    expect(plugin.constraintOf('b')).toBeUndefined();
+    expect(plugin.constraintOf('c')).toBeUndefined();
+
+    plugin.clearConstraint('a');
+    dataset.entries.update('a', { start: day(0), end: day(1) });
+
+    expect([startOf(dataset, 'b'), startOf(dataset, 'c')]).toEqual([day(1), day(2)]);
+  });
+
   it('puts an Entry on its must-start-on date and reports the Dependency it breaks', () => {
     const { dataset, plugin } = chain();
 

@@ -132,7 +132,9 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
   // and the next commit overwrites it again before `change` reads it.
   let pending: readonly ScheduleDiagnostic[] | undefined;
   const handlers = new Set<ScheduleDiagnosticsHandler>();
-  // True while `setConstraint` writes the moves it computed. Those writes need no second engine run.
+  // True from the start of `setConstraint` until its commit ends. The row writer and the extender run at
+  // commit, so the flag must outlive the transaction body. The moves need no second engine run, and they
+  // leave no floor rows.
   let applyingConstraint = false;
   let refreshQueued = false;
 
@@ -608,15 +610,15 @@ export function scheduling(options: SchedulingOptions = {}): Scheduling {
     setConstraint(entry, constraint) {
       const current = installation('scheduling.setConstraint');
       const id = entryId(entry);
-      current.dataset.transaction(() => {
-        current.store.set(id, constraint);
-        applyingConstraint = true;
-        try {
+      applyingConstraint = true;
+      try {
+        current.dataset.transaction(() => {
+          current.store.set(id, constraint);
           moveToConstraint(current, id, constraint);
-        } finally {
-          applyingConstraint = false;
-        }
-      });
+        });
+      } finally {
+        applyingConstraint = false;
+      }
     },
 
     clearConstraint(entry) {
