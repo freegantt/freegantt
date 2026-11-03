@@ -9,6 +9,7 @@ import type {
   FieldKey,
   PluginStoreName,
   RemovalExtender,
+  StoreRowUpdated,
 } from '../model/index.js';
 
 // `ProposedEdit`/`EntryEdits` moved to `model/entry.ts` in S3.3 so `layout/gesture-draft.ts`
@@ -35,6 +36,11 @@ export const identityExtender: EditExtender = () => EMPTY_EDITS;
  *  preview never does (#235), so this is what `addedEntryIds`/`removedEntryIds` read there. One
  *  frozen `Set`, not a fresh one per call, so a preview frame allocates nothing (I5). */
 export const EMPTY_ENTRY_IDS: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
+
+/** Shared by every `EditRequest` builder whose transaction writes no plugin store — the drag preview
+ *  never does, so this is what `changedStoreRows` reads there. One frozen list, so a preview frame
+ *  allocates nothing (I5). */
+export const NO_STORE_ROWS: readonly StoreRowUpdated[] = Object.freeze([]);
 
 /** No removal, ever — the removal hook's occupant until a plugin composes onto it. The commit path
  *  checks for this occupant, so a Dataset with no removal extender builds no `EditRequest` for it. */
