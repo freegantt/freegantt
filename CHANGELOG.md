@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- The harness "Dependencies" page installs `scheduling()`. A connect drag onto a bar that starts too early moves that bar, and one undo puts the bar back and removes the line.
 - `scheduling()` moves a successor in the same step as a new Dependency. `entryDependencies().add()` and the connect drag push a successor that starts too early, and its followers, with `pushOnly` rules. A manually scheduled Entry stays, and constraints apply. One undo removes the link and the move, and the float follows in the same step. A removed Dependency moves nothing. `replaceAll()` pushes too, in a sync change set with no undo step.
 - `EditRequest` gains `changedStoreRows`: the plugin store rows the transaction changes, each with its `from` and `to` row. A transaction that writes only a plugin store already reached the edit extension hook. Now the extender can see which rows changed, read the store as the commit leaves it, and answer with Entry edits in the same ChangeSet, so one undo reverts both. A drag preview and a transaction with no store write give an empty list.
 - The harness "Scheduling" page has a constraint form. It sets "start no earlier than", "finish no later than" or "must start on" on a chosen task, and it clears the constraint. A list names the task that breaks a ceiling, or keeps a must-start-on date and breaks a Dependency.
