@@ -28,6 +28,8 @@ export interface ConnectorSelectionPorts {
 
 export interface ConnectorSelection {
   isSelected(dependencyId: string): boolean;
+  /** Removes the key handlers, so a key on a connector reaches a disposed plugin no more. */
+  disposeKeys(): void;
 }
 
 type Step = 'previous' | 'next';
@@ -78,21 +80,28 @@ export function connectorSelection(ctx: PluginContext, ports: ConnectorSelection
     ['ArrowDown', 'next'],
     ['ArrowRight', 'next'],
   ];
-  for (const [chord, step] of arrowSteps) {
+  const keyDisposers = arrowSteps.map(([chord, step]) =>
     ctx.interaction.registerKeyHandler(chord, (event) => {
       const from = dependencyUnder(event.target);
       if (from === undefined) return false;
       moveFocus(from, step);
-    });
-  }
+    }),
+  );
 
   // What does Delete do on a focused connector? It removes the Dependency. On any other target
   // the key stays with core, which removes Entries.
-  ctx.interaction.registerKeyHandler('Delete', (event) => {
-    const dependencyId = dependencyUnder(event.target);
-    if (dependencyId === undefined) return false;
-    ports.removeByUser(dependencyId);
-  });
+  keyDisposers.push(
+    ctx.interaction.registerKeyHandler('Delete', (event) => {
+      const dependencyId = dependencyUnder(event.target);
+      if (dependencyId === undefined) return false;
+      ports.removeByUser(dependencyId);
+    }),
+  );
 
-  return { isSelected: (dependencyId) => dependencyId === selected };
+  return {
+    isSelected: (dependencyId) => dependencyId === selected,
+    disposeKeys: () => {
+      for (const dispose of keyDisposers) dispose();
+    },
+  };
 }

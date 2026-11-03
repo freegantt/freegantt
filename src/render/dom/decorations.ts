@@ -59,6 +59,7 @@ function toGeom(
   return { paint: 'band', x: item.x, width: item.width, height, className: item.class ?? '' };
 }
 
+// Nodes are keyed by position, so a node can change kind. Each kind sets or clears every field the others use.
 function patch(node: HTMLElement, geom: DecorationGeom): void {
   if (geom.paint === 'span') {
     node.className = classListFor(geom.className, 'fg-row-span');
@@ -71,13 +72,16 @@ function patch(node: HTMLElement, geom: DecorationGeom): void {
   if (geom.paint === 'stripe') {
     node.className = classListFor(geom.className, 'fg-row-stripe');
     node.style.transform = `translateY(${geom.top}px)`;
+    node.style.width = '';
     node.style.height = `${geom.height}px`;
+    node.textContent = '';
     return;
   }
   node.className = classListFor(geom.className, 'fg-range-band');
   node.style.transform = `translateX(${geom.x}px)`;
   node.style.width = `${geom.width}px`;
   node.style.height = `${geom.height}px`;
+  node.textContent = '';
 }
 
 function syncOneLayer(

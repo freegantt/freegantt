@@ -58,6 +58,33 @@ test('a connector stays drawn while one end is outside the window and its path c
   expect(await connectorIds(page)).toContain(FAR_CONNECTOR);
 });
 
+test('removing the Entry a pair points at removes the pair', async ({ page }) => {
+  await page.goto('/related-to.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+  const near = page.locator('#gantt [data-connector-id="related:seeded-0:end:seeded-1:start"]');
+  await expect(near).toHaveCount(1);
+
+  await page.evaluate(() => {
+    const gantt = (window as unknown as { __gantt: { dataset: import('freegantt').Dataset } }).__gantt;
+    gantt.dataset.entries.remove('seeded-1');
+  });
+  await expect(near).toHaveCount(0);
+
+  // An Entry with the same id returns. The removed pair stays gone.
+  await page.evaluate(() => {
+    const gantt = (window as unknown as { __gantt: { dataset: import('freegantt').Dataset } }).__gantt;
+    gantt.dataset.entries.add({
+      id: 'seeded-1',
+      name: 'Back again',
+      start: '2026-01-05',
+      end: '2026-01-07',
+      siblingIndex: 1,
+    });
+  });
+  await expect(page.locator('#gantt [data-bar-id="seeded-1:0"]')).toHaveCount(1);
+  await expect(near).toHaveCount(0);
+});
+
 // The connect gesture in a real browser. happy-dom runs no layout, so only a browser proves the ports
 // sit beside the bar edges and a pointer can reach them.
 
