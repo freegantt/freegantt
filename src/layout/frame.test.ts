@@ -84,6 +84,22 @@ describe('computeFrame', () => {
     expect(frame.rows[1]?.top).toBe(32);
   });
 
+  it('draws an arrowhead at the arrival end of a connector unless the input says none', () => {
+    const base = {
+      entries: sampleEntries,
+      scale: wideScale,
+      preset,
+      visible,
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    };
+
+    expect(computeFrame(base).connectorArrow).toBe('end');
+    expect(computeFrame({ ...base, connectorArrow: 'none' }).connectorArrow).toBe('none');
+  });
+
   it('carries every Entry a custom row owns, not only the first (#185)', () => {
     const owned = sampleEntries.slice(0, 3);
     const frame = computeFrame({

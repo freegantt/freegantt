@@ -1550,7 +1550,13 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         frame.contentHeight,
         frame.visible.height,
       );
-      connectors?.sync(frame.connectors, frame.contentWidth, frame.contentHeight, frame.visible.height);
+      connectors?.sync(
+        frame.connectors,
+        frame.connectorArrow,
+        frame.contentWidth,
+        frame.contentHeight,
+        frame.visible.height,
+      );
       cursorLineHeight = Math.max(frame.contentHeight, frame.visible.height);
       if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
       if (gridLayer) {

@@ -458,6 +458,7 @@ ${DARK_COLOR_TOKENS}
 .fg-connectors { position: relative; pointer-events: none; }
 .fg-connectors-svg { position: absolute; top: 0; left: 0; overflow: hidden; }
 .fg-connector.fg-connector-copy { pointer-events: none; }
+.fg-connector-arrow { fill: var(--fg-connector-arrow-color, context-stroke); }
 .fg-connector { fill: none; stroke: currentColor; stroke-width: 1.5px; pointer-events: stroke; cursor: pointer; }
 .fg-connector:focus { outline: none; }
 .fg-connector-text { fill: currentColor; font-size: 11px; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--fg-pane-bg); stroke-width: 3px; pointer-events: none; user-select: none; }
@@ -557,7 +558,7 @@ ${DARK_COLOR_TOKENS}
    the box. A coarse pointer, like a finger, gets a wider box. Shown on the hovered bar, and on every
    connectable bar during a drag, only while a plugin handles the connect drag. */
 /* A port sits outside the bar, past the resize handle, so a grab on the dot connects and never resizes. */
-.fg-container { --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; --fg-connector-port-gap: 4px; }
+.fg-container { --fg-connector-arrow-size: 8px; --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; --fg-connector-port-gap: 4px; }
 .fg-connector-port { --fg-port-width: var(--fg-connector-port-width); position: absolute; top: 0; left: 0; width: var(--fg-port-width); box-sizing: border-box; padding: 0 2px; cursor: crosshair; touch-action: none; display: flex; align-items: center; }
 @media (pointer: coarse) { .fg-connector-port { --fg-port-width: var(--fg-connector-port-coarse-width); } }
 .fg-connector-port[data-edge="start"] { justify-content: flex-end; margin-left: calc(-1 * (var(--fg-port-width) + var(--fg-connector-port-gap))); }
