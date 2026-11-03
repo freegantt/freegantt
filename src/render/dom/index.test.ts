@@ -1398,8 +1398,8 @@ describe('render/dom backend', () => {
 
     backend.applyState({
       preview: [
-        { barId: a!.id, dx: 10, dy: 0, dWidth: 0, extra: false },
-        { barId: b!.id, dx: 5, dy: 0, dWidth: 0, extra: true },
+        { entryId: a!.entryId, barId: a!.id, dx: 10, dy: 0, dWidth: 0, extra: false },
+        { entryId: b!.entryId, barId: b!.id, dx: 5, dy: 0, dWidth: 0, extra: true },
       ],
     });
     expect(nodeA.dataset['state']).toBe('dragging');
@@ -1433,7 +1433,9 @@ describe('render/dom backend', () => {
     const [a] = frame.bars;
     const node = timeline.querySelector<HTMLElement>(`[data-bar-id="${a!.id}"]`)!;
 
-    backend.applyState({ preview: [{ barId: a!.id, dx: 0, dy: 32, dWidth: 0, extra: false }] });
+    backend.applyState({
+      preview: [{ entryId: a!.entryId, barId: a!.id, dx: 0, dy: 32, dWidth: 0, extra: false }],
+    });
     expect(node.style.transform).toBe(`translate(${a!.x}px, ${a!.y + 32}px)`);
 
     backend.applyState({});
@@ -1691,6 +1693,62 @@ describe('render/dom backend', () => {
     backend.applyState({ resizableEntryId: a!.entryId, resizableEdges: { start: false, end: true } });
     expect(start.hidden).toBe(true);
     expect(end.hidden).toBe(false);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('resize handles and connect ports sit on the preview edges of their bar, and go back once the preview clears', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 0 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    backend.sync(frame);
+    const [a] = frame.bars;
+    const handle = (edge: string) =>
+      timeline.querySelector<HTMLElement>(`.fg-bar-handle[data-edge="${edge}"]`)!;
+    const port = (edge: string) =>
+      timeline.querySelector<HTMLElement>(`.fg-connector-port[data-edge="${edge}"]`)!;
+    const gesture = { resizableEntryId: a!.entryId, connectableBarId: a!.id };
+    const at = (x: number, y: number) => `translate(${x}px, ${y}px)`;
+
+    backend.applyState(gesture);
+    expect(handle('end').style.transform).toBe(at(a!.x + a!.width, a!.y));
+
+    // A move shifts both edges, a resize shifts only the end edge, a row move shifts the row.
+    const cases = [
+      { dx: 40, dy: 0, dWidth: 0 },
+      { dx: 0, dy: 0, dWidth: 30 },
+      { dx: 0, dy: 32, dWidth: 0 },
+    ];
+    for (const offsets of cases) {
+      backend.applyState({
+        ...gesture,
+        preview: [{ entryId: a!.entryId, barId: a!.id, ...offsets, extra: false }],
+      });
+      const startAt = at(a!.x + offsets.dx, a!.y + offsets.dy);
+      const endAt = at(a!.x + offsets.dx + a!.width + offsets.dWidth, a!.y + offsets.dy);
+      expect(handle('start').style.transform).toBe(startAt);
+      expect(handle('end').style.transform).toBe(endAt);
+      expect(port('start').style.transform).toBe(startAt);
+      expect(port('end').style.transform).toBe(endAt);
+    }
+
+    backend.applyState(gesture);
+    expect(handle('start').style.transform).toBe(at(a!.x, a!.y));
+    expect(handle('end').style.transform).toBe(at(a!.x + a!.width, a!.y));
+    expect(port('start').style.transform).toBe(at(a!.x, a!.y));
+    expect(port('end').style.transform).toBe(at(a!.x + a!.width, a!.y));
 
     backend.destroy();
     grid.remove();
@@ -2471,6 +2529,7 @@ describe('render/dom backend', () => {
 
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       const id = frame.bars[0]!.id;
+      const owner = frame.bars[0]!.entryId;
       expect(bar.dataset['label']).toBe('inside');
 
       // [S3-A3]'s own ceiling, applied to this flip: no node created or removed, and the canvas ruler
@@ -2483,7 +2542,9 @@ describe('render/dom backend', () => {
       const measureTextCallsBeforePreview = measureTextCalls;
 
       // Shrinks the bar past the fit line entirely off the hot path — no frame, no canvas call.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }],
+      });
       expect(bar.dataset['label']).toBe('outside');
       observer.disconnect();
       expect(mutations).toBe(0);
@@ -2515,6 +2576,7 @@ describe('render/dom backend', () => {
 
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       const id = frame.bars[0]!.id;
+      const owner = frame.bars[0]!.entryId;
       expect(bar.dataset['label']).toBe('inside');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
@@ -2523,13 +2585,17 @@ describe('render/dom backend', () => {
       // label child survived, so `.fg-bar-label`'s default rule (overflow: hidden; text-overflow:
       // ellipsis) kept painting it, clipped, inside the now-too-narrow bar — the exact 'inside' look
       // #435 exists to avoid.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: -180, extra: false }],
+      });
       expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
       // Widens it back past the fit line, relative to the committed 200px base (a preview delta is
       // always against `syncBars`'s own geometry, not the previous preview) — 100px still fits.
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: -100, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: -100, extra: false }],
+      });
       expect(bar.dataset['label']).toBe('inside');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
@@ -2555,6 +2621,7 @@ describe('render/dom backend', () => {
 
       const bar = timeline.querySelector<HTMLElement>('.fg-bar')!;
       const id = frame.bars[0]!.id;
+      const owner = frame.bars[0]!.entryId;
       expect(bar.dataset['label']).toBe('hidden');
       expect(bar.querySelector('.fg-bar-label')?.textContent).toBe('Discovery');
 
@@ -2566,7 +2633,9 @@ describe('render/dom backend', () => {
         for (const record of records) mutations += record.addedNodes.length + record.removedNodes.length;
       });
       observer.observe(timeline, { childList: true, subtree: true });
-      backend.applyState({ preview: [{ barId: id, dx: 0, dy: 0, dWidth: 180, extra: false }] });
+      backend.applyState({
+        preview: [{ entryId: owner, barId: id, dx: 0, dy: 0, dWidth: 180, extra: false }],
+      });
       observer.disconnect();
       expect(mutations).toBe(0);
       expect(bar.dataset['label']).toBe('inside');
@@ -2783,6 +2852,138 @@ describe('render/dom backend', () => {
     const stripe = timeline.querySelector<HTMLElement>('.fg-row-stripe')!;
     expect(stripe.style.transform).toBe(`translateY(${row.top}px)`);
     expect(stripe.style.height).toBe(`${row.height}px`);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('paints a rowSpan inside its row, hidden from assistive tech, with no hit target, on the layer the provider chose', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    const row = frame.rows[0]!;
+
+    backend.sync({
+      ...frame,
+      underBars: [],
+      overBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, class: 'planned', text: 'was 3 Sep' }],
+    });
+
+    const bars = timeline.querySelector('.fg-bars')!;
+    const span = timeline.querySelector<HTMLElement>('.fg-row-span')!;
+    expect(span.classList.contains('planned')).toBe(true);
+    expect(span.getAttribute('aria-hidden')).toBe('true');
+    expect(span.hasAttribute('tabindex')).toBe(false);
+    expect(span.hasAttribute('data-row-id')).toBe(false);
+    expect(span.style.transform).toBe(`translate(40px, ${row.top}px)`);
+    expect(span.style.width).toBe('25px');
+    expect(span.textContent).toBe('was 3 Sep');
+    expect(span.style.height).toBe(`${row.height}px`);
+    expect(bars.compareDocumentPosition(span) & Node.DOCUMENT_POSITION_FOLLOWING).toBeGreaterThan(0);
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25 }],
+      overBars: [],
+    });
+    const under = timeline.querySelector<HTMLElement>('.fg-row-span')!;
+    expect(bars.compareDocumentPosition(under) & Node.DOCUMENT_POSITION_PRECEDING).toBeGreaterThan(0);
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('paints no rowSpan for a row outside the window', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+
+    // The second entry's row exists in no painted frame — the mounted window holds the first only.
+    const outsideRow = computeFrame({
+      entries: sampleEntries.slice(1, 2),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    }).rows[0]!;
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: outsideRow.id, x: 0, width: 10 }],
+      overBars: [],
+    });
+    expect(timeline.querySelector('.fg-row-span')).toBeNull();
+
+    backend.destroy();
+    grid.remove();
+    timeline.remove();
+  });
+
+  it('clears the width and text of a rowSpan node that a stripe or a band reuses', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+
+    const frame = computeFrame({
+      entries: sampleEntries.slice(0, 1),
+      scale,
+      preset,
+      visible: { x: 0, y: 0, width: 0, height: 200 },
+      rowHeight: 32,
+      revision: 0,
+      datasetRevision: 0,
+      variants: variantRegistry,
+    });
+    const row = frame.rows[0]!;
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, text: 'was 3 Sep' }],
+      overBars: [],
+    });
+    backend.sync({ ...frame, underBars: [{ kind: 'rowStripe', rowId: row.id }], overBars: [] });
+
+    const stripe = timeline.querySelector<HTMLElement>('.fg-row-stripe')!;
+    expect(stripe.style.width).toBe('');
+    expect(stripe.textContent).toBe('');
+
+    backend.sync({
+      ...frame,
+      underBars: [{ kind: 'rowSpan', rowId: row.id, x: 40, width: 25, text: 'was 3 Sep' }],
+      overBars: [],
+    });
+    backend.sync({ ...frame, underBars: [{ kind: 'rangeBand', x: 0, width: 10 }], overBars: [] });
+
+    const band = timeline.querySelector<HTMLElement>('.fg-range-band')!;
+    expect(band.style.width).toBe('10px');
+    expect(band.textContent).toBe('');
 
     backend.destroy();
     grid.remove();

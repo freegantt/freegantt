@@ -1346,6 +1346,7 @@ describe('Gantt.visibleSpan (issue #461)', () => {
       const gantt = new Gantt({
         container,
         dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+        fitDatasetPaddingPx: 0,
       });
 
       const beforeMeasure = gantt.visibleSpan;
@@ -1469,6 +1470,7 @@ describe('Gantt.visibleSpan (issue #461)', () => {
         dataset: new Dataset({ entries: narrowEntries, timeZone: 'UTC' }),
         fit: 'pane',
         range: 'fitDataset',
+        fitDatasetPaddingPx: 0,
       });
       // A pane far wider than one day's own content at any legible density.
       FakeResizeObserver.instances[0]!.fire({ width: 2000, height: 100 });
@@ -2282,6 +2284,22 @@ describe('Gantt minGridWidth (#127)', () => {
     expect(after).toEqual([]);
     expect(gantt.gridWidth).toBe(160);
 
+    gantt.destroy();
+  });
+});
+
+describe('Gantt connectorArrow', () => {
+  it('defaults to end, takes the option and changes live', () => {
+    const container = document.createElement('div');
+    const dataset = new Dataset({ entries: sampleEntries, timeZone: 'UTC' });
+    const defaultGantt = new Gantt({ container, dataset });
+    expect(defaultGantt.connectorArrow).toBe('end');
+    defaultGantt.destroy();
+
+    const gantt = new Gantt({ container: document.createElement('div'), dataset, connectorArrow: 'none' });
+    expect(gantt.connectorArrow).toBe('none');
+    gantt.connectorArrow = 'end';
+    expect(gantt.connectorArrow).toBe('end');
     gantt.destroy();
   });
 });

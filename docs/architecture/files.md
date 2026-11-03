@@ -112,9 +112,18 @@ where they do something beyond re-export.
 | `layout/column.ts` | `FrameColumn, ResolvedColumn, FieldCompare` | Pure data types for the grid-column paint shape and its locale-bound formatter. |
 | `layout/column-renderers.ts` | `meter(), image()` | Shipped Grid-column renderers as DOM-free description trees. `meter()` paints a percent as a track; `image()` paints a stored URL as an img. The look lives in the always-on sheet — a Column renderer cannot carry a css string the way a variant can. |
 | `layout/date-line.ts` | `resolveDateLines()` | Resolves the today-line and authored date lines into positioned `DateLine` decorations. |
+| `layout/bar-preview.ts` | `BarPreview`, `previewedBox()` | Where a drag preview shows one bar. A frame, a connector and the backend paint read this one rule. |
 | `layout/gesture-draft.ts` | `draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()` | Pure gesture math for drag previews. All date computation stays here so `interaction/` performs no arithmetic. |
 | `layout/decoration.ts` | `DecorationLayer, DecorationProvider, RangeBand, RowStripe` | The decoration seam's own types — range bands and row stripes as pixel-resolved shapes. |
 | `layout/decorations.ts` | `DecorationRunner` | Runs registered decoration providers into the frame's under-bar and over-bar layers. |
+| `layout/connector-input.ts` | `ConnectorInput, ConnectorEnd, ConnectorProvider, ConnectorFlags, CONNECTOR_FLAG_KEYS, PathCommand` | The connector seam's own types. A provider names two bar edges and core does the rest. |
+| `layout/connectors/connector-router.ts` | `ConnectorRouter` | Runs registered connector providers into the frame's connectors. It finds both bars for any Entry, routes once per revision and clips per frame. |
+| `layout/connectors/bar-index.ts` | `BarIndex, VerticalPlacer` | Finds an x for a vertical connector segment that crosses no bar in the rows between. |
+| `layout/connectors/connector-arrow.ts` | `ConnectorArrow, DEFAULT_CONNECTOR_ARROW` | The consumer's choice of arrowhead on a connector: at the arrival end, or none. |
+| `layout/connectors/connector-routing.ts` | `ConnectorRouting, resolveConnectorRouting()` | The consumer's choices for bar avoidance: on or off, and the row cap. |
+| `layout/connectors/route-connector.ts` | `routeConnector(), CONNECTOR_STUB_PX` | The orthogonal path between two bar edges. |
+| `layout/connectors/clip-path.ts` | `clipPath(), boundsOf(), boundsTouchWindow()` | Clips a connector path to the window. |
+| `layout/connectors/frame-connector.ts` | `FrameConnector` | One connector as the frame carries it. |
 | `layout/frame-row.ts` | `FrameRow` | The painted-row shape `computeFrame` emits and a cell renderer reads. |
 | `layout/pick-defined.ts` | `pickDefined()` | Copies only defined keys from a patch onto a settings object. |
 | `layout/entry-rule.ts` | `compileEntryRule(), EntryRule, EntryPredicate, FieldMatch, EntryRulePorts` | One match syntax for "which Entry does this rule claim?" — a variant's `when` and a row source's `childrenAsSegments` both compile through this, so `bars/` and `rows/` never import each other over it. |
@@ -148,6 +157,8 @@ where they do something beyond re-export.
 | `render/dom/sync-keyed.ts` | `syncKeyed(), SyncKeyedSpec, KeyedLayer, NestedKeyedLayers` | The whole reconciler. Look-up-or-create per key → patch only if geometry changed → prune vanished keys. Scope is hard-bounded to attr/class/style/text + keyed children. |
 | `render/dom/pixel-property.ts` | `readPixelProperty(), PixelPropertyPolicy` | One reader for every `--fg-*` pixel custom property, with an explicit validity policy so "zero is nonsense" and "zero is a choice" are stated, not implied. |
 | `render/dom/date-line.ts` | `attachDateLines(), DateLineAttachment` | Renders the today-line and authored date lines as positioned decoration elements. |
+| `render/dom/connect-affordance.ts` | `ConnectAffordance` | Draws the connector ports beside the hovered bar's edges and the connect drag's preview line. It builds nothing until the first connectable bar is hovered. |
+| `render/dom/connectors.ts` | `ConnectorsAttachment` | Turns `FrameConnector` into keyed SVG paths in one layer below the bars, plus a layer above them for the selected line, the label text and the arrowhead marker. |
 | `render/dom/decorations.ts` | `DecorationsAttachment` | Turns `RangeBand`/`RowStripe` into keyed DOM nodes. |
 | `render/dom/dom-contract.ts` | `BAR_CLASS, ROW_CLASS, …` | Class names and data attributes this backend writes. Nothing outside `render/dom` may retype them; `view/gantt-dom.ts` resolves a node from these constants alone. |
 | `render/dom/element-description.ts` | `buildElement()` | Turns one `ElementDescription` into a live DOM subtree. Stays inside the reconciler's hard-bounded scope. |
@@ -164,6 +175,8 @@ where they do something beyond re-export.
 | `view/gantt-shell.ts` | `GanttShell, GanttShellOptions` | The composition root. Constructs the `Viewport`, `FrameLayout`, `PaneLayout`, `RenderBackend`, `EventBus`, `FrameScheduler`, `GesturePipeline`, `PluginRuntime`, `TreeCollapse` and every attachment; exposes live-reconfigurable properties. |
 | `view/frame-settings.ts` | `FrameSettings, DEFAULT_ROW_HEIGHT` | Every live setting that says what the next frame draws, plus the table of what each change invalidates. |
 | `view/plugin-ports.ts` | `buildPluginPorts(), PluginContextParts` | Everything a `PluginContext` carries that `GanttShell` owns. Spread into the public context; `api/gantt.ts` adds only `dataset` and `gantt`. |
+| `view/connect-context.ts` | `ConnectGestureContext, ConnectDraft` | What the connect controller asks the shell: a hit test, one capability answer, content coordinates, a paint door and a propose door. |
+| `view/connect-proposal.ts` | `proposeConnect(), ConnectHandlers, ConnectHandler` | Runs `beforeConnect`, then each connect handler, then `connect`. It holds the handler list, so the controller exists only while one is registered. |
 | `view/plugin-registrations.ts` | `PluginRegistrations` | The five seams a plugin registers into — renderer, decoration, bar producer, kind default, grid column — each with the refresh it owes. |
 | `view/renderer-registry.ts` | `RendererRegistry` | Resolves which renderer paints one bar/cell/header/tooltip. Consumer config always wins over a plugin. |
 | `view/gantt-dom.ts` | `GanttDom, ContainerDom, DomTarget` | This Gantt's rendered DOM as a read surface: is this node mine, what is it, where is the element for this entry. |
@@ -211,6 +224,7 @@ where they do something beyond re-export.
 
 | file | exports | what it is for |
 | --- | --- | --- |
+| `interaction/connect.ts` | `attachConnect()` | The Connect controller: a drag from a connector port to a port of another bar. It proposes the two ends on a drop and writes nothing itself. |
 | `interaction/entry-gestures.ts` | `attachEntryGestures()` | Wires pointer events on entries into the `EntryGestureContext`'s session lifecycle. |
 | `interaction/row-reorder-drag.ts` | `createRowReorderDrag()` | A grid row drag over its own pointer stream: grabs the row's subject and arms a `{ kind: 'reorder' }` session, tree-only, no date write. |
 | `interaction/column-gestures.ts` | `attachColumnGestures()` | Resize and reorder pointer sequences for grid columns, over the same `createPointerGesture` controller. |
@@ -233,6 +247,7 @@ where they do something beyond re-export.
 | `api/attempt-mutation.ts` | `attemptMutation()` | Runs a mutating body and returns `false` when `beforeChange` refuses, instead of throwing. |
 | `api/watch-all-errors.ts` | `watchAllErrors()` | One handler over the Dataset `error` feed and the Gantt's, de-duplicated. |
 | `api/time-facade.ts` | `isCoarserThan, readPlainTime, startOfLastCoveredDay, startOfNextDay` | Narrow slice of `time/` that `extensions/features/time-shading.ts`, `extensions/features/time-shading-covers.ts`, and `extensions/features/inline-editing.ts` need without importing the public barrel (that barrel re-exports `tooltips`/`inlineEditing`). |
+| `api/schedule-facade.ts` | `schedule(), calculateFloat(), findDrivingPath(), FloatRequest, FloatResult, ScheduleConstraint, ScheduleDiagnostic, ScheduleEntry, ScheduleRequest, SuccessorMoves` | Narrow slice of `scheduling/` that `extensions/features/scheduling.ts` needs. It avoids the `api/index.ts` barrel, which would close a cycle. |
 | `api/decoration-facade.ts` | `DecorationLayer, DecorationContext, DecorationInput` | Narrow slice of `layout/`'s decoration vocabulary that `extensions/features/time-shading.ts` needs without importing the public barrel (that barrel re-exports `timeShading`). |
 | `api/index.ts` | the public surface | The allow-list with a sealed `exports` map. Re-exports `Gantt`/`Dataset`/the viewport models, the plugin and command contracts, the shipped built-ins, and the `model/` and `time/` types a consumer needs. |
 
@@ -254,11 +269,36 @@ where they do something beyond re-export.
 | `extensions/features/date-input.ts` | `DateInput, DateInputFactory` | Default date seam: wraps `<input type="date">`. No extra runtime dep. |
 | `extensions/features/time-shading-covers.ts` | `TimeCover, DayOfWeek, daysOfWeek(), hours(), dates(), spans(), notCovered(), mergeSpans(), complement(), coarsestFloor()` | The five `TimeCover` builders behind `timeShading()`, plus the span merge/complement they and the rule level share. |
 | `extensions/features/time-shading.ts` | `timeShading(), ShadingRule, CoverPredicate` | Shipped plugin that shades regions of the time axis. Ordinary `ChromePlugin`, layer `underBars` always. Every band carries the `.fg-time-shading` Part, themed by the `--fg-time-shading-fill` Token. |
+| `extensions/features/entry-dependencies.ts` | `entryDependencies(), ENTRY_DEPENDENCIES_ID, Dependency, DependencyInput, DependencyLag, DependencyType, EntryDependencies, EntryDependenciesOptions` | Shipped plugin that stores Dependencies in a plugin store, one row per successor. It removes a Dependency when an Entry goes, it registers one connector for each, and a connect drag adds one. Needs no scheduling plugin. |
+| `extensions/features/entry-dependencies-selection.ts` | `connectorIdOf, connectorSelection, ConnectorSelection, ConnectorSelectionPorts` | Which Dependency connector the user selected, and the click, focus, arrow and Delete handlers that act on it. |
+| `extensions/features/scheduling-float.ts` | `floatFields, floatWrites(), FLOAT_FIELD, CRITICAL_FIELD, HeldFloat, FloatWrite` | The `float` and `critical` Fields of `scheduling()`, and the writes that make each Entry hold its analysed float. |
+| `extensions/features/scheduling.ts` | `scheduling(), SCHEDULING_ID, Scheduling, SchedulingOptions, EntryConstraint, EditedDate, ScheduleDiagnosticsHandler` | Shipped plugin that keeps Dependencies true. It runs the engine in the edit hook, declares the `manuallyScheduled` Field, stores one start floor per Entry, raises `scheduleDiagnostics`, and flags cycle connectors. It needs `entryDependencies()`. |
 | `extensions/plugin-order.ts` | `resolveSetupOrder(), assertNoDuplicateIds(), OrderedPlugin` | The one place that answers "in what order do plugins set up?". A plugin's two halves share one `requires` list between them, so the sort belongs to neither install site alone. Generic over the plugin shape — it reads `id` and `requires` and nothing else. |
 | `extensions/index.ts` | barrel | Re-exports the runtime, commands, keymap, and the shipped built-ins. |
 
-### not yet written
+### `scheduling/` — pure — the propagation engine, no DOM
 
 | file | exports | what it is for |
 | --- | --- | --- |
-| `scheduling/index.ts` | — | The first-party default plugin's pure engine + the `EditExtender` occupancy. |
+| `scheduling/apply-lag.ts` | `applyLag()` | Turns a lag into a distance in time. Every sub-day lag goes through it; `day-counting.ts` wraps it for workdays. |
+| `scheduling/day-counting.ts` | `dayCountingFor(), DayCounting, ScheduleCalendar, Span` | Counts days for one Entry: in workdays with a working calendar, in 24-hour days without one. A lag lands through it and a moved Entry keeps its length through it. |
+| `scheduling/dependency-order.ts` | `orderByDependency(), OrderStep` | Orders Entries so each predecessor comes first, and finds loops. It uses no recursion. |
+| `scheduling/find-driving-path.ts` | `findDrivingPath()` | The chain of predecessors that holds one Entry in place. It uses no recursion. |
+| `scheduling/float-graph.ts` | `buildFloatGraph(), FloatRequest, FloatGraph, FloatNode, FloatEdge, drivenField(), anchorField()` | The dated leaf Entries and readable Dependencies that the float analysis and the driving path both read. It marks loop members. |
+| `scheduling/float.ts` | `calculateFloat(), FloatResult, EntryFloat` | Total float and the critical flag for each scheduled Entry, from a backward pass over the Dependencies. It uses no recursion. |
+| `scheduling/golden/calendar.golden.ts` | `calendarScenarios` | Hand-worked answers for a working calendar: a lag over a weekend and a holiday, a negative lag, two calendars, and none. |
+| `scheduling/golden/conflict.golden.ts` | `conflictScenarios` | Hand-worked answers for manually scheduled Entries, parents, loops, and unreadable dependencies. |
+| `scheduling/golden/constraint.golden.ts` | `constraintScenarios` | Hand-worked answers for each constraint kind and for the precedence between a constraint, a dependency and a manually scheduled Entry. |
+| `scheduling/golden/dependency-types.golden.ts` | `dependencyTypeScenarios` | Hand-worked answers for each dependency type, each lag sign, and chains. |
+| `scheduling/golden/edit.golden.ts` | `editScenarios` | Hand-worked answers for a user edit: a move, a resize, and a conflict. |
+| `scheduling/golden/follow.golden.ts` | `followScenarios` | Hand-worked answers for how a successor follows: earlier or only later, and the start floor. |
+| `scheduling/golden/index.ts` | `goldenScenarios` | Joins the scenario lists into one list for the engine tests. |
+| `scheduling/golden/scenario.ts` | `GoldenScenario, GoldenEntry, GoldenDependency, GoldenChange, GoldenDiagnostic, day(), toRequest(), toExpectedResult()` | The scenario shape, in whole days. It converts a scenario to a request and to the expected result. |
+| `scheduling/index.ts` | barrel | Re-exports the engine, the policy, the request and result types, and the working calendar. |
+| `scheduling/propagate.ts` | `moveSuccessor(), movableFields(), FIELDS, Node, Edge, Run` | Moves one Entry to satisfy the dependencies that reach it. It uses no recursion. |
+| `scheduling/schedule-entry.ts` | `ScheduleEntry, ScheduleField` | The slice of an Entry that the engine reads. |
+| `scheduling/schedule-request.ts` | `ScheduleRequest, ScheduleDependency, ScheduleDependencyType, ProposedEntryDates` | The plain data that `schedule()` takes. |
+| `scheduling/schedule-result.ts` | `ScheduleResult, ScheduleChange, ScheduleDiagnostic, CycleDiagnostic, BlockedMoveDiagnostic, BlockReason, InvalidDependencyDiagnostic` | The patch and the diagnostics that `schedule()` answers. |
+| `scheduling/schedule.ts` | `schedule()` | The pure, deterministic propagation engine. It never changes its input. |
+| `scheduling/scheduling-policy.ts` | `SchedulingPolicy, EditResolution, ScheduleRuleKind, defaultPolicy` | The policy seam. It decides which fields move and how the engine resolves a conflicting edit. |
+| `scheduling/working-calendar.ts` | `workingCalendar(), WorkingCalendar, WorkingCalendarOptions, OffTimeCover, Workday, InvalidWorkingCalendarError` | An immutable set of workdays and holidays. It answers `isWorkday`, `addWorkdays` and `workdaysBetween` with integer day arithmetic, and `offTime()` returns a `TimeCover`-shaped cover for `timeShading()`. |

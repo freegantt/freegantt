@@ -29,6 +29,7 @@ import type {
 import type {
   DecorationLayer,
   DecorationProvider,
+  ConnectorProvider,
   EntryVariant,
   FrameBar,
   RendererFor,
@@ -48,6 +49,7 @@ import type {
   RegisterKeyHandler,
 } from '../extensions/keymap.js';
 import type { PluginRegistrar } from './plugin-registrations.js';
+import type { ConnectHandler } from './connect-proposal.js';
 import type { WriteVerdict } from './capability.js';
 import type { GanttEvents, EntryFieldEdit } from './event-bus.js';
 import { buildElement } from '../render/dom/element-description.js';
@@ -57,7 +59,7 @@ import { toGridColumn } from './grid-columns.js';
 
 /** What `ctx.view.onDomEvent` hands a plugin: the browser event, plus what the node it landed on
  *  stands for (review A4). `target` is `undefined` when the event landed inside this Gantt, but on
- *  none of the five things `targetUnder` names. A pane's own padding and an empty stretch of
+ *  none of the six things `targetUnder` names. A pane's own padding and an empty stretch of
  *  timeline are two such places. An event outside this Gantt never reaches the handler at all. */
 export type DomEventHandler<K extends keyof DocumentEventMap> = (
   event: DocumentEventMap[K],
@@ -179,6 +181,10 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  run. A plugin that builds its own `Popup` (over `view.overlay` below) is that caller. Its
      *  Escape dismissal then wins by the keymap's own newest-first order, the same way
      *  `extensions/popup.ts`'s own dismissal does.
+     *
+     *  The handler may return `false` to decline. The key then goes to the next older binding, and
+     *  core keeps its own meaning for a key the plugin does not want. A plugin that binds `Delete`
+     *  or an arrow must decline every target it does not own.
      *
      *  Two things differ from `registerKeybinding`. This one is callable any time the plugin is
      *  installed, not only while `setup` runs. That is because a popup opens and closes for as long
@@ -327,6 +333,25 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  kind: 'rangeBand', start: day, end: ctx.time.addDays(day, 1) })))`. The returned `Disposer`
      *  removes the provider sooner (#155). */
     registerDecoration(layer: DecorationLayer, provider: DecorationProvider): Disposer;
+    /** Registers a connector provider. It names the two bar edges a line joins. Core finds the
+     *  bars, routes the path and clips it to the window. Legal only while `setup` runs. Disposing
+     *  this plugin removes the provider. Call: `ctx.view.registerConnector(() => related.map((r) => ({
+     *  id: `related:${r.id}`, from: { entryId: r.aId, edge: 'end' }, to: { entryId: r.bId,
+     *  edge: 'start' } })))`. Core reads the provider again after each dataset change. */
+    registerConnector(provider: ConnectorProvider): Disposer;
+    /** Asks every connector provider again and redraws the connectors. Call it when state that
+     *  only the screen shows changes, such as the selected connector. Several calls before the next
+     *  frame give one redraw. It writes nothing to the Dataset, makes no undo step and fires no
+     *  change event. Data belongs in a plugin store, which refreshes the connectors on its own.
+     *  Call: `ctx.view.refreshConnectors()`. */
+    refreshConnectors(): void;
+    /** Registers a handler for the connect drag. The user drags from a connector port on one bar
+     *  edge and drops on a port of another bar. After `beforeConnect` allows it, the handler gets
+     *  the two ends and writes the plugin's own data. Core names no meaning for the pair. While no
+     *  plugin registers a handler, no port draws and no `beforeConnect` or `connect` event fires.
+     *  Legal only while `setup` runs. Disposing this plugin removes the handler. Call:
+     *  `ctx.view.onConnect(({ from, to }) => related.add(from.entryId, to.entryId))`. */
+    onConnect(handler: ConnectHandler): Disposer;
     /** Registers `column` on this Gantt's grid, appended after the consumer's own
      *  `gridColumns` in registration order. A duplicate `field` the consumer's own list already
      *  names is dropped (config beats a plugin). The Field it names still resolves through the
@@ -509,6 +534,10 @@ export function buildPluginPorts(
           .map((column) => ({ header: column.header, value: column.format(entry) })),
       registerDecoration: (layer, provider) =>
         registerWhileOpen(() => shell.registrations.registerDecoration(layer, provider)),
+      registerConnector: (provider) =>
+        registerWhileOpen(() => shell.registrations.registerConnector(provider)),
+      refreshConnectors: () => shell.registrations.refreshConnectors(),
+      onConnect: (handler) => registerWhileOpen(() => shell.registrations.registerConnectHandler(handler)),
       variantFor: (entry) => shell.variantFor(entry),
       resolvedColumns: () => shell.resolvedColumns().map(toGridColumn),
       registerGridColumn: (column) =>

@@ -7,7 +7,16 @@
 import { mountThemePicker } from './page-theme.js';
 
 export type HarnessPageId =
-  'planner' | 'generic-demo' | 'editing-and-data' | 'hierarchy-and-timeline' | 'performance';
+  | 'planner'
+  | 'generic-demo'
+  | 'editing-and-data'
+  | 'hierarchy-and-timeline'
+  | 'planned-vs-actual'
+  | 'performance'
+  | 'related-to'
+  | 'dependencies'
+  | 'scheduling'
+  | 'critical-path';
 
 interface HarnessPage {
   readonly id: HarnessPageId;
@@ -20,7 +29,12 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'generic-demo', label: 'Generic demo', file: 'generic.html' },
   { id: 'editing-and-data', label: 'Editing & data', file: 'editing-and-data.html' },
   { id: 'hierarchy-and-timeline', label: 'Hierarchy & timeline', file: 'hierarchy-and-timeline.html' },
+  { id: 'planned-vs-actual', label: 'Planned vs actual', file: 'planned-vs-actual.html' },
   { id: 'performance', label: 'Performance', file: 'performance.html' },
+  { id: 'related-to', label: 'Related to', file: 'related-to.html' },
+  { id: 'dependencies', label: 'Dependencies', file: 'dependencies.html' },
+  { id: 'scheduling', label: 'Scheduling', file: 'scheduling.html' },
+  { id: 'critical-path', label: 'Critical path', file: 'critical-path.html' },
 ];
 
 /** A build can ship some of the demo pages. `VITE_HARNESS_PAGES=generic-demo,performance` keeps

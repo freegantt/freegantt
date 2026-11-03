@@ -121,7 +121,9 @@ describe('Keymap.resolve (D-S5-7)', () => {
     const { registry, ctx, ran } = makeCommands();
     const keymap = new Keymap<unknown>(registry, () => ctx);
     keymap.register({ chord: 'Escape', command: 'freegantt.a' });
-    const removeHandler = keymap.registerHandler('Escape', () => ran.push('handler'));
+    const removeHandler = keymap.registerHandler('Escape', () => {
+      ran.push('handler');
+    });
 
     const handled = keymap.resolve(event({ key: 'Escape' }));
 
@@ -135,13 +137,44 @@ describe('Keymap.resolve (D-S5-7)', () => {
     expect(ran).toEqual(['handler', 'a']);
   });
 
+  it('a handler that returns false declines, and the next older binding takes the key', () => {
+    const { registry, ctx, ran } = makeCommands();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
+    keymap.register({ chord: 'Delete', command: 'freegantt.a' });
+    keymap.registerHandler('Delete', () => {
+      ran.push('declined');
+      return false;
+    });
+
+    const handled = keymap.resolve(event({ key: 'Delete' }));
+
+    expect(handled).toBe(true);
+    expect(ran).toEqual(['declined', 'a']);
+  });
+
+  it('a handler that declines and has no older binding leaves the key unhandled', () => {
+    const { registry, ctx } = makeCommands();
+    const keymap = new Keymap<unknown>(registry, () => ctx);
+    keymap.registerHandler('Delete', () => false);
+
+    expect(keymap.resolve(event({ key: 'Delete' }))).toBe(false);
+  });
+
   it('registerHandler is gated by the same editable-target/IME rule as a command binding', () => {
     const { registry, ctx } = makeCommands();
     const keymap = new Keymap<unknown>(registry, () => ctx);
     const fired: string[] = [];
     // Registered oldest-first so the newest-first resolve order checks 'default' before 'captures'.
-    keymap.registerHandler('Escape', () => fired.push('captures'), { captureInEditable: true });
-    keymap.registerHandler('Escape', () => fired.push('default'));
+    keymap.registerHandler(
+      'Escape',
+      () => {
+        fired.push('captures');
+      },
+      { captureInEditable: true },
+    );
+    keymap.registerHandler('Escape', () => {
+      fired.push('default');
+    });
     const input = document.createElement('input');
 
     // Editable target, not composing: the default handler is skipped (same `isEditableTarget`

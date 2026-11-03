@@ -124,17 +124,18 @@ function fieldsWrittenBy(edit: ProposedEdit): ReadonlySet<string> {
 }
 
 /** I4: the extension hook may not propose a Field the transaction body already proposed on the same
- *  Entry (#232). `start`/`end` are ordinary Fields here (ADR 0026 retired the Segment that used to
+ *  Entry (#232), unless its result marks the Field as an override (ADR 0042). `start`/`end` are ordinary Fields here (ADR 0026 retired the Segment that used to
  *  make them a derived pair), so `fieldsWrittenBy` alone — no envelope carve-out — already answers
  *  what each side authored. */
-function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extenderEdits: ProposedEdits): void {
+function guardExtensionHookDoesNotOverwriteBody(proposed: ProposedEdits, extender: EditsReading): void {
   if (!isDevMode()) return;
-  for (const [id, edit] of extenderEdits) {
+  for (const [id, edit] of extender.stored) {
     const bodyEdit = proposed.get(id);
     if (!bodyEdit) continue;
     const bodyFields = fieldsWrittenBy(bodyEdit);
+    const overridden = extender.overrides.get(id);
     for (const field of fieldsWrittenBy(edit)) {
-      if (bodyFields.has(field)) {
+      if (bodyFields.has(field) && !overridden?.has(field)) {
         throw new Error(
           `buildCommitChangeSet: the extension hook proposed field "${field}" on entry "${String(id)}", ` +
             'which the transaction body already proposed (I4)',
@@ -209,6 +210,9 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
   const removedEntities = data.entries.pendingRemoved();
   const added = addedEntities.map((row) => row.entity);
   const removed = removedEntities.map((row) => row.entity);
+  // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
+  // Read before the hook, so an extender sees which store rows this transaction changes.
+  const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
   // The extender's cascade is read against the state its own edit lands on — committed entries
   // overlaid with this transaction's body edits, plus the entries this transaction itself adds — not
   // against `byId` alone (#212 R2 fix-plan review, finding A). `byId` is pre-transaction: an entry the
@@ -217,6 +221,7 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
   // `writeTarget` are built — the commit path and the preview path (`gesture-pipeline.ts`) both call
   // it, so neither can answer those two questions differently.
   const editRequest = createEditRequest({
+    isPreview: false,
     entries: byId,
     proposed,
     added,
@@ -225,10 +230,11 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
     committedChildIds: data.entries.committedChildIds(),
     fields: data.fields,
     lockRule: data.lockRule,
+    storeRows: pluginRows,
   });
   const extenderReading = data.extraEditsReadingFor(editRequest);
   const extenderEdits: ProposedEdits = extenderReading.stored;
-  guardExtensionHookDoesNotOverwriteBody(proposed, extenderEdits);
+  guardExtensionHookDoesNotOverwriteBody(proposed, extenderReading);
 
   // One merge of the body's and the extender's edits, diffed once below (#232) — two separate diffs
   // of `proposed` and `extenderEdits` used to let one field reach the `ChangeSet` twice, with two
@@ -291,9 +297,6 @@ export function buildCommitChangeSet(data: CommitChangeSetInput, origin: ChangeO
   // onto that entity instead, the same reason the sibling rank below folds onto the entity too.
   const rollupUpdatedForOthers = rollupUpdated.filter((row) => !addedIds.has(row.id));
   const rolledUpEntitiesForFold = foldRollUpRowsOntoAdded(addedEntitiesForFold, rollupUpdated, data.fields);
-
-  // Removing an entry removes its plugin rows in the same changeset, so the removed ids go in here.
-  const pluginRows = data.pluginStores.pendingRows(removed.map((entry) => entry.id));
 
   // The renumber pass (ADR 0034): every write this transaction staged replays here, once, over the
   // committed groups it touched — after the Rollup, so a reparent's own group change is already

@@ -311,6 +311,10 @@ ${DARK_COLOR_TOKENS}
    width: --fg-grid-content-width (#126) — falls back to 100% (today's layout, unchanged)
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
+/* The grid header is one row tall across every band. A divider between bands would run through the
+   column names, so the bands draw none and the header draws the one divider at its bottom edge. */
+.fg-grid-spacer .fg-band { border-bottom-color: transparent; }
+.fg-grid-spacer .fg-grid-header { box-shadow: inset 0 -1px 0 var(--fg-header-divider-color); }
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: ${INTERNAL_Z.paneChrome}; color: var(--fg-header-text); }
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
@@ -448,7 +452,23 @@ ${DARK_COLOR_TOKENS}
    an opaque bar. */
 .fg-time-shading { background: var(--fg-time-shading-fill); }
 .fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
+/* A row span's text sits at the span's end, inside its box. Text longer than the span is clipped. */
+.fg-row-span { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
 .fg-bars { position: relative; }
+/* Connectors: one zero-height layer below .fg-bars and one above, each with one svg sized to the content.
+   The upper layer repeats only the selected line and the label text. The layer
+   and svg ignore the pointer, so a bar under a line keeps its gestures. Only the stroke of a line takes
+   the pointer, so a click on a line selects it and a click beside it reaches what lies below. */
+.fg-connectors { position: relative; pointer-events: none; }
+.fg-connectors-svg { position: absolute; top: 0; left: 0; overflow: hidden; }
+.fg-connector.fg-connector-copy { pointer-events: none; }
+.fg-connector-arrow { fill: var(--fg-connector-arrow-color, context-stroke); }
+.fg-connector { fill: none; stroke: currentColor; stroke-width: 1.5px; pointer-events: stroke; cursor: pointer; }
+.fg-connector:focus { outline: none; }
+.fg-connector-text { fill: currentColor; font-size: 11px; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--fg-pane-bg); stroke-width: 3px; pointer-events: none; user-select: none; }
+.fg-connector[data-flag~="selected"], .fg-connector:focus-visible { stroke: var(--fg-selection-color); stroke-width: 3px; }
+.fg-connector[data-flag~="inactive"] { stroke-dasharray: 4 3; opacity: 0.6; }
+.fg-connector[data-flag~="cycle"] { stroke: var(--fg-warn); }
 /* touch-action: none on the bar itself, not just the resize handles — a touch drag must
    never fight the browser's own pan/scroll gesture over the same surface. */
 /* T1-1: the colour-mix lives on the bar itself, not .fg-container — a renderer's own
@@ -468,8 +488,9 @@ ${DARK_COLOR_TOKENS}
 /* data-label='outside' (render/dom/index.ts's own resolveBarLabelPlacement) — the label leaves the
    bar's own box and paints on the pane beside it, in the pane's own ink rather than the bar fill's
    label colour, with no ellipsis: resolveBarLabelPlacement only ever chooses 'outside' when the full
-   label already fits past the bar's right edge. */
-.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); }
+   label already fits past the bar's right edge. Its halo in the pane color keeps a connector line
+   behind it from cutting the text. */
+.fg-bar[data-label='outside'] .fg-bar-label { position: absolute; left: 100%; top: 50%; transform: translateY(-50%); padding-inline-start: var(--fg-bar-label-gap, ${DEFAULT_BAR_LABEL_GAP_PX}px); padding-inline-end: 0; overflow: visible; text-overflow: clip; color: var(--fg-bar-label-outside-color); text-shadow: 0 0 1px var(--fg-bar-label-halo-color), 1px 0 0 var(--fg-bar-label-halo-color), -1px 0 0 var(--fg-bar-label-halo-color), 0 1px 0 var(--fg-bar-label-halo-color), 0 -1px 0 var(--fg-bar-label-halo-color), 1px 1px 0 var(--fg-bar-label-halo-color), -1px -1px 0 var(--fg-bar-label-halo-color), 1px -1px 0 var(--fg-bar-label-halo-color), -1px 1px 0 var(--fg-bar-label-halo-color); }
 /* What contains an 'inside' label too wide for its own bar? This clip, and only for that one case
    (#436). The clip keys on data-label rather than sitting on .fg-bar, because the attribute is
    exactly the set of bars whose one child the library placed: 'outside' is the child meant to leave
@@ -537,6 +558,24 @@ ${DARK_COLOR_TOKENS}
 /* One shared pair of handle nodes, moved onto the resizable bar's edges by applyState rather
    than one pair per bar. Parked with the hidden DOM property (render/dom/index.ts), which the UA's
    own [hidden] { display: none } default already covers. */
+/* A connector port is a wide hit box centered on a bar edge, so it is easy to grab. The dot sits in
+   the outer half, clear of the bar body. The resize handle (z-index above) wins the middle 8px of
+   the box. A coarse pointer, like a finger, gets a wider box. Shown on the hovered bar, and on every
+   connectable bar during a drag, only while a plugin handles the connect drag. */
+/* A port sits outside the bar, past the resize handle, so a grab on the dot connects and never resizes. */
+.fg-container { --fg-bar-label-halo-color: var(--fg-pane-bg); --fg-connector-arrow-size: 8px; --fg-connector-port-width: 20px; --fg-connector-port-coarse-width: 32px; --fg-connector-port-gap: 4px; }
+.fg-connector-port { --fg-port-width: var(--fg-connector-port-width); position: absolute; top: 0; left: 0; width: var(--fg-port-width); box-sizing: border-box; padding: 0 2px; cursor: crosshair; touch-action: none; display: flex; align-items: center; }
+@media (pointer: coarse) { .fg-connector-port { --fg-port-width: var(--fg-connector-port-coarse-width); } }
+.fg-connector-port[data-edge="start"] { justify-content: flex-end; margin-left: calc(-1 * (var(--fg-port-width) + var(--fg-connector-port-gap))); }
+.fg-connector-port[data-edge="end"] { justify-content: flex-start; margin-left: var(--fg-connector-port-gap); }
+.fg-connector-port::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--fg-pane-bg); border: 1.5px solid var(--fg-bar-fill); box-sizing: border-box; }
+.fg-connector-port[hidden], .fg-connect-preview[hidden], .fg-connect-target[hidden] { display: none; }
+.fg-connector-port[data-active]::before { background: var(--fg-selection-color); transform: scale(1.4); }
+/* The bar a drop would join. It only outlines: the pointer passes through it. */
+.fg-connect-target { position: absolute; top: 0; left: 0; box-sizing: border-box; border: 2px solid var(--fg-selection-color); border-radius: 4px; pointer-events: none; }
+.fg-connect-preview { position: absolute; top: 0; left: 0; overflow: visible; pointer-events: none; color: var(--fg-selection-color); }
+.fg-connect-preview line { stroke: currentColor; stroke-width: 1.5px; stroke-dasharray: 4 3; }
+.fg-connect-preview[data-pending] { opacity: ${DEFAULT_PENDING_OPACITY}; }
 .fg-bar-handle { position: absolute; top: 0; left: -4px; width: 8px; cursor: ew-resize; touch-action: none; z-index: ${INTERNAL_Z.paneChrome}; }
 /* In flow, below the sticky header — the same origin .fg-bars and .fg-row-bands sit at. Absolute at
    the pane's own top-left instead, the sizer declared a scroll extent one header short of where the

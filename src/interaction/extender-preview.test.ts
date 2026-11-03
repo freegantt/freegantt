@@ -113,6 +113,7 @@ function buildShell(options: { extender?: EditExtender; shell?: Partial<GanttShe
           extraEditsFor: (draft) =>
             state.extraEditsFor(
               createEditRequest({
+                isPreview: true,
                 entries: state.entries.committedById(),
                 proposed: draft,
                 added: [],
@@ -212,6 +213,7 @@ describe('[S3-A4] extender preview', () => {
         extraEditsFor: (draft) =>
           built.state.extraEditsFor(
             createEditRequest({
+              isPreview: true,
               entries: built.state.entries.committedById(),
               proposed: draft,
               added: [],

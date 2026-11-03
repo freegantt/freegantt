@@ -23,8 +23,8 @@ import type {
   RowId,
   ClientPoint,
 } from '../../layout/index.js';
-import type { ColumnAlign, FrameColumn } from '../../layout/index.js';
-import type { RenderBackend, RenderSurfaces, InteractionState, HitResult } from '../backend.js';
+import type { ColumnAlign, ConnectorArrow, FrameColumn, FrameConnector } from '../../layout/index.js';
+import type { RenderBackend, RenderSurfaces, InteractionState, HitResult, RowHit } from '../backend.js';
 import {
   DEFAULT_DATE_LINE_LABEL_PLACEMENT,
   entryIdOfBar,
@@ -39,6 +39,10 @@ import type { TickLineAttachment } from './tick-lines.js';
 import { createTextRuler } from './text-ruler.js';
 import type { TextRuler } from './text-ruler.js';
 import { readPixelProperty } from './pixel-property.js';
+import { attachConnectors } from './connectors.js';
+import type { ConnectorsAttachment } from './connectors.js';
+import { attachConnectAffordance } from './connect-affordance.js';
+import type { ConnectAffordance } from './connect-affordance.js';
 import { attachDecorations } from './decorations.js';
 import type { DecorationsAttachment } from './decorations.js';
 import { KeyedLayer, NestedKeyedLayers } from './sync-keyed.js';
@@ -392,10 +396,17 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   let dateLines: DateLineAttachment | undefined;
   let tickLines: TickLineAttachment | undefined;
   let decorations: DecorationsAttachment | undefined;
+  let connectors: ConnectorsAttachment | undefined;
+  /** What the last `sync` told the connector layer besides the connectors, so a drag preview repaints
+   *  the lines on the same surface. */
+  let connectorSurface:
+    { arrow: ConnectorArrow; contentWidth: number; contentHeight: number; paneHeight: number } | undefined;
   // One shared handle pair, created once at mount() and moved/parked by applyState — never
   // one pair per bar.
   let startHandle: HTMLElement | undefined;
   let endHandle: HTMLElement | undefined;
+  // The connect gesture's ports and preview line. Built when the first connectable bar is hovered.
+  let connectAffordance: ConnectAffordance | undefined;
   // S3.8: Cursor line singletons, created once at mount() and moved/parked by applyState.
   let cursorLine: HTMLElement | undefined;
   let cursorLineLabel: HTMLElement | undefined;
@@ -445,6 +456,9 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   /** S3.3: bars this backend currently holds off their committed transform for a drag
    *  preview — so the next `applyState` knows which ones to park back when they drop out of the set. */
   let paintedPreview: ReadonlySet<BarId> = new Set();
+  /** The preview offsets each previewed bar wears now. The resize handles and the connect ports read
+   *  them, so they sit on the preview edge of their bar and not on its committed edge. */
+  let previewByBarId: ReadonlyMap<BarId, BarPreview> = new Map();
   /** S3.6: split of `paintedPreview` by `BarPreview.extra` — `dragging` is the caller's own
    *  gesture, `ghost` is an installed extension hook's cascade. Tracked separately from
    *  `paintedPreview` (which drives the transform, not the token) so a `data-state` repaint touches
@@ -574,6 +588,32 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     return a.start === b.start && a.end === b.end;
   }
 
+  /** The box a bar shows now: its committed geometry plus the offsets of its drag preview. */
+  function previewedBox(id: BarId): HandleGeom | undefined {
+    const geom = barGeomByBarId.get(id);
+    const preview = previewByBarId.get(id);
+    if (geom === undefined || preview === undefined) return geom;
+    return {
+      x: geom.x + preview.dx,
+      y: geom.y + preview.dy,
+      width: geom.width + preview.dWidth,
+      height: geom.height,
+    };
+  }
+
+  /** Puts each painted handle on the edge its bar shows now. Writes the transform only (I5). */
+  function placeResizeHandles(): void {
+    if (!startHandle || !endHandle || paintedHandleBars === undefined) return;
+    const startBox = previewedBox(paintedHandleBars.start);
+    const endBox = previewedBox(paintedHandleBars.end);
+    if (startBox !== undefined && !startHandle.hidden) {
+      startHandle.style.transform = `translate(${startBox.x}px, ${startBox.y}px)`;
+    }
+    if (endBox !== undefined && !endHandle.hidden) {
+      endHandle.style.transform = `translate(${endBox.x + endBox.width}px, ${endBox.y}px)`;
+    }
+  }
+
   /** Moves the shared handle pair onto `bars`' own committed geometry, or parks both when
    *  it is undefined. Each handle reads its own bar: the start handle sits on the leftmost bar
    *  and the end handle on the rightmost (#200). `hidden` is a DOM property write, not
@@ -609,6 +649,22 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       endHandle.style.height = `${endGeom.height}px`;
     }
     paintedHandleBars = bars;
+    placeResizeHandles();
+  }
+
+  /** Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
+   *  through to the grid pane — a row click selects the same way a bar click does. The hit names
+   *  the row itself (#185): which Entries that row owns is the caller's question, and a row that
+   *  owns several used to lose all but the first to a made-up Bar id. A twisty click is not a
+   *  row hit at all: collapse stays on the twisty, never selection, and a miss there still counts
+   *  as a genuine grid miss (no clear). */
+  function rowHitUnder(el: Element | null): RowHit | null {
+    if (el === null || el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
+    const row = el.closest<HTMLElement>(`.${ROW_CLASS}`);
+    if (!row || !gridLayer?.contains(row)) return null;
+    const id = rowIdFromDataset(row.dataset[ROW_ID_KEY]);
+    // A header row carries no Entry, so it is never selectable — `entriesForRow` answers none.
+    return id === undefined ? null : { kind: 'row', rowId: id };
   }
 
   /** S3.8: parks the Cursor line when `x` is undefined; otherwise translates the stroke
@@ -799,6 +855,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     });
     next.forEach((preview, id) => applyBarPreview(id, preview));
     paintedPreview = new Set(next.keys());
+    previewByBarId = next;
+    placeResizeHandles();
 
     // S3.6: `dragging` (the caller's own draft) vs `ghost` (an installed extension hook's
     // `extra`, U7) — same diff-and-touch-only-changed shape `applyState`'s selected/pending sets use.
@@ -1456,6 +1514,10 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // selected-row band, and time shading, and under every bar — the design's own paint order
       // (`rowBands` -> `decorations` -> `tickLines` -> `bars`).
       tickLines = attachTickLines(timelineHost, barLayer);
+      // Below the bars, so a line passes behind the bars it crosses. The selected line and the label text
+      // sit in a second layer above the bars. Both layers take no pointer events.
+      connectors = attachConnectors(timelineHost, barLayer);
+      connectAffordance = attachConnectAffordance(barLayer, previewedBox);
       dateLines = attachDateLines(timelineHost, headerLayer, contentSizer);
       timelineHost.append(cursorLine);
       headerLayer.append(cursorLineLabel);
@@ -1524,6 +1586,19 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         frame.contentHeight,
         frame.visible.height,
       );
+      connectorSurface = {
+        arrow: frame.connectorArrow,
+        contentWidth: frame.contentWidth,
+        contentHeight: frame.contentHeight,
+        paneHeight: frame.visible.height,
+      };
+      connectors?.sync(
+        frame.connectors,
+        connectorSurface.arrow,
+        connectorSurface.contentWidth,
+        connectorSurface.contentHeight,
+        connectorSurface.paneHeight,
+      );
       cursorLineHeight = Math.max(frame.contentHeight, frame.visible.height);
       if (cursorLine && !cursorLine.hidden) cursorLine.style.height = `${cursorLineHeight}px`;
       if (gridLayer) {
@@ -1541,6 +1616,11 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const y = Math.max(0, frame.contentHeight - 1);
         contentSizer.style.transform = `translate(${x}px, ${y}px)`;
       }
+    },
+    paintConnectors(next: readonly FrameConnector[]) {
+      if (connectorSurface === undefined) return;
+      const { arrow, contentWidth, contentHeight, paneHeight } = connectorSurface;
+      connectors?.sync(next, arrow, contentWidth, contentHeight, paneHeight);
     },
     applyState(state: InteractionState) {
       // Diff against what was last painted, touch only the bars whose token set
@@ -1640,6 +1720,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintColumnResizePreview(state.columnResizePreview);
       paintColumnReorderPreview(state.columnReorderPreview);
       paintRowDrop(state.rowDrop);
+      connectAffordance?.paint(state.connectableBarId, state.connectDraft);
     },
     hitTest(at: ClientPoint): HitResult | null {
       // "The bars array is the hit index; DOM backends get hit-testing from event delegation"
@@ -1649,6 +1730,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       // S3.4: the shared handle pair sits above the bar layer in paint order, so a hit on a
       // handle is checked first — `paintedHandleBars` names the bar each handle sits on (
       // #200), a parked (hidden) handle is never returned by elementFromPoint.
+      const port = connectAffordance?.portAt(el instanceof Element ? el : null);
+      if (port !== undefined) return { kind: 'bar', barId: port.barId, port: port.edge };
       const handle = el instanceof Element ? el.closest<HTMLElement>(`.${BAR_HANDLE_CLASS}`) : null;
       if (handle && paintedHandleBars !== undefined) {
         const edge = handle.dataset['edge'];
@@ -1661,20 +1744,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const id = barIdFromDataset(bar.dataset[BAR_ID_KEY]);
         return id ? { kind: 'bar', barId: id } : null;
       }
-      // Bug hunt (S5 fixes, "grid row highlight and row click"): a miss on the bar layer falls
-      // through to the grid pane — a row click selects the same way a bar click does. The hit names
-      // the row itself (#185): which Entries that row owns is the caller's question, and a row that
-      // owns several used to lose all but the first to a made-up Bar id. A twisty click is not a
-      // row hit at all: collapse stays on the twisty, never selection, and a miss there still counts
-      // as a genuine grid miss (no clear).
-      if (el instanceof Element && el.closest(`.${ROW_TWISTY_CLASS}`)) return null;
-      const row = el instanceof Element ? el.closest<HTMLElement>(`.${ROW_CLASS}`) : null;
-      if (row && gridLayer?.contains(row)) {
-        const id = rowIdFromDataset(row.dataset[ROW_ID_KEY]);
-        // A header row carries no Entry, so it is never selectable — `entriesForRow` answers none.
-        if (id !== undefined) return { kind: 'row', rowId: id };
-      }
-      return null;
+      return rowHitUnder(el);
     },
     destroy() {
       dateLines?.destroy();
@@ -1683,6 +1753,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       tickLines = undefined;
       decorations?.destroy();
       decorations = undefined;
+      connectors?.destroy();
+      connectors = undefined;
       gridLayer?.replaceChildren();
       timelineHost?.replaceChildren();
       bandLayer.clear();
@@ -1701,6 +1773,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedHandleBars = undefined;
       paintedMovable = undefined;
       paintedPreview = new Set();
+      previewByBarId = new Map();
       paintedDragging = new Set();
       paintedGhost = new Set();
       paintedSelectedEntryIds = new Set();
@@ -1720,6 +1793,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       contentSizer = undefined;
       startHandle = undefined;
       endHandle = undefined;
+      connectAffordance?.destroy();
+      connectAffordance = undefined;
       cursorLine = undefined;
       cursorLineLabel = undefined;
       cursorLineHeight = 0;

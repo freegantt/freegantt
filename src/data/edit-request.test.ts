@@ -51,6 +51,7 @@ function requestOver(
   } = {},
 ): ReturnType<typeof createEditRequest> {
   return createEditRequest({
+    isPreview: false,
     entries,
     proposed: over.proposed ?? (new Map() as ProposedEdits),
     added: over.added ?? [],
@@ -85,6 +86,7 @@ describe('createEditRequest', () => {
 
     const proposed: ProposedEdits = new Map([[entryId('a'), proposedEdit({ start: 10 })]]);
     const request = createEditRequest({
+      isPreview: false,
       entries: roster,
       proposed,
       added: [],
@@ -111,6 +113,7 @@ describe('createEditRequest', () => {
     };
 
     const request = createEditRequest({
+      isPreview: false,
       entries: roster,
       proposed: new Map() as ProposedEdits,
       added: [],
@@ -196,6 +199,7 @@ describe('createEditRequest editableOf (#473)', () => {
 
   it("answers a plugin's own per-entry lock over the Field's own editable", () => {
     const request = createEditRequest({
+      isPreview: false,
       entries: depotTree(),
       proposed: new Map() as ProposedEdits,
       added: [],
@@ -213,6 +217,7 @@ describe('createEditRequest editableOf (#473)', () => {
   it('answers for an entry this same transaction adds, not only a committed one', () => {
     const added = entry('van-2', 0, 100, 'depot');
     const request = createEditRequest({
+      isPreview: false,
       entries: depotTree(),
       proposed: new Map() as ProposedEdits,
       added: [added],
@@ -235,6 +240,7 @@ describe('createEditRequest editableOf (#473)', () => {
   it('answers never for a compute Field, even under a lock rule that opens everything', () => {
     const opensEverything: FieldLockRule = () => 'anywhere';
     const request = createEditRequest({
+      isPreview: false,
       entries: depotTree(),
       proposed: new Map() as ProposedEdits,
       added: [],
@@ -260,6 +266,7 @@ describe('createEditRequest editableOf (#473)', () => {
     const subtreeLocked: FieldLockRule = (query, field) =>
       query.isDescendantOf('depot') ? 'never' : fieldEditableRule(costLookup.get)(query, field);
     const request = createEditRequest({
+      isPreview: false,
       entries,
       proposed: new Map() as ProposedEdits,
       added: [newVan1],

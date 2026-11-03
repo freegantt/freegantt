@@ -63,6 +63,12 @@ not a consumer's to set" below for the four channels.
 | `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired — see below) |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. A Bar that carries its own `box` skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
+| `--fg-connector-arrow-size` | `8px` | Edge of the connector arrowhead. The Gantt reads it when the arrowhead first shows, so set it before `connectorArrow` is `'end'`. |
+| `--fg-connector-arrow-color` | `context-stroke` | Fill of the connector arrowhead. By default it follows the line, so a selected or cycle connector gets its own arrowhead colour. |
+| `--fg-connector-port-width` | `20px` | `.fg-connector-port` width. The box sits outside the bar, past the resize handle, and the dot sits at its bar side |
+| `--fg-port-width` | `var(--fg-connector-port-coarse-width)` | The width one port uses now. The sheet sets it from `--fg-connector-port-width`, or from the coarse width on a coarse pointer. Set the two tokens above, not this one. |
+| `--fg-connector-port-gap` | `4px` | The space between the bar edge and its port. It keeps the resize handle free; set it to half the handle width |
+| `--fg-connector-port-coarse-width` | `32px` | `.fg-connector-port` width on a coarse pointer, such as a finger |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row |
 | `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one |
@@ -97,6 +103,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-bar-opacity` | `1` | — (not theme-dependent) | `.fg-bar`'s `--fg-bar-fill-painted` mix, below |
 | `--fg-bar-label-color` | `#FFFFFF` | `#16181D` | `.fg-bar` text |
 | `--fg-bar-label-outside-color` | `#5E5A53` | `#A8A49B` | `.fg-bar[data-label='outside'] .fg-bar-label` — a label pushed past the bar's own edge paints on the pane, so it takes the pane's own ink family instead of `--fg-bar-label-color` |
+| `--fg-bar-label-halo-color` | `var(--fg-pane-bg)` | — | The halo around a label outside its bar. A connector line behind the label never cuts the text. Set it to `transparent` for no halo |
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#C93820` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
 | `--fg-date-line-label-color` | `#FFFFFF` | `#1B1D22` | `.fg-date-line-label`, `.fg-cursor-line-label` text — the chip's own ink, paired with `--fg-date-line-color` as its fill |
@@ -264,6 +271,11 @@ rename.
 | `.fg-bar` | One Bar. Every look wears this class, diamonds included. |
 | `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
+| `.fg-connector-copy` | The copy of the selected connector above the bars. It takes no pointer events. |
+| `.fg-connector-arrow` | The arrowhead shape inside the connector layer. `connectorArrow: 'none'` removes it. |
+| `.fg-connector-port` | One connector port on a bar edge. It shows on the hovered bar, and on every connectable bar during a drag, while a plugin handles the connect drag. It carries `data-edge`, and `data-active` while a drop here would connect. |
+| `.fg-connect-target` | The outline on the bar a connect drop would join. It only outlines: the pointer passes through it. |
+| `.fg-connect-preview` | The line a connect drag draws from its source edge to the pointer. It carries `data-pending` while an async `beforeConnect` handler holds the drop. |
 | `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-bar-diamond` | `diamond()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-date-line` | A Date line stroke, Today included. |
@@ -274,8 +286,13 @@ rename.
 | `.fg-drop-note` | The note beside the pointer that says why a drag refuses its drop. Hidden except while a refused row sits under the pointer. |
 | `.fg-decorations-under` | Decoration layer below the bars. |
 | `.fg-decorations-over` | Decoration layer above the bars. |
+| `.fg-connectors` | Layer above the bars that holds the connector SVG. It ignores the pointer. |
+| `.fg-connectors-svg` | The SVG box, sized to the content. |
+| `.fg-connector` | One connector path. It carries `data-connector-id` and `data-flag`. A connector with a label takes the pointer on its stroke and takes focus. |
+| `.fg-connector-text` | The label text of a connector whose provider asks for it. It is `aria-hidden`. |
 | `.fg-range-band` | A range decoration (weekend shading, and the like). |
 | `.fg-row-stripe` | A row-height decoration stripe. |
+| `.fg-row-span` | A decoration box inside one row, between two Instants. It paints its optional `text` at its end. |
 | `.fg-time-shading` | `timeShading()`'s own band, beside `.fg-range-band` — the Part `--fg-time-shading-fill` paints. |
 | `.fg-popup` | Shared popup surface for tooltips, the context menu, and the reorder wash. |
 | `.fg-tooltip` | `tooltips()` content, inside `.fg-popup`. |
@@ -291,18 +308,16 @@ rename.
 
 ### `data-flag`
 
-`data-flag` is a space-separated token list. It has two producers: `BarFlags`/`LinkFlags` and the
+`data-flag` is a space-separated token list. It has two producers: `BarFlags`/`ConnectorFlags` and the
 Today line wrapper (`render/dom/date-line.ts`), which writes `today` independently of the
-`BarFlags`/`LinkFlags` key set. `BAR_FLAG_KEYS` (`src/layout/frame.ts`, a public export) names the
+`BarFlags`/`ConnectorFlags` key set. `BAR_FLAG_KEYS` (`src/layout/frame.ts`, a public export) names the
 closed key set for the first producer's bar side; `LINK_FLAG_KEYS` is the same list for the link
 side but stays internal — see the note below. A Vitest guard (`test/guards/flag-selectors.test.ts`)
 fails if a key here has no row below, or a row here names a key the list does not.
 
 `.fg-bar` paints `data-flag` today; every key stays false until the scheduling plugin sets one
-true. `.fg-link` paints nothing yet — no code under `render/dom` reads `GeometryFrame.links` — so
-its two rows name the vocabulary that element will carry once the scheduling plugin adds it, not a
-selector a stylesheet can match now (this is why `LINK_FLAG_KEYS` is not exported from `api/`:
-nothing yet paints a `.fg-link` for a consumer's rule to match). `.fg-date-line` and
+true. `.fg-connector` paints `data-flag` from the flags a connector provider states. The
+`ConnectorFlags` key set is `CONNECTOR_FLAG_KEYS`, a public export. `.fg-date-line` and
 `.fg-date-line-label` paint `data-flag="today"` now, on every frame where the Today line shows —
 but the shipped stylesheet carries no rule against either selector; Today gets no palette of its
 own. Styling Today apart from an ordinary Date line is a rule the consumer writes, against
@@ -313,8 +328,9 @@ none out of the box. See "Date lines and the Today line" below for the worked ex
 |---|---|
 | `.fg-bar[data-flag~="conflict"]` | the scheduling plugin |
 | `.fg-bar[data-flag~="cycle"]` | the scheduling plugin |
-| `.fg-link[data-flag~="inactive"]` | the scheduling plugin |
-| `.fg-link[data-flag~="cycle"]` | the scheduling plugin |
+| `.fg-connector[data-flag~="inactive"]` | the connector provider |
+| `.fg-connector[data-flag~="cycle"]` | the connector provider |
+| `.fg-connector[data-flag~="selected"]` | the connector provider |
 | `.fg-date-line[data-flag~="today"]` | the library (Today line) |
 | `.fg-date-line-label[data-flag~="today"]` | the library (Today line) |
 

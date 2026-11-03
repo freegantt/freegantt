@@ -12,6 +12,8 @@ export type {
   PluginStoreView,
   ExtenderWrapper,
   RemovalExtenderWrapper,
+  EditRowWriter,
+  StoreRowWrite,
   HierarchySource,
   HierarchySourceWrapper,
   FieldLockQuery,
@@ -27,7 +29,7 @@ export type {
   RemoveRuleWrapper,
 } from './dataset-plugin.js';
 // #197: what that wrapper composes with — the one legal merge of two extenders' writes.
-export { mergeEntryEdits } from './dataset-plugin.js';
+export { mergeEntryEdits, overridingProposed } from './dataset-plugin.js';
 // ADR 0026 retired the several-Segment case it names: the rigid move a plugin's cascade
 // writes honestly, for the one span an Entry has.
 export { moveEntryTo } from './dataset-plugin.js';
@@ -184,6 +186,8 @@ export type {
   EntryResize,
   EntryFieldEdit,
   EntryActivate,
+  ConnectEnds,
+  ConnectHandler,
 } from '../view/index.js';
 // S3: `Gantt.capabilities`'s own type and the per-gesture rule shape (`view/capability.ts`).
 // #256: `WriteRule` is the shape of `capabilities.edit`, which answers one cell rather than one
@@ -209,7 +213,7 @@ export type { GanttDom, DomTarget, PaneName, DomEventHandler, DomEventOptions } 
 // `RegisterKeyHandler` as a second argument, and a plugin author passes the same bound method it
 // already had: `ctx.interaction.registerKeyHandler`.
 export { createPopup } from '../extensions/popup.js';
-export type { RegisterKeyHandler, KeyEventLike } from '../extensions/keymap.js';
+export type { RegisterKeyHandler, KeyHandler, KeyEventLike } from '../extensions/keymap.js';
 export type {
   Popup,
   PopupOptions,
@@ -241,8 +245,37 @@ export type {
 // write one by hand for a calendar no builder covers.
 export { timeShading } from '../extensions/features/time-shading.js';
 export type { ShadingRule, CoverPredicate } from '../extensions/features/time-shading.js';
+// `entryDependencies()`: the first-party store for Dependencies (FS, SS, FF, SF, lag in days). It
+// draws a connector for each one and needs no scheduling plugin.
+export { entryDependencies, ENTRY_DEPENDENCIES_ID } from '../extensions/features/entry-dependencies.js';
+export type {
+  BeforeDependencyRemoveHandler,
+  Dependency,
+  DependencyEvents,
+  DependencyInput,
+  DependencyLag,
+  DependencyRemoval,
+  DependencyRemoveHandler,
+  DependencyType,
+  EntryDependencies,
+  EntryDependenciesOptions,
+} from '../extensions/features/entry-dependencies.js';
+// `scheduling()`: the first-party plugin that keeps Dependencies true. It needs `entryDependencies()`.
+// Without it, connectors draw and nothing moves.
+export { scheduling, SCHEDULING_ID } from '../extensions/features/scheduling.js';
+export type {
+  EditedDate,
+  EntryConstraint,
+  ScheduleDiagnosticsHandler,
+  Scheduling,
+  SchedulingOptions,
+} from '../extensions/features/scheduling.js';
 export { daysOfWeek, hours, dates, spans, notCovered } from '../extensions/features/time-shading-covers.js';
 export type { TimeCover, DayOfWeek } from '../extensions/features/time-shading-covers.js';
+// The working calendar: a pure value the scheduling plugin owns. `calendar.offTime()` is a `TimeCover`
+// by shape, so `timeShading([{ covers: calendar.offTime() }])` shades its days off.
+export { workingCalendar, InvalidWorkingCalendarError } from '../scheduling/index.js';
+export type { WorkingCalendar, WorkingCalendarOptions, OffTimeCover, Workday } from '../scheduling/index.js';
 // TimeScaleModel/ScrollAxis are layout/'s own — both are public, consumer-constructed objects
 // (D9), so this re-exports straight from their owning layer rather than laundering them through
 // view/, which has no other interest in them (issue #91 §9-I).
@@ -314,6 +347,10 @@ export {
   UnknownCommandError,
   RendererAlreadyRegisteredError,
   CustomRowSourceNotFilterableOrSortableError,
+  UnsupportedLagUnitError,
+  DuplicateDependencyIdError,
+  DependencyStoreNotInstalledError,
+  SchedulingNotInstalledError,
 } from '../model/index.js';
 
 // model/ types the public surface re-exports. A consumer building entries or catching errors names these.
@@ -408,12 +445,21 @@ export type {
   BarSpanKind,
   PlannedRowKind,
 } from '../layout/index.js';
-// The closed `data-flag` key set behind `BarFlags` (#475) — a consumer writing a stylesheet
-// selector or a `barRenderer` reads the same list `flagTokens` iterates. `LINK_FLAG_KEYS` stays
-// layout-internal (NEW-3/#481 review): `GeometryFrame.links` always emits `[]` until links paint
-// (S7), no renderer reads it, and no stylesheet has a `.fg-link` rule, so a consumer styling
-// against it today would write CSS that matches nothing.
-export { BAR_FLAG_KEYS } from '../layout/index.js';
+// The closed `data-flag` key sets behind `BarFlags` (#475) and `ConnectorFlags` — a consumer writing a
+// stylesheet selector or a `barRenderer` reads the same lists the renderer iterates.
+export { BAR_FLAG_KEYS, CONNECTOR_FLAG_KEYS } from '../layout/index.js';
+// A connector provider's own vocabulary — a plugin author writes
+// `ctx.view.registerConnector(() => [...])` against these alone.
+export type {
+  ConnectorEdge,
+  ConnectorEnd,
+  ConnectorFlags,
+  ConnectorInput,
+  ConnectorProvider,
+  ConnectorRouting,
+  ConnectorArrow,
+} from '../layout/index.js';
+
 // S5.6: a decoration provider's own vocabulary — a plugin author writes `ctx.view
 // .registerDecoration('underBars', (ctx) => [...])` against these alone. `RangeBand`/`RowStripe`
 // are the same pixel-resolved shapes `GeometryFrame.underBars`/`.overBars` carry.
@@ -424,6 +470,7 @@ export type {
   DecorationInput,
   RangeBand,
   RowStripe,
+  RowSpan,
 } from '../layout/index.js';
 // ADR 0018: `EntryVariant.bars`'s own vocabulary — a plugin author naming `BarProducer`
 // explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
@@ -519,3 +566,34 @@ export type {
 // that takes a `ZonedTime` rather than reading `ctx.time`/`dataset.time` inline. `PlainParts` rides
 // along: `ZonedTime.toPlain`/`.fromPlain` both name it.
 export type { ZonedTime, PlainParts } from '../time/index.js';
+
+// The pure propagation engine. `schedule()` takes plain data and answers a patch plus
+// diagnostics, so a caller can use it with no plugin installed. The scheduling plugin calls it
+// from its edit extender.
+export { schedule, calculateFloat, findDrivingPath, defaultPolicy } from '../scheduling/index.js';
+export type {
+  SchedulingPolicy,
+  EditResolution,
+  ScheduleRuleKind,
+  ScheduleRequest,
+  ScheduleDependency,
+  ScheduleCalendar,
+  ScheduleConstraint,
+  ScheduleConstraintKind,
+  ScheduleDependencyType,
+  FloatRequest,
+  FloatResult,
+  EntryFloat,
+  SuccessorMoves,
+  ScheduleEntry,
+  ScheduleField,
+  ProposedEntryDates,
+  ScheduleResult,
+  ScheduleChange,
+  ScheduleDiagnostic,
+  CycleDiagnostic,
+  BlockedMoveDiagnostic,
+  ConstraintViolationDiagnostic,
+  BlockReason,
+  InvalidDependencyDiagnostic,
+} from '../scheduling/index.js';

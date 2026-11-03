@@ -109,6 +109,18 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       { label: 'docs/08 — A bar is an Entry', href: BAR_IS_AN_ENTRY },
     ],
   },
+  'planned-vs-actual': {
+    features: [
+      'A planned span under each actual bar, drawn by a plugin that reads two consumer Fields',
+      'The span sits on the underBars layer, takes no clicks, and hides from screen readers',
+    ],
+    config: [
+      "fields: [{ key: 'plannedStart' }, { key: 'plannedEnd' }]",
+      "ctx.view.registerDecoration('underBars', ({ rows }) => rows.map(…))",
+      "{ kind: 'rowSpan', rowId, start, end, class }",
+    ],
+    specLinks: [],
+  },
   performance: {
     features: [
       '50,000 entries in one Dataset, with the load and first-paint times on the page',
@@ -119,6 +131,79 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
     config: [
       'new Dataset({ entries: fiftyThousandEntries })',
       'new Gantt({ container, dataset, scale, scroll: { x } })',
+    ],
+    specLinks: [],
+  },
+  'related-to': {
+    features: [
+      'A plugin that keeps its related Entries in a plugin store and draws a line between each pair',
+      'Drag from a connector port on one bar to a port on another bar to add a pair; one undo removes it',
+      'A beforeConnect handler that waits 600 ms holds the drop and the preview line (Escape ends the wait)',
+      'A locked Entry resolves the connect capability to false, so its bar shows no port',
+      'A line that stays drawn when one end, or both ends, scroll out of the window',
+      'Each line has an accessible name, and no line draws when no plugin registers a provider',
+    ],
+    config: [
+      'ctx.view.registerConnector(() => related.map((r) => ({ id, from, to })))',
+      "from: { entryId, edge: 'end' }, to: { entryId, edge: 'start' }",
+      'ctx.view.onConnect(({ from, to }) => relate(from, to))',
+      'capabilities: { connect: (entry) => (entry.read("locked") === true ? false : undefined) }',
+    ],
+    specLinks: [{ label: 'docs/10 — Styling and theming', href: STYLING_GUIDE }],
+  },
+  dependencies: {
+    features: [
+      'One plugin stores the Dependencies: FS, SS, FF and SF, with a lag in days (one is negative)',
+      'The Gantt draws a connector for each Dependency, named "<from> → <to>" for a screen reader',
+      'Replace the whole set: scroll, zoom and collapsed groups stay as they are',
+      'Remove an Entry and every Dependency that names it goes too, in the same undo step',
+      'Drag from a port on one bar to a port on another: end→start adds FS, start→start SS, end→end FF, start→end SF',
+      'A new Dependency pushes a successor that starts too early; one undo removes the line and puts the bar back',
+      'Click a connector, or Tab to one, to select it; click anywhere else to clear. The Entry selection stays as it is',
+      'Arrow keys move to the next or previous connector; Delete removes the Dependency, and one undo restores it',
+    ],
+    config: [
+      'dependencies.on("beforeDependencyRemove", ({ dependency }) => confirmDialog(dependency)) // return false to keep it',
+      'dependencies.on("dependencyRemove", ({ dependency }) => log(dependency.id))',
+      'entryDependencies({ labelField: "name", showLabels: true }) // draw "<from> → <to>" on each line',
+      'const dependencies = entryDependencies(); new Dataset({ entries, plugins: [dependencies, scheduling()] })',
+      'entryDependencies({ connectByDrag: false }) // an app that only shows Dependencies: no port, no drag',
+      "dependencies.replaceAll([{ id, fromId, toId, type: 'FS', lag: { value: -1, unit: 'day' } }])",
+      'dependencies.add(dependency) / dependencies.remove(id) / dependencies.all()',
+    ],
+    specLinks: [],
+  },
+  scheduling: {
+    features: [
+      'Drag a task later and its successors move; drag it earlier and they follow',
+      'One undo restores every task the drag moved',
+      'A Manual column toggles manuallyScheduled: the plugin never moves that task and reports the broken link',
+      'Drag a task before its predecessor ends: the Dependency wins and the task lands after it; the date stays as a floor',
+      'The constraint form sets "start no earlier than", "finish no later than" or "must start on" on one task: a floor moves a task with no Dependency later, a date wins over a Dependency, and a ceiling that a Dependency breaks shows a finding',
+      'A loop of Dependencies is listed by its members, and its connectors carry the cycle flag',
+      'One working calendar shades weekends and two holidays and drives the schedule: drag a predecessor so a successor crosses a holiday and it skips the shaded days',
+    ],
+    config: [
+      'new Dataset({ entries, plugins: [entryDependencies(), scheduling({ calendar, successorMoves: "pushAndPull" })] })',
+      "timeShading([{ covers: calendar.offTime() }]) // the same calendar object shades what scheduling() skips",
+      "gridColumns: ['name', 'start', 'end', { field: 'manuallyScheduled', toggle: true }]",
+      "scheduling.on('scheduleDiagnostics', (findings) => …) / scheduling.diagnostics()",
+      'scheduling.setConstraint(id, { kind: "mustStartOn", date }) / scheduling.constraintOf(id) / scheduling.clearConstraint(id)',
+    ],
+    specLinks: [],
+  },
+  'critical-path': {
+    features: [
+      'scheduling() writes a float (in days) and a critical flag on each task, in the same undo step as the edit that changed them',
+      'One variant rule paints the critical bars; core draws nothing for float',
+      'Drag a critical task later and every task after it stays critical; drag the short branch and it turns critical when its float runs out',
+      'Select a task and press Show driving path: the readout beside it shows the chain of predecessors that holds it in place',
+    ],
+    config: [
+      'new Dataset({ entries, plugins: [entryDependencies(), scheduling()] })',
+      "variants: [{ name: 'critical', when: { critical: true }, paint: () => ({ class: { 'critical-bar': true } }) }]",
+      "gridColumns: ['name', 'start', 'end', 'float', 'critical']",
+      'scheduling.drivingPath(entryId) // the Entry ids, in order, ending with entryId',
     ],
     specLinks: [],
   },

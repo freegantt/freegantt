@@ -1,7 +1,16 @@
 // data/ — the extension hook every transaction calls once (D4). An unoccupied hook is the identity
 // function; an installed plugin (S7's scheduling engine) is what returns anything else.
 
-import type { EditExtender, EntryEdit, EntryEdits, EntryId, RemovalExtender } from '../model/index.js';
+import type {
+  EditExtender,
+  EntryEdit,
+  EntryEdits,
+  EntryId,
+  FieldKey,
+  PluginStoreName,
+  RemovalExtender,
+  StoreRowUpdated,
+} from '../model/index.js';
 
 // `ProposedEdit`/`EntryEdits` moved to `model/entry.ts` in S3.3 so `layout/gesture-draft.ts`
 // can build one without reaching into `data/`; `EditRequest`/`EditExtender` followed in S5.10
@@ -28,9 +37,51 @@ export const identityExtender: EditExtender = () => EMPTY_EDITS;
  *  frozen `Set`, not a fresh one per call, so a preview frame allocates nothing (I5). */
 export const EMPTY_ENTRY_IDS: ReadonlySet<EntryId> = Object.freeze(new Set<EntryId>());
 
+/** Shared by every `EditRequest` builder whose transaction writes no plugin store — the drag preview
+ *  never does, so this is what `changedStoreRows` reads there. One frozen list, so a preview frame
+ *  allocates nothing (I5). */
+export const NO_STORE_ROWS: readonly StoreRowUpdated[] = Object.freeze([]);
+
 /** No removal, ever — the removal hook's occupant until a plugin composes onto it. The commit path
  *  checks for this occupant, so a Dataset with no removal extender builds no `EditRequest` for it. */
 export const identityRemovalExtender: RemovalExtender = () => EMPTY_ENTRY_IDS;
+
+/** One row write a plugin's edit row writer answered, tagged with the store it targets. */
+export interface StagedRowWrite {
+  readonly store: PluginStoreName;
+  readonly id: EntryId;
+  readonly row: object | undefined;
+}
+
+/** What a Dataset with no row writer answers: no write, from one shared frozen list. */
+export const NO_ROW_WRITES: readonly StagedRowWrite[] = Object.freeze([]);
+
+/** Carries the Fields an extender result overrides. A symbol key stays out of `Object.keys`, so the
+ *  edit still reads as the plain `EntryEdit` that `entries.update()` takes. */
+const OVERRIDES = Symbol('freegantt.overridingProposed');
+
+type MarkedEdit = EntryEdit & { readonly [OVERRIDES]?: ReadonlySet<string> };
+
+/**
+ * Marks the Fields of `edit` that replace what the transaction body proposed on the same Entry (ADR
+ * 0042). An unmarked write to a proposed Field still throws in dev mode.
+ *
+ * ```ts
+ * edits.set(id, overridingProposed(['start'], { start: placed }));
+ * ```
+ *
+ * A reviewer finds every override by searching for this call.
+ */
+export function overridingProposed(fields: readonly FieldKey[], edit: EntryEdit): EntryEdit {
+  return Object.assign({}, edit, { [OVERRIDES]: new Set<string>(fields) });
+}
+
+/** The Fields `edit` marks as overrides. An edit with no mark answers an empty set. */
+export function overriddenFieldsOf(edit: EntryEdit): ReadonlySet<string> {
+  return (edit as MarkedEdit)[OVERRIDES] ?? NO_FIELDS;
+}
+
+const NO_FIELDS: ReadonlySet<string> = Object.freeze(new Set<string>());
 
 /**
  * Merges two sets of extra writes, keyed by Entry — the composition an `ExtenderWrapper` needs
@@ -51,6 +102,15 @@ export const identityRemovalExtender: RemovalExtender = () => EMPTY_ENTRY_IDS;
 export function mergeEntryEdits(base: EntryEdits, extra: EntryEdits): EntryEdits {
   if (extra.size === 0) return base;
   const merged = new Map<EntryId, EntryEdit>(base);
-  for (const [id, edit] of extra) merged.set(id, { ...merged.get(id), ...edit });
+  for (const [id, edit] of extra) {
+    const earlier = merged.get(id);
+    const combined: EntryEdit = { ...earlier, ...edit };
+    // The spread keeps only the later mark, so the union restores the earlier one.
+    const marks = new Set([
+      ...(earlier ? overriddenFieldsOf(earlier) : NO_FIELDS),
+      ...overriddenFieldsOf(edit),
+    ]);
+    merged.set(id, marks.size === 0 ? combined : overridingProposed([...marks], combined));
+  }
   return merged;
 }

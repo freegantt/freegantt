@@ -9,7 +9,7 @@ import { describe, expect, it, afterEach } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { tagged, provenByLintAndTests } from '../../scripts/slice-gate.mjs';
+import { tagged, provenByLintAndTests, openRow } from '../../scripts/slice-gate.mjs';
 
 let tmpDir: string | undefined;
 
@@ -97,5 +97,16 @@ describe('provenByLintAndTests()', () => {
   it('keeps the tagged label, so the printed line still names its acceptance id', () => {
     const cwd = makeFixture('FX-1');
     expect(provenByLintAndTests(passingCheck(cwd), () => true).label).toBe('[FX-1] fixture check');
+  });
+});
+
+// An open row has no proof yet. It must name its id and never claim a pass, so a reader of the
+// gate output cannot mistake "nothing checked" for "checked and green".
+describe('openRow()', () => {
+  it('names its id, is marked open, and never reports a pass', () => {
+    const row = openRow('FX-1', 'fixture row');
+    expect(row.label).toBe('[FX-1] fixture row');
+    expect(row.open).toBe(true);
+    expect(row.run()).toBe(false);
   });
 });

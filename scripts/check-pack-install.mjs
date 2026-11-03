@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// #400 — the S6 acceptance row "`npm pack` output audited: internals unreachable, types complete"
+// #400 — [S6-A5], the S6 acceptance row "`npm pack` output audited: internals unreachable, types complete"
 // (plans/03-slices.md §S6). `check-lib-build.mjs` only reads `pnpm pack`'s file list; nothing until
 // now installed the tarball and asked a real TypeScript project to resolve it. This does both:
 //   1. `import { Gantt } from 'freegantt'` must compile under `strict` — a consumer's install works.
@@ -104,6 +104,6 @@ if (failed) {
   process.exit(1);
 }
 console.log(
-  'check-pack-install: the packed tarball installs, `freegantt` compiles under strict, ' +
+  'check-pack-install [S6-A5]: the packed tarball installs, `freegantt` compiles under strict, ' +
     'and `freegantt/src/...` stays unreachable.',
 );

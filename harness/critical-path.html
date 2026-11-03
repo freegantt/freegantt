@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — critical path</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+      <main>
+        <div class="page-head">
+          <h1>Critical path</h1>
+          <p>
+            <code>scheduling()</code> gives each task a float and marks the tasks with no float as critical.
+            The Gantt paints them in the warning colour through one variant rule: core draws nothing for
+            float. Drag a task and the critical bars change. Select a task and log its driving path.
+          </p>
+        </div>
+        <div id="page-brief"></div>
+        <section class="workbench" aria-label="Critical path workbench">
+          <div id="toolbar"></div>
+          <div class="workbench-actions">
+            <button type="button" id="show-driving-path-btn">Show driving path</button>
+            <span class="readout" id="driving-path-readout" aria-live="polite"
+              >Driving path: select a task</span
+            >
+          </div>
+          <div id="gantt"></div>
+          <div class="statusbar"></div>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./critical-path.ts"></script>
+  </body>
+</html>

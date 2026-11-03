@@ -22,6 +22,9 @@ export interface AffordanceInputs {
 export interface AffordanceIds {
   hoveredBarId?: BarId;
   movableBarId?: BarId;
+  /** The hovered bar, and only when its `connect` capability resolved true. Its two edges show a
+   *  connector port. */
+  connectableBarId?: BarId;
   /** The Entry the handle pair brackets (#200) — the pair sits on that Entry's envelope, so the two
    *  handles can land on two different bars. Which bars those are is the backend's own reading of
    *  the frame it synced, the same way the Selection paints (#185). */
@@ -45,6 +48,10 @@ export function projectAffordances(inputs: AffordanceInputs): AffordanceIds {
 
   if (hoveredBarId !== undefined && hoveredEntryId !== undefined && canGesture('move', hoveredEntryId)) {
     out.movableBarId = hoveredBarId;
+  }
+
+  if (hoveredBarId !== undefined && hoveredEntryId !== undefined && canGesture('connect', hoveredEntryId)) {
+    out.connectableBarId = hoveredBarId;
   }
 
   const resizable = resolveResizableEntry({

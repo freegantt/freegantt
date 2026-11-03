@@ -16,6 +16,7 @@ import type {
   Instant,
 } from '../model/index.js';
 import { addMs, diffMs, toEndInstant, toInstant } from '../time/index.js';
+import { overriddenFieldsOf } from './edit-extension.js';
 import type { EntryEdits, ProposedEdit, ProposedEdits } from './edit-extension.js';
 import {
   completeProps,
@@ -198,6 +199,8 @@ export interface EditReading {
  *  (#232). Internal only. */
 export interface EditsReading {
   readonly stored: ProposedEdits;
+  /** The Fields each Entry's edit marked as overrides of a body proposal (ADR 0042). */
+  readonly overrides: ReadonlyMap<EntryId, ReadonlySet<string>>;
 }
 
 /** Reads an `entries.update()` edit into `ProposedEdit` (S2.3 §1.1) — every present core date field
@@ -303,6 +306,7 @@ export function toEditsReading(
   hierarchySource: HierarchySource,
 ): EditsReading {
   const stored = new Map<EntryId, ProposedEdit>();
+  const overrides = new Map<EntryId, ReadonlySet<string>>();
   for (const [id, edit] of edits) {
     // The Entry as this transaction's own body leaves it, not the pre-transaction snapshot: a cascade
     // onto an Entry the same transaction added has no committed state to read against, and one whose
@@ -316,6 +320,8 @@ export function toEditsReading(
     }
     const reading = toEditReading(edit, context, entry, registry, EXTENDER_OPERATION);
     stored.set(id, reading.stored);
+    const marked = overriddenFieldsOf(edit);
+    if (marked.size > 0) overrides.set(id, marked);
   }
-  return { stored };
+  return { stored, overrides };
 }
