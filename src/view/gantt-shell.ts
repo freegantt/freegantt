@@ -33,6 +33,7 @@ import type {
   ReportUnknownFieldMatch,
   ResolvedRenderer,
   BarLabels,
+  ConnectorRouting,
   BarRenderer,
   GridCellRenderer,
   HeaderRenderer,
@@ -382,6 +383,8 @@ export interface GanttShellOptions {
   /** Live. Where the default bar label paints — ignored once `barRenderer`'s output takes over
    *  a bar's content. Default `'fitBar'`. */
   barLabels?: BarLabels;
+  /** Live. How connector routes dodge bars. Default `{ avoidBars: true, maxAvoidRows: 200 }`. */
+  connectorRouting?: ConnectorRouting;
   /** Live. A function, or a per-kind map — undefined and "no per-kind
    *  entry" both keep the library's own bar output. Always loses to a plugin's own `registerRenderer`
    *  only when this is itself undefined; wins over a plugin's the rest of the time. */
@@ -1656,6 +1659,15 @@ export class GanttShell {
     this.#columnChrome.commitHidden(field, false);
   }
 
+  /** Live. Reassigning reroutes every connector. */
+  get connectorRouting(): ConnectorRouting {
+    return this.#frameSettings.connectorRouting;
+  }
+
+  set connectorRouting(connectorRouting: ConnectorRouting) {
+    this.#frameSettings.set({ connectorRouting });
+  }
+
   /** Live. Reassigning repaints every bar with no remount (I8) — same posture as `barRenderer`
    *  just below. */
   get barLabels(): BarLabels {
@@ -2264,6 +2276,7 @@ export class GanttShell {
         : {}),
       ...(options.rowSource !== undefined ? { rowSource: options.rowSource } : {}),
       ...(options.barLabels !== undefined ? { barLabels: options.barLabels } : {}),
+      ...(options.connectorRouting !== undefined ? { connectorRouting: options.connectorRouting } : {}),
       ...(options.todayLineMarginTicks !== undefined
         ? { todayLineMarginTicks: options.todayLineMarginTicks }
         : {}),
