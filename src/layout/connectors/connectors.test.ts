@@ -3,6 +3,9 @@ import fc from 'fast-check';
 import { entryId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 import { createTimeScale, dayPreset, instant } from '../../time/index.js';
+import { BarIndex } from './bar-index.js';
+import { routeConnector } from './route-connector.js';
+import type { ConnectorAnchor } from './route-connector.js';
 import { entryDoubles } from '../entry-double.js';
 import { createVariantRegistry } from '../bars/variants.js';
 import { FrameLayout } from '../frame-layout.js';
@@ -71,8 +74,8 @@ describe('connectors in the frame', () => {
     expect(connector?.id).toBe('related:ab');
     expect(connector?.path).toEqual([
       { cmd: 'M', x: 1000, y: 16 },
-      { cmd: 'L', x: 1008, y: 16 },
-      { cmd: 'L', x: 1008, y: 48 },
+      { cmd: 'L', x: 1012, y: 16 },
+      { cmd: 'L', x: 1012, y: 48 },
       { cmd: 'L', x: 2000, y: 48 },
     ]);
   });
@@ -221,5 +224,212 @@ describe('asking the providers again', () => {
     expect(frameOf(held, {}, layout).connectors[0]?.flags.selected).toBeUndefined();
     // A new list is what `refreshConnectors()` hands the layout.
     expect(frameOf([...held], {}, layout).connectors[0]?.flags.selected).toBe(true);
+  });
+});
+
+describe('connector route shapes', () => {
+  /** Four rows. `a` and `d` sit at the left, and the middle rows hold bars far to the right. */
+  const rows = entryDoubles([
+    { id: 'a', name: 'A', start: 0, end: MS_PER_BAR },
+    { id: 'm1', name: 'M1', start: 5 * MS_PER_BAR, end: 6 * MS_PER_BAR },
+    { id: 'm2', name: 'M2', start: 5 * MS_PER_BAR, end: 6 * MS_PER_BAR },
+    { id: 'd', name: 'D', start: MS_PER_BAR / 2, end: 3 * MS_PER_BAR },
+  ]);
+  const pathOf = (from: ConnectorInput['from'], to: ConnectorInput['to']) =>
+    frameOf([() => [{ id: 'c', from, to }]], { entries: rows }).connectors[0]?.path;
+  const end = (id: string) => ({ entryId: entryId(id), edge: 'end' as const });
+  const start = (id: string) => ({ entryId: entryId(id), edge: 'start' as const });
+
+  it('runs a backward finish-to-start along the near gap of the target row, going down', () => {
+    expect(pathOf(end('a'), start('d'))).toEqual([
+      { cmd: 'M', x: 1000, y: 16 },
+      { cmd: 'L', x: 1012, y: 16 },
+      { cmd: 'L', x: 1012, y: 96 },
+      { cmd: 'L', x: 488, y: 96 },
+      { cmd: 'L', x: 488, y: 112 },
+      { cmd: 'L', x: 500, y: 112 },
+    ]);
+  });
+
+  it('runs a backward finish-to-start along the near gap of the target row, going up', () => {
+    expect(pathOf(end('d'), start('a'))).toEqual([
+      { cmd: 'M', x: 3000, y: 112 },
+      { cmd: 'L', x: 3012, y: 112 },
+      { cmd: 'L', x: 3012, y: 32 },
+      { cmd: 'L', x: -12, y: 32 },
+      { cmd: 'L', x: -12, y: 16 },
+      { cmd: 'L', x: 0, y: 16 },
+    ]);
+  });
+
+  it('keeps the adjacent-row backward route on the shared gap', () => {
+    const adjacent = entryDoubles([
+      { id: 'a', name: 'A', start: 0, end: MS_PER_BAR },
+      { id: 'e', name: 'E', start: 0, end: MS_PER_BAR / 2 },
+    ]);
+    const [connector] = frameOf([() => [{ id: 'c', from: end('a'), to: start('e') }]], {
+      entries: adjacent,
+    }).connectors;
+    expect(connector?.path).toEqual([
+      { cmd: 'M', x: 1000, y: 16 },
+      { cmd: 'L', x: 1012, y: 16 },
+      { cmd: 'L', x: 1012, y: 32 },
+      { cmd: 'L', x: -12, y: 32 },
+      { cmd: 'L', x: -12, y: 48 },
+      { cmd: 'L', x: 0, y: 48 },
+    ]);
+  });
+
+  it('draws start-to-start with one vertical left of both bars', () => {
+    expect(pathOf(start('a'), start('d'))).toEqual([
+      { cmd: 'M', x: 0, y: 16 },
+      { cmd: 'L', x: -12, y: 16 },
+      { cmd: 'L', x: -12, y: 112 },
+      { cmd: 'L', x: 500, y: 112 },
+    ]);
+  });
+
+  it('draws finish-to-finish with one vertical right of both bars', () => {
+    expect(pathOf(end('a'), end('d'))).toEqual([
+      { cmd: 'M', x: 1000, y: 16 },
+      { cmd: 'L', x: 3012, y: 16 },
+      { cmd: 'L', x: 3012, y: 112 },
+      { cmd: 'L', x: 3000, y: 112 },
+    ]);
+  });
+
+  it('loops below the row when both ends sit on one row and the target lies behind', () => {
+    const segmented = entryDoubles([
+      { id: 'row', name: 'Row', start: 0, end: 3 * MS_PER_BAR },
+      { id: 's1', name: 'S1', parentId: 'row', start: 0, end: MS_PER_BAR },
+      { id: 's2', name: 'S2', parentId: 'row', start: 2 * MS_PER_BAR, end: 3 * MS_PER_BAR },
+    ]);
+    const [connector] = frameOf([() => [{ id: 'c', from: end('s2'), to: start('s1') }]], {
+      entries: segmented,
+      rows: { source: 'entries', childrenAsSegments: true },
+    }).connectors;
+    expect(connector?.path).toEqual([
+      { cmd: 'M', x: 3000, y: 16 },
+      { cmd: 'L', x: 3012, y: 16 },
+      { cmd: 'L', x: 3012, y: 32 },
+      { cmd: 'L', x: -12, y: 32 },
+      { cmd: 'L', x: -12, y: 16 },
+      { cmd: 'L', x: 0, y: 16 },
+    ]);
+  });
+});
+
+describe('routeConnector property', () => {
+  const ROW = 32;
+  const anchor = fc
+    .record({
+      x: fc.integer({ min: -500, max: 500 }),
+      row: fc.integer({ min: 0, max: 6 }),
+      edge: fc.constantFrom('start' as const, 'end' as const),
+    })
+    .map(({ x, row, edge }): ConnectorAnchor => ({
+      x,
+      y: row * ROW + ROW / 2,
+      edge,
+      rowIndex: row,
+      rowTop: row * ROW,
+      rowBottom: row * ROW + ROW,
+    }));
+
+  it('is orthogonal and joins the source anchor to the target anchor', () => {
+    fc.assert(
+      fc.property(anchor, anchor, (from, to) => {
+        const points = routeConnector(from, to);
+        expect(points[0]).toEqual({ x: from.x, y: from.y });
+        expect(points.at(-1)).toEqual({ x: to.x, y: to.y });
+        points.slice(1).forEach((point, index) => {
+          const before = points[index]!;
+          expect(point.x === before.x || point.y === before.y).toBe(true);
+        });
+      }),
+    );
+  });
+});
+
+describe('bars in the way of a vertical', () => {
+  const bars = (byRow: Record<number, [number, number][]>) =>
+    new BarIndex((row) => (byRow[row] ?? []).map(([left, right]) => ({ left, right })), 200);
+  const ask = (index: BarIndex, preferredX: number, minX: number, maxX: number) =>
+    index.freeX({ fromRow: 0, toRow: 4, preferredX, minX, maxX });
+
+  it('keeps the default x when no row between holds a bar there', () => {
+    expect(ask(bars({ 2: [[100, 200]] }), 50, 0, 90)).toBe(50);
+  });
+
+  it('moves to the nearest free x, with 2 px of air beside the bar', () => {
+    const index = bars({ 2: [[40, 60]] });
+    expect(ask(index, 55, 0, 100)).toBe(62);
+    expect(ask(index, 45, 0, 100)).toBe(38);
+  });
+
+  it('hops over bars that touch in different rows', () => {
+    expect(ask(bars({ 1: [[40, 60]], 3: [[60, 80]] }), 50, 0, 200)).toBe(38);
+  });
+
+  it('keeps the default x when no x in the range is free', () => {
+    expect(ask(bars({ 2: [[0, 200]] }), 50, 40, 60)).toBe(50);
+  });
+
+  it('ignores the rows of the two ends', () => {
+    expect(ask(bars({ 0: [[0, 200]], 4: [[0, 200]] }), 50, 0, 90)).toBe(50);
+  });
+
+  it('keeps the default x for a vertical over more rows than the cap', () => {
+    const capped = new BarIndex(() => [{ left: 40, right: 60 }], 2);
+    expect(capped.freeX({ fromRow: 0, toRow: 4, preferredX: 50, minX: 0, maxX: 100 })).toBe(50);
+    expect(capped.freeX({ fromRow: 0, toRow: 3, preferredX: 55, minX: 0, maxX: 100 })).toBe(62);
+  });
+
+  it('draws a forward connector beside a bar that stands on its vertical', () => {
+    // `a` ends at 1000 on row 0, `b` starts at 2000 on row 3. `x` sits on x 1006–1050 in row 1.
+    const crowded = entryDoubles([
+      { id: 'a', name: 'A', start: 0, end: MS_PER_BAR },
+      { id: 'x', name: 'X', start: 1.006 * MS_PER_BAR, end: 1.05 * MS_PER_BAR },
+      { id: 'y', name: 'Y', start: 8 * MS_PER_BAR, end: 9 * MS_PER_BAR },
+      { id: 'b', name: 'B', start: 2 * MS_PER_BAR, end: 3 * MS_PER_BAR },
+    ]);
+    const connector = (avoid: boolean) =>
+      frameOf([() => [{ ...finishToStart, to: { entryId: entryId('b'), edge: 'start' } }]], {
+        entries: crowded,
+        connectorRouting: { avoidBars: avoid },
+      }).connectors[0]?.path;
+    expect(connector(false)?.[1]).toEqual({ cmd: 'L', x: 1012, y: 16 });
+    expect(connector(true)?.[1]).toEqual({ cmd: 'L', x: 1052, y: 16 });
+  });
+
+  it('leaves a connector alone when the option turns avoidance off', () => {
+    const crowded = entryDoubles([
+      { id: 'a', name: 'A', start: 0, end: MS_PER_BAR },
+      { id: 'x', name: 'X', start: 1.006 * MS_PER_BAR, end: 1.05 * MS_PER_BAR },
+      { id: 'b', name: 'B', start: 2 * MS_PER_BAR, end: 3 * MS_PER_BAR },
+    ]);
+    const path = frameOf([() => [{ ...finishToStart, to: { entryId: entryId('b'), edge: 'start' } }]], {
+      entries: crowded,
+      connectorRouting: { avoidBars: false },
+    }).connectors[0]?.path;
+    expect(path?.[1]).toEqual({ cmd: 'L', x: 1012, y: 16 });
+  });
+
+  it('reroutes when the routing option changes on the same dataset', () => {
+    const crowded = entryDoubles([
+      { id: 'a', name: 'A', start: 0, end: MS_PER_BAR },
+      { id: 'x', name: 'X', start: 1.006 * MS_PER_BAR, end: 1.05 * MS_PER_BAR },
+      { id: 'b', name: 'B', start: 2 * MS_PER_BAR, end: 3 * MS_PER_BAR },
+    ]);
+    const providers = [() => [{ ...finishToStart, to: { entryId: entryId('b'), edge: 'start' as const } }]];
+    const layout = new FrameLayout();
+    const on = frameOf(providers, { entries: crowded }, layout).connectors[0]?.path[1];
+    const off = frameOf(
+      providers,
+      { entries: crowded, connectorRouting: { avoidBars: false }, revision: 1 },
+      layout,
+    ).connectors[0]?.path[1];
+    expect(on).toEqual({ cmd: 'L', x: 1052, y: 16 });
+    expect(off).toEqual({ cmd: 'L', x: 1012, y: 16 });
   });
 });
