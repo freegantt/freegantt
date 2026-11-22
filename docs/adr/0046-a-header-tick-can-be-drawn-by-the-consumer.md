@@ -35,3 +35,15 @@ interface HeaderTickPaint   { content?: ElementDescription; flags?: readonly str
 ## Consequences
 
 - With no renderer, the header draws as before.
+
+## Addendum: a band can align its cells to a finer unit
+
+A month band and a week band drift apart where a week crosses a month end. A consumer wants one month cell to cover whole weeks.
+
+- `ViewPresetHeader.alignTo?: TimeUnit` makes the band's cells start and end on boundaries of that finer unit.
+- A month band with `alignTo: 'week'` owns the weeks whose first day falls in that month.
+- `alignTo` must be strictly finer than the band's `unit`. `resolvePreset` throws `InvalidPresetError` with rule `'header-align'` otherwise.
+- The cells come from the same tick walk as every other band. `tickFloor` and `nextTick` find the calendar boundary, and the first `alignTo` boundary at or after it starts the cell.
+- The name is `alignTo` because `snap` means drag snapping.
+- A header tick renderer and a `rangeStart` year label see the aligned cell as a normal tick.
+

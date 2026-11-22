@@ -8,6 +8,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- `ViewPresetHeader.alignTo` makes a header band's cells start and end on boundaries of a finer unit. A month band with `alignTo: 'week'` owns the weeks whose first day falls in that month. A coarser or equal `alignTo` throws `InvalidPresetError` (rule `'header-align'`).
 - A bar in a Row with Lanes now sits in its Lane. `lanes.of(entry)` names the Lane, and `FrameBar.lane`, `y` and `height` say where. A Row with no Lanes centres its bar as before.
 - Variant takes `chrome: 'none'`. The library then draws no fill, border, radius or padding on that bar, and the bar carries `data-chrome='none'`.
 - New `BarLabelPolicy` value `'outsideOrNone'`. The label paints beside the bar when it fits before the next bar in the same Lane, and paints nowhere otherwise. Other policies stay as they were.
