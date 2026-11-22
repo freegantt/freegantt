@@ -151,6 +151,22 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
     ],
     specLinks: [{ label: 'docs/10 — Styling and theming', href: STYLING_GUIDE }],
   },
+  'inline-details': {
+    features: [
+      'Click a task: a details panel opens under its row, as wide as the grid and the timeline together',
+      'The rows below the panel move down, and move back up when the panel closes',
+      'Scroll the rows and the panel stays with its row; pan the timeline and it stays full width',
+      'A row scrolled up under the header hides the panel too',
+      'Type in the panel input: the Gantt keys (arrows, Home, Enter) never run for it',
+    ],
+    config: [
+      'entries: each task has a spacer entry with no dates, so it draws no bar; a row filter keeps only the open task’s spacer',
+      'rowHeight: ({ entry }) => (entry is a spacer ? 132 : 32)',
+      'ctx.view.rowSpanLayer.present(panel)',
+      'ctx.view.rowBox(spacerId) -> { top, height }',
+    ],
+    specLinks: [{ label: 'docs/06 — Plugin authoring', href: PLUGIN_GUIDE }],
+  },
   dependencies: {
     features: [
       'One plugin stores the Dependencies: FS, SS, FF and SF, with a lag in days (one is negative)',
