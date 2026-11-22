@@ -1034,7 +1034,14 @@ export function placeFrame(
   // labels below and `tickLines`' unclamped lines: both read the same `scale.ticks` call per band,
   // so a preset's own boundaries never drift between the header and the pane under it.
   const rawBandTicks = preset.headers.map((header) =>
-    scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan),
+    scale.ticks(
+      {
+        unit: header.unit,
+        increment: header.increment,
+        ...(header.alignTo === undefined ? {} : { alignTo: header.alignTo }),
+      },
+      horizontalSpan,
+    ),
   );
   const bands = placeHeaderBands(input, mem, rawBandTicks, settings, labelLeftClamp);
 

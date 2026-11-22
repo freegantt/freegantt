@@ -295,7 +295,7 @@ export class UnknownPresetError extends FreeGanttError {
  * `resolvePreset` (header readability follow-up). One code covers every such rule, because each one
  * names the same fault: this preset object is inconsistent. `time/presets.ts` holds the rules —
  * today, `'tick-widths'` (`preferredTickWidthPx` below its own `minTickWidthPx`), `'tick-step'`
- * (`tickUnit`/`tickIncrement` coarser than the finest header), `'header-height'` (a header `heightPx` that is not a positive number), and `'tick-increment'` (a
+ * (`tickUnit`/`tickIncrement` coarser than the finest header), `'header-height'` (a header `heightPx` that is not a positive number), `'header-align'` (a header `alignTo` that is not strictly finer than the band's unit), and `'tick-increment'` (a
  * `tickIncrement` or header `increment` that is not a positive whole number — `0` or less never
  * advances a step, `stepBy` throws an untyped `RangeError` for it deep in `time/scale.ts`, far from
  * the preset that caused it (NEW-2/#481 review)). `rule` is that closed set, for a caller that wants
@@ -313,12 +313,12 @@ export class UnknownPresetError extends FreeGanttError {
  * that always said `gantt.preset` named the wrong door for the other two. */
 export class InvalidPresetError extends FreeGanttError {
   readonly presetId: string;
-  readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height';
+  readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height' | 'header-align';
   readonly operation: string;
 
   constructor(
     presetId: string,
-    rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height',
+    rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height' | 'header-align',
     message: string,
     operation: string,
   ) {

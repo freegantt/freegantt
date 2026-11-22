@@ -306,6 +306,36 @@ describe('validatePresetTickIncrement (via resolvePreset)', () => {
     }
   });
 
+  it.each([
+    ['the same unit', 'month'],
+    ['a coarser unit', 'year'],
+  ] as const)('throws with rule "header-align" for an alignTo of %s', (_label, alignTo) => {
+    const preset: ViewPreset = {
+      id: 'custom-bad-align',
+      tickUnit: 'week',
+      tickIncrement: 1,
+      headers: [{ unit: 'month', increment: 1, format: () => 'x', alignTo }],
+      preferredTickWidthPx: 40,
+    };
+    expect(() => resolvePreset(preset, 'test')).toThrow(InvalidPresetError);
+    try {
+      resolvePreset(preset, 'test');
+    } catch (error) {
+      expect((error as InvalidPresetError).rule).toBe('header-align');
+    }
+  });
+
+  it('accepts a month band aligned to weeks', () => {
+    const preset: ViewPreset = {
+      id: 'custom-align',
+      tickUnit: 'week',
+      tickIncrement: 1,
+      headers: [{ unit: 'month', increment: 1, format: () => 'x', alignTo: 'week' }],
+      preferredTickWidthPx: 40,
+    };
+    expect(resolvePreset(preset, 'test')).toBe(preset);
+  });
+
   it('accepts a header band with its own positive heightPx', () => {
     const preset: ViewPreset = {
       id: 'custom-header-height',
