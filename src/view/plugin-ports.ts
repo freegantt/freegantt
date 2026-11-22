@@ -38,6 +38,7 @@ import type {
   ResolvedRenderer,
   ResolvedVariant,
   TooltipRenderer,
+  RowBox,
 } from '../layout/index.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
@@ -86,6 +87,10 @@ export interface GanttShellPorts {
   overlay: MountLayer;
   /** #158. The grid's own row layer, alive as long as the plugin is. */
   rowLayer: MountLayer;
+  /** The full-width layer that follows the rows' vertical scroll. */
+  rowSpanLayer: MountLayer;
+  /** Where one row sits, for a plugin that mounts content beside it. */
+  rowBox(id: string): RowBox | undefined;
   /** This Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
    *  each plugin's `by` onto it below, so a plugin never names itself. */
   raiseError: RaiseError;
@@ -239,6 +244,20 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  the pane. A popup dismisses on a scroll rather than following it. Live for the plugin's
      *  whole lifetime, the same posture as `overlay`. */
     rowLayer: MountLayer;
+    /** A layer as wide as the grid pane and the timeline pane together, below the header. Use it
+     *  for a panel that opens under one row and spans the whole Gantt.
+     *
+     *  It follows the rows' vertical scroll in the same frame, by one transform per frame and no
+     *  scroll listener. It stays still when the timeline pans sideways. Content that scrolled up
+     *  under the header is hidden. Pointer events pass through everywhere except on the content
+     *  you mount. A key pressed inside that content stays there: the Gantt's own keys never run.
+     *  Position content with `rowBox`. Live for the plugin's whole lifetime, like `overlay`. */
+    rowSpanLayer: MountLayer;
+    /** Where the row of an entry (or a row id) starts and how tall it is. `top` counts from the
+     *  top of `rowSpanLayer`. It answers from the layout, so a row scrolled out of the window
+     *  answers too. `undefined` for a row a collapsed parent hides, and for an unknown id. Read it
+     *  again after a row height change, a collapse or a data change: a row's top moves with them. */
+    rowBox(id: EntryId | string): RowBox | undefined;
     /** Builds a live node from an `ElementDescription` — the one seam
      *  `extensions/` has to the reconciler. `extensions/` may not import `render/` itself.
      *  Never `innerHTML`d except the description's own explicit `html` opt-in (I13).
@@ -517,6 +536,8 @@ export function buildPluginPorts(
     view: {
       overlay: shell.overlay,
       rowLayer: shell.rowLayer,
+      rowSpanLayer: shell.rowSpanLayer,
+      rowBox: (id) => shell.rowBox(id),
       renderElement: (description) => buildElement(description),
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,

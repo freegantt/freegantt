@@ -4,6 +4,7 @@
 import {
   barSpan,
   FrameLayout,
+  type RowBox,
   TimeScaleModel,
   Viewport,
   createVariantRegistry,
@@ -806,6 +807,8 @@ export class GanttShell {
   /** #158: the grid's own row layer, where a plugin mounts content that must scroll with the rows.
    *  Constructed beside the overlay, and for the same reason. */
   #rowLayer: DomMountLayer;
+  /** The layer that spans both panes and follows the rows' vertical scroll. */
+  #rowSpanLayer: DomMountLayer;
   /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
    *  Constructed beside the overlay, and for the same reason. */
   #dom: ContainerDom;
@@ -842,6 +845,16 @@ export class GanttShell {
       () => this.#paneLayout.rowLayerBounds(),
       this.#containerResize,
     );
+    this.#rowSpanLayer = new DomMountLayer(
+      this.#panes.rowSpan,
+      () => this.#paneLayout.rowSpanBounds(),
+      this.#containerResize,
+    );
+    // Content a plugin mounts here owns its keys. The container's keymap, pan and edit handlers
+    // never see a key typed in an input, a button or a select inside it.
+    const keepKeysInRowSpan = (event: KeyboardEvent): void => event.stopPropagation();
+    this.#panes.rowSpanClip.addEventListener('keydown', keepKeysInRowSpan);
+    this.#teardown.add(() => this.#panes.rowSpanClip.removeEventListener('keydown', keepKeysInRowSpan));
     this.#dom = new ContainerDom({
       container: this.#container,
       paneLayout: this.#paneLayout,
@@ -922,6 +935,7 @@ export class GanttShell {
       grid: this.#panes.rows,
       timeline: this.#panes.timeline,
       gridHeader: this.#panes.gridHeader,
+      rowSpan: this.#panes.rowSpan,
     });
 
     // Built before the plugin runtime. Core commands register into this during this
@@ -2386,6 +2400,8 @@ export class GanttShell {
       raiseError: this.#raiseError,
       overlay: this.#overlay,
       rowLayer: this.#rowLayer,
+      rowSpanLayer: this.#rowSpanLayer,
+      rowBox: (id) => this.#rowBox(id),
       dom: this.#dom,
       commands: this.#commandRegistry,
       keymap: this.#keymap,
@@ -3302,7 +3318,18 @@ export class GanttShell {
    *  the pane's top, and covers that band of rows for the whole scroll. The grid pane's rows clip
    *  below its spacer for the same reason. Reporting the full pane box left the scroll model one
    *  header short of the true extent. The last row could then never scroll fully into view. */
+  /** Where one row sits, planned fresh, so a row a write just added answers before the next frame. */
+  #rowBox(id: string): RowBox | undefined {
+    this.#layout.ensureRowPlan(this.#rowPlanInput(), {
+      rowHeight: this.#frameSettings.rowHeight,
+      ...this.#frameSettings.rowHeightFunction(),
+      registry: this.#registrations.variants,
+    });
+    return this.#layout.rowBox(id);
+  }
+
   #applyRowsViewportSize(): void {
+    this.#paneLayout.syncRowSpanTop();
     this.#viewportHandle.setPaneSize({
       width: this.#paneBox.width,
       height: this.#rowsViewportHeight(),

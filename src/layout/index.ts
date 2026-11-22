@@ -55,7 +55,7 @@ export type {
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows, resolveRowSource } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
-export type { FrameLayoutView, RowPlanInput, RowPlanMemoryInput } from './frame-layout.js';
+export type { FrameLayoutView, RowBox, RowPlanInput, RowPlanMemoryInput } from './frame-layout.js';
 export { FrameMemory } from './frame-memory.js';
 export { resolveDateLines, DEFAULT_DATE_LINE_LABEL_PLACEMENT } from './date-line.js';
 export type {

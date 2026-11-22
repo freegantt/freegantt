@@ -84,7 +84,10 @@ function buildHarness(portOverrides: Partial<RovingFocusPorts> = {}): Harness {
   document.body.append(grid, timeline, splitter, overlay);
 
   const ports = makePorts(portOverrides);
-  const roving = new RovingFocus({ grid, rows, gridHeader, timeline, splitter, overlay }, ports);
+  const roving = new RovingFocus(
+    { grid, rows, gridHeader, timeline, splitter, overlay, rowSpan: makePane(), rowSpanClip: makePane() },
+    ports,
+  );
 
   const fire = (target: HTMLElement, type: string, init: KeyboardEventInit): KeyboardEvent => {
     const event = new KeyboardEvent(type, { bubbles: true, cancelable: true, ...init });

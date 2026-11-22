@@ -678,6 +678,9 @@ ${DARK_COLOR_TOKENS}
    this file) is what wins that competition, and a consumer embedding a Gantt inside
    its own stacking context can move the whole layer by setting the one property. pointer-events: none
    so an empty overlay never blocks the panes underneath; a mounted .fg-popup opts back in. */
+.fg-span-layer-clip { position: absolute; left: 0; right: 0; top: var(--fg-span-layer-top, 0px); bottom: 0; overflow: hidden; pointer-events: none; z-index: ${INTERNAL_Z.abovePaneChrome}; }
+.fg-span-layer { position: relative; }
+.fg-span-layer > * { pointer-events: auto; }
 .fg-overlay { position: absolute; inset: 0; z-index: var(--fg-z-overlay, ${DEFAULT_OVERLAY_Z_INDEX}); pointer-events: none; overflow: visible; }
 /* overflow-x stays hidden so a menu item's own hover paint clips to this radius instead of
    squaring off the first and last corners; overflow-y is auto for the same reason

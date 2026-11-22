@@ -69,6 +69,10 @@ export interface Panes {
    *  top of both panes, wrapped by `view/mount-layer.ts`. Structure only; the `MountLayer` over it
    *  owns its content. */
   readonly overlay: HTMLElement;
+  /** The row span layer: as wide as both panes, below the header, moved by the rows' vertical
+   *  scroll and never by the horizontal one. `rowSpanClip` holds it and owns the clip. */
+  readonly rowSpan: HTMLElement;
+  readonly rowSpanClip: HTMLElement;
 }
 
 export class PaneLayout {
@@ -176,7 +180,15 @@ export class PaneLayout {
     const overlay = document.createElement('div');
     overlay.className = 'fg-overlay';
 
-    this.#container.append(this.#gridPane, splitter, timelinePane, overlay);
+    // Sibling of the panes, so it spans both. The clip stays still and hides what scrolled up under
+    // the header. The layer inside takes the one per-frame transform, like `rowLayer` above.
+    const rowSpanClip = document.createElement('div');
+    rowSpanClip.className = 'fg-span-layer-clip';
+    const rowSpan = document.createElement('div');
+    rowSpan.className = 'fg-span-layer';
+    rowSpanClip.append(rowSpan);
+
+    this.#container.append(this.#gridPane, splitter, timelinePane, rowSpanClip, overlay);
 
     this.panes = {
       grid: this.#gridPane,
@@ -185,6 +197,8 @@ export class PaneLayout {
       splitter,
       timeline: timelinePane,
       overlay,
+      rowSpan,
+      rowSpanClip,
     };
   }
 
@@ -297,6 +311,16 @@ export class PaneLayout {
    *  that same transform, so it must measure against the moved box, not the pane's fixed one. */
   rowLayerBounds(): DOMRect {
     return this.panes.rows.getBoundingClientRect();
+  }
+
+  /** `ctx.view.rowSpanLayer.bounds`: the row span layer's client rect, transform included. */
+  rowSpanBounds(): DOMRect {
+    return this.panes.rowSpan.getBoundingClientRect();
+  }
+
+  /** Starts the row span clip under the header, so a row scrolled up under the header hides. */
+  syncRowSpanTop(): void {
+    this.panes.rowSpanClip.style.setProperty('--fg-span-layer-top', `${this.measureHeaderHeight()}px`);
   }
 
   /** `ctx.view.overlay.bounds` (#168): the overlay layer's own client rect. A popup sits at that

@@ -32,6 +32,12 @@ import type { EntryRulePorts } from './entry-rule.js';
  *    in place (#187).
  *  - `collapsed` — `TreeCollapse` replaces its frozen id array on every change (`view/tree-collapse.ts`).
  *  - `entryRulePorts` — built once per Gantt. */
+/** One row's place in the content: `top` is its y from the first row, `height` its own height. */
+export interface RowBox {
+  readonly top: number;
+  readonly height: number;
+}
+
 export interface RowPlanInput {
   entries: readonly Entry[];
   datasetRevision: number;
@@ -245,6 +251,19 @@ export class FrameLayout implements FrameLayoutView {
    * needs a row's own height to place its before/into/after thirds. */
   rowHeightAt(index: number): number {
     return this.#memory.heights.heightAt(index);
+  }
+
+  /** Where the row of this entry (or this row id) starts, and how tall it is, in the coordinates of
+   *  the content: the same `top` the row paints at. Answers from the row-height index, so a row the
+   *  window has not drawn answers too. `undefined` for a row a collapsed parent hides, and for an id
+   *  no plan holds. The caller plans first (`ensureRowPlan`) when it needs a row this frame added. */
+  rowBox(id: string): RowBox | undefined {
+    const owner = this.#rowIndexOfEntry.has(id as EntryId)
+      ? (id as EntryId)
+      : this.entryIdsForRow(id as RowId)[0];
+    const index = owner === undefined ? -1 : this.rowIndexForEntry(owner);
+    if (index < 0) return undefined;
+    return { top: this.rowTop(index), height: this.rowHeightAt(index) };
   }
 
   /** How many rows the current plan holds — a row drop zone's "past the last row" check

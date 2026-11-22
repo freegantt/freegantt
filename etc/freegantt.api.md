@@ -2261,6 +2261,8 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     view: {
         overlay: MountLayer;
         rowLayer: MountLayer;
+        rowSpanLayer: MountLayer;
+        rowBox(id: EntryId | string): RowBox | undefined;
         renderElement(description: ElementDescription): HTMLElement;
         dom: GanttDom;
         onDomEvent<K extends keyof DocumentEventMap>(type: K, handler: DomEventHandler<K>, options?: DomEventOptions): Disposer;
@@ -3313,6 +3315,7 @@ export interface ZonedTime {
 // Warnings were encountered during analysis:
 //
 // dist/api/plugin.d.ts:68:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
+// dist/view/plugin-ports.d.ts:209:9 - (ae-forgotten-export) The symbol "RowBox" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

@@ -466,6 +466,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
   // position by one `translateY(-visible.y)` per frame, written in `sync()` below.
   let gridLayer: HTMLElement | undefined;
   let gridHeaderLayer: HTMLElement | undefined;
+  let rowSpanLayer: HTMLElement | undefined;
   /** S5.7: written by `syncGridHeader`, read by `applyState`'s drop-indicator paint for the
    *  `beforeColumnKey: null` ("at the end") case. */
   let lastHeaderColumnKeys: readonly string[] = [];
@@ -1624,6 +1625,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       gridLayer = surfaces.grid;
       gridLayer.replaceChildren();
       gridHeaderLayer = surfaces.gridHeader;
+      rowSpanLayer = surfaces.rowSpan;
       gridHeaderLayer?.replaceChildren();
       timelineHost = surfaces.timeline;
       timelineHost.replaceChildren();
@@ -1779,6 +1781,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // structural rather than a property this line has to maintain by hand.
         gridLayer.style.transform = `translateY(${-frame.visible.y}px)`;
       }
+      // The row span layer rides the same scroll, vertically only, so its content keeps full width.
+      if (rowSpanLayer) rowSpanLayer.style.transform = `translateY(${-frame.visible.y}px)`;
       if (contentSizer) {
         // The sizer itself is 1x1px, so its far edge — not its origin — must land at the content
         // extent, or the browser's native scrollable range ends up 1px past what the ScrollAxis computed.
@@ -1955,6 +1959,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       paintedColumnDropKey = undefined;
       paintedColumnDragKey = undefined;
       gridLayer = undefined;
+      rowSpanLayer = undefined;
       gridHeaderLayer = undefined;
       timelineHost = undefined;
       headerLayer = undefined;

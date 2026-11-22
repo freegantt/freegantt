@@ -493,6 +493,61 @@ describe('FrameLayout.rowIndexForEntry (#528)', () => {
   });
 });
 
+describe('FrameLayout.rowBox', () => {
+  it('answers a row the window never drew, from the layout alone', () => {
+    const flat = Array.from({ length: 10_000 }, (_unused, index) => ({ id: `e${index}` }));
+    const layout = new FrameLayout();
+    layout.computeFrame(
+      input({ entries: entryDoubles(flat), visible: { x: 0, y: 0, width: 400, height: 96 } }),
+    );
+
+    expect(layout.rowBox('e0')).toEqual({ top: 0, height: 32 });
+    expect(layout.rowBox('e5000')).toEqual({ top: 5000 * 32, height: 32 });
+  });
+
+  it('answers a row id as it answers the entry on that row', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: entryDoubles([{ id: 'a' }, { id: 'b' }]) }));
+    const rowOfB = layout.rowIdForEntry(entryId('b'))!;
+
+    expect(layout.rowBox(rowOfB)).toEqual(layout.rowBox('b'));
+    expect(layout.rowBox('b')).toEqual({ top: 32, height: 32 });
+  });
+
+  it('counts a taller row into every top below it', () => {
+    const layout = new FrameLayout();
+    const entries = entryDoubles([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    layout.computeFrame(
+      input({ entries, rowHeightOf: (row) => (row.entry?.id === entryId('b') ? 120 : 32) }),
+    );
+
+    expect(layout.rowBox('b')).toEqual({ top: 32, height: 120 });
+    expect(layout.rowBox('c')).toEqual({ top: 152, height: 32 });
+  });
+
+  it('answers undefined for a row a collapsed parent hides, and for an unknown id', () => {
+    const [parent, child] = entryDoubles([
+      { id: String(sampleEntries[0]!.id), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+      {
+        id: String(sampleEntries[1]!.id),
+        start: sampleEntries[1]!.start!,
+        end: sampleEntries[1]!.end!,
+        parentId: String(sampleEntries[0]!.id),
+      },
+    ]) as readonly [Entry, Entry];
+    const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [parent, child], rows: tree }));
+    expect(layout.rowBox(child.id)).toBeDefined();
+
+    layout.computeFrame(input({ entries: [parent, child], rows: tree, collapsed: [parent.id] }));
+
+    expect(layout.rowBox(child.id)).toBeUndefined();
+    expect(layout.rowBox(parent.id)).toEqual({ top: 0, height: 32 });
+    expect(layout.rowBox('not-a-row')).toBeUndefined();
+  });
+});
+
 // #424 review, point 1: an earlier cut of `ensureRowPlan` replanned `#plan` and the row-id maps but
 // left `#memory` — the height index, `rowById` — behind. A read between two `computeFrame` calls
 // then answered from two different row trees at once: `rowIndexForEntry` saw the replanned rows,
