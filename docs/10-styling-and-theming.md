@@ -279,6 +279,8 @@ rename.
 | `.fg-timeline-pane` | Right pane. Header, bars, decorations, date lines. |
 | `.fg-shared-axis` | On `.fg-timeline-pane` when this Gantt shares a `ScrollAxis` on `x`. Reserves a scrollbar gutter, so every pane on that axis keeps one width. Needs `scrollbar-gutter`; an engine without it falls back to today's behaviour, where the two panes stop up to a scrollbar's width apart. |
 | `.fg-splitter` | Drag handle between the two panes. |
+| `.fg-span-layer-clip` | Clip of the row span layer: as wide as both panes, below the header. It hides content that scrolled up under the header. `pointer-events: none` until mounted content opts in. |
+| `.fg-span-layer` | The row span layer inside the clip. It follows the rows' vertical scroll by one transform per frame, and never the horizontal pan. |
 | `.fg-overlay` | Popup mount layer above both panes. `pointer-events: none` until a `.fg-popup` opts in. |
 | `.fg-grid-header` | Column header row in the grid pane. |
 | `.fg-col-header` | One column header cell. |

@@ -8,6 +8,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ### Added
 
+- `ctx.view.rowSpanLayer` is a mount layer as wide as the grid pane and the timeline pane together. It follows the rows' vertical scroll and stays still on a horizontal pan. It hides content that scrolled up under the header. A key pressed inside its content never reaches the Gantt.
+- `ctx.view.rowBox(id)` answers `{ top, height }` for the row of an entry or a row id, from the layout. It returns `undefined` for a hidden or unknown row.
+- Harness: the Inline details page opens a details panel under a task and pushes the rows below down.
 - `ViewPresetHeader.alignTo` makes a header band's cells start and end on boundaries of a finer unit. A month band with `alignTo: 'week'` owns the weeks whose first day falls in that month. A coarser or equal `alignTo` throws `InvalidPresetError` (rule `'header-align'`).
 - A bar in a Row with Lanes now sits in its Lane. `lanes.of(entry)` names the Lane, and `FrameBar.lane`, `y` and `height` say where. A Row with no Lanes centres its bar as before.
 - Variant takes `chrome: 'none'`. The library then draws no fill, border, radius or padding on that bar, and the bar carries `data-chrome='none'`.

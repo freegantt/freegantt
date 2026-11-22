@@ -722,6 +722,58 @@ function marksFirstWeek() {
 export { marksFirstWeek };
 ```
 
+## Mount content in a layer
+
+A plugin mounts HTML in one of three layers through `ctx.view`. Each layer answers one question: what does the content follow?
+
+| Layer | Spans | Follows vertical scroll | Follows horizontal pan |
+| --- | --- | --- | --- |
+| `overlay` | The whole Gantt | No. A popup dismisses on scroll. | No |
+| `rowLayer` | The grid pane, clipped to it | Yes | Yes |
+| `rowSpanLayer` | Grid pane and timeline pane together, below the header | Yes | No |
+
+Each layer takes `present(content)` and gives back a disposer. `onResize` and `bounds` work the same on all three.
+`rowSpanLayer` hides content that scrolled up under the header. Pointer events pass through it, except on your content.
+A key pressed inside content in `rowSpanLayer` stays there. The Gantt's keymap and pan keys never run for it.
+
+`ctx.view.rowBox(id)` returns `{ top, height }` for a row. `top` counts from the top of `rowSpanLayer`. It reads the layout, so a row scrolled out of the window answers. It returns `undefined` for a row a collapsed parent hides and for an unknown id.
+A row's top moves when a row height changes, a parent collapses or expands, data changes or the Gantt resizes. Read `rowBox` again then.
+
+### An inline panel under a row
+
+Add a bar-less spacer entry after the row. Answer its height through the live `rowHeight` callback: the panel height when it is open, `0` when it is not. The rows below move down. Mount the panel in `rowSpanLayer` at `rowBox(spacer.id).top`.
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function detailsPanel(openFor: () => string | undefined) {
+  return definePlugin({
+    id: 'demo.detailsPanel',
+    view(ctx) {
+      const panel = document.createElement('div');
+      panel.style.cssText = 'position:absolute;left:0;right:0;height:120px';
+      panel.textContent = 'Details';
+
+      const place = () => {
+        const taskId = openFor();
+        const box = taskId === undefined ? undefined : ctx.view.rowBox(`${taskId}:panel`);
+        panel.hidden = box === undefined;
+        if (box) panel.style.top = `${box.top}px`;
+      };
+
+      ctx.view.rowSpanLayer.present(panel);
+      ctx.view.rowSpanLayer.onResize(place);
+      ctx.events.on('navigationChange', place);
+      place();
+    },
+  });
+}
+
+export { detailsPanel };
+```
+
+The spacer entry is a normal entry with no dates, so it draws no bar. The consumer's `rowHeight` returns the panel's height for it. `harness/` has a runnable version.
+
 ## Every registration seam
 
 All of these calls are legal only inside a plugin's own half. Each row
