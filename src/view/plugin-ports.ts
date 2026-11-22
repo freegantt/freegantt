@@ -91,6 +91,8 @@ export interface GanttShellPorts {
   rowSpanLayer: MountLayer;
   /** Where one row sits, for a plugin that mounts content beside it. */
   rowBox(id: string): RowBox | undefined;
+  /** Tells a plugin after a frame moved a row top or height. */
+  onRowLayout(callback: () => void): Disposer;
   /** This Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
    *  each plugin's `by` onto it below, so a plugin never names itself. */
   raiseError: RaiseError;
@@ -258,6 +260,12 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  answers too. `undefined` for a row a collapsed parent hides, and for an unknown id. Read it
      *  again after a row height change, a collapse or a data change: a row's top moves with them. */
     rowBox(id: EntryId | string): RowBox | undefined;
+    /** Calls `callback` after a frame whose rows sit differently: a row height change, a collapse
+     *  or expand, a filter, or a data change. A scroll alone never calls it, because a scroll moves
+     *  no row top. The callback runs after the frame paints, so `rowBox` is already current. It does
+     *  not run for the frame that is painted when you register: read `rowBox` once yourself. The
+     *  `Disposer` stops it. */
+    onRowLayout(callback: () => void): Disposer;
     /** Builds a live node from an `ElementDescription` — the one seam
      *  `extensions/` has to the reconciler. `extensions/` may not import `render/` itself.
      *  Never `innerHTML`d except the description's own explicit `html` opt-in (I13).
@@ -538,6 +546,7 @@ export function buildPluginPorts(
       rowLayer: shell.rowLayer,
       rowSpanLayer: shell.rowSpanLayer,
       rowBox: (id) => shell.rowBox(id),
+      onRowLayout: (callback) => shell.onRowLayout(callback),
       renderElement: (description) => buildElement(description),
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,

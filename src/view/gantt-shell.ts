@@ -55,6 +55,7 @@ import type {
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
+import { RowLayoutWatch } from './row-layout-watch.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
@@ -809,6 +810,8 @@ export class GanttShell {
   #rowLayer: DomMountLayer;
   /** The layer that spans both panes and follows the rows' vertical scroll. */
   #rowSpanLayer: DomMountLayer;
+  /** Tells a plugin when a row top or height moved (`ctx.view.onRowLayout`). */
+  #rowLayoutWatch = new RowLayoutWatch();
   /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
    *  Constructed beside the overlay, and for the same reason. */
   #dom: ContainerDom;
@@ -835,6 +838,7 @@ export class GanttShell {
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#containerResize = new ContainerResize(this.#container);
     this.#teardown.add(() => this.#containerResize.destroy());
+    this.#teardown.add(() => this.#rowLayoutWatch.destroy());
     this.#overlay = new DomMountLayer(
       this.#panes.overlay,
       () => this.#paneLayout.overlayBounds(),
@@ -2402,6 +2406,7 @@ export class GanttShell {
       rowLayer: this.#rowLayer,
       rowSpanLayer: this.#rowSpanLayer,
       rowBox: (id) => this.#rowBox(id),
+      onRowLayout: (callback) => this.#rowLayoutWatch.onChange(callback),
       dom: this.#dom,
       commands: this.#commandRegistry,
       keymap: this.#keymap,
@@ -3422,6 +3427,11 @@ export class GanttShell {
     this.#paneLayout.gridPattern = nestsRows(this.#frameSettings.rowSource) ? 'treegrid' : 'grid';
     this.#paneLayout.setGridSize(frame.rowCount, frame.columns.length);
     this.#backend.sync(frame);
+    this.#rowLayoutWatch.settle({
+      planRevision: this.#layout.rowPlanRevision,
+      rowCount: frame.rowCount,
+      contentHeight: frame.contentHeight,
+    });
     this.#lastBarById.clear();
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);
     // The grid pane's spacer mirrors the header's own band count. So both panes resolve

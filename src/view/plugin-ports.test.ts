@@ -74,6 +74,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     rowLayer: fakeMountLayer(),
     rowSpanLayer: fakeMountLayer(),
     rowBox: () => undefined,
+    onRowLayout: () => () => {},
     dom: makeDom(container),
     commands: {
       register: (command) => registry.add(`command:${command.id}`),
