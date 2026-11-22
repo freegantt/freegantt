@@ -1,6 +1,6 @@
 # A full-width layer that scrolls with the rows, and a row's box
 
-Status: proposed. Additive. No breaking change.
+Status: accepted, including `onRowLayout`. Additive. No breaking change.
 
 ## Need
 
@@ -80,7 +80,7 @@ Findings from the code:
 - `docs/06-plugin-authoring.md`: the layer table and an "inline panel under a row" recipe.
 - `CHANGELOG.md`: Added.
 
-## Questions for the coordinator
+## Questions that were answered
 
 1. Do you accept the three names: `rowSpanLayer`, `rowBox`, `onRowLayout`?
 2. Do you accept the new `onRowLayout` hook, as the one addition beyond the two approved getters?

@@ -67,6 +67,7 @@ function open(taskId: string | undefined): void {
   openTaskId = taskId;
   gantt.rowSource = rowSourceFor(taskId);
   panel.show(taskId);
+  showLayoutChanges();
 }
 
 gantt.on('entryActivate', ({ entry }) => {
@@ -74,6 +75,16 @@ gantt.on('entryActivate', ({ entry }) => {
   if (id.endsWith(':panel')) return;
   open(id === openTaskId ? undefined : id);
 });
+
+// Counts the frames that moved a row. A scroll adds none.
+const layoutReadout = document.querySelector<HTMLSpanElement>('#layout-readout')!;
+gantt.on('navigationChange', () => showLayoutChanges());
+function showLayoutChanges(): void {
+  requestAnimationFrame(() => {
+    layoutReadout.textContent = `Row layout changes: ${panel.layoutChanges}`;
+  });
+}
+showLayoutChanges();
 
 declare global {
   interface Window {

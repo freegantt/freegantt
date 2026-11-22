@@ -737,7 +737,7 @@ Each layer takes `present(content)` and gives back a disposer. `onResize` and `b
 A key pressed inside content in `rowSpanLayer` stays there. The Gantt's keymap and pan keys never run for it.
 
 `ctx.view.rowBox(id)` returns `{ top, height }` for a row. `top` counts from the top of `rowSpanLayer`. It reads the layout, so a row scrolled out of the window answers. It returns `undefined` for a row a collapsed parent hides and for an unknown id.
-A row's top moves when a row height changes, a parent collapses or expands, data changes or the Gantt resizes. Read `rowBox` again then.
+A row's top moves when a row height changes, a parent collapses or expands, a filter changes or data changes. `ctx.view.onRowLayout(callback)` tells you after the frame that moved a row, and the callback reads `rowBox` again. It never runs for a scroll, because a scroll moves no row top. It does not run for the frame painted when you register, so read `rowBox` once yourself. It gives back a disposer.
 
 ### An inline panel under a row
 
@@ -763,7 +763,7 @@ function detailsPanel(openFor: () => string | undefined) {
 
       ctx.view.rowSpanLayer.present(panel);
       ctx.view.rowSpanLayer.onResize(place);
-      ctx.events.on('navigationChange', place);
+      ctx.view.onRowLayout(place);
       place();
     },
   });

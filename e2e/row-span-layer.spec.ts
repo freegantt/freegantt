@@ -49,7 +49,7 @@ test('the panel opens under its row, spans both panes and pushes the rows below 
 
   await page.locator(`${PANEL} button`).click();
   await expect(page.locator(PANEL)).toBeHidden();
-  expect(await top(page, FOURTH_BAR)).toBe(nextBarBefore);
+  await expect.poll(() => top(page, FOURTH_BAR)).toBe(nextBarBefore);
 });
 
 test('the layer follows vertical scroll and stays still on a horizontal pan', async ({ page }) => {
@@ -106,4 +106,20 @@ test('a key pressed in mounted content never reaches the Gantt', async ({ page }
   await page.locator(`${PANEL} input`).focus();
   await page.keyboard.type('hello');
   await expect(page.locator(`${PANEL} input`)).toHaveValue('hello');
+});
+
+test('the rows moving tells the plugin, and a scroll does not', async ({ page }) => {
+  await openPanelUnderTask(page, 2);
+  const count = async (): Promise<number> =>
+    Number((await page.locator('#layout-readout').textContent())?.match(/\d+/)?.[0]);
+  await expect.poll(count).toBeGreaterThan(0);
+  const afterOpen = await count();
+
+  await scrollTimeline(page, { top: 60 });
+  await scrollTimeline(page, { left: 120 });
+  await page.waitForTimeout(300);
+  expect(await count()).toBe(afterOpen);
+
+  await page.locator(`${PANEL} button`).click();
+  await expect.poll(count).toBeGreaterThan(afterOpen);
 });

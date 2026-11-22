@@ -15,6 +15,8 @@ export function spacerIdFor(taskId: string): string {
 export interface InlineDetailsPlugin extends ChromePlugin {
   /** Shows the panel for this task. `undefined` closes it. */
   show(taskId: string | undefined): void;
+  /** How many times the rows moved since mount. The page shows it. */
+  readonly layoutChanges: number;
 }
 
 /** `describe` answers the lines the panel shows for one task. */
@@ -24,6 +26,7 @@ export function inlineDetailsPanel(
 ): InlineDetailsPlugin {
   let place: () => void = () => {};
   let openFor: string | undefined;
+  let layoutChanges = 0;
 
   const plugin = definePlugin({
     id: 'demo.inlineDetailsPanel',
@@ -58,16 +61,22 @@ export function inlineDetailsPanel(
 
       ctx.disposables.add(ctx.view.rowSpanLayer.present(panel));
       ctx.disposables.add(ctx.view.rowSpanLayer.onResize(place));
-      // A row's top moves with a collapse, a data change or a new height. The page calls `show` for
-      // the height change, and a viewport move re-reads the box for the rest.
-      ctx.disposables.add(ctx.events.on('navigationChange', place));
+      // A row's top moves with a collapse, a filter, a data change or a new height, and never with a scroll.
+      ctx.disposables.add(
+        ctx.view.onRowLayout(() => {
+          layoutChanges += 1;
+          place();
+        }),
+      );
     },
   });
 
-  return Object.assign(plugin, {
+  const shown = Object.assign(plugin, {
     show(taskId: string | undefined) {
       openFor = taskId;
       place();
     },
   });
+  // A getter, so the page reads the live count. `Object.assign` would copy it once.
+  return Object.defineProperty(shown, 'layoutChanges', { get: () => layoutChanges }) as InlineDetailsPlugin;
 }
