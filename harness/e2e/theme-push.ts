@@ -7,7 +7,7 @@
 //    inside it on `theme: 'auto'` follows with no assignment of its own.
 //
 // Neither Gantt below ever reads the `dark` class on `<html>` — that class is this page's own
-// app-level signal, the thing Tailwind/Filament/next-themes already write. The library only ever
+// app-level signal, the thing Tailwind/next-themes already write. The library only ever
 // sees what the toggle pushes onto it.
 //
 // `e2e/theme-push.spec.ts` drives this page: it clicks the toggle and checks both Gantts follow.

@@ -26,7 +26,7 @@ decided behaviour, and the workaround below is the supported answer.
 1. The nearest `data-fg-theme` pin, found by a `closest()` walk up from the container.
 2. `prefers-color-scheme`, which is the operating system.
 
-Applications do not use either. Tailwind, Filament and next-themes put `class="dark"` on
+Applications do not use either. Tailwind and next-themes put `class="dark"` on
 `<html>`. Bootstrap 5.3 uses `data-bs-theme="dark"`. FreeGantt sees none of these.
 
 The result is not a small mismatch. A user on a light operating system who turns the application
