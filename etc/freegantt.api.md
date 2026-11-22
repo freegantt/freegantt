@@ -1939,13 +1939,13 @@ export class InvalidPlainTimeError extends FreeGanttError {
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(presetId: string, rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height', message: string, operation: string);
+    constructor(presetId: string, rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height' | 'header-align', message: string, operation: string);
     // (undocumented)
     readonly operation: string;
     // (undocumented)
     readonly presetId: string;
     // (undocumented)
-    readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height';
+    readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height' | 'header-align';
 }
 
 // @public
@@ -2986,7 +2986,9 @@ export interface TimeScale {
     // (undocumented)
     readonly range: TimeSpan;
     spanForPixels(span: PixelSpan): TimeSpan;
-    ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+    ticks(step: TickStep & {
+        readonly alignTo?: TimeUnit;
+    }, span: PixelSpan): readonly Tick[];
     readonly timeZone: string;
     // (undocumented)
     widthForDuration(d: Duration, at: Instant): number;
@@ -3232,6 +3234,7 @@ export interface ViewPreset {
 
 // @public (undocumented)
 export interface ViewPresetHeader extends TickStep {
+    alignTo?: TimeUnit;
     // (undocumented)
     format: DateFormat;
     heightPx?: number;
