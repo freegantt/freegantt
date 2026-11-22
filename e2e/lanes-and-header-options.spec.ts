@@ -85,3 +85,28 @@ test('the today column paints after every other band under the bars', async ({ p
   );
   expect(order.at(-1)).toBe('today');
 });
+
+test('a month band aligned to weeks starts every cell on a week tick', async ({ page }) => {
+  await openPage(page);
+  await page.evaluate(() => {
+    window.__gantt.preset = {
+      id: 'month-by-week',
+      tickUnit: 'week',
+      tickIncrement: 1,
+      headers: [
+        { unit: 'month', increment: 1, format: { month: 'short' }, alignTo: 'week' },
+        { unit: 'week', increment: 1, format: { day: 'numeric' } },
+      ],
+      preferredTickWidthPx: 48,
+    };
+  });
+  const starts = async (band: number): Promise<number[]> =>
+    page
+      .locator('#gantt .fg-band:has(.fg-tick)')
+      .nth(band)
+      .locator('.fg-tick')
+      .evaluateAll((ticks) => ticks.map((tick) => Math.round(tick.getBoundingClientRect().left)));
+  await expect.poll(async () => (await starts(0)).length).toBeGreaterThan(1);
+  const weekStarts = new Set(await starts(1));
+  for (const monthStart of await starts(0)) expect(weekStarts.has(monthStart)).toBe(true);
+});
