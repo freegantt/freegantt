@@ -6,6 +6,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
+### Added
+
+- A bar in a Row with Lanes now sits in its Lane. `lanes.of(entry)` names the Lane, and `FrameBar.lane`, `y` and `height` say where. A Row with no Lanes centres its bar as before.
+- Variant takes `chrome: 'none'`. The library then draws no fill, border, radius or padding on that bar, and the bar carries `data-chrome='none'`.
+- New `BarLabelPolicy` value `'outsideOrNone'`. The label paints beside the bar when it fits before the next bar in the same Lane, and paints nowhere otherwise. Other policies stay as they were.
+
+- new `--fg-col-header-align` token aligns column header label: `center` (the default) or `flex-end` for bottom edge. `--fg-col-header-padding-block` now takes shorthand, such as `0 10px`.
+
+- new `lanes` Gantt option gives Rows Lanes: `{ count(entry), of(entry) }`. Row with Lanes grows to hold them. Lane size comes from `--fg-lane-height`, `--fg-lane-gap` and `--fg-lane-padding`. Row draws empty `.fg-lane` guides, styled by `--fg-lane-bg`, `--fg-lane-border` and `--fg-lane-radius`. frame rows carry `lanes`. live.
+
+- new `headerTickRenderer` Gantt option draws and flags each header tick. function gets `band`, `tick`, `time`, `locale` and `rangeStart`, returns `content` and `flags` (or nothing). flag becomes `data-flag` token on tick. library adds `today` flag finest-band tick holds today. live.
+- Header band takes `heightPx` in preset. wins over `--fg-band-height`. `format` context for header gets `rangeStart`. Non-positive `heightPx` throws `InvalidPresetError` with rule `header-height`.
+- Four new tokens style header tick: `--fg-tick-edge-color`, `--fg-tick-off-bg`, `--fg-tick-today-bg` and `--fg-tick-today-color`.
+
+- The new `rowHeight` Gantt option sets a Row's height: a number for every Row, or a function that answers per Row from its Entry, kind and depth. It changes live. `--fg-row-height` stays the default. A bar centres in its own Row, and a connector leaves from the middle of its own Row.
+- The new `tickLines` Gantt option sets which body lines the timeline draws: `'tick'` (the default, one per tick), `'none'`, or `{ unit: 'week' }` for a line at each week start. It changes live.
+- The new `todayColumn` Gantt option tints today's day column under the bars. The default is `false`. It changes live. The new `--fg-today-column-bg` token sets the tint.
+- `todayLine` also takes `{ at: 'now' | 'dayCentre' }`. `{ at: 'dayCentre' }` puts the line at the middle of the current day. `true` still means the current instant.
+- The Today line has three new tokens: `--fg-today-line-width`, `--fg-today-line-opacity` and `--fg-today-line-animation`. Each default keeps today's look. The `fg-today-glow` keyframes exist only for a reader who accepts motion.
+- Five new tokens style the row twisty: `--fg-twisty-glyph-collapsed`, `--fg-twisty-glyph-expanded`, `--fg-twisty-rotation-expanded`, `--fg-twisty-transition` and `--fg-twisty-gap`. The defaults keep today's look.
+- A row now carries `data-kind` (`entry` or `header`), `data-depth` and, when it holds children, `data-parent`. The timeline row band carries the same three. Two new tokens style a group row: `--fg-group-row-bg` and `--fg-group-row-border`.
+- A cell drawn by a `gridCellRenderer` now gets an `aria-label` on its `gridcell`. The value is the library text for the cell. A renderer whose root element sets its own `aria-label` keeps that name, and the cell gets none.
+- New tokens `--fg-twisty-icon`, `--fg-twisty-icon-color` and `--fg-twisty-icon-size` draw the twisty as a mask image.
+- `--fg-col-header-padding-inline` and `-block` pad the column header apart from the row cells. Four more tokens style the column header text: `--fg-col-header-transform`, `-tracking`, `-font-size` and `-font-weight`. Defaults keep today's look.
+- New tokens `--fg-band-font-size`, `--fg-band-font-weight`, `--fg-tick-font-size` and `--fg-tick-font-weight` set the header text.
+
 ## [0.2.0] - 2026-11-02
 
 Dependencies and scheduling. `entryDependencies()` stores links between Entries and draws them as connectors. A user connects two bars by drag, and selects, labels and deletes a line. `scheduling()` keeps the links true: a move pushes the successors, in working days when you pass a working calendar. It also reads constraints and manually scheduled Entries, and it writes float, critical and a driving path. Both plugins use generic seams that any plugin can use. The seams are connector providers, the connect gesture, plugin store writes with an edit, and an extender that sees store-only changes. Read the new guide [Dependencies and scheduling](docs/13-dependencies-and-scheduling.md).
@@ -64,6 +90,8 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - The harness has a "Scheduling" page. It installs `scheduling()` on a chain of six tasks joined by all four Dependency types and one negative lag. Drag a task later and its successors move. Drag it earlier and they follow. One undo restores them all. A Manual column toggles `manuallyScheduled`, and a loop of three tasks shows its members from the diagnostics.
 
 ### Changed
+
+- The `todayColumn` tint paints after the time-shading bands, so an off-day band no longer covers it.
 
 - `scheduling()` skips its float pass on a drag-preview frame, so a drag on a long chain costs less per frame. Float and critical marks update on commit, as before.
 - A finish-to-start connector to a bar that starts at, or within two stubs (24 px) after, the end of its source now takes one bend. The line runs right from the source, then drops onto the successor's top edge (or rises onto its bottom edge), and the arrowhead points into the bar. A start-to-finish connector does the same, mirrored. It used to zig-zag back across both bars. `ConnectorAnchor` gains `barTop` and `barBottom`. A bar in the way of the new vertical keeps the old route.
