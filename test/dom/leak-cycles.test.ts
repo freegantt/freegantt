@@ -381,7 +381,7 @@ describe('[S6-A4] a destroyed Gantt leaves nothing bound to a shared axis (#403)
   });
 
   it('the consumer shape — x shared, y private — leaves the shared x clean (D-S6-1)', () => {
-    // `the consumer brief` §1: two panes, one shared time axis, one
+    // The first consumer's shape: two panes, one shared time axis, one
     // shared horizontal scroll. Private y is the library's own ruling (#405), and it is the shape
     // that consumer mounts and destroys on every visit.
     const scale = new TimeScaleModel({ fit: 'preset' });
