@@ -4,6 +4,7 @@
 import type {
   BarFlags,
   BarLabelPlacement,
+  BarChrome,
   BarLabelPolicy,
   BarRenderer,
   BarRendererContext,
@@ -23,7 +24,13 @@ import type {
   RowId,
   ClientPoint,
 } from '../../layout/index.js';
-import type { ColumnAlign, ConnectorArrow, FrameColumn, FrameConnector } from '../../layout/index.js';
+import type {
+  ColumnAlign,
+  ConnectorArrow,
+  FrameColumn,
+  FrameConnector,
+  PlannedRowKind,
+} from '../../layout/index.js';
 import type { RenderBackend, RenderSurfaces, InteractionState, HitResult, RowHit } from '../backend.js';
 import {
   DEFAULT_DATE_LINE_LABEL_PLACEMENT,
@@ -98,6 +105,9 @@ export interface DomBackendOptions {
    *  call, same live-reconfiguration posture `resolveBarRenderer` below already takes. Omitted — a
    *  test backend built with no options — falls back to `'fitBar'` for every entry. */
   resolveBarLabelPolicy?: (entry: Entry) => BarLabelPolicy;
+  /** Per entry, read fresh every `syncBars` call like `resolveBarLabelPolicy`. `'none'` stamps
+   *  `data-chrome` so the library draws no fill, border, radius or padding. Omitted: `'default'`. */
+  resolveBarChrome?: (entry: Entry) => BarChrome;
   /** #318 follow-up. Read fresh every `sync` call, same posture as `resolveBarLabelPolicy` above. Omitted —
    *  a test backend built with no options — falls back to `DEFAULT_DATE_LINE_LABEL_PLACEMENT`. */
   readDateLineLabelPlacement?: () => DateLineLabelPlacement;
@@ -136,7 +146,10 @@ function callRenderer<TCtx>(
   }
 }
 
-type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label'>;
+type TickGeom = Pick<FrameHeaderTick, 'x' | 'width' | 'label' | 'content'> & {
+  /** The `data-flag` tokens, space-joined. Empty: no attribute. */
+  flag: string;
+};
 type CellItem = {
   key: string;
   text: string;
@@ -183,6 +196,7 @@ type HeaderCellGeom = {
 type RowGeom = {
   top: number;
   height: number;
+  kind: PlannedRowKind;
   gridCells: readonly string[];
   index: number;
   rowCount: number;
@@ -198,11 +212,33 @@ type RowGeom = {
 /** The timeline pane's own zebra band for one row — the same paint `.fg-row` carries in the grid
  *  pane, from the same `FrameRow`, so both panes stripe the same rows (I9's pixel identity applies
  *  to the row's background too, not just its top/height). */
-type RowBandGeom = {
+type RowBandGeom = LaneGuideGeom & {
   top: number;
   height: number;
   parity: RowParity;
+  kind: PlannedRowKind;
+  depth: number;
+  parent: boolean;
 };
+
+/** What a band needs to draw its Lane guides. Numbers, so the band's patch gate compares by value. */
+type LaneGuideGeom = {
+  laneCount: number;
+  laneFirstOffset: number;
+  laneHeight: number;
+  laneStep: number;
+};
+
+function laneGuideGeom(row: FrameRow): LaneGuideGeom {
+  const [first, second] = row.lanes ?? [];
+  if (first === undefined) return { laneCount: 0, laneFirstOffset: 0, laneHeight: 0, laneStep: 0 };
+  return {
+    laneCount: row.lanes!.length,
+    laneFirstOffset: first.top - row.top,
+    laneHeight: first.height,
+    laneStep: second === undefined ? 0 : second.top - first.top,
+  };
+}
 /** The `data-label` token `patch` paints, and whether a `.fg-bar-label` child exists at all (#435
  *  follow-up). `BarLabelPlacement`'s two values still mean "paints, on this side." `'hidden'`
  *  adds a third: the child exists, measured, but must not paint — `'insideOrNone'` on a bar too
@@ -230,6 +266,8 @@ type BarGeom = Pick<
 > & {
   /** `true` for a locked Entry's bar. */
   locked: boolean;
+  /** `'none'` when the variant's paint owns the whole box. */
+  chrome: BarChrome;
   /** S5.4: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
   /** This frame's label token — see `BarLabelToken` for what each value means and costs.
@@ -242,6 +280,31 @@ type BarGeom = Pick<
  *  scrolls. */
 type RowParity = 'odd' | 'even';
 
+/** Where the next Bar in the same Row and Lane starts, for every Bar that has one. A Bar whose
+ *  successor starts at the same x has none: two Bars that share a start do not push each other's label. */
+function nextBarXInLane(bars: readonly FrameBar[]): Map<BarId, number> {
+  const lanes = new Map<string, FrameBar[]>();
+  for (const bar of bars) {
+    const key = `${bar.rowId}\u0000${bar.lane ?? 0}`;
+    const held = lanes.get(key);
+    if (held === undefined) lanes.set(key, [bar]);
+    else held.push(bar);
+  }
+  const next = new Map<BarId, number>();
+  for (const lane of lanes.values()) {
+    lane.sort((a, b) => a.x - b.x);
+    // Walk back to front, so the nearest later start is known in one pass.
+    let laterX: number | undefined;
+    for (let i = lane.length - 1; i >= 0; i--) {
+      const bar = lane[i]!;
+      const following = lane[i + 1];
+      if (following !== undefined && following.x > bar.x) laterX = following.x;
+      if (laterX !== undefined) next.set(bar.id, laterX);
+    }
+  }
+  return next;
+}
+
 function rowParity(index: number): RowParity {
   return index % 2 === 0 ? 'odd' : 'even';
 }
@@ -252,7 +315,7 @@ function rowParity(index: number): RowParity {
  *  breaking for, so a forced side with no room still falls back to inside; and `undefined` textWidth
  *  (no 2d context to measure with) always reads `'inside'` — today's exact behaviour, so a stub DOM
  *  never invents pixels it cannot measure. Returns `undefined` only for `'none'` or for
- *  `'insideOrNone'` on a bar too narrow — callers map that second case to the `'hidden'` token
+ *  `'insideOrNone'` on a bar too narrow, or `'outsideOrNone'` on a bar with no room beside it — callers map that second case to the `'hidden'` token
  *  (`BarLabelToken`), not to "no child," on any bar this function can be asked about twice. */
 function resolveBarLabelPlacement(
   mode: BarLabelPolicy,
@@ -261,9 +324,15 @@ function resolveBarLabelPlacement(
   barWidth: number,
   gapPx: number,
   contentWidth: number,
+  nextBarX: number | undefined,
 ): BarLabelPlacement | undefined {
   if (mode === 'none') return undefined;
   if (textWidth === undefined || mode === 'inside') return 'inside';
+  // The room outside ends at the content edge, or one gap before the next Bar in the same Lane.
+  if (mode === 'outsideOrNone') {
+    const room = nextBarX === undefined ? contentWidth : Math.min(contentWidth, nextBarX - gapPx);
+    return barX + barWidth + gapPx + textWidth <= room ? 'outside' : undefined;
+  }
   const fitsInside = textWidth + 2 * gapPx <= barWidth;
   if (mode === 'insideOrNone') return fitsInside ? 'inside' : undefined;
   if (mode === 'fitBar' && fitsInside) return 'inside';
@@ -271,6 +340,22 @@ function resolveBarLabelPlacement(
   if (mode === 'outside') return fitsOutside ? 'outside' : 'inside';
   // 'fitBar' remaining: outside when it fits there, inside (ellipsised) as the last resort.
   return fitsOutside ? 'outside' : 'inside';
+}
+
+/** Which `data-label` token a bar's label child gets, or `undefined` for no child at all. A
+ *  `barRenderer` that owns the content gets none. A policy that can hide a label (`insideOrNone`,
+ *  `outsideOrNone`) gets a hidden child up front when no placement fits: a resize preview can widen
+ *  the bar past the fit line mid-drag, and that hot path only flips `data-label` — it never grows
+ *  the child `patch` owns (`BarLabelToken` states what the hidden child costs). */
+function labelTokenOf(
+  ownsContent: boolean,
+  placement: BarLabelPlacement | undefined,
+  policy: BarLabelPolicy,
+  label: string,
+): BarLabelToken | undefined {
+  if (ownsContent) return undefined;
+  const canFlipToLabel = (policy === 'insideOrNone' || policy === 'outsideOrNone') && label !== '';
+  return placement ?? (canFlipToLabel ? 'hidden' : undefined);
 }
 
 /** Does this paint own the bar's content, or only decorate it (ADR 0018)? A description that
@@ -297,7 +382,7 @@ function barContent(painted: ElementDescription | undefined, label: ElementDescr
 type HandleGeom = Pick<FrameBar, 'x' | 'y' | 'width' | 'height'>;
 /** Bands carry no per-frame geometry of their own yet (height/stacking is S1.9/S1.10) — an always-
  * equal geom means `syncKeyed` patches a band node once, at creation, and never again. */
-type BandGeom = Record<string, never>;
+type BandGeom = { heightPx?: number };
 const EMPTY_BAND_GEOM: BandGeom = Object.freeze({});
 
 /** `data-flag` is generated from `BAR_FLAG_KEYS` (S1.10) — adding a new key to that list
@@ -328,6 +413,18 @@ function cellItemsFor(
     if (column?.flex !== undefined) item.flex = column.flex;
     return item;
   });
+}
+
+/** A cell drawn by a `gridCellRenderer` gets an accessible name from the library text, so a renderer
+ *  that draws a picture or a nest of spans is still announced. The name sits on the `gridcell`,
+ *  because a bare `span` may not carry one. A renderer whose root names itself, such as a checkbox
+ *  with its own `aria-label`, keeps that name, and the cell takes none. */
+function paintCellName(cell: HTMLElement, label: HTMLElement, geom: CellGeom): void {
+  const content = geom.content;
+  const rootNamesItself = content?.attrs?.['aria-label'] !== undefined;
+  if (content === undefined || rootNamesItself) cell.removeAttribute('aria-label');
+  else cell.setAttribute('aria-label', geom.text);
+  applyElementDescription(label, content ?? { text: geom.text });
 }
 
 function paintColumnBox(node: HTMLElement, geom: { width: number; flex: number; align: ColumnAlign }): void {
@@ -534,6 +631,14 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
    *  with; both read the same as "never flips". A defined width does not promise a painting
    *  placement: `'insideOrNone'` on a bar too narrow measures the text and still stores `'hidden'` in
    *  `labelPlacementByBarId` below, so the two maps disagree on purpose for that one state. */
+  // Where the next Bar in the same Lane starts, per Bar. Only an `'outsideOrNone'` label reads it, so
+  // it is built on the first ask of a frame and not at all for a frame that never asks.
+  let framedBars: readonly FrameBar[] = [];
+  let nextBarXByBarId: Map<BarId, number> | undefined;
+  function nextBarXOf(id: BarId): number | undefined {
+    nextBarXByBarId ??= nextBarXInLane(framedBars);
+    return nextBarXByBarId.get(id);
+  }
   const labelWidthByBarId = new Map<BarId, number | undefined>();
   /** Each mounted bar's last-committed label token — what `restoreBarTransform` puts back on
    *  `data-label` once a resize preview that flipped it mid-drag clears without a commit. Written in
@@ -834,7 +939,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     if (textWidth === undefined) return;
     const entry = entryById(entryIdOfBar(id));
     const policy = entry === undefined ? 'fitBar' : resolveBarLabelPolicy(entry);
-    const placement = resolveBarLabelPlacement(policy, textWidth, x, width, barLabelGapPx, contentWidthPx);
+    const placement = resolveBarLabelPlacement(
+      policy,
+      textWidth,
+      x,
+      width,
+      barLabelGapPx,
+      contentWidthPx,
+      nextBarXOf(id),
+    );
     // Invariant this line leans on (pass-2 branch review): `labelWidthByBarId` is defined for a
     // bar (the guard above) only when `toGeom` measured a label for it, and `toGeom` measures a label
     // only for a bar that also gets a `.fg-bar-label` child — either painting, or hidden and ready to
@@ -1011,11 +1124,20 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       node.className = 'fg-tick';
       return node;
     },
-    toGeom: (tick: FrameHeaderTick): TickGeom => ({ x: tick.x, width: tick.width, label: tick.label }),
+    toGeom: (tick: FrameHeaderTick): TickGeom => ({
+      x: tick.x,
+      width: tick.width,
+      label: tick.label,
+      flag: tick.flags.length === 0 ? '' : tick.flags.join(' '),
+      ...(tick.content !== undefined ? { content: tick.content } : {}),
+    }),
     patch: (node: HTMLElement, geom: TickGeom): void => {
       node.style.transform = `translateX(${geom.x}px)`;
       node.style.width = `${geom.width}px`;
-      node.textContent = geom.label;
+      if (geom.flag === '') node.removeAttribute('data-flag');
+      else node.setAttribute('data-flag', geom.flag);
+      if (geom.content === undefined) node.textContent = geom.label;
+      else applyElementDescription(node, geom.content);
     },
   };
 
@@ -1030,8 +1152,12 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         node.className = 'fg-band';
         return node;
       },
-      toGeom: () => EMPTY_BAND_GEOM,
-      patch: () => {},
+      toGeom: (band) => (band.heightPx === undefined ? EMPTY_BAND_GEOM : { heightPx: band.heightPx }),
+      // The band's own height rides the same token the stylesheet reads, so its ticks follow it.
+      patch: (node, geom) => {
+        if (geom.heightPx === undefined) node.style.removeProperty('--fg-band-height');
+        else node.style.setProperty('--fg-band-height', `${geom.heightPx}px`);
+      },
     });
 
     bands.forEach((band, i) => {
@@ -1071,7 +1197,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       twisty.hidden = !geom.first || !geom.expandable;
       if (twisty.hidden) twisty.removeAttribute('aria-expanded');
       else twisty.setAttribute('aria-expanded', geom.expanded ? 'true' : 'false');
-      applyElementDescription(label, geom.content ?? { text: geom.text });
+      paintCellName(node, label, geom);
     },
   };
 
@@ -1167,6 +1293,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const geom: RowGeom = {
           top: row.top,
           height: row.height,
+          kind: row.kind,
           gridCells: row.gridCells,
           index: row.index,
           rowCount,
@@ -1189,6 +1316,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         node.setAttribute('aria-rowindex', String(geom.index + 2));
         setTreeRowAttributes(node, geom);
         node.dataset['parity'] = rowParity(geom.index);
+        stampRowKind(node, geom.kind, geom.depth, geom.expandable);
         if (geom.matched === false) node.dataset['matched'] = 'false';
         else delete node.dataset['matched'];
         if (geom.locked === true) node.dataset['locked'] = '';
@@ -1197,6 +1325,33 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
     });
 
     syncCellsForEachRow(rows, columns);
+  }
+
+  /** Styling hooks for a group row: what the row is, how deep it sits, and whether it holds children.
+   *  Both panes stamp them, so one selector paints the grid row and its timeline band alike. */
+  function stampRowKind(node: HTMLElement, kind: PlannedRowKind, depth: number, parent: boolean): void {
+    node.dataset['kind'] = kind;
+    node.dataset['depth'] = String(depth);
+    if (parent) node.dataset['parent'] = '';
+    else delete node.dataset['parent'];
+  }
+
+  /** Draws the empty Lane guides of a band. A guide sits at its own offset inside the band, so a
+   *  scroll never moves it. The guides are decoration, so a screen reader skips them. */
+  function paintLaneGuides(band: HTMLElement, geom: LaneGuideGeom): void {
+    const guides = band.querySelectorAll<HTMLElement>(':scope > .fg-lane');
+    for (let i = guides.length - 1; i >= geom.laneCount; i--) guides[i]!.remove();
+    for (let lane = 0; lane < geom.laneCount; lane++) {
+      let guide = guides[lane];
+      if (guide === undefined) {
+        guide = document.createElement('div');
+        guide.className = 'fg-lane';
+        guide.setAttribute('aria-hidden', 'true');
+        band.append(guide);
+      }
+      guide.style.transform = `translateY(${geom.laneFirstOffset + lane * geom.laneStep}px)`;
+      guide.style.height = `${geom.laneHeight}px`;
+    }
   }
 
   /** `aria-level`, `aria-posinset`, `aria-setsize` and `aria-expanded` describe a row's place in a
@@ -1294,6 +1449,8 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
 
   function syncBars(bars: readonly FrameBar[]): void {
     if (!barLayer) return;
+    framedBars = bars;
+    nextBarXByBarId = undefined;
     barGeomByBarId.clear();
     barIdsByEntryId.clear();
     for (const bar of bars) {
@@ -1340,7 +1497,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         const resolvedPlacement =
           bar.label === ''
             ? undefined
-            : resolveBarLabelPlacement(policy, textWidth, bar.x, bar.width, barLabelGapPx, contentWidthPx);
+            : resolveBarLabelPlacement(
+                policy,
+                textWidth,
+                bar.x,
+                bar.width,
+                barLabelGapPx,
+                contentWidthPx,
+                nextBarXOf(bar.id),
+              );
         const resolved = entry === undefined ? undefined : resolveBarRenderer(entry);
         let content: ElementDescription | undefined;
         if (resolved !== undefined && entry !== undefined) {
@@ -1355,14 +1520,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         // its markup instead, which is also why the mid-drag restamp below skips such a bar: its
         // label placement is a frame fact for it, not a hot-path one.
         const ownsContent = content !== undefined && paintsItsOwnContent(content);
-        // (#435 follow-up): a resize preview can still widen an `insideOrNone` bar past the fit
-        // line mid-drag (applyBarPreview), and that hot path only flips `data-label` — it never grows
-        // the child `patch` owns. So this one case gets a child up front, holding the `'hidden'` token
-        // (see `BarLabelToken` for what it costs), instead of no child at all.
-        const canFlipToLabel = !ownsContent && policy === 'insideOrNone' && bar.label !== '';
-        const labelToken: BarLabelToken | undefined = ownsContent
-          ? undefined
-          : (resolvedPlacement ?? (canFlipToLabel ? 'hidden' : undefined));
+        const labelToken = labelTokenOf(ownsContent, resolvedPlacement, policy, bar.label);
         labelWidthByBarId.set(bar.id, ownsContent ? undefined : textWidth);
         labelPlacementByBarId.set(bar.id, labelToken);
         return {
@@ -1376,12 +1534,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           a11yLabel: bar.a11yLabel,
           span: bar.span,
           locked: bar.locked === true,
+          chrome: entry === undefined ? 'default' : (options.resolveBarChrome?.(entry) ?? 'default'),
           labelPlacement: labelToken,
           ...(content !== undefined ? { content } : {}),
         };
       },
       patch: (node, geom) => {
         node.dataset['variant'] = geom.variant;
+        if (geom.chrome === 'none') node.dataset['chrome'] = 'none';
+        else delete node.dataset['chrome'];
         // States a fact about the paint, not a judgement on the variant (plans/01 §2.5) — every bar
         // `barSpan` floors or fixes carries it the same way. Pair with `data-variant` to tell which
         // variant was floored or holds a fixed box.
@@ -1439,11 +1600,21 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
         }
         return node;
       },
-      toGeom: (row) => ({ top: row.top, height: row.height, parity: rowParity(row.index) }),
+      toGeom: (row) => ({
+        top: row.top,
+        height: row.height,
+        parity: rowParity(row.index),
+        kind: row.kind,
+        depth: row.depth,
+        parent: row.expandable,
+        ...laneGuideGeom(row),
+      }),
       patch: (node, geom) => {
         node.style.transform = `translateY(${geom.top}px)`;
         node.style.height = `${geom.height}px`;
         node.dataset['parity'] = geom.parity;
+        stampRowKind(node, geom.kind, geom.depth, geom.parent);
+        paintLaneGuides(node, geom);
       },
     });
   }

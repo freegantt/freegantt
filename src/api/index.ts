@@ -122,6 +122,14 @@ export type {
   DateLineInput,
   DateLine,
   DateLineLabelPlacement,
+  HeaderTickContext,
+  HeaderTickPaint,
+  HeaderTickRenderer,
+  LaneRule,
+  RowHeight,
+  RowHeightContext,
+  TickLines,
+  TodayLineSpec,
   ChromePlugin,
   DataPlugin,
   Plugin,
@@ -439,6 +447,7 @@ export type {
   TooltipRendererContext,
   FrameBar,
   FrameRow,
+  FrameLane,
   ResolvedColumn,
   FrameColumn,
   BarFlags,
@@ -481,7 +490,7 @@ export type { Bar, BarProducer, BarAnchor, FixedBarBox } from '../layout/index.j
 // `EntryPredicate` names its predicate arm alone. Named for what they match — an Entry — rather than
 // for one of the two keys that take them: `EntriesRowSource.childrenAsSegments` takes the same shape
 // (#421).
-export type { EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
+export type { BarChrome, EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
 // ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
 // looks up again.
 export type { ResolvedVariant } from '../layout/index.js';
@@ -561,6 +570,7 @@ export type {
   TickStep,
   DateFormat,
   HeaderFormat,
+  HeaderFormatContext,
 } from '../time/index.js';
 // S5.6: `Dataset.time`'s own type — a plugin author names this when it writes a function
 // that takes a `ZonedTime` rather than reading `ctx.time`/`dataset.time` inline. `PlainParts` rides

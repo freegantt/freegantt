@@ -27,7 +27,18 @@ import type {
   RowSort,
   Overscan,
 } from '../layout/index.js';
-import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
+import type {
+  DateLine,
+  DateLineLabelPlacement,
+  RowHeight,
+  RowHeightContext,
+  LaneRule,
+  HeaderTickContext,
+  HeaderTickPaint,
+  HeaderTickRenderer,
+  TickLines,
+  TodayLineSpec,
+} from '../layout/index.js';
 import type {
   BarLabels,
   ConnectorRouting,
@@ -159,8 +170,32 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  midnight until something else repaints. An app that wants a live line reassigns this on its own
    *  timer, e.g. `setInterval(() => { gantt.todayLine = new Date(); }, 60_000)`, held in a plugin's
    *  `ctx.disposables`. `false`: off, no clock read. An `InstantInput` pins it with no clock read at
-   *  all. To keep today visible, pan with `panToToday()` or grow `range`. */
-  todayLine?: boolean | InstantInput;
+   *  all. To keep today visible, pan with `panToToday()` or grow `range`.
+   *
+   *  `{ at: 'dayCentre' }` reads the clock and puts the line in the middle of today's calendar day
+   *  in the Dataset zone, so a day column holds the line at its centre. `{ at: 'now' }` equals `true`. */
+  todayLine?: boolean | InstantInput | TodayLineSpec;
+  /** Live. Default `false`. `true` paints a column over the finest header tick that holds today,
+   *  under the bars. Colour: `--fg-today-column-bg`. Part: `.fg-today-column`. */
+  todayColumn?: boolean;
+  /** Live. Default `'tick'`: one body line per finest header tick. `{ unit: 'week' }` draws one line
+   *  per week start under a day-wide header. `'none'` draws no line. */
+  tickLines?: TickLines;
+  /** Live. Default: `--fg-row-height`. A number sets one height in px for every Row. A function
+   *  answers per Row, once per layout pass, from the Row's Entry, kind and depth:
+   *  `rowHeight: (ctx) => (ctx.depth === 0 ? 48 : 40)`. Give a height above 0. Any other answer
+   *  falls back to the default. Bars centre in their Row. */
+  rowHeight?: RowHeight;
+  /** Live. Which Rows hold Lanes: `{ count: (entry) => 2, of: (entry) => 0 }`. A Row with n Lanes
+   *  grows to `2 * --fg-lane-padding + n * --fg-lane-height + (n - 1) * --fg-lane-gap`, unless
+   *  `rowHeight` answers taller. An empty Lane still counts. The Row draws one empty `.fg-lane` guide
+   *  per Lane. Lane size comes from the tokens only. */
+  lanes?: LaneRule;
+  /** Live. Draws and flags one header tick. `undefined` from the function keeps the library text.
+   *  `content` replaces the tick's text. `flags` become `data-flag` tokens, for example `'off'` for a
+   *  day the consumer's own calendar calls non-working. The library adds `'today'` itself, to the
+   *  tick that holds today. The context holds `band`, `tick`, `time`, `locale` and `rangeStart`. */
+  headerTickRenderer?: HeaderTickRenderer;
   /** Live (S1.13). Default `[]`. Extra Date lines beside the today wrapper —
    *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
    *  Header bands. The wrapper's own line never gets a Date line label; give one of these a `label` instead. */
@@ -368,7 +403,17 @@ export type { ActedOn, CommandTarget };
 // explicitly imports it beside `DateLineInput`, its loose counterpart above.
 export type { DateLine };
 // `dateLineLabelPlacement`'s own type (#318 follow-up), passed through the same way.
-export type { DateLineLabelPlacement };
+export type {
+  DateLineLabelPlacement,
+  HeaderTickContext,
+  HeaderTickPaint,
+  HeaderTickRenderer,
+  LaneRule,
+  RowHeight,
+  RowHeightContext,
+  TickLines,
+  TodayLineSpec,
+};
 
 export class Gantt<TProps = unknown> {
   #shell: GanttShell;
@@ -408,6 +453,11 @@ export class Gantt<TProps = unknown> {
         'locale',
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
+        'todayColumn',
+        'tickLines',
+        'rowHeight',
+        'headerTickRenderer',
+        'lanes',
         'capabilities',
         'pointerActivation',
         'snap',
@@ -520,8 +570,9 @@ export class Gantt<TProps = unknown> {
 
   /** Reads `todayLine`'s loose pinned form through the dataset's zone (S1.13) — booleans
    *  pass through untouched, so `true`/`false` never take a clock read they don't need. */
-  #toTodayLine(todayLine: boolean | InstantInput): boolean | Instant {
+  #toTodayLine(todayLine: boolean | InstantInput | TodayLineSpec): boolean | Instant | TodayLineSpec {
     if (typeof todayLine === 'boolean') return todayLine;
+    if (typeof todayLine === 'object' && 'at' in todayLine) return todayLine;
     return toInstant(this.#dataset.timeZone, todayLine, 'gantt.todayLine');
   }
 
@@ -966,13 +1017,58 @@ export class Gantt<TProps = unknown> {
 
   /** Getter returns what was resolved (S1.13, S4-1) — a `boolean` passes straight
    *  through; any other setting reads back the `Instant` it was pinned to, never the loose input. */
-  get todayLine(): boolean | Instant {
+  get todayLine(): boolean | Instant | TodayLineSpec {
     return this.#shell.todayLine;
+  }
+
+  /** Live. See `GanttOptions.todayColumn`. */
+  get todayColumn(): boolean {
+    return this.#shell.todayColumn;
+  }
+
+  set todayColumn(on: boolean) {
+    this.#shell.todayColumn = on;
+  }
+
+  /** Live. See `GanttOptions.tickLines`. */
+  get tickLines(): TickLines {
+    return this.#shell.tickLines;
+  }
+
+  set tickLines(lines: TickLines) {
+    this.#shell.tickLines = lines;
+  }
+
+  /** Live. See `GanttOptions.lanes`. */
+  get lanes(): LaneRule | undefined {
+    return this.#shell.lanes;
+  }
+
+  set lanes(rule: LaneRule | undefined) {
+    this.#shell.lanes = rule;
+  }
+
+  /** Live. See `GanttOptions.headerTickRenderer`. */
+  get headerTickRenderer(): HeaderTickRenderer | undefined {
+    return this.#shell.headerTickRenderer;
+  }
+
+  set headerTickRenderer(renderer: HeaderTickRenderer | undefined) {
+    this.#shell.headerTickRenderer = renderer;
+  }
+
+  /** Live. See `GanttOptions.rowHeight`. */
+  get rowHeight(): RowHeight {
+    return this.#shell.rowHeight;
+  }
+
+  set rowHeight(height: RowHeight) {
+    this.#shell.rowHeight = height;
   }
 
   /** Live (S1.12/S1.13). `true`/`false` pass straight through; any other
    *  `InstantInput` is read once through the dataset's zone and pins the line with no clock read. */
-  set todayLine(on: boolean | InstantInput) {
+  set todayLine(on: boolean | InstantInput | TodayLineSpec) {
     this.#shell.todayLine = this.#toTodayLine(on);
   }
 

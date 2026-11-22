@@ -27,7 +27,13 @@ export interface Tick {
 }
 
 /** A Formatter without the entry: a header tick has no row. Zone and locale come only from `ctx`. */
-export type HeaderFormat = (value: Instant, ctx: FormatContext) => string;
+export type HeaderFormat = (value: Instant, ctx: HeaderFormatContext) => string;
+
+/** What a header format callback knows. `rangeStart` is the first Instant of the axis, so a label can
+ *  show a year only where the year changes ("Jan 2027") and stay short elsewhere. */
+export interface HeaderFormatContext extends FormatContext {
+  readonly rangeStart: Instant;
+}
 
 /** What a header band states to turn an Instant into its label. Options are
  * resolved through `Intl.DateTimeFormat` in the Gantt's locale and the Dataset's zone; a callback is
@@ -42,6 +48,9 @@ export interface ViewPresetHeader extends TickStep {
    *  `true` to keep this band's `format` exactly as written. No effect on a callback `format`: only
    *  `Intl.DateTimeFormatOptions` fields are ever inspected or stripped. */
   repeatCoarserUnits?: boolean;
+  /** The band's own height in px. Absent: the `--fg-band-height` token, then its default. A header
+   *  with a two-line tick cell sets a taller band than one with a single line. */
+  heightPx?: number;
 }
 
 /** Data, not a switch statement — shipped presets are config objects; custom ones are too (plans/01 §5.1). */

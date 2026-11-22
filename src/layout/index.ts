@@ -21,6 +21,7 @@ export { meter, image } from './column-renderers.js';
 export type {
   DoubleVariantMatch,
   EntryVariant,
+  BarChrome,
   FieldMatch,
   ReportDoubleMatch,
   ReportUnknownFieldMatch,
@@ -62,6 +63,7 @@ export type {
   DateLineDecoration,
   DateLineLabelPlacement,
   ResolveDateLinesInput,
+  TodayLineSpec,
 } from './date-line.js';
 export type {
   GeometryFrame,
@@ -73,6 +75,7 @@ export type {
   FrameHeaderBand,
   FrameHeaderTick,
   FrameTickLine,
+  TickLines,
   Overscan,
   PathCommand,
   RangeBand,
@@ -145,6 +148,10 @@ export type {
   ScrollAxisBinding,
   ScrollAxisBindingHandle,
 } from './viewport/scroll-axis.js';
+export { laneBandsOf, laneCountOf, laneRowHeight } from './lane.js';
+export type { FrameLane, LaneGeometry, LaneLayout, LaneRule } from './lane.js';
+export type { RowHeight, RowHeightContext, RowHeightResolver } from './row-height.js';
+export type { HeaderTickContext, HeaderTickPaint, HeaderTickRenderer } from './header-tick.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
 export { rowDropZoneAt, ROW_CHANGE_THRESHOLD_PX, DROP_ZONE_HYSTERESIS_PX } from './row-drop-zone.js';
@@ -158,6 +165,7 @@ export type {
   SnapSetting,
   Tick,
   HeaderFormat,
+  HeaderFormatContext,
   DateFormat,
   PresetRef,
   PresetId,

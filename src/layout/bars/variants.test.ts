@@ -456,3 +456,13 @@ describe('core’s three shipped factories (ADR 0022 §1)', () => {
     expect(registry.installedCss()).toEqual([summary().css]);
   });
 });
+
+describe('chrome', () => {
+  it('is default for every variant that says nothing, and none for one whose paint owns the box', () => {
+    const registry = createVariantRegistry({ fieldFor: () => undefined });
+    registry.addPluginVariant({ name: 'badge', when: (entry) => entry.id === 'badge', chrome: 'none' });
+
+    expect(registry.resolveFor(spanEntry('badge')).chrome).toBe('none');
+    expect(registry.resolveFor(spanEntry('plain')).chrome).toBe('default');
+  });
+});

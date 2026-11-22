@@ -6,7 +6,7 @@
 import type { FormatContext, Instant } from '../model/index.js';
 import { toPlain, weekOfYear } from './zone.js';
 import { addMs } from './instant.js';
-import type { DateFormat, ViewPresetHeader } from './scale.js';
+import type { DateFormat, HeaderFormatContext, ViewPresetHeader } from './scale.js';
 
 const DEFAULT_DATE_FORMAT: Intl.DateTimeFormatOptions = Object.freeze({
   year: 'numeric',
@@ -64,8 +64,17 @@ function intlFormatter(
  *  frame is the allocation this cache exists to prevent. A callback `DateFormat` is a Formatter
  *  without the entry, so it passes straight through, curried over `ctx` — a Field's own Formatter
  *  (`formatDateTime`, a custom `dateFormatter(...)`) labels a header band the same way. */
-export function resolveDateFormat(format: DateFormat, ctx: FormatContext): (i: Instant) => string {
-  if (typeof format === 'function') return (i) => format(i, ctx);
+export function resolveDateFormat(
+  format: DateFormat,
+  ctx: FormatContext & { readonly rangeStart?: Instant },
+): (i: Instant) => string {
+  if (typeof format === 'function') {
+    const { rangeStart } = ctx;
+    // A caller with no axis (a one-off label) gets the labelled Instant as the range start.
+    if (rangeStart === undefined) return (i) => format(i, { ...ctx, rangeStart: i });
+    const full: HeaderFormatContext = { ...ctx, rangeStart };
+    return (i) => format(i, full);
+  }
   const formatter = intlFormatter(ctx.timeZone, ctx.locale, format);
   return (i) => formatter.format(toJsDate(i));
 }

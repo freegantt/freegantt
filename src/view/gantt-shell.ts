@@ -17,6 +17,11 @@ import {
 import type {
   DateLine,
   DateLineLabelPlacement,
+  TickLines,
+  TodayLineSpec,
+  RowHeight,
+  LaneRule,
+  HeaderTickRenderer,
   Overscan,
   PresetRef,
   RowSource,
@@ -349,7 +354,17 @@ export interface GanttShellOptions {
    *  `a11yLabel` alike. */
   locale?: Intl.LocalesArgument;
   /** Live. Default `true`. */
-  todayLine?: boolean | Instant;
+  todayLine?: boolean | Instant | TodayLineSpec;
+  /** Live. Default `false`. */
+  todayColumn?: boolean;
+  /** Live. Default `'tick'`. */
+  tickLines?: TickLines;
+  /** Live. One height in px for every Row, or a function that answers per Row. Default: `--fg-row-height`. */
+  rowHeight?: RowHeight;
+  /** Live. Which Rows hold Lanes. A Row with Lanes grows to hold them; see `--fg-lane-height`. */
+  lanes?: LaneRule;
+  /** Live. Draws and flags one header tick. Default: the library text. */
+  headerTickRenderer?: HeaderTickRenderer;
   /** Live. Default `[]`. */
   dateLines?: readonly DateLine[];
   /** Live. See `GanttOptions.dateLineLabelPlacement`. Default `DEFAULT_DATE_LINE_LABEL_PLACEMENT`
@@ -1188,6 +1203,7 @@ export class GanttShell {
       // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
       resolveBarLabelPolicy: (entry) =>
         resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
+      resolveBarChrome: (entry) => this.variantFor(entry).chrome,
       readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
       // ADR 0018: a variant's own `paint` first, because it names the rows it covers. Then
       // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
@@ -1317,6 +1333,7 @@ export class GanttShell {
       expandableOfRow: (id) => {
         this.#layout.ensureRowPlan(this.#rowPlanInput(), {
           rowHeight: this.#frameSettings.rowHeight,
+          ...this.#frameSettings.rowHeightFunction(),
           registry: this.#registrations.variants,
         });
         return this.#layout.expandableOfRow(id);
@@ -1813,12 +1830,52 @@ export class GanttShell {
     return this.#events.emit(name, payload);
   }
 
-  get todayLine(): boolean | Instant {
+  get todayLine(): boolean | Instant | TodayLineSpec {
     return this.#frameSettings.todayLine;
   }
 
-  set todayLine(on: boolean | Instant) {
+  set todayLine(on: boolean | Instant | TodayLineSpec) {
     this.#frameSettings.set({ todayLine: on });
+  }
+
+  get todayColumn(): boolean {
+    return this.#frameSettings.todayColumn;
+  }
+
+  set todayColumn(on: boolean) {
+    this.#frameSettings.set({ todayColumn: on });
+  }
+
+  get tickLines(): TickLines {
+    return this.#frameSettings.tickLines;
+  }
+
+  set tickLines(lines: TickLines) {
+    this.#frameSettings.set({ tickLines: lines });
+  }
+
+  get lanes(): LaneRule | undefined {
+    return this.#frameSettings.lanes;
+  }
+
+  set lanes(rule: LaneRule | undefined) {
+    this.#frameSettings.set({ lanes: rule });
+  }
+
+  get headerTickRenderer(): HeaderTickRenderer | undefined {
+    return this.#frameSettings.headerTickRenderer;
+  }
+
+  set headerTickRenderer(renderer: HeaderTickRenderer | undefined) {
+    this.#frameSettings.set({ headerTickRenderer: renderer });
+  }
+
+  get rowHeight(): RowHeight {
+    return this.#frameSettings.rowHeightRule;
+  }
+
+  set rowHeight(height: RowHeight) {
+    this.#frameSettings.set({ rowHeight: height });
   }
 
   get dateLines(): readonly DateLine[] {
@@ -2299,6 +2356,11 @@ export class GanttShell {
       headerRenderer: options.headerRenderer,
       tooltipRenderer: options.tooltipRenderer,
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
+      ...(options.todayColumn !== undefined ? { todayColumn: options.todayColumn } : {}),
+      ...(options.tickLines !== undefined ? { tickLines: options.tickLines } : {}),
+      ...(options.rowHeight !== undefined ? { rowHeight: options.rowHeight } : {}),
+      ...(options.lanes !== undefined ? { lanes: options.lanes } : {}),
+      ...(options.headerTickRenderer !== undefined ? { headerTickRenderer: options.headerTickRenderer } : {}),
       ...(options.dateLines !== undefined ? { dateLines: options.dateLines } : {}),
       ...(options.dateLineLabelPlacement !== undefined
         ? { dateLineLabelPlacement: options.dateLineLabelPlacement }
@@ -3339,7 +3401,8 @@ export class GanttShell {
     // their header height from the same `--fg-band-height` expression, and cannot drift.
     // A changed band stack is a changed header height, and the rows' viewport is the pane box minus
     // that. So this re-derives the viewport here, rather than waiting for the next pane resize.
-    if (this.#paneLayout.setHeaderBandCount(frame.header.bands.length)) this.#applyRowsViewportSize();
+    if (this.#paneLayout.setHeaderBands(frame.header.bands.map((band) => band.heightPx)))
+      this.#applyRowsViewportSize();
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
     // #440: does a neighbour share our axis? If so this pane holds its width steady, so the two

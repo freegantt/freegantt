@@ -79,7 +79,8 @@ export class PaneLayout {
   #timelinePane: HTMLElement;
   #gridWidth: number;
   #minGridWidth: number;
-  #headerBandCount = 0;
+  /** The band heights the spacer was last built from, so an unchanged stack is a no-op. */
+  #headerBandShape: string | undefined;
   #gridPattern: GridPattern = 'grid';
 
   constructor(options: PaneLayoutOptions) {
@@ -117,14 +118,14 @@ export class PaneLayout {
     // only when the pane has nothing else to focus.
     this.#gridPane.tabIndex = -1;
 
-    // Renders one empty `.fg-band` per header band (`setHeaderBandCount`) instead of
+    // Renders one empty `.fg-band` per header band (`setHeaderBands`) instead of
     // being sized imperatively — both panes then resolve their header height from the same
     // `--fg-band-height` CSS expression and cannot drift.
     this.#spacer = document.createElement('div');
     this.#spacer.className = 'fg-grid-spacer';
     // S5.11: the spacer holds the one header row, so it is the grid's header `rowgroup`.
     // Its `.fg-band` children are empty height mirrors of the timeline's bands and say nothing to a
-    // screen reader — `setHeaderBandCount` hides each one from the tree.
+    // screen reader — `setHeaderBands` hides each one from the tree.
     this.#spacer.setAttribute('role', 'rowgroup');
 
     const rowClip = document.createElement('div');
@@ -310,13 +311,16 @@ export class PaneLayout {
    *  A no-op when the count is unchanged — the common case, every render. Returns whether the stack
    *  changed, because the header height changed with it and the rows' own viewport height is the
    *  pane box minus that (`GanttShell#applyPaneMeasurement`). */
-  setHeaderBandCount(count: number): boolean {
-    if (count === this.#headerBandCount) return false;
-    this.#headerBandCount = count;
+  setHeaderBands(heights: readonly (number | undefined)[]): boolean {
+    const shape = heights.join(',');
+    if (shape === this.#headerBandShape) return false;
+    this.#headerBandShape = shape;
     this.#spacer.replaceChildren();
-    for (let i = 0; i < count; i++) {
+    for (const heightPx of heights) {
       const band = document.createElement('div');
       band.className = 'fg-band';
+      // A band with its own height states it through the token the timeline's band reads.
+      if (heightPx !== undefined) band.style.setProperty('--fg-band-height', `${heightPx}px`);
       // Height only — the timeline's own bands carry the tick labels. Hidden, so the header
       // `rowgroup` around it holds exactly one row.
       band.setAttribute('aria-hidden', 'true');

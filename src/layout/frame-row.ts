@@ -3,6 +3,7 @@
 // itself the file that calls the decoration runner, so the dependency can only run one way.
 
 import type { EntryId, RowId } from '../model/index.js';
+import type { FrameLane } from './lane.js';
 import type { PlannedRowKind } from './rows/row-source.js';
 
 export interface FrameRow {
@@ -19,6 +20,8 @@ export interface FrameRow {
   /** `true` when the row's subject Entry is locked. Absent otherwise. `render/` stamps `data-locked`. */
   locked?: boolean;
   /** One library-formatted string per configured grid column, in column order (ADR 0005). */
+  /** The Lanes the row draws, top to bottom. Absent when the row holds none. */
+  lanes?: readonly FrameLane[];
   gridCells: readonly string[];
   /** Every Entry this row owns, in the order the row source gave them (#185). Empty for a header
    *  row and for a custom row with none. A row click selects all of them.

@@ -67,6 +67,15 @@ function validatePresetTickIncrement(preset: ViewPreset, operation: string): voi
         operation,
       );
     }
+    if (header.heightPx !== undefined && !(Number.isFinite(header.heightPx) && header.heightPx > 0)) {
+      throw new InvalidPresetError(
+        preset.id,
+        'header-height',
+        `declares a header band for unit "${header.unit}" with heightPx ${header.heightPx}, not a ` +
+          'positive number. Set heightPx above 0, or leave it out to use --fg-band-height.',
+        operation,
+      );
+    }
   }
 }
 
