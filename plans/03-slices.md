@@ -317,7 +317,7 @@ Slices are scope, not calendar estimates. Within a slice, entries are ordered so
 
 **The number is a name, not a position.** S0–S7 are in slice order; S9 is not. It was given a high number to park it, then promoted. **There is no S8.** Do not read "S9" as "after S7" — it runs **before any further S6 work**, and only S6 work that serves it continues past it (author's ruling, 2026-09-15; `plans/s6-scale-and-sync/README.md` §4 Q3).
 
-**Goal:** the public-surface asks the first real consumer raised (`plans/handoff/2026-09-15-crm-filament-labor.md`), which S6 held out because S6 ships no new public feature. The consumer is deleting its fallback, so these are what it cannot ship without.
+**Goal:** the public-surface asks the first real consumer raised, which S6 held out because S6 ships no new public feature. The consumer is deleting its fallback, so these are what it cannot ship without.
 
 **Tracker:** none yet. The first tracker described a design the author withdrew, so it was deleted rather than edited (2026-09-16). R1's plan is `plans/segment-is-a-bar/` — `README.md` (the build order), `CHILD-ENTRY-DESIGN.md` (the ruled design), and `SPIKE-FINDINGS.md` (the evidence) — written from #421. Every ruling is ADR 0026's rulings appendix.
 

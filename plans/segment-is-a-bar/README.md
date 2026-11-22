@@ -240,7 +240,7 @@ Reversible. Each is a **J** in the log when a build takes it.
 
 ## User stories
 
-Each story is one acceptance test. The consumer brief is `plans/handoff/2026-09-15-crm-filament-labor.md` §3.
+Each story is one acceptance test.
 
 1. **A crew lead sees one bar per day.** A labour request's days are child Entries with `hours`, `worker` and `filled`. The rule claims the request, so the row shows one bar per day, each with its own text and colour. A weekend gap draws nothing, because no child covers it.
 2. **The row shows the total.** `hours` declares `rollUp: 'sum'`. The request row's grid cell reads the sum of its days, at every zoom.
