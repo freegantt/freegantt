@@ -286,6 +286,37 @@ describe('validatePresetTickIncrement (via resolvePreset)', () => {
     }
   });
 
+  it.each([
+    ['zero', 0],
+    ['negative', -8],
+    ['not a number', Number.NaN],
+  ])('throws with rule "header-height" for a %s header heightPx', (_label, heightPx) => {
+    const preset: ViewPreset = {
+      id: 'custom-bad-header-height',
+      tickUnit: 'day',
+      tickIncrement: 1,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x', heightPx }],
+      preferredTickWidthPx: 40,
+    };
+    expect(() => resolvePreset(preset, 'test')).toThrow(InvalidPresetError);
+    try {
+      resolvePreset(preset, 'test');
+    } catch (error) {
+      expect((error as InvalidPresetError).rule).toBe('header-height');
+    }
+  });
+
+  it('accepts a header band with its own positive heightPx', () => {
+    const preset: ViewPreset = {
+      id: 'custom-header-height',
+      tickUnit: 'day',
+      tickIncrement: 1,
+      headers: [{ unit: 'day', increment: 1, format: () => 'x', heightPx: 36 }],
+      preferredTickWidthPx: 40,
+    };
+    expect(resolvePreset(preset, 'test')).toBe(preset);
+  });
+
   it('throws with rule "tick-increment" for a header band whose own increment cannot advance', () => {
     const preset: ViewPreset = {
       id: 'custom-bad-header-increment',

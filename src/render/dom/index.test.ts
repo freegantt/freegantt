@@ -8,6 +8,7 @@ import type {
   Entry,
   ErrorReportInput,
   BarId,
+  BarLabelPolicy,
   ResolvedBarLabel,
   TimeScale,
   ViewPreset,
@@ -2461,6 +2462,88 @@ describe('render/dom backend', () => {
       grid.remove();
       timeline.remove();
       restoreRuler();
+    });
+
+    describe('outsideOrNone', () => {
+      function backendWith(policy: BarLabelPolicy, chrome: 'default' | 'none' = 'default') {
+        return createDomBackend({
+          entryById: entryLookup,
+          resolveBarRenderer: () => undefined,
+          resolveGridCellRenderer: () => undefined,
+          resolveHeaderRenderer: () => undefined,
+          resolveBarLabelPolicy: () => policy,
+          resolveBarChrome: () => chrome,
+        });
+      }
+      /** One short bar at x 0, and a second bar in the same Row and Lane at `nextX`. */
+      function frameWithNeighbour(nextX: number | undefined) {
+        const frame = frameFor(0, 20, 2000);
+        const first = frame.bars[0]!;
+        if (nextX !== undefined) {
+          frame.bars.push({ ...first, id: `${first.id}-next` as typeof first.id, x: nextX, label: '' });
+        }
+        return frame;
+      }
+      function labelOfFirstBar(nextX: number | undefined, policy: BarLabelPolicy = 'outsideOrNone') {
+        withStubRuler();
+        const backend = backendWith(policy);
+        const { grid, timeline } = mountSurfaces();
+        backend.mount({ grid, timeline });
+        backend.sync(frameWithNeighbour(nextX));
+        const token = timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['label'];
+        backend.destroy();
+        grid.remove();
+        timeline.remove();
+        restoreRuler();
+        return token;
+      }
+
+      it('paints the label beside the bar when nothing follows it in the lane', () => {
+        expect(labelOfFirstBar(undefined)).toBe('outside');
+      });
+
+      it('paints the label beside the bar when the next bar starts far enough away', () => {
+        expect(labelOfFirstBar(400)).toBe('outside');
+      });
+
+      it('hides the label when the text would reach the next bar in the lane', () => {
+        expect(labelOfFirstBar(60)).toBe('hidden');
+      });
+
+      it('never paints the label inside, even when the bar is wide', () => {
+        withStubRuler();
+        const backend = backendWith('outsideOrNone');
+        const { grid, timeline } = mountSurfaces();
+        backend.mount({ grid, timeline });
+        backend.sync(frameFor(0, 500, 2000));
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['label']).toBe('outside');
+        backend.destroy();
+        grid.remove();
+        timeline.remove();
+        restoreRuler();
+      });
+
+      it('leaves every other policy as it was: fitBar ignores the next bar', () => {
+        expect(labelOfFirstBar(60, 'fitBar')).toBe('outside');
+      });
+
+      it('stamps data-chrome for a variant whose paint owns the box, and nothing otherwise', () => {
+        withStubRuler();
+        const { grid, timeline } = mountSurfaces();
+        const none = backendWith('fitBar', 'none');
+        none.mount({ grid, timeline });
+        none.sync(frameFor(0, 200, 2000));
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['chrome']).toBe('none');
+        none.destroy();
+        const plain = backendWith('fitBar');
+        plain.mount({ grid, timeline });
+        plain.sync(frameFor(0, 200, 2000));
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['chrome']).toBeUndefined();
+        plain.destroy();
+        grid.remove();
+        timeline.remove();
+        restoreRuler();
+      });
     });
 
     it('barLabels: "insideOrNone" paints no label at all on a bar too narrow for it, never outside (#435)', () => {

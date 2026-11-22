@@ -164,12 +164,15 @@ describe('FrameSettings — the invalidation table', () => {
 });
 
 describe('FrameSettings — the pixel properties', () => {
-  it('reads all four properties, and asks for no frame of its own', () => {
+  it('reads every pixel property, and asks for no frame of its own', () => {
     const { ports, calls, reads } = recordingPorts({
       '--fg-row-height': 48,
       '--fg-tick-box-floor': 3,
       '--fg-bar-min-width': 16,
       '--fg-bar-height': 20,
+      '--fg-lane-height': 30,
+      '--fg-lane-gap': 6,
+      '--fg-lane-padding': 10,
     });
     const settings = new FrameSettings(ports);
     settings.refreshPixelProperties();
@@ -179,6 +182,9 @@ describe('FrameSettings — the pixel properties', () => {
       '--fg-tick-box-floor',
       '--fg-bar-min-width',
       '--fg-bar-height',
+      '--fg-lane-height',
+      '--fg-lane-gap',
+      '--fg-lane-padding',
     ]);
     expect(calls).toEqual([]);
     expect(settings.rowHeight).toBe(48);
@@ -261,5 +267,53 @@ describe('FrameSettings — toLayoutInput', () => {
     const second = new FrameSettings(recordingPorts().ports);
     first.set({ todayLine: false });
     expect(second.todayLine).toBe(true);
+  });
+});
+
+describe('FrameSettings — lanes', () => {
+  const rule = { count: () => 2, of: () => 0 };
+
+  it('hands the layout no lanes until a rule is set', () => {
+    const { ports } = recordingPorts();
+    expect(new FrameSettings(ports).rowHeightFunction()).toEqual({});
+  });
+
+  it('hands the layout the rule with the lane tokens it measured', () => {
+    const { ports } = recordingPorts({ '--fg-lane-height': 24, '--fg-lane-gap': 2, '--fg-lane-padding': 5 });
+    const settings = new FrameSettings(ports, { lanes: rule });
+    settings.refreshPixelProperties();
+    expect(settings.rowHeightFunction().lanes).toEqual({
+      rule,
+      geometry: { heightPx: 24, gapPx: 2, paddingPx: 5 },
+    });
+  });
+
+  it('keeps one layout object until the rule or a token changes, so heights rebuild only then', () => {
+    const { ports } = recordingPorts({ '--fg-lane-height': 24 });
+    const settings = new FrameSettings(ports, { lanes: rule });
+    settings.refreshPixelProperties();
+    const first = settings.rowHeightFunction().lanes;
+    expect(settings.rowHeightFunction().lanes).toBe(first);
+    settings.set({ lanes: { count: () => 1, of: () => 0 } });
+    expect(settings.rowHeightFunction().lanes).not.toBe(first);
+  });
+
+  it('builds a new layout when a lane token changes', () => {
+    const values: Record<string, number> = { '--fg-lane-height': 24 };
+    const { ports } = recordingPorts(values);
+    const settings = new FrameSettings(ports, { lanes: rule });
+    settings.refreshPixelProperties();
+    const first = settings.rowHeightFunction().lanes;
+    values['--fg-lane-height'] = 40;
+    settings.refreshPixelProperties();
+    expect(settings.rowHeightFunction().lanes?.geometry.heightPx).toBe(40);
+    expect(settings.rowHeightFunction().lanes).not.toBe(first);
+  });
+
+  it('the lanes setting invalidates with one repaint', () => {
+    const { settings, calls } = settingsWith();
+    settings.set({ lanes: rule });
+    expect(calls).toEqual(['requestFrame']);
+    expect(settings.lanes).toBe(rule);
   });
 });

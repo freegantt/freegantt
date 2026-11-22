@@ -63,6 +63,9 @@ export const BAR_FLAG_KEYS: readonly ["conflict", "cycle"];
 // @public
 export type BarAnchor = 'start' | 'center' | 'end';
 
+// @public
+export type BarChrome = 'default' | 'none';
+
 // @public (undocumented)
 export type BarFlags = Partial<Record<(typeof BAR_FLAG_KEYS)[number], boolean>>;
 
@@ -81,7 +84,7 @@ export function barIdFromDataset(value: string | undefined): BarId | undefined;
 export type BarLabelPlacement = 'inside' | 'outside';
 
 // @public
-export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'outsideOrNone' | 'none';
 
 // @public
 export type BarLabels = BarLabelPolicy | BarLabelSpec;
@@ -1157,6 +1160,7 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
     barLabels?: BarLabels;
     bars?: BarProducer;
     capabilities?: Capabilities;
+    chrome?: BarChrome;
     css?: string;
     name: string;
     paint?: BarRenderer;
@@ -1403,6 +1407,7 @@ export interface FrameBar {
     // (undocumented)
     id: BarId;
     label: string;
+    lane?: number;
     locked?: boolean;
     // (undocumented)
     rowId: RowId;
@@ -1434,6 +1439,14 @@ export interface FrameColumn {
     width?: number;
 }
 
+// @public
+export interface FrameLane {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly top: number;
+}
+
 // @public (undocumented)
 export interface FrameRow {
     // (undocumented)
@@ -1443,6 +1456,7 @@ export interface FrameRow {
     expandable: boolean;
     // (undocumented)
     expanded: boolean;
+    // (undocumented)
     gridCells: readonly string[];
     // (undocumented)
     height: number;
@@ -1452,6 +1466,7 @@ export interface FrameRow {
     index: number;
     // (undocumented)
     kind: PlannedRowKind;
+    lanes?: readonly FrameLane[];
     locked?: boolean;
     matched?: boolean;
     // (undocumented)
@@ -1530,9 +1545,13 @@ export class Gantt<TProps = unknown> {
     hasPlugin(plugin: ChromePlugin | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
+    get headerTickRenderer(): HeaderTickRenderer | undefined;
+    set headerTickRenderer(renderer: HeaderTickRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
     installPlugin(plugin: ChromePlugin): void;
+    get lanes(): LaneRule | undefined;
+    set lanes(rule: LaneRule | undefined);
     // (undocumented)
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
@@ -1560,6 +1579,8 @@ export class Gantt<TProps = unknown> {
     });
     get resolvedTheme(): ResolvedTheme;
     reveal(id: EntryId | string): void;
+    get rowHeight(): RowHeight;
+    set rowHeight(height: RowHeight);
     get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry<TProps>[];
@@ -1573,8 +1594,12 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
-    get todayLine(): boolean | Instant;
-    set todayLine(on: boolean | InstantInput);
+    get tickLines(): TickLines;
+    set tickLines(lines: TickLines);
+    get todayColumn(): boolean;
+    set todayColumn(on: boolean);
+    get todayLine(): boolean | Instant | TodayLineSpec;
+    set todayLine(on: boolean | InstantInput | TodayLineSpec);
     // (undocumented)
     get todayLineMarginTicks(): number;
     set todayLineMarginTicks(ticks: number);
@@ -1680,17 +1705,22 @@ export interface GanttOptionsBase<TProps = unknown> {
     gridResizable?: boolean;
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
+    headerTickRenderer?: HeaderTickRenderer;
+    lanes?: LaneRule;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
     overscan?: Overscan;
     plugins?: readonly ChromePlugin[];
     pointerActivation?: PointerActivation;
+    rowHeight?: RowHeight;
     rowSource?: RowSource;
     scroll?: ScrollAxes;
     selectedEntryIds?: readonly (EntryId | string)[];
     snap?: SnapSetting;
     theme?: Theme;
-    todayLine?: boolean | InstantInput;
+    tickLines?: TickLines;
+    todayColumn?: boolean;
+    todayLine?: boolean | InstantInput | TodayLineSpec;
     todayLineMarginTicks?: number;
     tooltipRenderer?: TooltipRenderer;
     variants?: readonly EntryVariant<TProps>[];
@@ -1797,7 +1827,13 @@ export interface GroupRowSource extends RowSourceCommon {
 }
 
 // @public
-export type HeaderFormat = (value: Instant, ctx: FormatContext) => string;
+export type HeaderFormat = (value: Instant, ctx: HeaderFormatContext) => string;
+
+// @public
+export interface HeaderFormatContext extends FormatContext {
+    // (undocumented)
+    readonly rangeStart: Instant;
+}
 
 // @public (undocumented)
 export type HeaderRenderer = (ctx: HeaderRendererContext) => ElementDescription | undefined;
@@ -1807,6 +1843,26 @@ export interface HeaderRendererContext {
     // (undocumented)
     column: ResolvedColumn;
 }
+
+// @public (undocumented)
+export interface HeaderTickContext {
+    readonly band: number;
+    // (undocumented)
+    readonly locale: Intl.LocalesArgument;
+    readonly rangeStart: Instant;
+    // (undocumented)
+    readonly tick: Tick;
+    readonly time: ZonedTime;
+}
+
+// @public (undocumented)
+export interface HeaderTickPaint {
+    content?: ElementDescription;
+    flags?: readonly string[];
+}
+
+// @public
+export type HeaderTickRenderer = (context: HeaderTickContext) => HeaderTickPaint | undefined;
 
 // @public
 export type HierarchySource<TProps = Record<string, unknown>> = (entry: Omit<StoredEntry<TProps>, 'siblingIndex'>) => EntryId | string | undefined;
@@ -1883,13 +1939,13 @@ export class InvalidPlainTimeError extends FreeGanttError {
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(presetId: string, rule: 'tick-widths' | 'tick-step' | 'tick-increment', message: string, operation: string);
+    constructor(presetId: string, rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height', message: string, operation: string);
     // (undocumented)
     readonly operation: string;
     // (undocumented)
     readonly presetId: string;
     // (undocumented)
-    readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment';
+    readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height';
 }
 
 // @public
@@ -1974,6 +2030,12 @@ export interface KeyEventLike {
 
 // @public
 export type KeyHandler = (event: KeyEventLike) => void | false;
+
+// @public
+export interface LaneRule {
+    count(entry: Entry): number;
+    of(entry: Entry): number;
+}
 
 // @public
 export function lastCoveredInstant(span: {
@@ -2510,6 +2572,7 @@ export type ResolvedTheme = 'light' | 'dark';
 export interface ResolvedVariant extends DrawnVariant {
     readonly barLabels: BarLabels | undefined;
     readonly capabilities: Capabilities | undefined;
+    readonly chrome: BarChrome;
     readonly css: string | undefined;
     readonly paint: BarRenderer | undefined;
 }
@@ -2535,6 +2598,22 @@ export interface RollUpContext extends ComputeContext {
 
 // @public
 export type RowFilter = (entry: Entry) => boolean;
+
+// Warning: (ae-forgotten-export) The symbol "RowHeightResolver" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type RowHeight = number | RowHeightResolver;
+
+// @public
+export interface RowHeightContext {
+    // (undocumented)
+    readonly depth: number;
+    readonly entry: Entry | undefined;
+    // (undocumented)
+    readonly kind: PlannedRowKind;
+    readonly laneHeight: number | undefined;
+    readonly lanes: number;
+}
 
 // @public (undocumented)
 export type RowId = string & {
@@ -2877,6 +2956,12 @@ export interface Tick {
 }
 
 // @public
+export type TickLines = 'tick' | 'none' | {
+    unit: TimeUnit;
+    increment?: number;
+};
+
+// @public
 export interface TickStep {
     // (undocumented)
     readonly increment: number;
@@ -2968,6 +3053,12 @@ export interface TimeUnitWidth {
     // (undocumented)
     readonly unit: TimeUnit;
     readonly widthPx: number;
+}
+
+// @public
+export interface TodayLineSpec {
+    // (undocumented)
+    at: 'now' | 'dayCentre';
 }
 
 // @public
@@ -3143,6 +3234,7 @@ export interface ViewPreset {
 export interface ViewPresetHeader extends TickStep {
     // (undocumented)
     format: DateFormat;
+    heightPx?: number;
     repeatCoarserUnits?: boolean;
 }
 

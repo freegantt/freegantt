@@ -4,8 +4,10 @@ import { createVariantRegistry } from './bars/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import * as produceBars from './bars/produce-bars.js';
 import { rowId } from '../model/index.js';
+import type { Entry } from '../model/index.js';
 import { entryDoubleLike } from './entry-double.js';
 import type { PlannedRow } from './rows/row-source.js';
+import type { RowHeightContext } from './row-height.js';
 import { addMs } from '../time/index.js';
 
 function planOf(entries = sampleEntries): readonly PlannedRow[] {
@@ -167,5 +169,118 @@ describe('FrameMemory caches the Bars a row produced (#230 R1)', () => {
 
     expect(memory.rowMemory('no-such-row').bars).toEqual([]);
     expect(memory.rowMemory('no-such-row')).toBe(memory.rowMemory('no-other-row'));
+  });
+});
+
+describe('FrameMemory row height function (ADR 0044)', () => {
+  const registry = createVariantRegistry({ fieldFor: () => undefined });
+  const entries = sampleEntries.slice(0, 3);
+
+  it('asks the function with the Row’s Entry, kind and depth', () => {
+    const memory = new FrameMemory();
+    const heightById = new Map(entries.map((entry, i) => [entry.id, 40 + i]));
+    const rowHeightOf = vi.fn((ctx: RowHeightContext) => {
+      expect(ctx.kind).toBe('entry');
+      expect(ctx.depth).toBe(0);
+      return heightById.get(ctx.entry!.id)!;
+    });
+    memory.sync({ plan: planOf(entries), rowHeight: 32, rowHeightOf, entries, registry, datasetRevision: 0 });
+    expect(memory.heights.heightAt(0)).toBe(40);
+    expect(memory.heights.heightAt(1)).toBe(41);
+    expect(memory.heights.topAt(2)).toBe(81);
+  });
+
+  it('builds the height index again when the function changes', () => {
+    const memory = new FrameMemory();
+    const plan = planOf(entries);
+    memory.sync({ plan, rowHeight: 32, rowHeightOf: () => 50, entries, registry, datasetRevision: 0 });
+    expect(memory.heights.heightAt(1)).toBe(50);
+    memory.sync({ plan, rowHeight: 32, rowHeightOf: () => 60, entries, registry, datasetRevision: 0 });
+    expect(memory.heights.heightAt(1)).toBe(60);
+  });
+
+  it('gives the default height for an answer that is not a positive number', () => {
+    const memory = new FrameMemory();
+    const answers = [0, Number.NaN, -4];
+    let call = 0;
+    memory.sync({
+      plan: planOf(entries),
+      rowHeight: 32,
+      rowHeightOf: () => answers[call++]!,
+      entries,
+      registry,
+      datasetRevision: 0,
+    });
+    expect([0, 1, 2].map((i) => memory.heights.heightAt(i))).toEqual([32, 32, 32]);
+  });
+});
+
+describe('FrameMemory lanes (ADR 0043)', () => {
+  const registry = createVariantRegistry({ fieldFor: () => undefined });
+  const entries = sampleEntries.slice(0, 3);
+  const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
+  const lanesOf = (counts: number[]) => {
+    const countById = new Map(entries.map((entry, i) => [entry.id, counts[i]!]));
+    return { rule: { count: (entry: Entry) => countById.get(entry.id)!, of: () => 0 }, geometry };
+  };
+
+  it('sizes a row from its Lane count, and a row with none from rowHeight', () => {
+    const memory = new FrameMemory();
+    memory.sync({
+      plan: planOf(entries),
+      rowHeight: 32,
+      lanes: lanesOf([1, 2, 0]),
+      entries,
+      registry,
+      datasetRevision: 0,
+    });
+    expect([0, 1, 2].map((i) => memory.heights.heightAt(i))).toEqual([50, 86, 32]);
+  });
+
+  it('tells the height function the Lane count and the Lane height', () => {
+    const memory = new FrameMemory();
+    const seen: [number, number | undefined][] = [];
+    memory.sync({
+      plan: planOf(entries),
+      rowHeight: 32,
+      rowHeightOf: (ctx) => {
+        seen.push([ctx.lanes, ctx.laneHeight]);
+        return ctx.laneHeight ?? 48;
+      },
+      lanes: lanesOf([1, 2, 0]),
+      entries,
+      registry,
+      datasetRevision: 0,
+    });
+    expect([0, 1, 2].map((i) => memory.heights.heightAt(i))).toEqual([50, 86, 48]);
+    expect(seen).toEqual([
+      [1, 50],
+      [2, 86],
+      [0, undefined],
+    ]);
+  });
+
+  it('centres the Lanes of a row the height function made taller', () => {
+    const memory = new FrameMemory();
+    memory.sync({
+      plan: planOf(entries),
+      rowHeight: 32,
+      rowHeightOf: () => 100,
+      lanes: lanesOf([1, 1, 1]),
+      entries,
+      registry,
+      datasetRevision: 0,
+    });
+    expect(memory.lanesOfRow(0, 0, 100)).toEqual([{ top: 35, height: 30 }]);
+  });
+
+  it('builds the height index again when the Lane geometry changes', () => {
+    const memory = new FrameMemory();
+    const plan = planOf(entries);
+    memory.sync({ plan, rowHeight: 32, lanes: lanesOf([1, 1, 1]), entries, registry, datasetRevision: 0 });
+    expect(memory.heights.heightAt(0)).toBe(50);
+    const taller = { ...lanesOf([1, 1, 1]), geometry: { ...geometry, heightPx: 40 } };
+    memory.sync({ plan, rowHeight: 32, lanes: taller, entries, registry, datasetRevision: 0 });
+    expect(memory.heights.heightAt(0)).toBe(60);
   });
 });

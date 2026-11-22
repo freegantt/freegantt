@@ -102,6 +102,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       capabilities: undefined,
       css: undefined,
       barLabels: undefined,
+      chrome: 'default',
     }),
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),

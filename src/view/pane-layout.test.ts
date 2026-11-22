@@ -23,23 +23,31 @@ describe('PaneLayout', () => {
     paneLayout.destroy();
   });
 
-  it('[S1-A8] setHeaderBandCount renders one empty .fg-band per band in the spacer (D-S1.12-9)', () => {
+  it('setHeaderBands renders one empty .fg-band per band in the spacer', () => {
     const container = el();
     const paneLayout = new PaneLayout({ container });
     const spacer = container.querySelector<HTMLElement>('.fg-grid-spacer')!;
     expect(spacer.querySelector('.fg-grid-header')).not.toBeNull();
     expect(spacer.querySelectorAll('.fg-band')).toHaveLength(0);
 
-    paneLayout.setHeaderBandCount(2);
+    paneLayout.setHeaderBands([undefined, undefined]);
     expect(spacer.querySelectorAll('.fg-band')).toHaveLength(2);
     expect(spacer.querySelector('.fg-grid-header')).not.toBeNull();
 
-    // A no-op when the count is unchanged — it must not remount the bands.
+    // A no-op when the stack is unchanged — it must not remount the bands.
     const bandBefore = spacer.firstElementChild;
-    paneLayout.setHeaderBandCount(2);
+    paneLayout.setHeaderBands([undefined, undefined]);
     expect(spacer.firstElementChild).toBe(bandBefore);
 
-    paneLayout.setHeaderBandCount(1);
+    // A band with its own height mirrors it, so the grid header and the timeline header agree.
+    paneLayout.setHeaderBands([30, 36]);
+    const bands = spacer.querySelectorAll<HTMLElement>('.fg-band');
+    expect(Array.from(bands).map((band) => band.style.getPropertyValue('--fg-band-height'))).toEqual([
+      '30px',
+      '36px',
+    ]);
+
+    paneLayout.setHeaderBands([undefined]);
     expect(spacer.querySelectorAll('.fg-band')).toHaveLength(1);
 
     paneLayout.destroy();

@@ -1,7 +1,7 @@
 // layout/ — Date line geometry. DOM-free. Paint lives in render/dom/date-line.ts (S1.13).
 
 import type { Instant } from '../model/index.js';
-import { now } from '../time/index.js';
+import { addMs, diffMs, now, startOf, stepBy } from '../time/index.js';
 import type { TimeScale } from '../time/index.js';
 
 /** One vertical marker at an Instant, in content pixels. Index-keyed by the caller, like Header
@@ -36,11 +36,18 @@ export type DateLineLabelPlacement = 'inHeader' | 'belowHeader' | number;
 
 export const DEFAULT_DATE_LINE_LABEL_PLACEMENT: DateLineLabelPlacement = 'belowHeader';
 
+/** Where the today line sits inside today. `'now'` is the clock instant. `'dayCentre'` is the middle of
+ *  today's calendar day in the Dataset zone, so a day column holds the line at its centre. */
+export interface TodayLineSpec {
+  at: 'now' | 'dayCentre';
+}
+
 export interface ResolveDateLinesInput {
-  scale: Pick<TimeScale, 'range' | 'xForInstant'>;
+  scale: Pick<TimeScale, 'range' | 'xForInstant' | 'timeZone'>;
   /** `true`/`undefined` reads `now()` (or the test-frozen `now` below); `false` omits it; an
-   *  `Instant` pins the line there with no clock read at all. Default `true`. */
-  todayLine?: boolean | Instant;
+   *  `Instant` pins the line there with no clock read at all; a `TodayLineSpec` reads the clock and
+   *  places the line by its `at`. Default `true`. */
+  todayLine?: boolean | Instant | TodayLineSpec;
   dateLines?: readonly DateLine[];
   /** Frozen Instant for tests, used only when `todayLine` resolves to "now" mode. */
   now?: Instant;
@@ -63,6 +70,19 @@ function dateLineAt(
   return line;
 }
 
+/** The Instant the today line sits at. Only a `TodayLineSpec` with `at: 'dayCentre'` moves it off the clock. */
+function todayLineInstant(
+  todayLine: true | Instant | TodayLineSpec,
+  timeZone: string,
+  clock: Instant,
+): Instant {
+  if (typeof todayLine === 'number') return todayLine;
+  if (todayLine === true || todayLine.at === 'now') return clock;
+  const dayStart = startOf(timeZone, clock, 'day');
+  const dayEnd = stepBy(timeZone, dayStart, 'day', 1);
+  return addMs(dayStart, diffMs(dayEnd, dayStart) / 2);
+}
+
 /** Turns the today wrapper and any authored Date lines into decorations in range, positionally
  * (no `id` — index-keying is `render/dom`'s job). */
 export function resolveDateLines(input: ResolveDateLinesInput): DateLineDecoration[] {
@@ -70,7 +90,7 @@ export function resolveDateLines(input: ResolveDateLinesInput): DateLineDecorati
   const lines: DateLineDecoration[] = [];
   const todayLine = input.todayLine ?? true;
   if (todayLine !== false) {
-    const at = todayLine === true ? (input.now ?? now()) : todayLine;
+    const at = todayLineInstant(todayLine, scale.timeZone, input.now ?? now());
     const today = dateLineAt(scale, at, { today: true });
     if (today) lines.push(today);
   }

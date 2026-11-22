@@ -758,7 +758,7 @@ nav.harness-site-nav a[aria-current='page'] {
    colour, the consumer ships the type. Tabular figures are the reason this matters here — the
    grid's dates and budgets are columns that have to line up. */
 .fg-tick {
-  font-size: 11px;
+  font-size: var(--fg-tick-font-size, 11px);
 }
 
 .fg-row,

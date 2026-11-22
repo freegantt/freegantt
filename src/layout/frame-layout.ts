@@ -9,6 +9,8 @@ import { placeConnectors, placeFrame } from './frame.js';
 import type { FrameConnector } from './connectors/frame-connector.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
+import type { RowHeightResolver } from './row-height.js';
+import type { LaneLayout } from './lane.js';
 import { DecorationRunner } from './decorations.js';
 import { ConnectorRouter } from './connectors/connector-router.js';
 import type { PlannedRow, RowSource, UnindexedRow } from './rows/row-source.js';
@@ -49,6 +51,8 @@ type RowPlanInputKey = keyof RowPlanInput;
  *  own comment for why the sync itself is unconditional. */
 export interface RowPlanMemoryInput {
   rowHeight: number;
+  rowHeightOf?: RowHeightResolver;
+  lanes?: LaneLayout;
   registry: VariantBars;
 }
 
@@ -140,14 +144,24 @@ export class FrameLayout implements FrameLayoutView {
     // than the last one did? A scroll or a pan never does — `visible`/`revision`/`rowHeight` are not
     // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below, and
     // `rowPlanRevision` (bumped inside `ensureRowPlan`, not here) stays put too.
-    this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
+    this.ensureRowPlan(planInputFrom(input), {
+      rowHeight: input.rowHeight,
+      ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
+      ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
+      registry: input.variants,
+    });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations, this.#connectors);
   }
 
   /** The connectors of a frame, with nothing else laid out. A drag preview asks for these on every
    *  animation frame: only the connectors with an end on a moved bar route again. */
   computeConnectors(input: LayoutInput): readonly FrameConnector[] {
-    this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
+    this.ensureRowPlan(planInputFrom(input), {
+      rowHeight: input.rowHeight,
+      ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
+      ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
+      registry: input.variants,
+    });
     return placeConnectors(input, this.#plan, this.#memory, this.#connectors);
   }
 
@@ -179,6 +193,8 @@ export class FrameLayout implements FrameLayoutView {
     this.#memory.sync({
       plan: this.#plan,
       rowHeight: memory.rowHeight,
+      ...(memory.rowHeightOf !== undefined ? { rowHeightOf: memory.rowHeightOf } : {}),
+      ...(memory.lanes !== undefined ? { lanes: memory.lanes } : {}),
       entries: input.entries,
       registry: memory.registry,
       datasetRevision: input.datasetRevision,

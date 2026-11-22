@@ -1,14 +1,33 @@
 // layout/ is headless geometry — no DOM, no drawing calls (plans/01 §4). DOM-free by construction.
 
-import type { RowId, BarId, EntryId, Entry, Instant, Rect, TimeUnit, FieldContext } from '../model/index.js';
+import type {
+  RowId,
+  BarId,
+  EntryId,
+  Entry,
+  Instant,
+  Rect,
+  TimeUnit,
+  FieldContext,
+  ElementDescription,
+} from '../model/index.js';
 import { partIndexOfBar } from '../model/index.js';
 import type { Tick, TimeScale, ViewPreset } from '../time/index.js';
-import { dropRepeatedGranularity, formatStartAndEnd, resolveDateFormat } from '../time/index.js';
+import {
+  createZonedTime,
+  dropRepeatedGranularity,
+  formatStartAndEnd,
+  now,
+  resolveDateFormat,
+} from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
-import type { DateLine, DateLineDecoration } from './date-line.js';
+import type { DateLine, DateLineDecoration, TodayLineSpec } from './date-line.js';
 import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
+import type { RowHeightResolver } from './row-height.js';
+import type { FrameLane, LaneLayout } from './lane.js';
+import type { HeaderTickPaint, HeaderTickRenderer } from './header-tick.js';
 import { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows } from './rows/row-source.js';
 import { resolveRows } from './rows/resolve-rows.js';
 import type { EntryRulePorts } from './entry-rule.js';
@@ -251,6 +270,8 @@ export interface FrameBar {
    *  no name and no resolver names a Field with a value: no label paints, and a `barRenderer` sees
    *  no `ctx.label` either (#421 C5). */
   label: string;
+  /** The Lane the Bar sits in, when its Row holds Lanes. `y` and `height` are then that Lane's. */
+  lane?: number;
   x: number;
   y: number;
   width: number;
@@ -291,12 +312,18 @@ export interface FrameHeaderTick {
    *  content edge, so this is not always a full step's width. */
   width: number;
   label: string;
+  /** Tokens for `data-flag`: `'today'` when the tick holds today, then the consumer's own flags. */
+  flags: readonly string[];
+  /** What the consumer's `headerTickRenderer` drew in place of `label`. Absent: draw `label`. */
+  content?: ElementDescription;
 }
 
 /** One row of the header, emitted per `preset.headers` entry, coarsest first. */
 export interface FrameHeaderBand {
   unit: TimeUnit;
   increment: number;
+  /** The band's own height in px, from the preset. Absent: `--fg-band-height` decides. */
+  heightPx?: number;
   ticks: readonly FrameHeaderTick[];
 }
 
@@ -309,6 +336,11 @@ export interface FrameTickLine {
   x: number;
   major: boolean;
 }
+
+/** Which vertical lines the timeline body draws. `'tick'` (the default) draws one per finest-band
+ *  tick. A step draws one per step — `{ unit: 'week' }` gives a line at each week start under a
+ *  day-wide header. `'none'` draws no line. */
+export type TickLines = 'tick' | 'none' | { unit: TimeUnit; increment?: number };
 
 export interface FrameHeader {
   bands: readonly FrameHeaderBand[];
@@ -375,14 +407,25 @@ export interface LayoutInput {
   visible: Rect;
   /** Default `{ verticalRows: 2, horizontalPx: 128 }`. Live — see `Viewport.overscan`. */
   overscan?: Overscan;
+  /** The height every Row has, unless `rowHeightOf` answers for it. */
   rowHeight: number;
+  /** Answers one Row's height. Absent: every Row is `rowHeight`. */
+  rowHeightOf?: RowHeightResolver;
+  /** Which Rows hold Lanes, and at what geometry. Absent: no Row does. */
+  lanes?: LaneLayout;
   revision: number;
   /** Feeds every header band's `resolveDateFormat` call and `a11yLabel`.
    * `undefined` = the runtime default. */
   locale?: Intl.LocalesArgument;
   /** `true`/`undefined` reads `now()`; `false` omits the today wrapper; an `Instant` pins it with
    *  no clock read. Default `true`. */
-  todayLine?: boolean | Instant;
+  todayLine?: boolean | Instant | TodayLineSpec;
+  /** Paints a column over the finest tick that holds today. Omitted → off. */
+  todayColumn?: boolean;
+  /** Draws and flags one header tick. Omitted → the library text, and only the `'today'` flag. */
+  headerTickRenderer?: HeaderTickRenderer;
+  /** Which vertical lines the body draws. Omitted → `'tick'`. */
+  tickLines?: TickLines;
   /** Authored Date lines, resolved on the same path as the today wrapper (S1.13). */
   dateLines?: readonly DateLine[];
   /** Tick box floor in px (CONTEXT.md). Default `DEFAULT_TICK_BOX_FLOOR_PX`. View reads
@@ -445,6 +488,33 @@ export interface LayoutInput {
 /** The `locked` member of a frame row or bar: present and `true` for a locked Entry, absent otherwise. */
 function lockedMark(locked: boolean): { locked?: true } {
   return locked ? { locked: true } : {};
+}
+
+/** The Lane an Entry's Bar sits in, or `undefined` when no rule places it. */
+function laneOfEntry(lanes: LaneLayout | undefined, entry: Entry | undefined): number | undefined {
+  return lanes === undefined || entry === undefined ? undefined : Math.floor(lanes.rule.of(entry));
+}
+
+/** Where a Bar sits vertically. In a Row with Lanes it takes its Lane's top and height, and the
+ *  last Lane takes a Bar whose Lane the Row does not hold. In a Row with none it centres. */
+function barPlacementIn(
+  rowLanes: readonly FrameLane[],
+  lane: number | undefined,
+  rowTop: number,
+  rowHeight: number,
+  barHeightPx: number,
+): { lane?: number; y: number; height: number } {
+  if (rowLanes.length === 0 || lane === undefined || !Number.isFinite(lane)) {
+    return { y: barBandAt(rowTop, rowHeight, barHeightPx).top, height: barHeightPx };
+  }
+  const held = Math.min(Math.max(lane, 0), rowLanes.length - 1);
+  const band = rowLanes[held]!;
+  return { lane: held, y: band.top, height: band.height };
+}
+
+/** The `lanes` member of a frame row: present for a row that holds Lanes, absent otherwise. */
+function lanesMark(lanes: readonly FrameLane[]): { lanes?: readonly FrameLane[] } {
+  return lanes.length > 0 ? { lanes } : {};
 }
 
 function entryIsLocked(entry: Entry | undefined, input: LayoutInput): boolean {
@@ -528,6 +598,8 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
   mem.sync({
     plan,
     rowHeight: input.rowHeight,
+    ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
+    ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
     entries: input.entries,
     registry: input.variants,
     datasetRevision: input.datasetRevision,
@@ -624,7 +696,7 @@ function placeVisibleRowsAndBars(
   mem: FrameMemory,
   settings: FramePaintSettings,
 ): { rows: FrameRow[]; bars: FrameBar[] } {
-  const { scale, visible, rowHeight, locale } = input;
+  const { scale, visible, locale } = input;
   // #414: `mem.sync` keeps one Map of every Entry, rebuilt only when the `entries` array changes
   // identity — a scroll frame reuses it instead of paying an O(entries) allocation every frame.
   const entryById = mem.entryById;
@@ -660,6 +732,7 @@ function placeVisibleRowsAndBars(
     const rowBars = produced.bars;
     const height = index.heightAt(rowIndex);
     const parts = partCountByEntry(rowBars);
+    const rowLanes = mem.lanesOfRow(rowIndex, top, height);
     rows.push({
       id: planned.id,
       kind: planned.kind,
@@ -670,6 +743,7 @@ function placeVisibleRowsAndBars(
       expandable: planned.expandable,
       expanded: planned.expanded,
       ...(planned.matched !== undefined ? { matched: planned.matched } : {}),
+      ...lanesMark(rowLanes),
       gridCells: cellsForRow(planned, input.columns, entryById),
       // A header row stands for no Entry, so it owns none and never becomes selectable.
       entryIds: isPlannedHeaderRow(planned) ? [] : planned.entryIds,
@@ -698,10 +772,8 @@ function placeVisibleRowsAndBars(
         variant: producedBar.variant,
         label,
         x,
-        // Every row is one lane (singleLane): the bar centres in the row's own band.
-        y: barBandAt(top, rowHeight, settings.barHeightPx).top,
+        ...barPlacementIn(rowLanes, laneOfEntry(input.lanes, entry), top, height, settings.barHeightPx),
         width,
-        height: settings.barHeightPx,
         flags: {},
         span,
         ...lockedMark(entryIsLocked(entry, input)),
@@ -760,6 +832,83 @@ function contentTickLinesOf(
   );
 }
 
+/** Call: `bodyTickLinesOf(setting, rawBandTicks, scale, horizontalSpan)`. Which lines the body draws:
+ *  one per finest tick, one per stated step, or none. A stated step is why a day-wide header can
+ *  carry a line at each week start only. */
+function bodyTickLinesOf(
+  setting: TickLines,
+  rawBandTicks: readonly (readonly Tick[])[],
+  scale: TimeScale,
+  horizontalSpan: { x: number; width: number },
+): FrameTickLine[] {
+  if (setting === 'none') return [];
+  if (setting === 'tick') return contentTickLinesOf(rawBandTicks, scale.contentWidth);
+  const stepTicks = scale.ticks({ unit: setting.unit, increment: setting.increment ?? 1 }, horizontalSpan);
+  return markMajorTickLines(
+    stepTicks.filter((tick) => tick.x >= 0 && tick.x < scale.contentWidth),
+    coarserBandStartsOf(rawBandTicks),
+  );
+}
+
+/** Call: `todayColumnOf(scale, finestStep, at, horizontalSpan)`. The band that covers today's finest
+ *  tick, or nothing when today lies outside the visible content. */
+/** The step one column stands for: the finest header band's own, or the preset's tick when it has no band. */
+function columnStepOf(
+  finestBand: FrameHeaderBand | undefined,
+  preset: ViewPreset,
+): { unit: TimeUnit; increment: number } {
+  return {
+    unit: finestBand?.unit ?? preset.tickUnit,
+    increment: finestBand?.increment ?? preset.tickIncrement,
+  };
+}
+
+function todayColumnOf(
+  scale: TimeScale,
+  step: { unit: TimeUnit; increment: number },
+  at: Instant,
+  horizontalSpan: { x: number; width: number },
+): ResolvedDecoration | undefined {
+  const x = scale.xForInstant(at);
+  const tick = scale
+    .ticks(step, horizontalSpan)
+    .find((candidate) => candidate.x <= x && x < candidate.x + candidate.width);
+  if (tick === undefined) return undefined;
+  const clipped = clipToContent(tick.x, tick.width, scale.contentWidth);
+  return { kind: 'rangeBand', x: clipped.x, width: clipped.width, class: 'fg-today-column' };
+}
+
+/** Call: `todayInstantOf(input)`. The Instant the frame treats as today: a pinned Instant, else the clock. */
+function todayInstantOf(input: LayoutInput): Instant {
+  return typeof input.todayLine === 'number' ? input.todayLine : now();
+}
+
+const NO_FLAGS: readonly string[] = Object.freeze([]);
+const TODAY_FLAG: readonly string[] = Object.freeze(['today']);
+
+/** Call: `tickFlags(holdsToday, consumerFlags)`. A tick with no flag shares one empty array, so a scroll frame allocates nothing for it. */
+function tickFlags(holdsToday: boolean, consumerFlags: readonly string[] | undefined): readonly string[] {
+  if (consumerFlags === undefined || consumerFlags.length === 0) return holdsToday ? TODAY_FLAG : NO_FLAGS;
+  return holdsToday ? ['today', ...consumerFlags] : consumerFlags;
+}
+
+/** Call: `headerTickPainterOf(input, memory, presetId, timeZone, rangeStart)`. Asks the consumer's
+ *  renderer about one header tick, through the cache. Without a renderer it answers nothing. */
+function headerTickPainterOf(
+  input: LayoutInput,
+  memory: FrameMemory,
+  presetId: string,
+  timeZone: string,
+  rangeStart: Instant,
+): (band: number, tick: Tick) => HeaderTickPaint | undefined {
+  const renderer = input.headerTickRenderer;
+  if (renderer === undefined) return () => undefined;
+  const time = createZonedTime(timeZone);
+  const locale = input.locale;
+  return (band, tick) =>
+    memory.headerTickPaints.paintFor(renderer, presetId, { band, tick, time, locale, rangeStart });
+}
+
 /** Call: `connectorWindowOf(input, settings)`. The region a connector may paint in: the cull window,
  *  with the vertical overscan counted in rows. A zero extent disables culling on that axis. */
 function connectorWindowOf(input: LayoutInput, settings: FramePaintSettings): ConnectorWindow {
@@ -793,7 +942,7 @@ export function placeConnectors(
     rowHeight: input.rowHeight,
     barBox: (bar) => barSpan(bar, input.scale, settings.minBarWidthPx),
     previews: input.barPreviews ?? [],
-    barBand: (rowTop) => barBandAt(rowTop, input.rowHeight, settings.barHeightPx),
+    barBand: (rowTop, rowHeight) => barBandAt(rowTop, rowHeight, settings.barHeightPx),
     previewedBarBox: (bar, preview) =>
       previewedBox(barSpan(bar, input.scale, settings.minBarWidthPx), preview),
     paintKey: `${settings.minBarWidthPx}|${settings.barHeightPx}`,
@@ -801,39 +950,31 @@ export function placeConnectors(
   });
 }
 
-/** Call: `placeFrame(input, plan, memory, decorations, connectorRouter)`. Geometry only — the caller already
- *  resolved rows. */
-export function placeFrame(
+/** Places every header band: clamped label boxes, the library text, today's flag and the consumer's
+ *  paint. It runs once per frame, from the ticks `placeFrame` already asked the scale for. */
+function placeHeaderBands(
   input: LayoutInput,
-  plan: readonly PlannedRow[],
-  memory?: FrameMemory,
-  decorations?: DecorationRunner,
-  connectorRouter?: ConnectorRouter,
-): GeometryFrame {
-  const { scale, preset, visible, revision, locale } = input;
-  const mem = memory ?? memoryFor(input, plan);
-  const settings = framePaintSettingsOf(input);
-  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, settings);
-  const horizontalSpan = horizontalQuerySpan(settings.horizontalCull, scale.contentWidth);
-  const labelLeftClamp = headerLabelLeftClamp(visible, settings.horizontalCull);
-
-  // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
-  // `--fg-tick-box-floor`). A straddling tick clamped to a thinner remainder would ask for e.g.
-  // `width: 0.5px` and still paint at that floor — eating into the next cell. Below the floor the
-  // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
-
+  mem: FrameMemory,
+  rawBandTicks: readonly (readonly Tick[])[],
+  settings: FramePaintSettings,
+  labelLeftClamp: number,
+): FrameHeaderBand[] {
+  const { scale, preset, locale } = input;
   const headerFormats = dropRepeatedGranularity(preset.headers);
-  // Raw ticks per band, coarsest first — computed once and shared by `bands`' clamped
-  // labels below and `tickLines`' unclamped lines: both read the same `scale.ticks` call per band,
-  // so a preset's own boundaries never drift between the header and the pane under it.
-  const rawBandTicks = preset.headers.map((header) =>
-    scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan),
-  );
+  const rangeStart = scale.range.start;
+  const format = (band: number): ((at: Instant) => string) =>
+    resolveDateFormat(headerFormats[band]!, { timeZone: scale.timeZone, locale, rangeStart });
+  // The library owns the clock, so it flags the finest-band tick that holds today. A consumer adds its own flags.
+  const todayX = input.todayLine === false ? undefined : scale.xForInstant(todayInstantOf(input));
+  const tickPainter = headerTickPainterOf(input, mem, preset.id, scale.timeZone, rangeStart);
   const bands: FrameHeaderBand[] = preset.headers.map((header, i) => {
-    const format = resolveDateFormat(headerFormats[i]!, { timeZone: scale.timeZone, locale });
+    const labelOf = format(i);
+    // Only the finest band is flagged: a month band holds today on every day of the month.
+    const isFinestBand = i === preset.headers.length - 1;
     return {
       unit: header.unit,
       increment: header.increment,
+      ...(header.heightPx !== undefined ? { heightPx: header.heightPx } : {}),
       ticks: rawBandTicks[i]!.map((tick) => {
         // Only the one tick whose cell actually straddles the clamp line is "stuck" — a tick
         // that ends before it (fully behind the visible edge, kept around only by the overscan
@@ -853,10 +994,49 @@ export function placeFrame(
         // the straddle clamp above, so the two compose: that clamp can only move `x` rightward
         // to keep a label inside the visible pane, and this clip only pulls the box back inside
         // the content — neither can undo the other's work.
-        return { ...clipToContent(x, width, scale.contentWidth), label: format(tick.instant) };
+        const holdsToday =
+          isFinestBand && todayX !== undefined && tick.x <= todayX && todayX < tick.x + tick.width;
+        const paint = tickPainter(i, tick);
+        return {
+          ...clipToContent(x, width, scale.contentWidth),
+          label: labelOf(tick.instant),
+          flags: tickFlags(holdsToday, paint?.flags),
+          ...(paint?.content !== undefined ? { content: paint.content } : {}),
+        };
       }).filter((cell) => cell.width > 0),
     };
   });
+  return bands;
+}
+
+/** Call: `placeFrame(input, plan, memory, decorations, connectorRouter)`. Geometry only — the caller already
+ *  resolved rows. */
+export function placeFrame(
+  input: LayoutInput,
+  plan: readonly PlannedRow[],
+  memory?: FrameMemory,
+  decorations?: DecorationRunner,
+  connectorRouter?: ConnectorRouter,
+): GeometryFrame {
+  const { scale, preset, visible, revision } = input;
+  const mem = memory ?? memoryFor(input, plan);
+  const settings = framePaintSettingsOf(input);
+  const { rows, bars } = placeVisibleRowsAndBars(input, plan, mem, settings);
+  const horizontalSpan = horizontalQuerySpan(settings.horizontalCull, scale.contentWidth);
+  const labelLeftClamp = headerLabelLeftClamp(visible, settings.horizontalCull);
+
+  // A Tick's CSS border-box cannot shrink below the Tick box floor (`tickBoxFloorPx`, Token
+  // `--fg-tick-box-floor`). A straddling tick clamped to a thinner remainder would ask for e.g.
+  // `width: 0.5px` and still paint at that floor — eating into the next cell. Below the floor the
+  // sticky behaviour buys nothing, so the tick keeps its true (off-screen) x.
+
+  // Raw ticks per band, coarsest first — computed once and shared by `bands`' clamped
+  // labels below and `tickLines`' unclamped lines: both read the same `scale.ticks` call per band,
+  // so a preset's own boundaries never drift between the header and the pane under it.
+  const rawBandTicks = preset.headers.map((header) =>
+    scale.ticks({ unit: header.unit, increment: header.increment }, horizontalSpan),
+  );
+  const bands = placeHeaderBands(input, mem, rawBandTicks, settings, labelLeftClamp);
 
   /** One tick column on screen stands for the finest band's own step, because that is the band
    *  `tickLines` draws the pane's grid from and the one a reader counts columns on. A preset with
@@ -875,12 +1055,15 @@ export function placeFrame(
   });
 
   const connectors = placeConnectors(input, plan, mem, connectorRouter);
+  const todayColumn = input.todayColumn
+    ? todayColumnOf(scale, columnStepOf(finestBand, preset), todayInstantOf(input), horizontalSpan)
+    : undefined;
 
   return {
     revision,
     visible,
     header: { bands },
-    tickLines: contentTickLinesOf(rawBandTicks, scale.contentWidth),
+    tickLines: bodyTickLinesOf(input.tickLines ?? 'tick', rawBandTicks, scale, horizontalSpan),
     rows,
     rowCount: plan.length,
     tree: nestsRows(input.rows ?? DEFAULT_ROW_SOURCE),
@@ -894,7 +1077,8 @@ export function placeFrame(
       todayLine: input.todayLine ?? true,
       ...(input.dateLines ? { dateLines: input.dateLines } : {}),
     }),
-    underBars,
+    // The today column paints last, so an off-day band never covers it.
+    underBars: todayColumn === undefined ? underBars : [...underBars, todayColumn],
     overBars,
     columns: columnsForFrame(input.columns),
   };

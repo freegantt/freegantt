@@ -33,7 +33,7 @@ export interface ConnectorRunInput {
   /** The bar's painted box. `frame.ts` owns the rule, so the router asks instead of copying it. */
   barBox: (bar: Bar) => { x: number; width: number };
   /** The bar's painted top and bottom in a row that starts at `rowTop`. `frame.ts` owns this rule too. */
-  barBand: (rowTop: number) => { top: number; bottom: number };
+  barBand: (rowTop: number, rowHeight: number) => { top: number; bottom: number };
   /** Where the bar shows while a drag preview moves it. `frame.ts` owns this rule too. */
   previewedBarBox: (bar: Bar, preview: BarPreview) => { x: number; width: number; dy: number };
   /** The drag in flight. Empty outside a drag, and the connectors keep their committed places. */
@@ -176,6 +176,7 @@ export class ConnectorRouter {
       input.datasetRevision,
       input.memory.producedRevision,
       input.rowHeight,
+      input.memory.heightIndexRevision,
       input.paintKey,
       content.start,
       content.end,
@@ -284,10 +285,11 @@ export class ConnectorRouter {
       preview === undefined ? { ...input.barBox(bar), dy: 0 } : input.previewedBarBox(bar, preview);
     if (width <= 0) return undefined;
     const committedTop = memory.heights.topAt(resolved.rowIndex);
-    const y = committedTop + input.rowHeight / 2 + dy;
+    const committedHeight = memory.heights.heightAt(resolved.rowIndex);
+    const y = committedTop + committedHeight / 2 + dy;
     const rowIndex = dy === 0 ? resolved.rowIndex : rowIndexAt(y, input);
     const rowTop = memory.heights.topAt(rowIndex);
-    const { top: barTop, bottom: barBottom } = input.barBand(committedTop + dy);
+    const { top: barTop, bottom: barBottom } = input.barBand(committedTop + dy, committedHeight);
     return {
       x: end.edge === 'start' ? x : x + width,
       y,
