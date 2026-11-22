@@ -86,7 +86,7 @@ The counts live in two places, because one place cannot answer both halves. `tes
 1. **A leak census has to be proved red.** A first draft patched `globalThis.EventTarget.prototype` and read clean through a deliberately leaked document listener, because happy-dom's nodes inherit from its own `EventTarget` class and not from that global. Every count here was then checked by injecting a real leak: a missed `removeEventListener`, a missed `disconnect()`, and a missed `unbind()` each turn it red.
 2. **Heap is a question only a real browser answers.** happy-dom retains about 0.2 MB per rendered entry per mount whatever `destroy()` does, and two forced collections do not return it. The same page in Chromium grows 1.4 KB per mount over 150 mounts, with node and listener counts exactly flat. So the fake-DOM tests assert counts and never memory, and they use small fixtures.
 
-The first consumer is a Livewire single-page app that mounts and destroys a linked pair on every visit. A leak there shows up as a slow tab after forty minutes of a dispatcher's work.
+The first consumer is a single-page app that mounts and destroys a linked pair on every visit. A leak there shows up as a slow tab after forty minutes of a dispatcher's work.
 
 ### R5 — the pack audit → **#400**
 

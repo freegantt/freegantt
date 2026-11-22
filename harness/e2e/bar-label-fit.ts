@@ -10,7 +10,7 @@ import type { Entry, EntryInput, ViewPreset } from 'freegantt';
 
 const DAY_COUNT = 40;
 const ORIGIN = new Date('2026-01-01T00:00:00Z');
-const ROW_ENTRY_ID = 'fulfillment-row';
+const ROW_ENTRY_ID = 'parent-row';
 
 // Each child's `end` equals the next child's `start` — the half-open `[start, end)` storage rule
 // (`plans/01` §5) already butts these tiles edge to edge with no gap to tune.
@@ -20,7 +20,7 @@ const children: EntryInput[] = Array.from({ length: DAY_COUNT }, (_, i) => {
   return { id: `day-${i + 1}`, name: `Day ${i + 1}`, parentId: ROW_ENTRY_ID, start, end };
 });
 
-const entries: EntryInput[] = [{ id: ROW_ENTRY_ID, name: 'Fulfillment row' }, ...children];
+const entries: EntryInput[] = [{ id: ROW_ENTRY_ID, name: 'Parent row' }, ...children];
 
 const dataset = new Dataset({ entries, timeZone: 'UTC' });
 

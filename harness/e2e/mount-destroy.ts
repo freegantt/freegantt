@@ -1,4 +1,4 @@
-// The first consumer's own shape (#403, brief §5): a Livewire single-page app mounts a linked pair
+// The first consumer's own shape (#403, brief §5): a single-page app mounts a linked pair
 // on every visit and destroys it on the way out, with no full page load in between. Nothing else in
 // the gallery calls `destroy()`, so nothing else shows what it leaves behind.
 //
