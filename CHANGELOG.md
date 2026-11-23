@@ -6,36 +6,113 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
+These changes ship as 0.3.0. The release is about **dense boards**: timelines where a row holds several bars side by side, where rows have different heights, and where each header cell carries its own meaning.
+
+- **Rows:** Rows can hold Lanes and size themselves. `lanes` stacks bars inside one Row, and `rowHeight` sets a height per Row.
+- **Header:** `headerTickRenderer` draws and flags each tick, and `alignTo` lines a coarse band up with a finer one.
+- **Body:** the timeline body can draw week lines only, and it can tint today's column.
+- **Bars:** bars can opt out of library chrome and paint themselves.
+- **Plugins:** `ctx.view.rowSpanLayer`, `rowBox` and `onRowLayout` let a plugin mount content under a row that spans both panes and follows the layout.
+
+Every new option defaults to the 0.2.0 look. An app that sets none of them renders as before. See [Styling and theming](docs/10-styling-and-theming.md) for the new tokens, and [Plugin authoring](docs/06-plugin-authoring.md) for the row layer.
+
 ### Added
 
-- `ctx.view.rowSpanLayer` is a mount layer as wide as the grid pane and the timeline pane together. It follows the rows' vertical scroll and stays still on a horizontal pan. It hides content that scrolled up under the header. A key pressed inside its content never reaches the Gantt. A wheel over its content scrolls the rows and pans the timeline, unless the content scrolls by itself and is not at its edge.
-- `ctx.view.rowBox(id)` answers `{ top, height }` for the row of an entry or a row id, from the layout. The `RowBox` type is exported, so a consumer can name the answer. It returns `undefined` for a hidden or unknown row.
-- `ctx.view.onRowLayout(callback)` calls a plugin after a frame moved a row top or height: a row height change, a collapse, a filter or a data change. A scroll alone never calls it.
-- Harness: the Inline details page opens a details panel under a task and pushes the rows below down.
-- `ViewPresetHeader.alignTo` makes a header band's cells start and end on boundaries of a finer unit. A month band with `alignTo: 'week'` owns the weeks whose first day falls in that month. A coarser or equal `alignTo` throws `InvalidPresetError` (rule `'header-align'`).
-- A bar in a Row with Lanes now sits in its Lane. `lanes.of(entry)` names the Lane, and `FrameBar.lane`, `y` and `height` say where. A Row with no Lanes centres its bar as before.
-- Variant takes `chrome: 'none'`. The library then draws no fill, border, radius or padding on that bar, and the bar carries `data-chrome='none'`.
-- New `BarLabelPolicy` value `'outsideOrNone'`. The label paints beside the bar when it fits before the next bar in the same Lane, and paints nowhere otherwise. Other policies stay as they were.
+#### Rows and lanes
 
-- new `--fg-col-header-align` token aligns column header label: `center` (the default) or `flex-end` for bottom edge. `--fg-col-header-padding-block` now takes shorthand, such as `0 10px`.
+- The new `lanes` Gantt option gives Rows Lanes: `{ count(entry), of(entry) }`.
+  - A Row with Lanes grows to hold them. A bar sits in the Lane that `lanes.of(entry)` names, and `FrameBar.lane`, `y` and `height` say where.
+  - A Row with no Lanes centres its bar as before.
+  - The Lane size comes from `--fg-lane-height`, `--fg-lane-gap` and `--fg-lane-padding`.
+  - Rows draw empty `.fg-lane` guides, styled by `--fg-lane-bg`, `--fg-lane-border` and `--fg-lane-radius`.
+  - Frame rows carry `lanes`.
+  - It changes live.
+- The new `rowHeight` Gantt option sets a Row's height: a number for every Row, or a function that answers per Row from its Entry, kind and depth.
+  - `--fg-row-height` stays the default.
+  - A bar centres in its own Row, and a connector leaves from the middle of its own Row.
+  - It changes live.
+- A row now carries `data-kind` (`entry` or `header`) and `data-depth`, plus `data-parent` when it holds children. The timeline row band carries the same three attributes.
+  - Two new tokens style a group row: `--fg-group-row-bg` and `--fg-group-row-border`.
 
-- new `lanes` Gantt option gives Rows Lanes: `{ count(entry), of(entry) }`. Row with Lanes grows to hold them. Lane size comes from `--fg-lane-height`, `--fg-lane-gap` and `--fg-lane-padding`. Row draws empty `.fg-lane` guides, styled by `--fg-lane-bg`, `--fg-lane-border` and `--fg-lane-radius`. frame rows carry `lanes`. live.
+#### Header
 
-- new `headerTickRenderer` Gantt option draws and flags each header tick. function gets `band`, `tick`, `time`, `locale` and `rangeStart`, returns `content` and `flags` (or nothing). flag becomes `data-flag` token on tick. library adds `today` flag finest-band tick holds today. live.
-- Header band takes `heightPx` in preset. wins over `--fg-band-height`. `format` context for header gets `rangeStart`. Non-positive `heightPx` throws `InvalidPresetError` with rule `header-height`.
-- Four new tokens style header tick: `--fg-tick-edge-color`, `--fg-tick-off-bg`, `--fg-tick-today-bg` and `--fg-tick-today-color`.
+- The new `headerTickRenderer` Gantt option draws each header tick and flags it.
+  - The function gets `band`, `tick`, `time`, `locale` and `rangeStart`, and returns `content` and `flags`, or nothing.
+  - Each flag becomes a `data-flag` token on the tick. The library adds a `today` flag to the finest band's tick that holds today.
+  - It changes live.
+- `ViewPresetHeader.alignTo` makes a header band's cells start and end on the boundaries of a finer unit. A month band with `alignTo: 'week'` owns the weeks whose first day falls in that month.
+  - A coarser or equal `alignTo` throws `InvalidPresetError` (rule `'header-align'`).
+- A header band takes `heightPx` in its preset, and it wins over `--fg-band-height`.
+  - A height of zero or less throws `InvalidPresetError` (rule `'header-height'`).
+- A header `format` function now gets `rangeStart` in its context (`HeaderFormatContext`).
+- New tokens style the header:
+  - **Tick text:** `--fg-band-font-size`, `--fg-band-font-weight`, `--fg-tick-font-size` and `--fg-tick-font-weight`.
+  - **Tick state:** `--fg-tick-edge-color`, `--fg-tick-off-bg`, `--fg-tick-today-bg` and `--fg-tick-today-color`.
+- The column header can be styled apart from the row cells:
+  - **Padding:** `--fg-col-header-padding-inline` and `--fg-col-header-padding-block`.
+  - **Text:** `--fg-col-header-transform`, `--fg-col-header-tracking`, `--fg-col-header-font-size` and `--fg-col-header-font-weight`.
+  - **Alignment:** `--fg-col-header-align` sets the label to `center` (the default) or to the bottom edge with `flex-end`.
 
-- The new `rowHeight` Gantt option sets a Row's height: a number for every Row, or a function that answers per Row from its Entry, kind and depth. It changes live. `--fg-row-height` stays the default. A bar centres in its own Row, and a connector leaves from the middle of its own Row.
-- The new `tickLines` Gantt option sets which body lines the timeline draws: `'tick'` (the default, one per tick), `'none'`, or `{ unit: 'week' }` for a line at each week start. It changes live.
-- The new `todayColumn` Gantt option tints today's day column under the bars. The default is `false`. It changes live. The new `--fg-today-column-bg` token sets the tint.
-- `todayLine` also takes `{ at: 'now' | 'dayCentre' }`. `{ at: 'dayCentre' }` puts the line at the middle of the current day. `true` still means the current instant.
-- The Today line has three new tokens: `--fg-today-line-width`, `--fg-today-line-opacity` and `--fg-today-line-animation`. Each default keeps today's look. The `fg-today-glow` keyframes exist only for a reader who accepts motion.
-- Five new tokens style the row twisty: `--fg-twisty-glyph-collapsed`, `--fg-twisty-glyph-expanded`, `--fg-twisty-rotation-expanded`, `--fg-twisty-transition` and `--fg-twisty-gap`. The defaults keep today's look.
-- A row now carries `data-kind` (`entry` or `header`), `data-depth` and, when it holds children, `data-parent`. The timeline row band carries the same three. Two new tokens style a group row: `--fg-group-row-bg` and `--fg-group-row-border`.
-- A cell drawn by a `gridCellRenderer` now gets an `aria-label` on its `gridcell`. The value is the library text for the cell. A renderer whose root element sets its own `aria-label` keeps that name, and the cell gets none.
-- New tokens `--fg-twisty-icon`, `--fg-twisty-icon-color` and `--fg-twisty-icon-size` draw the twisty as a mask image.
-- `--fg-col-header-padding-inline` and `-block` pad the column header apart from the row cells. Four more tokens style the column header text: `--fg-col-header-transform`, `-tracking`, `-font-size` and `-font-weight`. Defaults keep today's look.
-- New tokens `--fg-band-font-size`, `--fg-band-font-weight`, `--fg-tick-font-size` and `--fg-tick-font-weight` set the header text.
+#### Timeline body and today
+
+- The new `tickLines` Gantt option sets which body lines the timeline draws:
+  - `'tick'`, the default: one line per tick.
+  - `'none'`: no lines.
+  - `{ unit: 'week' }`: one line at each week start.
+
+  It changes live.
+
+- The new `todayColumn` Gantt option tints today's day column under the bars.
+  - The default is `false`, and it changes live.
+  - The `--fg-today-column-bg` token sets the tint.
+  - The tint paints after the time-shading bands, so an off-day band never covers it.
+- `todayLine` also takes `{ at: 'now' | 'dayCentre' }`.
+  - `{ at: 'dayCentre' }` puts the line in the middle of the current day.
+  - `true` still means the current instant.
+- Three new tokens style the Today line: `--fg-today-line-width`, `--fg-today-line-opacity` and `--fg-today-line-animation`.
+  - Each default keeps the 0.2.0 look.
+  - The `fg-today-glow` keyframes run only for a reader who accepts motion.
+
+#### Bars and labels
+
+- A Variant takes `chrome: 'none'`. The library then draws no fill, border, radius or padding on that bar, and the bar carries `data-chrome='none'`, so a renderer can paint the whole bar.
+- There's a new `BarLabelPolicy` value, `'outsideOrNone'`.
+  - The label paints beside the bar when it fits before the next bar in the same Lane, and paints nowhere otherwise.
+  - The other policies are unchanged.
+
+#### Plugin API
+
+- `ctx.view.rowSpanLayer` is a mount layer as wide as the grid pane and the timeline pane together.
+  - It follows the rows' vertical scroll and stays still on a horizontal pan.
+  - It hides content that has scrolled up under the header.
+  - A key pressed inside its content never reaches the Gantt.
+  - A wheel over its content scrolls the rows and pans the timeline, unless the content scrolls itself and isn't at its edge.
+- `ctx.view.rowBox(id)` returns `{ top, height }` from the layout, for an entry's row or a row id.
+  - It returns `undefined` for a hidden or unknown row.
+  - The `RowBox` type is exported, so a consumer can name the result.
+- `ctx.view.onRowLayout(callback)` calls a plugin after a frame moved a row's top or height: a row height change, a collapse, a filter or a data change.
+  - A scroll alone never calls it.
+
+#### Twisty
+
+- Five new tokens style the row twisty: `--fg-twisty-glyph-collapsed`, `--fg-twisty-glyph-expanded`, `--fg-twisty-rotation-expanded`, `--fg-twisty-transition` and `--fg-twisty-gap`.
+- Three more tokens draw the twisty as a mask image: `--fg-twisty-icon`, `--fg-twisty-icon-color` and `--fg-twisty-icon-size`.
+- The defaults keep the 0.2.0 look.
+
+#### Accessibility
+
+- A cell drawn by a `gridCellRenderer` now gets an `aria-label` on its `gridcell`, holding the library's text for the cell.
+  - A renderer whose root element sets its own `aria-label` keeps that name, and the cell gets none.
+
+#### Harness
+
+- The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `rowSpanLayer` and `onRowLayout`.
+
+### Changed
+
+- `--fg-col-header-padding-block` now takes shorthand, such as `0 10px`.
+- The TypeScript type of `gantt.todayLine` widens to `boolean | Instant | TodayLineSpec`. Code that narrows the getter's value may need a branch for the new object form. Code that never sets the object form gets the same runtime values as before.
+- `HeaderFormat` takes a `HeaderFormatContext`, which extends `FormatContext` with `rangeStart`. A function typed against `FormatContext` still compiles.
 
 ## [0.2.0] - 2026-11-02
 
@@ -95,8 +172,6 @@ Dependencies and scheduling. `entryDependencies()` stores links between Entries 
 - The harness has a "Scheduling" page. It installs `scheduling()` on a chain of six tasks joined by all four Dependency types and one negative lag. Drag a task later and its successors move. Drag it earlier and they follow. One undo restores them all. A Manual column toggles `manuallyScheduled`, and a loop of three tasks shows its members from the diagnostics.
 
 ### Changed
-
-- The `todayColumn` tint paints after the time-shading bands, so an off-day band no longer covers it.
 
 - `scheduling()` skips its float pass on a drag-preview frame, so a drag on a long chain costs less per frame. Float and critical marks update on commit, as before.
 - A finish-to-start connector to a bar that starts at, or within two stubs (24 px) after, the end of its source now takes one bend. The line runs right from the source, then drops onto the successor's top edge (or rises onto its bottom edge), and the arrowhead points into the bar. A start-to-finish connector does the same, mirrored. It used to zig-zag back across both bars. `ConnectorAnchor` gains `barTop` and `barBottom`. A bar in the way of the new vertical keeps the old route.
