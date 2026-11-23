@@ -2600,6 +2600,14 @@ export interface RollUpContext extends ComputeContext {
 }
 
 // @public
+export interface RowBox {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly top: number;
+}
+
+// @public
 export type RowFilter = (entry: Entry) => boolean;
 
 // Warning: (ae-forgotten-export) The symbol "RowHeightResolver" needs to be exported by the entry point index.d.ts
@@ -3316,7 +3324,6 @@ export interface ZonedTime {
 // Warnings were encountered during analysis:
 //
 // dist/api/plugin.d.ts:68:9 - (ae-forgotten-export) The symbol "PropsOf" needs to be exported by the entry point index.d.ts
-// dist/view/plugin-ports.d.ts:213:9 - (ae-forgotten-export) The symbol "RowBox" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 
