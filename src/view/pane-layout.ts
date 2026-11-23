@@ -275,6 +275,11 @@ export class PaneLayout {
     return this.#spacer.offsetHeight;
   }
 
+  /** The visible box of one element a plugin mounted, for the wheel check over the row span layer. */
+  clientBoxOf(element: HTMLElement): { width: number; height: number } {
+    return { width: element.clientWidth, height: element.clientHeight };
+  }
+
   /** `GanttDom.bounds` (S5.3): the container's own client rect, the outer clamp a popup
    *  anchored outside both panes still clamps to. */
   bounds(): DOMRect {

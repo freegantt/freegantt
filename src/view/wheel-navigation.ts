@@ -44,6 +44,13 @@ export interface WheelNavigationOptions {
    *  when this is `true`: the grid pane is its own real horizontal scroller, so plain
    *  horizontal wheel already reaches it as the browser's native `scroll` event. Default `false`. */
   forwardPlainWheel?: boolean;
+  /** A pane that scrolls on neither axis (the row span layer) also forwards a plain horizontal
+   *  wheel, so the timeline pans under it the way it does under a pointer over the timeline pane.
+   *  Needs `forwardPlainWheel`. Default `false`. */
+  forwardHorizontalWheel?: boolean;
+  /** Content inside `pane` that scrolls by itself (a textarea) keeps its wheel. Asked before a plain
+   *  or shift wheel is forwarded: `true` leaves the event to the browser. Zoom never asks. */
+  contentTakesWheel?: (event: WheelEvent) => boolean;
 }
 
 export function attachWheelNavigation(
@@ -53,6 +60,8 @@ export function attachWheelNavigation(
 ): WheelNavigationAttachment {
   const anchorPane = options.anchorPane ?? pane;
   const forwardPlainWheel = options.forwardPlainWheel ?? false;
+  const forwardHorizontalWheel = options.forwardHorizontalWheel ?? false;
+  const contentTakesWheel = options.contentTakesWheel ?? (() => false);
   let zoomRemainderPx = 0;
 
   function onWheel(e: WheelEvent): void {
@@ -76,6 +85,7 @@ export function attachWheelNavigation(
       return;
     }
     zoomRemainderPx = 0;
+    if (contentTakesWheel(e)) return;
     if (e.shiftKey && ctx.wheelPanEnabled()) {
       e.preventDefault();
       const alongX = deltaPx(e, 'x');
@@ -84,9 +94,10 @@ export function attachWheelNavigation(
     }
     if (forwardPlainWheel && ctx.wheelPanEnabled()) {
       const dy = deltaPx(e, 'y');
-      if (dy === 0) return;
+      const dx = forwardHorizontalWheel ? deltaPx(e, 'x') : 0;
+      if (dy === 0 && dx === 0) return;
       e.preventDefault();
-      ctx.panBy(0, dy);
+      ctx.panBy(dx, dy);
     }
   }
 

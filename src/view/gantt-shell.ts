@@ -87,7 +87,7 @@ import { registerCoreCommands } from './core-commands.js';
 import type { CoreCommandPorts } from './core-commands.js';
 import { Keymap } from '../extensions/keymap.js';
 import { DisposableStore } from '../extensions/disposables.js';
-import { attachScroll } from './scroll-attachment.js';
+import { attachScroll, contentScrollsForWheel } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
@@ -640,6 +640,7 @@ export class GanttShell {
   #columnChrome!: ColumnChrome;
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #wheelNavigationGrid: WheelNavigationAttachment | undefined;
+  #wheelNavigationSpan: WheelNavigationAttachment | undefined;
   #rowTwistyAttachment: RowTwistyAttachment;
   /** One long-lived, mutable per-Gantt object. `applyState` diffs against what it painted
    *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
@@ -854,11 +855,15 @@ export class GanttShell {
       () => this.#paneLayout.rowSpanBounds(),
       this.#containerResize,
     );
-    // Content a plugin mounts here owns its keys. The container's keymap, pan and edit handlers
-    // never see a key typed in an input, a button or a select inside it.
-    const keepKeysInRowSpan = (event: KeyboardEvent): void => event.stopPropagation();
-    this.#panes.rowSpanClip.addEventListener('keydown', keepKeysInRowSpan);
-    this.#teardown.add(() => this.#panes.rowSpanClip.removeEventListener('keydown', keepKeysInRowSpan));
+    // Content a plugin mounts here owns its keys and its text. The container's keymap, pan and edit
+    // handlers never see a key typed in it. The container's own guards against a double-click word
+    // range and a text selection never see a mouse press or a selection inside it, so a user can
+    // still double-click a word or drag a selection in the panel's input.
+    const keepInRowSpan = (event: Event): void => event.stopPropagation();
+    for (const type of ['keydown', 'mousedown', 'selectstart']) {
+      this.#panes.rowSpanClip.addEventListener(type, keepInRowSpan);
+      this.#teardown.add(() => this.#panes.rowSpanClip.removeEventListener(type, keepInRowSpan));
+    }
     this.#dom = new ContainerDom({
       container: this.#container,
       paneLayout: this.#paneLayout,
@@ -1629,6 +1634,25 @@ export class GanttShell {
       forwardPlainWheel: true,
     });
     this.#teardown.add(() => this.#wheelNavigationGrid?.detach());
+    // The row span layer sits over both panes, so a wheel over its content scrolls the rows and
+    // pans the timeline as it does over a pane. Content that scrolls by itself keeps its wheel.
+    // A shift wheel turns its vertical delta into a horizontal one, so the check follows that.
+    const spanClip = this.#panes.rowSpanClip;
+    this.#wheelNavigationSpan = attachWheelNavigation(spanClip, wheelNavigationCtx, {
+      anchorPane: this.#panes.timeline,
+      forwardPlainWheel: true,
+      forwardHorizontalWheel: true,
+      contentTakesWheel: (event) =>
+        contentScrollsForWheel(
+          event.target,
+          spanClip,
+          event.shiftKey
+            ? { x: event.deltaX !== 0 ? event.deltaX : event.deltaY, y: 0 }
+            : { x: event.deltaX, y: event.deltaY },
+          (element) => this.#paneLayout.clientBoxOf(element),
+        ),
+    });
+    this.#teardown.add(() => this.#wheelNavigationSpan?.detach());
   }
 
   /** Which root does an ancestor's `data-fg-theme` pin live on? */

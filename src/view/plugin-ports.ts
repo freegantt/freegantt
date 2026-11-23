@@ -253,6 +253,8 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  scroll listener. It stays still when the timeline pans sideways. Content that scrolled up
      *  under the header is hidden. Pointer events pass through everywhere except on the content
      *  you mount. A key pressed inside that content stays there: the Gantt's own keys never run.
+     *  A wheel over it scrolls the rows and pans the timeline, unless your content scrolls by itself
+     *  and is not at its edge.
      *  Position content with `rowBox`. Live for the plugin's whole lifetime, like `overlay`. */
     rowSpanLayer: MountLayer;
     /** Where the row of an entry (or a row id) starts and how tall it is. `top` counts from the

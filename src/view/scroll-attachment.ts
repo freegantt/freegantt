@@ -114,3 +114,40 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
     },
   };
 }
+
+/** The visible box of one element, measured by the caller. `PaneLayout` is the one file in `view/`
+ *  that measures a box (I9), so the shell hands this reader over from there. */
+export type ClientBoxReader = (element: HTMLElement) => { readonly width: number; readonly height: number };
+
+/** Does an element between the wheel's target and `boundary` scroll on its own, in the direction the
+ *  wheel turns, and not sit at that edge? The row span layer asks it, so a textarea in a panel keeps
+ *  its own wheel and the rows scroll once the textarea reaches an edge. The only reader of element
+ *  scroll beside the binding above (I12). */
+export function contentScrollsForWheel(
+  target: EventTarget | null,
+  boundary: HTMLElement,
+  wheel: { readonly x: number; readonly y: number },
+  clientBox: ClientBoxReader,
+): boolean {
+  let node = target instanceof HTMLElement ? target : null;
+  while (node !== null && node !== boundary) {
+    const style = getComputedStyle(node);
+    const box = clientBox(node);
+    if (wheel.y !== 0 && scrollsAlong(style.overflowY, node.scrollHeight, box.height)) {
+      const atEdge =
+        wheel.y < 0 ? node.scrollTop <= 0 : node.scrollTop + box.height >= node.scrollHeight - EPSILON;
+      if (!atEdge) return true;
+    }
+    if (wheel.x !== 0 && scrollsAlong(style.overflowX, node.scrollWidth, box.width)) {
+      const atEdge =
+        wheel.x < 0 ? node.scrollLeft <= 0 : node.scrollLeft + box.width >= node.scrollWidth - EPSILON;
+      if (!atEdge) return true;
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
+function scrollsAlong(overflow: string, scrollSize: number, clientSize: number): boolean {
+  return (overflow === 'auto' || overflow === 'scroll') && scrollSize > clientSize + EPSILON;
+}

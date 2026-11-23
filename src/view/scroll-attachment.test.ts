@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attachScroll } from './scroll-attachment.js';
+import { attachScroll, contentScrollsForWheel } from './scroll-attachment.js';
 import { ScrollAxis, Viewport } from '../layout/index.js';
 import type { DatasetBinding } from '../layout/index.js';
 import type { Entry, Instant } from '../model/index.js';
@@ -189,5 +189,68 @@ describe('attachScroll reserveScrollbarGutter', () => {
     survivor.reserve();
 
     expect(survivor.element.classList.contains('fg-shared-axis')).toBe(false);
+  });
+});
+
+describe('contentScrollsForWheel', () => {
+  const style = document.createElement('style');
+  style.textContent = '.wheel-auto { overflow-y: auto; } .wheel-hidden { overflow-y: hidden; }';
+  document.head.append(style);
+
+  const heights = new Map<HTMLElement, number>();
+  const clientBox = (element: HTMLElement) => ({ width: 0, height: heights.get(element) ?? 0 });
+
+  function box(scroll: {
+    top?: number;
+    height: number;
+    client: number;
+    overflow?: 'auto' | 'hidden';
+  }): HTMLElement {
+    const node = document.createElement('textarea');
+    node.className = `wheel-${scroll.overflow ?? 'auto'}`;
+    document.body.append(node);
+    Object.defineProperty(node, 'scrollHeight', { value: scroll.height });
+    heights.set(node, scroll.client);
+    node.scrollTop = scroll.top ?? 0;
+    return node;
+  }
+  function boundaryOf(...children: HTMLElement[]): HTMLElement {
+    const boundary = document.createElement('div');
+    document.body.append(boundary);
+    boundary.append(...children);
+    return boundary;
+  }
+  const down = { x: 0, y: 40 };
+  const up = { x: 0, y: -40 };
+
+  it('says yes for a scrollable box that is not at the edge the wheel turns toward', () => {
+    const area = box({ top: 10, height: 300, client: 100 });
+    const boundary = boundaryOf(area);
+    expect(contentScrollsForWheel(area, boundary, down, clientBox)).toBe(true);
+    expect(contentScrollsForWheel(area, boundary, up, clientBox)).toBe(true);
+  });
+
+  it('says no at the edge the wheel turns toward, so the rows take the wheel', () => {
+    const atTop = box({ top: 0, height: 300, client: 100 });
+    const atBottom = box({ top: 200, height: 300, client: 100 });
+    const boundary = boundaryOf(atTop, atBottom);
+    expect(contentScrollsForWheel(atTop, boundary, up, clientBox)).toBe(false);
+    expect(contentScrollsForWheel(atBottom, boundary, down, clientBox)).toBe(false);
+  });
+
+  it('says no for a box with nothing to scroll or with overflow hidden', () => {
+    const fits = box({ height: 100, client: 100 });
+    const hidden = box({ height: 300, client: 100, overflow: 'hidden' });
+    const boundary = boundaryOf(fits, hidden);
+    expect(contentScrollsForWheel(fits, boundary, down, clientBox)).toBe(false);
+    expect(contentScrollsForWheel(hidden, boundary, down, clientBox)).toBe(false);
+  });
+
+  it('looks at ancestors up to the boundary and no further', () => {
+    const outside = box({ top: 10, height: 300, client: 100 });
+    const inner = document.createElement('span');
+    const boundary = boundaryOf(inner);
+    outside.append(boundary);
+    expect(contentScrollsForWheel(inner, boundary, down, clientBox)).toBe(false);
   });
 });
