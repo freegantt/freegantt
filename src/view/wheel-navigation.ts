@@ -64,24 +64,29 @@ export function attachWheelNavigation(
   const contentTakesWheel = options.contentTakesWheel ?? (() => false);
   let zoomRemainderPx = 0;
 
+  /** Ctrl/⌘+wheel: one preset step per notch of wheel travel, anchored at the pointer. */
+  function zoomByWheel(e: WheelEvent): void {
+    e.preventDefault();
+    const offsetX = e.clientX - anchorPane.getBoundingClientRect().left;
+    const dy = deltaPx(e, 'y');
+    if (dy === 0) return;
+    if (zoomRemainderPx !== 0 && Math.sign(dy) !== Math.sign(zoomRemainderPx)) {
+      zoomRemainderPx = 0;
+    }
+    zoomRemainderPx += dy;
+    while (zoomRemainderPx <= -WHEEL_PX_PER_PRESET_STEP) {
+      ctx.zoomIn(offsetX);
+      zoomRemainderPx += WHEEL_PX_PER_PRESET_STEP;
+    }
+    while (zoomRemainderPx >= WHEEL_PX_PER_PRESET_STEP) {
+      ctx.zoomOut(offsetX);
+      zoomRemainderPx -= WHEEL_PX_PER_PRESET_STEP;
+    }
+  }
+
   function onWheel(e: WheelEvent): void {
     if ((e.ctrlKey || e.metaKey) && ctx.wheelZoomEnabled()) {
-      e.preventDefault();
-      const offsetX = e.clientX - anchorPane.getBoundingClientRect().left;
-      const dy = deltaPx(e, 'y');
-      if (dy === 0) return;
-      if (zoomRemainderPx !== 0 && Math.sign(dy) !== Math.sign(zoomRemainderPx)) {
-        zoomRemainderPx = 0;
-      }
-      zoomRemainderPx += dy;
-      while (zoomRemainderPx <= -WHEEL_PX_PER_PRESET_STEP) {
-        ctx.zoomIn(offsetX);
-        zoomRemainderPx += WHEEL_PX_PER_PRESET_STEP;
-      }
-      while (zoomRemainderPx >= WHEEL_PX_PER_PRESET_STEP) {
-        ctx.zoomOut(offsetX);
-        zoomRemainderPx -= WHEEL_PX_PER_PRESET_STEP;
-      }
+      zoomByWheel(e);
       return;
     }
     zoomRemainderPx = 0;
