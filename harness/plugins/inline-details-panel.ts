@@ -42,11 +42,16 @@ export function inlineDetailsPanel(
       note.type = 'text';
       note.placeholder = 'Add a note';
       note.setAttribute('aria-label', 'Note');
+      // Longer than its box, so a wheel over it scrolls the text and not the rows.
+      const notes = document.createElement('textarea');
+      notes.setAttribute('aria-label', 'Notes');
+      notes.rows = 2;
+      notes.value = Array.from({ length: 12 }, (_unused, index) => `Note line ${index + 1}`).join('\n');
       const close = document.createElement('button');
       close.type = 'button';
       close.textContent = 'Close';
       close.addEventListener('click', onClose);
-      panel.append(title, lines, note, close);
+      panel.append(title, lines, note, notes, close);
 
       place = () => {
         const box = openFor === undefined ? undefined : ctx.view.rowBox(spacerIdFor(openFor));

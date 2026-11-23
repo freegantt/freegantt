@@ -734,7 +734,8 @@ A plugin mounts HTML in one of three layers through `ctx.view`. Each layer answe
 
 Each layer takes `present(content)` and gives back a disposer. `onResize` and `bounds` work the same on all three.
 `rowSpanLayer` hides content that scrolled up under the header. Pointer events pass through it, except on your content.
-A key pressed inside content in `rowSpanLayer` stays there. The Gantt's keymap and pan keys never run for it.
+A key pressed inside content in `rowSpanLayer` stays there. The Gantt's keymap and pan keys never run for it. A mouse press and a text selection inside it stay there too, so a user can select text in your input.
+A mouse wheel over that content scrolls the rows, and a sideways or Shift wheel pans the timeline, as over a pane. Content that scrolls by itself, such as a textarea, keeps the wheel until it reaches its edge.
 
 `ctx.view.rowBox(id)` returns `{ top, height }` for a row. `top` counts from the top of `rowSpanLayer`. It reads the layout, so a row scrolled out of the window answers. It returns `undefined` for a row a collapsed parent hides and for an unknown id.
 A row's top moves when a row height changes, a parent collapses or expands, a filter changes or data changes. `ctx.view.onRowLayout(callback)` tells you after the frame that moved a row, and the callback reads `rowBox` again. It never runs for a scroll, because a scroll moves no row top. It does not run for the frame painted when you register, so read `rowBox` once yourself. It gives back a disposer.

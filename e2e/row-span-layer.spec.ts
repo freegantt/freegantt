@@ -123,3 +123,86 @@ test('the rows moving tells the plugin, and a scroll does not', async ({ page })
   await page.locator(`${PANEL} button`).click();
   await expect.poll(count).toBeGreaterThan(afterOpen);
 });
+
+const timelineScroll = (page: Page): Promise<{ top: number; left: number }> =>
+  page.evaluate(() => {
+    const pane = document.querySelector<HTMLElement>('#gantt .fg-timeline-pane')!;
+    return { top: pane.scrollTop, left: pane.scrollLeft };
+  });
+
+const centreOf = async (page: Page, selector: string): Promise<{ x: number; y: number }> => {
+  const box = (await page.locator(selector).boundingBox())!;
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+test('a wheel over the panel scrolls the rows, and a sideways or shift wheel pans the timeline', async ({
+  page,
+}) => {
+  await openPanelUnderTask(page, 2);
+  const over = await centreOf(page, `${PANEL} h3`);
+  await page.mouse.move(over.x, over.y);
+
+  await page.mouse.wheel(0, 90);
+  await expect.poll(async () => (await timelineScroll(page)).top).toBeGreaterThan(0);
+
+  await page.mouse.wheel(120, 0);
+  await expect.poll(async () => (await timelineScroll(page)).left).toBeGreaterThan(0);
+
+  const before = (await timelineScroll(page)).left;
+  await page.keyboard.down('Shift');
+  await page.mouse.wheel(0, 120);
+  await page.keyboard.up('Shift');
+  await expect.poll(async () => (await timelineScroll(page)).left).toBeGreaterThan(before);
+});
+
+test('a wheel over a scrollable textarea in the panel scrolls the textarea, until it reaches the edge', async ({
+  page,
+}) => {
+  await openPanelUnderTask(page, 2);
+  const over = await centreOf(page, `${PANEL} textarea`);
+  await page.mouse.move(over.x, over.y);
+  const textareaTop = (): Promise<number> =>
+    page.locator(`${PANEL} textarea`).evaluate((node) => node.scrollTop);
+
+  await page.mouse.wheel(0, 20);
+  await expect.poll(textareaTop).toBeGreaterThan(0);
+  expect((await timelineScroll(page)).top).toBe(0);
+
+  // The textarea takes this wheel down to its edge. The next one, at the edge, scrolls the rows.
+  await page.mouse.wheel(0, 2000);
+  await expect.poll(textareaTop).toBeGreaterThan(20);
+  await page.mouse.wheel(0, 100);
+  await expect.poll(async () => (await timelineScroll(page)).top).toBeGreaterThan(0);
+});
+
+test('a mouse press, a drag and a double-click in the panel start no Gantt gesture', async ({ page }) => {
+  await openPanelUnderTask(page, 2);
+  const state = (): Promise<string> =>
+    page.evaluate(() =>
+      JSON.stringify({
+        selected: window.__gantt.selectedEntryIds,
+        bars: Array.from(document.querySelectorAll('#gantt .fg-bar')).map((bar) => {
+          const box = bar.getBoundingClientRect();
+          return [Math.round(box.left), Math.round(box.width)];
+        }),
+      }),
+    );
+  const before = await state();
+
+  const from = await centreOf(page, `${PANEL} h3`);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 200, from.y - 150, { steps: 8 });
+  await page.mouse.up();
+  await page.mouse.dblclick(from.x, from.y);
+  expect(await state()).toBe(before);
+
+  const input = page.locator(`${PANEL} input`);
+  await input.fill('alpha beta');
+  const box = (await input.boundingBox())!;
+  await page.mouse.dblclick(box.x + 12, box.y + box.height / 2);
+  const selection = await input.evaluate((node: HTMLInputElement) =>
+    node.value.slice(node.selectionStart ?? 0, node.selectionEnd ?? 0),
+  );
+  expect(selection).toBe('alpha');
+});

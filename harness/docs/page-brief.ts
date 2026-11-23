@@ -157,6 +157,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
       'The rows below the panel move down, and move back up when the panel closes',
       'Scroll the rows and the panel stays with its row; pan the timeline and it stays full width',
       'A row scrolled up under the header hides the panel too',
+      'Wheel over the panel to scroll the rows; wheel inside its textarea to scroll the text',
       'Type in the panel input: the Gantt keys (arrows, Home, Enter) never run for it',
     ],
     config: [
