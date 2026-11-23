@@ -856,9 +856,9 @@ export class GanttShell {
       this.#containerResize,
     );
     // Content a plugin mounts here owns its keys and its text. The container's keymap, pan and edit
-    // handlers never see a key typed in it. The container's own guards against a double-click word
-    // range and a text selection never see a mouse press or a selection inside it, so a user can
-    // still double-click a word or drag a selection in the panel's input.
+    // handlers never see a key typed in it. The container blocks a double-click word range and a
+    // text selection. Those guards never see a press or a selection inside the layer. So a user can
+    // still double-click a word, or drag a selection, in the panel's input.
     const keepInRowSpan = (event: Event): void => event.stopPropagation();
     for (const type of ['keydown', 'mousedown', 'selectstart']) {
       this.#panes.rowSpanClip.addEventListener(type, keepInRowSpan);
@@ -1634,8 +1634,8 @@ export class GanttShell {
       forwardPlainWheel: true,
     });
     this.#teardown.add(() => this.#wheelNavigationGrid?.detach());
-    // The row span layer sits over both panes, so a wheel over its content scrolls the rows and
-    // pans the timeline as it does over a pane. Content that scrolls by itself keeps its wheel.
+    // The row span layer sits over both panes. A wheel over its content scrolls the rows and pans
+    // the timeline, as it does over a pane. Content that scrolls by itself keeps its wheel.
     // A shift wheel turns its vertical delta into a horizontal one, so the check follows that.
     const spanClip = this.#panes.rowSpanClip;
     this.#wheelNavigationSpan = attachWheelNavigation(spanClip, wheelNavigationCtx, {
