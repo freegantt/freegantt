@@ -286,7 +286,7 @@ export class ConnectorRouter {
       preview === undefined ? { ...input.barBox(bar), dy: 0 } : input.previewedBarBox(bar, preview);
     if (width <= 0) return undefined;
     const committedTop = memory.heights.topAt(resolved.rowIndex);
-    const committedHeight = memory.heights.heightAt(resolved.rowIndex);
+    const committedHeight = memory.heightOfRow(resolved.rowIndex);
     const { top: barTop, bottom: barBottom } = input.barBand(
       bar,
       resolved.rowIndex,
@@ -302,7 +302,7 @@ export class ConnectorRouter {
       edge: end.edge,
       rowIndex,
       rowTop,
-      rowBottom: rowTop + memory.heights.heightAt(rowIndex),
+      rowBottom: rowTop + memory.heightOfRow(rowIndex),
       barTop,
       barBottom,
     };

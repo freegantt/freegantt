@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import fc from 'fast-check';
-import { entryId } from '../../model/index.js';
+import { entryId, rowId } from '../../model/index.js';
 import type { Entry } from '../../model/index.js';
 import { createTimeScale, dayPreset, instant } from '../../time/index.js';
 import { BarIndex } from './bar-index.js';
@@ -132,6 +132,19 @@ describe('connectors in the frame', () => {
         expect(frame.connectors.map((c) => c.id)).toEqual(['related:ab']);
       }),
     );
+  });
+
+  it('ends on the bar below a Row detail, and starts on the bar above it', () => {
+    const plain = frameOf([() => [finishToStart]]);
+    const withDetail = frameOf([() => [finishToStart]], { rowDetailHeights: new Map([[rowId('a'), 100]]) });
+    const ends = (frame: typeof plain) => {
+      const path = frame.connectors[0]!.path;
+      return [path[0], path.at(-1)];
+    };
+    const [plainStart, plainEnd] = ends(plain);
+    const [detailStart, detailEnd] = ends(withDetail);
+    expect(detailStart).toEqual(plainStart);
+    expect((detailEnd as { y: number }).y).toBe((plainEnd as { y: number }).y + 100);
   });
 
   it('draws nothing and raises no error for an end with no Entry', () => {

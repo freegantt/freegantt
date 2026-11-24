@@ -59,6 +59,7 @@ export interface RowPlanMemoryInput {
   rowHeight: number;
   rowHeightOf?: RowHeightResolver;
   lanes?: LaneLayout;
+  rowDetailHeights?: ReadonlyMap<RowId, number>;
   registry: VariantBars;
 }
 
@@ -155,6 +156,7 @@ export class FrameLayout implements FrameLayoutView {
       rowHeight: input.rowHeight,
       ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
       ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
+      ...(input.rowDetailHeights !== undefined ? { rowDetailHeights: input.rowDetailHeights } : {}),
       registry: input.variants,
     });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations, this.#connectors);
@@ -167,6 +169,7 @@ export class FrameLayout implements FrameLayoutView {
       rowHeight: input.rowHeight,
       ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
       ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
+      ...(input.rowDetailHeights !== undefined ? { rowDetailHeights: input.rowDetailHeights } : {}),
       registry: input.variants,
     });
     return placeConnectors(input, this.#plan, this.#memory, this.#connectors);
@@ -202,6 +205,7 @@ export class FrameLayout implements FrameLayoutView {
       rowHeight: memory.rowHeight,
       ...(memory.rowHeightOf !== undefined ? { rowHeightOf: memory.rowHeightOf } : {}),
       ...(memory.lanes !== undefined ? { lanes: memory.lanes } : {}),
+      ...(memory.rowDetailHeights !== undefined ? { rowDetailHeights: memory.rowDetailHeights } : {}),
       entries: input.entries,
       registry: memory.registry,
       datasetRevision: input.datasetRevision,
@@ -250,10 +254,22 @@ export class FrameLayout implements FrameLayoutView {
     return this.#memory.heights.indexAtY(y);
   }
 
-  /** The row-height index's own `heightAt`, exposed the same way `rowIndexAtY` is — a row drop zone
-   * needs a row's own height to place its before/into/after thirds. */
+  /** The row's own height, without its Row detail — the band its Bars and Lanes sit in. A row drop
+   * zone needs it to place its before/into/after thirds. */
   rowHeightAt(index: number): number {
-    return this.#memory.heights.heightAt(index);
+    return this.#memory.heightOfRow(index);
+  }
+
+  /** Where the Row detail of this row starts: the bottom of the row's own band, in the coordinates of
+   *  the content. Takes an Entry id or a row id, like `rowBox`. `undefined` for a row a collapsed
+   *  parent hides and for an id no plan holds. The caller plans first (`ensureRowPlan`). */
+  rowDetailTop(id: string): number | undefined {
+    const index = this.#indexOfRowOrEntry(id);
+    return index < 0 ? undefined : this.rowTop(index) + this.rowHeightAt(index);
+  }
+
+  #indexOfRowOrEntry(id: string): number {
+    return this.#rowIndexOfEntry.get(id as EntryId) ?? this.#rowIndexOfRow.get(id) ?? -1;
   }
 
   /** Where the row of this entry (or this row id, a header row's id too) starts, and how tall it is, in
@@ -261,7 +277,7 @@ export class FrameLayout implements FrameLayoutView {
    *  window has not drawn answers too. `undefined` for a row a collapsed parent hides, and for an id
    *  no plan holds. The caller plans first (`ensureRowPlan`) when it needs a row this frame added. */
   rowBox(id: string): RowBox | undefined {
-    const index = this.#rowIndexOfEntry.get(id as EntryId) ?? this.#rowIndexOfRow.get(id) ?? -1;
+    const index = this.#indexOfRowOrEntry(id);
     if (index < 0) return undefined;
     return { top: this.rowTop(index), height: this.rowHeightAt(index) };
   }

@@ -1422,7 +1422,7 @@ export class GanttShell {
             heights: {
               indexAtY: (y) => this.#layout.rowIndexAtY(y),
               topAt: (index) => this.#layout.rowTop(index),
-              heightAt: (index) => this.#layout.rowHeightAt(index),
+              rowHeightAt: (index) => this.#layout.rowHeightAt(index),
               totalHeight: this.#contentSize.height,
             },
             rowCount: this.#layout.rowCount,

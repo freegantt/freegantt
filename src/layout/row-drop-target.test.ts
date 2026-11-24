@@ -136,4 +136,20 @@ describe('dropPlaceFor', () => {
     expect(place).toMatchObject({ parentId: undefined, index: 3, depth: 0, rowId: undefined, side: 'end' });
     expect((place as { lineY: number }).lineY).toBe(ROWS.length * ROW_HEIGHT);
   });
+
+  it('puts the line of an after drop under the Row detail, on the top of the next row', () => {
+    // Row 2 holds a 100px detail: row 3 starts 100px lower than a plain grid says.
+    const withDetail: RowsForDrop = {
+      ...rowsForDrop(),
+      rowTop: (index) => index * ROW_HEIGHT + (index > 2 ? 100 : 0),
+    };
+    const place = dropPlaceFor(rowZone(2, 'after'), withDetail);
+    expect((place as { lineY: number }).lineY).toBe(3 * ROW_HEIGHT + 100);
+  });
+
+  it('an after drop on a childrenAsSegments row lands after it, not into it', () => {
+    const rows = ROWS.map((row, index) => (index === 3 ? { ...row, childrenAsSegments: true } : row));
+    expect(dropPlaceFor(rowZone(3, 'after'), rowsForDrop(rows))).toMatchObject({ side: 'after', index: 2 });
+    expect(dropPlaceFor(rowZone(3, 'before'), rowsForDrop(rows))).toMatchObject({ side: 'into' });
+  });
 });

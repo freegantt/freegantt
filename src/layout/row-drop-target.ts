@@ -16,6 +16,7 @@ import { ROW_DROP_ZONE_KIND } from './row-drop-zone.js';
 export interface RowsForDrop {
   readonly rows: readonly PlannedRow[];
   rowTop(index: number): number;
+  /** The row's own band, without its Row detail. */
   rowHeightAt(index: number): number;
   entryOf(id: EntryId): Entry | undefined;
   /** Every Entry at tree depth 0, in sibling order. */
@@ -75,7 +76,10 @@ function rowZonePlace(zone: Extract<RowDropZone, { kind: 'row' }>, rows: RowsFor
   const subject = rows.entryOf(subjectId);
   if (subject === undefined) return { refused: 'entryGone', rowId: row.id };
 
-  if (row.childrenAsSegments === true || zone.side === 'into') return intoPlace(row, subject);
+  // A drop under a row, on its Row detail, is `after` even for a row whose children draw as segments.
+  if ((row.childrenAsSegments === true && zone.side !== 'after') || zone.side === 'into') {
+    return intoPlace(row, subject);
+  }
   if (zone.side === 'before') return beforePlace(zone.rowIndex, row, subject, rows);
   return afterPlace(zone.rowIndex, row, subject, rows);
 }
@@ -113,7 +117,8 @@ function beforePlace(rowIndex: number, row: PlannedRow, subject: Entry, rows: Ro
  *  deeper, on the very same y a `before` on the row below would paint. Any other row's bottom edge
  *  is a plain sibling boundary: same group as the row's subject, one rank past it. */
 function afterPlace(rowIndex: number, row: PlannedRow, subject: Entry, rows: RowsForDrop): DropPlace {
-  const lineY = rows.rowTop(rowIndex) + rows.rowHeightAt(rowIndex);
+  // The line sits under the row and its Row detail, on the top of the next row.
+  const lineY = rows.rowTop(rowIndex + 1);
   if (row.expanded && row.expandable && row.childrenAsSegments !== true) {
     return { parentId: subject.id, index: 0, depth: row.depth + 1, lineY, rowId: row.id, side: 'after' };
   }

@@ -414,6 +414,8 @@ export interface LayoutInput {
   rowHeightOf?: RowHeightResolver;
   /** Which Rows hold Lanes, and at what geometry. Absent: no Row does. */
   lanes?: LaneLayout;
+  /** The measured height of each Row detail, by Row. Absent or empty: no Row holds one. */
+  rowDetailHeights?: ReadonlyMap<RowId, number>;
   revision: number;
   /** Feeds every header band's `resolveDateFormat` call and `a11yLabel`.
    * `undefined` = the runtime default. */
@@ -603,6 +605,7 @@ function memoryFor(input: LayoutInput, plan: readonly PlannedRow[], memory?: Fra
     rowHeight: input.rowHeight,
     ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
     ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
+    ...(input.rowDetailHeights !== undefined ? { rowDetailHeights: input.rowDetailHeights } : {}),
     entries: input.entries,
     registry: input.variants,
     datasetRevision: input.datasetRevision,
@@ -733,7 +736,7 @@ function placeVisibleRowsAndBars(
 
     const produced = mem.rowMemory(planned.id);
     const rowBars = produced.bars;
-    const height = index.heightAt(rowIndex);
+    const height = mem.heightOfRow(rowIndex);
     const parts = partCountByEntry(rowBars);
     const rowLanes = mem.lanesOfRow(rowIndex, top, height);
     rows.push({

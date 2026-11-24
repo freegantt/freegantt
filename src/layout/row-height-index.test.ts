@@ -18,7 +18,6 @@ describe('PrefixSumHeightIndex', () => {
     expect(index.topAt(2)).toBe(60);
     expect(index.topAt(3)).toBe(70);
     expect(index.totalHeight).toBe(130);
-    expect(index.heightAt(2)).toBe(10);
   });
 
   it('maps a y offset to the row that contains it, including exact boundaries', () => {

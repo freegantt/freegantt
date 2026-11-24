@@ -5,7 +5,6 @@
 // (D2).
 
 export interface RowHeightIndex {
-  heightAt(index: number): number;
   topAt(index: number): number;
   indexAtY(y: number): number;
   readonly totalHeight: number;
@@ -13,29 +12,26 @@ export interface RowHeightIndex {
 }
 
 /** Prefix sums computed lazily and cached; `invalidateFrom` discards the cached suffix so the next
- * read recomputes only what changed instead of the whole index. */
+ * read recomputes only what changed instead of the whole index. Each step is the whole vertical
+ * room one row takes: its own height plus its Row detail. */
 export class PrefixSumHeightIndex implements RowHeightIndex {
   readonly #count: number;
-  readonly #getHeight: (index: number) => number;
+  readonly #getStep: (index: number) => number;
   readonly #tops: number[];
   #validUpTo: number;
 
-  constructor(count: number, getHeight: (index: number) => number) {
+  constructor(count: number, getStep: (index: number) => number) {
     this.#count = count;
-    this.#getHeight = getHeight;
+    this.#getStep = getStep;
     this.#tops = new Array<number>(count + 1).fill(0);
     this.#validUpTo = 0;
   }
 
   #ensure(uptoIndex: number): void {
     for (let i = this.#validUpTo; i < uptoIndex; i++) {
-      this.#tops[i + 1] = this.#tops[i]! + this.#getHeight(i);
+      this.#tops[i + 1] = this.#tops[i]! + this.#getStep(i);
     }
     if (uptoIndex > this.#validUpTo) this.#validUpTo = uptoIndex;
-  }
-
-  heightAt(index: number): number {
-    return this.#getHeight(index);
   }
 
   topAt(index: number): number {
