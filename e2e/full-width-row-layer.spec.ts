@@ -67,7 +67,13 @@ test('the layer follows vertical scroll and stays still on a horizontal pan', as
 
 test('content scrolled up under the header is hidden', async ({ page }) => {
   await openPanelUnderTask(page, 1);
-  await scrollTimeline(page, { top: 150 });
+  // The pane clamps scrollTop to its content height, so wait until the panel's height is in and 150 holds.
+  await expect
+    .poll(async () => {
+      await scrollTimeline(page, { top: 150 });
+      return page.locator('#gantt .fg-timeline-pane').evaluate((pane) => pane.scrollTop);
+    })
+    .toBe(150);
   const headerBottom = await page
     .locator('#gantt .fg-grid-spacer')
     .evaluate((node) => node.getBoundingClientRect().bottom);
