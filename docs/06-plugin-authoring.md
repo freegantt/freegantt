@@ -779,6 +779,22 @@ function detailsPanel() {
 - A detail is not a Row and not an Entry. It has no ARIA row, no selection and no key path. Give the content its own role and label.
 - Keys, the mouse and the wheel work as in `fullWidthRowLayer`.
 
+#### Line up with the timeline
+
+The detail spans both panes. To put content under the timeline columns, use the two tokens the Gantt writes: `--fg-timeline-pane-left` and `--fg-timeline-pane-width`. The detail wrapper inherits them. They stay correct when a splitter drag, a window resize or a scrollbar moves the Timeline pane. They are read-only.
+
+```ts
+function timelineNote(text: string): HTMLElement {
+  const note = document.createElement('p');
+  note.textContent = text;
+  note.style.marginLeft = 'var(--fg-timeline-pane-left)';
+  note.style.width = 'var(--fg-timeline-pane-width)';
+  return note;
+}
+```
+
+Append the note to the detail content. Keep padding off the content itself, or the line starts inside that padding. See [Styling and theming](./10-styling-and-theming.md) for the tokens.
+
 `harness/` has a runnable version.
 
 ## Every registration seam

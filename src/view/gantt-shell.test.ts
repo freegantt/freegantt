@@ -315,6 +315,27 @@ describe('scroll (D9, #9)', () => {
   // element as the scroller). happy-dom does no layout, so these drive the same FakeResizeObserver
   // seam pane-size-attachment.test.ts uses, feeding the pane height GanttShell reads on construction.
 
+  it('writes the Timeline pane tokens on the first measurement and again on a size change', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const shell = paintedShell({ wiring: {}, container, dataset: fakeDataset(tallEntries(5)) });
+      const layer = container.querySelector<HTMLElement>('.fg-full-width-row-layer')!;
+      const timeline = container.querySelector<HTMLElement>('.fg-timeline-pane')!;
+      expect(layer.style.getPropertyValue('--fg-timeline-pane-width')).toBe('0px');
+
+      Object.defineProperty(timeline, 'clientWidth', { value: 480, configurable: true });
+      FakeResizeObserver.instances[0]!.fire({ width: 480, height: 100 });
+
+      expect(layer.style.getPropertyValue('--fg-timeline-pane-width')).toBe('480px');
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('two shells sharing one y ScrollAxis both contribute to the shared max (U1/U2)', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);

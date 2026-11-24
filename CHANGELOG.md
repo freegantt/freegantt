@@ -106,6 +106,10 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
   - A detail of a Row that is collapsed, filtered or unknown stays mounted, hidden and spaceless.
   - It is not a Row and not an Entry: it has no ARIA row, no selection and no key path. Give the content its own role and label.
   - It replaces the bar-less spacer Entry recipe.
+- The new `--fg-timeline-pane-left` and `--fg-timeline-pane-width` tokens say where the Timeline pane sits.
+  - The Gantt writes them in px on the full-width row layer, so every child and every Row detail inherits them. A consumer reads them and never sets them.
+  - `left` counts from the left edge of the full-width row layer. `width` is the visible width of the Timeline pane, without the vertical scrollbar.
+  - They follow a splitter drag, a window resize and a scrollbar that appears. They replace a `getBoundingClientRect()` read on `.fg-header`.
 - A frame that only changes a Row detail height now calls an `onRowLayout` listener too.
 - A Page Down or Page Up in the grid moves by the rows in the visible window, counted by pixels, so a tall Row detail shortens the page.
 
@@ -122,7 +126,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
 #### Harness
 
-- The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `presentRowDetail`.
+- The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `presentRowDetail`. A line in the panel lines up with the timeline columns through the new Timeline pane tokens.
 - The harness "Hierarchy & timeline" page has a "Dense board" panel and a "Today" panel.
   - The Dense board panel switches `lanes`, a `rowHeight` function, `headerTickRenderer`, a header preset with `heightPx` and `alignTo`, `tickLines`, a Variant with `unstyled: true`, and the `outsideOrNone` bar label policy.
   - The Today panel is a second Gantt around the real today. It switches `todayHighlight` between the two layers, and `todayLineAt` between `'now'` and `'dayCenter'`.

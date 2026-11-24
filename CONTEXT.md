@@ -461,7 +461,7 @@ The left-hand pane of a Pane layout: row labels and, from S4, Field-driven colum
 _Avoid_: Label column, gutter (gutter was the pre-S1.8 shape, where the row-label width lived inside the render backend's paint layer instead of being a pane in its own right — D-S1.8-2 retired it)
 
 **Timeline pane**:
-The right-hand pane of a Pane layout and the single native scroller for both axes: header bands, bars, Connectors, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the container or the Grid pane.
+The right-hand pane of a Pane layout and the single native scroller for both axes: header bands, bars, Connectors, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the container or the Grid pane. The library publishes where it sits as two output Tokens on the Full-width row layer: `--fg-timeline-pane-left` (its visible left edge from that layer's left edge) and `--fg-timeline-pane-width` (its client width, without the vertical scrollbar). A consumer reads them and never sets them, unlike the input Token `--fg-grid-pane-width`.
 _Avoid_: Chart area, canvas (canvas reads as the future canvas render backend, a different concept)
 
 **Splitter**:

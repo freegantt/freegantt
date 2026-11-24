@@ -3393,6 +3393,7 @@ export class GanttShell {
    *  overlapped it in the first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#paneBox = size;
+    this.#paneLayout.publishTimelinePaneBox();
     this.#frameSettings.refreshPixelProperties();
     this.#applyRowsViewportSize();
   }

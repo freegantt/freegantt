@@ -33,6 +33,8 @@ export function inlineDetailsPanel(
         const title = document.createElement('h3');
         title.textContent = details.title;
         const lines = document.createElement('p');
+        // The Gantt writes `--fg-timeline-pane-left` and `--fg-timeline-pane-width` for this line.
+        lines.className = 'demo-details-timeline-line';
         lines.textContent = details.lines.join(' · ');
         const note = document.createElement('input');
         note.type = 'text';

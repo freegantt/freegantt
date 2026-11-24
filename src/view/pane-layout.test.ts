@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PaneLayout } from './pane-layout.js';
 
 // getComputedStyle only resolves custom properties on elements connected to the document (jsdom).
@@ -139,6 +139,59 @@ describe('PaneLayout', () => {
     expect(paneLayout.measureTimelinePane()).toEqual({ width: 500, height: 300 });
 
     paneLayout.destroy();
+  });
+
+  describe('publishTimelinePaneBox()', () => {
+    function stubTimelineBox(
+      paneLayout: PaneLayout,
+      box: { left: number; width: number; clientLeft?: number },
+    ) {
+      const { timeline, fullWidthRowLayer } = paneLayout.panes;
+      Object.defineProperty(timeline, 'clientWidth', { value: box.width, configurable: true });
+      Object.defineProperty(timeline, 'clientLeft', { value: box.clientLeft ?? 0, configurable: true });
+      timeline.getBoundingClientRect = () => ({ left: 10 + box.left }) as DOMRect;
+      fullWidthRowLayer.getBoundingClientRect = () => ({ left: 10 }) as DOMRect;
+    }
+
+    it('writes the visible left edge and the client width on the full-width row layer', () => {
+      const paneLayout = new PaneLayout({ container: el() });
+      stubTimelineBox(paneLayout, { left: 164, width: 500 });
+
+      paneLayout.publishTimelinePaneBox();
+
+      const layer = paneLayout.panes.fullWidthRowLayer;
+      expect(layer.style.getPropertyValue('--fg-timeline-pane-left')).toBe('164px');
+      expect(layer.style.getPropertyValue('--fg-timeline-pane-width')).toBe('500px');
+      paneLayout.destroy();
+    });
+
+    it('counts a left border of the timeline pane into the left edge', () => {
+      const paneLayout = new PaneLayout({ container: el() });
+      stubTimelineBox(paneLayout, { left: 164, width: 498, clientLeft: 1 });
+
+      paneLayout.publishTimelinePaneBox();
+
+      const layer = paneLayout.panes.fullWidthRowLayer;
+      expect(layer.style.getPropertyValue('--fg-timeline-pane-left')).toBe('165px');
+      paneLayout.destroy();
+    });
+
+    it('writes nothing while the box is unchanged, and writes again when it changes', () => {
+      const paneLayout = new PaneLayout({ container: el() });
+      const layer = paneLayout.panes.fullWidthRowLayer;
+      const write = vi.spyOn(layer.style, 'setProperty');
+      stubTimelineBox(paneLayout, { left: 164, width: 500 });
+
+      paneLayout.publishTimelinePaneBox();
+      paneLayout.publishTimelinePaneBox();
+      expect(write).toHaveBeenCalledTimes(2);
+
+      stubTimelineBox(paneLayout, { left: 164, width: 480 });
+      paneLayout.publishTimelinePaneBox();
+      expect(write).toHaveBeenCalledTimes(4);
+      expect(layer.style.getPropertyValue('--fg-timeline-pane-width')).toBe('480px');
+      paneLayout.destroy();
+    });
   });
 
   it('destroy() clears the container', () => {

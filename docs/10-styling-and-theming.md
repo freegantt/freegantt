@@ -233,6 +233,29 @@ that overrides `--fg-bar-fill` on one bar element sees its own override in the m
 and the override sit at the same element. `--fg-bar-opacity` itself stays declared on `.fg-container`
 and inherits down unchanged, so one setting still covers every bar.
 
+### Output tokens — the library writes, you read
+
+Two `--fg-*` properties are outputs. The Gantt writes them. A consumer reads them and never sets them. A value you set is overwritten at the next size change.
+This is the opposite of `--fg-grid-pane-width`. You set that one, and the Gantt reads it once.
+
+| Token | Value | Written on |
+|---|---|---|
+| `--fg-timeline-pane-left` | The visible left edge of the Timeline pane, in px. It counts from the left edge of the full-width row layer. | `.fg-full-width-row-layer` |
+| `--fg-timeline-pane-width` | The visible width of the Timeline pane, in px. A vertical scrollbar is not part of it. | `.fg-full-width-row-layer` |
+
+The Gantt writes both on mount. It writes them again each time the Timeline pane changes size: a splitter drag, a window resize or a vertical scrollbar that appears. It writes nothing when the values stay the same.
+Every child of the full-width row layer inherits them. So does every Row detail wrapper. That layer spans the container, and so does a Row detail wrapper. So the left value also counts from the left edge of a Row detail.
+Use them to line content up with the timeline columns:
+
+```css
+.my-row-detail-timeline {
+  margin-left: var(--fg-timeline-pane-left);
+  width: var(--fg-timeline-pane-width);
+}
+```
+
+The tokens give no value outside the full-width row layer. A popup in the overlay layer does not inherit them.
+
 ### Internal tokens — not a consumer's to set
 
 Seven `--fg-*` properties are the library's own plumbing, not a consumer's to set. Five are geometry

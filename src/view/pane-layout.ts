@@ -19,6 +19,9 @@ const GRID_PANE_WIDTH_PROPERTY = '--fg-grid-pane-width';
 export const DEFAULT_GRID_PANE_WIDTH_PX = 160;
 /** Zero is authored, not nonsense: a container that wants no grid pane sets `--fg-grid-pane-width: 0`. */
 const GRID_PANE_WIDTH_POLICY = { fallback: DEFAULT_GRID_PANE_WIDTH_PX, accepts: 'zeroOrMore' } as const;
+/** Outputs: the library writes these two, a consumer only reads them. */
+const TIMELINE_PANE_LEFT_PROPERTY = '--fg-timeline-pane-left';
+const TIMELINE_PANE_WIDTH_PROPERTY = '--fg-timeline-pane-width';
 const SPLITTER_WIDTH_PROPERTY = '--fg-splitter-width';
 /** Shipped default for `--fg-splitter-width` (docs/05-consumer-api.md) — `styles.ts` declares the
  *  same number on `:root` so a consumer can read it back (#383). */
@@ -86,6 +89,8 @@ export class PaneLayout {
   /** The band heights the spacer was last built from, so an unchanged stack is a no-op. */
   #headerBandShape: string | undefined;
   #gridPattern: GridPattern = 'grid';
+  /** The box last written to the tokens, so an unchanged measurement writes nothing. */
+  #publishedTimelineBox: { left: number; width: number } | undefined;
 
   constructor(options: PaneLayoutOptions) {
     this.#container = options.container;
@@ -266,6 +271,27 @@ export class PaneLayout {
   /** The timeline pane's client box — the one measurement everything downstream is sized from. */
   measureTimelinePane(): Size {
     return { width: this.panes.timeline.clientWidth, height: this.panes.timeline.clientHeight };
+  }
+
+  /** Tells content in the full-width row layer where the Timeline pane sits. The two tokens
+   *  `--fg-timeline-pane-left` and `--fg-timeline-pane-width` are outputs: the library writes them
+   *  and a consumer only reads them. They sit on the layer itself, which every child and every Row
+   *  detail wrapper inherits from, and which goes away with the Gantt. Call it when the Timeline
+   *  pane size changes. It writes only when a value changed. */
+  publishTimelinePaneBox(): void {
+    const { timeline, fullWidthRowLayer } = this.panes;
+    const box = {
+      left:
+        timeline.getBoundingClientRect().left +
+        timeline.clientLeft -
+        fullWidthRowLayer.getBoundingClientRect().left,
+      width: timeline.clientWidth,
+    };
+    const last = this.#publishedTimelineBox;
+    if (last?.left === box.left && last.width === box.width) return;
+    this.#publishedTimelineBox = box;
+    fullWidthRowLayer.style.setProperty(TIMELINE_PANE_LEFT_PROPERTY, `${box.left}px`);
+    fullWidthRowLayer.style.setProperty(TIMELINE_PANE_WIDTH_PROPERTY, `${box.width}px`);
   }
 
   /** The header's own height, read from the grid pane's spacer — that stack of
