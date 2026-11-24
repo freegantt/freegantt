@@ -29,7 +29,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
   - It changes live.
 - The new `rowHeight` Gantt option sets a Row's height: a number for every Row, or a function that answers per Row from its Entry, kind and depth.
   - `--fg-row-height` stays the default.
-  - A bar centres in its own Row, and a connector leaves from the middle of its own Row.
+  - A bar centres in its own Row, and a connector leaves from the middle of its bar. In a Row with Lanes, that is the middle of its Lane.
   - It changes live.
 - A row now carries `data-kind` (`entry` or `header`) and `data-depth`, plus `data-parent` when it holds children. The timeline row band carries the same three attributes.
   - Two new tokens style a group row: `--fg-group-row-bg` and `--fg-group-row-border`.
