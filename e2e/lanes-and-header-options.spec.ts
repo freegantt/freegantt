@@ -115,3 +115,18 @@ test('a month band aligned to weeks starts every cell on a week tick', async ({ 
     })
     .toBe(true);
 });
+
+test('a column header follows --fg-cell-padding-inline until the app sets its own header padding', async ({
+  page,
+}) => {
+  await openPage(page);
+  const headerPadding = (): Promise<string> =>
+    page
+      .locator('#gantt .fg-col-header')
+      .first()
+      .evaluate((node) => getComputedStyle(node).paddingLeft);
+  await page.addStyleTag({ content: '#gantt { --fg-cell-padding-inline: 16px; }' });
+  await expect.poll(headerPadding).toBe('16px');
+  await page.addStyleTag({ content: '#gantt { --fg-col-header-padding-inline: 6px; }' });
+  await expect.poll(headerPadding).toBe('6px');
+});

@@ -110,7 +110,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
 ### Changed
 
-- `--fg-col-header-padding-block` now takes shorthand, such as `0 10px`.
+- A column header reads `--fg-col-header-padding-inline` and `--fg-col-header-padding-block` first, then falls back to `--fg-cell-padding-inline` and `--fg-cell-padding-block`. An app that set the cell tokens keeps aligned headers. `--fg-col-header-padding-block` takes a shorthand, such as `0 10px`.
 - The TypeScript type of `gantt.todayLine` widens to `boolean | Instant | TodayLineSpec`. Code that narrows the getter's value may need a branch for the new object form. Code that never sets the object form gets the same runtime values as before.
 - `HeaderFormat` takes a `HeaderFormatContext`, which extends `FormatContext` with `rangeStart`. A function typed against `FormatContext` still compiles.
 

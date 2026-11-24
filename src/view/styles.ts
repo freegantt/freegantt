@@ -274,8 +274,6 @@ const METRIC_TOKENS = `
   --fg-column-resizer-hit: 12px;
   --fg-cell-padding-inline: 10px;
   --fg-cell-padding-block: 4px;
-  --fg-col-header-padding-inline: 10px;
-  --fg-col-header-padding-block: 4px;
   --fg-col-header-align: center;
   --fg-indent-width: 12px;
   --fg-bar-label-gap: ${DEFAULT_BAR_LABEL_GAP_PX}px;
@@ -341,8 +339,9 @@ ${DARK_COLOR_TOKENS}
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: ${INTERNAL_Z.paneChrome}; color: var(--fg-header-text); }
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
-   grid text never sits flush against a column's own edge or its neighbour's. */
-.fg-col-header { display: flex; align-items: var(--fg-col-header-align, center); min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-col-header-padding-inline, 10px); padding-block: var(--fg-col-header-padding-block, 4px); text-transform: var(--fg-col-header-transform, none); letter-spacing: var(--fg-col-header-tracking, normal); font-size: var(--fg-col-header-font-size, inherit); font-weight: var(--fg-col-header-font-weight, inherit); }
+   grid text never sits flush against a column's own edge or its neighbour's. The header's own pair
+   is not set at the root, so a header follows the cell pair until an app sets its own. */
+.fg-col-header { display: flex; align-items: var(--fg-col-header-align, center); min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-col-header-padding-inline, var(--fg-cell-padding-inline, 10px)); padding-block: var(--fg-col-header-padding-block, var(--fg-cell-padding-block, 4px)); text-transform: var(--fg-col-header-transform, none); letter-spacing: var(--fg-col-header-tracking, normal); font-size: var(--fg-col-header-font-size, inherit); font-weight: var(--fg-col-header-font-weight, inherit); }
 /* #139: every column is fixed by default — data-fixed is the common case now, not the exception.
    --fg-column-width (default 120, read by ColumnChrome, no rule of its own here — same posture
    --fg-column-min-width takes) sets the width a column falls back to when neither this Gantt's own

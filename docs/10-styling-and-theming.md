@@ -125,8 +125,8 @@ not a consumer's to set" below for the four channels.
 | `--fg-twisty-icon` | `none` | — | `.fg-row-twisty` icon as a mask image, for example `url(chevron.svg)`. Pair it with `--fg-twisty-icon-color: currentColor`, and set both glyph tokens to `''` |
 | `--fg-twisty-icon-color` | `transparent` | — | The fill under the mask. `currentColor` gives the chevron the label colour |
 | `--fg-twisty-icon-size` | `auto` | — | `.fg-row-twisty` icon box size, for example `14px` |
-| `--fg-col-header-padding-inline` | `10px` | — | `.fg-col-header` inline padding. A row cell keeps `--fg-cell-padding-inline` |
-| `--fg-col-header-padding-block` | `4px` | — | `.fg-col-header` block padding. A shorthand is allowed: `0 10px` is no top and 10px bottom |
+| `--fg-col-header-padding-inline` | not set | — | `.fg-col-header` inline padding. Not set, it reads `--fg-cell-padding-inline`. A row cell always keeps `--fg-cell-padding-inline` |
+| `--fg-col-header-padding-block` | not set | — | `.fg-col-header` block padding. Not set, it reads `--fg-cell-padding-block`. A shorthand is allowed: `0 10px` is no top and 10px bottom |
 | `--fg-col-header-align` | `center` | — | `.fg-col-header` cross-axis alignment. `flex-end` sits the label on the header's bottom edge |
 | `--fg-col-header-transform` | `none` | — | `.fg-col-header` `text-transform` |
 | `--fg-col-header-tracking` | `normal` | — | `.fg-col-header` `letter-spacing` |
