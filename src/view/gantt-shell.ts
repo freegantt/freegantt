@@ -59,6 +59,8 @@ import type {
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
 import { RowLayoutWatch } from './row-layout-watch.js';
+import { RowDetails } from './row-details.js';
+import type { RowDetailsPorts } from './row-details.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
@@ -118,6 +120,7 @@ import {
   entryIdOfBar,
   entryId,
   barId,
+  rowId,
   spansTime,
 } from '../model/index.js';
 import type {
@@ -829,6 +832,8 @@ export class GanttShell {
       () => console.error('FreeGantt: an onRowLayout listener threw', error),
     ),
   );
+  /** The content plugins present under a Row (`ctx.view.presentRowDetail`). Built with the panes. */
+  #rowDetails!: RowDetails;
   /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
    *  Constructed beside the overlay, and for the same reason. */
   #dom: ContainerDom;
@@ -856,6 +861,8 @@ export class GanttShell {
     this.#containerResize = new ContainerResize(this.#container);
     this.#teardown.add(() => this.#containerResize.destroy());
     this.#teardown.add(() => this.#rowLayoutWatch.destroy());
+    this.#rowDetails = new RowDetails(this.#rowDetailsPorts());
+    this.#teardown.add(() => this.#rowDetails.destroy());
     this.#overlay = new DomMountLayer(
       this.#panes.overlay,
       () => this.#paneLayout.overlayBounds(),
@@ -1370,11 +1377,7 @@ export class GanttShell {
       // `rowTop`/`barsForEntry` answering about the row `expandableOfRow` just found, not the last
       // painted frame's.
       expandableOfRow: (id) => {
-        this.#layout.ensureRowPlan(this.#rowPlanInput(), {
-          rowHeight: this.#frameSettings.rowHeight,
-          ...this.#frameSettings.rowHeightFunction(),
-          registry: this.#registrations.variants,
-        });
+        this.#planRows();
         return this.#layout.expandableOfRow(id);
       },
     };
@@ -2350,7 +2353,7 @@ export class GanttShell {
       plannedRows: () => this.#layout.plannedRows(),
       columnKeys: () => this.#columnChrome.resolvedColumns.map((column) => column.field),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
-      rowsPerPage: () => Math.max(1, Math.floor(this.#viewport.visible.height / this.#averageRowHeight())),
+      rowsPerPage: () => this.#rowsInWindow(),
       collapseRow: (id) => this.#treeCollapse.collapse(id),
       expandRow: (id) => this.#treeCollapse.expand(id),
       selectOnFocus: (hit) => this.#entrySelection.propose(this.#entrySelection.selectableEntriesOf(hit)),
@@ -2463,6 +2466,7 @@ export class GanttShell {
       rowLayer: this.#rowLayer,
       fullWidthRowLayer: this.#fullWidthRowLayer,
       rowBox: (id) => this.#rowBox(id),
+      presentRowDetail: (id, content) => this.#rowDetails.present(id, content),
       onRowLayout: (callback) => this.#rowLayoutWatch.onChange(callback),
       dom: this.#dom,
       commands: this.#commandRegistry,
@@ -3234,11 +3238,13 @@ export class GanttShell {
       : this.#frameSettings.rowHeight;
   }
 
-  /** The mean painted Row height, so a page of rows follows a `rowHeight` function. With no row it
-   *  answers the default Row height. */
-  #averageRowHeight(): number {
+  /** How many rows the visible window spans, counted by the pixels it covers. A page of rows follows
+   *  a `rowHeight` function and a Row detail, which a mean row height cannot say. At least one. */
+  #rowsInWindow(): number {
+    const { y, height } = this.#viewport.visible;
     const count = this.#layout.rowCount;
-    return count === 0 ? this.#frameSettings.rowHeight : this.#layout.rowTop(count) / count;
+    const lastRow = y + height >= this.#contentSize.height ? count : this.#layout.rowIndexAtY(y + height);
+    return Math.max(1, lastRow - this.#layout.rowIndexAtY(y));
   }
 
   /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
@@ -3397,12 +3403,42 @@ export class GanttShell {
    *  header short of the true extent. The last row could then never scroll fully into view. */
   /** Where one row sits, planned fresh, so a row a write just added answers before the next frame. */
   #rowBox(id: string): RowBox | undefined {
+    this.#planRows();
+    return this.#layout.rowBox(id);
+  }
+
+  /** Brings the layout up to date with every write since the last frame, without painting one. A Row
+   *  detail the plugin presented since then counts, so the Rows below it answer at their new place. */
+  #planRows(): void {
+    this.#rowDetails.measurePending();
     this.#layout.ensureRowPlan(this.#rowPlanInput(), {
       rowHeight: this.#frameSettings.rowHeight,
       ...this.#frameSettings.rowHeightFunction(),
+      rowDetailHeights: this.#rowDetails.heights,
       registry: this.#registrations.variants,
     });
-    return this.#layout.rowBox(id);
+  }
+
+  /** What `RowDetails` borrows from this Gantt to mount, measure and place content under a Row. */
+  #rowDetailsPorts(): RowDetailsPorts {
+    return {
+      layer: this.#panes.fullWidthRowLayer,
+      rowIdOf: (id) => {
+        this.#planRows();
+        return this.#layout.rowIdForEntry(entryId(id)) ?? rowId(id);
+      },
+      rowDetailTop: (id) => this.#layout.rowDetailTop(id),
+      measure: (wrapper) => this.#paneLayout.measureRowDetailHeight(wrapper),
+      visibleWindow: () => ({ top: this.#viewport.visible.y, height: this.#viewport.visible.height }),
+      panBy: (dy) => this.#panBy(0, dy),
+      revealRange: (top, height) => {
+        this.#viewport.reveal({ x: this.#viewport.scroll.x.state.position, y: top, width: 0, height });
+        this.#frames.flush();
+      },
+      paintNow: () => this.#frames.flush(),
+      requestPaint: () => this.#frames.request(),
+      focusRow: (id) => this.#rovingFocus.focusRow(id),
+    };
   }
 
   #applyRowsViewportSize(): void {
@@ -3455,6 +3491,7 @@ export class GanttShell {
       connectorProviders: this.#registrations.connectorProviders(),
       datasetRevision: this.#options.dataset.datasetRevision,
       entryRulePorts: this.#entryRulePorts,
+      rowDetailHeights: this.#rowDetails.heights,
       // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
       // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
       barLabelFor: (entry) => this.#labelFor(entry),
@@ -3490,6 +3527,7 @@ export class GanttShell {
     if (this.#frameSettings.barRenderer !== undefined) {
       this.#reportBarRendererShadowed(this.#frameSettings.barRenderer, this.#options.dataset.entries.all);
     }
+    this.#rowDetails.measurePending();
     const barPreviews = this.#barPreviewsForFrame();
     this.#paintedBarPreviews = barPreviews;
     const frame = this.#layout.computeFrame(this.#layoutInput(this.#revision++, barPreviews));
@@ -3499,10 +3537,12 @@ export class GanttShell {
     this.#paneLayout.gridPattern = nestsRows(this.#frameSettings.rowSource) ? 'treegrid' : 'grid';
     this.#paneLayout.setGridSize(frame.rowCount, frame.columns.length);
     this.#backend.sync(frame);
+    this.#rowDetails.placeAll();
     this.#rowLayoutWatch.settle({
       planRevision: this.#layout.rowPlanRevision,
       rowCount: frame.rowCount,
       contentHeight: frame.contentHeight,
+      heightIndexRevision: this.#layout.heightIndexRevision,
     });
     this.#lastBarById.clear();
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);

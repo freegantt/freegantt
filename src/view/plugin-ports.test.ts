@@ -74,6 +74,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     rowLayer: fakeMountLayer(),
     fullWidthRowLayer: fakeMountLayer(),
     rowBox: () => undefined,
+    presentRowDetail: () => () => {},
     onRowLayout: () => () => {},
     dom: makeDom(container),
     commands: {
@@ -212,6 +213,22 @@ describe('buildPluginPorts — disposal (#155)', () => {
       },
     });
     harness.parts.view.onRowLayout(() => {});
+    expect(live.size).toBe(1);
+
+    harness.parts.disposables.disposeAll();
+
+    expect(live.size).toBe(0);
+  });
+
+  it('`disposables.disposeAll()` removes a Row detail the plugin presented', () => {
+    const live = new Set<HTMLElement>();
+    const harness = makeHarness({
+      presentRowDetail: (_id, content) => {
+        live.add(content);
+        return () => live.delete(content);
+      },
+    });
+    harness.parts.view.presentRowDetail('t1', document.createElement('div'));
     expect(live.size).toBe(1);
 
     harness.parts.disposables.disposeAll();

@@ -4,11 +4,13 @@
 import type { Disposer } from '../model/index.js';
 
 /** What the last painted frame says about the rows: how many, how tall in all, and which plan. A
- *  row height change, a collapse, a filter and a data change each move at least one of the three. */
+ *  row height change, a Row detail change, a collapse, a filter and a data change each move at least one field. */
 export interface RowLayoutStamp {
   readonly planRevision: number;
   readonly rowCount: number;
   readonly contentHeight: number;
+  /** Moves when a Row detail grows or shrinks, even if the total height stays the same. */
+  readonly heightIndexRevision: number;
 }
 
 /** Tells listeners after a frame whose rows sit differently from the frame before. The first frame
@@ -36,7 +38,8 @@ export class RowLayoutWatch {
     const moved =
       last.planRevision !== stamp.planRevision ||
       last.rowCount !== stamp.rowCount ||
-      last.contentHeight !== stamp.contentHeight;
+      last.contentHeight !== stamp.contentHeight ||
+      last.heightIndexRevision !== stamp.heightIndexRevision;
     if (!moved) return;
     for (const listener of [...this.#listeners]) {
       try {

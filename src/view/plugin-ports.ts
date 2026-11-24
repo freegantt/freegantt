@@ -91,6 +91,8 @@ export interface GanttShellPorts {
   fullWidthRowLayer: MountLayer;
   /** Where one row sits, for a plugin that mounts content beside it. */
   rowBox(id: string): RowBox | undefined;
+  /** Mounts content under one Row, measures it and reserves its height. */
+  presentRowDetail(id: string, content: HTMLElement): Disposer;
   /** Tells a plugin after a frame moved a row top or height. */
   onRowLayout(callback: () => void): Disposer;
   /** This Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
@@ -262,6 +264,17 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  answers too. `undefined` for a row a collapsed parent hides, and for an unknown id. Read it
      *  again after a row height change, a collapse or a data change: a row's top moves with them. */
     rowBox(id: EntryId | string): RowBox | undefined;
+    /** Presents `content` under one Row, as wide as both panes, and pushes the rows below it down.
+     *  The Gantt measures the content, so its height follows what it holds. Set a fixed height in
+     *  your own CSS. Pass an Entry id or a row id.
+     *
+     *  A Row holds one detail: a second call for the same Row replaces the first, and the first
+     *  `Disposer` then does nothing. The `Disposer` removes the detail and the rows close up. When
+     *  focus sits inside the detail at that moment, it moves to the Row. The Gantt also removes the
+     *  detail when the plugin uninstalls. A Row that is collapsed, filtered out or unknown keeps the
+     *  detail mounted and hidden. It takes no space until the Row returns. The detail is not a Row:
+     *  it has no ARIA row, no selection and no key path. Give your content its own role and label. */
+    presentRowDetail(rowId: EntryId | string, content: HTMLElement): Disposer;
     /** Calls `callback` after a frame whose rows sit differently: a row height change, a collapse
      *  or expand, a filter, or a data change. A scroll alone never calls it, because a scroll moves
      *  no row top. The callback runs after the frame paints, so `rowBox` is already current. It does
@@ -548,6 +561,11 @@ export function buildPluginPorts(
       rowLayer: shell.rowLayer,
       fullWidthRowLayer: shell.fullWidthRowLayer,
       rowBox: (id) => shell.rowBox(id),
+      presentRowDetail: (rowId, content) => {
+        const dispose = shell.presentRowDetail(rowId, content);
+        disposables.add(dispose);
+        return dispose;
+      },
       onRowLayout: (callback) => {
         const dispose = shell.onRowLayout(callback);
         disposables.add(dispose);

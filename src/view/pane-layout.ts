@@ -275,6 +275,12 @@ export class PaneLayout {
     return this.#spacer.offsetHeight;
   }
 
+  /** The border-box height of a Row detail's wrapper, read from layout. One batch of reads follows
+   *  one batch of writes, so a hundred new details cost one layout pass. */
+  measureRowDetailHeight(wrapper: HTMLElement): number {
+    return wrapper.getBoundingClientRect().height;
+  }
+
   /** The visible box of one element a plugin mounted, for the wheel check over the full-width row layer. */
   clientBoxOf(element: HTMLElement): { width: number; height: number } {
     return { width: element.clientWidth, height: element.clientHeight };

@@ -2263,6 +2263,7 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
         rowLayer: MountLayer;
         fullWidthRowLayer: MountLayer;
         rowBox(id: EntryId | string): RowBox | undefined;
+        presentRowDetail(rowId: EntryId | string, content: HTMLElement): Disposer;
         onRowLayout(callback: () => void): Disposer;
         renderElement(description: ElementDescription): HTMLElement;
         dom: GanttDom;

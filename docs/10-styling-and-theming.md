@@ -287,6 +287,7 @@ rename.
 | `.fg-splitter` | Drag handle between the two panes. |
 | `.fg-full-width-row-layer-clip` | Clip of the full-width row layer: as wide as both panes, below the header. It hides content that scrolled up under the header. `pointer-events: none` until mounted content opts in. |
 | `.fg-full-width-row-layer` | The full-width row layer inside the clip. It follows the rows' vertical scroll by one transform per frame, and never the horizontal pan. |
+| `.fg-row-detail` | The wrapper the Gantt puts around a Row detail, inside the full-width row layer. It sits under its Row, as wide as both panes. The Gantt measures it and moves it by a transform. It is `hidden` while its Row is collapsed, filtered or unknown. The background is `--fg-pane-bg`. |
 | `.fg-overlay` | Popup mount layer above both panes. `pointer-events: none` until a `.fg-popup` opts in. |
 | `.fg-grid-header` | Column header row in the grid pane. |
 | `.fg-col-header` | One column header cell. |

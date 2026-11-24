@@ -681,9 +681,13 @@ ${DARK_COLOR_TOKENS}
    this file) is what wins that competition, and a consumer embedding a Gantt inside
    its own stacking context can move the whole layer by setting the one property. pointer-events: none
    so an empty overlay never blocks the panes underneath; a mounted .fg-popup opts back in. */
-.fg-full-width-row-layer-clip { position: absolute; left: 0; right: 0; top: var(--fg-full-width-row-layer-top, 0px); bottom: 0; overflow: hidden; pointer-events: none; z-index: ${INTERNAL_Z.abovePaneChrome}; }
+.fg-full-width-row-layer-clip { position: absolute; left: 0; right: 0; top: var(--fg-full-width-row-layer-top, 0px); bottom: 0; overflow: clip; pointer-events: none; z-index: ${INTERNAL_Z.abovePaneChrome}; }
 .fg-full-width-row-layer { position: relative; }
 .fg-full-width-row-layer > * { pointer-events: auto; }
+/* A Row detail: the library places this wrapper under its Row, wide as both panes. flow-root keeps the
+   content's own margins inside the measured height. The pane background hides the rows' grid lines. */
+.fg-row-detail { position: absolute; top: 0; left: 0; right: 0; display: flow-root; box-sizing: border-box; background: var(--fg-pane-bg); }
+.fg-row-detail[hidden] { display: none; }
 .fg-overlay { position: absolute; inset: 0; z-index: var(--fg-z-overlay, ${DEFAULT_OVERLAY_Z_INDEX}); pointer-events: none; overflow: visible; }
 /* overflow-x stays hidden so a menu item's own hover paint clips to this radius instead of
    squaring off the first and last corners; overflow-y is auto for the same reason

@@ -185,6 +185,7 @@ where they do something beyond re-export.
 | `view/renderer-registry.ts` | `RendererRegistry` | Resolves which renderer paints one bar/cell/header/tooltip. Consumer config always wins over a plugin. |
 | `view/gantt-dom.ts` | `GanttDom, ContainerDom, DomTarget` | This Gantt's rendered DOM as a read surface: is this node mine, what is it, where is the element for this entry. |
 | `view/mount-layer.ts` | `MountLayer` | Where a plugin mounts and how it stays put. Overlay escapes the pane box; row layer travels with the rows. |
+| `view/row-details.ts` | `RowDetails` | Mounts, measures and places the content a plugin presents under a Row. Costs nothing while no Row detail is open. |
 | `view/row-layout-watch.ts` | `RowLayoutWatch` | Tells a plugin after a frame moved a row top or height. A scroll never does. |
 | `view/column-chrome.ts` | `ColumnChrome` | Grid-column resolve, live resize/reorder preview, and the one commit sequence pointer drag and `gantt.gridColumns = …` share. |
 | `view/column-toggle.ts` | `toggleCellContent`, `switchToggleCell` | A toggle column's cell look, and the one gated switch a click and a key press share. |

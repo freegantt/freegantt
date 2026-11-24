@@ -209,6 +209,17 @@ export class RovingFocus {
     if (bar !== undefined) this.#focusBar(bar);
   }
 
+  /** Puts real focus on the Row's own node, and scrolls the Row into view first. A Row the plan does
+   *  not hold gets the grid pane's tab stop instead, so focus never falls to the page. */
+  focusRow(rowId: RowId): void {
+    if (this.#ports.plannedRows().some((row) => row.id === rowId)) {
+      this.#focusGridRow(rowId, undefined);
+      return;
+    }
+    const stop = this.#panes.rows.querySelector<HTMLElement>('[tabindex="0"]') ?? this.#panes.grid;
+    stop.focus();
+  }
+
   /** Called once per render, after the backend has synced the DOM to the new frame. Reassigns
    *  `tabindex` so exactly one node per pane carries `0`. Refocuses the remembered row or bar too,
    *  if real focus was on the node this frame just recycled or dropped (I8). */

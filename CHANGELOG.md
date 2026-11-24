@@ -12,7 +12,7 @@ These changes ship as 0.3.0. The release is about **dense boards**: timelines wh
 - **Header:** `headerTickRenderer` draws and flags each tick, and `alignTo` lines a coarse band up with a finer one.
 - **Body:** the timeline body can draw week lines only, and it can tint today.
 - **Bars:** bars can opt out of library chrome and paint themselves.
-- **Plugins:** `ctx.view.fullWidthRowLayer`, `rowBox` and `onRowLayout` let a plugin mount content under a row that spans both panes and follows the layout.
+- **Plugins:** `ctx.view.presentRowDetail` opens content under a row, as wide as both panes. The rows below move down by the height of that content. `fullWidthRowLayer`, `rowBox` and `onRowLayout` let a plugin place its own content against the layout.
 
 Every new option defaults to the 0.2.0 look. An app that sets none of them renders as before. See [Styling and theming](docs/10-styling-and-theming.md) for the new tokens, and [Plugin authoring](docs/06-plugin-authoring.md) for the row layer.
 
@@ -99,6 +99,16 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
   - A scroll alone never calls it.
   - A listener that throws reports on the `error` event with code `row-layout-listener-failed`. The other listeners still run. The plugin's disposables stop the listener on uninstall.
 
+- `ctx.view.presentRowDetail(rowId, content)` presents content under one Row, as wide as both panes, and pushes the rows below it down.
+  - The Gantt measures the content, so the height follows what it holds. A fixed height is your own CSS.
+  - A Row holds one detail. A second call for the same Row replaces the first.
+  - The returned `Disposer` removes the detail once, and the rows close up. Focus inside the detail moves to the Row. The plugin's disposables remove it on uninstall.
+  - A detail of a Row that is collapsed, filtered or unknown stays mounted, hidden and spaceless.
+  - It is not a Row and not an Entry: it has no ARIA row, no selection and no key path. Give the content its own role and label.
+  - It replaces the bar-less spacer Entry recipe.
+- A frame that only changes a Row detail height now calls an `onRowLayout` listener too.
+- A Page Down or Page Up in the grid moves by the rows in the visible window, counted by pixels, so a tall Row detail shortens the page.
+
 #### Twisty
 
 - Five new tokens style the row twisty: `--fg-twisty-glyph-collapsed`, `--fg-twisty-glyph-expanded`, `--fg-twisty-rotation-expanded`, `--fg-twisty-transition` and `--fg-twisty-gap`.
@@ -112,7 +122,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
 #### Harness
 
-- The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `fullWidthRowLayer` and `onRowLayout`.
+- The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `presentRowDetail`.
 - The harness "Hierarchy & timeline" page has a "Dense board" panel and a "Today" panel.
   - The Dense board panel switches `lanes`, a `rowHeight` function, `headerTickRenderer`, a header preset with `heightPx` and `alignTo`, `tickLines`, a Variant with `unstyled: true`, and the `outsideOrNone` bar label policy.
   - The Today panel is a second Gantt around the real today. It switches `todayHighlight` between the two layers, and `todayLineAt` between `'now'` and `'dayCenter'`.
@@ -123,7 +133,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 - `HeaderFormat` takes a `HeaderFormatContext`, which extends `FormatContext` with `rangeStart`. A function typed against `FormatContext` still compiles.
 - Every default keeps the 0.2.0 look. The type changes below can still break TypeScript code.
 - `InvalidPresetError.rule` gains `'header-height'` and `'header-align'`. A `switch` over `rule` that must be exhaustive needs two more cases.
-- `PluginContextParts.view` gains `fullWidthRowLayer`, `rowBox` and `onRowLayout`. A test double that builds `view` by hand needs the three members.
+- `PluginContextParts.view` gains `fullWidthRowLayer`, `rowBox`, `presentRowDetail` and `onRowLayout`. A test double that builds `view` by hand needs the four members.
 - `ResolvedVariant` gains `unstyled: boolean`. Code that builds a `ResolvedVariant` by hand must set it.
 - `ScaleModel.ticks` takes `TickStep & { alignTo? }`. A custom `ScaleModel` must accept the wider argument.
 
