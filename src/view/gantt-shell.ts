@@ -2326,8 +2326,7 @@ export class GanttShell {
       plannedRows: () => this.#layout.plannedRows(),
       columnKeys: () => this.#columnChrome.resolvedColumns.map((column) => column.field),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
-      rowsPerPage: () =>
-        Math.max(1, Math.floor(this.#viewport.visible.height / this.#frameSettings.rowHeight)),
+      rowsPerPage: () => Math.max(1, Math.floor(this.#viewport.visible.height / this.#averageRowHeight())),
       collapseRow: (id) => this.#treeCollapse.collapse(id),
       expandRow: (id) => this.#treeCollapse.expand(id),
       selectOnFocus: (hit) => this.#entrySelection.propose(this.#entrySelection.selectableEntriesOf(hit)),
@@ -2338,7 +2337,7 @@ export class GanttShell {
           x: this.#viewport.scroll.x.state.position,
           y,
           width: 0,
-          height: this.#frameSettings.rowHeight,
+          height: this.#rowHeightAtIndex(index),
         });
         this.#frames.flush();
       },
@@ -3155,7 +3154,7 @@ export class GanttShell {
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.y.state.position;
     // `width: 0` at the current x reads as "already visible" to `Viewport.reveal`. This moves
     // only y — the same no-op-on-x idiom `#rovingFocusPorts`'s own `revealRow` above already uses.
-    this.#viewport.reveal({ x, y, width: 0, height: this.#frameSettings.rowHeight });
+    this.#viewport.reveal({ x, y, width: 0, height: this.#rowHeightAtIndex(rowIndex) });
   }
 
   /** Reveals the whole Entry: the union of the painted extents of every Bar it draws (#295). An
@@ -3190,7 +3189,22 @@ export class GanttShell {
 
   #revealRect(rowIndex: number, x: number, width: number): void {
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.y.state.position;
-    this.#viewport.reveal({ x, y, width, height: this.#frameSettings.rowHeight });
+    this.#viewport.reveal({ x, y, width, height: this.#rowHeightAtIndex(rowIndex) });
+  }
+
+  /** The painted height of the row at `index`, so a reveal brings the whole Row into view. An index
+   *  with no row (a filter hides the Entry) answers the default Row height. */
+  #rowHeightAtIndex(index: number): number {
+    return index >= 0 && index < this.#layout.rowCount
+      ? this.#layout.rowHeightAt(index)
+      : this.#frameSettings.rowHeight;
+  }
+
+  /** The mean painted Row height, so a page of rows follows a `rowHeight` function. With no row it
+   *  answers the default Row height. */
+  #averageRowHeight(): number {
+    const count = this.#layout.rowCount;
+    return count === 0 ? this.#frameSettings.rowHeight : this.#layout.rowTop(count) / count;
   }
 
   /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration

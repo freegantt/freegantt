@@ -688,6 +688,32 @@ describe('preset/range/fit/overscan/zoomTo/zoomBy/reveal (S1.9)', () => {
     }
   });
 
+  it('reveal(entryId) brings the whole of a Row taller than the default height into view', () => {
+    FakeResizeObserver.instances = [];
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    try {
+      const container = document.createElement('div');
+      const scrollY = new ScrollAxis();
+      const shell = paintedShell({
+        wiring: {},
+        container,
+        dataset: fakeDataset(tallEntries(50)),
+        scroll: { y: scrollY },
+        rowHeight: () => 60,
+      });
+      FakeResizeObserver.instances[0]!.fire({ width: 500, height: 100 });
+
+      shell.reveal(entryId('e40'));
+      // Row 40 starts at 40 * 60 and ends 60 below it: its bottom edge meets the pane's bottom edge.
+      expect(scrollY.state.position).toBe(40 * 60 + 60 - 100);
+
+      shell.destroy();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('reveal expands a collapsed ancestor instead of scrolling to y 0', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
