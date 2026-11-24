@@ -548,7 +548,11 @@ export function buildPluginPorts(
       rowLayer: shell.rowLayer,
       rowSpanLayer: shell.rowSpanLayer,
       rowBox: (id) => shell.rowBox(id),
-      onRowLayout: (callback) => shell.onRowLayout(callback),
+      onRowLayout: (callback) => {
+        const dispose = shell.onRowLayout(callback);
+        disposables.add(dispose);
+        return dispose;
+      },
       renderElement: (description) => buildElement(description),
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,

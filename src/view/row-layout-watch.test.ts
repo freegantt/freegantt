@@ -9,7 +9,7 @@ const stamp = (planRevision: number, rowCount: number, contentHeight: number) =>
 
 describe('RowLayoutWatch', () => {
   it('sets the baseline on the first frame without telling anyone', () => {
-    const watch = new RowLayoutWatch();
+    const watch = new RowLayoutWatch(() => {});
     let calls = 0;
     watch.onChange(() => (calls += 1));
     watch.settle(stamp(1, 3, 96));
@@ -21,7 +21,7 @@ describe('RowLayoutWatch', () => {
     ['another row count', stamp(1, 4, 96)],
     ['another content height', stamp(1, 3, 120)],
   ])('tells listeners about %s', (_label, next) => {
-    const watch = new RowLayoutWatch();
+    const watch = new RowLayoutWatch(() => {});
     let calls = 0;
     watch.onChange(() => (calls += 1));
     watch.settle(stamp(1, 3, 96));
@@ -30,7 +30,7 @@ describe('RowLayoutWatch', () => {
   });
 
   it('stays quiet when a frame holds the same rows', () => {
-    const watch = new RowLayoutWatch();
+    const watch = new RowLayoutWatch(() => {});
     let calls = 0;
     watch.onChange(() => (calls += 1));
     watch.settle(stamp(1, 3, 96));
@@ -39,12 +39,27 @@ describe('RowLayoutWatch', () => {
   });
 
   it('stops telling a listener after its disposer runs', () => {
-    const watch = new RowLayoutWatch();
+    const watch = new RowLayoutWatch(() => {});
     let calls = 0;
     const stop = watch.onChange(() => (calls += 1));
     watch.settle(stamp(1, 3, 96));
     stop();
     watch.settle(stamp(2, 3, 96));
     expect(calls).toBe(0);
+  });
+
+  it('reports a listener that throws and still tells the others', () => {
+    const failures: unknown[] = [];
+    const watch = new RowLayoutWatch((error) => failures.push(error));
+    const boom = new Error('boom');
+    let calls = 0;
+    watch.onChange(() => {
+      throw boom;
+    });
+    watch.onChange(() => (calls += 1));
+    watch.settle(stamp(1, 3, 96));
+    expect(() => watch.settle(stamp(2, 3, 96))).not.toThrow();
+    expect(calls).toBe(1);
+    expect(failures).toEqual([boom]);
   });
 });

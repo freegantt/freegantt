@@ -812,7 +812,18 @@ export class GanttShell {
   /** The layer that spans both panes and follows the rows' vertical scroll. */
   #rowSpanLayer: DomMountLayer;
   /** Tells a plugin when a row top or height moved (`ctx.view.onRowLayout`). */
-  #rowLayoutWatch = new RowLayoutWatch();
+  #rowLayoutWatch = new RowLayoutWatch((error) =>
+    this.#raiseError(
+      {
+        code: 'row-layout-listener-failed',
+        message: `An onRowLayout listener threw: ${error instanceof Error ? error.message : String(error)}`,
+        severity: 'error',
+        by: 'core',
+        cause: error,
+      },
+      () => console.error('FreeGantt: an onRowLayout listener threw', error),
+    ),
+  );
   /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
    *  Constructed beside the overlay, and for the same reason. */
   #dom: ContainerDom;

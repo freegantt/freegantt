@@ -203,6 +203,22 @@ describe('buildPluginPorts — disposal (#155)', () => {
     expect(harness.registry.live).toEqual([]);
   });
 
+  it('`disposables.disposeAll()` stops an `onRowLayout` listener too', () => {
+    const live = new Set<() => void>();
+    const harness = makeHarness({
+      onRowLayout: (callback) => {
+        live.add(callback);
+        return () => live.delete(callback);
+      },
+    });
+    harness.parts.view.onRowLayout(() => {});
+    expect(live.size).toBe(1);
+
+    harness.parts.disposables.disposeAll();
+
+    expect(live.size).toBe(0);
+  });
+
   it('`disposables.disposeAll()` frees every gated registration, so uninstall needs no plugin help', () => {
     const harness = makeHarness();
     for (const [, register] of gatedRegistrations) register(harness.parts);

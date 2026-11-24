@@ -17,6 +17,10 @@ export class RowLayoutWatch {
   readonly #listeners = new Set<() => void>();
   #last: RowLayoutStamp | undefined;
 
+  /** `reportFailure` hears each listener that throws. The other listeners still run, and the frame
+   *  goes on. */
+  constructor(private readonly reportFailure: (error: unknown) => void) {}
+
   onChange(callback: () => void): Disposer {
     this.#listeners.add(callback);
     return () => {
@@ -34,7 +38,13 @@ export class RowLayoutWatch {
       last.rowCount !== stamp.rowCount ||
       last.contentHeight !== stamp.contentHeight;
     if (!moved) return;
-    for (const listener of [...this.#listeners]) listener();
+    for (const listener of [...this.#listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        this.reportFailure(error);
+      }
+    }
   }
 
   destroy(): void {

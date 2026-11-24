@@ -93,6 +93,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
   - The `RowBox` type is exported, so a consumer can name the result.
 - `ctx.view.onRowLayout(callback)` calls a plugin after a frame moved a row's top or height: a row height change, a collapse, a filter or a data change.
   - A scroll alone never calls it.
+  - A listener that throws reports on the `error` event with code `row-layout-listener-failed`. The other listeners still run. The plugin's disposables stop the listener on uninstall.
 
 #### Twisty
 
