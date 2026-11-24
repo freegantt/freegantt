@@ -132,6 +132,8 @@ export type {
   RowHeightResolver,
   TickLines,
   TodayLineAt,
+  TodayHighlight,
+  ResolvedTodayHighlight,
   ChromePlugin,
   DataPlugin,
   Plugin,

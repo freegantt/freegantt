@@ -10,7 +10,7 @@ These changes ship as 0.3.0. The release is about **dense boards**: timelines wh
 
 - **Rows:** Rows can hold Lanes and size themselves. `lanes` stacks bars inside one Row, and `rowHeight` sets a height per Row.
 - **Header:** `headerTickRenderer` draws and flags each tick, and `alignTo` lines a coarse band up with a finer one.
-- **Body:** the timeline body can draw week lines only, and it can tint today's column.
+- **Body:** the timeline body can draw week lines only, and it can tint today.
 - **Bars:** bars can opt out of library chrome and paint themselves.
 - **Plugins:** `ctx.view.fullWidthRowLayer`, `rowBox` and `onRowLayout` let a plugin mount content under a row that spans both panes and follows the layout.
 
@@ -63,10 +63,13 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
   It changes live.
 
-- The new `todayColumn` Gantt option tints today's day column under the bars.
+- The new `todayHighlight` Gantt option tints the finest header tick that holds today.
   - The default is `false`, and it changes live.
-  - The `--fg-today-column-bg` token sets the tint.
-  - The tint paints after the time-shading bands, so an off-day band never covers it.
+  - `true` paints under the bars. `{ layer: 'overBars' }` paints over the bars, for opaque bars.
+  - The getter returns the normal form: `false` or `{ layer }`.
+  - The `--fg-today-highlight-bg`, `--fg-today-highlight-border` and `--fg-today-highlight-min-width` tokens style it.
+  - The tint paints last in its layer, so an off-day band never covers it.
+- The new `--fg-today-line-color` token sets the today line colour. Unset, the line follows `--fg-date-line-color`.
 - The new `todayLineAt` Gantt option sets where the clock-driven today line sits: `'now'` (the default) or `'dayCenter'`.
   - `'dayCenter'` puts the line in the middle of the current day.
   - A pinned `todayLine` Instant ignores it.

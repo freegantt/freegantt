@@ -1593,8 +1593,8 @@ export class Gantt<TProps = unknown> {
     set theme(value: Theme);
     get tickLines(): TickLines;
     set tickLines(lines: TickLines);
-    get todayColumn(): boolean;
-    set todayColumn(on: boolean);
+    get todayHighlight(): ResolvedTodayHighlight;
+    set todayHighlight(value: TodayHighlight);
     get todayLine(): boolean | Instant;
     set todayLine(on: boolean | InstantInput);
     get todayLineAt(): TodayLineAt;
@@ -1718,7 +1718,7 @@ export interface GanttOptionsBase<TProps = unknown> {
     snap?: SnapSetting;
     theme?: Theme;
     tickLines?: TickLines;
-    todayColumn?: boolean;
+    todayHighlight?: TodayHighlight;
     todayLine?: boolean | InstantInput;
     todayLineAt?: TodayLineAt;
     todayLineMarginTicks?: number;
@@ -2569,6 +2569,11 @@ export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSourc
 // @public
 export type ResolvedTheme = 'light' | 'dark';
 
+// Warning: (ae-forgotten-export) The symbol "TodayHighlightSpec" needs to be exported by the entry point index.d.ts
+//
+// @public
+export type ResolvedTodayHighlight = TodayHighlightSpec | false;
+
 // Warning: (ae-forgotten-export) The symbol "DrawnVariant" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -3073,6 +3078,9 @@ export interface TimeUnitWidth {
     readonly unit: TimeUnit;
     readonly widthPx: number;
 }
+
+// @public
+export type TodayHighlight = boolean | TodayHighlightSpec;
 
 // @public
 export type TodayLineAt = 'now' | 'dayCenter';

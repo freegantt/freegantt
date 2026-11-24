@@ -185,8 +185,8 @@ const LIGHT_COLOR_TOKENS = `
      weight. Under a bar (--fg-bar-fill, opaque) the wash is invisible by construction — it only
      shows on the pane a bar does not cover. */
   --fg-time-shading-fill: rgb(26 24 21 / 0.05);
-  /* A tint over the finest tick that holds today (todayColumn). Same hue as --fg-selection-color. */
-  --fg-today-column-bg: oklch(0.55 0.13 245 / 0.07);
+  /* A tint over the finest tick that holds today (todayHighlight). Same hue as --fg-selection-color. */
+  --fg-today-highlight-bg: oklch(0.55 0.13 245 / 0.07);
   /* #425: a vertical drag's Insertion line — the same meaning the column-reorder drop indicator
      already borrows --fg-selection-color for (see .fg-col-header[data-drop] above), given its own
      token so a consumer can restyle the row drop line without also restyling selection. */
@@ -238,7 +238,7 @@ const DARK_COLOR_TOKENS = `
   /* Same rule as Light's pair: the theme's own light ink (rgb(236 234 227)), one notch past
      --fg-tick-line-strong-color's own alpha (0.17) for the same separation-from-a-tick-line reason. */
   --fg-time-shading-fill: rgb(236 234 227 / 0.07);
-  --fg-today-column-bg: oklch(0.72 0.13 245 / 0.08);
+  --fg-today-highlight-bg: oklch(0.72 0.13 245 / 0.08);
   --fg-drop-line-color: oklch(0.72 0.13 245);
   --fg-drop-refused-bg: rgb(224 163 64 / 0.18);
 `.trimEnd();
@@ -256,6 +256,8 @@ const METRIC_TOKENS = `
   --fg-grid-pane-width: ${DEFAULT_GRID_PANE_WIDTH_PX}px;
   --fg-splitter-width: ${DEFAULT_SPLITTER_WIDTH_PX}px;
   --fg-band-height: ${DEFAULT_BAND_HEIGHT_PX}px;
+  --fg-today-highlight-border: none;
+  --fg-today-highlight-min-width: 0px;
   --fg-today-line-width: 1px;
   --fg-today-line-opacity: 1;
   --fg-today-line-animation: none;
@@ -487,8 +489,9 @@ ${DARK_COLOR_TOKENS}
    two rules' bands apart. Layer underBars beneath .fg-bars is what keeps the wash invisible under
    an opaque bar. */
 .fg-time-shading { background: var(--fg-time-shading-fill); }
-/* todayColumn: the finest tick that holds today. It sits in the underBars layer, so a bar covers it. */
-.fg-today-column { background: var(--fg-today-column-bg); }
+/* todayHighlight: the finest tick that holds today. In the underBars layer a bar covers it. In the
+   overBars layer it covers the bars, so a consumer picks a translucent colour there. */
+.fg-today-highlight { box-sizing: border-box; background: var(--fg-today-highlight-bg); border: var(--fg-today-highlight-border); min-width: var(--fg-today-highlight-min-width); }
 .fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
 /* A row span's text sits at the span's end, inside its box. Text longer than the span is clipped. */
 .fg-row-span { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
@@ -631,10 +634,11 @@ ${DARK_COLOR_TOKENS}
    bottom: 0 would resolve against the pane's visible clientHeight and cut the line off at the
    first screenful instead of running the full scrollable row content. */
 .fg-date-line { position: absolute; top: 0; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
-/* The Today line has three knobs and no colour of its own: width, opacity and an animation. The
-   defaults (1px, 1, none) leave it identical to every other Date line. A wider line stays centred on
-   its Instant. */
-.fg-date-line[data-flag='today'] { border-left-width: var(--fg-today-line-width); margin-left: calc((var(--fg-today-line-width) - 1px) / -2); opacity: var(--fg-today-line-opacity); animation: var(--fg-today-line-animation); }
+/* The Today line has four knobs: colour, width, opacity and an animation. The defaults (the Date line
+   colour, 1px, 1, none) leave it identical to every other Date line. A wider line stays centred on
+   its Instant. --fg-today-line-color has no default of its own, so it follows --fg-date-line-color
+   wherever a consumer sets that. */
+.fg-date-line[data-flag='today'] { border-left-color: var(--fg-today-line-color, var(--fg-date-line-color)); border-left-width: var(--fg-today-line-width); margin-left: calc((var(--fg-today-line-width) - 1px) / -2); opacity: var(--fg-today-line-opacity); animation: var(--fg-today-line-animation); }
 /* The glow exists only for a reader who accepts motion. Under prefers-reduced-motion: reduce the
    keyframes are undefined, so a consumer's --fg-today-line-animation names nothing and nothing moves. */
 @media (prefers-reduced-motion: no-preference) {

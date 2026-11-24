@@ -57,6 +57,8 @@ export { FrameLayout } from './frame-layout.js';
 export type { FrameLayoutView, RowBox, RowPlanInput, RowPlanMemoryInput } from './frame-layout.js';
 export { FrameMemory } from './frame-memory.js';
 export { resolveDateLines, DEFAULT_DATE_LINE_LABEL_PLACEMENT } from './date-line.js';
+export { resolveTodayHighlight } from './today-highlight.js';
+export type { ResolvedTodayHighlight, TodayHighlight, TodayHighlightSpec } from './today-highlight.js';
 export type {
   DateLine,
   DateLineDecoration,

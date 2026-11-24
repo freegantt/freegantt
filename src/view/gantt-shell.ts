@@ -13,6 +13,7 @@ import {
   isTimeUnit,
   nestsRows,
   resolveRowSource,
+  resolveTodayHighlight,
   rowDropZoneAt,
 } from '../layout/index.js';
 import type {
@@ -20,6 +21,8 @@ import type {
   DateLineLabelPlacement,
   TickLines,
   TodayLineAt,
+  TodayHighlight,
+  ResolvedTodayHighlight,
   RowHeight,
   LaneRule,
   HeaderTickRenderer,
@@ -360,7 +363,7 @@ export interface GanttShellOptions {
   /** Live. Default `'now'`. */
   todayLineAt?: TodayLineAt;
   /** Live. Default `false`. */
-  todayColumn?: boolean;
+  todayHighlight?: TodayHighlight;
   /** Live. Default `'tick'`. */
   tickLines?: TickLines;
   /** Live. One height in px for every Row, or a function that answers per Row. Default: `--fg-row-height`. */
@@ -1901,12 +1904,12 @@ export class GanttShell {
     this.#frameSettings.set({ todayLineAt: at });
   }
 
-  get todayColumn(): boolean {
-    return this.#frameSettings.todayColumn;
+  get todayHighlight(): ResolvedTodayHighlight {
+    return this.#frameSettings.todayHighlight;
   }
 
-  set todayColumn(on: boolean) {
-    this.#frameSettings.set({ todayColumn: on });
+  set todayHighlight(value: TodayHighlight) {
+    this.#frameSettings.set({ todayHighlight: resolveTodayHighlight(value) });
   }
 
   get tickLines(): TickLines {
@@ -2426,7 +2429,9 @@ export class GanttShell {
       tooltipRenderer: options.tooltipRenderer,
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
       ...(options.todayLineAt !== undefined ? { todayLineAt: options.todayLineAt } : {}),
-      ...(options.todayColumn !== undefined ? { todayColumn: options.todayColumn } : {}),
+      ...(options.todayHighlight !== undefined
+        ? { todayHighlight: resolveTodayHighlight(options.todayHighlight) }
+        : {}),
       ...(options.tickLines !== undefined ? { tickLines: options.tickLines } : {}),
       ...(options.rowHeight !== undefined ? { rowHeight: options.rowHeight } : {}),
       ...(options.lanes !== undefined ? { lanes: options.lanes } : {}),

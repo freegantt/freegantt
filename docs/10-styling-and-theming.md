@@ -111,7 +111,10 @@ not a consumer's to set" below for the four channels.
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#C93820` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
 | `--fg-date-line-label-color` | `#FFFFFF` | `#1B1D22` | `.fg-date-line-label`, `.fg-cursor-line-label` text — the chip's own ink, paired with `--fg-date-line-color` as its fill |
-| `--fg-today-column-bg` | `oklch(0.55 0.13 245 / 0.07)` | `oklch(0.72 0.13 245 / 0.08)` | `.fg-today-column` — the tint of today's day column. Shows only when `todayColumn` is on |
+| `--fg-today-highlight-bg` | `oklch(0.55 0.13 245 / 0.07)` | `oklch(0.72 0.13 245 / 0.08)` | `.fg-today-highlight` — the tint of the finest tick that holds today. Shows only when `todayHighlight` is on. Over the bars, use a translucent colour |
+| `--fg-today-highlight-border` | `none` | — | `.fg-today-highlight` `border` shorthand, for example `1px solid #C93820` |
+| `--fg-today-highlight-min-width` | `0px` | — | `.fg-today-highlight` `min-width`. It keeps a narrow tick visible. The band grows to the right |
+| `--fg-today-line-color` | `var(--fg-date-line-color)` | — | `.fg-date-line[data-flag='today']` stroke colour. Unset, the Today line follows `--fg-date-line-color` |
 | `--fg-today-line-width` | `1px` | — | `.fg-date-line[data-flag='today']` stroke width. The line stays centred on its instant |
 | `--fg-today-line-opacity` | `1` | — | `.fg-date-line[data-flag='today']` opacity |
 | `--fg-today-line-animation` | `none` | — | `.fg-date-line[data-flag='today']` animation. The keyframes `fg-today-glow` exist only for a reader who accepts motion, so `fg-today-glow 2.8s ease-in-out infinite` moves nothing under `prefers-reduced-motion: reduce` |
@@ -319,7 +322,7 @@ rename.
 | `.fg-connect-preview` | The line a connect drag draws from its source edge to the pointer. It carries `data-pending` while an async `beforeConnect` handler holds the drop. |
 | `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-bar-diamond` | `diamond()` glyph. CSS ships with the variant, not the base sheet. |
-| `.fg-today-column` | The tint of today's day column. Drawn under the bars, after the time-shading bands, when `todayColumn` is on. |
+| `.fg-today-highlight` | The tint of the finest tick that holds today. Drawn last in its layer, after the time-shading bands, when `todayHighlight` is on. `underBars` is the default layer. |
 | `.fg-date-line` | A Date line stroke, Today included. |
 | `.fg-date-line-label` | Date line chip. |
 | `.fg-cursor-line` | Hot-path cursor stroke under the pointer. |
@@ -433,14 +436,14 @@ the next layout pass owns the node.
 through `--fg-date-line-color` (`#C93820` light, `#FF6F57` dark), and `.fg-date-line-label` paints a
 filled chip from the same token. The Today line is visible out of the box, with no consumer CSS.
 
-**Today has three tokens and no more.** Today is a Date line that carries `data-flag="today"`. The base
-stylesheet adds one rule for that flag. It reads `--fg-today-line-width`, `--fg-today-line-opacity` and
-`--fg-today-line-animation`. Each default gives the plain 1px stroke, so the look does not change until
+**Today has four tokens and no more.** Today is a Date line that carries `data-flag="today"`. The base
+stylesheet adds one rule for that flag. It reads `--fg-today-line-color`, `--fg-today-line-width`,
+`--fg-today-line-opacity` and `--fg-today-line-animation`. Each default gives the plain 1px stroke, so the look does not change until
 a consumer sets a token. The label chip has no Today rule. A consumer that wants one writes
 `.fg-date-line-label[data-flag='today']`.
 
 **Where the line sits.** `todayLine: true` puts the line at the current instant. `todayLineAt: 'dayCenter'` puts it at the middle of the current day, so it sits in the middle of today's column on a
-day scale. `todayColumn: true` tints that column.
+day scale. `todayHighlight: true` tints that tick under the bars. `todayHighlight: { layer: 'overBars' }` tints it over the bars.
 
 **The glow respects reduced motion.** The `fg-today-glow` keyframes are defined only inside
 `@media (prefers-reduced-motion: no-preference)`. A reader who asks for less motion gets a still line.

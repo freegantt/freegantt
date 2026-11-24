@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// Row height, Lanes, the header tick renderer, tick lines and the today column are live options.
+// Row height, Lanes, the header tick renderer, tick lines and the today highlight are live options.
 // A unit test proves the frame geometry. This spec proves a real browser paints it.
 
 declare global {
@@ -71,19 +71,35 @@ test('tickLines none draws no tick line', async ({ page }) => {
   await expect(page.locator('#gantt .fg-tick-line')).toHaveCount(0);
 });
 
-test('the today column paints after every other band under the bars', async ({ page }) => {
+test('the today highlight paints after every other band under the bars', async ({ page }) => {
   await openPage(page);
   await page.evaluate(() => {
     window.__gantt.todayLine = '2026-03-04T12:00:00Z';
-    window.__gantt.todayColumn = true;
+    window.__gantt.todayHighlight = true;
   });
-  await expect(page.locator('#gantt .fg-today-column')).toHaveCount(1);
+  await expect(page.locator('#gantt .fg-today-highlight')).toHaveCount(1);
   const order = await page.evaluate(() =>
     Array.from(document.querySelectorAll('#gantt .fg-decorations-under > .fg-range-band')).map((band) =>
-      band.classList.contains('fg-today-column') ? 'today' : 'other',
+      band.classList.contains('fg-today-highlight') ? 'today' : 'other',
     ),
   );
   expect(order.at(-1)).toBe('today');
+});
+
+test('the today highlight paints over the bars when its layer is overBars', async ({ page }) => {
+  await openPage(page);
+  await page.evaluate(() => {
+    window.__gantt.todayLine = '2026-03-04T12:00:00Z';
+    window.__gantt.todayHighlight = { layer: 'overBars' };
+  });
+  await expect(page.locator('#gantt .fg-decorations-over .fg-today-highlight')).toHaveCount(1);
+  await expect(page.locator('#gantt .fg-decorations-under .fg-today-highlight')).toHaveCount(0);
+  const barsBeforeHighlight = await page.evaluate(() => {
+    const bars = document.querySelector('#gantt .fg-bars')!;
+    const highlight = document.querySelector('#gantt .fg-today-highlight')!;
+    return Boolean(bars.compareDocumentPosition(highlight) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(barsBeforeHighlight).toBe(true);
 });
 
 test('a month band aligned to weeks starts every cell on a week tick', async ({ page }) => {

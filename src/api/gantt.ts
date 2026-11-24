@@ -40,6 +40,8 @@ import type {
   HeaderTickRenderer,
   TickLines,
   TodayLineAt,
+  TodayHighlight,
+  ResolvedTodayHighlight,
 } from '../layout/index.js';
 import type {
   BarLabels,
@@ -178,9 +180,12 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `'dayCenter'` is the middle of today's calendar day in the Dataset zone, so a day column holds
    *  the line at its center. A pinned `todayLine` Instant ignores it. Default `'now'`. */
   todayLineAt?: TodayLineAt;
-  /** Live. Default `false`. `true` paints a column over the finest header tick that holds today,
-   *  under the bars. Colour: `--fg-today-column-bg`. Part: `.fg-today-column`. */
-  todayColumn?: boolean;
+  /** Live. Default `false`. Tints one finest header tick: the tick of the finest header band that
+   *  holds today, or the preset tick when the preset has no header band. `true` paints it under the
+   *  bars. `{ layer: 'overBars' }` paints it over the bars, for opaque bars. Colour, border and
+   *  minimum width: `--fg-today-highlight-bg`, `--fg-today-highlight-border`,
+   *  `--fg-today-highlight-min-width`. Part: `.fg-today-highlight`. */
+  todayHighlight?: TodayHighlight;
   /** Live. Default `'tick'`: one body line per finest header tick. `{ unit: 'week' }` draws one line
    *  per week start under a day-wide header. `'none'` draws no line. */
   tickLines?: TickLines;
@@ -418,6 +423,8 @@ export type {
   RowHeightResolver,
   TickLines,
   TodayLineAt,
+  TodayHighlight,
+  ResolvedTodayHighlight,
 };
 
 export class Gantt<TProps = unknown> {
@@ -459,7 +466,7 @@ export class Gantt<TProps = unknown> {
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
         'todayLineAt',
-        'todayColumn',
+        'todayHighlight',
         'tickLines',
         'rowHeight',
         'headerTickRenderer',
@@ -485,6 +492,7 @@ export class Gantt<TProps = unknown> {
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
       ...(options.todayLineAt !== undefined ? { todayLineAt: options.todayLineAt } : {}),
+      ...(options.todayHighlight !== undefined ? { todayHighlight: options.todayHighlight } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
       // Applied inside the shell's own constructor, ahead of `paintFirstFrame()` below, so a
       // plugin's `view()` reads the real starting selection back through `ctx.gantt` (ADR 0032).
@@ -1032,13 +1040,14 @@ export class Gantt<TProps = unknown> {
     return this.#shell.todayLineAt;
   }
 
-  /** Live. See `GanttOptions.todayColumn`. */
-  get todayColumn(): boolean {
-    return this.#shell.todayColumn;
+  /** Live. See `GanttOptions.todayHighlight`. The getter returns the normal form: `false`, or
+   *  `{ layer }`. `true` reads back as `{ layer: 'underBars' }`. */
+  get todayHighlight(): ResolvedTodayHighlight {
+    return this.#shell.todayHighlight;
   }
 
-  set todayColumn(on: boolean) {
-    this.#shell.todayColumn = on;
+  set todayHighlight(value: TodayHighlight) {
+    this.#shell.todayHighlight = value;
   }
 
   /** Live. See `GanttOptions.tickLines`. */

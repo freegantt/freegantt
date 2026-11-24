@@ -22,6 +22,7 @@ import {
 } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
 import type { DateLine, DateLineDecoration, TodayLineAt } from './date-line.js';
+import type { ResolvedTodayHighlight } from './today-highlight.js';
 import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
@@ -422,8 +423,8 @@ export interface LayoutInput {
   todayLine?: boolean | Instant;
   /** Where a clock-driven today line sits inside today. Default `'now'`. */
   todayLineAt?: TodayLineAt;
-  /** Paints a column over the finest tick that holds today. Omitted → off. */
-  todayColumn?: boolean;
+  /** Paints a band over the finest tick that holds today, in the named layer. Omitted → off. */
+  todayHighlight?: ResolvedTodayHighlight;
   /** Draws and flags one header tick. Omitted → the library text, and only the `'today'` flag. */
   headerTickRenderer?: HeaderTickRenderer;
   /** Which vertical lines the body draws. Omitted → `'tick'`. */
@@ -852,10 +853,8 @@ function bodyTickLinesOf(
   );
 }
 
-/** Call: `todayColumnOf(scale, finestStep, at, horizontalSpan)`. The band that covers today's finest
- *  tick, or nothing when today lies outside the visible content. */
-/** The step one column stands for: the finest header band's own, or the preset's tick when it has no band. */
-function columnStepOf(
+/** The step one tick of the finest header band stands for, or the preset's tick when it has no band. */
+function highlightStepOf(
   finestBand: FrameHeaderBand | undefined,
   preset: ViewPreset,
 ): { unit: TimeUnit; increment: number } {
@@ -865,7 +864,9 @@ function columnStepOf(
   };
 }
 
-function todayColumnOf(
+/** Call: `todayHighlightOf(scale, finestStep, at, horizontalSpan)`. The band that covers today's finest
+ *  tick, or nothing when today lies outside the visible content. */
+function todayHighlightOf(
   scale: TimeScale,
   step: { unit: TimeUnit; increment: number },
   at: Instant,
@@ -877,7 +878,15 @@ function todayColumnOf(
     .find((candidate) => candidate.x <= x && x < candidate.x + candidate.width);
   if (tick === undefined) return undefined;
   const clipped = clipToContent(tick.x, tick.width, scale.contentWidth);
-  return { kind: 'rangeBand', x: clipped.x, width: clipped.width, class: 'fg-today-column' };
+  return { kind: 'rangeBand', x: clipped.x, width: clipped.width, class: 'fg-today-highlight' };
+}
+
+/** Call: `withLast(bands, band)`. The bands, with `band` added at the end when it exists. */
+function withLast(
+  bands: readonly ResolvedDecoration[],
+  band: ResolvedDecoration | undefined,
+): readonly ResolvedDecoration[] {
+  return band === undefined ? bands : [...bands, band];
 }
 
 /** Call: `todayInstantOf(input)`. The Instant the frame treats as today: a pinned Instant, else the clock. */
@@ -1077,9 +1086,10 @@ export function placeFrame(
   });
 
   const connectors = placeConnectors(input, plan, mem, connectorRouter);
-  const todayColumn = input.todayColumn
-    ? todayColumnOf(scale, columnStepOf(finestBand, preset), todayInstantOf(input), horizontalSpan)
+  const todayHighlight = input.todayHighlight
+    ? todayHighlightOf(scale, highlightStepOf(finestBand, preset), todayInstantOf(input), horizontalSpan)
     : undefined;
+  const highlightLayer = input.todayHighlight ? input.todayHighlight.layer : undefined;
 
   return {
     revision,
@@ -1100,9 +1110,9 @@ export function placeFrame(
       ...(input.todayLineAt !== undefined ? { todayLineAt: input.todayLineAt } : {}),
       ...(input.dateLines ? { dateLines: input.dateLines } : {}),
     }),
-    // The today column paints last, so an off-day band never covers it.
-    underBars: todayColumn === undefined ? underBars : [...underBars, todayColumn],
-    overBars,
+    // The today highlight paints last in its layer, so an off-day band never covers it.
+    underBars: highlightLayer === 'underBars' ? withLast(underBars, todayHighlight) : underBars,
+    overBars: highlightLayer === 'overBars' ? withLast(overBars, todayHighlight) : overBars,
     columns: columnsForFrame(input.columns),
   };
 }

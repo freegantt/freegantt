@@ -115,6 +115,7 @@ where they do something beyond re-export.
 | `layout/lane.ts` | `laneRowHeight()`, `laneBandsOf()` | Lane geometry: the Row height that holds n Lanes, and where each Lane sits. |
 | `layout/header-tick.ts` | `HeaderTickPaintCache` | Calls the consumer's `headerTickRenderer` once per tick and caches the paint, so the frame loop allocates nothing. |
 | `layout/date-line.ts` | `resolveDateLines()` | Resolves the today-line and authored date lines into positioned `DateLine` decorations. |
+| `layout/today-highlight.ts` | `resolveTodayHighlight()` | Turns the `todayHighlight` option into its normal form: `false` or `{ layer }`. |
 | `layout/bar-preview.ts` | `BarPreview`, `previewedBox()` | Where a drag preview shows one bar. A frame, a connector and the backend paint read this one rule. |
 | `layout/gesture-draft.ts` | `draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()` | Pure gesture math for drag previews. All date computation stays here so `interaction/` performs no arithmetic. |
 | `layout/decoration.ts` | `DecorationLayer, DecorationProvider, RangeBand, RowStripe` | The decoration seam's own types — range bands and row stripes as pixel-resolved shapes. |

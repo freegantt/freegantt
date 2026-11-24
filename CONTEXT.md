@@ -637,6 +637,10 @@ _Avoid_: caption (used generically elsewhere), tooltip (this is always-visible, 
 The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Updates on the next render, not on a clock tick (D-S1.12-14) — a plugin that wants a live line reassigns `gantt.todayLine` on its own timer, held in `ctx.disposables`. Paint marks it with `data-flag="today"` on `.fg-date-line`. `panToToday` pans to `now()`.
 _Avoid_: Cursor (that is the pane's CSS cursor, or the Cursor line during a drag — never this Date line)
 
+**Today highlight**:
+The tint over the one tick that holds today. The tick is the finest header band's tick, or the preset tick when the preset has no header band. `gantt.todayHighlight` is the option: `false`, `true` or `{ layer: 'underBars' | 'overBars' }`. The getter returns `false` or `{ layer }`. Paint is `.fg-today-highlight`, a range band in a decoration layer, styled by `--fg-today-highlight-bg`, `--fg-today-highlight-border` and `--fg-today-highlight-min-width`. It paints last in its layer.
+_Avoid_: Today column (a Column is a Grid column), Today line (a stroke at one Instant, not a tint over a tick)
+
 **Cursor line**:
 A hot-path hairline at the Instant under the pointer during a pointer drag (S3.8, D-S3-15, issue #99 gap 5). Paint is `.fg-cursor-line` / `.fg-cursor-line-label`, singleton nodes moved by `applyState` via `InteractionState.cursorX` / `cursorLabel`. Reuses `--fg-date-line-color`. Never a `frame.decorations` Date line — those are authored markers; this one tracks the pointer and parks when the drag ends. The caption is `cursorLabelForX` in `layout/` (`instantForX` → `snapInstant` → `formatDate`).
 _Avoid_: Date line (authored, in the frame), Today line, cursor (the CSS `cursor` property on a bar)

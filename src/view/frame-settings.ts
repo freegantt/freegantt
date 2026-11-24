@@ -27,6 +27,7 @@ import type {
   DateLineLabelPlacement,
   TickLines,
   TodayLineAt,
+  ResolvedTodayHighlight,
   RowHeight,
   LaneLayout,
   LaneRule,
@@ -140,7 +141,7 @@ interface FrameSettingsValues {
   locale: Intl.LocalesArgument | undefined;
   todayLine: boolean | Instant;
   todayLineAt: TodayLineAt;
-  todayColumn: boolean;
+  todayHighlight: ResolvedTodayHighlight;
   tickLines: TickLines;
   headerTickRenderer: HeaderTickRenderer | undefined;
   rowHeight: RowHeight | undefined;
@@ -178,7 +179,7 @@ function defaultSettings(): FrameSettingsValues {
     locale: undefined,
     todayLine: true,
     todayLineAt: 'now',
-    todayColumn: false,
+    todayHighlight: false,
     tickLines: 'tick',
     headerTickRenderer: undefined,
     rowHeight: undefined,
@@ -210,7 +211,7 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
   locale: 'rebindFields',
   todayLine: 'repaint',
   todayLineAt: 'repaint',
-  todayColumn: 'repaint',
+  todayHighlight: 'repaint',
   tickLines: 'repaint',
   headerTickRenderer: 'repaint',
   rowHeight: 'repaint',
@@ -243,7 +244,7 @@ type SettingLayoutInputKey =
   | 'locale'
   | 'todayLine'
   | 'todayLineAt'
-  | 'todayColumn'
+  | 'todayHighlight'
   | 'tickLines'
   | 'headerTickRenderer'
   | 'dateLines'
@@ -300,8 +301,8 @@ export class FrameSettings {
     return this.#values.todayLineAt;
   }
 
-  get todayColumn(): boolean {
-    return this.#values.todayColumn;
+  get todayHighlight(): ResolvedTodayHighlight {
+    return this.#values.todayHighlight;
   }
 
   get tickLines(): TickLines {
@@ -455,7 +456,7 @@ export class FrameSettings {
       barHeightPx: this.#metrics.barHeightPx,
       todayLine: this.#values.todayLine,
       todayLineAt: this.#values.todayLineAt,
-      todayColumn: this.#values.todayColumn,
+      todayHighlight: this.#values.todayHighlight,
       tickLines: this.#values.tickLines,
       ...(this.#values.headerTickRenderer !== undefined
         ? { headerTickRenderer: this.#guardedHeaderTickRenderer(this.#values.headerTickRenderer) }

@@ -967,22 +967,24 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     expect(frame.header.bands.map((band) => band.heightPx)).toEqual([undefined, 36]);
   });
 
-  it('paints a today column over the finest tick that holds today, and not by default', () => {
+  it('paints a today highlight over the finest tick that holds today, and not by default', () => {
     const today = instant('2026-08-27T10:00:00Z');
     const off = computeFrame(inputWith({ todayLine: today }));
-    expect(off.underBars.some((band) => band.kind === 'rangeBand' && band.class === 'fg-today-column')).toBe(
-      false,
+    expect(
+      off.underBars.some((band) => band.kind === 'rangeBand' && band.class === 'fg-today-highlight'),
+    ).toBe(false);
+    const on = computeFrame(inputWith({ todayLine: today, todayHighlight: { layer: 'underBars' } }));
+    const highlight = on.underBars.find(
+      (band) => band.kind === 'rangeBand' && band.class === 'fg-today-highlight',
     );
-    const on = computeFrame(inputWith({ todayLine: today, todayColumn: true }));
-    const column = on.underBars.find((band) => band.kind === 'rangeBand' && band.class === 'fg-today-column');
     const dayTicks = on.header.bands[1]!.ticks;
     const holder = dayTicks.find(
       (tick) => tick.x <= gridScale.xForInstant(today) && gridScale.xForInstant(today) < tick.x + tick.width,
     );
-    expect(column).toMatchObject({ x: holder!.x, width: holder!.width });
+    expect(highlight).toMatchObject({ x: holder!.x, width: holder!.width });
   });
 
-  it('paints the today column after the bands a decoration provider adds, so shading never covers it', () => {
+  it('paints the today highlight after the bands a decoration provider adds, so shading never covers it', () => {
     const today = instant('2026-08-27T10:00:00Z');
     const shading = {
       kind: 'rangeBand' as const,
@@ -993,14 +995,23 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     const frame = computeFrame(
       inputWith({
         todayLine: today,
-        todayColumn: true,
+        todayHighlight: { layer: 'underBars' },
         decorationProviders: [{ layer: 'underBars', provider: () => [shading] }],
       }),
     );
     expect(frame.underBars.map((band) => band.kind === 'rangeBand' && band.class)).toEqual([
       'fg-time-shading',
-      'fg-today-column',
+      'fg-today-highlight',
     ]);
+  });
+
+  it('paints the today highlight over the bars when its layer is overBars', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const frame = computeFrame(inputWith({ todayLine: today, todayHighlight: { layer: 'overBars' } }));
+    const isHighlight = (band: { kind: string; class?: string }): boolean =>
+      band.kind === 'rangeBand' && band.class === 'fg-today-highlight';
+    expect(frame.overBars.filter(isHighlight)).toHaveLength(1);
+    expect(frame.underBars.filter(isHighlight)).toHaveLength(0);
   });
 
   it('marks the day tick a week also starts at, and nothing else, major', () => {
