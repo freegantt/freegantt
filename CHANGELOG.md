@@ -6,15 +6,73 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). A b
 
 ## [Unreleased]
 
-These changes ship as 0.3.0. The release is about **dense boards**: timelines where a row holds several bars side by side, where rows have different heights, and where each header cell carries its own meaning.
+## [0.3.0] - 2026-11-24
+
+This release is about **dense boards**: timelines where a row holds several bars side by side, where rows have different heights, and where each header cell carries its own meaning.
 
 - **Rows:** Rows can hold Lanes and size themselves. `lanes` stacks bars inside one Row, and `rowHeight` sets a height per Row.
 - **Header:** `headerTickRenderer` draws and flags each tick, and `alignTo` lines a coarse band up with a finer one.
 - **Body:** the timeline body can draw week lines only, and it can tint today.
-- **Bars:** bars can opt out of library chrome and paint themselves.
+- **Bars:** bars can opt out of library styling and paint themselves.
 - **Plugins:** `ctx.view.presentRowDetail` opens content under a row, as wide as both panes. The rows below move down by the height of that content. `fullWidthRowLayer`, `rowBox` and `onRowLayout` let a plugin place its own content against the layout.
 
 Every new option defaults to the 0.2.0 look. An app that sets none of them renders as before. See [Styling and theming](docs/10-styling-and-theming.md) for the new tokens, and [Plugin authoring](docs/06-plugin-authoring.md) for the row layer.
+
+### Upgrading from 0.2.0
+
+Each item has an impact rating, the apps it reaches, and the fix.
+
+#### Medium impact
+
+**A cell drawn by a `gridCellRenderer` now has an accessible name.**
+
+- What changed: the cell's `gridcell` gets an `aria-label` that holds the library's text for the cell. A renderer whose root element sets its own `aria-label` keeps that name, and the cell gets none.
+- Who it reaches: apps that use `gridCellRenderer` and test accessible names (for example `getByRole('gridcell', { name })`) or snapshot the accessibility tree.
+- Fix: update the expected names. To keep a custom name, set `aria-label` on the renderer's root element.
+
+#### Low impact
+
+**`PluginContextParts.view` has four new members: `fullWidthRowLayer`, `rowBox`, `onRowLayout` and `presentRowDetail`.**
+
+- Who it reaches: tests that build a plugin context by hand.
+- Fix: add the new members to the test double.
+
+**Three unions have new values.**
+
+- `InvalidPresetError.rule` gains `'header-height'` and `'header-align'`.
+- `BarLabelPolicy` gains `'outsideOrNone'`.
+- `BuiltInReportCode` gains `'row-layout-listener-failed'`.
+- Who it reaches: code with an exhaustive `switch` over one of them.
+- Fix: add the new cases.
+
+**`ResolvedVariant` has a new member, `unstyled: boolean`.**
+
+- Who it reaches: code that builds a `ResolvedVariant` object by hand.
+- Fix: set `unstyled: false`.
+
+**`ScaleModel.ticks` takes `TickStep & { alignTo? }`.**
+
+- Who it reaches: apps that implement their own `ScaleModel`.
+- Fix: accept the wider argument. You can ignore `alignTo`.
+
+**New DOM attributes on rows and header ticks.**
+
+- What changed: a row and its timeline band now carry `data-kind`, `data-depth` and, when the row has children, `data-parent`. A header tick can carry `data-flag`, and the library adds `today`.
+- Who it reaches: DOM snapshot tests, and app CSS whose attribute selectors are broad enough to match these.
+- Fix: update the snapshots. Nothing changes the default look.
+
+**The bundle is about 6.4 KB larger.**
+
+- What changed: the features above. The core entry grew by 6373 B, as the bundle check measures it.
+- Who it reaches: apps with a strict bundle-size budget.
+
+#### Not breaking (listed because they look like they might be)
+
+- **Column header padding.** The header has its own tokens, `--fg-col-header-padding-inline` and `--fg-col-header-padding-block`. When they are not set, the header still follows `--fg-cell-padding-*`, as in 0.2.0.
+- **`todayLine`.** It keeps its 0.2.0 type. The new `todayLineAt` option chooses where the line sits.
+- **`HeaderFormat`.** It now receives a `HeaderFormatContext`, which extends `FormatContext`. A function typed against `FormatContext` still compiles.
+- **Group rows.** A parent or header row keeps its stripe and its hover, selection and drop colours. `--fg-group-row-bg` replaces only the stripe.
+- **Twisty.** With no twisty token set, the arrow renders exactly as in 0.2.0.
 
 ### Added
 
