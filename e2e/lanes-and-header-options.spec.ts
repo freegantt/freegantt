@@ -106,7 +106,12 @@ test('a month band aligned to weeks starts every cell on a week tick', async ({ 
       .nth(band)
       .locator('.fg-tick')
       .evaluateAll((ticks) => ticks.map((tick) => Math.round(tick.getBoundingClientRect().left)));
-  await expect.poll(async () => (await starts(0)).length).toBeGreaterThan(1);
-  const weekStarts = new Set(await starts(1));
-  for (const monthStart of await starts(0)) expect(weekStarts.has(monthStart)).toBe(true);
+  // Poll the whole alignment, because the old preset's ticks also give two or more month cells.
+  await expect
+    .poll(async () => {
+      const monthStarts = await starts(0);
+      const weekStarts = new Set(await starts(1));
+      return monthStarts.length > 1 && monthStarts.every((monthStart) => weekStarts.has(monthStart));
+    })
+    .toBe(true);
 });

@@ -168,9 +168,20 @@ test('a wheel over a scrollable textarea in the panel scrolls the textarea, unti
   await expect.poll(textareaTop).toBeGreaterThan(0);
   expect((await timelineScroll(page)).top).toBe(0);
 
-  // The textarea takes this wheel down to its edge. The next one, at the edge, scrolls the rows.
-  await page.mouse.wheel(0, 2000);
-  await expect.poll(textareaTop).toBeGreaterThan(20);
+  // The textarea takes the wheel down to its edge. Firefox scrolls it a few lines per wheel and WebKit
+  // animates it, so wheel again until it sits at the bottom. The next wheel, at the edge, scrolls the rows.
+  const atBottom = (): Promise<boolean> =>
+    page
+      .locator(`${PANEL} textarea`)
+      .evaluate((node) => node.scrollTop + node.clientHeight >= node.scrollHeight - 1);
+  await expect
+    .poll(async () => {
+      if (await atBottom()) return true;
+      await page.mouse.wheel(0, 200);
+      return false;
+    })
+    .toBe(true);
+  expect((await timelineScroll(page)).top).toBe(0);
   await page.mouse.wheel(0, 100);
   await expect.poll(async () => (await timelineScroll(page)).top).toBeGreaterThan(0);
 });
