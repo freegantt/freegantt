@@ -113,6 +113,9 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 #### Harness
 
 - The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `fullWidthRowLayer` and `onRowLayout`.
+- The harness "Hierarchy & timeline" page has a "Dense board" panel and a "Today" panel.
+  - The Dense board panel switches `lanes`, a `rowHeight` function, `headerTickRenderer`, a header preset with `heightPx` and `alignTo`, `tickLines`, a Variant with `unstyled: true`, and the `outsideOrNone` bar label policy.
+  - The Today panel is a second Gantt around the real today. It switches `todayHighlight` between the two layers, and `todayLineAt` between `'now'` and `'dayCenter'`.
 
 ### Changed
 
