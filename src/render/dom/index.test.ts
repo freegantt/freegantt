@@ -2501,14 +2501,14 @@ describe('render/dom backend', () => {
     });
 
     describe('outsideOrNone', () => {
-      function backendWith(policy: BarLabelPolicy, chrome: 'default' | 'none' = 'default') {
+      function backendWith(policy: BarLabelPolicy, unstyled = false) {
         return createDomBackend({
           entryById: entryLookup,
           resolveBarRenderer: () => undefined,
           resolveGridCellRenderer: () => undefined,
           resolveHeaderRenderer: () => undefined,
           resolveBarLabelPolicy: () => policy,
-          resolveBarChrome: () => chrome,
+          resolveBarUnstyled: () => unstyled,
         });
       }
       /** One short bar at x 0, and a second bar in the same Row and Lane at `nextX`. */
@@ -2563,18 +2563,18 @@ describe('render/dom backend', () => {
         expect(labelOfFirstBar(60, 'fitBar')).toBe('outside');
       });
 
-      it('stamps data-chrome for a variant whose paint owns the box, and nothing otherwise', () => {
+      it('stamps data-unstyled for a variant whose paint owns the box, and nothing otherwise', () => {
         withStubRuler();
         const { grid, timeline } = mountSurfaces();
-        const none = backendWith('fitBar', 'none');
+        const none = backendWith('fitBar', true);
         none.mount({ grid, timeline });
         none.sync(frameFor(0, 200, 2000));
-        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['chrome']).toBe('none');
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['unstyled']).toBe('');
         none.destroy();
         const plain = backendWith('fitBar');
         plain.mount({ grid, timeline });
         plain.sync(frameFor(0, 200, 2000));
-        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['chrome']).toBeUndefined();
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['unstyled']).toBeUndefined();
         plain.destroy();
         grid.remove();
         timeline.remove();

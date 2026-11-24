@@ -4,7 +4,6 @@
 import type {
   BarFlags,
   BarLabelPlacement,
-  BarChrome,
   BarLabelPolicy,
   BarRenderer,
   BarRendererContext,
@@ -106,8 +105,8 @@ export interface DomBackendOptions {
    *  test backend built with no options — falls back to `'fitBar'` for every entry. */
   resolveBarLabelPolicy?: (entry: Entry) => BarLabelPolicy;
   /** Per entry, read fresh every `syncBars` call like `resolveBarLabelPolicy`. `'none'` stamps
-   *  `data-chrome` so the library draws no fill, border, radius or padding. Omitted: `'default'`. */
-  resolveBarChrome?: (entry: Entry) => BarChrome;
+   *  `data-unstyled` so the library draws no fill, border, radius or padding. Omitted: `false`. */
+  resolveBarUnstyled?: (entry: Entry) => boolean;
   /** #318 follow-up. Read fresh every `sync` call, same posture as `resolveBarLabelPolicy` above. Omitted —
    *  a test backend built with no options — falls back to `DEFAULT_DATE_LINE_LABEL_PLACEMENT`. */
   readDateLineLabelPlacement?: () => DateLineLabelPlacement;
@@ -266,8 +265,8 @@ type BarGeom = Pick<
 > & {
   /** `true` for a locked Entry's bar. */
   locked: boolean;
-  /** `'none'` when the variant's paint owns the whole box. */
-  chrome: BarChrome;
+  /** `true` when the variant's paint owns the whole box. */
+  unstyled: boolean;
   /** S5.4: a resolved `barRenderer`'s output for this one bar — undefined keeps `label`. */
   content?: ElementDescription;
   /** This frame's label token — see `BarLabelToken` for what each value means and costs.
@@ -1534,15 +1533,15 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
           a11yLabel: bar.a11yLabel,
           span: bar.span,
           locked: bar.locked === true,
-          chrome: entry === undefined ? 'default' : (options.resolveBarChrome?.(entry) ?? 'default'),
+          unstyled: entry !== undefined && (options.resolveBarUnstyled?.(entry) ?? false),
           labelPlacement: labelToken,
           ...(content !== undefined ? { content } : {}),
         };
       },
       patch: (node, geom) => {
         node.dataset['variant'] = geom.variant;
-        if (geom.chrome === 'none') node.dataset['chrome'] = 'none';
-        else delete node.dataset['chrome'];
+        if (geom.unstyled) node.dataset['unstyled'] = '';
+        else delete node.dataset['unstyled'];
         // States a fact about the paint, not a judgement on the variant (plans/01 §2.5) — every bar
         // `barSpan` floors or fixes carries it the same way. Pair with `data-variant` to tell which
         // variant was floored or holds a fixed box.

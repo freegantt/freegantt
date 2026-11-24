@@ -21,7 +21,6 @@ export { meter, image } from './column-renderers.js';
 export type {
   DoubleVariantMatch,
   EntryVariant,
-  BarChrome,
   FieldMatch,
   ReportDoubleMatch,
   ReportUnknownFieldMatch,

@@ -47,8 +47,8 @@ export interface ResolvedVariant extends DrawnVariant {
   /** What this variant's own bars print, and where — merged key by key over the Gantt's own
    *  `barLabels` (`mergeBarLabels`, #421 C5), or `undefined` for no opinion at this level. */
   readonly barLabels: BarLabels | undefined;
-  /** Whether the library draws the bar's own box, or the `paint` owns all of it. */
-  readonly chrome: BarChrome;
+  /** `true` when the `paint` owns the bar's whole box, and the library draws no fill, border, radius or padding. */
+  readonly unstyled: boolean;
 }
 
 /** One variant, as one object. A consumer installs it through `GanttOptions.variants`; a plugin
@@ -94,14 +94,11 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  and `{ field: 'hours' }` alone keeps the Gantt's own policy. Omit it for no opinion — every
    *  bar this variant draws then prints exactly what the Gantt's own `barLabels` says. */
   barLabels?: BarLabels;
-  /** Who draws the bar's box. `'default'`: the library paints fill, border, radius and padding.
-   *  `'none'`: it paints none of them, so a `paint` owns the whole box, as a badge or an icon does.
-   *  Position, size, label placement and state rings stay the library's. Default `'default'`. */
-  chrome?: BarChrome;
+  /** `true`: the library paints no fill, border, radius or padding, so a `paint` owns the whole box,
+   *  as a badge or an icon does. Position, size, label placement and state rings stay the library's.
+   *  Default `false`. */
+  unstyled?: boolean;
 }
-
-/** Who draws a bar's box: the library (`'default'`) or the variant's own `paint` (`'none'`). */
-export type BarChrome = 'default' | 'none';
 
 /** Two rules from one source both matched one Entry. The newest paints; the older one is reported
  *  and draws nothing. The library never arbitrates between plugins — the consumer chose which ones
@@ -410,7 +407,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         capabilities: variant.capabilities,
         css: variant.css,
         barLabels: variant.barLabels,
-        chrome: variant.chrome ?? 'default',
+        unstyled: variant.unstyled ?? false,
       },
       matches:
         variant.when === undefined

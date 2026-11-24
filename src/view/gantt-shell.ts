@@ -1237,7 +1237,7 @@ export class GanttShell {
       // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
       resolveBarLabelPolicy: (entry) =>
         resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
-      resolveBarChrome: (entry) => this.variantFor(entry).chrome,
+      resolveBarUnstyled: (entry) => this.variantFor(entry).unstyled,
       readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
       // ADR 0018: a variant's own `paint` first, because it names the rows it covers. Then
       // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired

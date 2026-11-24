@@ -76,7 +76,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
 #### Bars and labels
 
-- A Variant takes `chrome: 'none'`. The library then draws no fill, border, radius or padding on that bar, and the bar carries `data-chrome='none'`, so a renderer can paint the whole bar.
+- A Variant takes `unstyled: true`. The library then draws no fill, border, radius or padding on that bar, and the bar carries `data-unstyled`, so a renderer can paint the whole bar.
 - There's a new `BarLabelPolicy` value, `'outsideOrNone'`.
   - The label paints beside the bar when it fits before the next bar in the same Lane, and paints nowhere otherwise.
   - The other policies are unchanged.

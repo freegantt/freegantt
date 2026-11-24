@@ -547,8 +547,8 @@ ${DARK_COLOR_TOKENS}
    instead of the library leaving the child unmounted, which is what kept the label painted, clipped,
    on a shrink that crossed the fit line mid-drag. */
 .fg-bar[data-label='hidden'] .fg-bar-label { display: none; }
-/* chrome: 'none' — the variant's paint owns the whole box, so the library draws no fill, border, radius or padding. */
-.fg-bar[data-chrome='none'] { background: none; border: 0; border-radius: 0; padding: 0; }
+/* unstyled: true — the variant's paint owns the whole box, so the library draws no fill, border, radius or padding. */
+.fg-bar[data-unstyled] { background: none; border: 0; border-radius: 0; padding: 0; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). All five tokens paint now.

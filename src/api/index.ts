@@ -494,7 +494,7 @@ export type { RowBox } from '../layout/index.js';
 // `EntryPredicate` names its predicate arm alone. Named for what they match — an Entry — rather than
 // for one of the two keys that take them: `EntriesRowSource.childrenAsSegments` takes the same shape
 // (#421).
-export type { BarChrome, EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
+export type { EntryVariant, EntryRule, EntryPredicate, FieldMatch } from '../layout/index.js';
 // ADR 0022 §3: `gantt.variantFor(entry)` answers this — the whole variant, not a name a caller
 // looks up again.
 export type { ResolvedVariant } from '../layout/index.js';

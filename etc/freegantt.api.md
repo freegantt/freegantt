@@ -63,9 +63,6 @@ export const BAR_FLAG_KEYS: readonly ["conflict", "cycle"];
 // @public
 export type BarAnchor = 'start' | 'center' | 'end';
 
-// @public
-export type BarChrome = 'default' | 'none';
-
 // @public (undocumented)
 export type BarFlags = Partial<Record<(typeof BAR_FLAG_KEYS)[number], boolean>>;
 
@@ -1160,10 +1157,10 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
     barLabels?: BarLabels;
     bars?: BarProducer;
     capabilities?: Capabilities;
-    chrome?: BarChrome;
     css?: string;
     name: string;
     paint?: BarRenderer;
+    unstyled?: boolean;
     when?: EntryRule<TProps>;
 }
 
@@ -2575,9 +2572,9 @@ export type ResolvedTheme = 'light' | 'dark';
 export interface ResolvedVariant extends DrawnVariant {
     readonly barLabels: BarLabels | undefined;
     readonly capabilities: Capabilities | undefined;
-    readonly chrome: BarChrome;
     readonly css: string | undefined;
     readonly paint: BarRenderer | undefined;
+    readonly unstyled: boolean;
 }
 
 // @public

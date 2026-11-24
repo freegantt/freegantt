@@ -435,7 +435,7 @@ write.
 - `collapsed`, `collapse()`, `expand()`, `toggleCollapse()`, `collapseAll()`, `expandAll()`, `collapseStateOf(id)` — per-Gantt view state; `collapseStateOf` reads back `'collapsed' | 'expanded' | 'leaf' | undefined`
 - Events: `beforeCollapseChange` / `collapseChange`
 - `scroll` — pass the same `ScrollAxis` instances (`{ x?, y? }`) into a new `Gantt` after `destroy()` so pane scroll survives remount (for example after the app rebuilds the Dataset). Do not copy `scrollTop` off the pane.
-- `variants` — the rules this Gantt paints rows with. A variant takes `chrome: 'none'` when its `paint` owns the whole box. A bar in a Row with Lanes sits in the Lane `lanes.laneOf(entry)` names, at that Lane's top and height. `barLabels: { policy: 'outsideOrNone' }` paints a label beside a short bar, and hides it when the text would reach the next bar in the same Lane; `bar()`, `summary()`, `diamond()` are core's own shipped looks.
+- `variants` — the rules this Gantt paints rows with. A variant takes `unstyled: true` when its `paint` owns the whole box. A bar in a Row with Lanes sits in the Lane `lanes.laneOf(entry)` names, at that Lane's top and height. `barLabels: { policy: 'outsideOrNone' }` paints a label beside a short bar, and hides it when the text would reach the next bar in the same Lane; `bar()`, `summary()`, `diamond()` are core's own shipped looks.
 - `gantt.variantFor(entry): ResolvedVariant` — the whole variant this Gantt resolved for one row, never `entry.variant`: an Entry belongs to a `Dataset`, a variant resolves per Gantt, and two Gantts on one Dataset may answer differently for the same row.
 
 ### Formatters

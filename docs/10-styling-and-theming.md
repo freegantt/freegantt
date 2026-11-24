@@ -308,7 +308,7 @@ rename.
 | `.fg-tick` | One tick label inside a band. |
 | `.fg-tick-line` | Vertical grid line in the timeline body. One per finest-band tick. |
 | `.fg-row-band` | Timeline copy of a grid row's zebra, hover, and selection paint. |
-| `.fg-bar` | One Bar. Every look wears this class, diamonds included. `data-chrome='none'` means the variant's `paint` owns the whole box, so the library draws no fill, border, radius or padding. |
+| `.fg-bar` | One Bar. Every look wears this class, diamonds included. `data-unstyled` means the variant's `paint` owns the whole box, so the library draws no fill, border, radius or padding. |
 | `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`, or until the next Bar in the lane leaves room, under `'outsideOrNone'`. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
 | `.fg-connector-copy` | The copy of the selected connector above the bars. It takes no pointer events. |
