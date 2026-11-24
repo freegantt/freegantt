@@ -199,6 +199,23 @@ describe('FrameMemory row height function (ADR 0044)', () => {
     expect(memory.heights.heightAt(1)).toBe(60);
   });
 
+  it('builds the height index again when a new plan keeps the same row count', () => {
+    const memory = new FrameMemory();
+    const [a, b, c] = entries;
+    const heightById = new Map([
+      [a!.id, 100],
+      [b!.id, 30],
+      [c!.id, 30],
+    ]);
+    const rowHeightOf = (ctx: RowHeightContext): number => heightById.get(ctx.entry!.id)!;
+    const bind = { rowHeight: 32, rowHeightOf, entries, registry, datasetRevision: 0 };
+    memory.sync({ ...bind, plan: planOf([a!, b!, c!]) });
+    expect(memory.heights.topAt(1)).toBe(100);
+    memory.sync({ ...bind, plan: planOf([b!, c!, a!]) });
+    expect(memory.heights.topAt(1)).toBe(30);
+    expect(memory.heights.topAt(2)).toBe(60);
+  });
+
   it('gives the default height for an answer that is not a positive number', () => {
     const memory = new FrameMemory();
     const answers = [0, Number.NaN, -4];

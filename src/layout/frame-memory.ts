@@ -114,6 +114,14 @@ export class FrameMemory {
       this.#cachedRowHeightOf = bind.rowHeightOf;
       this.#cachedLanes = bind.lanes;
       this.heightIndexRevision++;
+    } else if (planChanged) {
+      // A re-sort or a same-size filter keeps the row count but moves every Row's height.
+      this.#heights = new PrefixSumHeightIndex(bind.plan.length, (index) => this.heightOfRow(index));
+      this.heightIndexRevision++;
+      if (revisionChanged) {
+        this.#produced.clear();
+        this.producedRevision++;
+      }
     } else if (revisionChanged) {
       this.#produced.clear();
       this.producedRevision++;
