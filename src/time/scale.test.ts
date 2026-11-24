@@ -351,3 +351,41 @@ describe('pxPerMsForUnitWidth', () => {
     );
   });
 });
+
+describe('createTimeScale ticks — a band aligned to a finer unit', () => {
+  const utc = 'UTC';
+  const monthByWeek = { unit: 'month', increment: 1, alignTo: 'week' } as const;
+  const isoDay = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+  const cellsOver = (start: string, end: string) => {
+    const range = { start: instant(`${start}T00:00:00Z`), end: instant(`${end}T00:00:00Z`) };
+    const scale = createTimeScale({ timeZone: utc, range, pxPerMs: 1 / (1000 * 60 * 60) });
+    return scale.ticks(monthByWeek, { x: 0, width: scale.contentWidth }).map((tick) => isoDay(tick.instant));
+  };
+
+  it('starts each month cell on the first week start inside the month, across a year boundary', () => {
+    // Dec 2026 starts on a Tuesday and Jan 2027 on a Friday: Mondays Dec 7 and Jan 4 open them.
+    // The range opens on Dec 1, which still belongs to the November cell that began on Nov 2.
+    expect(cellsOver('2026-12-01', '2027-01-20')).toEqual(['2026-11-02', '2026-12-07', '2027-01-04']);
+  });
+
+  it('starts a cell on the 1st when the 1st is already a week start', () => {
+    // Feb 1 2027 is a Monday.
+    expect(cellsOver('2027-01-10', '2027-02-10')).toEqual(['2027-01-04', '2027-02-01']);
+  });
+
+  it('draws cells that touch, with no gap and no overlap', () => {
+    const range = { start: instant('2026-11-01T00:00:00Z'), end: instant('2027-03-01T00:00:00Z') };
+    const scale = createTimeScale({ timeZone: utc, range, pxPerMs: 1 / (1000 * 60 * 60) });
+    const cells = scale.ticks(monthByWeek, { x: 0, width: scale.contentWidth });
+    for (let i = 1; i < cells.length; i++) {
+      expect(cells[i]!.x).toBeCloseTo(cells[i - 1]!.x + cells[i - 1]!.width, 6);
+    }
+  });
+
+  it('leaves a band without alignTo on the calendar boundary', () => {
+    const range = { start: instant('2026-12-01T00:00:00Z'), end: instant('2027-01-20T00:00:00Z') };
+    const scale = createTimeScale({ timeZone: utc, range, pxPerMs: 1 / (1000 * 60 * 60) });
+    const plain = scale.ticks({ unit: 'month', increment: 1 }, { x: 0, width: scale.contentWidth });
+    expect(plain.map((tick) => isoDay(tick.instant))).toEqual(['2026-12-01', '2027-01-01']);
+  });
+});

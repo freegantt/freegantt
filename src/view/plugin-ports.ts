@@ -38,6 +38,7 @@ import type {
   ResolvedRenderer,
   ResolvedVariant,
   TooltipRenderer,
+  RowBox,
 } from '../layout/index.js';
 import { DisposableStore } from '../extensions/disposables.js';
 import { RegistrationGate } from '../extensions/plugin-runtime.js';
@@ -86,6 +87,14 @@ export interface GanttShellPorts {
   overlay: MountLayer;
   /** #158. The grid's own row layer, alive as long as the plugin is. */
   rowLayer: MountLayer;
+  /** The full-width layer that follows the rows' vertical scroll. */
+  fullWidthRowLayer: MountLayer;
+  /** Where one row sits, for a plugin that mounts content beside it. */
+  rowBox(id: string): RowBox | undefined;
+  /** Mounts content under one Row, measures it and reserves its height. */
+  presentRowDetail(id: string, content: HTMLElement): Disposer;
+  /** Tells a plugin after a frame moved a row top or height. */
+  onRowLayout(callback: () => void): Disposer;
   /** This Gantt's raise seam, over its own `error` bus. `buildPluginPorts` binds
    *  each plugin's `by` onto it below, so a plugin never names itself. */
   raiseError: RaiseError;
@@ -239,6 +248,39 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  the pane. A popup dismisses on a scroll rather than following it. Live for the plugin's
      *  whole lifetime, the same posture as `overlay`. */
     rowLayer: MountLayer;
+    /** A layer as wide as the grid pane and the timeline pane together, below the header. Use it
+     *  for a panel that opens under one row and spans the whole Gantt.
+     *
+     *  It follows the rows' vertical scroll in the same frame, by one transform per frame and no
+     *  scroll listener. It stays still when the timeline pans sideways. Content that scrolled up
+     *  under the header is hidden. Pointer events pass through everywhere except on the content
+     *  you mount. A key pressed inside that content stays there: the Gantt's own keys never run.
+     *  A wheel over it scrolls the rows and pans the timeline, unless your content scrolls by itself
+     *  and is not at its edge.
+     *  Position content with `rowBox`. Live for the plugin's whole lifetime, like `overlay`. */
+    fullWidthRowLayer: MountLayer;
+    /** Where the row of an entry (or a row id) starts and how tall it is. `top` counts from the
+     *  top of `fullWidthRowLayer`. It answers from the layout, so a row scrolled out of the window
+     *  answers too. `undefined` for a row a collapsed parent hides, and for an unknown id. Read it
+     *  again after a row height change, a collapse or a data change: a row's top moves with them. */
+    rowBox(id: EntryId | string): RowBox | undefined;
+    /** Presents `content` under one Row, as wide as both panes, and pushes the rows below it down.
+     *  The Gantt measures the content, so its height follows what it holds. Set a fixed height in
+     *  your own CSS. Pass an Entry id or a row id.
+     *
+     *  A Row holds one detail: a second call for the same Row replaces the first, and the first
+     *  `Disposer` then does nothing. The `Disposer` removes the detail and the rows close up. When
+     *  focus sits inside the detail at that moment, it moves to the Row. The Gantt also removes the
+     *  detail when the plugin uninstalls. A Row that is collapsed, filtered out or unknown keeps the
+     *  detail mounted and hidden. It takes no space until the Row returns. The detail is not a Row:
+     *  it has no ARIA row, no selection and no key path. Give your content its own role and label. */
+    presentRowDetail(rowId: EntryId | string, content: HTMLElement): Disposer;
+    /** Calls `callback` after a frame whose rows sit differently: a row height change, a collapse
+     *  or expand, a filter, or a data change. A scroll alone never calls it, because a scroll moves
+     *  no row top. The callback runs after the frame paints, so `rowBox` is already current. It does
+     *  not run for the frame that is painted when you register: read `rowBox` once yourself. The
+     *  `Disposer` stops it. */
+    onRowLayout(callback: () => void): Disposer;
     /** Builds a live node from an `ElementDescription` — the one seam
      *  `extensions/` has to the reconciler. `extensions/` may not import `render/` itself.
      *  Never `innerHTML`d except the description's own explicit `html` opt-in (I13).
@@ -517,6 +559,18 @@ export function buildPluginPorts(
     view: {
       overlay: shell.overlay,
       rowLayer: shell.rowLayer,
+      fullWidthRowLayer: shell.fullWidthRowLayer,
+      rowBox: (id) => shell.rowBox(id),
+      presentRowDetail: (rowId, content) => {
+        const dispose = shell.presentRowDetail(rowId, content);
+        disposables.add(dispose);
+        return dispose;
+      },
+      onRowLayout: (callback) => {
+        const dispose = shell.onRowLayout(callback);
+        disposables.add(dispose);
+        return dispose;
+      },
       renderElement: (description) => buildElement(description),
       dom: shell.dom,
       onDomEvent: listenWhileInstalled,

@@ -127,6 +127,10 @@ const LIGHT_COLOR_TOKENS = `
   /* A line the coarser header band changes over — the week holding the 1st, a week's Monday. */
   --fg-tick-line-strong-color: rgb(26 24 21 / 0.16);
   --fg-row-even-bg: transparent;
+  --fg-tick-edge-color: var(--fg-header-divider-color);
+  --fg-tick-off-bg: transparent;
+  --fg-tick-today-bg: transparent;
+  --fg-tick-today-color: var(--fg-header-subtext);
   --fg-row-odd-bg: #FAF8F2;
   --fg-row-hover-bg: #F6F3EB;
   /* A flat band, in the family --fg-row-hover-bg and --fg-row-odd-bg already belong to — not a mix
@@ -181,6 +185,8 @@ const LIGHT_COLOR_TOKENS = `
      weight. Under a bar (--fg-bar-fill, opaque) the wash is invisible by construction — it only
      shows on the pane a bar does not cover. */
   --fg-time-shading-fill: rgb(26 24 21 / 0.05);
+  /* A tint over the finest tick that holds today (todayHighlight). Same hue as --fg-selection-color. */
+  --fg-today-highlight-bg: oklch(0.55 0.13 245 / 0.07);
   /* #425: a vertical drag's Insertion line — the same meaning the column-reorder drop indicator
      already borrows --fg-selection-color for (see .fg-col-header[data-drop] above), given its own
      token so a consumer can restyle the row drop line without also restyling selection. */
@@ -204,6 +210,10 @@ const DARK_COLOR_TOKENS = `
   --fg-tick-line-color: rgb(236 234 227 / 0.1);
   --fg-tick-line-strong-color: rgb(236 234 227 / 0.17);
   --fg-row-even-bg: transparent;
+  --fg-tick-edge-color: var(--fg-header-divider-color);
+  --fg-tick-off-bg: transparent;
+  --fg-tick-today-bg: transparent;
+  --fg-tick-today-color: var(--fg-header-subtext);
   --fg-row-odd-bg: #20232A;
   --fg-row-hover-bg: #262A32;
   --fg-row-selected-bg: #1F2A3F;
@@ -228,6 +238,7 @@ const DARK_COLOR_TOKENS = `
   /* Same rule as Light's pair: the theme's own light ink (rgb(236 234 227)), one notch past
      --fg-tick-line-strong-color's own alpha (0.17) for the same separation-from-a-tick-line reason. */
   --fg-time-shading-fill: rgb(236 234 227 / 0.07);
+  --fg-today-highlight-bg: oklch(0.72 0.13 245 / 0.08);
   --fg-drop-line-color: oklch(0.72 0.13 245);
   --fg-drop-refused-bg: rgb(224 163 64 / 0.18);
 `.trimEnd();
@@ -245,15 +256,27 @@ const METRIC_TOKENS = `
   --fg-grid-pane-width: ${DEFAULT_GRID_PANE_WIDTH_PX}px;
   --fg-splitter-width: ${DEFAULT_SPLITTER_WIDTH_PX}px;
   --fg-band-height: ${DEFAULT_BAND_HEIGHT_PX}px;
+  --fg-today-highlight-border: none;
+  --fg-today-highlight-min-width: 0px;
+  --fg-today-line-width: 1px;
+  --fg-today-line-opacity: 1;
+  --fg-today-line-animation: none;
   --fg-tick-box-floor: ${DEFAULT_TICK_BOX_FLOOR_PX}px;
   --fg-bar-min-width: ${DEFAULT_MIN_BAR_WIDTH_PX}px;
   --fg-bar-height: ${DEFAULT_BAR_HEIGHT_PX}px;
+  --fg-lane-height: 30px;
+  --fg-lane-gap: 6px;
+  --fg-lane-padding: 10px;
+  --fg-lane-bg: transparent;
+  --fg-lane-border: transparent;
+  --fg-lane-radius: 6px;
   --fg-bar-radius: ${DEFAULT_BAR_RADIUS_PX}px;
   --fg-column-width: ${DEFAULT_COLUMN_WIDTH_PX}px;
   --fg-column-min-width: ${DEFAULT_COLUMN_MIN_WIDTH_PX}px;
   --fg-column-resizer-hit: 12px;
   --fg-cell-padding-inline: 10px;
   --fg-cell-padding-block: 4px;
+  --fg-col-header-align: center;
   --fg-indent-width: 12px;
   --fg-bar-label-gap: ${DEFAULT_BAR_LABEL_GAP_PX}px;
   --fg-ghost-opacity: ${DEFAULT_GHOST_OPACITY};
@@ -307,7 +330,7 @@ ${DARK_COLOR_TOKENS}
    and transform-driven (.fg-rows-clip below owns that clip; unchanged for that axis). */
 .fg-grid-pane { display: flex; flex-direction: column; flex-shrink: 0; overflow-x: auto; overflow-y: hidden; background: var(--fg-pane-bg); }
 /* S1.12: mirrors .fg-header's own band stack — one .fg-band per header band
-   (setHeaderBandCount), sized from the same --fg-band-height expression.
+   (setHeaderBands), sized from the same --fg-band-height expression.
    width: --fg-grid-content-width (#126) — falls back to 100% (today's layout, unchanged)
    and only widens past the pane when fixed-width columns overflow it (PaneLayout#contentWidth). */
 .fg-grid-spacer { flex-shrink: 0; display: flex; flex-direction: column; position: relative; width: var(--fg-grid-content-width, 100%); }
@@ -318,8 +341,9 @@ ${DARK_COLOR_TOKENS}
 .fg-grid-header { position: absolute; inset: 0; display: flex; align-items: stretch; z-index: ${INTERNAL_Z.paneChrome}; color: var(--fg-header-text); }
 /* position: relative so .fg-column-resizer (below) anchors to this cell's own box, not the header row's. */
 /* --fg-cell-padding-inline/-block: the one pair of tokens both a header cell and a row cell read, so
-   grid text never sits flush against a column's own edge or its neighbour's. */
-.fg-col-header { display: flex; align-items: center; min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-cell-padding-inline, 10px); padding-block: var(--fg-cell-padding-block, 4px); }
+   grid text never sits flush against a column's own edge or its neighbour's. The header's own pair
+   is not set at the root, so a header follows the cell pair until an app sets its own. */
+.fg-col-header { display: flex; align-items: var(--fg-col-header-align, center); min-width: 0; overflow: hidden; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; position: relative; cursor: pointer; padding-inline: var(--fg-col-header-padding-inline, var(--fg-cell-padding-inline, 10px)); padding-block: var(--fg-col-header-padding-block, var(--fg-cell-padding-block, 4px)); text-transform: var(--fg-col-header-transform, none); letter-spacing: var(--fg-col-header-tracking, normal); font-size: var(--fg-col-header-font-size, inherit); font-weight: var(--fg-col-header-font-weight, inherit); }
 /* #139: every column is fixed by default — data-fixed is the common case now, not the exception.
    --fg-column-width (default 120, read by ColumnChrome, no rule of its own here — same posture
    --fg-column-min-width takes) sets the width a column falls back to when neither this Gantt's own
@@ -373,7 +397,7 @@ ${DARK_COLOR_TOKENS}
 .fg-header { background: var(--fg-header-bg); position: sticky; top: 0; z-index: ${INTERNAL_Z.paneChrome}; height: auto; overflow: visible; }
 /* #225: the S1.12 width clip moves here so .fg-header stays overflow: visible. */
 .fg-header-bands { display: flex; flex-direction: column; overflow: hidden; }
-.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); min-height: 0; }
+.fg-band { background: var(--fg-header-band-bg); color: var(--fg-header-text); font-size: var(--fg-band-font-size, inherit); font-weight: var(--fg-band-font-weight, inherit); border-bottom: 1px solid var(--fg-header-divider-color); position: relative; flex: 0 0 var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); min-height: 0; }
 /* padding/overflow are structural, not typography (font-size/family stay the consumer's):
    a tick's box is exactly its own width, so a label that would collide with its neighbour
    clips with an ellipsis instead of overflowing and garbling both (S1.12 header readability follow-up).
@@ -381,14 +405,21 @@ ${DARK_COLOR_TOKENS}
    separate columns, matching .fg-band's existing border-bottom between bands.
    --fg-tick-box-floor is the Tick box floor (CONTEXT.md): padding-inline derives from it so the
    CSS box and layout's clamp input stay one Token. The 1px in the calc is this rule's border-left. */
-.fg-tick { color: var(--fg-header-subtext); position: absolute; top: 0; left: 0; height: var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); line-height: var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-header-divider-color); }
-.fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
+.fg-tick { color: var(--fg-header-subtext); font-size: var(--fg-tick-font-size, inherit); font-weight: var(--fg-tick-font-weight, inherit); position: absolute; top: 0; left: 0; height: var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); line-height: var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-tick-edge-color); }
+.fg-tick[data-flag~='off'] { background: var(--fg-tick-off-bg); }
+.fg-tick[data-flag~='today'] { background: var(--fg-tick-today-bg); color: var(--fg-tick-today-color); }
+.fg-row { --fg-row-stripe-bg: var(--fg-row-even-bg); background: var(--fg-row-stripe-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
 /* Row parity comes from the frame's absolute row index (render/dom's rowParity), stamped as
    data-parity — not from :nth-child, which counts only the windowed rows and slides the whole zebra
    out of phase as soon as the pane scrolls. .fg-row-band is the timeline pane's copy of the same
    paint, from the same FrameRow, so the two panes stripe the same rows in both themes. */
-.fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { background: var(--fg-row-odd-bg); }
-.fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { background: var(--fg-row-even-bg); }
+.fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { --fg-row-stripe-bg: var(--fg-row-odd-bg); background: var(--fg-row-stripe-bg); }
+.fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { --fg-row-stripe-bg: var(--fg-row-even-bg); background: var(--fg-row-stripe-bg); }
+/* A group row is a row that holds children, or a header row. Both panes carry the hooks, so the fill
+   and the hairline cover the label and the timeline together. With --fg-group-row-bg unset the row
+   keeps its parity stripe. The fill sits before the state rules below, so hover, selection and a
+   refused drop still show on a group row. */
+.fg-row[data-parent], .fg-row-band[data-parent], .fg-row[data-kind='header'], .fg-row-band[data-kind='header'] { background: var(--fg-group-row-bg, var(--fg-row-stripe-bg)); border-top: var(--fg-group-row-border, 0 solid transparent); box-sizing: border-box; }
 /* One line per finest-band tick boundary, mounted between the decorations layer and .fg-bars, so
    the zebra, the selected-row band, and weekend shading paint over the lines, and every bar paints
    over them in turn — the design's own paint order. height is set inline per frame
@@ -399,6 +430,7 @@ ${DARK_COLOR_TOKENS}
 .fg-tick-line[data-major] { background: var(--fg-tick-line-strong-color); }
 .fg-row-bands { position: relative; }
 .fg-row-band { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; }
+.fg-lane { position: absolute; top: 0; left: 0; width: 100%; box-sizing: border-box; background: var(--fg-lane-bg); border: 1px solid var(--fg-lane-border); border-radius: var(--fg-lane-radius); }
 .fg-row-label, .fg-row-cell { color: var(--fg-row-label-color); display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; flex: var(--fg-col-flex, 1) 1 0; padding-inline-end: var(--fg-cell-padding-inline, 10px); padding-block: var(--fg-cell-padding-block, 4px); }
 .fg-row[data-matched='false'] .fg-row-label, .fg-row[data-matched='false'] .fg-row-cell { color: var(--fg-row-unmatched-label-color); }
 /* Bug hunt (S5 fixes): a grid row's own selection paint (CONTEXT.md Parts/State) — a background, not
@@ -427,9 +459,15 @@ ${DARK_COLOR_TOKENS}
 .fg-toggle-box { box-sizing: border-box; width: 14px; height: 14px; border: 1.5px solid var(--fg-row-label-color); border-radius: 3px; display: inline-block; position: relative; }
 .fg-toggle-box-checked { background: var(--fg-selection-color); border-color: var(--fg-selection-color); }
 .fg-toggle-box-checked::after { content: ''; position: absolute; left: 3.5px; top: 0.5px; width: 3px; height: 7px; border: solid var(--fg-pane-bg); border-width: 0 2px 2px 0; transform: rotate(45deg); }
-.fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
-.fg-row-twisty::before { content: '▸'; }
-.fg-row-twisty[aria-expanded='true']::before { content: '▾'; }
+/* The twisty has these knobs: the gap after it, and one glyph for each state. A consumer
+   that wants one chevron that turns sets both glyph tokens to it and --fg-twisty-rotation-expanded
+   to 90deg. The transition token is for that turn. */
+.fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); margin-inline-end: var(--fg-twisty-gap, 0px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
+/* An icon draws as a mask over a fill: set --fg-twisty-icon to url(...) and --fg-twisty-icon-color to
+   currentColor, and the chevron takes the label colour. With no icon the mask is off and the fill is
+   clear, so the glyph shows. Set both glyph tokens to '' to hide the glyph under an icon. */
+.fg-row-twisty::before { content: var(--fg-twisty-glyph-collapsed, '▸'); display: inline-block; width: var(--fg-twisty-icon-size, auto); height: var(--fg-twisty-icon-size, auto); vertical-align: var(--fg-twisty-icon-align, baseline); background: var(--fg-twisty-icon-color, transparent); -webkit-mask: var(--fg-twisty-icon, none) center / contain no-repeat; mask: var(--fg-twisty-icon, none) center / contain no-repeat; transition: var(--fg-twisty-transition, none); }
+.fg-row-twisty[aria-expanded='true']::before { content: var(--fg-twisty-glyph-expanded, '▾'); transform: rotate(var(--fg-twisty-rotation-expanded, 0deg)); }
 .fg-row-label[data-fixed], .fg-row-cell[data-fixed] { flex: 0 0 auto; }
 .fg-row-label[data-align='end'], .fg-row-cell[data-align='end'] { justify-content: flex-end; text-align: end; }
 .fg-row-label[data-align='center'], .fg-row-cell[data-align='center'] { justify-content: center; text-align: center; }
@@ -451,6 +489,9 @@ ${DARK_COLOR_TOKENS}
    two rules' bands apart. Layer underBars beneath .fg-bars is what keeps the wash invisible under
    an opaque bar. */
 .fg-time-shading { background: var(--fg-time-shading-fill); }
+/* todayHighlight: the finest tick that holds today. In the underBars layer a bar covers it. In the
+   overBars layer it covers the bars, so a consumer picks a translucent colour there. */
+.fg-today-highlight { box-sizing: border-box; background: var(--fg-today-highlight-bg); border: var(--fg-today-highlight-border); min-width: var(--fg-today-highlight-min-width); }
 .fg-row-stripe { position: absolute; left: 0; width: 100%; pointer-events: none; }
 /* A row span's text sits at the span's end, inside its box. Text longer than the span is clipped. */
 .fg-row-span { position: absolute; top: 0; left: 0; box-sizing: border-box; pointer-events: none; display: flex; align-items: center; justify-content: flex-end; overflow: hidden; white-space: nowrap; }
@@ -509,6 +550,8 @@ ${DARK_COLOR_TOKENS}
    instead of the library leaving the child unmounted, which is what kept the label painted, clipped,
    on a shrink that crossed the fit line mid-drag. */
 .fg-bar[data-label='hidden'] .fg-bar-label { display: none; }
+/* unstyled: true — the variant's paint owns the whole box, so the library draws no fill, border, radius or padding. */
+.fg-bar[data-unstyled] { background: none; border: 0; border-radius: 0; padding: 0; }
 .fg-bar[data-flag~="conflict"] { outline: 2px solid var(--fg-warn); }
 /* data-state is a fixed five-token projection of InteractionState, painted once here — not a
    per-bar modifier class (CONTEXT.md's State attribute entry). All five tokens paint now.
@@ -591,6 +634,16 @@ ${DARK_COLOR_TOKENS}
    bottom: 0 would resolve against the pane's visible clientHeight and cut the line off at the
    first screenful instead of running the full scrollable row content. */
 .fg-date-line { position: absolute; top: 0; border-left: 1px solid var(--fg-date-line-color); pointer-events: none; }
+/* The Today line has four knobs: colour, width, opacity and an animation. The defaults (the Date line
+   colour, 1px, 1, none) leave it identical to every other Date line. A wider line stays centred on
+   its Instant. --fg-today-line-color has no default of its own, so it follows --fg-date-line-color
+   wherever a consumer sets that. */
+.fg-date-line[data-flag='today'] { border-left-color: var(--fg-today-line-color, var(--fg-date-line-color)); border-left-width: var(--fg-today-line-width); margin-left: calc((var(--fg-today-line-width) - 1px) / -2); opacity: var(--fg-today-line-opacity); animation: var(--fg-today-line-animation); }
+/* The glow exists only for a reader who accepts motion. Under prefers-reduced-motion: reduce the
+   keyframes are undefined, so a consumer's --fg-today-line-animation names nothing and nothing moves. */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes fg-today-glow { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.75; } }
+}
 /* A label is a filled chip, not bare coloured text. Bare text put a thin time-coloured word on the
    header band and asked it to clear 4.5:1 there; a chip carries its own ground, so the label reads
    at any band colour a theme picks.
@@ -628,6 +681,13 @@ ${DARK_COLOR_TOKENS}
    this file) is what wins that competition, and a consumer embedding a Gantt inside
    its own stacking context can move the whole layer by setting the one property. pointer-events: none
    so an empty overlay never blocks the panes underneath; a mounted .fg-popup opts back in. */
+.fg-full-width-row-layer-clip { position: absolute; left: 0; right: 0; top: var(--fg-full-width-row-layer-top, 0px); bottom: 0; overflow: clip; pointer-events: none; z-index: ${INTERNAL_Z.abovePaneChrome}; }
+.fg-full-width-row-layer { position: relative; }
+.fg-full-width-row-layer > * { pointer-events: auto; }
+/* A Row detail: the library places this wrapper under its Row, wide as both panes. flow-root keeps the
+   content's own margins inside the measured height. The pane background hides the rows' grid lines. */
+.fg-row-detail { position: absolute; top: 0; left: 0; right: 0; display: flow-root; box-sizing: border-box; background: var(--fg-pane-bg); }
+.fg-row-detail[hidden] { display: none; }
 .fg-overlay { position: absolute; inset: 0; z-index: var(--fg-z-overlay, ${DEFAULT_OVERLAY_Z_INDEX}); pointer-events: none; overflow: visible; }
 /* overflow-x stays hidden so a menu item's own hover paint clips to this radius instead of
    squaring off the first and last corners; overflow-y is auto for the same reason

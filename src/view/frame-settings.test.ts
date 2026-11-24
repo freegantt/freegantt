@@ -44,6 +44,7 @@ function recordingPorts(
       return pixels[property] ?? policy.fallback;
     },
     datasetLocale: () => datasetLocale,
+    reportHeaderTickFailure: () => calls.push('reportHeaderTickFailure'),
   };
   return { ports, calls, reads };
 }
@@ -82,6 +83,12 @@ describe('FrameSettings — the invalidation table', () => {
       expected: ['invalidateBars', 'requestFrame'],
     },
     { setting: 'todayLine', patch: { todayLine: false }, expected: ['requestFrame'] },
+    { setting: 'todayLineAt', patch: { todayLineAt: 'dayCenter' }, expected: ['requestFrame'] },
+    {
+      setting: 'todayHighlight',
+      patch: { todayHighlight: { layer: 'overBars' } },
+      expected: ['requestFrame'],
+    },
     { setting: 'dateLines', patch: { dateLines: [] }, expected: ['requestFrame'] },
     {
       setting: 'dateLineLabelPlacement',
@@ -164,12 +171,15 @@ describe('FrameSettings — the invalidation table', () => {
 });
 
 describe('FrameSettings — the pixel properties', () => {
-  it('reads all four properties, and asks for no frame of its own', () => {
+  it('reads every pixel property, and asks for no frame of its own', () => {
     const { ports, calls, reads } = recordingPorts({
       '--fg-row-height': 48,
       '--fg-tick-box-floor': 3,
       '--fg-bar-min-width': 16,
       '--fg-bar-height': 20,
+      '--fg-lane-height': 30,
+      '--fg-lane-gap': 6,
+      '--fg-lane-padding': 10,
     });
     const settings = new FrameSettings(ports);
     settings.refreshPixelProperties();
@@ -179,6 +189,9 @@ describe('FrameSettings — the pixel properties', () => {
       '--fg-tick-box-floor',
       '--fg-bar-min-width',
       '--fg-bar-height',
+      '--fg-lane-height',
+      '--fg-lane-gap',
+      '--fg-lane-padding',
     ]);
     expect(calls).toEqual([]);
     expect(settings.rowHeight).toBe(48);
@@ -261,5 +274,95 @@ describe('FrameSettings — toLayoutInput', () => {
     const second = new FrameSettings(recordingPorts().ports);
     first.set({ todayLine: false });
     expect(second.todayLine).toBe(true);
+  });
+});
+
+describe('FrameSettings — header tick renderer', () => {
+  const tickContext = {} as Parameters<NonNullable<FrameSettingsPatch['headerTickRenderer']>>[0];
+
+  it('reports a throw and answers nothing, so the tick keeps the library label', () => {
+    const { ports, calls } = recordingPorts();
+    const settings = new FrameSettings(ports, {
+      headerTickRenderer: () => {
+        throw new Error('bad tick');
+      },
+    });
+    const renderer = settings.toLayoutInput(perFrame()).headerTickRenderer!;
+    expect(renderer(tickContext)).toBeUndefined();
+    expect(calls).toEqual(['reportHeaderTickFailure']);
+  });
+
+  it('passes an answer through and keeps one wrapper until the renderer changes', () => {
+    const { ports } = recordingPorts();
+    const settings = new FrameSettings(ports, { headerTickRenderer: () => ({ flags: ['off'] }) });
+    const first = settings.toLayoutInput(perFrame()).headerTickRenderer!;
+    expect(first(tickContext)).toEqual({ flags: ['off'] });
+    expect(settings.toLayoutInput(perFrame()).headerTickRenderer).toBe(first);
+    settings.set({ headerTickRenderer: () => undefined });
+    expect(settings.toLayoutInput(perFrame()).headerTickRenderer).not.toBe(first);
+  });
+});
+
+describe('FrameSettings — numeric rowHeight', () => {
+  it('uses a positive number as the default Row height', () => {
+    const { ports } = recordingPorts({ '--fg-row-height': 40 });
+    const settings = new FrameSettings(ports, { rowHeight: 52 });
+    settings.refreshPixelProperties();
+    expect(settings.rowHeight).toBe(52);
+  });
+
+  it.each([0, -8, Number.NaN, Number.POSITIVE_INFINITY])('falls back to the token for %s', (given) => {
+    const { ports } = recordingPorts({ '--fg-row-height': 40 });
+    const settings = new FrameSettings(ports, { rowHeight: given });
+    settings.refreshPixelProperties();
+    expect(settings.rowHeight).toBe(40);
+  });
+});
+
+describe('FrameSettings — lanes', () => {
+  const rule = { laneCount: () => 2, laneOf: () => 0 };
+
+  it('hands the layout no lanes until a rule is set', () => {
+    const { ports } = recordingPorts();
+    expect(new FrameSettings(ports).rowHeightFunction()).toEqual({});
+  });
+
+  it('hands the layout the rule with the lane tokens it measured', () => {
+    const { ports } = recordingPorts({ '--fg-lane-height': 24, '--fg-lane-gap': 2, '--fg-lane-padding': 5 });
+    const settings = new FrameSettings(ports, { lanes: rule });
+    settings.refreshPixelProperties();
+    expect(settings.rowHeightFunction().lanes).toEqual({
+      rule,
+      geometry: { heightPx: 24, gapPx: 2, paddingPx: 5 },
+    });
+  });
+
+  it('keeps one layout object until the rule or a token changes, so heights rebuild only then', () => {
+    const { ports } = recordingPorts({ '--fg-lane-height': 24 });
+    const settings = new FrameSettings(ports, { lanes: rule });
+    settings.refreshPixelProperties();
+    const first = settings.rowHeightFunction().lanes;
+    expect(settings.rowHeightFunction().lanes).toBe(first);
+    settings.set({ lanes: { laneCount: () => 1, laneOf: () => 0 } });
+    expect(settings.rowHeightFunction().lanes).not.toBe(first);
+  });
+
+  it('builds a new layout when a lane token changes', () => {
+    const values: Record<string, number> = { '--fg-lane-height': 24 };
+    const { ports } = recordingPorts(values);
+    const settings = new FrameSettings(ports, { lanes: rule });
+    settings.refreshPixelProperties();
+    const first = settings.rowHeightFunction().lanes;
+    values['--fg-lane-height'] = 40;
+    settings.refreshPixelProperties();
+    expect(settings.rowHeightFunction().lanes?.geometry.heightPx).toBe(40);
+    expect(settings.rowHeightFunction().lanes).not.toBe(first);
+  });
+
+  it('the lanes setting invalidates with one repaint', () => {
+    const { settings, calls } = settingsWith();
+    settings.set({ lanes: rule });
+    expect(calls).toEqual(['requestFrame']);
+    expect(settings.lanes).toBe(rule);
   });
 });

@@ -3,7 +3,7 @@
 // here (I10) — everything outside time/ must go through xForInstant/instantForX/widthForDuration.
 
 import type { Duration, FormatContext, Instant, PixelSpan, TimeSpan, TimeUnit } from '../model/index.js';
-import { stepBy, tickFloor, nextTick } from './zone.js';
+import { stepBy, startOf, tickFloor, nextTick } from './zone.js';
 import { instant } from './instant.js';
 import type { SnapRule, TickStep } from './snap.js';
 
@@ -27,7 +27,13 @@ export interface Tick {
 }
 
 /** A Formatter without the entry: a header tick has no row. Zone and locale come only from `ctx`. */
-export type HeaderFormat = (value: Instant, ctx: FormatContext) => string;
+export type HeaderFormat = (value: Instant, ctx: HeaderFormatContext) => string;
+
+/** What a header format callback knows. `rangeStart` is the first Instant of the axis, so a label can
+ *  show a year only where the year changes ("Jan 2027") and stay short elsewhere. */
+export interface HeaderFormatContext extends FormatContext {
+  readonly rangeStart: Instant;
+}
 
 /** What a header band states to turn an Instant into its label. Options are
  * resolved through `Intl.DateTimeFormat` in the Gantt's locale and the Dataset's zone; a callback is
@@ -42,6 +48,14 @@ export interface ViewPresetHeader extends TickStep {
    *  `true` to keep this band's `format` exactly as written. No effect on a callback `format`: only
    *  `Intl.DateTimeFormatOptions` fields are ever inspected or stripped. */
   repeatCoarserUnits?: boolean;
+  /** The band's own height in px. Absent: the `--fg-band-height` token, then its default. A header
+   *  with a two-line tick cell sets a taller band than one with a single line. */
+  heightPx?: number;
+  /** Cells start and end on boundaries of this finer unit, not on the band's own calendar boundary.
+   *  A month band with `alignTo: 'week'` owns the weeks whose first day falls in that month, so its
+   *  cells line up with the week band under it. Must be strictly finer than `unit`; `resolvePreset`
+   *  throws `InvalidPresetError` otherwise. Named `alignTo` because `snap` means drag snapping. */
+  alignTo?: TimeUnit;
 }
 
 /** Data, not a switch statement — shipped presets are config objects; custom ones are too (plans/01 §5.1). */
@@ -79,7 +93,7 @@ export interface TimeScale {
    *  step-driven caller normally never sees this: every shipped and custom preset already rejects a
    *  bad `tickIncrement`/header `increment` at registration (`time/presets.ts`), so the throw only
    *  reaches a caller building a `TickStep` by hand. */
-  ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+  ticks(step: TickStep & { readonly alignTo?: TimeUnit }, span: PixelSpan): readonly Tick[];
   /** What time a pixel extent stands for. Clamps to `[0, contentWidth]` first (there is no
    *  time outside the content), so a caller hands over whatever pixels it has and never repeats the
    *  bound itself. Half-open, like every other span. A zero-width extent answers a degenerate span,
@@ -120,7 +134,7 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
     return xForInstant(end) - xForInstant(at);
   }
 
-  function ticks(step: TickStep, span: PixelSpan): readonly Tick[] {
+  function ticks(step: TickStep & { readonly alignTo?: TimeUnit }, span: PixelSpan): readonly Tick[] {
     if (span.width <= 0) return [];
     const spanEnd = instantForX(span.x + span.width);
 
@@ -130,10 +144,24 @@ export function createTimeScale(options: TimeScaleOptions): TimeScale {
     // first cell stays on the same instant across a pan. nextTick (not a plain stepBy) carries that
     // same anchor forward one cell at a time, resetting at each anchor-unit boundary rather than
     // striding across it — the whole row of cells the window draws stays on that one lattice.
-    let cursor = tickFloor(timeZone, instantForX(span.x), step.unit, step.increment);
+    const spanStart = instantForX(span.x);
+    // A cell of an aligned band starts on the first `alignTo` boundary at or after its calendar
+    // boundary, so it owns the finer cells whose first instant falls inside that calendar cell.
+    const cellStart = (boundary: Instant): Instant => {
+      if (step.alignTo === undefined) return boundary;
+      const floor = startOf(timeZone, boundary, step.alignTo);
+      return floor === boundary ? boundary : stepBy(timeZone, floor, step.alignTo, 1);
+    };
+    let boundary = tickFloor(timeZone, spanStart, step.unit, step.increment);
+    // The cell covering `span.x` may be the previous calendar cell, when this one starts later.
+    if (cellStart(boundary) > spanStart) {
+      boundary = tickFloor(timeZone, instant(boundary - 1), step.unit, step.increment);
+    }
+    let cursor = cellStart(boundary);
     let count = 0;
     while (cursor < spanEnd && count < MAX_TICKS) {
-      const next = nextTick(timeZone, cursor, step.unit, step.increment);
+      boundary = nextTick(timeZone, boundary, step.unit, step.increment);
+      const next = cellStart(boundary);
       out.push({ instant: cursor, x: xForInstant(cursor), width: xForInstant(next) - xForInstant(cursor) });
       cursor = next;
       count++;

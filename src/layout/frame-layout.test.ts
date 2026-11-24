@@ -13,7 +13,6 @@ import { entryDoubles } from './entry-double.js';
 import { changeSetId, entryId, barId, rowId } from '../model/index.js';
 import type { ChangeSet } from '../model/index.js';
 import type { LayoutInput } from './frame.js';
-import { PrefixSumHeightIndex } from './row-height-index.js';
 
 // FrameLayout exists to keep ONE row-height index alive across a Gantt's renders (#47), so what has
 // to be tested is how often it builds one. Counting constructions is the only observation of that:
@@ -269,14 +268,12 @@ describe('FrameLayout row production (S4.8, [S4-A5])', () => {
     spy.mockRestore();
   });
 
-  it('invalidateFrom recomputes only the suffix; heightAt has a production caller', () => {
-    const heightAt = vi.spyOn(PrefixSumHeightIndex.prototype, 'heightAt');
+  it('invalidateFrom recomputes only the suffix', () => {
     const layout = new FrameLayout();
     const entries = sampleEntries.slice(0, 3);
     const rowsInput = input({ entries });
     const first = layout.computeFrame(rowsInput);
     expect(first.rows[0]?.height).toBe(layout.rowTop(1) - layout.rowTop(0));
-    expect(heightAt).toHaveBeenCalled();
 
     const produceSpy = vi.spyOn(produceBars, 'produceBarsForRow');
     produceSpy.mockClear();
@@ -285,7 +282,6 @@ describe('FrameLayout row production (S4.8, [S4-A5])', () => {
     const producedFor = produceSpy.mock.calls.map((call) => call[0].entryIds.map((id) => String(id)));
     expect(producedFor.some((ids) => ids.includes(String(sampleEntries[0]!.id)))).toBe(false);
     expect(producedFor.some((ids) => ids.includes(String(sampleEntries[1]!.id)))).toBe(true);
-    heightAt.mockRestore();
     produceSpy.mockRestore();
   });
 
@@ -493,6 +489,74 @@ describe('FrameLayout.rowIndexForEntry (#528)', () => {
   });
 });
 
+describe('FrameLayout.rowBox', () => {
+  it('answers a row the window never drew, from the layout alone', () => {
+    const flat = Array.from({ length: 10_000 }, (_unused, index) => ({ id: `e${index}` }));
+    const layout = new FrameLayout();
+    layout.computeFrame(
+      input({ entries: entryDoubles(flat), visible: { x: 0, y: 0, width: 400, height: 96 } }),
+    );
+
+    expect(layout.rowBox('e0')).toEqual({ top: 0, height: 32 });
+    expect(layout.rowBox('e5000')).toEqual({ top: 5000 * 32, height: 32 });
+  });
+
+  it('answers a row id as it answers the entry on that row', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: entryDoubles([{ id: 'a' }, { id: 'b' }]) }));
+    const rowOfB = layout.rowIdForEntry(entryId('b'))!;
+
+    expect(layout.rowBox(rowOfB)).toEqual(layout.rowBox('b'));
+    expect(layout.rowBox('b')).toEqual({ top: 32, height: 32 });
+  });
+
+  it('answers a grouping header row by its row id', () => {
+    const layout = new FrameLayout();
+    const frame = layout.computeFrame(
+      input({
+        entries: sampleEntries.slice(0, 4),
+        rows: { source: 'group', groupBy: () => 'all' },
+      }),
+    );
+    const header = frame.rows.find((row) => row.kind === 'header')!;
+
+    expect(layout.rowBox(header.id)).toEqual({ top: header.top, height: header.height });
+  });
+
+  it('counts a taller row into every top below it', () => {
+    const layout = new FrameLayout();
+    const entries = entryDoubles([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    layout.computeFrame(
+      input({ entries, rowHeightOf: (row) => (row.entry?.id === entryId('b') ? 120 : 32) }),
+    );
+
+    expect(layout.rowBox('b')).toEqual({ top: 32, height: 120 });
+    expect(layout.rowBox('c')).toEqual({ top: 152, height: 32 });
+  });
+
+  it('answers undefined for a row a collapsed parent hides, and for an unknown id', () => {
+    const [parent, child] = entryDoubles([
+      { id: String(sampleEntries[0]!.id), start: sampleEntries[0]!.start!, end: sampleEntries[0]!.end! },
+      {
+        id: String(sampleEntries[1]!.id),
+        start: sampleEntries[1]!.start!,
+        end: sampleEntries[1]!.end!,
+        parentId: String(sampleEntries[0]!.id),
+      },
+    ]) as readonly [Entry, Entry];
+    const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [parent, child], rows: tree }));
+    expect(layout.rowBox(child.id)).toBeDefined();
+
+    layout.computeFrame(input({ entries: [parent, child], rows: tree, collapsed: [parent.id] }));
+
+    expect(layout.rowBox(child.id)).toBeUndefined();
+    expect(layout.rowBox(parent.id)).toEqual({ top: 0, height: 32 });
+    expect(layout.rowBox('not-a-row')).toBeUndefined();
+  });
+});
+
 // #424 review, point 1: an earlier cut of `ensureRowPlan` replanned `#plan` and the row-id maps but
 // left `#memory` — the height index, `rowById` — behind. A read between two `computeFrame` calls
 // then answered from two different row trees at once: `rowIndexForEntry` saw the replanned rows,
@@ -607,5 +671,90 @@ describe('FrameLayout.rowPlanRevision advances with the row tree, not the frame 
     );
 
     expect(layout.rowPlanRevision).toBe(before);
+  });
+});
+
+describe('FrameLayout Row details', () => {
+  const entries = entryDoubles([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+  const detailOfB = new Map([[rowId('b'), 100]]);
+
+  it('moves the rows below a detail down by its height, and keeps each row own height', () => {
+    const layout = new FrameLayout();
+    const frame = layout.computeFrame(input({ entries, rowDetailHeights: detailOfB }));
+
+    expect(frame.rows.map((row) => [row.top, row.height])).toEqual([
+      [0, 32],
+      [32, 32],
+      [164, 32],
+    ]);
+    expect(frame.contentHeight).toBe(196);
+    expect(layout.rowBox('b')).toEqual({ top: 32, height: 32 });
+    expect(layout.rowBox('c')).toEqual({ top: 164, height: 32 });
+  });
+
+  it('keeps every bar of a row in the row own band, not in its detail', () => {
+    const layout = new FrameLayout();
+    const dated = entryDoubles(
+      entries.map((entry) => ({
+        id: String(entry.id),
+        start: sampleEntries[0]!.start!,
+        end: sampleEntries[0]!.end!,
+      })),
+    );
+    const frame = layout.computeFrame(input({ entries: dated, rowDetailHeights: detailOfB }));
+    for (const bar of frame.bars) {
+      const row = frame.rows.find((candidate) => candidate.id === bar.rowId)!;
+      expect(bar.y).toBeGreaterThanOrEqual(row.top);
+      expect(bar.y + bar.height).toBeLessThanOrEqual(row.top + row.height);
+    }
+  });
+
+  it('answers where the detail of a row starts, below the row own band', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries, rowDetailHeights: detailOfB }));
+
+    expect(layout.rowDetailTop('b')).toBe(64);
+    expect(layout.rowDetailTop('c')).toBe(196);
+    expect(layout.rowDetailTop(layout.rowIdForEntry(entryId('b'))!)).toBe(64);
+  });
+
+  it('answers no detail top for a row a collapsed parent hides, or an unknown id', () => {
+    const [parent, child] = entryDoubles([{ id: 'p' }, { id: 'k', parentId: 'p' }]) as readonly [
+      Entry,
+      Entry,
+    ];
+    const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries: [parent, child], rows: tree, collapsed: [parent.id] }));
+
+    expect(layout.rowDetailTop(child.id)).toBeUndefined();
+    expect(layout.rowDetailTop('not-a-row')).toBeUndefined();
+    expect(layout.rowDetailTop(parent.id)).toBe(32);
+  });
+
+  it('a hidden row takes no room, and takes it back when it returns', () => {
+    const [parent, child] = entryDoubles([{ id: 'p' }, { id: 'k', parentId: 'p' }]) as readonly [
+      Entry,
+      Entry,
+    ];
+    const tree: LayoutInput['rows'] = { source: 'entries', tree: true };
+    const details = new Map([[rowId('k'), 80]]);
+    const layout = new FrameLayout();
+    const collapsed = layout.computeFrame(
+      input({ entries: [parent, child], rows: tree, collapsed: [parent.id], rowDetailHeights: details }),
+    );
+    expect(collapsed.contentHeight).toBe(32);
+    const open = layout.computeFrame(
+      input({ entries: [parent, child], rows: tree, rowDetailHeights: details }),
+    );
+    expect(open.contentHeight).toBe(32 + 32 + 80);
+  });
+
+  it('bumps the height index revision when only a detail changes', () => {
+    const layout = new FrameLayout();
+    layout.computeFrame(input({ entries, rowDetailHeights: detailOfB }));
+    const before = layout.heightIndexRevision;
+    layout.computeFrame(input({ entries, rowDetailHeights: new Map([[rowId('b'), 140]]) }));
+    expect(layout.heightIndexRevision).toBe(before + 1);
   });
 });

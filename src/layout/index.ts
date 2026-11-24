@@ -54,14 +54,17 @@ export type {
 } from './rows/row-source.js';
 export { DEFAULT_ROW_SOURCE, isPlannedHeaderRow, nestsRows, resolveRowSource } from './rows/row-source.js';
 export { FrameLayout } from './frame-layout.js';
-export type { FrameLayoutView, RowPlanInput, RowPlanMemoryInput } from './frame-layout.js';
+export type { FrameLayoutView, RowBox, RowPlanInput, RowPlanMemoryInput } from './frame-layout.js';
 export { FrameMemory } from './frame-memory.js';
 export { resolveDateLines, DEFAULT_DATE_LINE_LABEL_PLACEMENT } from './date-line.js';
+export { resolveTodayHighlight } from './today-highlight.js';
+export type { ResolvedTodayHighlight, TodayHighlight, TodayHighlightSpec } from './today-highlight.js';
 export type {
   DateLine,
   DateLineDecoration,
   DateLineLabelPlacement,
   ResolveDateLinesInput,
+  TodayLineAt,
 } from './date-line.js';
 export type {
   GeometryFrame,
@@ -73,6 +76,7 @@ export type {
   FrameHeaderBand,
   FrameHeaderTick,
   FrameTickLine,
+  TickLines,
   Overscan,
   PathCommand,
   RangeBand,
@@ -145,10 +149,14 @@ export type {
   ScrollAxisBinding,
   ScrollAxisBindingHandle,
 } from './viewport/scroll-axis.js';
+export { laneBandsOf, laneCountOf, laneRowHeight } from './lane.js';
+export type { FrameLane, LaneGeometry, LaneLayout, LaneRule } from './lane.js';
+export type { RowContext, RowHeight, RowHeightContext, RowHeightResolver } from './row-height.js';
+export type { HeaderTickContext, HeaderTickPaint, HeaderTickRenderer } from './header-tick.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';
 export { rowDropZoneAt, ROW_CHANGE_THRESHOLD_PX, DROP_ZONE_HYSTERESIS_PX } from './row-drop-zone.js';
-export type { RowDropSide, RowDropZone, RowDropZoneInput } from './row-drop-zone.js';
+export type { RowDropHeights, RowDropSide, RowDropZone, RowDropZoneInput } from './row-drop-zone.js';
 export { dropPlaceFor } from './row-drop-target.js';
 export type { RowsForDrop, DropPlace, DropPlaceAnswer } from './row-drop-target.js';
 export type {
@@ -158,6 +166,7 @@ export type {
   SnapSetting,
   Tick,
   HeaderFormat,
+  HeaderFormatContext,
   DateFormat,
   PresetRef,
   PresetId,

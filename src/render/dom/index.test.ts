@@ -3,11 +3,13 @@ import { createDomBackend } from './index.js';
 import { computeFrame, createVariantRegistry, fixedWidthBar } from '../../layout/index.js';
 import type {
   BarRenderer,
+  HeaderTickRenderer,
   ResolvedRenderer,
   DateLineLabelPlacement,
   Entry,
   ErrorReportInput,
   BarId,
+  BarLabelPolicy,
   ResolvedBarLabel,
   TimeScale,
   ViewPreset,
@@ -215,6 +217,41 @@ describe('render/dom backend', () => {
     const ticks = timeline.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(1);
     expect(ticks[0]?.textContent).toBe('tick');
+    backend.destroy();
+  });
+
+  it('drops what a tick drew once the renderer answers nothing, and keeps the tick class', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frameWith = (headerTickRenderer: HeaderTickRenderer) =>
+      computeFrame({
+        entries: [],
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        variants: variantRegistry,
+        headerTickRenderer,
+      });
+
+    backend.sync(
+      frameWith(() => ({
+        content: { text: 'drawn', class: { custom: true }, style: { color: 'red' }, attrs: { title: 'x' } },
+      })),
+    );
+    const tick = timeline.querySelector<HTMLElement>('.fg-header .fg-tick')!;
+    expect(tick.classList.contains('custom')).toBe(true);
+
+    backend.sync(frameWith(() => undefined));
+    expect(timeline.querySelector('.fg-header .fg-tick')).toBe(tick);
+    expect(tick.textContent).toBe('tick');
+    expect(tick.classList.contains('fg-tick')).toBe(true);
+    expect(tick.classList.contains('custom')).toBe(false);
+    expect(tick.style.color).toBe('');
+    expect(tick.hasAttribute('title')).toBe(false);
     backend.destroy();
   });
 
@@ -2461,6 +2498,88 @@ describe('render/dom backend', () => {
       grid.remove();
       timeline.remove();
       restoreRuler();
+    });
+
+    describe('outsideOrNone', () => {
+      function backendWith(policy: BarLabelPolicy, unstyled = false) {
+        return createDomBackend({
+          entryById: entryLookup,
+          resolveBarRenderer: () => undefined,
+          resolveGridCellRenderer: () => undefined,
+          resolveHeaderRenderer: () => undefined,
+          resolveBarLabelPolicy: () => policy,
+          resolveBarUnstyled: () => unstyled,
+        });
+      }
+      /** One short bar at x 0, and a second bar in the same Row and Lane at `nextX`. */
+      function frameWithNeighbour(nextX: number | undefined) {
+        const frame = frameFor(0, 20, 2000);
+        const first = frame.bars[0]!;
+        if (nextX !== undefined) {
+          frame.bars.push({ ...first, id: `${first.id}-next` as typeof first.id, x: nextX, label: '' });
+        }
+        return frame;
+      }
+      function labelOfFirstBar(nextX: number | undefined, policy: BarLabelPolicy = 'outsideOrNone') {
+        withStubRuler();
+        const backend = backendWith(policy);
+        const { grid, timeline } = mountSurfaces();
+        backend.mount({ grid, timeline });
+        backend.sync(frameWithNeighbour(nextX));
+        const token = timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['label'];
+        backend.destroy();
+        grid.remove();
+        timeline.remove();
+        restoreRuler();
+        return token;
+      }
+
+      it('paints the label beside the bar when nothing follows it in the lane', () => {
+        expect(labelOfFirstBar(undefined)).toBe('outside');
+      });
+
+      it('paints the label beside the bar when the next bar starts far enough away', () => {
+        expect(labelOfFirstBar(400)).toBe('outside');
+      });
+
+      it('hides the label when the text would reach the next bar in the lane', () => {
+        expect(labelOfFirstBar(60)).toBe('hidden');
+      });
+
+      it('never paints the label inside, even when the bar is wide', () => {
+        withStubRuler();
+        const backend = backendWith('outsideOrNone');
+        const { grid, timeline } = mountSurfaces();
+        backend.mount({ grid, timeline });
+        backend.sync(frameFor(0, 500, 2000));
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['label']).toBe('outside');
+        backend.destroy();
+        grid.remove();
+        timeline.remove();
+        restoreRuler();
+      });
+
+      it('leaves every other policy as it was: fitBar ignores the next bar', () => {
+        expect(labelOfFirstBar(60, 'fitBar')).toBe('outside');
+      });
+
+      it('stamps data-unstyled for a variant whose paint owns the box, and nothing otherwise', () => {
+        withStubRuler();
+        const { grid, timeline } = mountSurfaces();
+        const none = backendWith('fitBar', true);
+        none.mount({ grid, timeline });
+        none.sync(frameFor(0, 200, 2000));
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['unstyled']).toBe('');
+        none.destroy();
+        const plain = backendWith('fitBar');
+        plain.mount({ grid, timeline });
+        plain.sync(frameFor(0, 200, 2000));
+        expect(timeline.querySelector<HTMLElement>('.fg-bar')!.dataset['unstyled']).toBeUndefined();
+        plain.destroy();
+        grid.remove();
+        timeline.remove();
+        restoreRuler();
+      });
     });
 
     it('barLabels: "insideOrNone" paints no label at all on a bar too narrow for it, never outside (#435)', () => {

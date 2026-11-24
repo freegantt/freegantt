@@ -19,6 +19,9 @@ const GRID_PANE_WIDTH_PROPERTY = '--fg-grid-pane-width';
 export const DEFAULT_GRID_PANE_WIDTH_PX = 160;
 /** Zero is authored, not nonsense: a container that wants no grid pane sets `--fg-grid-pane-width: 0`. */
 const GRID_PANE_WIDTH_POLICY = { fallback: DEFAULT_GRID_PANE_WIDTH_PX, accepts: 'zeroOrMore' } as const;
+/** Outputs: the library writes these two, a consumer only reads them. */
+const TIMELINE_PANE_LEFT_PROPERTY = '--fg-timeline-pane-left';
+const TIMELINE_PANE_WIDTH_PROPERTY = '--fg-timeline-pane-width';
 const SPLITTER_WIDTH_PROPERTY = '--fg-splitter-width';
 /** Shipped default for `--fg-splitter-width` (docs/05-consumer-api.md) — `styles.ts` declares the
  *  same number on `:root` so a consumer can read it back (#383). */
@@ -69,6 +72,10 @@ export interface Panes {
    *  top of both panes, wrapped by `view/mount-layer.ts`. Structure only; the `MountLayer` over it
    *  owns its content. */
   readonly overlay: HTMLElement;
+  /** The full-width row layer: as wide as both panes, below the header, moved by the rows' vertical
+   *  scroll and never by the horizontal one. `fullWidthRowLayerClip` holds it and owns the clip. */
+  readonly fullWidthRowLayer: HTMLElement;
+  readonly fullWidthRowLayerClip: HTMLElement;
 }
 
 export class PaneLayout {
@@ -79,8 +86,11 @@ export class PaneLayout {
   #timelinePane: HTMLElement;
   #gridWidth: number;
   #minGridWidth: number;
-  #headerBandCount = 0;
+  /** The band heights the spacer was last built from, so an unchanged stack is a no-op. */
+  #headerBandShape: string | undefined;
   #gridPattern: GridPattern = 'grid';
+  /** The box last written to the tokens, so an unchanged measurement writes nothing. */
+  #publishedTimelineBox: { left: number; width: number } | undefined;
 
   constructor(options: PaneLayoutOptions) {
     this.#container = options.container;
@@ -117,14 +127,14 @@ export class PaneLayout {
     // only when the pane has nothing else to focus.
     this.#gridPane.tabIndex = -1;
 
-    // Renders one empty `.fg-band` per header band (`setHeaderBandCount`) instead of
+    // Renders one empty `.fg-band` per header band (`setHeaderBands`) instead of
     // being sized imperatively — both panes then resolve their header height from the same
     // `--fg-band-height` CSS expression and cannot drift.
     this.#spacer = document.createElement('div');
     this.#spacer.className = 'fg-grid-spacer';
     // S5.11: the spacer holds the one header row, so it is the grid's header `rowgroup`.
     // Its `.fg-band` children are empty height mirrors of the timeline's bands and say nothing to a
-    // screen reader — `setHeaderBandCount` hides each one from the tree.
+    // screen reader — `setHeaderBands` hides each one from the tree.
     this.#spacer.setAttribute('role', 'rowgroup');
 
     const rowClip = document.createElement('div');
@@ -175,7 +185,15 @@ export class PaneLayout {
     const overlay = document.createElement('div');
     overlay.className = 'fg-overlay';
 
-    this.#container.append(this.#gridPane, splitter, timelinePane, overlay);
+    // Sibling of the panes, so it spans both. The clip stays still and hides what scrolled up under
+    // the header. The layer inside takes the one per-frame transform, like `rowLayer` above.
+    const fullWidthRowLayerClip = document.createElement('div');
+    fullWidthRowLayerClip.className = 'fg-full-width-row-layer-clip';
+    const fullWidthRowLayer = document.createElement('div');
+    fullWidthRowLayer.className = 'fg-full-width-row-layer';
+    fullWidthRowLayerClip.append(fullWidthRowLayer);
+
+    this.#container.append(this.#gridPane, splitter, timelinePane, fullWidthRowLayerClip, overlay);
 
     this.panes = {
       grid: this.#gridPane,
@@ -184,6 +202,8 @@ export class PaneLayout {
       splitter,
       timeline: timelinePane,
       overlay,
+      fullWidthRowLayer,
+      fullWidthRowLayerClip,
     };
   }
 
@@ -253,11 +273,43 @@ export class PaneLayout {
     return { width: this.panes.timeline.clientWidth, height: this.panes.timeline.clientHeight };
   }
 
+  /** Tells content in the full-width row layer where the Timeline pane sits. The two tokens
+   *  `--fg-timeline-pane-left` and `--fg-timeline-pane-width` are outputs: the library writes them
+   *  and a consumer only reads them. They sit on the layer itself, which every child and every Row
+   *  detail wrapper inherits from, and which goes away with the Gantt. Call it when the Timeline
+   *  pane size changes. It writes only when a value changed. */
+  publishTimelinePaneBox(): void {
+    const { timeline, fullWidthRowLayer } = this.panes;
+    const box = {
+      left:
+        timeline.getBoundingClientRect().left +
+        timeline.clientLeft -
+        fullWidthRowLayer.getBoundingClientRect().left,
+      width: timeline.clientWidth,
+    };
+    const last = this.#publishedTimelineBox;
+    if (last?.left === box.left && last.width === box.width) return;
+    this.#publishedTimelineBox = box;
+    fullWidthRowLayer.style.setProperty(TIMELINE_PANE_LEFT_PROPERTY, `${box.left}px`);
+    fullWidthRowLayer.style.setProperty(TIMELINE_PANE_WIDTH_PROPERTY, `${box.width}px`);
+  }
+
   /** The header's own height, read from the grid pane's spacer — that stack of
    *  `.fg-band` elements is the same height as the timeline pane's own sticky header, so one read
    *  answers for both panes. The rows a viewer can actually see are the pane box minus this. */
   measureHeaderHeight(): number {
     return this.#spacer.offsetHeight;
+  }
+
+  /** The border-box height of a Row detail's wrapper, read from layout. One batch of reads follows
+   *  one batch of writes, so a hundred new details cost one layout pass. */
+  measureRowDetailHeight(wrapper: HTMLElement): number {
+    return wrapper.getBoundingClientRect().height;
+  }
+
+  /** The visible box of one element a plugin mounted, for the wheel check over the full-width row layer. */
+  clientBoxOf(element: HTMLElement): { width: number; height: number } {
+    return { width: element.clientWidth, height: element.clientHeight };
   }
 
   /** `GanttDom.bounds` (S5.3): the container's own client rect, the outer clamp a popup
@@ -298,6 +350,19 @@ export class PaneLayout {
     return this.panes.rows.getBoundingClientRect();
   }
 
+  /** `ctx.view.fullWidthRowLayer.bounds`: the full-width row layer's client rect, transform included. */
+  rowSpanBounds(): DOMRect {
+    return this.panes.fullWidthRowLayer.getBoundingClientRect();
+  }
+
+  /** Starts the row span clip under the header, so a row scrolled up under the header hides. */
+  syncRowSpanTop(): void {
+    this.panes.fullWidthRowLayerClip.style.setProperty(
+      '--fg-full-width-row-layer-top',
+      `${this.measureHeaderHeight()}px`,
+    );
+  }
+
   /** `ctx.view.overlay.bounds` (#168): the overlay layer's own client rect. A popup sits at that
    *  layer's origin, so this is the box its transform counts from. `bounds()` above stays the outer
    *  clamp for placement, which is a question about the whole Gantt. */
@@ -310,13 +375,16 @@ export class PaneLayout {
    *  A no-op when the count is unchanged — the common case, every render. Returns whether the stack
    *  changed, because the header height changed with it and the rows' own viewport height is the
    *  pane box minus that (`GanttShell#applyPaneMeasurement`). */
-  setHeaderBandCount(count: number): boolean {
-    if (count === this.#headerBandCount) return false;
-    this.#headerBandCount = count;
+  setHeaderBands(heights: readonly (number | undefined)[]): boolean {
+    const shape = heights.join(',');
+    if (shape === this.#headerBandShape) return false;
+    this.#headerBandShape = shape;
     this.#spacer.replaceChildren();
-    for (let i = 0; i < count; i++) {
+    for (const heightPx of heights) {
       const band = document.createElement('div');
       band.className = 'fg-band';
+      // A band with its own height states it through the token the timeline's band reads.
+      if (heightPx !== undefined) band.style.setProperty('--fg-band-height', `${heightPx}px`);
       // Height only — the timeline's own bands carry the tick labels. Hidden, so the header
       // `rowgroup` around it holds exactly one row.
       band.setAttribute('aria-hidden', 'true');

@@ -81,7 +81,7 @@ export function barIdFromDataset(value: string | undefined): BarId | undefined;
 export type BarLabelPlacement = 'inside' | 'outside';
 
 // @public
-export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'outsideOrNone' | 'none';
 
 // @public
 export type BarLabels = BarLabelPolicy | BarLabelSpec;
@@ -149,7 +149,7 @@ export type BlockReason =
 export type BuiltInCommandId = 'freegantt.collapseAll' | 'freegantt.expandAll' | 'freegantt.collapseRow' | 'freegantt.expandRow' | 'freegantt.zoomIn' | 'freegantt.zoomOut' | 'freegantt.panToToday' | 'freegantt.panToStart' | 'freegantt.panToEnd' | 'freegantt.panRight' | 'freegantt.panLeft' | 'freegantt.panDown' | 'freegantt.panUp' | 'freegantt.pageDown' | 'freegantt.pageUp' | 'freegantt.selectAll' | 'freegantt.clearSelection' | 'freegantt.selectNextEntry' | 'freegantt.selectPreviousEntry' | 'freegantt.activateEntry' | 'freegantt.moveEntryUp' | 'freegantt.moveEntryDown' | 'freegantt.indentEntry' | 'freegantt.outdentEntry' | 'freegantt.deleteSelection' | 'freegantt.clearDates' | 'freegantt.discardCellEdit' | 'freegantt.editFocusedCell' | 'freegantt.switchToggle' | 'freegantt.undo' | 'freegantt.redo' | 'freegantt.resizeColumnWider' | 'freegantt.resizeColumnNarrower' | 'freegantt.moveColumnRight' | 'freegantt.moveColumnLeft';
 
 // @public
-export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-remove-refused' | 'entry-clear-dates-refused' | 'entry-step-refused' | 'entry-drop-refused' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'connect-handler-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
+export type BuiltInReportCode = 'mutation-cancelled' | 'entry-move-cancelled' | 'entry-resize-cancelled' | 'entry-remove-refused' | 'entry-clear-dates-refused' | 'entry-step-refused' | 'entry-drop-refused' | 'entry-move-dropped' | 'entry-resize-dropped' | 'renderer-failed' | 'disposer-failed' | 'extender-preview-failed' | 'rollup-preview-failed' | 'gesture-commit-failed' | 'connect-handler-failed' | 'row-layout-listener-failed' | 'scale-options-ignored' | 'rollup-corrected' | 'unknown-parent' | 'hierarchy-cycle' | 'variant-matched-twice' | 'bar-renderer-shadowed' | 'unknown-variant-field' | 'unknown-row-source-field' | 'unknown-bar-label-field' | 'derived-values-dropped' | 'sibling-index-dropped' | 'derived-value' | 'no-parse-value' | 'no-date-value' | 'unsaved-value' | 'unreadable-value' | 'refused-write';
 
 // @public
 export type BuiltInThrownCode = 'unsupported-unit' | 'invalid-snap-increment' | 'container-not-found' | 'invalid-instant' | 'invalid-plain-time' | 'unknown-preset' | 'invalid-preset' | 'entry-not-found' | 'reveal-target-not-found' | 'duplicate-entry-id' | 'parent-cycle' | 'inverted-span' | 'unknown-field' | 'duplicate-field-key' | 'reserved-field-key' | 'duplicate-props-key' | 'illegal-core-field-override' | 'computed-field-cannot-be-written' | 'field-not-editable' | 'derived-field-not-writable' | 'unknown-aggregator' | 'unknown-field-type' | 'aggregator-failed' | 'field-column-not-defined' | 'toggle-field-not-boolean' | 'unknown-grid-column' | 'mutation-during-notification' | 'mutation-during-extension-hook' | 'transaction-already-open' | 'mutation-cancelled' | 'unreadable-value' | 'invalid-replay-origin' | 'duplicate-row-id' | 'duplicate-plugin-id' | 'plugin-not-installed' | 'missing-plugin' | 'plugin-requirement-cycle' | 'registration-closed' | 'plugin-setup-failed' | 'renderer-already-registered' | 'unknown-command' | 'empty-covers' | 'custom-row-source-not-filterable-or-sortable' | 'sibling-index-out-of-range' | 'place-refused' | 'remove-refused' | 'unsupported-lag-unit' | 'duplicate-dependency-id' | 'dependency-store-not-installed' | 'scheduling-not-installed' | 'invalid-working-calendar';
@@ -1160,6 +1160,7 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
     css?: string;
     name: string;
     paint?: BarRenderer;
+    unstyled?: boolean;
     when?: EntryRule<TProps>;
 }
 
@@ -1403,6 +1404,7 @@ export interface FrameBar {
     // (undocumented)
     id: BarId;
     label: string;
+    lane?: number;
     locked?: boolean;
     // (undocumented)
     rowId: RowId;
@@ -1434,6 +1436,14 @@ export interface FrameColumn {
     width?: number;
 }
 
+// @public
+export interface FrameLane {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly top: number;
+}
+
 // @public (undocumented)
 export interface FrameRow {
     // (undocumented)
@@ -1443,6 +1453,7 @@ export interface FrameRow {
     expandable: boolean;
     // (undocumented)
     expanded: boolean;
+    // (undocumented)
     gridCells: readonly string[];
     // (undocumented)
     height: number;
@@ -1452,6 +1463,7 @@ export interface FrameRow {
     index: number;
     // (undocumented)
     kind: PlannedRowKind;
+    lanes?: readonly FrameLane[];
     locked?: boolean;
     matched?: boolean;
     // (undocumented)
@@ -1530,9 +1542,13 @@ export class Gantt<TProps = unknown> {
     hasPlugin(plugin: ChromePlugin | PluginId): boolean;
     get headerRenderer(): HeaderRenderer | undefined;
     set headerRenderer(renderer: HeaderRenderer | undefined);
+    get headerTickRenderer(): HeaderTickRenderer | undefined;
+    set headerTickRenderer(renderer: HeaderTickRenderer | undefined);
     get hiddenGridColumns(): readonly FieldKey[];
     hideGridColumn(field: FieldKey): void;
     installPlugin(plugin: ChromePlugin): void;
+    get lanes(): LaneRule | undefined;
+    set lanes(rule: LaneRule | undefined);
     // (undocumented)
     get locale(): Intl.LocalesArgument | undefined;
     set locale(l: Intl.LocalesArgument | undefined);
@@ -1560,6 +1576,8 @@ export class Gantt<TProps = unknown> {
     });
     get resolvedTheme(): ResolvedTheme;
     reveal(id: EntryId | string): void;
+    get rowHeight(): RowHeight;
+    set rowHeight(height: RowHeight);
     get rowSource(): ResolvedRowSource;
     set rowSource(next: RowSource);
     get selectedEntries(): readonly Entry<TProps>[];
@@ -1573,8 +1591,14 @@ export class Gantt<TProps = unknown> {
     // (undocumented)
     get theme(): Theme;
     set theme(value: Theme);
+    get tickLines(): TickLines;
+    set tickLines(lines: TickLines);
+    get todayHighlight(): ResolvedTodayHighlight;
+    set todayHighlight(value: TodayHighlight);
     get todayLine(): boolean | Instant;
     set todayLine(on: boolean | InstantInput);
+    get todayLineAt(): TodayLineAt;
+    set todayLineAt(at: TodayLineAt);
     // (undocumented)
     get todayLineMarginTicks(): number;
     set todayLineMarginTicks(ticks: number);
@@ -1680,17 +1704,23 @@ export interface GanttOptionsBase<TProps = unknown> {
     gridResizable?: boolean;
     gridWidth?: GridWidth;
     headerRenderer?: HeaderRenderer;
+    headerTickRenderer?: HeaderTickRenderer;
+    lanes?: LaneRule;
     locale?: Intl.LocalesArgument;
     minGridWidth?: number;
     overscan?: Overscan;
     plugins?: readonly ChromePlugin[];
     pointerActivation?: PointerActivation;
+    rowHeight?: RowHeight;
     rowSource?: RowSource;
     scroll?: ScrollAxes;
     selectedEntryIds?: readonly (EntryId | string)[];
     snap?: SnapSetting;
     theme?: Theme;
+    tickLines?: TickLines;
+    todayHighlight?: TodayHighlight;
     todayLine?: boolean | InstantInput;
+    todayLineAt?: TodayLineAt;
     todayLineMarginTicks?: number;
     tooltipRenderer?: TooltipRenderer;
     variants?: readonly EntryVariant<TProps>[];
@@ -1797,7 +1827,13 @@ export interface GroupRowSource extends RowSourceCommon {
 }
 
 // @public
-export type HeaderFormat = (value: Instant, ctx: FormatContext) => string;
+export type HeaderFormat = (value: Instant, ctx: HeaderFormatContext) => string;
+
+// @public
+export interface HeaderFormatContext extends FormatContext {
+    // (undocumented)
+    readonly rangeStart: Instant;
+}
 
 // @public (undocumented)
 export type HeaderRenderer = (ctx: HeaderRendererContext) => ElementDescription | undefined;
@@ -1807,6 +1843,26 @@ export interface HeaderRendererContext {
     // (undocumented)
     column: ResolvedColumn;
 }
+
+// @public (undocumented)
+export interface HeaderTickContext {
+    readonly band: number;
+    // (undocumented)
+    readonly locale: Intl.LocalesArgument;
+    readonly rangeStart: Instant;
+    // (undocumented)
+    readonly tick: Tick;
+    readonly time: ZonedTime;
+}
+
+// @public (undocumented)
+export interface HeaderTickPaint {
+    content?: ElementDescription;
+    flags?: readonly string[];
+}
+
+// @public
+export type HeaderTickRenderer = (context: HeaderTickContext) => HeaderTickPaint | undefined;
 
 // @public
 export type HierarchySource<TProps = Record<string, unknown>> = (entry: Omit<StoredEntry<TProps>, 'siblingIndex'>) => EntryId | string | undefined;
@@ -1883,13 +1939,13 @@ export class InvalidPlainTimeError extends FreeGanttError {
 
 // @public
 export class InvalidPresetError extends FreeGanttError {
-    constructor(presetId: string, rule: 'tick-widths' | 'tick-step' | 'tick-increment', message: string, operation: string);
+    constructor(presetId: string, rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height' | 'header-align', message: string, operation: string);
     // (undocumented)
     readonly operation: string;
     // (undocumented)
     readonly presetId: string;
     // (undocumented)
-    readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment';
+    readonly rule: 'tick-widths' | 'tick-step' | 'tick-increment' | 'header-height' | 'header-align';
 }
 
 // @public
@@ -1974,6 +2030,12 @@ export interface KeyEventLike {
 
 // @public
 export type KeyHandler = (event: KeyEventLike) => void | false;
+
+// @public
+export interface LaneRule {
+    laneCount(row: RowContext): number;
+    laneOf(entry: Entry): number;
+}
 
 // @public
 export function lastCoveredInstant(span: {
@@ -2199,6 +2261,10 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
     view: {
         overlay: MountLayer;
         rowLayer: MountLayer;
+        fullWidthRowLayer: MountLayer;
+        rowBox(id: EntryId | string): RowBox | undefined;
+        presentRowDetail(rowId: EntryId | string, content: HTMLElement): Disposer;
+        onRowLayout(callback: () => void): Disposer;
         renderElement(description: ElementDescription): HTMLElement;
         dom: GanttDom;
         onDomEvent<K extends keyof DocumentEventMap>(type: K, handler: DomEventHandler<K>, options?: DomEventOptions): Disposer;
@@ -2504,6 +2570,9 @@ export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSourc
 // @public
 export type ResolvedTheme = 'light' | 'dark';
 
+// @public
+export type ResolvedTodayHighlight = TodayHighlightSpec | false;
+
 // Warning: (ae-forgotten-export) The symbol "DrawnVariant" needs to be exported by the entry point index.d.ts
 //
 // @public
@@ -2512,6 +2581,7 @@ export interface ResolvedVariant extends DrawnVariant {
     readonly capabilities: Capabilities | undefined;
     readonly css: string | undefined;
     readonly paint: BarRenderer | undefined;
+    readonly unstyled: boolean;
 }
 
 // @public
@@ -2534,7 +2604,37 @@ export interface RollUpContext extends ComputeContext {
 }
 
 // @public
+export interface RowBox {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly top: number;
+}
+
+// @public
+export interface RowContext {
+    // (undocumented)
+    readonly depth: number;
+    readonly entry: Entry | undefined;
+    // (undocumented)
+    readonly kind: PlannedRowKind;
+}
+
+// @public
 export type RowFilter = (entry: Entry) => boolean;
+
+// @public
+export type RowHeight = number | RowHeightResolver;
+
+// @public
+export interface RowHeightContext extends RowContext {
+    readonly defaultHeight: number;
+    readonly laneCount: number;
+    readonly laneHeight: number | undefined;
+}
+
+// @public (undocumented)
+export type RowHeightResolver = (context: RowHeightContext) => number;
 
 // @public (undocumented)
 export type RowId = string & {
@@ -2877,6 +2977,12 @@ export interface Tick {
 }
 
 // @public
+export type TickLines = 'tick' | 'none' | {
+    unit: TimeUnit;
+    increment?: number;
+};
+
+// @public
 export interface TickStep {
     // (undocumented)
     readonly increment: number;
@@ -2901,7 +3007,9 @@ export interface TimeScale {
     // (undocumented)
     readonly range: TimeSpan;
     spanForPixels(span: PixelSpan): TimeSpan;
-    ticks(step: TickStep, span: PixelSpan): readonly Tick[];
+    ticks(step: TickStep & {
+        readonly alignTo?: TimeUnit;
+    }, span: PixelSpan): readonly Tick[];
     readonly timeZone: string;
     // (undocumented)
     widthForDuration(d: Duration, at: Instant): number;
@@ -2969,6 +3077,18 @@ export interface TimeUnitWidth {
     readonly unit: TimeUnit;
     readonly widthPx: number;
 }
+
+// @public
+export type TodayHighlight = boolean | TodayHighlightSpec;
+
+// @public
+export interface TodayHighlightSpec {
+    // (undocumented)
+    readonly layer: DecorationLayer;
+}
+
+// @public
+export type TodayLineAt = 'now' | 'dayCenter';
 
 // @public
 export class ToggleFieldNotBooleanError extends FreeGanttError {
@@ -3141,8 +3261,10 @@ export interface ViewPreset {
 
 // @public (undocumented)
 export interface ViewPresetHeader extends TickStep {
+    alignTo?: TimeUnit;
     // (undocumented)
     format: DateFormat;
+    heightPx?: number;
     repeatCoarserUnits?: boolean;
 }
 

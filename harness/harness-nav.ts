@@ -14,6 +14,7 @@ export type HarnessPageId =
   | 'planned-vs-actual'
   | 'performance'
   | 'related-to'
+  | 'inline-details'
   | 'dependencies'
   | 'scheduling'
   | 'critical-path';
@@ -32,6 +33,7 @@ const HARNESS_PAGES: readonly HarnessPage[] = [
   { id: 'planned-vs-actual', label: 'Planned vs actual', file: 'planned-vs-actual.html' },
   { id: 'performance', label: 'Performance', file: 'performance.html' },
   { id: 'related-to', label: 'Related to', file: 'related-to.html' },
+  { id: 'inline-details', label: 'Inline details', file: 'inline-details.html' },
   { id: 'dependencies', label: 'Dependencies', file: 'dependencies.html' },
   { id: 'scheduling', label: 'Scheduling', file: 'scheduling.html' },
   { id: 'critical-path', label: 'Critical path', file: 'critical-path.html' },

@@ -339,9 +339,17 @@ _Avoid_: Calendar alone (ambiguous with a UI date picker or an imported ICS cale
 The internal list `resolveRows` produces before placement — `PlannedRow` values with `entryIds`, tree `depth`, collapse flags, and filter `matched`. Not public: consumers use `RowSource` and receive derived `Row`s in the frame. `CustomRow` is the public DTO for `{ source: 'custom' }`.
 _Avoid_: PlannedRow as a glossary term (internal only), Row model (Row is what the frame carries after placement)
 
+**Lane**:
+A horizontal band inside one Row (ADR 0043). The consumer states how many Lanes a Row holds (`gantt.lanes.laneCount(row)`, a header Row too) and which Lane a Bar sits in (`gantt.lanes.laneOf(entry)`). A Lane with no Bar still counts, so an empty Lane keeps its band. Lane height, gap and padding come from `--fg-lane-*` tokens. The library never moves a Bar between Lanes.
+_Avoid_: Track, line, Lane packing, slot
+
 **Row**:
-A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Bars of many Entries, and a row source may produce Rows that correspond to no Entry at all. `Row.kind: 'header'` is a grouping header that stands for no Entry (`entryIds` is empty). A parent Entry and a leaf Entry both produce a row of `Row.kind: 'entry'`. Collapse holds `RowId`s; for the entries source a `RowId` equals the `EntryId`. A grouping header uses a derived `RowId` from the group key. Its name cell is `headerLabel`; other cells are empty. Every Bar on a Row draws at the same vertical band, centred in the row (`singleLane`, D-S4-19) — Lane and Lane packing are retired (#298): the only row-packing behavior there ever was is the one every row already has.
-_Avoid_: Line, track, record; reading `Row.kind: 'header'` as "a parent Entry"; using `'group'` as a Row kind (that literal is gone with `Entry.kind`); Lane, Lane packing, `heightMode: 'pack'` (retired, #298 — see above)
+A horizontal track of a Gantt — the unit of vertical layout, and what the grid pane and the timeline pane both position against. Rows are derived on every layout pass and never persisted. A Row is not an Entry: one Row may carry the Bars of many Entries, and a row source may produce Rows that correspond to no Entry at all. `Row.kind: 'header'` is a grouping header that stands for no Entry (`entryIds` is empty). A parent Entry and a leaf Entry both produce a row of `Row.kind: 'entry'`. Collapse holds `RowId`s; for the entries source a `RowId` equals the `EntryId`. A grouping header uses a derived `RowId` from the group key. Its name cell is `headerLabel`; other cells are empty. A Row with no Lanes draws every Bar at the same vertical band, centred in the row. A Row with Lanes splits that space into Lanes (see _Lane_).
+_Avoid_: Line, track, record; reading `Row.kind: 'header'` as "a parent Entry"; using `'group'` as a Row kind (that literal is gone with `Entry.kind`); Lane packing, `heightMode: 'pack'` (retired, #298; the library never packs Bars into Lanes)
+
+**Row detail** (ADR 0046):
+Content a plugin presents under one Row with `ctx.view.presentRowDetail(rowId, content)`. It spans the Grid pane and the Timeline pane. The library measures it, reserves its height and places it, so the rows below move down by that height. A Row detail is not a Row and not an Entry: it has no ARIA row, no selection, no undo step and no key path. The Row keeps its own height and its own Bars. One Row holds at most one Row detail, and a second present replaces the first. A fixed height is the consumer's CSS on the content. A Row that is collapsed, filtered or unknown keeps its Row detail mounted, hidden, and the Row detail takes no space.
+_Avoid_: Spacer entry, spacer row (the retired recipe), Inline panel, Row expansion, Detail row, Row span
 
 **Row source**:
 The configuration that decides what the Rows are for a given Gantt — the Entries themselves (optionally as a tree), one Row per value of some grouping function, or a consumer-supplied resolver. Live on `gantt.rowSource` (and `GanttOptions.rowSource` at construction). Alternative views (workload, resources) are new row sources, not new rendering or interaction code. `{ source: 'custom', resolve }` returns `CustomRow` values (`id`, optional `entryIds`, optional `label`). Core adapts those to the internal row plan. This `custom` is the row-source occupant, not a custom ViewPreset object. `filter`, `sort`, and `filterPolicy` live here — never on the Store (D-S4-28).
@@ -453,7 +461,7 @@ The left-hand pane of a Pane layout: row labels and, from S4, Field-driven colum
 _Avoid_: Label column, gutter (gutter was the pre-S1.8 shape, where the row-label width lived inside the render backend's paint layer instead of being a pane in its own right — D-S1.8-2 retired it)
 
 **Timeline pane**:
-The right-hand pane of a Pane layout and the single native scroller for both axes: header bands, bars, Connectors, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the container or the Grid pane.
+The right-hand pane of a Pane layout and the single native scroller for both axes: header bands, bars, Connectors, and decorations all mount inside it. `attachScroll` and `attachPaneSize` both bind to this element, never to the container or the Grid pane. The library publishes where it sits as two output Tokens on the Full-width row layer: `--fg-timeline-pane-left` (its visible left edge from that layer's left edge) and `--fg-timeline-pane-width` (its client width, without the vertical scrollbar). A consumer reads them and never sets them, unlike the input Token `--fg-grid-pane-width`.
 _Avoid_: Chart area, canvas (canvas reads as the future canvas render backend, a different concept)
 
 **Splitter**:
@@ -465,8 +473,12 @@ The Grid pane's width in px — the one number `PaneLayout` owns and the one thi
 _Avoid_: Grid pane width in code (too long once `gantt.` already says "grid pane"), gutter width (gutter is retired — see Grid pane)
 
 **Row layer**:
-The element the Grid pane's rows live in (`.fg-rows`, `PaneLayout.panes.rows`), and one of the two Mount layers over it (`PluginContext.view.rowLayer`, #158). The Grid pane owns no vertical scrollbar, so this layer follows the Timeline pane's native scroll by one `translateY` per frame (D-S1.8-1), while the pane scrolls horizontally around it (D-S1.8-13). Content presented here travels with the rows on both axes, in the same frame, with no scroll listener of its own — the whole difference from the Overlay, and why the Cell editor and its Refusal notice mount here and a Popup does not. The layer's own rect answers from the layer itself (`rowLayer.bounds`, #168). Beside the rows, never inside one: a row and its cells are `render/dom`'s reconciled DOM.
+The element the Grid pane's rows live in (`.fg-rows`, `PaneLayout.panes.rows`), and one of the three Mount layers over it (`PluginContext.view.rowLayer`, #158). The Grid pane owns no vertical scrollbar, so this layer follows the Timeline pane's native scroll by one `translateY` per frame, while the pane scrolls horizontally around it. Content presented here travels with the rows on both axes, in the same frame, with no scroll listener of its own — the whole difference from the Overlay, and why the Cell editor and its Refusal notice mount here and a Popup does not. The layer's own rect answers from the layer itself (`rowLayer.bounds`, #168). Beside the rows, never inside one: a row and its cells are `render/dom`'s reconciled DOM.
 _Avoid_: Row container, Scroll layer (the layer is not the scroller — the Timeline pane is)
+
+**Full-width row layer**:
+The Mount layer as wide as the Grid pane and the Timeline pane together, below the header (`PluginContext.view.fullWidthRowLayer`; `.fg-full-width-row-layer` inside `.fg-full-width-row-layer-clip`). Content presented here follows the rows' vertical scroll and stays still on a horizontal pan, so a panel under one row keeps the full width of the Gantt. The clip hides content that scrolled up under the header. A key press, a mouse press and a text selection inside the content stay there, and a wheel over it scrolls the rows unless the content scrolls itself. A plugin places content with `ctx.view.rowBox(id)`, whose `top` counts from the top of this layer.
+_Avoid_: Row span layer (retired name), Span layer; a `rowSpan` Decoration is a box inside one row and is a different concept
 
 **Render surface**:
 One of the two DOM elements (`grid`, `timeline`) a `RenderBackend.mount()` receives (`render/backend.ts`'s `RenderSurfaces<TSurface>`, S1.8). `render/dom` puts the row layer in the grid surface and the header/bar/sizer layers in the timeline surface; `render/null` ignores both. Replaces the pre-S1.8 single-container `mount()`, which reserved the row-label gutter inside the paint layer itself.
@@ -628,6 +640,10 @@ _Avoid_: caption (used generically elsewhere), tooltip (this is always-visible, 
 **Today line**:
 The Date line at `now()`. `gantt.todayLine` (default on) is the wrapper that emits it — `true`, `false`, or a pinned `InstantInput` (S1.13, D-S1.13-4), with no clock read once pinned. Updates on the next render, not on a clock tick (D-S1.12-14) — a plugin that wants a live line reassigns `gantt.todayLine` on its own timer, held in `ctx.disposables`. Paint marks it with `data-flag="today"` on `.fg-date-line`. `panToToday` pans to `now()`.
 _Avoid_: Cursor (that is the pane's CSS cursor, or the Cursor line during a drag — never this Date line)
+
+**Today highlight**:
+The tint over the one tick that holds today. The tick is the finest header band's tick, or the preset tick when the preset has no header band. `gantt.todayHighlight` is the option: `false`, `true` or `{ layer: 'underBars' | 'overBars' }`. The getter returns `false` or `{ layer }`. Paint is `.fg-today-highlight`, a range band in a decoration layer, styled by `--fg-today-highlight-bg`, `--fg-today-highlight-border` and `--fg-today-highlight-min-width`. It paints last in its layer.
+_Avoid_: Today column (a Column is a Grid column), Today line (a stroke at one Instant, not a tint over a tick)
 
 **Cursor line**:
 A hot-path hairline at the Instant under the pointer during a pointer drag (S3.8, D-S3-15, issue #99 gap 5). Paint is `.fg-cursor-line` / `.fg-cursor-line-label`, singleton nodes moved by `applyState` via `InteractionState.cursorX` / `cursorLabel`. Reuses `--fg-date-line-color`. Never a `frame.decorations` Date line — those are authored markers; this one tracks the pointer and parks when the drag ends. The caption is `cursorLabelForX` in `layout/` (`instantForX` → `snapInstant` → `formatDate`).
@@ -934,7 +950,7 @@ The split every default chord `view/gantt-shell.ts` binds falls into, one or the
 _Avoid_: Keyboard shortcut (this repo's own word for the concept is Chord — see Keymap); treating every chord as negotiable (an Obligation chord is not a config surface)
 
 **Mount layer**:
-The one shape a plugin mounts content into (`view/mount-layer.ts`'s `MountLayer`, #168): `present(node)`, `onResize(callback)`, and the layer's own `bounds`. A Gantt has exactly two — the Overlay and the Row layer — and the difference is the instance, never the interface. Reposition-on-resize belongs to whatever you mounted into, so both carry `onResize`, over one shared `ResizeObserver` per Gantt (`ContainerResize`, issue #137 F9). Before #168 there were two interfaces and only one had `onResize`, so the Cell editor mounted in one layer and borrowed the resize signal from the other.
+The one shape a plugin mounts content into (`view/mount-layer.ts`'s `MountLayer`, #168): `present(node)`, `onResize(callback)`, and the layer's own `bounds`. A Gantt has exactly three — the Overlay, the Row layer and the Full-width row layer — and the difference is the instance, never the interface. Reposition-on-resize belongs to whatever you mounted into, so all three carry `onResize`, over one shared `ResizeObserver` per Gantt (`ContainerResize`). Before #168 there were two interfaces and only one had `onResize`, so the Cell editor mounted in one layer and borrowed the resize signal from the other.
 _Avoid_: Overlay handle (retired — a one-field wrapper is the inner type, so `present` returns a plain Disposer), Host, Portal
 
 **Overlay**:

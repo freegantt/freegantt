@@ -82,6 +82,9 @@ export type BuiltInReportCode =
   // A plugin's connect handler threw while core ran the drop. The other handlers still run, and the
   // `connect` event still fires.
   | 'connect-handler-failed'
+  // A listener given to `ctx.view.onRowLayout` threw. The other listeners still run, and the frame
+  // carries on.
+  | 'row-layout-listener-failed'
   | 'scale-options-ignored'
   | 'rollup-corrected'
   // ADR 0020: a hierarchy source answered with an id no Entry holds, or with a chain that loops

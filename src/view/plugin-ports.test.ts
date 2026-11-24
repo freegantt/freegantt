@@ -72,6 +72,10 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     events: { on: vi.fn(), off: vi.fn() },
     overlay: fakeMountLayer(),
     rowLayer: fakeMountLayer(),
+    fullWidthRowLayer: fakeMountLayer(),
+    rowBox: () => undefined,
+    presentRowDetail: () => () => {},
+    onRowLayout: () => () => {},
     dom: makeDom(container),
     commands: {
       register: (command) => registry.add(`command:${command.id}`),
@@ -102,6 +106,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
       capabilities: undefined,
       css: undefined,
       barLabels: undefined,
+      unstyled: false,
     }),
     lastPaintedBar: () => makeBar(),
     entry: (id) => makeEntry(id),
@@ -197,6 +202,38 @@ describe('buildPluginPorts — disposal (#155)', () => {
     dispose();
 
     expect(harness.registry.live).toEqual([]);
+  });
+
+  it('`disposables.disposeAll()` stops an `onRowLayout` listener too', () => {
+    const live = new Set<() => void>();
+    const harness = makeHarness({
+      onRowLayout: (callback) => {
+        live.add(callback);
+        return () => live.delete(callback);
+      },
+    });
+    harness.parts.view.onRowLayout(() => {});
+    expect(live.size).toBe(1);
+
+    harness.parts.disposables.disposeAll();
+
+    expect(live.size).toBe(0);
+  });
+
+  it('`disposables.disposeAll()` removes a Row detail the plugin presented', () => {
+    const live = new Set<HTMLElement>();
+    const harness = makeHarness({
+      presentRowDetail: (_id, content) => {
+        live.add(content);
+        return () => live.delete(content);
+      },
+    });
+    harness.parts.view.presentRowDetail('t1', document.createElement('div'));
+    expect(live.size).toBe(1);
+
+    harness.parts.disposables.disposeAll();
+
+    expect(live.size).toBe(0);
   });
 
   it('`disposables.disposeAll()` frees every gated registration, so uninstall needs no plugin help', () => {

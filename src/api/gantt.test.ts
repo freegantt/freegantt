@@ -883,6 +883,28 @@ describe('Gantt.panToDate / panToToday (S1.12, D-S1.12-8)', () => {
     }
   });
 
+  it('todayHighlight reads back in its normal form, from the option and from the setter', () => {
+    const make = (todayHighlight?: boolean | { layer: 'underBars' | 'overBars' }): Gantt => {
+      const options = {
+        container: document.createElement('div'),
+        dataset: new Dataset({ entries: sampleEntries, timeZone: 'UTC' }),
+      };
+      return new Gantt(todayHighlight === undefined ? options : { ...options, todayHighlight });
+    };
+    const gantt = make();
+    expect(gantt.todayHighlight).toBe(false);
+    gantt.todayHighlight = true;
+    expect(gantt.todayHighlight).toEqual({ layer: 'underBars' });
+    gantt.todayHighlight = { layer: 'overBars' };
+    expect(gantt.todayHighlight).toEqual({ layer: 'overBars' });
+    gantt.todayHighlight = false;
+    expect(gantt.todayHighlight).toBe(false);
+    gantt.destroy();
+    const fromOption = make(true);
+    expect(fromOption.todayHighlight).toEqual({ layer: 'underBars' });
+    fromOption.destroy();
+  });
+
   it('todayLineMarginTicks is configurable, live, and constructor-settable', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
@@ -1089,7 +1111,7 @@ describe('Gantt dateLines (S1.13)', () => {
     }
   });
 
-  it('[S1-A12] .fg-today-line does not exist anywhere in the rendered DOM; .fg-date-line does, with --fg-date-line-color in the token table and --fg-today-line-color absent', () => {
+  it('[S1-A12] .fg-today-line does not exist anywhere in the rendered DOM; .fg-date-line does, with --fg-date-line-color in the token table and --fg-today-line-color falling back to it', () => {
     FakeResizeObserver.instances = [];
     vi.stubGlobal('ResizeObserver', FakeResizeObserver);
 
@@ -1115,7 +1137,7 @@ describe('Gantt dateLines (S1.13)', () => {
         .map((s) => s.textContent ?? '')
         .join('\n');
       expect(styleSheet).toContain('--fg-date-line-color');
-      expect(styleSheet).not.toContain('--fg-today-line-color');
+      expect(styleSheet).toContain('var(--fg-today-line-color, var(--fg-date-line-color))');
 
       gantt.destroy();
     } finally {

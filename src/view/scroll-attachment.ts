@@ -26,8 +26,17 @@ const EPSILON = 1;
 const SHARED_AXIS_CLASS = 'fg-shared-axis';
 
 /** `element` is the timeline pane: the single native scroller (D-D). The grid pane never scrolls —
- * it follows by transform, which is why there is no second scroller to fall a frame behind. */
-export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAttachment {
+ * it follows by transform, which is why there is no second scroller to fall a frame behind.
+ *
+ * `refreshPaneSize` re-measures the pane. A native scroll can land in the frame that resized the pane,
+ * before the size observer reports it. The element then scrolls further than the model's maximum
+ * allows. The model clamps that scroll and the next write undoes it. So a scroll past the maximum
+ * asks for a fresh pane size first. */
+export function attachScroll(
+  element: HTMLElement,
+  viewport: Viewport,
+  refreshPaneSize: () => void,
+): ScrollAttachment {
   // What `writePosition` itself last pushed into the element — not the model's current target,
   // which may already have moved on to something newer (#131). A model-driven write's own 'scroll'
   // event does not always arrive before the next one: Firefox can deliver it late enough to land
@@ -97,6 +106,12 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
     if (Math.abs(element.scrollLeft - to.x) < EPSILON && Math.abs(element.scrollTop - to.y) < EPSILON) {
       return;
     }
+    if (
+      element.scrollLeft > viewport.scroll.x.state.max + EPSILON ||
+      element.scrollTop > viewport.scroll.y.state.max + EPSILON
+    ) {
+      refreshPaneSize();
+    }
     // One batch, one notification, even though each axis moves through its own `ScrollAxis`.
     viewport.batch(() => {
       viewport.scroll.x.panTo(element.scrollLeft);
@@ -113,4 +128,47 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
       element.removeEventListener('scroll', onNativeScroll);
     },
   };
+}
+
+/** The visible box of one element, measured by the caller. `PaneLayout` is the one file in `view/`
+ *  that measures a box (I9), so the shell hands this reader over from there. */
+export type ClientBoxReader = (element: HTMLElement) => { readonly width: number; readonly height: number };
+
+/** Does an element between the wheel's target and `boundary` scroll on its own, in the direction the
+ *  wheel turns, and not sit at that edge? The full-width row layer asks it, so a textarea in a panel keeps
+ *  its own wheel and the rows scroll once the textarea reaches an edge. The only reader of element
+ *  scroll beside the binding above (I12). */
+export function contentScrollsForWheel(
+  target: EventTarget | null,
+  boundary: HTMLElement,
+  wheel: { readonly x: number; readonly y: number },
+  clientBox: ClientBoxReader,
+): boolean {
+  let node = target instanceof HTMLElement ? target : null;
+  while (node !== null && node !== boundary) {
+    const style = getComputedStyle(node);
+    const box = clientBox(node);
+    if (wheel.y !== 0 && scrollsAlong(node, style.overflowY, node.scrollHeight, box.height)) {
+      const atEdge =
+        wheel.y < 0 ? node.scrollTop <= 0 : node.scrollTop + box.height >= node.scrollHeight - EPSILON;
+      if (!atEdge) return true;
+    }
+    if (wheel.x !== 0 && scrollsAlong(node, style.overflowX, node.scrollWidth, box.width)) {
+      const atEdge =
+        wheel.x < 0 ? node.scrollLeft <= 0 : node.scrollLeft + box.width >= node.scrollWidth - EPSILON;
+      if (!atEdge) return true;
+    }
+    node = node.parentElement;
+  }
+  return false;
+}
+
+/** Firefox reports a textarea's computed overflow as `visible` while the textarea still scrolls its
+ *  own text, so a textarea counts as scrollable unless the app hides or clips it. */
+function scrollsAlong(node: HTMLElement, overflow: string, scrollSize: number, clientSize: number): boolean {
+  const scrolls =
+    overflow === 'auto' ||
+    overflow === 'scroll' ||
+    (node instanceof HTMLTextAreaElement && overflow !== 'hidden' && overflow !== 'clip');
+  return scrolls && scrollSize > clientSize + EPSILON;
 }

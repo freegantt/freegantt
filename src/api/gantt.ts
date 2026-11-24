@@ -27,7 +27,23 @@ import type {
   RowSort,
   Overscan,
 } from '../layout/index.js';
-import type { DateLine, DateLineLabelPlacement } from '../layout/index.js';
+import type {
+  DateLine,
+  DateLineLabelPlacement,
+  RowHeight,
+  RowContext,
+  RowHeightContext,
+  RowHeightResolver,
+  LaneRule,
+  HeaderTickContext,
+  HeaderTickPaint,
+  HeaderTickRenderer,
+  TickLines,
+  TodayLineAt,
+  TodayHighlight,
+  TodayHighlightSpec,
+  ResolvedTodayHighlight,
+} from '../layout/index.js';
 import type {
   BarLabels,
   ConnectorRouting,
@@ -161,6 +177,34 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  `ctx.disposables`. `false`: off, no clock read. An `InstantInput` pins it with no clock read at
    *  all. To keep today visible, pan with `panToToday()` or grow `range`. */
   todayLine?: boolean | InstantInput;
+  /** Live. Where the clock-driven today line sits inside today. `'now'` is the clock instant.
+   *  `'dayCenter'` is the middle of today's calendar day in the Dataset zone, so a day column holds
+   *  the line at its center. A pinned `todayLine` Instant ignores it. Default `'now'`. */
+  todayLineAt?: TodayLineAt;
+  /** Live. Default `false`. Tints one finest header tick: the tick of the finest header band that
+   *  holds today, or the preset tick when the preset has no header band. `true` paints it under the
+   *  bars. `{ layer: 'overBars' }` paints it over the bars, for opaque bars. Colour, border and
+   *  minimum width: `--fg-today-highlight-bg`, `--fg-today-highlight-border`,
+   *  `--fg-today-highlight-min-width`. Part: `.fg-today-highlight`. */
+  todayHighlight?: TodayHighlight;
+  /** Live. Default `'tick'`: one body line per finest header tick. `{ unit: 'week' }` draws one line
+   *  per week start under a day-wide header. `'none'` draws no line. */
+  tickLines?: TickLines;
+  /** Live. Default: `--fg-row-height`. A number sets one height in px for every Row. A function
+   *  answers per Row, once per layout pass, from the Row's Entry, kind and depth:
+   *  `rowHeight: (ctx) => (ctx.depth === 0 ? 48 : 40)`. Give a height above 0. Any other answer
+   *  falls back to the default. Bars centre in their Row. */
+  rowHeight?: RowHeight;
+  /** Live. Which Rows hold Lanes: `{ count: (entry) => 2, of: (entry) => 0 }`. A Row with n Lanes
+   *  grows to `2 * --fg-lane-padding + n * --fg-lane-height + (n - 1) * --fg-lane-gap`, unless
+   *  `rowHeight` answers taller. An empty Lane still counts. The Row draws one empty `.fg-lane` guide
+   *  per Lane. Lane size comes from the tokens only. */
+  lanes?: LaneRule;
+  /** Live. Draws and flags one header tick. `undefined` from the function keeps the library text.
+   *  `content` replaces the tick's text. `flags` become `data-flag` tokens, for example `'off'` for a
+   *  day the consumer's own calendar calls non-working. The library adds `'today'` itself, to the
+   *  tick that holds today. The context holds `band`, `tick`, `time`, `locale` and `rangeStart`. */
+  headerTickRenderer?: HeaderTickRenderer;
   /** Live (S1.13). Default `[]`. Extra Date lines beside the today wrapper —
    *  status/as-of dates, sprint or holiday markers, project start/finish. No id: index-keyed, like
    *  Header bands. The wrapper's own line never gets a Date line label; give one of these a `label` instead. */
@@ -368,7 +412,22 @@ export type { ActedOn, CommandTarget };
 // explicitly imports it beside `DateLineInput`, its loose counterpart above.
 export type { DateLine };
 // `dateLineLabelPlacement`'s own type (#318 follow-up), passed through the same way.
-export type { DateLineLabelPlacement };
+export type {
+  DateLineLabelPlacement,
+  HeaderTickContext,
+  HeaderTickPaint,
+  HeaderTickRenderer,
+  LaneRule,
+  RowHeight,
+  RowContext,
+  RowHeightContext,
+  RowHeightResolver,
+  TickLines,
+  TodayLineAt,
+  TodayHighlight,
+  TodayHighlightSpec,
+  ResolvedTodayHighlight,
+};
 
 export class Gantt<TProps = unknown> {
   #shell: GanttShell;
@@ -408,6 +467,12 @@ export class Gantt<TProps = unknown> {
         'locale',
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
+        'todayLineAt',
+        'todayHighlight',
+        'tickLines',
+        'rowHeight',
+        'headerTickRenderer',
+        'lanes',
         'capabilities',
         'pointerActivation',
         'snap',
@@ -428,6 +493,8 @@ export class Gantt<TProps = unknown> {
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
+      ...(options.todayLineAt !== undefined ? { todayLineAt: options.todayLineAt } : {}),
+      ...(options.todayHighlight !== undefined ? { todayHighlight: options.todayHighlight } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
       // Applied inside the shell's own constructor, ahead of `paintFirstFrame()` below, so a
       // plugin's `view()` reads the real starting selection back through `ctx.gantt` (ADR 0032).
@@ -970,10 +1037,66 @@ export class Gantt<TProps = unknown> {
     return this.#shell.todayLine;
   }
 
+  /** Live. See `GanttOptions.todayLineAt`. */
+  get todayLineAt(): TodayLineAt {
+    return this.#shell.todayLineAt;
+  }
+
+  /** Live. See `GanttOptions.todayHighlight`. The getter returns the normal form: `false`, or
+   *  `{ layer }`. `true` reads back as `{ layer: 'underBars' }`. */
+  get todayHighlight(): ResolvedTodayHighlight {
+    return this.#shell.todayHighlight;
+  }
+
+  set todayHighlight(value: TodayHighlight) {
+    this.#shell.todayHighlight = value;
+  }
+
+  /** Live. See `GanttOptions.tickLines`. */
+  get tickLines(): TickLines {
+    return this.#shell.tickLines;
+  }
+
+  set tickLines(lines: TickLines) {
+    this.#shell.tickLines = lines;
+  }
+
+  /** Live. See `GanttOptions.lanes`. */
+  get lanes(): LaneRule | undefined {
+    return this.#shell.lanes;
+  }
+
+  set lanes(rule: LaneRule | undefined) {
+    this.#shell.lanes = rule;
+  }
+
+  /** Live. See `GanttOptions.headerTickRenderer`. */
+  get headerTickRenderer(): HeaderTickRenderer | undefined {
+    return this.#shell.headerTickRenderer;
+  }
+
+  set headerTickRenderer(renderer: HeaderTickRenderer | undefined) {
+    this.#shell.headerTickRenderer = renderer;
+  }
+
+  /** Live. See `GanttOptions.rowHeight`. */
+  get rowHeight(): RowHeight {
+    return this.#shell.rowHeight;
+  }
+
+  set rowHeight(height: RowHeight) {
+    this.#shell.rowHeight = height;
+  }
+
   /** Live (S1.12/S1.13). `true`/`false` pass straight through; any other
    *  `InstantInput` is read once through the dataset's zone and pins the line with no clock read. */
   set todayLine(on: boolean | InstantInput) {
     this.#shell.todayLine = this.#toTodayLine(on);
+  }
+
+  /** Live. See `GanttOptions.todayLineAt`. */
+  set todayLineAt(at: TodayLineAt) {
+    this.#shell.todayLineAt = at;
   }
 
   /** Getter returns what was resolved (S4-1), same precedent as `todayLine`/`range` above: every

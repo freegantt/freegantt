@@ -3,8 +3,6 @@
 // keeps, and reads back a `RowDropZone`. `view/row-drop-target.ts` turns that zone into a Tree
 // place; this file only answers "where is the pointer", never "what does that mean".
 
-import type { RowHeightIndex } from './row-height-index.js';
-
 /** Which third of a row the pointer is over. A `childrenAsSegments` row is `into` over its whole
  *  height — it has no before/after edge of its own, its children live inside it. */
 export type RowDropSide = 'before' | 'into' | 'after';
@@ -39,12 +37,21 @@ export const ROW_CHANGE_THRESHOLD_PX = 4;
  *  between two rows when the previous zone named the row on the other side of it. */
 export const DROP_ZONE_HYSTERESIS_PX = 3;
 
+/** What the zone reads about row geometry. `topAt` and `indexAtY` count a row's Row detail, so a
+ *  pointer over a detail names its row. `rowHeightAt` is the row's own band, without the detail. */
+export interface RowDropHeights {
+  indexAtY(y: number): number;
+  topAt(index: number): number;
+  rowHeightAt(index: number): number;
+  readonly totalHeight: number;
+}
+
 export interface RowDropZoneInput {
   /** Content-y of the pointer, in the same space `heights` measures. */
   readonly y: number;
   /** The row the grabbed bar sits on — that row is always `sourceRow`, never `before`/`into`/`after`. */
   readonly sourceRowIndex: number;
-  readonly heights: Pick<RowHeightIndex, 'indexAtY' | 'topAt' | 'heightAt' | 'totalHeight'>;
+  readonly heights: RowDropHeights;
   readonly rowCount: number;
   /** True for a row whose children draw as bars on it rather than rows of their own
    *  (`childrenAsSegments`) — such a row has no before/after edge, it is `into` everywhere. */
@@ -75,12 +82,12 @@ export function rowDropZoneAt(input: RowDropZoneInput, previous: RowDropZone): R
   }
 
   const top = heights.topAt(rowIndex);
-  const height = heights.heightAt(rowIndex);
+  const height = heights.rowHeightAt(rowIndex);
   const offset = y - top;
 
   if (
     previous.kind === ROW_DROP_ZONE_KIND.sourceRow &&
-    insideSourceDeadZone(rowIndex, sourceRowIndex, offset, height)
+    insideSourceDeadZone(rowIndex, sourceRowIndex, offset, heights.topAt(rowIndex + 1) - top)
   ) {
     return previous;
   }
@@ -95,6 +102,10 @@ export function rowDropZoneAt(input: RowDropZoneInput, previous: RowDropZone): R
     return previous;
   }
 
+  // Under the row's own band lies its Row detail. A drop there lands after the row, even on a row
+  // that is `into` everywhere else.
+  if (offset >= height) return sameZone(previous, { kind: 'row', rowIndex, side: 'after' });
+
   if (takesWholeRowInto(rowIndex)) {
     return sameZone(previous, { kind: 'row', rowIndex, side: 'into' });
   }
@@ -108,15 +119,16 @@ export function rowDropZoneAt(input: RowDropZoneInput, previous: RowDropZone): R
 }
 
 /** True while the pointer, having just left the source row, still sits within
- *  `ROW_CHANGE_THRESHOLD_PX` of the edge that faces it — the source row's own dead zone. */
+ *  `ROW_CHANGE_THRESHOLD_PX` of the edge that faces it — the source row's own dead zone. `step` is
+ *  the room the neighbour takes, its Row detail included, so the edge is the neighbour's far side. */
 function insideSourceDeadZone(
   rowIndex: number,
   sourceRowIndex: number,
   offset: number,
-  height: number,
+  step: number,
 ): boolean {
   if (rowIndex === sourceRowIndex + 1) return offset < ROW_CHANGE_THRESHOLD_PX;
-  if (rowIndex === sourceRowIndex - 1) return height - offset < ROW_CHANGE_THRESHOLD_PX;
+  if (rowIndex === sourceRowIndex - 1) return step - offset < ROW_CHANGE_THRESHOLD_PX;
   return false;
 }
 
@@ -130,7 +142,7 @@ function insideLastRowDeadZone(
   sourceRowIndex: number,
   rowCount: number,
   y: number,
-  heights: Pick<RowHeightIndex, 'totalHeight'>,
+  heights: Pick<RowDropHeights, 'totalHeight'>,
 ): boolean {
   const lastRowIndex = rowCount - 1;
   const overflow = y - heights.totalHeight;

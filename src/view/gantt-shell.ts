@@ -4,6 +4,7 @@
 import {
   barSpan,
   FrameLayout,
+  type RowBox,
   TimeScaleModel,
   Viewport,
   createVariantRegistry,
@@ -12,11 +13,19 @@ import {
   isTimeUnit,
   nestsRows,
   resolveRowSource,
+  resolveTodayHighlight,
   rowDropZoneAt,
 } from '../layout/index.js';
 import type {
   DateLine,
   DateLineLabelPlacement,
+  TickLines,
+  TodayLineAt,
+  TodayHighlight,
+  ResolvedTodayHighlight,
+  RowHeight,
+  LaneRule,
+  HeaderTickRenderer,
   Overscan,
   PresetRef,
   RowSource,
@@ -49,6 +58,9 @@ import type {
 } from '../layout/index.js';
 import type { EntryRulePorts } from '../layout/entry-rule.js';
 
+import { RowLayoutWatch } from './row-layout-watch.js';
+import { RowDetails } from './row-details.js';
+import type { RowDetailsPorts } from './row-details.js';
 import { createDomBackend } from '../render/dom/index.js';
 import { readPixelProperty } from '../render/dom/pixel-property.js';
 import { PaneLayout } from './pane-layout.js';
@@ -80,7 +92,7 @@ import { registerCoreCommands } from './core-commands.js';
 import type { CoreCommandPorts } from './core-commands.js';
 import { Keymap } from '../extensions/keymap.js';
 import { DisposableStore } from '../extensions/disposables.js';
-import { attachScroll } from './scroll-attachment.js';
+import { attachScroll, contentScrollsForWheel } from './scroll-attachment.js';
 import type { ScrollAttachment } from './scroll-attachment.js';
 import { attachPaneSize } from './pane-size-attachment.js';
 import type { PaneSizeAttachment } from './pane-size-attachment.js';
@@ -108,6 +120,7 @@ import {
   entryIdOfBar,
   entryId,
   barId,
+  rowId,
   spansTime,
 } from '../model/index.js';
 import type {
@@ -350,6 +363,18 @@ export interface GanttShellOptions {
   locale?: Intl.LocalesArgument;
   /** Live. Default `true`. */
   todayLine?: boolean | Instant;
+  /** Live. Default `'now'`. */
+  todayLineAt?: TodayLineAt;
+  /** Live. Default `false`. */
+  todayHighlight?: TodayHighlight;
+  /** Live. Default `'tick'`. */
+  tickLines?: TickLines;
+  /** Live. One height in px for every Row, or a function that answers per Row. Default: `--fg-row-height`. */
+  rowHeight?: RowHeight;
+  /** Live. Which Rows hold Lanes. A Row with Lanes grows to hold them; see `--fg-lane-height`. */
+  lanes?: LaneRule;
+  /** Live. Draws and flags one header tick. Default: the library text. */
+  headerTickRenderer?: HeaderTickRenderer;
   /** Live. Default `[]`. */
   dateLines?: readonly DateLine[];
   /** Live. See `GanttOptions.dateLineLabelPlacement`. Default `DEFAULT_DATE_LINE_LABEL_PLACEMENT`
@@ -623,6 +648,7 @@ export class GanttShell {
   #columnChrome!: ColumnChrome;
   #wheelNavigation: WheelNavigationAttachment | undefined;
   #wheelNavigationGrid: WheelNavigationAttachment | undefined;
+  #wheelNavigationSpan: WheelNavigationAttachment | undefined;
   #rowTwistyAttachment: RowTwistyAttachment;
   /** One long-lived, mutable per-Gantt object. `applyState` diffs against what it painted
    *  last. So writing into this and calling `#backend.applyState` allocates nothing per hover or
@@ -791,6 +817,23 @@ export class GanttShell {
   /** #158: the grid's own row layer, where a plugin mounts content that must scroll with the rows.
    *  Constructed beside the overlay, and for the same reason. */
   #rowLayer: DomMountLayer;
+  /** The layer that spans both panes and follows the rows' vertical scroll. */
+  #fullWidthRowLayer: DomMountLayer;
+  /** Tells a plugin when a row top or height moved (`ctx.view.onRowLayout`). */
+  #rowLayoutWatch = new RowLayoutWatch((error) =>
+    this.#raiseError(
+      {
+        code: 'row-layout-listener-failed',
+        message: `An onRowLayout listener threw: ${error instanceof Error ? error.message : String(error)}`,
+        severity: 'error',
+        by: 'core',
+        cause: error,
+      },
+      () => console.error('FreeGantt: an onRowLayout listener threw', error),
+    ),
+  );
+  /** The content plugins present under a Row (`ctx.view.presentRowDetail`). Built with the panes. */
+  #rowDetails!: RowDetails;
   /** Review N1/A3: this Gantt's own rendered DOM, as questions a plugin asks through `ctx.view.dom`.
    *  Constructed beside the overlay, and for the same reason. */
   #dom: ContainerDom;
@@ -817,6 +860,9 @@ export class GanttShell {
     // plugin runtime (just below) builds its first `PluginContext`.
     this.#containerResize = new ContainerResize(this.#container);
     this.#teardown.add(() => this.#containerResize.destroy());
+    this.#teardown.add(() => this.#rowLayoutWatch.destroy());
+    this.#rowDetails = new RowDetails(this.#rowDetailsPorts());
+    this.#teardown.add(() => this.#rowDetails.destroy());
     this.#overlay = new DomMountLayer(
       this.#panes.overlay,
       () => this.#paneLayout.overlayBounds(),
@@ -827,6 +873,20 @@ export class GanttShell {
       () => this.#paneLayout.rowLayerBounds(),
       this.#containerResize,
     );
+    this.#fullWidthRowLayer = new DomMountLayer(
+      this.#panes.fullWidthRowLayer,
+      () => this.#paneLayout.rowSpanBounds(),
+      this.#containerResize,
+    );
+    // Content a plugin mounts here owns its keys and its text. The container's keymap, pan and edit
+    // handlers never see a key typed in it. The container blocks a double-click word range and a
+    // text selection. Those guards never see a press or a selection inside the layer. So a user can
+    // still double-click a word, or drag a selection, in the panel's input.
+    const keepInRowSpan = (event: Event): void => event.stopPropagation();
+    for (const type of ['keydown', 'mousedown', 'selectstart']) {
+      this.#panes.fullWidthRowLayerClip.addEventListener(type, keepInRowSpan);
+      this.#teardown.add(() => this.#panes.fullWidthRowLayerClip.removeEventListener(type, keepInRowSpan));
+    }
     this.#dom = new ContainerDom({
       container: this.#container,
       paneLayout: this.#paneLayout,
@@ -907,6 +967,7 @@ export class GanttShell {
       grid: this.#panes.rows,
       timeline: this.#panes.timeline,
       gridHeader: this.#panes.gridHeader,
+      fullWidthRowLayer: this.#panes.fullWidthRowLayer,
     });
 
     // Built before the plugin runtime. Core commands register into this during this
@@ -934,7 +995,11 @@ export class GanttShell {
     // The timeline pane is the single native scroller; the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in),
     // so this field is never undefined during a render.
-    this.#scrollAttachment = attachScroll(this.#panes.timeline, this.#viewport);
+    this.#scrollAttachment = attachScroll(
+      this.#panes.timeline,
+      this.#viewport,
+      this.#refreshPaneSizeWhenChanged,
+    );
     this.#teardown.add(() => this.#scrollAttachment.detach());
 
     // bind() fires its own onChange synchronously, once per sub-model (bind always
@@ -1188,6 +1253,7 @@ export class GanttShell {
       // Gantt's own `barLabels`. A merge needs the row's own variant, and only an Entry names one.
       resolveBarLabelPolicy: (entry) =>
         resolveBarLabelPolicy(this.#frameSettings.barLabels, this.variantFor(entry).barLabels),
+      resolveBarUnstyled: (entry) => this.variantFor(entry).unstyled,
       readDateLineLabelPlacement: () => this.#frameSettings.dateLineLabelPlacement,
       // ADR 0018: a variant's own `paint` first, because it names the rows it covers. Then
       // `barRenderer`, the catch-all for every bar no variant paints — which is what the retired
@@ -1315,10 +1381,7 @@ export class GanttShell {
       // `rowTop`/`barsForEntry` answering about the row `expandableOfRow` just found, not the last
       // painted frame's.
       expandableOfRow: (id) => {
-        this.#layout.ensureRowPlan(this.#rowPlanInput(), {
-          rowHeight: this.#frameSettings.rowHeight,
-          registry: this.#registrations.variants,
-        });
+        this.#planRows();
         return this.#layout.expandableOfRow(id);
       },
     };
@@ -1366,7 +1429,7 @@ export class GanttShell {
             heights: {
               indexAtY: (y) => this.#layout.rowIndexAtY(y),
               topAt: (index) => this.#layout.rowTop(index),
-              heightAt: (index) => this.#layout.rowHeightAt(index),
+              rowHeightAt: (index) => this.#layout.rowHeightAt(index),
               totalHeight: this.#contentSize.height,
             },
             rowCount: this.#layout.rowCount,
@@ -1594,6 +1657,25 @@ export class GanttShell {
       forwardPlainWheel: true,
     });
     this.#teardown.add(() => this.#wheelNavigationGrid?.detach());
+    // The full-width row layer sits over both panes. A wheel over its content scrolls the rows and pans
+    // the timeline, as it does over a pane. Content that scrolls by itself keeps its wheel.
+    // A shift wheel turns its vertical delta into a horizontal one, so the check follows that.
+    const spanClip = this.#panes.fullWidthRowLayerClip;
+    this.#wheelNavigationSpan = attachWheelNavigation(spanClip, wheelNavigationCtx, {
+      anchorPane: this.#panes.timeline,
+      forwardPlainWheel: true,
+      forwardHorizontalWheel: true,
+      contentTakesWheel: (event) =>
+        contentScrollsForWheel(
+          event.target,
+          spanClip,
+          event.shiftKey
+            ? { x: event.deltaX !== 0 ? event.deltaX : event.deltaY, y: 0 }
+            : { x: event.deltaX, y: event.deltaY },
+          (element) => this.#paneLayout.clientBoxOf(element),
+        ),
+    });
+    this.#teardown.add(() => this.#wheelNavigationSpan?.detach());
   }
 
   /** Which root does an ancestor's `data-fg-theme` pin live on? */
@@ -1819,6 +1901,54 @@ export class GanttShell {
 
   set todayLine(on: boolean | Instant) {
     this.#frameSettings.set({ todayLine: on });
+  }
+
+  get todayLineAt(): TodayLineAt {
+    return this.#frameSettings.todayLineAt;
+  }
+
+  set todayLineAt(at: TodayLineAt) {
+    this.#frameSettings.set({ todayLineAt: at });
+  }
+
+  get todayHighlight(): ResolvedTodayHighlight {
+    return this.#frameSettings.todayHighlight;
+  }
+
+  set todayHighlight(value: TodayHighlight) {
+    this.#frameSettings.set({ todayHighlight: resolveTodayHighlight(value) });
+  }
+
+  get tickLines(): TickLines {
+    return this.#frameSettings.tickLines;
+  }
+
+  set tickLines(lines: TickLines) {
+    this.#frameSettings.set({ tickLines: lines });
+  }
+
+  get lanes(): LaneRule | undefined {
+    return this.#frameSettings.lanes;
+  }
+
+  set lanes(rule: LaneRule | undefined) {
+    this.#frameSettings.set({ lanes: rule });
+  }
+
+  get headerTickRenderer(): HeaderTickRenderer | undefined {
+    return this.#frameSettings.headerTickRenderer;
+  }
+
+  set headerTickRenderer(renderer: HeaderTickRenderer | undefined) {
+    this.#frameSettings.set({ headerTickRenderer: renderer });
+  }
+
+  get rowHeight(): RowHeight {
+    return this.#frameSettings.rowHeightRule;
+  }
+
+  set rowHeight(height: RowHeight) {
+    this.#frameSettings.set({ rowHeight: height });
   }
 
   get dateLines(): readonly DateLine[] {
@@ -2227,8 +2357,7 @@ export class GanttShell {
       plannedRows: () => this.#layout.plannedRows(),
       columnKeys: () => this.#columnChrome.resolvedColumns.map((column) => column.field),
       rowIdForEntry: (id) => this.#layout.rowIdForEntry(id),
-      rowsPerPage: () =>
-        Math.max(1, Math.floor(this.#viewport.visible.height / this.#frameSettings.rowHeight)),
+      rowsPerPage: () => this.#rowsInWindow(),
       collapseRow: (id) => this.#treeCollapse.collapse(id),
       expandRow: (id) => this.#treeCollapse.expand(id),
       selectOnFocus: (hit) => this.#entrySelection.propose(this.#entrySelection.selectableEntriesOf(hit)),
@@ -2239,7 +2368,7 @@ export class GanttShell {
           x: this.#viewport.scroll.x.state.position,
           y,
           width: 0,
-          height: this.#frameSettings.rowHeight,
+          height: this.#rowHeightAtIndex(index),
         });
         this.#frames.flush();
       },
@@ -2285,6 +2414,13 @@ export class GanttShell {
       invalidateBars: () => this.#layout.invalidateFrom(0),
       readPixelProperty: (property, policy) => readPixelProperty(this.#container, property, policy),
       datasetLocale: () => this.#options.dataset.locale,
+      reportHeaderTickFailure: (error) => {
+        const message = 'headerTickRenderer threw — falling back to the library label';
+        this.#raiseError(
+          { code: 'renderer-failed', message, severity: 'warning', by: 'core', cause: error },
+          () => console.error(`FreeGantt: ${message}`, error),
+        );
+      },
     };
   }
 
@@ -2299,6 +2435,14 @@ export class GanttShell {
       headerRenderer: options.headerRenderer,
       tooltipRenderer: options.tooltipRenderer,
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
+      ...(options.todayLineAt !== undefined ? { todayLineAt: options.todayLineAt } : {}),
+      ...(options.todayHighlight !== undefined
+        ? { todayHighlight: resolveTodayHighlight(options.todayHighlight) }
+        : {}),
+      ...(options.tickLines !== undefined ? { tickLines: options.tickLines } : {}),
+      ...(options.rowHeight !== undefined ? { rowHeight: options.rowHeight } : {}),
+      ...(options.lanes !== undefined ? { lanes: options.lanes } : {}),
+      ...(options.headerTickRenderer !== undefined ? { headerTickRenderer: options.headerTickRenderer } : {}),
       ...(options.dateLines !== undefined ? { dateLines: options.dateLines } : {}),
       ...(options.dateLineLabelPlacement !== undefined
         ? { dateLineLabelPlacement: options.dateLineLabelPlacement }
@@ -2324,6 +2468,10 @@ export class GanttShell {
       raiseError: this.#raiseError,
       overlay: this.#overlay,
       rowLayer: this.#rowLayer,
+      fullWidthRowLayer: this.#fullWidthRowLayer,
+      rowBox: (id) => this.#rowBox(id),
+      presentRowDetail: (id, content) => this.#rowDetails.present(id, content),
+      onRowLayout: (callback) => this.#rowLayoutWatch.onChange(callback),
       dom: this.#dom,
       commands: this.#commandRegistry,
       keymap: this.#keymap,
@@ -3048,7 +3196,7 @@ export class GanttShell {
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.y.state.position;
     // `width: 0` at the current x reads as "already visible" to `Viewport.reveal`. This moves
     // only y — the same no-op-on-x idiom `#rovingFocusPorts`'s own `revealRow` above already uses.
-    this.#viewport.reveal({ x, y, width: 0, height: this.#frameSettings.rowHeight });
+    this.#viewport.reveal({ x, y, width: 0, height: this.#rowHeightAtIndex(rowIndex) });
   }
 
   /** Reveals the whole Entry: the union of the painted extents of every Bar it draws (#295). An
@@ -3083,7 +3231,24 @@ export class GanttShell {
 
   #revealRect(rowIndex: number, x: number, width: number): void {
     const y = rowIndex >= 0 ? this.#layout.rowTop(rowIndex) : this.#viewport.scroll.y.state.position;
-    this.#viewport.reveal({ x, y, width, height: this.#frameSettings.rowHeight });
+    this.#viewport.reveal({ x, y, width, height: this.#rowHeightAtIndex(rowIndex) });
+  }
+
+  /** The painted height of the row at `index`, so a reveal brings the whole Row into view. An index
+   *  with no row (a filter hides the Entry) answers the default Row height. */
+  #rowHeightAtIndex(index: number): number {
+    return index >= 0 && index < this.#layout.rowCount
+      ? this.#layout.rowHeightAt(index)
+      : this.#frameSettings.rowHeight;
+  }
+
+  /** How many rows the visible window spans, counted by the pixels it covers. A page of rows follows
+   *  a `rowHeight` function and a Row detail, which a mean row height cannot say. At least one. */
+  #rowsInWindow(): number {
+    const { y, height } = this.#viewport.visible;
+    const count = this.#layout.rowCount;
+    const lastRow = y + height >= this.#contentSize.height ? count : this.#layout.rowIndexAtY(y + height);
+    return Math.max(1, lastRow - this.#layout.rowIndexAtY(y));
   }
 
   /** Every plugin registration seam returns a `Disposer` that removes exactly its own registration
@@ -3232,15 +3397,65 @@ export class GanttShell {
    *  overlapped it in the first place. */
   #applyPaneMeasurement(size: Size): void {
     this.#paneBox = size;
+    this.#paneLayout.publishTimelinePaneBox();
     this.#frameSettings.refreshPixelProperties();
     this.#applyRowsViewportSize();
   }
+
+  /** Reads the pane box now, and applies it when the size observer has not reported it yet. A scroll
+   *  that lands in the frame that resized the pane needs the new size before it clamps. */
+  #refreshPaneSizeWhenChanged = (): void => {
+    const size = this.#paneLayout.measureTimelinePane();
+    if (size.width === this.#paneBox.width && size.height === this.#paneBox.height) return;
+    this.#applyPaneMeasurement(size);
+  };
 
   /** The rows' own viewport is the pane box minus the header. The timeline pane's header sticks to
    *  the pane's top, and covers that band of rows for the whole scroll. The grid pane's rows clip
    *  below its spacer for the same reason. Reporting the full pane box left the scroll model one
    *  header short of the true extent. The last row could then never scroll fully into view. */
+  /** Where one row sits, planned fresh, so a row a write just added answers before the next frame. */
+  #rowBox(id: string): RowBox | undefined {
+    this.#planRows();
+    return this.#layout.rowBox(id);
+  }
+
+  /** Brings the layout up to date with every write since the last frame, without painting one. A Row
+   *  detail the plugin presented since then counts, so the Rows below it answer at their new place. */
+  #planRows(): void {
+    this.#rowDetails.measurePending();
+    this.#layout.ensureRowPlan(this.#rowPlanInput(), {
+      rowHeight: this.#frameSettings.rowHeight,
+      ...this.#frameSettings.rowHeightFunction(),
+      rowDetailHeights: this.#rowDetails.heights,
+      registry: this.#registrations.variants,
+    });
+  }
+
+  /** What `RowDetails` borrows from this Gantt to mount, measure and place content under a Row. */
+  #rowDetailsPorts(): RowDetailsPorts {
+    return {
+      layer: this.#panes.fullWidthRowLayer,
+      rowIdOf: (id) => {
+        this.#planRows();
+        return this.#layout.rowIdForEntry(entryId(id)) ?? rowId(id);
+      },
+      rowDetailTop: (id) => this.#layout.rowDetailTop(id),
+      measure: (wrapper) => this.#paneLayout.measureRowDetailHeight(wrapper),
+      visibleWindow: () => ({ top: this.#viewport.visible.y, height: this.#viewport.visible.height }),
+      panBy: (dy) => this.#panBy(0, dy),
+      revealRange: (top, height) => {
+        this.#viewport.reveal({ x: this.#viewport.scroll.x.state.position, y: top, width: 0, height });
+        this.#frames.flush();
+      },
+      paintNow: () => this.#frames.flush(),
+      requestPaint: () => this.#frames.request(),
+      focusRow: (id) => this.#rovingFocus.focusRow(id),
+    };
+  }
+
   #applyRowsViewportSize(): void {
+    this.#paneLayout.syncRowSpanTop();
     this.#viewportHandle.setPaneSize({
       width: this.#paneBox.width,
       height: this.#rowsViewportHeight(),
@@ -3289,6 +3504,7 @@ export class GanttShell {
       connectorProviders: this.#registrations.connectorProviders(),
       datasetRevision: this.#options.dataset.datasetRevision,
       entryRulePorts: this.#entryRulePorts,
+      rowDetailHeights: this.#rowDetails.heights,
       // #421 C5: fresh every frame, never cached on the Bar — `barLabels: 'repaint'`
       // (`frame-settings.ts`'s own `INVALIDATION` table) is what this resolver honours.
       barLabelFor: (entry) => this.#labelFor(entry),
@@ -3324,6 +3540,7 @@ export class GanttShell {
     if (this.#frameSettings.barRenderer !== undefined) {
       this.#reportBarRendererShadowed(this.#frameSettings.barRenderer, this.#options.dataset.entries.all);
     }
+    this.#rowDetails.measurePending();
     const barPreviews = this.#barPreviewsForFrame();
     this.#paintedBarPreviews = barPreviews;
     const frame = this.#layout.computeFrame(this.#layoutInput(this.#revision++, barPreviews));
@@ -3333,13 +3550,21 @@ export class GanttShell {
     this.#paneLayout.gridPattern = nestsRows(this.#frameSettings.rowSource) ? 'treegrid' : 'grid';
     this.#paneLayout.setGridSize(frame.rowCount, frame.columns.length);
     this.#backend.sync(frame);
+    this.#rowDetails.placeAll();
+    this.#rowLayoutWatch.settle({
+      planRevision: this.#layout.rowPlanRevision,
+      rowCount: frame.rowCount,
+      contentHeight: frame.contentHeight,
+      heightIndexRevision: this.#layout.heightIndexRevision,
+    });
     this.#lastBarById.clear();
     for (const bar of frame.bars) this.#lastBarById.set(bar.id, bar);
     // The grid pane's spacer mirrors the header's own band count. So both panes resolve
     // their header height from the same `--fg-band-height` expression, and cannot drift.
     // A changed band stack is a changed header height, and the rows' viewport is the pane box minus
     // that. So this re-derives the viewport here, rather than waiting for the next pane resize.
-    if (this.#paneLayout.setHeaderBandCount(frame.header.bands.length)) this.#applyRowsViewportSize();
+    if (this.#paneLayout.setHeaderBands(frame.header.bands.map((band) => band.heightPx)))
+      this.#applyRowsViewportSize();
     this.#contentSize = { width: frame.contentWidth, height: frame.contentHeight };
     this.#viewportHandle.setContentSize(this.#contentSize);
     // #440: does a neighbour share our axis? If so this pane holds its width steady, so the two

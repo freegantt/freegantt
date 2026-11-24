@@ -93,3 +93,43 @@ test('the last row scrolls fully into view — the pane scrolls its header as we
   });
   expect(overshoot).toBeLessThanOrEqual(1);
 });
+
+// A group row keeps its stripe and its state colours until the app sets --fg-group-row-bg. Set, the
+// token replaces the stripe only: hover and selection still win.
+test.describe('a group row', () => {
+  const groupRow = '#gantt .fg-grid-pane .fg-row[data-parent]';
+
+  test('keeps its parity stripe and shows hover while --fg-group-row-bg is unset', async ({ page }) => {
+    await page.goto('/hierarchy-and-timeline.html');
+    const row = page.locator(groupRow).first();
+    await expect(row).toBeVisible();
+    const stripe = await row.evaluate((el) => {
+      const probe = document.createElement('div');
+      probe.className = 'fg-row';
+      probe.dataset['parity'] = el.dataset['parity'] ?? 'even';
+      el.parentElement!.append(probe);
+      const colour = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return colour;
+    });
+    expect(await row.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(stripe);
+    await row.hover();
+    await expect(row).toHaveAttribute('data-state', /hovered/);
+    const hover = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue('--fg-row-hover-bg'),
+    );
+    expect(hover).not.toBe('');
+    expect(await row.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(stripe);
+  });
+
+  test('takes --fg-group-row-bg in place of the stripe, and still shows hover', async ({ page }) => {
+    await page.goto('/hierarchy-and-timeline.html');
+    const row = page.locator(groupRow).first();
+    await expect(row).toBeVisible();
+    await page.addStyleTag({ content: '#gantt { --fg-group-row-bg: rgb(1, 2, 3); }' });
+    expect(await row.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(1, 2, 3)');
+    await row.hover();
+    await expect(row).toHaveAttribute('data-state', /hovered/);
+    expect(await row.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe('rgb(1, 2, 3)');
+  });
+});

@@ -60,7 +60,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-row-height` | `36px` | `pixel-property.ts`, re-read on every pane measurement |
 | `--fg-grid-pane-width` | `160px` | `pixel-property.ts`, read once at construction |
 | `--fg-splitter-width` | `4px` | `pixel-property.ts` |
-| `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired — see below) |
+| `--fg-band-height` | `24px` | `.fg-band` / `.fg-tick` CSS (`--fg-header-height` retired — see below). A header's own `heightPx` in the preset wins over this token. Order: preset `heightPx`, then token, then default |
 | `--fg-tick-box-floor` | `9px` | `.fg-tick` padding calc + `pixel-property.ts` into `LayoutInput.tickBoxFloorPx` |
 | `--fg-bar-min-width` | `12px` | `pixel-property.ts` into `LayoutInput.minBarWidthPx` — every bar's painted-span floor; `FrameBar.span: 'minimum'` / `data-span="minimum"` mark a bar this floor touched. A Bar that carries its own `box` skips this floor entirely — `FrameBar.span: 'fixed'` / `data-span="fixed"` mark it instead, and its width is the box's own `widthPx`, never this token |
 | `--fg-connector-arrow-size` | `8px` | Edge of the connector arrowhead. The Gantt reads it when the arrowhead first shows, so set it before `connectorArrow` is `'end'`. |
@@ -69,6 +69,9 @@ not a consumer's to set" below for the four channels.
 | `--fg-port-width` | `var(--fg-connector-port-coarse-width)` | The width one port uses now. The sheet sets it from `--fg-connector-port-width`, or from the coarse width on a coarse pointer. Set the two tokens above, not this one. |
 | `--fg-connector-port-gap` | `4px` | The space between the bar edge and its port. It keeps the resize handle free; set it to half the handle width |
 | `--fg-connector-port-coarse-width` | `32px` | `.fg-connector-port` width on a coarse pointer, such as a finger |
+| `--fg-lane-height` | `30px` | `pixel-property.ts` into the Lane geometry. One Lane's height. Read only when `lanes` is set |
+| `--fg-lane-gap` | `6px` | `pixel-property.ts`. Space between two Lanes of one Row. `0` is allowed |
+| `--fg-lane-padding` | `10px` | `pixel-property.ts`. Space above the first and below the last Lane. `0` is allowed |
 | `--fg-bar-height` | `18px` | `pixel-property.ts` into `LayoutInput.barHeightPx` — a bar's own painted height, independent of `--fg-row-height`; centres in its row |
 | `--fg-bar-radius` | `4px` | `.fg-bar` CSS rule directly (not `pixel-property.ts` — a border-radius, not a layout number) |
 | `--fg-column-width` | `120px` | `column-chrome.ts`, re-read on every column rebind — the width a column takes when neither its own `width` nor its Field's `column.width` names one |
@@ -79,6 +82,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
 | `--fg-bar-label-gap` | `8px` | `pixel-property.ts`, read once at `mount()` — `.fg-bar-label` inline padding, and the gap between a bar's right edge and an outside label |
 | `--fg-z-overlay` | `3` | `.fg-overlay` CSS rule directly (not `pixel-property.ts` — a stacking position, not a layout number). Set above every internal layer (the grid header, the timeline header, a dragged column header, the date cursor line) so a mounted `.fg-popup` — a tooltip or a `contextMenu()` — always paints, and hit-tests, above them. Raise it further when this Gantt sits inside a consumer's own stacking context |
+| `--fg-full-width-row-layer-top` | `0px` | `.fg-full-width-row-layer-clip` top edge. The Gantt writes it: the header height, so the clip starts under the header. Do not set it. |
 
 ### Colour and shadow tokens
 
@@ -107,6 +111,42 @@ not a consumer's to set" below for the four channels.
 | `--fg-warn` | `#B4690E` | `#E0A340` | `.fg-bar[data-flag~="conflict"]` outline; the invalid cell editor's ring and discard button; `.fg-cell-notice`'s border and text |
 | `--fg-date-line-color` | `#C93820` | `#FF6F57` | `.fg-date-line`, `.fg-date-line-label`, `.fg-cursor-line`, `.fg-cursor-line-label` |
 | `--fg-date-line-label-color` | `#FFFFFF` | `#1B1D22` | `.fg-date-line-label`, `.fg-cursor-line-label` text — the chip's own ink, paired with `--fg-date-line-color` as its fill |
+| `--fg-today-highlight-bg` | `oklch(0.55 0.13 245 / 0.07)` | `oklch(0.72 0.13 245 / 0.08)` | `.fg-today-highlight` — the tint of the finest tick that holds today. Shows only when `todayHighlight` is on. Over the bars, use a translucent colour |
+| `--fg-today-highlight-border` | `none` | — | `.fg-today-highlight` `border` shorthand, for example `1px solid #C93820` |
+| `--fg-today-highlight-min-width` | `0px` | — | `.fg-today-highlight` `min-width`. It keeps a narrow tick visible. The band grows to the right |
+| `--fg-today-line-color` | `var(--fg-date-line-color)` | — | `.fg-date-line[data-flag='today']` stroke colour. Unset, the Today line follows `--fg-date-line-color` |
+| `--fg-today-line-width` | `1px` | — | `.fg-date-line[data-flag='today']` stroke width. The line stays centred on its instant |
+| `--fg-today-line-opacity` | `1` | — | `.fg-date-line[data-flag='today']` opacity |
+| `--fg-today-line-animation` | `none` | — | `.fg-date-line[data-flag='today']` animation. The keyframes `fg-today-glow` exist only for a reader who accepts motion, so `fg-today-glow 2.8s ease-in-out infinite` moves nothing under `prefers-reduced-motion: reduce` |
+| `--fg-twisty-glyph-collapsed` | `'▸'` | — | `.fg-row-twisty` glyph while the row is collapsed |
+| `--fg-twisty-glyph-expanded` | `'▾'` | — | `.fg-row-twisty` glyph while the row is expanded |
+| `--fg-twisty-rotation-expanded` | `0deg` | — | `.fg-row-twisty` turn while expanded. With one glyph in both tokens, `90deg` gives a chevron that turns |
+| `--fg-twisty-transition` | `none` | — | `.fg-row-twisty` transition for that turn |
+| `--fg-twisty-gap` | `0px` | — | Space between `.fg-row-twisty` and the label |
+| `--fg-group-row-bg` | `var(--fg-row-stripe-bg)` | — | `.fg-row` and `.fg-row-band` of a group row: a row that holds children, or a header row. Not set, the row keeps its stripe. Set, it replaces the stripe only. Hover, selection and a refused drop still show |
+| `--fg-group-row-border` | `0 solid transparent` | — | The same rows' `border-top`. Set `1px solid <colour>` for a hairline between groups |
+| `--fg-twisty-icon` | `none` | — | `.fg-row-twisty` icon as a mask image, for example `url(chevron.svg)`. Pair it with `--fg-twisty-icon-color: currentColor`, and set both glyph tokens to `''` |
+| `--fg-twisty-icon-color` | `transparent` | — | The fill under the mask. `currentColor` gives the chevron the label colour |
+| `--fg-twisty-icon-size` | `auto` | — | `.fg-row-twisty` icon box size, for example `14px` |
+| `--fg-twisty-icon-align` | `baseline` | — | `.fg-row-twisty` icon vertical alignment. Use `middle` to center an icon on the label text |
+| `--fg-col-header-padding-inline` | `var(--fg-cell-padding-inline, 10px)` | — | `.fg-col-header` inline padding. Not set, it reads `--fg-cell-padding-inline`. A row cell always keeps `--fg-cell-padding-inline` |
+| `--fg-col-header-padding-block` | `var(--fg-cell-padding-block, 4px)` | — | `.fg-col-header` block padding. Not set, it reads `--fg-cell-padding-block`. A shorthand is allowed: `0 10px` is no top and 10px bottom |
+| `--fg-col-header-align` | `center` | — | `.fg-col-header` cross-axis alignment. `flex-end` sits the label on the header's bottom edge |
+| `--fg-col-header-transform` | `none` | — | `.fg-col-header` `text-transform` |
+| `--fg-col-header-tracking` | `normal` | — | `.fg-col-header` `letter-spacing` |
+| `--fg-col-header-font-size` | `inherit` | — | `.fg-col-header` font size |
+| `--fg-col-header-font-weight` | `inherit` | — | `.fg-col-header` font weight |
+| `--fg-band-font-size` | `inherit` | — | `.fg-band` font size |
+| `--fg-band-font-weight` | `inherit` | — | `.fg-band` font weight |
+| `--fg-tick-font-size` | `inherit` | — | `.fg-tick` font size. A smaller size lets a two-digit date fit a narrow column |
+| `--fg-tick-font-weight` | `inherit` | — | `.fg-tick` font weight |
+| `--fg-tick-edge-color` | `var(--fg-header-divider-color)` | `var(--fg-header-divider-color)` | `.fg-tick` left edge line. Set `transparent` to draw no line between ticks |
+| `--fg-tick-off-bg` | `transparent` | `transparent` | `.fg-tick` background when `headerTickRenderer` flags it `off` |
+| `--fg-tick-today-bg` | `transparent` | `transparent` | `.fg-tick` background on the finest-band tick that holds today |
+| `--fg-tick-today-color` | `var(--fg-header-subtext)` | `var(--fg-header-subtext)` | `.fg-tick` text colour on that tick |
+| `--fg-lane-bg` | `transparent` | — | `.fg-lane` guide fill |
+| `--fg-lane-border` | `transparent` | — | `.fg-lane` guide 1px border colour |
+| `--fg-lane-radius` | `6px` | — | `.fg-lane` guide corner radius |
 | `--fg-hover-ring` | `rgb(26 24 21 / 0.22)` | `rgb(236 234 227 / 0.26)` | `.fg-bar[data-state~="hovered"]` — the hovered bar's inset hairline |
 | `--fg-drag-shadow` | `0 2px 0 rgb(26 24 21 / 0.18)` | `0 2px 0 rgb(0 0 0 / 0.45)` | `.fg-bar[data-state~="dragging"]` — the dragged bar's lift |
 | `--fg-selection-color` | `oklch(0.55 0.13 245)` | `oklch(0.72 0.13 245)` | `.fg-bar[data-state~="selected"]` outline, offset 2px off the bar (pending uses the same token, dotted); the column reorder drop indicator; the open cell editor's ring |
@@ -193,14 +233,37 @@ that overrides `--fg-bar-fill` on one bar element sees its own override in the m
 and the override sit at the same element. `--fg-bar-opacity` itself stays declared on `.fg-container`
 and inherits down unchanged, so one setting still covers every bar.
 
+### Output tokens — the library writes, you read
+
+Two `--fg-*` properties are outputs. The Gantt writes them. A consumer reads them and never sets them. A value you set is overwritten at the next size change.
+This is the opposite of `--fg-grid-pane-width`. You set that one, and the Gantt reads it once.
+
+| Token | Value | Written on |
+|---|---|---|
+| `--fg-timeline-pane-left` | The visible left edge of the Timeline pane, in px. It counts from the left edge of the full-width row layer. | `.fg-full-width-row-layer` |
+| `--fg-timeline-pane-width` | The visible width of the Timeline pane, in px. A vertical scrollbar is not part of it. | `.fg-full-width-row-layer` |
+
+The Gantt writes both on mount. It writes them again each time the Timeline pane changes size: a splitter drag, a window resize or a vertical scrollbar that appears. It writes nothing when the values stay the same.
+Every child of the full-width row layer inherits them. So does every Row detail wrapper. That layer spans the container, and so does a Row detail wrapper. So the left value also counts from the left edge of a Row detail.
+Use them to line content up with the timeline columns:
+
+```css
+.my-row-detail-timeline {
+  margin-left: var(--fg-timeline-pane-left);
+  width: var(--fg-timeline-pane-width);
+}
+```
+
+The tokens give no value outside the full-width row layer. A popup in the overlay layer does not inherit them.
+
 ### Internal tokens — not a consumer's to set
 
-Six `--fg-*` properties are the library's own plumbing, not a consumer's to set. Five are geometry
+Seven `--fg-*` properties are the library's own plumbing, not a consumer's to set. Five are geometry
 the library writes inline, per element, because a stylesheet rule alone cannot express it — setting
 one by hand fights the next frame, which overwrites it. The sixth, `--fg-bar-fill-painted`, is
 different: the base stylesheet computes it on `.fg-bar` itself, from `--fg-bar-fill` and
 `--fg-bar-opacity` (see the note above) — a consumer sets the two colour tokens that feed it, never
-this one.
+this one. The seventh, `--fg-row-stripe-bg`, is the same kind: each row sets it to its parity stripe, so a group row keeps that stripe while `--fg-group-row-bg` is not set.
 
 | Token | Written by | Read by |
 |---|---|---|
@@ -209,6 +272,7 @@ this one.
 | `--fg-row-depth` | `render/dom/index.ts`, per row — the row's hierarchy depth | `.fg-row-label` indent calc (with `--fg-indent-width`, above) |
 | `--fg-drop-line-depth` | `render/dom/index.ts`, on the grid pane's `.fg-drop-line` — the target place's tree depth during a vertical drag | `.fg-drop-line` indent calc (with `--fg-indent-width`, above) — the timeline instance resets it to 0 (full width) |
 | `--fg-popup-max-height` | `popup.ts`, on the popup wrapper — the anchor pane's height minus the popup's 1px top and bottom border | `.fg-popup` `max-height` (falls back to `none`) |
+| `--fg-row-stripe-bg` | `.fg-row` and `.fg-row-band`'s own CSS rules (`styles.ts`) — the row's parity stripe, from `--fg-row-odd-bg` or `--fg-row-even-bg` | `--fg-group-row-bg`'s fallback on a group row |
 | `--fg-bar-fill-painted` | `.fg-bar`'s own CSS rule (`styles.ts`), computed from `--fg-bar-fill` and `--fg-bar-opacity` | `.fg-bar` background |
 
 ### Retired and renamed tokens
@@ -244,6 +308,9 @@ rename.
 | `.fg-timeline-pane` | Right pane. Header, bars, decorations, date lines. |
 | `.fg-shared-axis` | On `.fg-timeline-pane` when this Gantt shares a `ScrollAxis` on `x`. Reserves a scrollbar gutter, so every pane on that axis keeps one width. Needs `scrollbar-gutter`; an engine without it falls back to today's behaviour, where the two panes stop up to a scrollbar's width apart. |
 | `.fg-splitter` | Drag handle between the two panes. |
+| `.fg-full-width-row-layer-clip` | Clip of the full-width row layer: as wide as both panes, below the header. It hides content that scrolled up under the header. `pointer-events: none` until mounted content opts in. |
+| `.fg-full-width-row-layer` | The full-width row layer inside the clip. It follows the rows' vertical scroll by one transform per frame, and never the horizontal pan. |
+| `.fg-row-detail` | The wrapper the Gantt puts around a Row detail, inside the full-width row layer. It sits under its Row, as wide as both panes. The Gantt measures it and moves it by a transform. It is `hidden` while its Row is collapsed, filtered or unknown. The background is `--fg-pane-bg`. |
 | `.fg-overlay` | Popup mount layer above both panes. `pointer-events: none` until a `.fg-popup` opts in. |
 | `.fg-grid-header` | Column header row in the grid pane. |
 | `.fg-col-header` | One column header cell. |
@@ -264,12 +331,13 @@ rename.
 | `.fg-image-cell` | `image()` img. |
 | `.fg-row-twisty` | Collapse control on a parent row. |
 | `.fg-header` | Sticky time header in the timeline pane. |
+| `.fg-lane` | One empty Lane guide inside a row band in the timeline pane. `aria-hidden`. Sized by `--fg-lane-*`. |
 | `.fg-band` | One header band. Height is `--fg-band-height`. |
 | `.fg-tick` | One tick label inside a band. |
 | `.fg-tick-line` | Vertical grid line in the timeline body. One per finest-band tick. |
 | `.fg-row-band` | Timeline copy of a grid row's zebra, hover, and selection paint. |
-| `.fg-bar` | One Bar. Every look wears this class, diamonds included. |
-| `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`. |
+| `.fg-bar` | One Bar. Every look wears this class, diamonds included. `data-unstyled` means the variant's `paint` owns the whole box, so the library draws no fill, border, radius or padding. |
+| `.fg-bar-label` | The bar's own text child. Hidden (`data-label='hidden'`) until its bar is wide enough, under `barLabels: 'insideOrNone'`, or until the next Bar in the lane leaves room, under `'outsideOrNone'`. |
 | `.fg-bar-handle` | Shared resize-handle pair, moved onto the resizable bar. |
 | `.fg-connector-copy` | The copy of the selected connector above the bars. It takes no pointer events. |
 | `.fg-connector-arrow` | The arrowhead shape inside the connector layer. `connectorArrow: 'none'` removes it. |
@@ -278,6 +346,7 @@ rename.
 | `.fg-connect-preview` | The line a connect drag draws from its source edge to the pointer. It carries `data-pending` while an async `beforeConnect` handler holds the drop. |
 | `.fg-bar-summary` | `summary()` glyph. CSS ships with the variant, not the base sheet. |
 | `.fg-bar-diamond` | `diamond()` glyph. CSS ships with the variant, not the base sheet. |
+| `.fg-today-highlight` | The tint of the finest tick that holds today. Drawn last in its layer, after the time-shading bands, when `todayHighlight` is on. `underBars` is the default layer. |
 | `.fg-date-line` | A Date line stroke, Today included. |
 | `.fg-date-line-label` | Date line chip. |
 | `.fg-cursor-line` | Hot-path cursor stroke under the pointer. |
@@ -391,12 +460,20 @@ the next layout pass owns the node.
 through `--fg-date-line-color` (`#C93820` light, `#FF6F57` dark), and `.fg-date-line-label` paints a
 filled chip from the same token. The Today line is visible out of the box, with no consumer CSS.
 
-**There is no Today-specific rule, and that is deliberate.** The library gives every date line the
-same stroke. It ships no separate style for the today line: Today is a Date line that carries
-`data-flag="today"`, and the base stylesheet has no rule that matches that flag. A consumer that
-wants the today line to look different reaches `.fg-date-line[data-flag='today']` and
-`.fg-date-line-label[data-flag='today']` — the stroke and the label are two elements, and each
-needs its own rule.
+**Today has four tokens and no more.** Today is a Date line that carries `data-flag="today"`. The base
+stylesheet adds one rule for that flag. It reads `--fg-today-line-color`, `--fg-today-line-width`,
+`--fg-today-line-opacity` and `--fg-today-line-animation`. Each default gives the plain 1px stroke, so the look does not change until
+a consumer sets a token. The label chip has no Today rule. A consumer that wants one writes
+`.fg-date-line-label[data-flag='today']`.
+
+**Where the line sits.** `todayLine: true` puts the line at the current instant. `todayLineAt: 'dayCenter'` puts it at the middle of the current day, so it sits in the middle of today's column on a
+day scale. `todayHighlight: true` tints that tick under the bars. `todayHighlight: { layer: 'overBars' }` tints it over the bars.
+
+**The glow respects reduced motion.** The `fg-today-glow` keyframes are defined only inside
+`@media (prefers-reduced-motion: no-preference)`. A reader who asks for less motion gets a still line.
+
+**Body lines.** `tickLines: 'tick'` (the default) draws a body line at every tick. `{ unit: 'week' }`
+draws one at each week start. `'none'` draws none.
 
 ### The harness's worked example
 

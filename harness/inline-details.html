@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeGantt harness — inline details</title>
+    <link rel="stylesheet" href="./harness-chrome.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="appbar">
+        <span class="appbar-mark">FreeGantt</span>
+        <nav class="harness-site-nav" aria-label="Harness pages"></nav>
+        <span class="appbar-spacer"></span>
+        <div class="harness-theme-picker"></div>
+      </header>
+      <main>
+        <div class="page-head">
+          <h1>Inline details</h1>
+          <p>
+            Click a task. A details panel opens under its row, as wide as the whole Gantt, and pushes the rows
+            below it down. Scroll and the panel stays with its row. Pan the timeline and the panel stays full
+            width. Click the task again, or Close, to shut it.
+          </p>
+        </div>
+        <div id="page-brief"></div>
+        <section class="workbench" aria-label="Inline details workbench">
+          <div id="gantt"></div>
+          <div class="statusbar">
+            <span class="readout" id="layout-readout">Row layout changes: 0</span>
+          </div>
+        </section>
+      </main>
+    </div>
+    <style>
+      .demo-details-panel {
+        box-sizing: border-box;
+        height: 132px;
+        padding: 12px 0;
+        background: var(--fg-pane-bg);
+        color: var(--fg-header-text);
+        border-block: 1px solid var(--fg-splitter-color);
+        box-shadow: inset 0 3px 6px rgb(0 0 0 / 8%);
+        user-select: text;
+      }
+      .demo-details-panel h3 {
+        margin: 0 16px 4px;
+        font-size: 14px;
+      }
+      /* Lines up under the timeline columns, whatever the splitter, scrollbar and window do. */
+      .demo-details-timeline-line {
+        box-sizing: border-box;
+        margin: 0 0 8px var(--fg-timeline-pane-left);
+        width: var(--fg-timeline-pane-width);
+        padding-left: 8px;
+        border-left: 2px solid var(--fg-header-divider-color);
+        font-size: 13px;
+        color: var(--fg-header-subtext);
+      }
+      .demo-details-panel input {
+        margin-left: 16px;
+      }
+      .demo-details-panel input,
+      .demo-details-panel textarea {
+        margin-right: 8px;
+        vertical-align: top;
+      }
+    </style>
+    <script type="module" src="./inline-details.ts"></script>
+  </body>
+</html>

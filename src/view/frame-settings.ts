@@ -25,6 +25,13 @@ import type {
   GridCellRenderer,
   DateLine,
   DateLineLabelPlacement,
+  TickLines,
+  TodayLineAt,
+  ResolvedTodayHighlight,
+  RowHeight,
+  LaneLayout,
+  LaneRule,
+  HeaderTickRenderer,
   FieldCompare,
   HeaderRenderer,
   LayoutInput,
@@ -40,6 +47,17 @@ const ROW_HEIGHT_PROPERTY = '--fg-row-height';
 export const DEFAULT_ROW_HEIGHT = 36;
 /** A zero-height row is not a row: only a positive value is an authored row height. */
 const ROW_HEIGHT_POLICY = { fallback: DEFAULT_ROW_HEIGHT, accepts: 'positive' } as const;
+
+const LANE_HEIGHT_PROPERTY = '--fg-lane-height';
+const LANE_GAP_PROPERTY = '--fg-lane-gap';
+const LANE_PADDING_PROPERTY = '--fg-lane-padding';
+export const DEFAULT_LANE_HEIGHT_PX = 30;
+export const DEFAULT_LANE_GAP_PX = 6;
+export const DEFAULT_LANE_PADDING_PX = 10;
+/** A zero-height Lane is not a Lane. A zero gap or padding is a real choice. */
+const LANE_HEIGHT_POLICY = { fallback: DEFAULT_LANE_HEIGHT_PX, accepts: 'positive' } as const;
+const LANE_GAP_POLICY = { fallback: DEFAULT_LANE_GAP_PX, accepts: 'zeroOrMore' } as const;
+const LANE_PADDING_POLICY = { fallback: DEFAULT_LANE_PADDING_PX, accepts: 'zeroOrMore' } as const;
 
 const TICK_BOX_FLOOR_PROPERTY = '--fg-tick-box-floor';
 /** A zero floor would re-open thin straddles painting at the CSS box minimum. */
@@ -61,6 +79,9 @@ interface PixelMetrics {
   tickBoxFloorPx: number;
   minBarWidthPx: number;
   barHeightPx: number;
+  laneHeightPx: number;
+  laneGapPx: number;
+  lanePaddingPx: number;
 }
 
 /** The four `--fg-*` properties this Gantt measures itself against. Each row carries the rule that
@@ -77,6 +98,9 @@ const PIXEL_PROPERTIES: readonly PixelPropertyRead[] = Object.freeze([
   { property: TICK_BOX_FLOOR_PROPERTY, policy: TICK_BOX_FLOOR_POLICY, metric: 'tickBoxFloorPx' },
   { property: MIN_BAR_WIDTH_PROPERTY, policy: MIN_BAR_WIDTH_POLICY, metric: 'minBarWidthPx' },
   { property: BAR_HEIGHT_PROPERTY, policy: BAR_HEIGHT_POLICY, metric: 'barHeightPx' },
+  { property: LANE_HEIGHT_PROPERTY, policy: LANE_HEIGHT_POLICY, metric: 'laneHeightPx' },
+  { property: LANE_GAP_PROPERTY, policy: LANE_GAP_POLICY, metric: 'laneGapPx' },
+  { property: LANE_PADDING_PROPERTY, policy: LANE_PADDING_POLICY, metric: 'lanePaddingPx' },
 ]);
 
 /** Default for `todayLineMarginTicks`: how many of the current preset's own ticks sit between the
@@ -107,6 +131,8 @@ export interface FrameSettingsPorts {
    *  own. Injected rather than imported, so this module never names `api/dataset.ts` (`view/` may
    *  not import `api/`). */
   datasetLocale(): Intl.LocalesArgument | undefined;
+  /** The consumer's `headerTickRenderer` threw. The frame goes on and the tick keeps the library label. */
+  reportHeaderTickFailure(error: unknown): void;
 }
 
 /** Every setting, with the value it currently holds. Five of them may honestly be unset, and say so
@@ -114,6 +140,12 @@ export interface FrameSettingsPorts {
 interface FrameSettingsValues {
   locale: Intl.LocalesArgument | undefined;
   todayLine: boolean | Instant;
+  todayLineAt: TodayLineAt;
+  todayHighlight: ResolvedTodayHighlight;
+  tickLines: TickLines;
+  headerTickRenderer: HeaderTickRenderer | undefined;
+  rowHeight: RowHeight | undefined;
+  lanes: LaneRule | undefined;
   dateLines: readonly DateLine[];
   dateLineLabelPlacement: DateLineLabelPlacement;
   todayLineMarginTicks: number;
@@ -146,6 +178,12 @@ function defaultSettings(): FrameSettingsValues {
   return {
     locale: undefined,
     todayLine: true,
+    todayLineAt: 'now',
+    todayHighlight: false,
+    tickLines: 'tick',
+    headerTickRenderer: undefined,
+    rowHeight: undefined,
+    lanes: undefined,
     dateLines: [],
     dateLineLabelPlacement: DEFAULT_DATE_LINE_LABEL_PLACEMENT,
     todayLineMarginTicks: DEFAULT_TODAY_LINE_MARGIN_TICKS,
@@ -172,6 +210,12 @@ function defaultSettings(): FrameSettingsValues {
 const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Object.freeze({
   locale: 'rebindFields',
   todayLine: 'repaint',
+  todayLineAt: 'repaint',
+  todayHighlight: 'repaint',
+  tickLines: 'repaint',
+  headerTickRenderer: 'repaint',
+  rowHeight: 'repaint',
+  lanes: 'repaint',
   dateLines: 'repaint',
   dateLineLabelPlacement: 'repaint',
   todayLineMarginTicks: 'none',
@@ -191,6 +235,7 @@ const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Obj
  *  Spelled in `LayoutInput`'s own words, which is why `rows` appears here and `rowSource` does not. */
 type SettingLayoutInputKey =
   | 'rowHeight'
+  | 'lanes'
   | 'connectorRouting'
   | 'connectorArrow'
   | 'tickBoxFloorPx'
@@ -198,6 +243,10 @@ type SettingLayoutInputKey =
   | 'barHeightPx'
   | 'locale'
   | 'todayLine'
+  | 'todayLineAt'
+  | 'todayHighlight'
+  | 'tickLines'
+  | 'headerTickRenderer'
   | 'dateLines'
   | 'rows'
   | 'fieldCompares'
@@ -211,13 +260,18 @@ export type PerFrameLayoutInput = Omit<LayoutInput, SettingLayoutInputKey>;
 export class FrameSettings {
   #ports: FrameSettingsPorts;
   #values: FrameSettingsValues = defaultSettings();
+  #guardedTick: { source: HeaderTickRenderer; guarded: HeaderTickRenderer } | undefined;
 
   #metrics: PixelMetrics = {
     rowHeight: DEFAULT_ROW_HEIGHT,
     tickBoxFloorPx: DEFAULT_TICK_BOX_FLOOR_PX,
     minBarWidthPx: DEFAULT_MIN_BAR_WIDTH_PX,
     barHeightPx: DEFAULT_BAR_HEIGHT_PX,
+    laneHeightPx: DEFAULT_LANE_HEIGHT_PX,
+    laneGapPx: DEFAULT_LANE_GAP_PX,
+    lanePaddingPx: DEFAULT_LANE_PADDING_PX,
   };
+  #laneLayout: LaneLayout | undefined;
 
   /** `initial` is written straight into the values, with no port call. A Gantt under construction
    *  has no columns to rebind and no frame to request yet, and it paints once at the end anyway. */
@@ -241,6 +295,22 @@ export class FrameSettings {
 
   get todayLine(): boolean | Instant {
     return this.#values.todayLine;
+  }
+
+  get todayLineAt(): TodayLineAt {
+    return this.#values.todayLineAt;
+  }
+
+  get todayHighlight(): ResolvedTodayHighlight {
+    return this.#values.todayHighlight;
+  }
+
+  get tickLines(): TickLines {
+    return this.#values.tickLines;
+  }
+
+  get headerTickRenderer(): HeaderTickRenderer | undefined {
+    return this.#values.headerTickRenderer;
   }
 
   get dateLines(): readonly DateLine[] {
@@ -287,9 +357,51 @@ export class FrameSettings {
     return this.#values.tooltipRenderer;
   }
 
-  /** Row height in px, from `--fg-row-height`. Read by keyboard row paging and by `reveal`. */
+  /** The default Row height in px: the number the consumer gave, else `--fg-row-height`. A number that
+   *  is not positive gives the token too, as the function path does. Keyboard row paging reads it. */
   get rowHeight(): number {
-    return this.#metrics.rowHeight;
+    const given = this.#values.rowHeight;
+    return typeof given === 'number' && Number.isFinite(given) && given > 0 ? given : this.#metrics.rowHeight;
+  }
+
+  /** The consumer's height function and Lane rule as `LayoutInput` spells them. Each is absent when
+   *  the consumer gave none. */
+  rowHeightFunction(): Pick<LayoutInput, 'rowHeightOf' | 'lanes'> {
+    const given = this.#values.rowHeight;
+    const lanes = this.#lanesLayout();
+    return {
+      ...(typeof given === 'function' ? { rowHeightOf: given } : {}),
+      ...(lanes !== undefined ? { lanes } : {}),
+    };
+  }
+
+  /** The Lane rule with the current geometry. The same object comes back until the rule or a
+   *  `--fg-lane-*` token changes, so the height index rebuilds only then. */
+  #lanesLayout(): LaneLayout | undefined {
+    const rule = this.#values.lanes;
+    if (rule === undefined) return undefined;
+    const { laneHeightPx: heightPx, laneGapPx: gapPx, lanePaddingPx: paddingPx } = this.#metrics;
+    const held = this.#laneLayout;
+    if (
+      held?.rule === rule &&
+      held.geometry.heightPx === heightPx &&
+      held.geometry.gapPx === gapPx &&
+      held.geometry.paddingPx === paddingPx
+    ) {
+      return held;
+    }
+    this.#laneLayout = { rule, geometry: { heightPx, gapPx, paddingPx } };
+    return this.#laneLayout;
+  }
+
+  /** What the consumer gave for `lanes`. */
+  get lanes(): LaneRule | undefined {
+    return this.#values.lanes;
+  }
+
+  /** What the consumer gave for `rowHeight`, or the default Row height when they gave nothing. */
+  get rowHeightRule(): RowHeight {
+    return this.#values.rowHeight ?? this.#metrics.rowHeight;
   }
 
   /** The settings half of `RowPlanInput` (#424) — `rows`/`fieldCompares`/`fieldContext`, spelled in
@@ -337,17 +449,41 @@ export class FrameSettings {
   toLayoutInput(perFrame: PerFrameLayoutInput): LayoutInput {
     return {
       ...perFrame,
-      rowHeight: this.#metrics.rowHeight,
+      rowHeight: this.rowHeight,
+      ...this.rowHeightFunction(),
       tickBoxFloorPx: this.#metrics.tickBoxFloorPx,
       minBarWidthPx: this.#metrics.minBarWidthPx,
       barHeightPx: this.#metrics.barHeightPx,
       todayLine: this.#values.todayLine,
+      todayLineAt: this.#values.todayLineAt,
+      todayHighlight: this.#values.todayHighlight,
+      tickLines: this.#values.tickLines,
+      ...(this.#values.headerTickRenderer !== undefined
+        ? { headerTickRenderer: this.#guardedHeaderTickRenderer(this.#values.headerTickRenderer) }
+        : {}),
       dateLines: this.#values.dateLines,
       connectorRouting: this.#values.connectorRouting,
       connectorArrow: this.#values.connectorArrow,
       ...this.rowPlanSettings(),
       ...(this.effectiveLocale !== undefined ? { locale: this.effectiveLocale } : {}),
     };
+  }
+
+  /** The consumer's tick renderer, wrapped so one throw reports and leaves that tick with the library
+   *  label. The same wrapper comes back until the renderer changes, because the tick paint cache
+   *  keeps its answers per renderer. */
+  #guardedHeaderTickRenderer(renderer: HeaderTickRenderer): HeaderTickRenderer {
+    if (this.#guardedTick?.source === renderer) return this.#guardedTick.guarded;
+    const guarded: HeaderTickRenderer = (context) => {
+      try {
+        return renderer(context);
+      } catch (error) {
+        this.#ports.reportHeaderTickFailure(error);
+        return undefined;
+      }
+    };
+    this.#guardedTick = { source: renderer, guarded };
+    return guarded;
   }
 
   /** Writes each key the patch carries and answers which ones actually changed value. A key the

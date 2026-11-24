@@ -9,6 +9,8 @@ import { placeConnectors, placeFrame } from './frame.js';
 import type { FrameConnector } from './connectors/frame-connector.js';
 import type { GeometryFrame, LayoutInput } from './frame.js';
 import { FrameMemory } from './frame-memory.js';
+import type { RowHeightResolver } from './row-height.js';
+import type { LaneLayout } from './lane.js';
 import { DecorationRunner } from './decorations.js';
 import { ConnectorRouter } from './connectors/connector-router.js';
 import type { PlannedRow, RowSource, UnindexedRow } from './rows/row-source.js';
@@ -30,6 +32,12 @@ import type { EntryRulePorts } from './entry-rule.js';
  *    in place (#187).
  *  - `collapsed` — `TreeCollapse` replaces its frozen id array on every change (`view/tree-collapse.ts`).
  *  - `entryRulePorts` — built once per Gantt. */
+/** One row's place in the content: `top` is its y from the first row, `height` its own height. */
+export interface RowBox {
+  readonly top: number;
+  readonly height: number;
+}
+
 export interface RowPlanInput {
   entries: readonly Entry[];
   datasetRevision: number;
@@ -49,6 +57,9 @@ type RowPlanInputKey = keyof RowPlanInput;
  *  own comment for why the sync itself is unconditional. */
 export interface RowPlanMemoryInput {
   rowHeight: number;
+  rowHeightOf?: RowHeightResolver;
+  lanes?: LaneLayout;
+  rowDetailHeights?: ReadonlyMap<RowId, number>;
   registry: VariantBars;
 }
 
@@ -108,6 +119,7 @@ export class FrameLayout implements FrameLayoutView {
   /** First planned row index for an entry, kept beside `#plan` so `rowIndexForEntry` never scans it
    *  (#528). Built once per replan in `#planRows`, not per lookup. */
   #rowIndexOfEntry = new Map<EntryId, number>();
+  #rowIndexOfRow = new Map<string, number>();
   #rowOfEntry = new Map<EntryId, RowId>();
   #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
@@ -140,14 +152,26 @@ export class FrameLayout implements FrameLayoutView {
     // than the last one did? A scroll or a pan never does — `visible`/`revision`/`rowHeight` are not
     // in `RowPlanInput` at all — so most frames skip straight to the cached `#plan` below, and
     // `rowPlanRevision` (bumped inside `ensureRowPlan`, not here) stays put too.
-    this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
+    this.ensureRowPlan(planInputFrom(input), {
+      rowHeight: input.rowHeight,
+      ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
+      ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
+      ...(input.rowDetailHeights !== undefined ? { rowDetailHeights: input.rowDetailHeights } : {}),
+      registry: input.variants,
+    });
     return placeFrame(input, this.#plan, this.#memory, this.#decorations, this.#connectors);
   }
 
   /** The connectors of a frame, with nothing else laid out. A drag preview asks for these on every
    *  animation frame: only the connectors with an end on a moved bar route again. */
   computeConnectors(input: LayoutInput): readonly FrameConnector[] {
-    this.ensureRowPlan(planInputFrom(input), { rowHeight: input.rowHeight, registry: input.variants });
+    this.ensureRowPlan(planInputFrom(input), {
+      rowHeight: input.rowHeight,
+      ...(input.rowHeightOf !== undefined ? { rowHeightOf: input.rowHeightOf } : {}),
+      ...(input.lanes !== undefined ? { lanes: input.lanes } : {}),
+      ...(input.rowDetailHeights !== undefined ? { rowDetailHeights: input.rowDetailHeights } : {}),
+      registry: input.variants,
+    });
     return placeConnectors(input, this.#plan, this.#memory, this.#connectors);
   }
 
@@ -179,6 +203,9 @@ export class FrameLayout implements FrameLayoutView {
     this.#memory.sync({
       plan: this.#plan,
       rowHeight: memory.rowHeight,
+      ...(memory.rowHeightOf !== undefined ? { rowHeightOf: memory.rowHeightOf } : {}),
+      ...(memory.lanes !== undefined ? { lanes: memory.lanes } : {}),
+      ...(memory.rowDetailHeights !== undefined ? { rowDetailHeights: memory.rowDetailHeights } : {}),
       entries: input.entries,
       registry: memory.registry,
       datasetRevision: input.datasetRevision,
@@ -200,11 +227,13 @@ export class FrameLayout implements FrameLayoutView {
     this.#indexPlanRows();
   }
 
-  /** Rebuilds `#rowIndexOfEntry` from `#plan` — the first row each entry appears in wins, matching
-   *  what a left-to-right scan of `#plan` would have found. */
+  /** Rebuilds `#rowIndexOfEntry` and `#rowIndexOfRow` from `#plan` — the first row each entry appears
+   *  in wins, matching what a left-to-right scan of `#plan` would have found. */
   #indexPlanRows(): void {
     this.#rowIndexOfEntry.clear();
+    this.#rowIndexOfRow.clear();
     this.#plan.forEach((row, index) => {
+      this.#rowIndexOfRow.set(row.id, index);
       for (const id of row.entryIds) {
         if (!this.#rowIndexOfEntry.has(id)) this.#rowIndexOfEntry.set(id, index);
       }
@@ -225,10 +254,32 @@ export class FrameLayout implements FrameLayoutView {
     return this.#memory.heights.indexAtY(y);
   }
 
-  /** The row-height index's own `heightAt`, exposed the same way `rowIndexAtY` is — a row drop zone
-   * needs a row's own height to place its before/into/after thirds. */
+  /** The row's own height, without its Row detail — the band its Bars and Lanes sit in. A row drop
+   * zone needs it to place its before/into/after thirds. */
   rowHeightAt(index: number): number {
-    return this.#memory.heights.heightAt(index);
+    return this.#memory.heightOfRow(index);
+  }
+
+  /** Where the Row detail of this row starts: the bottom of the row's own band, in the coordinates of
+   *  the content. Takes an Entry id or a row id, like `rowBox`. `undefined` for a row a collapsed
+   *  parent hides and for an id no plan holds. The caller plans first (`ensureRowPlan`). */
+  rowDetailTop(id: string): number | undefined {
+    const index = this.#indexOfRowOrEntry(id);
+    return index < 0 ? undefined : this.rowTop(index) + this.rowHeightAt(index);
+  }
+
+  #indexOfRowOrEntry(id: string): number {
+    return this.#rowIndexOfEntry.get(id as EntryId) ?? this.#rowIndexOfRow.get(id) ?? -1;
+  }
+
+  /** Where the row of this entry (or this row id, a header row's id too) starts, and how tall it is, in
+   *  the coordinates of the content: the same `top` the row paints at. Answers from the row-height index, so a row the
+   *  window has not drawn answers too. `undefined` for a row a collapsed parent hides, and for an id
+   *  no plan holds. The caller plans first (`ensureRowPlan`) when it needs a row this frame added. */
+  rowBox(id: string): RowBox | undefined {
+    const index = this.#indexOfRowOrEntry(id);
+    if (index < 0) return undefined;
+    return { top: this.rowTop(index), height: this.rowHeightAt(index) };
   }
 
   /** How many rows the current plan holds — a row drop zone's "past the last row" check

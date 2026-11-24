@@ -165,3 +165,80 @@ test('with the plugin-owned tree on, the same drag changes no row', async ({ pag
   await page.mouse.up();
   await expect.poll(() => parentIdOf('task-beta')).toBe(before);
 });
+
+test.describe('dense board controls', () => {
+  test('the lanes control gives Framing crew two lanes and leaves other rows alone', async ({ page }) => {
+    await gotoHierarchyAndTimeline(page);
+    await page.locator('#lanes-checkbox').check();
+    const crewBand = page.locator('#gantt .fg-row-band').filter({ has: page.locator('.fg-lane') });
+    await expect(crewBand).toHaveCount(1);
+    await expect(crewBand.locator('.fg-lane')).toHaveCount(2);
+  });
+
+  test('the tall parent rows control makes a parent row taller than a leaf row', async ({ page }) => {
+    await gotoHierarchyAndTimeline(page);
+    const bandHeight = async (entryId: string): Promise<number> => {
+      const rowId = await page
+        .locator(`#gantt .fg-row[data-entry-id="${entryId}"]`)
+        .getAttribute('data-row-id');
+      return page
+        .locator(`#gantt .fg-row-band[data-row-id="${rowId}"]`)
+        .evaluate((band) => band.getBoundingClientRect().height);
+    };
+    const leafBefore = await bandHeight('task-beta');
+    await page.locator('#tall-rows-checkbox').check();
+    await expect.poll(() => bandHeight('program')).toBe(leafBefore * 1.5);
+    expect(await bandHeight('task-beta')).toBe(leafBefore);
+  });
+
+  test('the header control aligns the month band to weeks and the flag control marks weekend ticks', async ({
+    page,
+  }) => {
+    await gotoHierarchyAndTimeline(page);
+    await page.locator('#header-preset').selectOption('aligned');
+    await page.locator('#weekend-flag-checkbox').check();
+    const monthBand = page.locator('#gantt .fg-band:has(.fg-tick)').first();
+    await expect.poll(() => monthBand.evaluate((band) => band.getBoundingClientRect().height)).toBe(30);
+    await expect(page.locator('#gantt .fg-tick[data-flag~="off"]').first()).toBeAttached();
+  });
+
+  test('the tick lines control switches between every tick, week starts and none', async ({ page }) => {
+    await gotoHierarchyAndTimeline(page);
+    await page.locator('#header-preset').selectOption('aligned');
+    const lines = page.locator('#gantt .fg-tick-line');
+    await expect(lines.first()).toBeAttached();
+    const everyTick = await lines.count();
+    await page.locator('#tick-lines-select').selectOption('week');
+    await expect.poll(() => lines.count()).toBeLessThan(everyTick);
+    await page.locator('#tick-lines-select').selectOption('none');
+    await expect(lines).toHaveCount(0);
+  });
+
+  test('the unstyled control draws the crew days with data-unstyled', async ({ page }) => {
+    await gotoHierarchyAndTimeline(page);
+    const crewDay = page.locator('#gantt .fg-bar[data-bar-id^="req-1-mon:"]');
+    await expect(crewDay).not.toHaveAttribute('data-unstyled', /.*/);
+    await page.locator('#unstyled-days-checkbox').check();
+    await expect(crewDay).toHaveAttribute('data-unstyled', /.*/);
+  });
+
+  test('the today highlight moves over the bars, and the line moves to the day center', async ({ page }) => {
+    await gotoHierarchyAndTimeline(page);
+    const underLayer = page.locator('#today-gantt .fg-decorations-under .fg-today-highlight');
+    const overLayer = page.locator('#today-gantt .fg-decorations-over .fg-today-highlight');
+    await expect(underLayer).toHaveCount(1);
+    await page.locator('#today-highlight-select').selectOption('overBars');
+    await expect(overLayer).toHaveCount(1);
+    await expect(underLayer).toHaveCount(0);
+    await page.locator('#today-highlight-select').selectOption('off');
+    await expect(overLayer).toHaveCount(0);
+
+    const lineLeft = (): Promise<number> =>
+      page
+        .locator('#today-gantt .fg-date-line[data-flag="today"]')
+        .evaluate((line) => line.getBoundingClientRect().left);
+    const before = await lineLeft();
+    await page.locator('#today-line-at-select').selectOption('dayCenter');
+    await expect.poll(lineLeft).not.toBe(before);
+  });
+});

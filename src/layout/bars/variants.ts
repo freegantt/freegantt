@@ -47,6 +47,8 @@ export interface ResolvedVariant extends DrawnVariant {
   /** What this variant's own bars print, and where — merged key by key over the Gantt's own
    *  `barLabels` (`mergeBarLabels`, #421 C5), or `undefined` for no opinion at this level. */
   readonly barLabels: BarLabels | undefined;
+  /** `true` when the `paint` owns the bar's whole box, and the library draws no fill, border, radius or padding. */
+  readonly unstyled: boolean;
 }
 
 /** One variant, as one object. A consumer installs it through `GanttOptions.variants`; a plugin
@@ -92,6 +94,10 @@ export interface EntryVariant<TProps = Record<string, unknown>> {
    *  and `{ field: 'hours' }` alone keeps the Gantt's own policy. Omit it for no opinion — every
    *  bar this variant draws then prints exactly what the Gantt's own `barLabels` says. */
   barLabels?: BarLabels;
+  /** `true`: the library paints no fill, border, radius or padding, so a `paint` owns the whole box,
+   *  as a badge or an icon does. Position, size, label placement and state rings stay the library's.
+   *  Default `false`. */
+  unstyled?: boolean;
 }
 
 /** Two rules from one source both matched one Entry. The newest paints; the older one is reported
@@ -401,6 +407,7 @@ export function createVariantRegistry(ports: VariantRegistryPorts): VariantRegis
         capabilities: variant.capabilities,
         css: variant.css,
         barLabels: variant.barLabels,
+        unstyled: variant.unstyled ?? false,
       },
       matches:
         variant.when === undefined

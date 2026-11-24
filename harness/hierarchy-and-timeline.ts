@@ -11,6 +11,7 @@ import {
   daysOfWeek,
   diffMs,
   inlineEditing,
+  now,
   spansTime,
   timeShading,
 } from 'freegantt';
@@ -23,7 +24,12 @@ import type {
   EntryVariant,
   Field,
   GridColumnInput,
+  HeaderTickRenderer,
+  LaneRule,
+  RowHeightResolver,
   RowSource,
+  TickLines,
+  ViewPreset,
 } from 'freegantt';
 import { hierarchyEntryInputs, hierarchyFieldOptions } from '../fixtures/hierarchy-dataset.js';
 import type { HierarchyEntryProps } from '../fixtures/hierarchy-dataset.js';
@@ -40,6 +46,7 @@ declare global {
     __dataset: Dataset;
     __gantt: Gantt;
     __owningParentGantt: Gantt;
+    __todayGantt: Gantt;
   }
 }
 
@@ -122,21 +129,44 @@ const STATUS_CHECK_LINE: DateLineInput = { placeAt: '2026-03-10', label: 'Status
 // answers it. Its label uses `insideOrNone` (#435): each day tile sits edge to edge with the next,
 // so a label too wide for its own tile paints no label at all, never one that spills into the
 // neighbour.
-const crewDayVariant: EntryVariant<HierarchyProps> = {
-  name: 'crew-day',
-  when: (entry) => entry.read('worker') !== undefined,
-  paint: ({ entry }) => ({
-    class: {
-      'crew-day-filled': entry.read('filled') === true,
-      'crew-day-open': entry.read('filled') !== true,
-    },
-  }),
-  barLabels: { field: 'worker', policy: 'insideOrNone' },
-  css: `
+type CrewDayLabelPolicy = 'insideOrNone' | 'outsideOrNone';
+
+/** The library draws the bar: fill, border and radius. `paint` only picks the class. */
+function crewDayVariant(policy: CrewDayLabelPolicy): EntryVariant<HierarchyProps> {
+  return {
+    name: 'crew-day',
+    when: (entry) => entry.read('worker') !== undefined,
+    paint: ({ entry }) => ({
+      class: {
+        'crew-day-filled': entry.read('filled') === true,
+        'crew-day-open': entry.read('filled') !== true,
+      },
+    }),
+    barLabels: { field: 'worker', policy },
+    css: `
     .crew-day-filled { background: var(--fg-bar-fill); }
     .crew-day-open { background: repeating-linear-gradient(45deg, var(--rule) 0, var(--rule) 6px, var(--surface-sunk) 6px, var(--surface-sunk) 12px); }
   `,
-};
+  };
+}
+
+/** The same day bars with `unstyled: true`: the library draws no fill, border or radius, so the
+ *  class below paints the whole pill. */
+function crewChipVariant(policy: CrewDayLabelPolicy): EntryVariant<HierarchyProps> {
+  return {
+    name: 'crew-chip',
+    unstyled: true,
+    when: (entry) => entry.read('worker') !== undefined,
+    paint: ({ entry }) => ({
+      class: { 'crew-chip': true, 'crew-chip-open': entry.read('filled') !== true },
+    }),
+    barLabels: { field: 'worker', policy },
+    css: `
+    .crew-chip { background: var(--fg-bar-fill); border-radius: 999px; }
+    .crew-chip-open { background: transparent; border: 2px dashed var(--fg-bar-fill); }
+  `,
+  };
+}
 
 const dataset = new Dataset<HierarchyProps>({
   entries: structuredClone([...hierarchyEntryInputs, OUT_OF_RANGE_BEFORE, ...GAP_DEMO_ENTRIES]),
@@ -162,6 +192,13 @@ const crewDaysBtn = document.querySelector<HTMLButtonElement>('#crew-days-btn')!
 const localeSelect = document.querySelector<HTMLSelectElement>('#locale-select')!;
 const rangeModeSelect = document.querySelector<HTMLSelectElement>('#range-mode')!;
 const dateLinesCheckbox = document.querySelector<HTMLInputElement>('#date-lines-checkbox')!;
+const lanesCheckbox = document.querySelector<HTMLInputElement>('#lanes-checkbox')!;
+const tallRowsCheckbox = document.querySelector<HTMLInputElement>('#tall-rows-checkbox')!;
+const headerPresetSelect = document.querySelector<HTMLSelectElement>('#header-preset')!;
+const weekendFlagCheckbox = document.querySelector<HTMLInputElement>('#weekend-flag-checkbox')!;
+const tickLinesSelect = document.querySelector<HTMLSelectElement>('#tick-lines-select')!;
+const unstyledDaysCheckbox = document.querySelector<HTMLInputElement>('#unstyled-days-checkbox')!;
+const labelPolicySelect = document.querySelector<HTMLSelectElement>('#label-policy-select')!;
 const selectionReadout = document.querySelector<HTMLParagraphElement>('#selection-readout')!;
 const log = document.querySelector<HTMLDivElement>('#log')!;
 
@@ -188,7 +225,7 @@ const gantt = new Gantt<HierarchyProps>({
   range: 'fitDataset',
   preset: 'weekAndMonth',
   plugins: [inlineEditing()],
-  variants: [crewDayVariant],
+  variants: [crewDayVariant('insideOrNone')],
   dateLines: [STATUS_CHECK_LINE],
 });
 
@@ -334,6 +371,123 @@ rangeModeSelect.addEventListener('change', () => {
 
 dateLinesCheckbox.addEventListener('change', () => {
   gantt.dateLines = dateLinesCheckbox.checked ? [STATUS_CHECK_LINE] : [];
+});
+
+// ---- Dense board: rows, header and bars. Each control writes one public option on the main Gantt. ----
+
+const FRAMING_CREW_ID = 'req-1';
+
+// Framing crew holds two Lanes, and an open day drops into the second one. Every other row has none.
+const framingCrewLanes: LaneRule = {
+  laneCount: (row) => (row.entry?.id === FRAMING_CREW_ID ? 2 : 0),
+  laneOf: (entry) => (entry.read('filled') === false ? 1 : 0),
+};
+
+// A parent row is taller than a leaf row. `defaultHeight` is `--fg-row-height`, so no pixel repeats here.
+const tallParentRows: RowHeightResolver = ({ entry, defaultHeight }) =>
+  entry?.hasChildren ? defaultHeight * 1.5 : defaultHeight;
+const defaultRowHeight: RowHeightResolver = ({ defaultHeight }) => defaultHeight;
+
+// The month band starts each cell on a week boundary, and it is taller than the bands below it.
+const DAY_BAND = 2;
+const alignedDayPreset: ViewPreset = {
+  id: 'dayWeekMonthAligned',
+  tickUnit: 'day',
+  tickIncrement: 1,
+  headers: [
+    { unit: 'month', increment: 1, format: { month: 'short' }, alignTo: 'week', heightPx: 30 },
+    { unit: 'week', increment: 1, format: { day: 'numeric', month: 'short' } },
+    { unit: 'day', increment: 1, format: { day: 'numeric' } },
+  ],
+  preferredTickWidthPx: 32,
+  minTickWidthPx: 28,
+};
+
+// A weekend day tick carries the `off` flag, and `--fg-tick-off-bg` shades it.
+const flagWeekendTicks: HeaderTickRenderer = ({ band, tick, time }) =>
+  band === DAY_BAND && time.dayOfWeek(tick.instant) >= 6 ? { flags: ['off'] } : undefined;
+
+const TICK_LINES: Readonly<Record<string, TickLines>> = {
+  tick: 'tick',
+  week: { unit: 'week' },
+  none: 'none',
+};
+
+function applyCrewDayVariant(): void {
+  const policy: CrewDayLabelPolicy =
+    labelPolicySelect.value === 'outsideOrNone' ? 'outsideOrNone' : 'insideOrNone';
+  gantt.variants = [unstyledDaysCheckbox.checked ? crewChipVariant(policy) : crewDayVariant(policy)];
+}
+
+lanesCheckbox.addEventListener('change', () => {
+  gantt.lanes = lanesCheckbox.checked ? framingCrewLanes : undefined;
+});
+
+tallRowsCheckbox.addEventListener('change', () => {
+  gantt.rowHeight = tallRowsCheckbox.checked ? tallParentRows : defaultRowHeight;
+});
+
+headerPresetSelect.addEventListener('change', () => {
+  gantt.preset = headerPresetSelect.value === 'aligned' ? alignedDayPreset : 'weekAndMonth';
+});
+
+weekendFlagCheckbox.addEventListener('change', () => {
+  gantt.headerTickRenderer = weekendFlagCheckbox.checked ? flagWeekendTicks : undefined;
+});
+
+tickLinesSelect.addEventListener('change', () => {
+  gantt.tickLines = TICK_LINES[tickLinesSelect.value] ?? 'tick';
+});
+
+unstyledDaysCheckbox.addEventListener('change', applyCrewDayVariant);
+labelPolicySelect.addEventListener('change', applyCrewDayVariant);
+
+// ---- Today: a small second Gantt built around the real today, so the highlight and the line are
+// on screen on any date. The main Gantt's March fixture sits far from it. ------------------------
+
+const DAY_MS = 86_400_000;
+const startOfToday = Math.floor(now() / DAY_MS) * DAY_MS;
+const aroundToday = (fromDay: number, toDay: number, id: string, name: string): EntryInput => ({
+  id,
+  name,
+  start: startOfToday + fromDay * DAY_MS,
+  end: startOfToday + toDay * DAY_MS,
+});
+
+const todayDataset = new Dataset({
+  entries: [
+    aroundToday(-3, 1, 'today-design', 'Design'),
+    aroundToday(-1, 3, 'today-build', 'Build'),
+    aroundToday(2, 5, 'today-ship', 'Ship'),
+  ],
+  timeZone: 'UTC',
+});
+
+const todayHighlightSelect = document.querySelector<HTMLSelectElement>('#today-highlight-select')!;
+const todayLineAtSelect = document.querySelector<HTMLSelectElement>('#today-line-at-select')!;
+
+const todayGantt = new Gantt({
+  container: '#today-gantt',
+  dataset: todayDataset,
+  gridColumns: ['name'],
+  range: 'fitDataset',
+  preset: 'day',
+  gridWidth: 'fitColumns',
+  todayLine: true,
+  todayLineAt: 'now',
+  todayHighlight: true,
+  a11yLabel: 'Today Gantt',
+});
+window.__todayGantt = todayGantt;
+
+todayHighlightSelect.addEventListener('change', () => {
+  const choice = todayHighlightSelect.value;
+  todayGantt.todayHighlight =
+    choice === 'off' ? false : { layer: choice === 'overBars' ? 'overBars' : 'underBars' };
+});
+
+todayLineAtSelect.addEventListener('change', () => {
+  todayGantt.todayLineAt = todayLineAtSelect.value === 'dayCenter' ? 'dayCenter' : 'now';
 });
 
 // ---- Owning parent (#470): a second Dataset, because `rollUp: 'none'` is a Field's own answer —

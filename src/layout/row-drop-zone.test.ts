@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DROP_ZONE_HYSTERESIS_PX, ROW_CHANGE_THRESHOLD_PX, rowDropZoneAt } from './row-drop-zone.js';
-import type { RowDropSide, RowDropZone, RowDropZoneInput } from './row-drop-zone.js';
+import type { RowDropHeights, RowDropSide, RowDropZone, RowDropZoneInput } from './row-drop-zone.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 
 // Every test below draws from a 10-row plan of uniform 32px rows, so a zone boundary sits at a
@@ -9,11 +9,21 @@ import { PrefixSumHeightIndex } from './row-height-index.js';
 const ROW_HEIGHT = 32;
 const ROW_COUNT = 10;
 
-function heights(): Pick<
-  import('./row-height-index.js').RowHeightIndex,
-  'indexAtY' | 'topAt' | 'heightAt' | 'totalHeight'
-> {
-  return new PrefixSumHeightIndex(ROW_COUNT, () => ROW_HEIGHT);
+/** Row geometry for rows of the given own heights, each followed by its Row detail height. */
+function heightsOf(rowHeights: readonly number[], details: readonly number[] = []): RowDropHeights {
+  const index = new PrefixSumHeightIndex(rowHeights.length, (i) => rowHeights[i]! + (details[i] ?? 0));
+  return {
+    indexAtY: (y) => index.indexAtY(y),
+    topAt: (i) => index.topAt(i),
+    rowHeightAt: (i) => rowHeights[i]!,
+    get totalHeight() {
+      return index.totalHeight;
+    },
+  };
+}
+
+function heights(): RowDropHeights {
+  return heightsOf(new Array<number>(ROW_COUNT).fill(ROW_HEIGHT));
 }
 
 const SOURCE_ROW: RowDropZone = { kind: 'sourceRow' };
@@ -131,7 +141,7 @@ describe('rowDropZoneAt', () => {
     // inside the hysteresis band a stale `previous.rowIndex` would otherwise hold onto.
     const previous: RowDropZone = { kind: 'row', rowIndex: 9, side: 'after' };
     const shrunkRowCount = 9;
-    const shrunkHeights = new PrefixSumHeightIndex(shrunkRowCount, () => ROW_HEIGHT);
+    const shrunkHeights = heightsOf(new Array<number>(shrunkRowCount).fill(ROW_HEIGHT));
     const zone = zoneAt(9 * ROW_HEIGHT - 1, previous, {
       rowCount: shrunkRowCount,
       heights: shrunkHeights,
@@ -180,5 +190,53 @@ describe('rowDropZoneAt', () => {
       ),
       { numRuns: 200 },
     );
+  });
+
+  describe('a Row detail under a row', () => {
+    // Row 2 holds a 100px detail: row 0 spans 0-32, row 1 32-64, row 2 64-96 plus detail 96-196, row 3 196-.
+    const details = [0, 0, 100];
+    const withDetail = (y: number, previous: RowDropZone, overrides: Partial<RowDropZoneInput> = {}) =>
+      zoneAt(y, previous, {
+        heights: heightsOf(new Array<number>(ROW_COUNT).fill(ROW_HEIGHT), details),
+        ...overrides,
+      });
+
+    it('a pointer over the detail is after that row', () => {
+      expect(withDetail(96, SOURCE_ROW)).toEqual({ kind: 'row', rowIndex: 2, side: 'after' });
+      expect(withDetail(150, SOURCE_ROW)).toEqual({ kind: 'row', rowIndex: 2, side: 'after' });
+      expect(withDetail(195, SOURCE_ROW)).toEqual({ kind: 'row', rowIndex: 2, side: 'after' });
+    });
+
+    it('the row below the detail starts at the end of the detail', () => {
+      expect(withDetail(196, SOURCE_ROW)).toEqual({ kind: 'row', rowIndex: 3, side: 'before' });
+    });
+
+    it('a childrenAsSegments row is still after over its detail', () => {
+      const takesWholeRowInto = (index: number) => index === 2;
+      expect(withDetail(64 + 4, SOURCE_ROW, { takesWholeRowInto })).toEqual({
+        kind: 'row',
+        rowIndex: 2,
+        side: 'into',
+      });
+      expect(withDetail(150, SOURCE_ROW, { takesWholeRowInto })).toEqual({
+        kind: 'row',
+        rowIndex: 2,
+        side: 'after',
+      });
+    });
+
+    it('the detail of the source row is sourceRow', () => {
+      expect(withDetail(150, SOURCE_ROW, { sourceRowIndex: 2 })).toEqual({ kind: 'sourceRow' });
+    });
+
+    it('the dead zone of the source row ends at the far side of a detail above it', () => {
+      // Source is row 3 (top 196). The pointer sits in row 2's detail, 2px above the source row.
+      expect(withDetail(194, SOURCE_ROW, { sourceRowIndex: 3 })).toEqual({ kind: 'sourceRow' });
+      expect(withDetail(150, SOURCE_ROW, { sourceRowIndex: 3 })).toEqual({
+        kind: 'row',
+        rowIndex: 2,
+        side: 'after',
+      });
+    });
   });
 });

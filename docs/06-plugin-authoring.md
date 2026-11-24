@@ -722,6 +722,81 @@ function marksFirstWeek() {
 export { marksFirstWeek };
 ```
 
+## Mount content in a layer
+
+A plugin mounts HTML in one of three layers through `ctx.view`. Each layer answers one question: what does the content follow?
+
+| Layer | Spans | Follows vertical scroll | Follows horizontal pan |
+| --- | --- | --- | --- |
+| `overlay` | The whole Gantt | No. A popup dismisses on scroll. | No |
+| `rowLayer` | The grid pane, clipped to it | Yes | Yes |
+| `fullWidthRowLayer` | Grid pane and timeline pane together, below the header | Yes | No |
+
+Each layer takes `present(content)` and gives back a disposer. `onResize` and `bounds` work the same on all three.
+`fullWidthRowLayer` hides content that scrolled up under the header. Pointer events pass through it, except on your content.
+A key pressed inside content in `fullWidthRowLayer` stays there. The Gantt's keymap and pan keys never run for it. A mouse press and a text selection inside it stay there too, so a user can select text in your input.
+A mouse wheel over that content scrolls the rows, and a sideways or Shift wheel pans the timeline, as over a pane. Content that scrolls by itself, such as a textarea, keeps the wheel until it reaches its edge.
+
+`ctx.view.rowBox(id)` returns `{ top, height }` for a row. `top` counts from the top of `fullWidthRowLayer`. It reads the layout, so a row scrolled out of the window answers. It returns `undefined` for a row a collapsed parent hides and for an unknown id.
+A row's top moves when a row height changes, a parent collapses or expands, a filter changes or data changes. `ctx.view.onRowLayout(callback)` tells you after the frame that moved a row, and the callback reads `rowBox` again. It never runs for a scroll, because a scroll moves no row top. It does not run for the frame painted when you register, so read `rowBox` once yourself. It gives back a disposer.
+
+### An inline panel under a row
+
+Call `ctx.view.presentRowDetail(rowId, content)`. The Gantt mounts `content` under that Row, as wide as both panes. The Gantt measures the content and pushes the rows below it down. The call gives back a disposer.
+
+```ts
+import { definePlugin } from 'freegantt';
+
+function detailsPanel() {
+  let present: (taskId: string) => () => void = () => () => {};
+  let close: () => void = () => {};
+
+  const plugin = definePlugin({
+    id: 'demo.detailsPanel',
+    view(ctx) {
+      present = (taskId) => {
+        const panel = document.createElement('section');
+        panel.textContent = 'Details';
+        return ctx.view.presentRowDetail(taskId, panel);
+      };
+    },
+  });
+
+  return Object.assign(plugin, {
+    open(taskId: string) {
+      close();
+      close = present(taskId);
+    },
+    close: () => close(),
+  });
+}
+```
+
+- The content sets its own height with CSS. A panel that grows or shrinks moves the rows below it.
+- A Row holds one detail. A second call for the same Row replaces the first.
+- The disposer removes the detail once. Focus inside the detail moves to its Row.
+- A Row that is collapsed, filtered or unknown keeps its detail mounted and hidden. It takes no space. The detail comes back at its last height.
+- A detail is not a Row and not an Entry. It has no ARIA row, no selection and no key path. Give the content its own role and label.
+- Keys, the mouse and the wheel work as in `fullWidthRowLayer`.
+
+#### Line up with the timeline
+
+The detail spans both panes. To put content under the timeline columns, use the two tokens the Gantt writes: `--fg-timeline-pane-left` and `--fg-timeline-pane-width`. The detail wrapper inherits them. They stay correct when a splitter drag, a window resize or a scrollbar moves the Timeline pane. They are read-only.
+
+```ts
+function timelineNote(text: string): HTMLElement {
+  const note = document.createElement('p');
+  note.textContent = text;
+  note.style.marginLeft = 'var(--fg-timeline-pane-left)';
+  note.style.width = 'var(--fg-timeline-pane-width)';
+  return note;
+}
+```
+
+Append the note to the detail content. Keep padding off the content itself, or the line starts inside that padding. See [Styling and theming](./10-styling-and-theming.md) for the tokens.
+
+`harness/` has a runnable version.
+
 ## Every registration seam
 
 All of these calls are legal only inside a plugin's own half. Each row

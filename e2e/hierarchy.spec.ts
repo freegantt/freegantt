@@ -39,6 +39,14 @@ async function rowIds(page: import('@playwright/test').Page): Promise<string[]> 
     .evaluateAll((nodes) => nodes.map((node) => (node as HTMLElement).dataset['rowId'] ?? ''));
 }
 
+test('the twisty sits on the text baseline when no twisty token is set', async ({ page }) => {
+  await gotoHierarchy(page);
+  const twisty = page.locator('#gantt .fg-row-twisty:not([hidden])').first();
+  await expect(twisty).toBeVisible();
+  const verticalAlign = await twisty.evaluate((node) => getComputedStyle(node, '::before').verticalAlign);
+  expect(verticalAlign).toBe('baseline');
+});
+
 test('twisty collapses a subtree and aria-expanded flips', async ({ page }) => {
   await gotoHierarchy(page);
 

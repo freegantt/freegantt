@@ -106,7 +106,7 @@ function heightsFor(rowCount: number) {
   return {
     indexAtY: (y: number) => Math.min(rowCount - 1, Math.max(0, Math.floor(y / ROW_HEIGHT))),
     topAt: (index: number) => index * ROW_HEIGHT,
-    heightAt: () => ROW_HEIGHT,
+    rowHeightAt: () => ROW_HEIGHT,
     totalHeight: rowCount * ROW_HEIGHT,
   };
 }

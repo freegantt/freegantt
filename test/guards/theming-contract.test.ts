@@ -57,7 +57,8 @@ function declarationsIn(block: string): Map<string, string> {
  *  when nothing sets it. This is how most structural/pixel tokens carry their default: not a bare
  *  declaration, but the second argument everywhere the sheet reads them back. */
 function varFallbacksIn(block: string): Map<string, string> {
-  const re = /var\((--fg-[\w-]+),\s*([^)]+)\)/g;
+  // One level of nested var() is allowed in the fallback: `var(--fg-x, var(--fg-y, 4px))`.
+  const re = /var\((--fg-[\w-]+),\s*((?:[^()]|\([^()]*\))+)\)/g;
   const found = new Map<string, string>();
   let match: RegExpExecArray | null;
   while ((match = re.exec(block))) found.set(match[1]!, match[2]!.trim());

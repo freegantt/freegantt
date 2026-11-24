@@ -51,6 +51,7 @@ export type {
   SnapSetting,
   Tick,
   HeaderFormat,
+  HeaderFormatContext,
   DateFormat,
 } from './scale.js';
 export {

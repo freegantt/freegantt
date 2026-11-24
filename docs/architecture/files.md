@@ -106,12 +106,16 @@ where they do something beyond re-export.
 | `layout/frame.ts` | `computeFrame(), GeometryFrame, LayoutInput, FrameRow/Bar/Header*, Overscan, DEFAULT_OVERSCAN` | The full pure layout pass: resolves rows, produces bars per row, culls to the visible window, and computes header ticks and date-line decorations. One call in → one `GeometryFrame` out. |
 | `layout/frame-layout.ts` | `FrameLayout` | The stateful wrapper that keeps a `RowHeightIndex` and per-row bar memo alive across renders. One instance per Gantt. |
 | `layout/frame-memory.ts` | `FrameMemory` | Holds one layout pass's cross-render memory — the `RowHeightIndex` plus a `Map` of per-row bar memos — so a later frame reuses geometry where the inputs did not change. |
+| `layout/row-height.ts` | `RowHeight, RowHeightContext, RowHeightResolver` | The types of the `rowHeight` option: one number for every Row, or a function that answers per Row. |
 | `layout/row-height-index.ts` | `RowHeightIndex, PrefixSumHeightIndex` | O(log n) prefix sums with binary search for `indexAtY`. Behind an interface so variable row heights can swap the implementation without touching `computeFrame`. |
 | `layout/row-drop-zone.ts` | `rowDropZoneAt(), RowDropZone, RowDropSide, ROW_CHANGE_THRESHOLD_PX, DROP_ZONE_HYSTERESIS_PX` | Turns a vertical drag's pointer y into which row it sits over, and which third (`before`/`into`/`after`), with a dead zone around the source row and hysteresis at every boundary so the answer does not flicker. |
 | `layout/row-drop-target.ts` | `dropPlaceFor(), RowsForDrop, DropPlace, DropPlaceAnswer` | Turns a resolved `RowDropZone` into where the drop lands in the tree — a parent, a rank among its current children, the Insertion line's depth and y — or a refusal for a group header row. |
 | `layout/column.ts` | `FrameColumn, ResolvedColumn, FieldCompare` | Pure data types for the grid-column paint shape and its locale-bound formatter. |
 | `layout/column-renderers.ts` | `meter(), image()` | Shipped Grid-column renderers as DOM-free description trees. `meter()` paints a percent as a track; `image()` paints a stored URL as an img. The look lives in the always-on sheet — a Column renderer cannot carry a css string the way a variant can. |
+| `layout/lane.ts` | `laneRowHeight()`, `laneBandsOf()` | Lane geometry: the Row height that holds n Lanes, and where each Lane sits. |
+| `layout/header-tick.ts` | `HeaderTickPaintCache` | Calls the consumer's `headerTickRenderer` once per tick and caches the paint, so the frame loop allocates nothing. |
 | `layout/date-line.ts` | `resolveDateLines()` | Resolves the today-line and authored date lines into positioned `DateLine` decorations. |
+| `layout/today-highlight.ts` | `resolveTodayHighlight()` | Turns the `todayHighlight` option into its normal form: `false` or `{ layer }`. |
 | `layout/bar-preview.ts` | `BarPreview`, `previewedBox()` | Where a drag preview shows one bar. A frame, a connector and the backend paint read this one rule. |
 | `layout/gesture-draft.ts` | `draftForMove(), draftForResize(), previewOffsets(), cursorLabelForX()` | Pure gesture math for drag previews. All date computation stays here so `interaction/` performs no arithmetic. |
 | `layout/decoration.ts` | `DecorationLayer, DecorationProvider, RangeBand, RowStripe` | The decoration seam's own types — range bands and row stripes as pixel-resolved shapes. |
@@ -181,6 +185,8 @@ where they do something beyond re-export.
 | `view/renderer-registry.ts` | `RendererRegistry` | Resolves which renderer paints one bar/cell/header/tooltip. Consumer config always wins over a plugin. |
 | `view/gantt-dom.ts` | `GanttDom, ContainerDom, DomTarget` | This Gantt's rendered DOM as a read surface: is this node mine, what is it, where is the element for this entry. |
 | `view/mount-layer.ts` | `MountLayer` | Where a plugin mounts and how it stays put. Overlay escapes the pane box; row layer travels with the rows. |
+| `view/row-details.ts` | `RowDetails` | Mounts, measures and places the content a plugin presents under a Row. Costs nothing while no Row detail is open. |
+| `view/row-layout-watch.ts` | `RowLayoutWatch` | Tells a plugin after a frame moved a row top or height. A scroll never does. |
 | `view/column-chrome.ts` | `ColumnChrome` | Grid-column resolve, live resize/reorder preview, and the one commit sequence pointer drag and `gantt.gridColumns = …` share. |
 | `view/column-toggle.ts` | `toggleCellContent`, `switchToggleCell` | A toggle column's cell look, and the one gated switch a click and a key press share. |
 | `view/column-gesture-context.ts` | `ColumnGestureContext` | The seam `interaction/column-gestures.ts` drives and `GanttShell` implements. |

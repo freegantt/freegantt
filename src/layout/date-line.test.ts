@@ -61,4 +61,20 @@ describe('resolveDateLines', () => {
       { kind: 'dateLine', x: scale.xForInstant(other), label: 'Kickoff' },
     ]);
   });
+
+  it("puts the today line in the middle of today's day for todayLineAt: 'dayCenter'", () => {
+    const afternoon = instant('2026-06-01T15:00:00Z');
+    const [line] = resolveDateLines({ scale, todayLineAt: 'dayCenter', now: afternoon });
+    expect(line?.x).toBe(scale.xForInstant(instant('2026-06-01T12:00:00Z')));
+  });
+
+  it("keeps the clock instant for todayLineAt: 'now'", () => {
+    const [line] = resolveDateLines({ scale, todayLineAt: 'now', now: inside });
+    expect(line?.x).toBe(scale.xForInstant(inside));
+  });
+
+  it('keeps a pinned Instant where it is, whatever todayLineAt says', () => {
+    const [line] = resolveDateLines({ scale, todayLine: inside, todayLineAt: 'dayCenter' });
+    expect(line?.x).toBe(scale.xForInstant(inside));
+  });
 });

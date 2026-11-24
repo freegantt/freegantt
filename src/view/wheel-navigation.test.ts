@@ -290,3 +290,68 @@ describe('attachWheelNavigation (S3.7, D-S3-14)', () => {
     node.remove();
   });
 });
+
+describe('attachWheelNavigation over a pane that scrolls on neither axis', () => {
+  it('pans along both axes for a plain wheel when it forwards the horizontal one too', () => {
+    const node = pane();
+    const { ctx, pans } = makeCtx();
+    attachWheelNavigation(node, ctx, { forwardPlainWheel: true, forwardHorizontalWheel: true });
+
+    const vertical = wheel({ deltaY: 40 });
+    const sideways = wheel({ deltaX: 25 });
+    node.dispatchEvent(vertical);
+    node.dispatchEvent(sideways);
+
+    expect(vertical.defaultPrevented).toBe(true);
+    expect(sideways.defaultPrevented).toBe(true);
+    expect(pans).toEqual([
+      [0, 40],
+      [25, 0],
+    ]);
+    node.remove();
+  });
+
+  it('leaves a horizontal wheel alone when it does not forward the horizontal one', () => {
+    const node = pane();
+    const { ctx, pans } = makeCtx();
+    attachWheelNavigation(node, ctx, { forwardPlainWheel: true });
+
+    const event = wheel({ deltaX: 25 });
+    node.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(pans).toEqual([]);
+    node.remove();
+  });
+
+  it('leaves a plain and a shift wheel to content that scrolls by itself', () => {
+    const node = pane();
+    const { ctx, pans } = makeCtx();
+    attachWheelNavigation(node, ctx, {
+      forwardPlainWheel: true,
+      forwardHorizontalWheel: true,
+      contentTakesWheel: () => true,
+    });
+
+    const plain = wheel({ deltaY: 40 });
+    const shifted = wheel({ deltaY: 40, shiftKey: true });
+    node.dispatchEvent(plain);
+    node.dispatchEvent(shifted);
+
+    expect(plain.defaultPrevented).toBe(false);
+    expect(shifted.defaultPrevented).toBe(false);
+    expect(pans).toEqual([]);
+    node.remove();
+  });
+
+  it('still zooms on ctrl+wheel over content that scrolls by itself', () => {
+    const node = pane();
+    const { ctx, zoomIns } = makeCtx();
+    attachWheelNavigation(node, ctx, { contentTakesWheel: () => true });
+
+    node.dispatchEvent(wheel({ deltaY: -100, ctrlKey: true }));
+
+    expect(zoomIns).toHaveLength(1);
+    node.remove();
+  });
+});

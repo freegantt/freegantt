@@ -92,13 +92,15 @@ export interface ResolvedRenderer<TRenderer> {
  *  already computes, but spends a bar that doesn't fit on no label at all rather than on an outside
  *  placement — a consumer painting contiguous bars edge to edge (a day-tile grid, #435) cannot let a
  *  label escape into the next bar the way `'fitBar'`'s and `'outside'`'s fallbacks both do. `'none'`
+ *  `'outsideOrNone'` is its mirror: the label paints outside when it fits before the next Bar in the
+ *  same Lane, else paints nowhere. A short Bar that holds only an icon needs it. `'none'`
  *  paints no label at all regardless of fit, and — like `'insideOrNone'` on a bar that doesn't fit —
  *  a `barRenderer` sees no `ctx.label` either: one answer to "did the consumer ask for a label", for
  *  the library's own paint and for a renderer's alike.
  *
  *  Named `Policy`, not `BarLabels`: this is one Gantt-wide or per-variant setting's policy half
  *  (#421 C5). `BarLabels` below is the wider public type a consumer actually writes. */
-export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'none';
+export type BarLabelPolicy = 'fitBar' | 'inside' | 'outside' | 'insideOrNone' | 'outsideOrNone' | 'none';
 
 /** The expert form of `barLabels`: which Field prints, and where it paints. Both keys are optional,
  *  so `{ field: 'hours' }` alone keeps whichever policy is already in force, and

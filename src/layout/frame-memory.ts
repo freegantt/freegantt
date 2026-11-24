@@ -2,8 +2,12 @@
 // a row's Bars are produced once per dataset revision, whether `heightOfRow` forced it above the
 // viewport or `placeFrame` placed it in the window.
 
-import type { Entry, EntryId } from '../model/index.js';
+import type { Entry, EntryId, RowId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
+import type { RowContext, RowHeightResolver } from './row-height.js';
+import { laneBandsOf, laneCountOf, laneRowHeight } from './lane.js';
+import type { FrameLane, LaneLayout } from './lane.js';
+import { HeaderTickPaintCache } from './header-tick.js';
 import { PrefixSumHeightIndex } from './row-height-index.js';
 import type { RowHeightIndex } from './row-height-index.js';
 import { produceBarsForRow } from './bars/produce-bars.js';
@@ -16,12 +20,20 @@ export interface RowMemory {
   readonly bars: readonly Bar[];
 }
 
+const NO_LANES: readonly FrameLane[] = Object.freeze([]);
+
 export interface FrameMemoryBind {
   readonly plan: readonly PlannedRow[];
   readonly rowHeight: number;
+  /** Answers a Row's height when the consumer gave a function. Absent: every Row is `rowHeight`. */
+  readonly rowHeightOf?: RowHeightResolver;
+  /** Which Rows hold Lanes. Absent: no Row does. */
+  readonly lanes?: LaneLayout;
   readonly entries: readonly Entry[];
   readonly registry: VariantBars;
   readonly datasetRevision: number;
+  /** The measured height of each Row detail, by Row. Absent or empty: no Row holds one. */
+  readonly rowDetailHeights?: ReadonlyMap<RowId, number>;
   /** Test seam: override row height for index-space overscan checks. */
   readonly heightAt?: (index: number) => number;
 }
@@ -42,10 +54,19 @@ export class FrameMemory {
   #entriesForEntryById: readonly Entry[] | undefined;
   #registry: VariantBars = NO_VARIANTS;
   #rowHeight = 0;
+  #rowHeightOf: RowHeightResolver | undefined;
+  #lanes: LaneLayout | undefined;
+  #cachedLanes: LaneLayout | undefined;
+  #cachedRowHeightOf: RowHeightResolver | undefined;
   #cachedRowCount = -1;
   #cachedRowHeight = -1;
   #datasetRevision: number | undefined;
   #heightAt: ((index: number) => number) | undefined;
+  /** The Row details the index steps over, or `undefined` when none is open, so a Gantt with no
+   *  Row detail never pays a map lookup per Row. */
+  #details: ReadonlyMap<RowId, number> | undefined;
+  /** What the consumer's header tick renderer answered, kept between frames. */
+  readonly headerTickPaints = new HeaderTickPaintCache();
   /** Bumped when this memory builds a fresh height index. */
   heightIndexRevision = 0;
   /** Bumped each time produced Bars are dropped. A reader that caches geometry built from Bars
@@ -72,6 +93,8 @@ export class FrameMemory {
     this.#plan = bind.plan;
     if (planChanged) this.#rowById = new Map(bind.plan.map((row) => [row.id, row]));
     this.#rowHeight = bind.rowHeight;
+    this.#rowHeightOf = bind.rowHeightOf;
+    this.#lanes = bind.lanes;
     if (bind.entries !== this.#entriesForEntryById) {
       this.#entryById = new Map(bind.entries.map((entry) => [entry.id, entry]));
       this.#entriesForEntryById = bind.entries;
@@ -80,29 +103,119 @@ export class FrameMemory {
     if (bind.heightAt !== undefined) this.#heightAt = bind.heightAt;
     else this.#heightAt = undefined;
 
+    const details =
+      bind.rowDetailHeights !== undefined && bind.rowDetailHeights.size > 0
+        ? bind.rowDetailHeights
+        : undefined;
+    const firstChangedDetail = this.#firstRowWithChangedDetail(this.#details, details);
+    this.#details = details;
+
     const countChanged = this.#cachedRowCount !== bind.plan.length;
-    const metricsChanged = this.#cachedRowHeight !== bind.rowHeight;
+    const metricsChanged =
+      this.#cachedRowHeight !== bind.rowHeight ||
+      this.#cachedRowHeightOf !== bind.rowHeightOf ||
+      this.#cachedLanes !== bind.lanes;
     const revisionChanged = bind.datasetRevision !== this.#datasetRevision;
 
     if (this.#heights === undefined || countChanged || metricsChanged) {
       this.#produced.clear();
       this.producedRevision++;
-      this.#heights = new PrefixSumHeightIndex(bind.plan.length, (index) => this.heightOfRow(index));
+      this.#heights = new PrefixSumHeightIndex(bind.plan.length, (index) => this.#stepOfRow(index));
       this.#cachedRowCount = bind.plan.length;
       this.#cachedRowHeight = bind.rowHeight;
+      this.#cachedRowHeightOf = bind.rowHeightOf;
+      this.#cachedLanes = bind.lanes;
       this.heightIndexRevision++;
     } else if (revisionChanged) {
       this.#produced.clear();
       this.producedRevision++;
       this.#heights.invalidateFrom(0);
+    } else if (planChanged) {
+      // A re-sort or a same-size filter keeps the row count and the data but moves every Row's height.
+      this.#heights.invalidateFrom(0);
+      this.heightIndexRevision++;
+    } else if (firstChangedDetail !== undefined) {
+      // A Row detail that grew moves only the Rows from its own Row down, and no Bar changes.
+      this.#heights.invalidateFrom(firstChangedDetail);
+      this.heightIndexRevision++;
     }
     this.#datasetRevision = bind.datasetRevision;
   }
 
-  /** Call: `memory.heightOfRow(index)` — every row uses `rowHeight` (singleLane). */
+  /** The index of the first planned Row whose Row detail height differs between two maps. `undefined`
+   *  when no Row in the plan changed, because a detail of a Row the plan lacks takes no room. */
+  #firstRowWithChangedDetail(
+    before: ReadonlyMap<RowId, number> | undefined,
+    after: ReadonlyMap<RowId, number> | undefined,
+  ): number | undefined {
+    if (before === after) return undefined;
+    let first: number | undefined;
+    const note = (id: RowId): void => {
+      const row = this.#rowById.get(id);
+      if (row !== undefined && (first === undefined || row.index < first)) first = row.index;
+    };
+    for (const [id, height] of after ?? []) if (before?.get(id) !== height) note(id);
+    for (const [id, height] of before ?? []) if (after?.get(id) !== height) note(id);
+    return first;
+  }
+
+  /** Call: `memory.laneCountOfRow(index)` — how many Lanes the row holds, a header row too. `0` for a
+   *  row with none. */
+  laneCountOfRow(index: number): number {
+    const planned = this.#plan[index];
+    if (this.#lanes === undefined || planned === undefined) return 0;
+    return laneCountOf(this.#lanes, this.#rowContextOf(planned));
+  }
+
+  #rowContextOf(planned: PlannedRow): RowContext {
+    const subject = planned.entryIds[0];
+    return {
+      entry: subject === undefined ? undefined : this.#entryById.get(subject),
+      kind: planned.kind,
+      depth: planned.depth,
+    };
+  }
+
+  /** Call: `memory.lanesOfRow(index, top, height)` — the Lanes to draw in the row, or none. */
+  lanesOfRow(index: number, top: number, height: number): readonly FrameLane[] {
+    const count = this.laneCountOfRow(index);
+    if (this.#lanes === undefined || count === 0) return NO_LANES;
+    return laneBandsOf(top, height, count, this.#lanes.geometry);
+  }
+
+  /** Call: `memory.heightOfRow(index)` — the height function's answer for the row, else the Lane
+   *  height when the row holds Lanes, else `rowHeight`. */
   heightOfRow(index: number): number {
     if (this.#heightAt !== undefined) return this.#heightAt(index);
-    return this.#rowHeight;
+    const planned = this.#plan[index];
+    if (planned === undefined) return this.#rowHeight;
+    const lanes = this.laneCountOfRow(index);
+    const laneHeight =
+      this.#lanes === undefined || lanes === 0 ? undefined : laneRowHeight(lanes, this.#lanes.geometry);
+    const resolve = this.#rowHeightOf;
+    // A Lane Row never clips its stack: a default height taller than the stack wins, a shorter one does not.
+    if (resolve === undefined) return Math.max(laneHeight ?? 0, this.#rowHeight);
+    const height = resolve({
+      ...this.#rowContextOf(planned),
+      laneCount: lanes,
+      laneHeight,
+      defaultHeight: this.#rowHeight,
+    });
+    // A function that answers nothing usable gets the default, so one bad Row never zeroes the pane.
+    return Number.isFinite(height) && height > 0 ? height : Math.max(laneHeight ?? 0, this.#rowHeight);
+  }
+
+  /** Call: `memory.detailHeightOfRow(index)` — the height of the Row detail under the row, `0` when it
+   *  holds none. */
+  detailHeightOfRow(index: number): number {
+    if (this.#details === undefined) return 0;
+    const planned = this.#plan[index];
+    return planned === undefined ? 0 : (this.#details.get(planned.id) ?? 0);
+  }
+
+  /** The whole vertical room a row takes: its own height plus its Row detail. */
+  #stepOfRow(index: number): number {
+    return this.heightOfRow(index) + this.detailHeightOfRow(index);
   }
 
   /** Call: `memory.rowMemory(row.id)` — produce a row's Bars once per dataset revision. */

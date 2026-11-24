@@ -6,7 +6,7 @@
 
 import { InvalidPresetError, UnknownPresetError } from '../model/index.js';
 import { formatHour, formatQuarter, formatWeekNumber } from './format.js';
-import { isCoarserStep } from './zone.js';
+import { isCoarserStep, isCoarserThan } from './zone.js';
 import type { ViewPreset } from './scale.js';
 
 /** `minTickWidthPx` is the density floor below which a preset's labels stop being legible;
@@ -64,6 +64,24 @@ function validatePresetTickIncrement(preset: ViewPreset, operation: string): voi
         'tick-increment',
         `declares a header band for unit "${header.unit}" with increment ${header.increment}, not a ` +
           'positive whole number. Set every header increment to 1 or more, so its band can advance.',
+        operation,
+      );
+    }
+    if (header.alignTo !== undefined && !isCoarserThan(header.unit, header.alignTo)) {
+      throw new InvalidPresetError(
+        preset.id,
+        'header-align',
+        `declares a header band for unit "${header.unit}" with alignTo "${header.alignTo}", which is not ` +
+          `finer than "${header.unit}". Set alignTo to a unit finer than the band's own, or leave it out.`,
+        operation,
+      );
+    }
+    if (header.heightPx !== undefined && !(Number.isFinite(header.heightPx) && header.heightPx > 0)) {
+      throw new InvalidPresetError(
+        preset.id,
+        'header-height',
+        `declares a header band for unit "${header.unit}" with heightPx ${header.heightPx}, not a ` +
+          'positive number. Set heightPx above 0, or leave it out to use --fg-band-height.',
         operation,
       );
     }

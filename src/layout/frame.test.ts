@@ -813,6 +813,207 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     ],
   };
 
+  const inputWith = (extra: Partial<Parameters<typeof computeFrame>[0]>) => ({
+    entries: gridEntries,
+    scale: gridScale,
+    preset: dayAndWeekHeaders,
+    visible,
+    rowHeight: 32,
+    revision: 0,
+    datasetRevision: 0,
+    variants: variantRegistry,
+    ...extra,
+  });
+
+  it("draws one line per week start for tickLines { unit: 'week' }", () => {
+    const frame = computeFrame(inputWith({ tickLines: { unit: 'week' } }));
+    const weekStartXs = frame.header.bands[0]!.ticks.map((tick) => tick.x);
+    expect(frame.tickLines.map((line) => line.x)).toEqual(weekStartXs);
+  });
+
+  it("draws no body line for tickLines 'none'", () => {
+    expect(computeFrame(inputWith({ tickLines: 'none' })).tickLines).toEqual([]);
+  });
+
+  it('gives a row its Lanes and the height that holds them, and a row with none no lanes', () => {
+    const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
+    const none = computeFrame(inputWith({}));
+    expect(none.rows.every((row) => row.lanes === undefined)).toBe(true);
+    const frame = computeFrame(
+      inputWith({ lanes: { rule: { laneCount: () => 2, laneOf: () => 0 }, geometry } }),
+    );
+    const row = frame.rows[0]!;
+    expect(row.height).toBe(86);
+    expect(row.lanes).toEqual([
+      { top: row.top + 10, height: 30 },
+      { top: row.top + 46, height: 30 },
+    ]);
+  });
+
+  it('lets a rule give a header row Lanes, and hands the rule the row’s kind and depth', () => {
+    const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
+    const asked: string[] = [];
+    const frame = computeFrame(
+      inputWith({
+        entries: sampleEntries.slice(0, 4),
+        rows: { source: 'group', groupBy: () => 'all' },
+        lanes: {
+          rule: {
+            laneCount: ({ kind, depth }) => {
+              asked.push(`${kind}:${depth}`);
+              return kind === 'header' ? 2 : 0;
+            },
+            laneOf: () => 0,
+          },
+          geometry,
+        },
+      }),
+    );
+    const header = frame.rows.find((row) => row.kind === 'header')!;
+    expect(header.lanes).toHaveLength(2);
+    expect(header.height).toBe(86);
+    expect(asked).toContain('header:0');
+    expect(frame.rows.filter((row) => row.kind !== 'header').every((row) => row.lanes === undefined)).toBe(
+      true,
+    );
+  });
+
+  it('puts a bar in the lane its Entry names, at that lane’s top and height', () => {
+    const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
+    const laneOf = (entry: { id: string }) => (entry.id === gridEntries[0]!.id ? 1 : 0);
+    const frame = computeFrame(
+      inputWith({ lanes: { rule: { laneCount: () => 2, laneOf: (entry) => laneOf(entry) }, geometry } }),
+    );
+    const row = frame.rows[0]!;
+    const bar = frame.bars.find((candidate) => candidate.rowId === row.id)!;
+    expect(bar.lane).toBe(1);
+    expect(bar.y).toBe(row.lanes![1]!.top);
+    expect(bar.height).toBe(30);
+  });
+
+  it('puts a bar whose lane the row does not hold in the last lane, and centres a bar in a row with none', () => {
+    const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
+    const frame = computeFrame(
+      inputWith({ lanes: { rule: { laneCount: () => 2, laneOf: () => 7 }, geometry } }),
+    );
+    expect(frame.bars.every((bar) => bar.lane === 1)).toBe(true);
+    const plain = computeFrame(inputWith({}));
+    expect(plain.bars.every((bar) => bar.lane === undefined)).toBe(true);
+  });
+
+  it('flags only the finest-band tick that holds today, and no tick when todayLine is off', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const frame = computeFrame(inputWith({ todayLine: today }));
+    expect(frame.header.bands[0]!.ticks.flatMap((tick) => tick.flags)).toEqual([]);
+    const flagged = frame.header.bands[1]!.ticks.filter((tick) => tick.flags.includes('today'));
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0]!.x).toBeLessThanOrEqual(gridScale.xForInstant(today));
+    const off = computeFrame(inputWith({ todayLine: false }));
+    expect(off.header.bands[1]!.ticks.flatMap((tick) => tick.flags)).toEqual([]);
+  });
+
+  it('puts the consumer headerTickRenderer’s flags and content on the tick, after today', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const headerTickRenderer = vi.fn((ctx: { band: number }) =>
+      ctx.band === 1 ? { flags: ['off'], content: { text: 'x' } } : undefined,
+    );
+    const frame = computeFrame(inputWith({ todayLine: today, headerTickRenderer }));
+    const dayTicks = frame.header.bands[1]!.ticks;
+    expect(dayTicks.every((tick) => tick.content?.text === 'x')).toBe(true);
+    expect(dayTicks.find((tick) => tick.flags.includes('today'))!.flags).toEqual(['today', 'off']);
+    expect(frame.header.bands[0]!.ticks.every((tick) => tick.content === undefined)).toBe(true);
+  });
+
+  it('drops an empty flag, a flag with whitespace and a repeated flag from a tick', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const headerTickRenderer = (ctx: { band: number }) =>
+      ctx.band === 1 ? { flags: ['off', '', 'two words', ' ', 'off', 'tab\there'] } : undefined;
+    const frame = computeFrame(inputWith({ todayLine: today, headerTickRenderer }));
+    const dayTicks = frame.header.bands[1]!.ticks;
+    expect(dayTicks.find((tick) => tick.flags.includes('today'))!.flags).toEqual(['today', 'off']);
+    expect(dayTicks.find((tick) => !tick.flags.includes('today'))!.flags).toEqual(['off']);
+  });
+
+  it('asks the headerTickRenderer once per tick, however many frames repeat', () => {
+    const headerTickRenderer = vi.fn(() => undefined);
+    const memory = new FrameMemory();
+    const input = inputWith({ headerTickRenderer });
+    computeFrame(input, memory);
+    const asked = headerTickRenderer.mock.calls.length;
+    expect(asked).toBeGreaterThan(0);
+    computeFrame({ ...input, revision: 1 }, memory);
+    expect(headerTickRenderer.mock.calls.length).toBe(asked);
+  });
+
+  it('gives the renderer the axis start, so a label can show a year only when it changes', () => {
+    const seen: number[] = [];
+    computeFrame(
+      inputWith({
+        headerTickRenderer: (ctx) => {
+          seen.push(ctx.rangeStart);
+          return undefined;
+        },
+      }),
+    );
+    expect(new Set(seen)).toEqual(new Set([gridScale.range.start]));
+  });
+
+  it('carries a header band’s own heightPx into the frame', () => {
+    const tall = {
+      ...dayAndWeekHeaders,
+      headers: dayAndWeekHeaders.headers.map((header, i) => (i === 1 ? { ...header, heightPx: 36 } : header)),
+    };
+    const frame = computeFrame(inputWith({ preset: tall }));
+    expect(frame.header.bands.map((band) => band.heightPx)).toEqual([undefined, 36]);
+  });
+
+  it('paints a today highlight over the finest tick that holds today, and not by default', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const off = computeFrame(inputWith({ todayLine: today }));
+    expect(
+      off.underBars.some((band) => band.kind === 'rangeBand' && band.class === 'fg-today-highlight'),
+    ).toBe(false);
+    const on = computeFrame(inputWith({ todayLine: today, todayHighlight: { layer: 'underBars' } }));
+    const highlight = on.underBars.find(
+      (band) => band.kind === 'rangeBand' && band.class === 'fg-today-highlight',
+    );
+    const dayTicks = on.header.bands[1]!.ticks;
+    const holder = dayTicks.find(
+      (tick) => tick.x <= gridScale.xForInstant(today) && gridScale.xForInstant(today) < tick.x + tick.width,
+    );
+    expect(highlight).toMatchObject({ x: holder!.x, width: holder!.width });
+  });
+
+  it('paints the today highlight after the bands a decoration provider adds, so shading never covers it', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const shading = {
+      kind: 'rangeBand' as const,
+      start: instant('2026-08-22T00:00:00Z'),
+      end: instant('2026-08-24T00:00:00Z'),
+      class: 'fg-time-shading',
+    };
+    const frame = computeFrame(
+      inputWith({
+        todayLine: today,
+        todayHighlight: { layer: 'underBars' },
+        decorationProviders: [{ layer: 'underBars', provider: () => [shading] }],
+      }),
+    );
+    expect(frame.underBars.map((band) => band.kind === 'rangeBand' && band.class)).toEqual([
+      'fg-time-shading',
+      'fg-today-highlight',
+    ]);
+  });
+
+  it('paints the today highlight over the bars when its layer is overBars', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const frame = computeFrame(inputWith({ todayLine: today, todayHighlight: { layer: 'overBars' } }));
+    const isHighlight = (band: { kind: string; class?: string }): boolean =>
+      band.kind === 'rangeBand' && band.class === 'fg-today-highlight';
+    expect(frame.overBars.filter(isHighlight)).toHaveLength(1);
+    expect(frame.underBars.filter(isHighlight)).toHaveLength(0);
+  });
+
   it('marks the day tick a week also starts at, and nothing else, major', () => {
     const frame = computeFrame({
       entries: gridEntries,

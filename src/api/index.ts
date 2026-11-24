@@ -122,6 +122,19 @@ export type {
   DateLineInput,
   DateLine,
   DateLineLabelPlacement,
+  HeaderTickContext,
+  HeaderTickPaint,
+  HeaderTickRenderer,
+  LaneRule,
+  RowHeight,
+  RowContext,
+  RowHeightContext,
+  RowHeightResolver,
+  TickLines,
+  TodayLineAt,
+  TodayHighlight,
+  TodayHighlightSpec,
+  ResolvedTodayHighlight,
   ChromePlugin,
   DataPlugin,
   Plugin,
@@ -439,6 +452,7 @@ export type {
   TooltipRendererContext,
   FrameBar,
   FrameRow,
+  FrameLane,
   ResolvedColumn,
   FrameColumn,
   BarFlags,
@@ -476,6 +490,8 @@ export type {
 // explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
 // to structural inference.
 export type { Bar, BarProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
+// The answer of `view.rowBox`: a row's top and height in full-width row layer coordinates.
+export type { RowBox } from '../layout/index.js';
 // ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
 // it. `EntryRule` is published beside it because an author cannot guess what `when` matches;
 // `EntryPredicate` names its predicate arm alone. Named for what they match — an Entry — rather than
@@ -561,6 +577,7 @@ export type {
   TickStep,
   DateFormat,
   HeaderFormat,
+  HeaderFormatContext,
 } from '../time/index.js';
 // S5.6: `Dataset.time`'s own type — a plugin author names this when it writes a function
 // that takes a `ZonedTime` rather than reading `ctx.time`/`dataset.time` inline. `PlainParts` rides

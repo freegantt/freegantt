@@ -8,10 +8,19 @@
     <style>
       /* The owning-parent demo is its own small instrument, outside the main workbench, so it gets
          a plain ruled box instead of the full toolbar/statusbar shell the main Gantt owns. */
-      #owning-parent-gantt {
+      #owning-parent-gantt,
+      #today-gantt {
         height: 150px;
         border: 1px solid var(--rule-strong);
         border-radius: var(--radius-surface);
+      }
+      /* The Today tokens are plain custom properties on the Gantt's own container. */
+      .today-panel {
+        grid-column: 1 / -1;
+      }
+      #today-gantt {
+        --fg-today-highlight-border: 1px solid oklch(0.55 0.13 245 / 0.5);
+        --fg-today-line-color: oklch(0.55 0.2 25);
       }
     </style>
   </head>
@@ -140,6 +149,74 @@
                 "Site survey" sits before the fixed range's start, and "Site hold" sits after its end — pick
                 <strong>Fixed</strong> to watch both leave the pane.
               </p>
+            </div>
+
+            <div class="panel">
+              <h3>Dense board</h3>
+              <p>
+                Row, header and bar options on the main Gantt above. Each control writes one public option,
+                live.
+              </p>
+              <div class="control-row">
+                <label><input id="lanes-checkbox" type="checkbox" /> Lanes in Framing crew</label>
+                <label><input id="tall-rows-checkbox" type="checkbox" /> Tall parent rows</label>
+              </div>
+              <div class="control-row">
+                <label>
+                  Header
+                  <select id="header-preset" aria-label="Header preset">
+                    <option value="plain" selected>Week and month</option>
+                    <option value="aligned">Days, months aligned to weeks</option>
+                  </select>
+                </label>
+                <label><input id="weekend-flag-checkbox" type="checkbox" /> Flag weekend ticks</label>
+              </div>
+              <div class="control-row">
+                <label>
+                  Tick lines
+                  <select id="tick-lines-select" aria-label="Tick lines">
+                    <option value="tick" selected>Every tick</option>
+                    <option value="week">Week starts</option>
+                    <option value="none">None</option>
+                  </select>
+                </label>
+              </div>
+              <div class="control-row">
+                <label><input id="unstyled-days-checkbox" type="checkbox" /> Unstyled crew days</label>
+                <label>
+                  Crew day label
+                  <select id="label-policy-select" aria-label="Crew day label policy">
+                    <option value="insideOrNone" selected>Inside, or none</option>
+                    <option value="outsideOrNone">Outside, or none</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="panel today-panel">
+              <h3>Today</h3>
+              <p>
+                This small Gantt builds its entries around the real today, so the highlight and the line show
+                up on any date. The tokens that style them sit in this page's CSS.
+              </p>
+              <div id="today-gantt"></div>
+              <div class="control-row">
+                <label>
+                  Highlight
+                  <select id="today-highlight-select" aria-label="Today highlight">
+                    <option value="off">Off</option>
+                    <option value="underBars" selected>Under the bars</option>
+                    <option value="overBars">Over the bars</option>
+                  </select>
+                </label>
+                <label>
+                  Line at
+                  <select id="today-line-at-select" aria-label="Today line position">
+                    <option value="now" selected>Now</option>
+                    <option value="dayCenter">Day center</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
             <div class="panel">
