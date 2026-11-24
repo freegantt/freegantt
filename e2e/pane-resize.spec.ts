@@ -329,3 +329,22 @@ test('a splitter drag moves the visible span (#461)', async ({ page }) => {
 
   await expect(readout).not.toHaveText(before ?? '');
 });
+
+test('a scroll in the frame that shrinks the Gantt keeps its position', async ({ page }) => {
+  await page.goto('/inline-details.html');
+  await expect(page.locator('#gantt .fg-bar').first()).toBeVisible();
+
+  // Shrink the Gantt and scroll in one task, so the size observer has not reported the new height yet.
+  // The browser lets the pane scroll to its new, larger maximum. The Gantt must keep that position.
+  const { reached, settled } = await page.locator('#gantt').evaluate(async (gantt) => {
+    const pane = gantt.querySelector<HTMLElement>('.fg-timeline-pane')!;
+    gantt.style.height = '300px';
+    pane.scrollTop = pane.scrollHeight;
+    const reached = pane.scrollTop;
+    for (let frame = 0; frame < 4; frame += 1) await new Promise((r) => requestAnimationFrame(r));
+    return { reached, settled: pane.scrollTop };
+  });
+
+  expect(reached).toBeGreaterThan(0);
+  expect(settled).toBe(reached);
+});

@@ -42,16 +42,11 @@ test('a panel above the visible rows grows and the rows in view stay where they 
   await page.locator('#gantt').evaluate((node) => {
     node.style.height = '400px';
   });
-  // The pane clamps scrollTop to its content. Scroll again until the resized Gantt holds 300 and
-  // the Gantt has seen both the new size and the scroll.
+  await page.locator('#gantt .fg-timeline-pane').evaluate((pane) => {
+    pane.scrollTop = 300;
+  });
   await expect
-    .poll(() =>
-      page.locator('#gantt .fg-timeline-pane').evaluate(async (pane) => {
-        pane.scrollTop = 300;
-        for (let frame = 0; frame < 3; frame += 1) await new Promise((r) => requestAnimationFrame(r));
-        return pane.scrollTop;
-      }),
-    )
+    .poll(() => page.locator('#gantt .fg-timeline-pane').evaluate((pane) => pane.scrollTop))
     .toBe(300);
   const visible = await page.locator(BAR).evaluateAll((bars) => {
     const header = document.querySelector('#gantt .fg-grid-spacer')!.getBoundingClientRect().bottom;

@@ -26,8 +26,17 @@ const EPSILON = 1;
 const SHARED_AXIS_CLASS = 'fg-shared-axis';
 
 /** `element` is the timeline pane: the single native scroller (D-D). The grid pane never scrolls —
- * it follows by transform, which is why there is no second scroller to fall a frame behind. */
-export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAttachment {
+ * it follows by transform, which is why there is no second scroller to fall a frame behind.
+ *
+ * `refreshPaneSize` re-measures the pane. A native scroll can land in the frame that resized the pane,
+ * before the size observer reports it. The element then scrolls further than the model's maximum
+ * allows. The model clamps that scroll and the next write undoes it. So a scroll past the maximum
+ * asks for a fresh pane size first. */
+export function attachScroll(
+  element: HTMLElement,
+  viewport: Viewport,
+  refreshPaneSize: () => void,
+): ScrollAttachment {
   // What `writePosition` itself last pushed into the element — not the model's current target,
   // which may already have moved on to something newer (#131). A model-driven write's own 'scroll'
   // event does not always arrive before the next one: Firefox can deliver it late enough to land
@@ -96,6 +105,12 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
     const to = target();
     if (Math.abs(element.scrollLeft - to.x) < EPSILON && Math.abs(element.scrollTop - to.y) < EPSILON) {
       return;
+    }
+    if (
+      element.scrollLeft > viewport.scroll.x.state.max + EPSILON ||
+      element.scrollTop > viewport.scroll.y.state.max + EPSILON
+    ) {
+      refreshPaneSize();
     }
     // One batch, one notification, even though each axis moves through its own `ScrollAxis`.
     viewport.batch(() => {

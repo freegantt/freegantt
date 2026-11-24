@@ -995,7 +995,11 @@ export class GanttShell {
     // The timeline pane is the single native scroller; the grid pane follows it by
     // transform, in render/dom's sync(). Constructed before either bind (Viewport's fan-in),
     // so this field is never undefined during a render.
-    this.#scrollAttachment = attachScroll(this.#panes.timeline, this.#viewport);
+    this.#scrollAttachment = attachScroll(
+      this.#panes.timeline,
+      this.#viewport,
+      this.#refreshPaneSizeWhenChanged,
+    );
     this.#teardown.add(() => this.#scrollAttachment.detach());
 
     // bind() fires its own onChange synchronously, once per sub-model (bind always
@@ -3397,6 +3401,14 @@ export class GanttShell {
     this.#frameSettings.refreshPixelProperties();
     this.#applyRowsViewportSize();
   }
+
+  /** Reads the pane box now, and applies it when the size observer has not reported it yet. A scroll
+   *  that lands in the frame that resized the pane needs the new size before it clamps. */
+  #refreshPaneSizeWhenChanged = (): void => {
+    const size = this.#paneLayout.measureTimelinePane();
+    if (size.width === this.#paneBox.width && size.height === this.#paneBox.height) return;
+    this.#applyPaneMeasurement(size);
+  };
 
   /** The rows' own viewport is the pane box minus the header. The timeline pane's header sticks to
    *  the pane's top, and covers that band of rows for the whole scroll. The grid pane's rows clip

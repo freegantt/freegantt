@@ -141,6 +141,10 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 - `ResolvedVariant` gains `unstyled: boolean`. Code that builds a `ResolvedVariant` by hand must set it.
 - `ScaleModel.ticks` takes `TickStep & { alignTo? }`. A custom `ScaleModel` must accept the wider argument.
 
+### Fixed
+
+- A scroll in the same frame that resizes the Gantt keeps its position. Before, the Gantt clamped the scroll to the old pane size and the pane jumped back.
+
 ## [0.2.0] - 2026-11-02
 
 Dependencies and scheduling. `entryDependencies()` stores links between Entries and draws them as connectors. A user connects two bars by drag, and selects, labels and deletes a line. `scheduling()` keeps the links true: a move pushes the successors, in working days when you pass a working calendar. It also reads constraints and manually scheduled Entries, and it writes float, critical and a driving path. Both plugins use generic seams that any plugin can use. The seams are connector providers, the connect gesture, plugin store writes with an edit, and an extender that sees store-only changes. Read the new guide [Dependencies and scheduling](docs/13-dependencies-and-scheduling.md).

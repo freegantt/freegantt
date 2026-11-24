@@ -34,7 +34,7 @@ describe('attachScroll', () => {
     handle.setContentSize({ width: 1000, height: 1000 });
     handle.setPaneSize({ width: 100, height: 100 });
     const element = el();
-    const attachment = attachScroll(element, viewport);
+    const attachment = attachScroll(element, viewport, () => {});
 
     viewport.batch(() => {
       viewport.scroll.x.panTo(250);
@@ -51,7 +51,7 @@ describe('attachScroll', () => {
     handle.setContentSize({ width: 1000, height: 1000 });
     handle.setPaneSize({ width: 100, height: 100 });
     const element = el();
-    attachScroll(element, viewport);
+    attachScroll(element, viewport, () => {});
 
     element.scrollLeft = 40;
     element.scrollTop = 60;
@@ -61,13 +61,43 @@ describe('attachScroll', () => {
     expect(viewport.scroll.y.state.position).toBe(60);
   });
 
+  it('a native scroll past the model maximum re-measures the pane, so a pane resized this frame keeps its scroll', () => {
+    const viewport = new Viewport();
+    const handle = viewport.bind(dataset, () => {});
+    handle.setContentSize({ width: 100, height: 1000 });
+    // The pane shrank to 300px, and its size observer has not reported it yet: the model still holds 600px.
+    handle.setPaneSize({ width: 100, height: 600 });
+    const element = el();
+    attachScroll(element, viewport, () => handle.setPaneSize({ width: 100, height: 300 }));
+
+    element.scrollTop = 700;
+    element.dispatchEvent(new Event('scroll'));
+
+    expect(viewport.scroll.y.state.position).toBe(700);
+  });
+
+  it('a native scroll inside the model maximum does not re-measure the pane', () => {
+    const viewport = new Viewport();
+    const handle = viewport.bind(dataset, () => {});
+    handle.setContentSize({ width: 100, height: 1000 });
+    handle.setPaneSize({ width: 100, height: 600 });
+    const element = el();
+    let measured = 0;
+    attachScroll(element, viewport, () => (measured += 1));
+
+    element.scrollTop = 400;
+    element.dispatchEvent(new Event('scroll'));
+
+    expect(measured).toBe(0);
+  });
+
   it('writePosition is the only thing that writes the element — it is not automatic (D-S1.5-7)', () => {
     const viewport = new Viewport();
     const handle = viewport.bind(dataset, () => {});
     handle.setContentSize({ width: 1000, height: 1000 });
     handle.setPaneSize({ width: 100, height: 100 });
     const element = el();
-    const attachment = attachScroll(element, viewport);
+    const attachment = attachScroll(element, viewport, () => {});
 
     viewport.scroll.y.panTo(50);
     // The model changed, but nothing writes the element until the caller says so.
@@ -87,7 +117,7 @@ describe('attachScroll', () => {
     handle.setContentSize({ width: 1000, height: 1000 });
     handle.setPaneSize({ width: 100, height: 100 });
     const element = el();
-    const attachment = attachScroll(element, viewport);
+    const attachment = attachScroll(element, viewport, () => {});
 
     attachment.writePosition(); // writes 0 — the element already starts at 0, so this is a no-op write
     viewport.scroll.x.panTo(250); // a newer target, not yet reflected in the element
@@ -104,7 +134,7 @@ describe('attachScroll', () => {
     handle.setContentSize({ width: 1000, height: 1000 });
     handle.setPaneSize({ width: 100, height: 100 });
     const element = el();
-    const attachment = attachScroll(element, viewport);
+    const attachment = attachScroll(element, viewport, () => {});
 
     attachment.detach();
 
@@ -127,7 +157,7 @@ describe('attachScroll reserveScrollbarGutter', () => {
     handle.setContentSize({ width: 1000, height: 1000 });
     handle.setPaneSize({ width: 100, height: 100 });
     const element = el();
-    const attachment = attachScroll(element, viewport);
+    const attachment = attachScroll(element, viewport, () => {});
     return { element, reserve: () => attachment.reserveScrollbarGutter() };
   }
 
