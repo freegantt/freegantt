@@ -83,7 +83,7 @@ test('content scrolled up under the header is hidden', async ({ page }) => {
     overflow: getComputedStyle(node).overflow,
   }));
   expect(clip.top).toBeCloseTo(headerBottom, 0);
-  expect(clip.overflow).toBe('hidden');
+  expect(clip.overflow).toBe('clip');
 });
 
 test('a key pressed in mounted content never reaches the Gantt', async ({ page }) => {

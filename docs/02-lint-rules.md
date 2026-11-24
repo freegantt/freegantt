@@ -222,7 +222,7 @@ behavior per kind" chain the rule targets. A comparison against any other kind v
 
 **Flags:** in `src/view/**` and `src/render/dom/**` — reads of `offsetHeight`/`clientHeight` and calls to `getBoundingClientRect()`.
 
-**Exempt:** `pane-layout.ts` and `pane-size-attachment.ts`, by filename. Both legitimately read `clientWidth`/`clientHeight` to measure the *pane's own box* (CONTEXT.md's "Pane size") — a different concept from *row* height. Banning that would break the synchronous first measurement `PaneLayout.measureTimelinePane()` needs.
+**Exempt:** `pane-layout.ts` and `pane-size-attachment.ts`, by filename. Both legitimately read `clientWidth`/`clientHeight` to measure the *pane's own box* (CONTEXT.md's "Pane size") — a different concept from *row* height. Banning that would break the synchronous first measurement `PaneLayout.measureTimelinePane()` needs. `pane-layout.ts` also holds `measureRowDetailHeight`. It reads the height of the content a plugin presents under a Row. The layout cannot know that height, and no row owns it.
 
 **Residue:** this rule does not catch an assignment to `style.height` that is not sourced from a `frame.rows[i].height` expression — too fragile to express syntactically, the same AUTO-PARTIAL shape as `no-time-to-pixel-math` (§3.2). Mitigated the same way: the layer graph makes a laundered value useless (only `layout/` legitimately owns row height), so the residue is small and review-visible.
 

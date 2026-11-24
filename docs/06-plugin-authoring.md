@@ -742,38 +742,44 @@ A row's top moves when a row height changes, a parent collapses or expands, a fi
 
 ### An inline panel under a row
 
-Add a bar-less spacer entry after the row. Answer its height through the live `rowHeight` callback: the panel height. A `rowHeight` answer of `0` or less means the default height, so a closed panel cannot answer `0`. Filter the spacer out of the row source instead. A filtered spacer holds no Row, and the rows stay close. Keep the spacer of the open task. The rows below move down. Mount the panel in `fullWidthRowLayer` at `rowBox(spacer.id).top`.
+Call `ctx.view.presentRowDetail(rowId, content)`. The Gantt mounts `content` under that Row, as wide as both panes. The Gantt measures the content and pushes the rows below it down. The call gives back a disposer.
 
 ```ts
 import { definePlugin } from 'freegantt';
 
-function detailsPanel(openFor: () => string | undefined) {
-  return definePlugin({
+function detailsPanel() {
+  let present: (taskId: string) => () => void = () => () => {};
+  let close: () => void = () => {};
+
+  const plugin = definePlugin({
     id: 'demo.detailsPanel',
     view(ctx) {
-      const panel = document.createElement('div');
-      panel.style.cssText = 'position:absolute;left:0;right:0;height:120px';
-      panel.textContent = 'Details';
-
-      const place = () => {
-        const taskId = openFor();
-        const box = taskId === undefined ? undefined : ctx.view.rowBox(`${taskId}:panel`);
-        panel.hidden = box === undefined;
-        if (box) panel.style.top = `${box.top}px`;
+      present = (taskId) => {
+        const panel = document.createElement('section');
+        panel.textContent = 'Details';
+        return ctx.view.presentRowDetail(taskId, panel);
       };
-
-      ctx.disposables.add(ctx.view.fullWidthRowLayer.present(panel));
-      ctx.disposables.add(ctx.view.fullWidthRowLayer.onResize(place));
-      ctx.disposables.add(ctx.view.onRowLayout(place));
-      place();
     },
   });
-}
 
-export { detailsPanel };
+  return Object.assign(plugin, {
+    open(taskId: string) {
+      close();
+      close = present(taskId);
+    },
+    close: () => close(),
+  });
+}
 ```
 
-The spacer entry is a normal entry with no dates, so it draws no bar. The consumer's `rowHeight` returns the panel's height for it, and the row filter keeps only the open task's spacer. `harness/` has a runnable version.
+- The content sets its own height with CSS. A panel that grows or shrinks moves the rows below it.
+- A Row holds one detail. A second call for the same Row replaces the first.
+- The disposer removes the detail once. Focus inside the detail moves to its Row.
+- A Row that is collapsed, filtered or unknown keeps its detail mounted and hidden. It takes no space. The detail comes back at its last height.
+- A detail is not a Row and not an Entry. It has no ARIA row, no selection and no key path. Give the content its own role and label.
+- Keys, the mouse and the wheel work as in `fullWidthRowLayer`.
+
+`harness/` has a runnable version.
 
 ## Every registration seam
 
