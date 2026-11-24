@@ -83,13 +83,19 @@ jobs:
       # `node_modules` is cached whole, keyed on the lockfile and the pinned Node version. A run
       # that changes no dependency installs nothing at all. Caching the directory rather than the
       # pnpm store is what buys that: the store still leaves the link step to run.
+      #
+      # Every step that downloads or installs runs through `scripts/retry-download.sh`: three
+      # tries, 120 seconds each. A stuck mirror then fails in minutes, not at the job limit. The
+      # step's own `timeout-minutes: 7` is the backstop. Test steps and job limits stay unbounded
+      # by design, because nobody can guess how long the tests take.
       - id: node-modules
         uses: actions/cache@v6
         with:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml') }}
       - if: steps.node-modules.outputs.cache-hit != 'true'
-        run: pnpm install --frozen-lockfile
+        timeout-minutes: 7
+        run: scripts/retry-download.sh pnpm install --frozen-lockfile
 
       # The browser-free chain. `FG_PR_ID` is `check-bundle-growth`'s (#342) ledger key.
       # `pull_request` carries a number, so that wins. `workflow_dispatch` carries none —
@@ -119,7 +125,8 @@ jobs:
           path: node_modules
           key: node-modules-${{ runner.os }}-${{ hashFiles('.nvmrc', 'pnpm-lock.yaml') }}
       - if: steps.node-modules.outputs.cache-hit != 'true'
-        run: pnpm install --frozen-lockfile
+        timeout-minutes: 7
+        run: scripts/retry-download.sh pnpm install --frozen-lockfile
 
       # Read the version from the installed package, never from `pnpm exec` output. `pnpm exec`
       # writes its own banner to stdout — "Already up to date" and "Done in 351ms using pnpm
@@ -143,9 +150,11 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.project }}
       - if: steps.browsers.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps ${{ matrix.project }}
+        timeout-minutes: 7
+        run: scripts/retry-download.sh pnpm exec playwright install --with-deps ${{ matrix.project }}
       - if: steps.browsers.outputs.cache-hit == 'true' && matrix.project != 'chromium'
-        run: pnpm exec playwright install-deps ${{ matrix.project }}
+        timeout-minutes: 7
+        run: scripts/retry-download.sh pnpm exec playwright install-deps ${{ matrix.project }}
 
       - run: pnpm exec playwright test --project=${{ matrix.project }}
       - if: failure()
