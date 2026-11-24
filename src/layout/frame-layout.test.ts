@@ -514,6 +514,19 @@ describe('FrameLayout.rowBox', () => {
     expect(layout.rowBox('b')).toEqual({ top: 32, height: 32 });
   });
 
+  it('answers a grouping header row by its row id', () => {
+    const layout = new FrameLayout();
+    const frame = layout.computeFrame(
+      input({
+        entries: sampleEntries.slice(0, 4),
+        rows: { source: 'group', groupBy: () => 'all' },
+      }),
+    );
+    const header = frame.rows.find((row) => row.kind === 'header')!;
+
+    expect(layout.rowBox(header.id)).toEqual({ top: header.top, height: header.height });
+  });
+
   it('counts a taller row into every top below it', () => {
     const layout = new FrameLayout();
     const entries = entryDoubles([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);

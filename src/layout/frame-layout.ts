@@ -118,6 +118,7 @@ export class FrameLayout implements FrameLayoutView {
   /** First planned row index for an entry, kept beside `#plan` so `rowIndexForEntry` never scans it
    *  (#528). Built once per replan in `#planRows`, not per lookup. */
   #rowIndexOfEntry = new Map<EntryId, number>();
+  #rowIndexOfRow = new Map<string, number>();
   #rowOfEntry = new Map<EntryId, RowId>();
   #entryIdsOfRow = new Map<RowId, readonly EntryId[]>();
   #parentOfRow = new Map<RowId, RowId>();
@@ -222,11 +223,13 @@ export class FrameLayout implements FrameLayoutView {
     this.#indexPlanRows();
   }
 
-  /** Rebuilds `#rowIndexOfEntry` from `#plan` — the first row each entry appears in wins, matching
-   *  what a left-to-right scan of `#plan` would have found. */
+  /** Rebuilds `#rowIndexOfEntry` and `#rowIndexOfRow` from `#plan` — the first row each entry appears
+   *  in wins, matching what a left-to-right scan of `#plan` would have found. */
   #indexPlanRows(): void {
     this.#rowIndexOfEntry.clear();
+    this.#rowIndexOfRow.clear();
     this.#plan.forEach((row, index) => {
+      this.#rowIndexOfRow.set(row.id, index);
       for (const id of row.entryIds) {
         if (!this.#rowIndexOfEntry.has(id)) this.#rowIndexOfEntry.set(id, index);
       }
@@ -253,15 +256,12 @@ export class FrameLayout implements FrameLayoutView {
     return this.#memory.heights.heightAt(index);
   }
 
-  /** Where the row of this entry (or this row id) starts, and how tall it is, in the coordinates of
-   *  the content: the same `top` the row paints at. Answers from the row-height index, so a row the
+  /** Where the row of this entry (or this row id, a header row's id too) starts, and how tall it is, in
+   *  the coordinates of the content: the same `top` the row paints at. Answers from the row-height index, so a row the
    *  window has not drawn answers too. `undefined` for a row a collapsed parent hides, and for an id
    *  no plan holds. The caller plans first (`ensureRowPlan`) when it needs a row this frame added. */
   rowBox(id: string): RowBox | undefined {
-    const owner = this.#rowIndexOfEntry.has(id as EntryId)
-      ? (id as EntryId)
-      : this.entryIdsForRow(id as RowId)[0];
-    const index = owner === undefined ? -1 : this.rowIndexForEntry(owner);
+    const index = this.#rowIndexOfEntry.get(id as EntryId) ?? this.#rowIndexOfRow.get(id) ?? -1;
     if (index < 0) return undefined;
     return { top: this.rowTop(index), height: this.rowHeightAt(index) };
   }
