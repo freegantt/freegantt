@@ -886,10 +886,14 @@ function todayInstantOf(input: LayoutInput): Instant {
 const NO_FLAGS: readonly string[] = Object.freeze([]);
 const TODAY_FLAG: readonly string[] = Object.freeze(['today']);
 
-/** Call: `tickFlags(holdsToday, consumerFlags)`. A tick with no flag shares one empty array, so a scroll frame allocates nothing for it. */
+/** Call: `tickFlags(holdsToday, consumerFlags)`. A tick with no flag shares one empty array, so a scroll
+ *  frame allocates nothing for it. A consumer flag that is empty, holds whitespace or repeats is dropped,
+ *  because `data-flag` is a space-separated token list and such a flag would split or vanish there. */
 function tickFlags(holdsToday: boolean, consumerFlags: readonly string[] | undefined): readonly string[] {
   if (consumerFlags === undefined || consumerFlags.length === 0) return holdsToday ? TODAY_FLAG : NO_FLAGS;
-  return holdsToday ? ['today', ...consumerFlags] : consumerFlags;
+  const tokens = new Set<string>(holdsToday ? TODAY_FLAG : []);
+  for (const flag of consumerFlags) if (flag !== '' && !/\s/.test(flag)) tokens.add(flag);
+  return tokens.size === 0 ? NO_FLAGS : [...tokens];
 }
 
 /** Call: `headerTickPainterOf(input, memory, presetId, timeZone, rangeStart)`. Asks the consumer's

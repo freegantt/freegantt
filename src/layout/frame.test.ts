@@ -892,6 +892,16 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     expect(frame.header.bands[0]!.ticks.every((tick) => tick.content === undefined)).toBe(true);
   });
 
+  it('drops an empty flag, a flag with whitespace and a repeated flag from a tick', () => {
+    const today = instant('2026-08-27T10:00:00Z');
+    const headerTickRenderer = (ctx: { band: number }) =>
+      ctx.band === 1 ? { flags: ['off', '', 'two words', ' ', 'off', 'tab\there'] } : undefined;
+    const frame = computeFrame(inputWith({ todayLine: today, headerTickRenderer }));
+    const dayTicks = frame.header.bands[1]!.ticks;
+    expect(dayTicks.find((tick) => tick.flags.includes('today'))!.flags).toEqual(['today', 'off']);
+    expect(dayTicks.find((tick) => !tick.flags.includes('today'))!.flags).toEqual(['off']);
+  });
+
   it('asks the headerTickRenderer once per tick, however many frames repeat', () => {
     const headerTickRenderer = vi.fn(() => undefined);
     const memory = new FrameMemory();
