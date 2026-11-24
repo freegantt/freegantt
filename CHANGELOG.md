@@ -12,7 +12,7 @@ These changes ship as 0.3.0. The release is about **dense boards**: timelines wh
 - **Header:** `headerTickRenderer` draws and flags each tick, and `alignTo` lines a coarse band up with a finer one.
 - **Body:** the timeline body can draw week lines only, and it can tint today's column.
 - **Bars:** bars can opt out of library chrome and paint themselves.
-- **Plugins:** `ctx.view.rowSpanLayer`, `rowBox` and `onRowLayout` let a plugin mount content under a row that spans both panes and follows the layout.
+- **Plugins:** `ctx.view.fullWidthRowLayer`, `rowBox` and `onRowLayout` let a plugin mount content under a row that spans both panes and follows the layout.
 
 Every new option defaults to the 0.2.0 look. An app that sets none of them renders as before. See [Styling and theming](docs/10-styling-and-theming.md) for the new tokens, and [Plugin authoring](docs/06-plugin-authoring.md) for the row layer.
 
@@ -83,7 +83,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
 #### Plugin API
 
-- `ctx.view.rowSpanLayer` is a mount layer as wide as the grid pane and the timeline pane together.
+- `ctx.view.fullWidthRowLayer` is a mount layer as wide as the grid pane and the timeline pane together.
   - It follows the rows' vertical scroll and stays still on a horizontal pan.
   - It hides content that has scrolled up under the header.
   - A key pressed inside its content never reaches the Gantt.
@@ -108,7 +108,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
 #### Harness
 
-- The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `rowSpanLayer` and `onRowLayout`.
+- The new "Inline details" page opens a details panel under a task and pushes the rows below it down. It's built on `fullWidthRowLayer` and `onRowLayout`.
 
 ### Changed
 

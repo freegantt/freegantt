@@ -485,7 +485,7 @@ export type {
 // explicitly, the same reason `BarRenderer`/`DecorationProvider` above are exported rather than left
 // to structural inference.
 export type { Bar, BarProducer, BarAnchor, FixedBarBox } from '../layout/index.js';
-// The answer of `view.rowBox`: a row's top and height in row span layer coordinates.
+// The answer of `view.rowBox`: a row's top and height in full-width row layer coordinates.
 export type { RowBox } from '../layout/index.js';
 // ADR 0018: one variant is one object, and `GanttOptions.variants` and `ctx.variants.add` both take
 // it. `EntryRule` is published beside it because an author cannot guess what `when` matches;

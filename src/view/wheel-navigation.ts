@@ -44,7 +44,7 @@ export interface WheelNavigationOptions {
    *  when this is `true`: the grid pane is its own real horizontal scroller, so plain
    *  horizontal wheel already reaches it as the browser's native `scroll` event. Default `false`. */
   forwardPlainWheel?: boolean;
-  /** A pane that scrolls on neither axis (the row span layer) also forwards a plain horizontal
+  /** A pane that scrolls on neither axis (the full-width row layer) also forwards a plain horizontal
    *  wheel, so the timeline pans under it the way it does under a pointer over the timeline pane.
    *  Needs `forwardPlainWheel`. Default `false`. */
   forwardHorizontalWheel?: boolean;

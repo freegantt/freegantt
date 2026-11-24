@@ -85,7 +85,16 @@ function buildHarness(portOverrides: Partial<RovingFocusPorts> = {}): Harness {
 
   const ports = makePorts(portOverrides);
   const roving = new RovingFocus(
-    { grid, rows, gridHeader, timeline, splitter, overlay, rowSpan: makePane(), rowSpanClip: makePane() },
+    {
+      grid,
+      rows,
+      gridHeader,
+      timeline,
+      splitter,
+      overlay,
+      fullWidthRowLayer: makePane(),
+      fullWidthRowLayerClip: makePane(),
+    },
     ports,
   );
 

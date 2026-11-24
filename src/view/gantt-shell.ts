@@ -810,7 +810,7 @@ export class GanttShell {
    *  Constructed beside the overlay, and for the same reason. */
   #rowLayer: DomMountLayer;
   /** The layer that spans both panes and follows the rows' vertical scroll. */
-  #rowSpanLayer: DomMountLayer;
+  #fullWidthRowLayer: DomMountLayer;
   /** Tells a plugin when a row top or height moved (`ctx.view.onRowLayout`). */
   #rowLayoutWatch = new RowLayoutWatch((error) =>
     this.#raiseError(
@@ -861,8 +861,8 @@ export class GanttShell {
       () => this.#paneLayout.rowLayerBounds(),
       this.#containerResize,
     );
-    this.#rowSpanLayer = new DomMountLayer(
-      this.#panes.rowSpan,
+    this.#fullWidthRowLayer = new DomMountLayer(
+      this.#panes.fullWidthRowLayer,
       () => this.#paneLayout.rowSpanBounds(),
       this.#containerResize,
     );
@@ -872,8 +872,8 @@ export class GanttShell {
     // still double-click a word, or drag a selection, in the panel's input.
     const keepInRowSpan = (event: Event): void => event.stopPropagation();
     for (const type of ['keydown', 'mousedown', 'selectstart']) {
-      this.#panes.rowSpanClip.addEventListener(type, keepInRowSpan);
-      this.#teardown.add(() => this.#panes.rowSpanClip.removeEventListener(type, keepInRowSpan));
+      this.#panes.fullWidthRowLayerClip.addEventListener(type, keepInRowSpan);
+      this.#teardown.add(() => this.#panes.fullWidthRowLayerClip.removeEventListener(type, keepInRowSpan));
     }
     this.#dom = new ContainerDom({
       container: this.#container,
@@ -955,7 +955,7 @@ export class GanttShell {
       grid: this.#panes.rows,
       timeline: this.#panes.timeline,
       gridHeader: this.#panes.gridHeader,
-      rowSpan: this.#panes.rowSpan,
+      fullWidthRowLayer: this.#panes.fullWidthRowLayer,
     });
 
     // Built before the plugin runtime. Core commands register into this during this
@@ -1645,10 +1645,10 @@ export class GanttShell {
       forwardPlainWheel: true,
     });
     this.#teardown.add(() => this.#wheelNavigationGrid?.detach());
-    // The row span layer sits over both panes. A wheel over its content scrolls the rows and pans
+    // The full-width row layer sits over both panes. A wheel over its content scrolls the rows and pans
     // the timeline, as it does over a pane. Content that scrolls by itself keeps its wheel.
     // A shift wheel turns its vertical delta into a horizontal one, so the check follows that.
-    const spanClip = this.#panes.rowSpanClip;
+    const spanClip = this.#panes.fullWidthRowLayerClip;
     this.#wheelNavigationSpan = attachWheelNavigation(spanClip, wheelNavigationCtx, {
       anchorPane: this.#panes.timeline,
       forwardPlainWheel: true,
@@ -2445,7 +2445,7 @@ export class GanttShell {
       raiseError: this.#raiseError,
       overlay: this.#overlay,
       rowLayer: this.#rowLayer,
-      rowSpanLayer: this.#rowSpanLayer,
+      fullWidthRowLayer: this.#fullWidthRowLayer,
       rowBox: (id) => this.#rowBox(id),
       onRowLayout: (callback) => this.#rowLayoutWatch.onChange(callback),
       dom: this.#dom,

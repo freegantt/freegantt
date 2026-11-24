@@ -88,7 +88,7 @@ export interface GanttShellPorts {
   /** #158. The grid's own row layer, alive as long as the plugin is. */
   rowLayer: MountLayer;
   /** The full-width layer that follows the rows' vertical scroll. */
-  rowSpanLayer: MountLayer;
+  fullWidthRowLayer: MountLayer;
   /** Where one row sits, for a plugin that mounts content beside it. */
   rowBox(id: string): RowBox | undefined;
   /** Tells a plugin after a frame moved a row top or height. */
@@ -256,9 +256,9 @@ export interface PluginContextParts<TGantt = unknown, TDataset = unknown> {
      *  A wheel over it scrolls the rows and pans the timeline, unless your content scrolls by itself
      *  and is not at its edge.
      *  Position content with `rowBox`. Live for the plugin's whole lifetime, like `overlay`. */
-    rowSpanLayer: MountLayer;
+    fullWidthRowLayer: MountLayer;
     /** Where the row of an entry (or a row id) starts and how tall it is. `top` counts from the
-     *  top of `rowSpanLayer`. It answers from the layout, so a row scrolled out of the window
+     *  top of `fullWidthRowLayer`. It answers from the layout, so a row scrolled out of the window
      *  answers too. `undefined` for a row a collapsed parent hides, and for an unknown id. Read it
      *  again after a row height change, a collapse or a data change: a row's top moves with them. */
     rowBox(id: EntryId | string): RowBox | undefined;
@@ -546,7 +546,7 @@ export function buildPluginPorts(
     view: {
       overlay: shell.overlay,
       rowLayer: shell.rowLayer,
-      rowSpanLayer: shell.rowSpanLayer,
+      fullWidthRowLayer: shell.fullWidthRowLayer,
       rowBox: (id) => shell.rowBox(id),
       onRowLayout: (callback) => {
         const dispose = shell.onRowLayout(callback);

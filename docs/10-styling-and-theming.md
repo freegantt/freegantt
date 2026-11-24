@@ -82,7 +82,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-indent-width` | `12px` | `.fg-row-label` indent calc, `.fg-row-twisty` width — one hierarchy-depth step |
 | `--fg-bar-label-gap` | `8px` | `pixel-property.ts`, read once at `mount()` — `.fg-bar-label` inline padding, and the gap between a bar's right edge and an outside label |
 | `--fg-z-overlay` | `3` | `.fg-overlay` CSS rule directly (not `pixel-property.ts` — a stacking position, not a layout number). Set above every internal layer (the grid header, the timeline header, a dragged column header, the date cursor line) so a mounted `.fg-popup` — a tooltip or a `contextMenu()` — always paints, and hit-tests, above them. Raise it further when this Gantt sits inside a consumer's own stacking context |
-| `--fg-span-layer-top` | `0px` | `.fg-span-layer-clip` top edge. The Gantt writes it: the header height, so the clip starts under the header. Do not set it. |
+| `--fg-full-width-row-layer-top` | `0px` | `.fg-full-width-row-layer-clip` top edge. The Gantt writes it: the header height, so the clip starts under the header. Do not set it. |
 
 ### Colour and shadow tokens
 
@@ -120,13 +120,13 @@ not a consumer's to set" below for the four channels.
 | `--fg-twisty-rotation-expanded` | `0deg` | — | `.fg-row-twisty` turn while expanded. With one glyph in both tokens, `90deg` gives a chevron that turns |
 | `--fg-twisty-transition` | `none` | — | `.fg-row-twisty` transition for that turn |
 | `--fg-twisty-gap` | `0px` | — | Space between `.fg-row-twisty` and the label |
-| `--fg-group-row-bg` | not set | not set | `.fg-row` and `.fg-row-band` of a group row: a row that holds children, or a header row. Not set, the row keeps its stripe. Set, it replaces the stripe only. Hover, selection and a refused drop still show |
+| `--fg-group-row-bg` | `var(--fg-row-stripe-bg)` | — | `.fg-row` and `.fg-row-band` of a group row: a row that holds children, or a header row. Not set, the row keeps its stripe. Set, it replaces the stripe only. Hover, selection and a refused drop still show |
 | `--fg-group-row-border` | `0 solid transparent` | — | The same rows' `border-top`. Set `1px solid <colour>` for a hairline between groups |
 | `--fg-twisty-icon` | `none` | — | `.fg-row-twisty` icon as a mask image, for example `url(chevron.svg)`. Pair it with `--fg-twisty-icon-color: currentColor`, and set both glyph tokens to `''` |
 | `--fg-twisty-icon-color` | `transparent` | — | The fill under the mask. `currentColor` gives the chevron the label colour |
 | `--fg-twisty-icon-size` | `auto` | — | `.fg-row-twisty` icon box size, for example `14px` |
-| `--fg-col-header-padding-inline` | not set | — | `.fg-col-header` inline padding. Not set, it reads `--fg-cell-padding-inline`. A row cell always keeps `--fg-cell-padding-inline` |
-| `--fg-col-header-padding-block` | not set | — | `.fg-col-header` block padding. Not set, it reads `--fg-cell-padding-block`. A shorthand is allowed: `0 10px` is no top and 10px bottom |
+| `--fg-col-header-padding-inline` | `var(--fg-cell-padding-inline, 10px)` | — | `.fg-col-header` inline padding. Not set, it reads `--fg-cell-padding-inline`. A row cell always keeps `--fg-cell-padding-inline` |
+| `--fg-col-header-padding-block` | `var(--fg-cell-padding-block, 4px)` | — | `.fg-col-header` block padding. Not set, it reads `--fg-cell-padding-block`. A shorthand is allowed: `0 10px` is no top and 10px bottom |
 | `--fg-col-header-align` | `center` | — | `.fg-col-header` cross-axis alignment. `flex-end` sits the label on the header's bottom edge |
 | `--fg-col-header-transform` | `none` | — | `.fg-col-header` `text-transform` |
 | `--fg-col-header-tracking` | `normal` | — | `.fg-col-header` `letter-spacing` |
@@ -231,12 +231,12 @@ and inherits down unchanged, so one setting still covers every bar.
 
 ### Internal tokens — not a consumer's to set
 
-Six `--fg-*` properties are the library's own plumbing, not a consumer's to set. Five are geometry
+Seven `--fg-*` properties are the library's own plumbing, not a consumer's to set. Five are geometry
 the library writes inline, per element, because a stylesheet rule alone cannot express it — setting
 one by hand fights the next frame, which overwrites it. The sixth, `--fg-bar-fill-painted`, is
 different: the base stylesheet computes it on `.fg-bar` itself, from `--fg-bar-fill` and
 `--fg-bar-opacity` (see the note above) — a consumer sets the two colour tokens that feed it, never
-this one.
+this one. The seventh, `--fg-row-stripe-bg`, is the same kind: each row sets it to its parity stripe, so a group row keeps that stripe while `--fg-group-row-bg` is not set.
 
 | Token | Written by | Read by |
 |---|---|---|
@@ -245,6 +245,7 @@ this one.
 | `--fg-row-depth` | `render/dom/index.ts`, per row — the row's hierarchy depth | `.fg-row-label` indent calc (with `--fg-indent-width`, above) |
 | `--fg-drop-line-depth` | `render/dom/index.ts`, on the grid pane's `.fg-drop-line` — the target place's tree depth during a vertical drag | `.fg-drop-line` indent calc (with `--fg-indent-width`, above) — the timeline instance resets it to 0 (full width) |
 | `--fg-popup-max-height` | `popup.ts`, on the popup wrapper — the anchor pane's height minus the popup's 1px top and bottom border | `.fg-popup` `max-height` (falls back to `none`) |
+| `--fg-row-stripe-bg` | `.fg-row` and `.fg-row-band`'s own CSS rules (`styles.ts`) — the row's parity stripe, from `--fg-row-odd-bg` or `--fg-row-even-bg` | `--fg-group-row-bg`'s fallback on a group row |
 | `--fg-bar-fill-painted` | `.fg-bar`'s own CSS rule (`styles.ts`), computed from `--fg-bar-fill` and `--fg-bar-opacity` | `.fg-bar` background |
 
 ### Retired and renamed tokens
@@ -280,8 +281,8 @@ rename.
 | `.fg-timeline-pane` | Right pane. Header, bars, decorations, date lines. |
 | `.fg-shared-axis` | On `.fg-timeline-pane` when this Gantt shares a `ScrollAxis` on `x`. Reserves a scrollbar gutter, so every pane on that axis keeps one width. Needs `scrollbar-gutter`; an engine without it falls back to today's behaviour, where the two panes stop up to a scrollbar's width apart. |
 | `.fg-splitter` | Drag handle between the two panes. |
-| `.fg-span-layer-clip` | Clip of the row span layer: as wide as both panes, below the header. It hides content that scrolled up under the header. `pointer-events: none` until mounted content opts in. |
-| `.fg-span-layer` | The row span layer inside the clip. It follows the rows' vertical scroll by one transform per frame, and never the horizontal pan. |
+| `.fg-full-width-row-layer-clip` | Clip of the full-width row layer: as wide as both panes, below the header. It hides content that scrolled up under the header. `pointer-events: none` until mounted content opts in. |
+| `.fg-full-width-row-layer` | The full-width row layer inside the clip. It follows the rows' vertical scroll by one transform per frame, and never the horizontal pan. |
 | `.fg-overlay` | Popup mount layer above both panes. `pointer-events: none` until a `.fg-popup` opts in. |
 | `.fg-grid-header` | Column header row in the grid pane. |
 | `.fg-col-header` | One column header cell. |

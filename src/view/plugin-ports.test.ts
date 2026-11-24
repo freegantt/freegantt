@@ -72,7 +72,7 @@ function makeHarness(overrides: Partial<GanttShellPorts> = {}): Harness {
     events: { on: vi.fn(), off: vi.fn() },
     overlay: fakeMountLayer(),
     rowLayer: fakeMountLayer(),
-    rowSpanLayer: fakeMountLayer(),
+    fullWidthRowLayer: fakeMountLayer(),
     rowBox: () => undefined,
     onRowLayout: () => () => {},
     dom: makeDom(container),

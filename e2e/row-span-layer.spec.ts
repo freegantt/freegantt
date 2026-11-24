@@ -72,7 +72,7 @@ test('content scrolled up under the header is hidden', async ({ page }) => {
     .locator('#gantt .fg-grid-spacer')
     .evaluate((node) => node.getBoundingClientRect().bottom);
   await expect.poll(() => top(page, PANEL)).toBeLessThan(headerBottom);
-  const clip = await page.locator('#gantt .fg-span-layer-clip').evaluate((node) => ({
+  const clip = await page.locator('#gantt .fg-full-width-row-layer-clip').evaluate((node) => ({
     top: node.getBoundingClientRect().top,
     overflow: getComputedStyle(node).overflow,
   }));

@@ -163,7 +163,7 @@ const PAGE_BRIEFS: Record<HarnessPageId, PageBrief> = {
     config: [
       'entries: each task has a spacer entry with no dates, so it draws no bar; a row filter keeps only the open task’s spacer',
       'rowHeight: ({ entry }) => (entry is a spacer ? 132 : 32)',
-      'ctx.view.rowSpanLayer.present(panel)',
+      'ctx.view.fullWidthRowLayer.present(panel)',
       'ctx.view.rowBox(spacerId) -> { top, height }',
       'ctx.view.onRowLayout(() => place()) — runs when a row top or height moved, never for a scroll',
     ],

@@ -64,8 +64,8 @@ export function inlineDetailsPanel(
         panel.style.height = `${box.height}px`;
       };
 
-      ctx.disposables.add(ctx.view.rowSpanLayer.present(panel));
-      ctx.disposables.add(ctx.view.rowSpanLayer.onResize(place));
+      ctx.disposables.add(ctx.view.fullWidthRowLayer.present(panel));
+      ctx.disposables.add(ctx.view.fullWidthRowLayer.onResize(place));
       // A row's top moves with a collapse, a filter, a data change or a new height, and never with a scroll.
       ctx.disposables.add(
         ctx.view.onRowLayout(() => {

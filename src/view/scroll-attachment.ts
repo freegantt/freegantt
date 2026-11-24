@@ -120,7 +120,7 @@ export function attachScroll(element: HTMLElement, viewport: Viewport): ScrollAt
 export type ClientBoxReader = (element: HTMLElement) => { readonly width: number; readonly height: number };
 
 /** Does an element between the wheel's target and `boundary` scroll on its own, in the direction the
- *  wheel turns, and not sit at that edge? The row span layer asks it, so a textarea in a panel keeps
+ *  wheel turns, and not sit at that edge? The full-width row layer asks it, so a textarea in a panel keeps
  *  its own wheel and the rows scroll once the textarea reaches an edge. The only reader of element
  *  scroll beside the binding above (I12). */
 export function contentScrollsForWheel(

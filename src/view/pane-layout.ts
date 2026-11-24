@@ -69,10 +69,10 @@ export interface Panes {
    *  top of both panes, wrapped by `view/mount-layer.ts`. Structure only; the `MountLayer` over it
    *  owns its content. */
   readonly overlay: HTMLElement;
-  /** The row span layer: as wide as both panes, below the header, moved by the rows' vertical
-   *  scroll and never by the horizontal one. `rowSpanClip` holds it and owns the clip. */
-  readonly rowSpan: HTMLElement;
-  readonly rowSpanClip: HTMLElement;
+  /** The full-width row layer: as wide as both panes, below the header, moved by the rows' vertical
+   *  scroll and never by the horizontal one. `fullWidthRowLayerClip` holds it and owns the clip. */
+  readonly fullWidthRowLayer: HTMLElement;
+  readonly fullWidthRowLayerClip: HTMLElement;
 }
 
 export class PaneLayout {
@@ -182,13 +182,13 @@ export class PaneLayout {
 
     // Sibling of the panes, so it spans both. The clip stays still and hides what scrolled up under
     // the header. The layer inside takes the one per-frame transform, like `rowLayer` above.
-    const rowSpanClip = document.createElement('div');
-    rowSpanClip.className = 'fg-span-layer-clip';
-    const rowSpan = document.createElement('div');
-    rowSpan.className = 'fg-span-layer';
-    rowSpanClip.append(rowSpan);
+    const fullWidthRowLayerClip = document.createElement('div');
+    fullWidthRowLayerClip.className = 'fg-full-width-row-layer-clip';
+    const fullWidthRowLayer = document.createElement('div');
+    fullWidthRowLayer.className = 'fg-full-width-row-layer';
+    fullWidthRowLayerClip.append(fullWidthRowLayer);
 
-    this.#container.append(this.#gridPane, splitter, timelinePane, rowSpanClip, overlay);
+    this.#container.append(this.#gridPane, splitter, timelinePane, fullWidthRowLayerClip, overlay);
 
     this.panes = {
       grid: this.#gridPane,
@@ -197,8 +197,8 @@ export class PaneLayout {
       splitter,
       timeline: timelinePane,
       overlay,
-      rowSpan,
-      rowSpanClip,
+      fullWidthRowLayer,
+      fullWidthRowLayerClip,
     };
   }
 
@@ -275,7 +275,7 @@ export class PaneLayout {
     return this.#spacer.offsetHeight;
   }
 
-  /** The visible box of one element a plugin mounted, for the wheel check over the row span layer. */
+  /** The visible box of one element a plugin mounted, for the wheel check over the full-width row layer. */
   clientBoxOf(element: HTMLElement): { width: number; height: number } {
     return { width: element.clientWidth, height: element.clientHeight };
   }
@@ -318,14 +318,17 @@ export class PaneLayout {
     return this.panes.rows.getBoundingClientRect();
   }
 
-  /** `ctx.view.rowSpanLayer.bounds`: the row span layer's client rect, transform included. */
+  /** `ctx.view.fullWidthRowLayer.bounds`: the full-width row layer's client rect, transform included. */
   rowSpanBounds(): DOMRect {
-    return this.panes.rowSpan.getBoundingClientRect();
+    return this.panes.fullWidthRowLayer.getBoundingClientRect();
   }
 
   /** Starts the row span clip under the header, so a row scrolled up under the header hides. */
   syncRowSpanTop(): void {
-    this.panes.rowSpanClip.style.setProperty('--fg-span-layer-top', `${this.measureHeaderHeight()}px`);
+    this.panes.fullWidthRowLayerClip.style.setProperty(
+      '--fg-full-width-row-layer-top',
+      `${this.measureHeaderHeight()}px`,
+    );
   }
 
   /** `ctx.view.overlay.bounds` (#168): the overlay layer's own client rect. A popup sits at that

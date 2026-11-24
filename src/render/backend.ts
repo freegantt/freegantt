@@ -122,7 +122,7 @@ export interface RenderSurfaces<THost> {
   /** Column header row in the grid pane. Omitted by tests that only paint body cells. */
   gridHeader?: THost;
   /** The layer that spans both panes and follows the rows' vertical scroll. Omitted by tests. */
-  rowSpan?: THost;
+  fullWidthRowLayer?: THost;
 }
 
 /** `THost` is the seam's only DOM-shaped type parameter — `backend.ts` itself still names no DOM
