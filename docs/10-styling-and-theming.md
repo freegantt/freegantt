@@ -120,7 +120,7 @@ not a consumer's to set" below for the four channels.
 | `--fg-twisty-rotation-expanded` | `0deg` | — | `.fg-row-twisty` turn while expanded. With one glyph in both tokens, `90deg` gives a chevron that turns |
 | `--fg-twisty-transition` | `none` | — | `.fg-row-twisty` transition for that turn |
 | `--fg-twisty-gap` | `0px` | — | Space between `.fg-row-twisty` and the label |
-| `--fg-group-row-bg` | `var(--fg-row-even-bg)` | `var(--fg-row-even-bg)` | `.fg-row` and `.fg-row-band` of a group row: a row that holds children, or a header row |
+| `--fg-group-row-bg` | not set | not set | `.fg-row` and `.fg-row-band` of a group row: a row that holds children, or a header row. Not set, the row keeps its stripe. Set, it replaces the stripe only. Hover, selection and a refused drop still show |
 | `--fg-group-row-border` | `0 solid transparent` | — | The same rows' `border-top`. Set `1px solid <colour>` for a hairline between groups |
 | `--fg-twisty-icon` | `none` | — | `.fg-row-twisty` icon as a mask image, for example `url(chevron.svg)`. Pair it with `--fg-twisty-icon-color: currentColor`, and set both glyph tokens to `''` |
 | `--fg-twisty-icon-color` | `transparent` | — | The fill under the mask. `currentColor` gives the chevron the label colour |

@@ -127,7 +127,6 @@ const LIGHT_COLOR_TOKENS = `
   /* A line the coarser header band changes over — the week holding the 1st, a week's Monday. */
   --fg-tick-line-strong-color: rgb(26 24 21 / 0.16);
   --fg-row-even-bg: transparent;
-  --fg-group-row-bg: var(--fg-row-even-bg);
   --fg-tick-edge-color: var(--fg-header-divider-color);
   --fg-tick-off-bg: transparent;
   --fg-tick-today-bg: transparent;
@@ -211,7 +210,6 @@ const DARK_COLOR_TOKENS = `
   --fg-tick-line-color: rgb(236 234 227 / 0.1);
   --fg-tick-line-strong-color: rgb(236 234 227 / 0.17);
   --fg-row-even-bg: transparent;
-  --fg-group-row-bg: var(--fg-row-even-bg);
   --fg-tick-edge-color: var(--fg-header-divider-color);
   --fg-tick-off-bg: transparent;
   --fg-tick-today-bg: transparent;
@@ -409,13 +407,18 @@ ${DARK_COLOR_TOKENS}
 .fg-tick { color: var(--fg-header-subtext); font-size: var(--fg-tick-font-size, inherit); font-weight: var(--fg-tick-font-weight, inherit); position: absolute; top: 0; left: 0; height: var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); line-height: var(--fg-band-height, ${DEFAULT_BAND_HEIGHT_PX}px); box-sizing: border-box; padding: 0 calc((var(--fg-tick-box-floor, ${DEFAULT_TICK_BOX_FLOOR_PX}px) - 1px) / 2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 1px solid var(--fg-tick-edge-color); }
 .fg-tick[data-flag~='off'] { background: var(--fg-tick-off-bg); }
 .fg-tick[data-flag~='today'] { background: var(--fg-tick-today-bg); color: var(--fg-tick-today-color); }
-.fg-row { background: var(--fg-row-even-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
+.fg-row { --fg-row-stripe-bg: var(--fg-row-even-bg); background: var(--fg-row-stripe-bg); position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: stretch; --fg-row-depth: 0; }
 /* Row parity comes from the frame's absolute row index (render/dom's rowParity), stamped as
    data-parity — not from :nth-child, which counts only the windowed rows and slides the whole zebra
    out of phase as soon as the pane scrolls. .fg-row-band is the timeline pane's copy of the same
    paint, from the same FrameRow, so the two panes stripe the same rows in both themes. */
-.fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { background: var(--fg-row-odd-bg); }
-.fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { background: var(--fg-row-even-bg); }
+.fg-row[data-parity='odd'], .fg-row-band[data-parity='odd'] { --fg-row-stripe-bg: var(--fg-row-odd-bg); background: var(--fg-row-stripe-bg); }
+.fg-row[data-parity='even'], .fg-row-band[data-parity='even'] { --fg-row-stripe-bg: var(--fg-row-even-bg); background: var(--fg-row-stripe-bg); }
+/* A group row is a row that holds children, or a header row. Both panes carry the hooks, so the fill
+   and the hairline cover the label and the timeline together. With --fg-group-row-bg unset the row
+   keeps its parity stripe. The fill sits before the state rules below, so hover, selection and a
+   refused drop still show on a group row. */
+.fg-row[data-parent], .fg-row-band[data-parent], .fg-row[data-kind='header'], .fg-row-band[data-kind='header'] { background: var(--fg-group-row-bg, var(--fg-row-stripe-bg)); border-top: var(--fg-group-row-border, 0 solid transparent); box-sizing: border-box; }
 /* One line per finest-band tick boundary, mounted between the decorations layer and .fg-bars, so
    the zebra, the selected-row band, and weekend shading paint over the lines, and every bar paints
    over them in turn — the design's own paint order. height is set inline per frame
@@ -459,9 +462,6 @@ ${DARK_COLOR_TOKENS}
    that wants one chevron that turns sets both glyph tokens to it and --fg-twisty-rotation-expanded
    to 90deg. The transition token is for that turn. */
 .fg-row-twisty { flex: 0 0 var(--fg-indent-width, 12px); width: var(--fg-indent-width, 12px); margin-inline-end: var(--fg-twisty-gap, 0px); border: 0; background: transparent; padding: 0; cursor: pointer; color: inherit; }
-/* A group row is a row that holds children, or a header row. Both panes carry the hooks, so the fill
-   and the hairline cover the label and the timeline together. */
-.fg-row[data-parent], .fg-row-band[data-parent], .fg-row[data-kind='header'], .fg-row-band[data-kind='header'] { background: var(--fg-group-row-bg); border-top: var(--fg-group-row-border, 0 solid transparent); box-sizing: border-box; }
 /* An icon draws as a mask over a fill: set --fg-twisty-icon to url(...) and --fg-twisty-icon-color to
    currentColor, and the chevron takes the label colour. With no icon the mask is off and the fill is
    clear, so the glyph shows. Set both glyph tokens to '' to hide the glyph under an icon. */
