@@ -742,7 +742,7 @@ A row's top moves when a row height changes, a parent collapses or expands, a fi
 
 ### An inline panel under a row
 
-Add a bar-less spacer entry after the row. Answer its height through the live `rowHeight` callback: the panel height when it is open, `0` when it is not. The rows below move down. Mount the panel in `rowSpanLayer` at `rowBox(spacer.id).top`.
+Add a bar-less spacer entry after the row. Answer its height through the live `rowHeight` callback: the panel height. A `rowHeight` answer of `0` or less means the default height, so a closed panel cannot answer `0`. Filter the spacer out of the row source instead. A filtered spacer holds no Row, and the rows stay close. Keep the spacer of the open task. The rows below move down. Mount the panel in `rowSpanLayer` at `rowBox(spacer.id).top`.
 
 ```ts
 import { definePlugin } from 'freegantt';
@@ -762,9 +762,9 @@ function detailsPanel(openFor: () => string | undefined) {
         if (box) panel.style.top = `${box.top}px`;
       };
 
-      ctx.view.rowSpanLayer.present(panel);
-      ctx.view.rowSpanLayer.onResize(place);
-      ctx.view.onRowLayout(place);
+      ctx.disposables.add(ctx.view.rowSpanLayer.present(panel));
+      ctx.disposables.add(ctx.view.rowSpanLayer.onResize(place));
+      ctx.disposables.add(ctx.view.onRowLayout(place));
       place();
     },
   });
@@ -773,7 +773,7 @@ function detailsPanel(openFor: () => string | undefined) {
 export { detailsPanel };
 ```
 
-The spacer entry is a normal entry with no dates, so it draws no bar. The consumer's `rowHeight` returns the panel's height for it. `harness/` has a runnable version.
+The spacer entry is a normal entry with no dates, so it draws no bar. The consumer's `rowHeight` returns the panel's height for it, and the row filter keeps only the open task's spacer. `harness/` has a runnable version.
 
 ## Every registration seam
 
