@@ -4,7 +4,7 @@
 
 import type { Entry, EntryId } from '../model/index.js';
 import type { PlannedRow } from './rows/row-source.js';
-import type { RowHeightResolver } from './row-height.js';
+import type { RowContext, RowHeightResolver } from './row-height.js';
 import { laneBandsOf, laneCountOf, laneRowHeight } from './lane.js';
 import type { FrameLane, LaneLayout } from './lane.js';
 import { HeaderTickPaintCache } from './header-tick.js';
@@ -126,13 +126,21 @@ export class FrameMemory {
     this.#datasetRevision = bind.datasetRevision;
   }
 
-  /** Call: `memory.laneCountOfRow(index)` — how many Lanes the row holds. `0` for a row with none. */
+  /** Call: `memory.laneCountOfRow(index)` — how many Lanes the row holds, a header row too. `0` for a
+   *  row with none. */
   laneCountOfRow(index: number): number {
     const planned = this.#plan[index];
-    const subject = planned?.entryIds[0];
-    const entry = subject === undefined ? undefined : this.#entryById.get(subject);
-    if (this.#lanes === undefined || entry === undefined || planned?.kind === 'header') return 0;
-    return laneCountOf(this.#lanes, entry);
+    if (this.#lanes === undefined || planned === undefined) return 0;
+    return laneCountOf(this.#lanes, this.#rowContextOf(planned));
+  }
+
+  #rowContextOf(planned: PlannedRow): RowContext {
+    const subject = planned.entryIds[0];
+    return {
+      entry: subject === undefined ? undefined : this.#entryById.get(subject),
+      kind: planned.kind,
+      depth: planned.depth,
+    };
   }
 
   /** Call: `memory.lanesOfRow(index, top, height)` — the Lanes to draw in the row, or none. */
@@ -154,13 +162,11 @@ export class FrameMemory {
     const resolve = this.#rowHeightOf;
     // A Lane Row never clips its stack: a default height taller than the stack wins, a shorter one does not.
     if (resolve === undefined) return Math.max(laneHeight ?? 0, this.#rowHeight);
-    const subject = planned.entryIds[0];
     const height = resolve({
-      entry: subject === undefined ? undefined : this.#entryById.get(subject),
-      kind: planned.kind,
-      depth: planned.depth,
-      lanes,
+      ...this.#rowContextOf(planned),
+      laneCount: lanes,
       laneHeight,
+      defaultHeight: this.#rowHeight,
     });
     // A function that answers nothing usable gets the default, so one bad Row never zeroes the pane.
     return Number.isFinite(height) && height > 0 ? height : Math.max(laneHeight ?? 0, this.#rowHeight);

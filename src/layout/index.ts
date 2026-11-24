@@ -150,7 +150,7 @@ export type {
 } from './viewport/scroll-axis.js';
 export { laneBandsOf, laneCountOf, laneRowHeight } from './lane.js';
 export type { FrameLane, LaneGeometry, LaneLayout, LaneRule } from './lane.js';
-export type { RowHeight, RowHeightContext, RowHeightResolver } from './row-height.js';
+export type { RowContext, RowHeight, RowHeightContext, RowHeightResolver } from './row-height.js';
 export type { HeaderTickContext, HeaderTickPaint, HeaderTickRenderer } from './header-tick.js';
 export { PrefixSumHeightIndex } from './row-height-index.js';
 export type { RowHeightIndex } from './row-height-index.js';

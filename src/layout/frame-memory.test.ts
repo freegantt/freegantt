@@ -4,10 +4,10 @@ import { createVariantRegistry } from './bars/variants.js';
 import { sampleEntries } from '../../fixtures/sample-dataset.js';
 import * as produceBars from './bars/produce-bars.js';
 import { rowId } from '../model/index.js';
-import type { Entry } from '../model/index.js';
 import { entryDoubleLike } from './entry-double.js';
 import type { PlannedRow } from './rows/row-source.js';
 import type { RowHeightContext } from './row-height.js';
+import type { LaneLayout } from './lane.js';
 import { addMs } from '../time/index.js';
 
 function planOf(entries = sampleEntries): readonly PlannedRow[] {
@@ -190,6 +190,24 @@ describe('FrameMemory row height function (ADR 0044)', () => {
     expect(memory.heights.topAt(2)).toBe(81);
   });
 
+  it('tells the function the default Row height', () => {
+    const memory = new FrameMemory();
+    const seen: number[] = [];
+    memory.sync({
+      plan: planOf(entries),
+      rowHeight: 37,
+      rowHeightOf: (ctx) => {
+        seen.push(ctx.defaultHeight);
+        return ctx.defaultHeight + 1;
+      },
+      entries,
+      registry,
+      datasetRevision: 0,
+    });
+    expect(memory.heights.heightAt(0)).toBe(38);
+    expect(new Set(seen)).toEqual(new Set([37]));
+  });
+
   it('builds the height index again when the function changes', () => {
     const memory = new FrameMemory();
     const plan = planOf(entries);
@@ -236,9 +254,9 @@ describe('FrameMemory lanes (ADR 0043)', () => {
   const registry = createVariantRegistry({ fieldFor: () => undefined });
   const entries = sampleEntries.slice(0, 3);
   const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
-  const lanesOf = (counts: number[]) => {
+  const lanesOf = (counts: number[]): LaneLayout => {
     const countById = new Map(entries.map((entry, i) => [entry.id, counts[i]!]));
-    return { rule: { count: (entry: Entry) => countById.get(entry.id)!, of: () => 0 }, geometry };
+    return { rule: { laneCount: ({ entry }) => countById.get(entry!.id)!, laneOf: () => 0 }, geometry };
   };
 
   it('sizes a row from its Lane count, and a row with none from rowHeight', () => {
@@ -259,7 +277,7 @@ describe('FrameMemory lanes (ADR 0043)', () => {
     memory.sync({
       plan: planOf(entries),
       rowHeight: 20,
-      lanes: { rule: { count: () => 2, of: () => 0 }, geometry },
+      lanes: { rule: { laneCount: () => 2, laneOf: () => 0 }, geometry },
       entries,
       registry,
       datasetRevision: 0,
@@ -272,7 +290,7 @@ describe('FrameMemory lanes (ADR 0043)', () => {
     memory.sync({
       plan: planOf(entries),
       rowHeight: 120,
-      lanes: { rule: { count: () => 2, of: () => 0 }, geometry },
+      lanes: { rule: { laneCount: () => 2, laneOf: () => 0 }, geometry },
       entries,
       registry,
       datasetRevision: 0,
@@ -287,7 +305,7 @@ describe('FrameMemory lanes (ADR 0043)', () => {
       plan: planOf(entries),
       rowHeight: 32,
       rowHeightOf: (ctx) => {
-        seen.push([ctx.lanes, ctx.laneHeight]);
+        seen.push([ctx.laneCount, ctx.laneHeight]);
         return ctx.laneHeight ?? 48;
       },
       lanes: lanesOf([1, 2, 0]),

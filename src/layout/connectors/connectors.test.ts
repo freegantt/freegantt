@@ -83,7 +83,7 @@ describe('connectors in the frame', () => {
   it('ends a connector at the middle of its bar’s own Lane', () => {
     const geometry = { heightPx: 10, gapPx: 4, paddingPx: 2 };
     const lanes = {
-      rule: { count: () => 2, of: (entry: Entry) => (entry.id === entryId('a') ? 1 : 0) },
+      rule: { laneCount: () => 2, laneOf: (entry: Entry) => (entry.id === entryId('a') ? 1 : 0) },
       geometry,
     };
     const [connector] = frameOf([() => [finishToStart]], { lanes, rowHeight: 20 }).connectors;

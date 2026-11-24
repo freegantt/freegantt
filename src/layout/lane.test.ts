@@ -5,7 +5,10 @@ import type { Entry } from '../model/index.js';
 
 const geometry: LaneGeometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
 const entry = {} as Entry;
-const layoutOf = (count: number): LaneLayout => ({ rule: { count: () => count, of: () => 0 }, geometry });
+const layoutOf = (count: number): LaneLayout => ({
+  rule: { laneCount: () => count, laneOf: () => 0 },
+  geometry,
+});
 
 describe('lane geometry', () => {
   it('gives a row with one Lane 50 px and a row with two Lanes 86 px', () => {
@@ -30,6 +33,6 @@ describe('lane geometry', () => {
     ['negative', -1, 0],
     ['not a number', Number.NaN, 0],
   ])('reads %s as a whole Lane count', (_label, answer, expected) => {
-    expect(laneCountOf(layoutOf(answer), entry)).toBe(expected);
+    expect(laneCountOf(layoutOf(answer), { entry, kind: 'entry', depth: 0 })).toBe(expected);
   });
 });

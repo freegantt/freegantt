@@ -839,7 +839,9 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
     const none = computeFrame(inputWith({}));
     expect(none.rows.every((row) => row.lanes === undefined)).toBe(true);
-    const frame = computeFrame(inputWith({ lanes: { rule: { count: () => 2, of: () => 0 }, geometry } }));
+    const frame = computeFrame(
+      inputWith({ lanes: { rule: { laneCount: () => 2, laneOf: () => 0 }, geometry } }),
+    );
     const row = frame.rows[0]!;
     expect(row.height).toBe(86);
     expect(row.lanes).toEqual([
@@ -848,11 +850,39 @@ describe('computeFrame — timeline grid lines (J2)', () => {
     ]);
   });
 
+  it('lets a rule give a header row Lanes, and hands the rule the row’s kind and depth', () => {
+    const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
+    const asked: string[] = [];
+    const frame = computeFrame(
+      inputWith({
+        entries: sampleEntries.slice(0, 4),
+        rows: { source: 'group', groupBy: () => 'all' },
+        lanes: {
+          rule: {
+            laneCount: ({ kind, depth }) => {
+              asked.push(`${kind}:${depth}`);
+              return kind === 'header' ? 2 : 0;
+            },
+            laneOf: () => 0,
+          },
+          geometry,
+        },
+      }),
+    );
+    const header = frame.rows.find((row) => row.kind === 'header')!;
+    expect(header.lanes).toHaveLength(2);
+    expect(header.height).toBe(86);
+    expect(asked).toContain('header:0');
+    expect(frame.rows.filter((row) => row.kind !== 'header').every((row) => row.lanes === undefined)).toBe(
+      true,
+    );
+  });
+
   it('puts a bar in the lane its Entry names, at that lane’s top and height', () => {
     const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
     const laneOf = (entry: { id: string }) => (entry.id === gridEntries[0]!.id ? 1 : 0);
     const frame = computeFrame(
-      inputWith({ lanes: { rule: { count: () => 2, of: (entry) => laneOf(entry) }, geometry } }),
+      inputWith({ lanes: { rule: { laneCount: () => 2, laneOf: (entry) => laneOf(entry) }, geometry } }),
     );
     const row = frame.rows[0]!;
     const bar = frame.bars.find((candidate) => candidate.rowId === row.id)!;
@@ -863,7 +893,9 @@ describe('computeFrame — timeline grid lines (J2)', () => {
 
   it('puts a bar whose lane the row does not hold in the last lane, and centres a bar in a row with none', () => {
     const geometry = { heightPx: 30, gapPx: 6, paddingPx: 10 };
-    const frame = computeFrame(inputWith({ lanes: { rule: { count: () => 2, of: () => 7 }, geometry } }));
+    const frame = computeFrame(
+      inputWith({ lanes: { rule: { laneCount: () => 2, laneOf: () => 7 }, geometry } }),
+    );
     expect(frame.bars.every((bar) => bar.lane === 1)).toBe(true);
     const plain = computeFrame(inputWith({}));
     expect(plain.bars.every((bar) => bar.lane === undefined)).toBe(true);

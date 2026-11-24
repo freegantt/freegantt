@@ -314,7 +314,7 @@ describe('FrameSettings — numeric rowHeight', () => {
 });
 
 describe('FrameSettings — lanes', () => {
-  const rule = { count: () => 2, of: () => 0 };
+  const rule = { laneCount: () => 2, laneOf: () => 0 };
 
   it('hands the layout no lanes until a rule is set', () => {
     const { ports } = recordingPorts();
@@ -337,7 +337,7 @@ describe('FrameSettings — lanes', () => {
     settings.refreshPixelProperties();
     const first = settings.rowHeightFunction().lanes;
     expect(settings.rowHeightFunction().lanes).toBe(first);
-    settings.set({ lanes: { count: () => 1, of: () => 0 } });
+    settings.set({ lanes: { laneCount: () => 1, laneOf: () => 0 } });
     expect(settings.rowHeightFunction().lanes).not.toBe(first);
   });
 

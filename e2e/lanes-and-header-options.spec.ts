@@ -31,7 +31,7 @@ test('a rowHeight resolver sets the height of every row', async ({ page }) => {
 test('lanes make a row as tall as its lanes, and draw one guide per lane', async ({ page }) => {
   await openPage(page);
   await page.evaluate(() => {
-    window.__gantt.lanes = { count: () => 2, of: () => 1 };
+    window.__gantt.lanes = { laneCount: () => 2, laneOf: () => 1 };
   });
   // 10 padding + 30 lane + 6 gap + 30 lane + 10 padding, from the default lane tokens.
   await expect.poll(() => firstRowBandHeight(page)).toBe(86);
@@ -42,7 +42,7 @@ test('lanes make a row as tall as its lanes, and draw one guide per lane', async
 test('a bar sits in the lane its rule names', async ({ page }) => {
   await openPage(page);
   await page.evaluate(() => {
-    window.__gantt.lanes = { count: () => 2, of: () => 1 };
+    window.__gantt.lanes = { laneCount: () => 2, laneOf: () => 1 };
   });
   const guides = page.locator('#gantt .fg-row-band').first().locator('.fg-lane');
   await expect(guides).toHaveCount(2);

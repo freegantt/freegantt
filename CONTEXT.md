@@ -340,7 +340,7 @@ The internal list `resolveRows` produces before placement — `PlannedRow` value
 _Avoid_: PlannedRow as a glossary term (internal only), Row model (Row is what the frame carries after placement)
 
 **Lane**:
-A horizontal band inside one Row (ADR 0043). The consumer states how many Lanes a Row holds (`gantt.lanes.count`) and which Lane a Bar sits in (`gantt.lanes.of`). A Lane with no Bar still counts, so an empty Lane keeps its band. Lane height, gap and padding come from `--fg-lane-*` tokens. The library never moves a Bar between Lanes.
+A horizontal band inside one Row (ADR 0043). The consumer states how many Lanes a Row holds (`gantt.lanes.laneCount(row)`, a header Row too) and which Lane a Bar sits in (`gantt.lanes.laneOf(entry)`). A Lane with no Bar still counts, so an empty Lane keeps its band. Lane height, gap and padding come from `--fg-lane-*` tokens. The library never moves a Bar between Lanes.
 _Avoid_: Track, line, Lane packing, slot
 
 **Row**:

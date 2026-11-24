@@ -2,13 +2,14 @@
 // hold them (ADR 0043). Geometry comes from `--fg-lane-*` tokens only, never from an option.
 
 import type { Entry } from '../model/index.js';
+import type { RowContext } from './row-height.js';
 
-/** Which Lanes does a Row hold? A consumer states it per Entry. */
+/** Which Lanes does a Row hold? A consumer states it per Row, and per Entry for the Bar's Lane. */
 export interface LaneRule {
   /** Lanes the Row of this Entry holds. An empty Lane still counts. `0` or less: the Row has none. */
-  count(entry: Entry): number;
+  laneCount(row: RowContext): number;
   /** The zero-based Lane a Bar of this Entry sits in. */
-  of(entry: Entry): number;
+  laneOf(entry: Entry): number;
 }
 
 /** The three `--fg-lane-*` tokens, read as px. */
@@ -31,8 +32,8 @@ export interface FrameLane {
 }
 
 /** Lanes a Row holds, as a whole number. A rule that answers nothing usable gives `0`. */
-export function laneCountOf(layout: LaneLayout, entry: Entry): number {
-  const count = Math.floor(layout.rule.count(entry));
+export function laneCountOf(layout: LaneLayout, row: RowContext): number {
+  const count = Math.floor(layout.rule.laneCount(row));
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 

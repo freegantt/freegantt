@@ -4,7 +4,7 @@
 // panel with `rowBox`.
 import { mountHarnessChrome } from './harness-nav.js';
 import { Gantt, Dataset } from 'freegantt';
-import type { EntryInput } from 'freegantt';
+import type { EntryInput, RowHeightContext } from 'freegantt';
 import { seededEntryInputs } from '../fixtures/seeded-dataset.js';
 import { mountPageBrief } from './docs/page-brief.js';
 import { PANEL_HEIGHT_PX, inlineDetailsPanel, spacerIdFor } from './plugins/inline-details-panel.js';
@@ -12,7 +12,6 @@ import { PANEL_HEIGHT_PX, inlineDetailsPanel, spacerIdFor } from './plugins/inli
 mountHarnessChrome();
 mountPageBrief(document.querySelector<HTMLDivElement>('#page-brief')!, 'inline-details');
 
-const ROW_HEIGHT_PX = 32;
 const tasks = seededEntryInputs({ count: 24 }).map((task, index) => ({
   ...task,
   name: `Task ${index + 1}`,
@@ -38,8 +37,8 @@ const panel = inlineDetailsPanel(
 const dataset = new Dataset({ entries, timeZone: 'UTC', plugins: [panel] });
 
 /** A spacer is as tall as the panel. A task keeps the normal row height. */
-function rowHeightOf({ entry }: { entry: { id: unknown } | undefined }): number {
-  return String(entry?.id ?? '').endsWith(':panel') ? PANEL_HEIGHT_PX : ROW_HEIGHT_PX;
+function rowHeightOf({ entry, defaultHeight }: RowHeightContext): number {
+  return String(entry?.id ?? '').endsWith(':panel') ? PANEL_HEIGHT_PX : defaultHeight;
 }
 
 /** The rows the Gantt keeps: every task, and the spacer of the open task. */

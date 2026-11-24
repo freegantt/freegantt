@@ -20,14 +20,14 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 
 #### Rows and lanes
 
-- The new `lanes` Gantt option gives Rows Lanes: `{ count(entry), of(entry) }`.
-  - A Row with Lanes grows to hold them. A bar sits in the Lane that `lanes.of(entry)` names, and `FrameBar.lane`, `y` and `height` say where.
+- The new `lanes` Gantt option gives Rows Lanes: `{ laneCount(row), laneOf(entry) }`. `laneCount` gets the Row's `entry`, `kind` and `depth`, so a header Row can hold Lanes.
+  - A Row with Lanes grows to hold them. A bar sits in the Lane that `lanes.laneOf(entry)` names, and `FrameBar.lane`, `y` and `height` say where.
   - A Row with no Lanes centres its bar as before.
   - The Lane size comes from `--fg-lane-height`, `--fg-lane-gap` and `--fg-lane-padding`.
   - Rows draw empty `.fg-lane` guides, styled by `--fg-lane-bg`, `--fg-lane-border` and `--fg-lane-radius`.
   - Frame rows carry `lanes`.
   - It changes live.
-- The new `rowHeight` Gantt option sets a Row's height: a number for every Row, or a function that answers per Row from its Entry, kind and depth.
+- The new `rowHeight` Gantt option sets a Row's height: a number for every Row, or a function that answers per Row from its Entry, kind, depth, `laneCount`, `laneHeight` and `defaultHeight`.
   - `--fg-row-height` stays the default.
   - A bar centres in its own Row, and a connector leaves from the middle of its bar. In a Row with Lanes, that is the middle of its Lane.
   - It changes live.

@@ -492,7 +492,7 @@ function lockedMark(locked: boolean): { locked?: true } {
 
 /** The Lane an Entry's Bar sits in, or `undefined` when no rule places it. */
 function laneOfEntry(lanes: LaneLayout | undefined, entry: Entry | undefined): number | undefined {
-  return lanes === undefined || entry === undefined ? undefined : Math.floor(lanes.rule.of(entry));
+  return lanes === undefined || entry === undefined ? undefined : Math.floor(lanes.rule.laneOf(entry));
 }
 
 /** Where a Bar sits vertically. In a Row with Lanes it takes its Lane's top and height, and the

@@ -2033,8 +2033,8 @@ export type KeyHandler = (event: KeyEventLike) => void | false;
 
 // @public
 export interface LaneRule {
-    count(entry: Entry): number;
-    of(entry: Entry): number;
+    laneCount(row: RowContext): number;
+    laneOf(entry: Entry): number;
 }
 
 // @public
@@ -2608,23 +2608,29 @@ export interface RowBox {
 }
 
 // @public
-export type RowFilter = (entry: Entry) => boolean;
-
-// Warning: (ae-forgotten-export) The symbol "RowHeightResolver" needs to be exported by the entry point index.d.ts
-//
-// @public
-export type RowHeight = number | RowHeightResolver;
-
-// @public
-export interface RowHeightContext {
+export interface RowContext {
     // (undocumented)
     readonly depth: number;
     readonly entry: Entry | undefined;
     // (undocumented)
     readonly kind: PlannedRowKind;
-    readonly laneHeight: number | undefined;
-    readonly lanes: number;
 }
+
+// @public
+export type RowFilter = (entry: Entry) => boolean;
+
+// @public
+export type RowHeight = number | RowHeightResolver;
+
+// @public
+export interface RowHeightContext extends RowContext {
+    readonly defaultHeight: number;
+    readonly laneCount: number;
+    readonly laneHeight: number | undefined;
+}
+
+// @public (undocumented)
+export type RowHeightResolver = (context: RowHeightContext) => number;
 
 // @public (undocumented)
 export type RowId = string & {
