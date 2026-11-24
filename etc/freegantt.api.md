@@ -1595,8 +1595,10 @@ export class Gantt<TProps = unknown> {
     set tickLines(lines: TickLines);
     get todayColumn(): boolean;
     set todayColumn(on: boolean);
-    get todayLine(): boolean | Instant | TodayLineSpec;
-    set todayLine(on: boolean | InstantInput | TodayLineSpec);
+    get todayLine(): boolean | Instant;
+    set todayLine(on: boolean | InstantInput);
+    get todayLineAt(): TodayLineAt;
+    set todayLineAt(at: TodayLineAt);
     // (undocumented)
     get todayLineMarginTicks(): number;
     set todayLineMarginTicks(ticks: number);
@@ -1717,7 +1719,8 @@ export interface GanttOptionsBase<TProps = unknown> {
     theme?: Theme;
     tickLines?: TickLines;
     todayColumn?: boolean;
-    todayLine?: boolean | InstantInput | TodayLineSpec;
+    todayLine?: boolean | InstantInput;
+    todayLineAt?: TodayLineAt;
     todayLineMarginTicks?: number;
     tooltipRenderer?: TooltipRenderer;
     variants?: readonly EntryVariant<TProps>[];
@@ -3072,10 +3075,7 @@ export interface TimeUnitWidth {
 }
 
 // @public
-export interface TodayLineSpec {
-    // (undocumented)
-    at: 'now' | 'dayCentre';
-}
+export type TodayLineAt = 'now' | 'dayCenter';
 
 // @public
 export class ToggleFieldNotBooleanError extends FreeGanttError {

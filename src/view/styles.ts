@@ -464,7 +464,7 @@ ${DARK_COLOR_TOKENS}
 /* An icon draws as a mask over a fill: set --fg-twisty-icon to url(...) and --fg-twisty-icon-color to
    currentColor, and the chevron takes the label colour. With no icon the mask is off and the fill is
    clear, so the glyph shows. Set both glyph tokens to '' to hide the glyph under an icon. */
-.fg-row-twisty::before { content: var(--fg-twisty-glyph-collapsed, '▸'); display: inline-block; width: var(--fg-twisty-icon-size, auto); height: var(--fg-twisty-icon-size, auto); vertical-align: middle; background: var(--fg-twisty-icon-color, transparent); -webkit-mask: var(--fg-twisty-icon, none) center / contain no-repeat; mask: var(--fg-twisty-icon, none) center / contain no-repeat; transition: var(--fg-twisty-transition, none); }
+.fg-row-twisty::before { content: var(--fg-twisty-glyph-collapsed, '▸'); display: inline-block; width: var(--fg-twisty-icon-size, auto); height: var(--fg-twisty-icon-size, auto); vertical-align: var(--fg-twisty-icon-align, baseline); background: var(--fg-twisty-icon-color, transparent); -webkit-mask: var(--fg-twisty-icon, none) center / contain no-repeat; mask: var(--fg-twisty-icon, none) center / contain no-repeat; transition: var(--fg-twisty-transition, none); }
 .fg-row-twisty[aria-expanded='true']::before { content: var(--fg-twisty-glyph-expanded, '▾'); transform: rotate(var(--fg-twisty-rotation-expanded, 0deg)); }
 .fg-row-label[data-fixed], .fg-row-cell[data-fixed] { flex: 0 0 auto; }
 .fg-row-label[data-align='end'], .fg-row-cell[data-align='end'] { justify-content: flex-end; text-align: end; }

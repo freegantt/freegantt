@@ -39,7 +39,7 @@ import type {
   HeaderTickPaint,
   HeaderTickRenderer,
   TickLines,
-  TodayLineSpec,
+  TodayLineAt,
 } from '../layout/index.js';
 import type {
   BarLabels,
@@ -172,11 +172,12 @@ export interface GanttOptionsBase<TProps = unknown> {
    *  midnight until something else repaints. An app that wants a live line reassigns this on its own
    *  timer, e.g. `setInterval(() => { gantt.todayLine = new Date(); }, 60_000)`, held in a plugin's
    *  `ctx.disposables`. `false`: off, no clock read. An `InstantInput` pins it with no clock read at
-   *  all. To keep today visible, pan with `panToToday()` or grow `range`.
-   *
-   *  `{ at: 'dayCentre' }` reads the clock and puts the line in the middle of today's calendar day
-   *  in the Dataset zone, so a day column holds the line at its centre. `{ at: 'now' }` equals `true`. */
-  todayLine?: boolean | InstantInput | TodayLineSpec;
+   *  all. To keep today visible, pan with `panToToday()` or grow `range`. */
+  todayLine?: boolean | InstantInput;
+  /** Live. Where the clock-driven today line sits inside today. `'now'` is the clock instant.
+   *  `'dayCenter'` is the middle of today's calendar day in the Dataset zone, so a day column holds
+   *  the line at its center. A pinned `todayLine` Instant ignores it. Default `'now'`. */
+  todayLineAt?: TodayLineAt;
   /** Live. Default `false`. `true` paints a column over the finest header tick that holds today,
    *  under the bars. Colour: `--fg-today-column-bg`. Part: `.fg-today-column`. */
   todayColumn?: boolean;
@@ -416,7 +417,7 @@ export type {
   RowHeightContext,
   RowHeightResolver,
   TickLines,
-  TodayLineSpec,
+  TodayLineAt,
 };
 
 export class Gantt<TProps = unknown> {
@@ -457,6 +458,7 @@ export class Gantt<TProps = unknown> {
         'locale',
         'dateLineLabelPlacement',
         'todayLineMarginTicks',
+        'todayLineAt',
         'todayColumn',
         'tickLines',
         'rowHeight',
@@ -482,6 +484,7 @@ export class Gantt<TProps = unknown> {
       ...(options.scale ? { scale: options.scale } : {}),
       ...(options.range !== undefined ? { range: this.#toRange(options.range) } : {}),
       ...(options.todayLine !== undefined ? { todayLine: this.#toTodayLine(options.todayLine) } : {}),
+      ...(options.todayLineAt !== undefined ? { todayLineAt: options.todayLineAt } : {}),
       ...(options.dateLines !== undefined ? { dateLines: this.#toDateLines(options.dateLines) } : {}),
       // Applied inside the shell's own constructor, ahead of `paintFirstFrame()` below, so a
       // plugin's `view()` reads the real starting selection back through `ctx.gantt` (ADR 0032).
@@ -574,9 +577,8 @@ export class Gantt<TProps = unknown> {
 
   /** Reads `todayLine`'s loose pinned form through the dataset's zone (S1.13) — booleans
    *  pass through untouched, so `true`/`false` never take a clock read they don't need. */
-  #toTodayLine(todayLine: boolean | InstantInput | TodayLineSpec): boolean | Instant | TodayLineSpec {
+  #toTodayLine(todayLine: boolean | InstantInput): boolean | Instant {
     if (typeof todayLine === 'boolean') return todayLine;
-    if (typeof todayLine === 'object' && 'at' in todayLine) return todayLine;
     return toInstant(this.#dataset.timeZone, todayLine, 'gantt.todayLine');
   }
 
@@ -1021,8 +1023,13 @@ export class Gantt<TProps = unknown> {
 
   /** Getter returns what was resolved (S1.13, S4-1) — a `boolean` passes straight
    *  through; any other setting reads back the `Instant` it was pinned to, never the loose input. */
-  get todayLine(): boolean | Instant | TodayLineSpec {
+  get todayLine(): boolean | Instant {
     return this.#shell.todayLine;
+  }
+
+  /** Live. See `GanttOptions.todayLineAt`. */
+  get todayLineAt(): TodayLineAt {
+    return this.#shell.todayLineAt;
   }
 
   /** Live. See `GanttOptions.todayColumn`. */
@@ -1072,8 +1079,13 @@ export class Gantt<TProps = unknown> {
 
   /** Live (S1.12/S1.13). `true`/`false` pass straight through; any other
    *  `InstantInput` is read once through the dataset's zone and pins the line with no clock read. */
-  set todayLine(on: boolean | InstantInput | TodayLineSpec) {
+  set todayLine(on: boolean | InstantInput) {
     this.#shell.todayLine = this.#toTodayLine(on);
+  }
+
+  /** Live. See `GanttOptions.todayLineAt`. */
+  set todayLineAt(at: TodayLineAt) {
+    this.#shell.todayLineAt = at;
   }
 
   /** Getter returns what was resolved (S4-1), same precedent as `todayLine`/`range` above: every

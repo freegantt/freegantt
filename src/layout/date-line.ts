@@ -36,18 +36,17 @@ export type DateLineLabelPlacement = 'inHeader' | 'belowHeader' | number;
 
 export const DEFAULT_DATE_LINE_LABEL_PLACEMENT: DateLineLabelPlacement = 'belowHeader';
 
-/** Where the today line sits inside today. `'now'` is the clock instant. `'dayCentre'` is the middle of
- *  today's calendar day in the Dataset zone, so a day column holds the line at its centre. */
-export interface TodayLineSpec {
-  at: 'now' | 'dayCentre';
-}
+/** Where the clock-driven today line sits inside today. `'now'` is the clock instant. `'dayCenter'` is
+ *  the middle of today's calendar day in the Dataset zone, so a day column holds the line at its center. */
+export type TodayLineAt = 'now' | 'dayCenter';
 
 export interface ResolveDateLinesInput {
   scale: Pick<TimeScale, 'range' | 'xForInstant' | 'timeZone'>;
   /** `true`/`undefined` reads `now()` (or the test-frozen `now` below); `false` omits it; an
-   *  `Instant` pins the line there with no clock read at all; a `TodayLineSpec` reads the clock and
-   *  places the line by its `at`. Default `true`. */
-  todayLine?: boolean | Instant | TodayLineSpec;
+   *  `Instant` pins the line there with no clock read at all. Default `true`. */
+  todayLine?: boolean | Instant;
+  /** Where a clock-driven line sits inside today. A pinned `Instant` ignores it. Default `'now'`. */
+  todayLineAt?: TodayLineAt;
   dateLines?: readonly DateLine[];
   /** Frozen Instant for tests, used only when `todayLine` resolves to "now" mode. */
   now?: Instant;
@@ -70,14 +69,15 @@ function dateLineAt(
   return line;
 }
 
-/** The Instant the today line sits at. Only a `TodayLineSpec` with `at: 'dayCentre'` moves it off the clock. */
+/** The Instant the today line sits at. Only `at: 'dayCenter'` on a clock-driven line moves it off the clock. */
 function todayLineInstant(
-  todayLine: true | Instant | TodayLineSpec,
+  todayLine: true | Instant,
+  at: TodayLineAt,
   timeZone: string,
   clock: Instant,
 ): Instant {
   if (typeof todayLine === 'number') return todayLine;
-  if (todayLine === true || todayLine.at === 'now') return clock;
+  if (at === 'now') return clock;
   const dayStart = startOf(timeZone, clock, 'day');
   const dayEnd = stepBy(timeZone, dayStart, 'day', 1);
   return addMs(dayStart, diffMs(dayEnd, dayStart) / 2);
@@ -90,7 +90,7 @@ export function resolveDateLines(input: ResolveDateLinesInput): DateLineDecorati
   const lines: DateLineDecoration[] = [];
   const todayLine = input.todayLine ?? true;
   if (todayLine !== false) {
-    const at = todayLineInstant(todayLine, scale.timeZone, input.now ?? now());
+    const at = todayLineInstant(todayLine, input.todayLineAt ?? 'now', scale.timeZone, input.now ?? now());
     const today = dateLineAt(scale, at, { today: true });
     if (today) lines.push(today);
   }

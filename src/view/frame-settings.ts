@@ -26,7 +26,7 @@ import type {
   DateLine,
   DateLineLabelPlacement,
   TickLines,
-  TodayLineSpec,
+  TodayLineAt,
   RowHeight,
   LaneLayout,
   LaneRule,
@@ -138,7 +138,8 @@ export interface FrameSettingsPorts {
  *  with an explicit `| undefined`. The other six always hold a value. */
 interface FrameSettingsValues {
   locale: Intl.LocalesArgument | undefined;
-  todayLine: boolean | Instant | TodayLineSpec;
+  todayLine: boolean | Instant;
+  todayLineAt: TodayLineAt;
   todayColumn: boolean;
   tickLines: TickLines;
   headerTickRenderer: HeaderTickRenderer | undefined;
@@ -176,6 +177,7 @@ function defaultSettings(): FrameSettingsValues {
   return {
     locale: undefined,
     todayLine: true,
+    todayLineAt: 'now',
     todayColumn: false,
     tickLines: 'tick',
     headerTickRenderer: undefined,
@@ -207,6 +209,7 @@ function defaultSettings(): FrameSettingsValues {
 const INVALIDATION: { readonly [K in FrameSettingKey]: FrameInvalidation } = Object.freeze({
   locale: 'rebindFields',
   todayLine: 'repaint',
+  todayLineAt: 'repaint',
   todayColumn: 'repaint',
   tickLines: 'repaint',
   headerTickRenderer: 'repaint',
@@ -239,6 +242,7 @@ type SettingLayoutInputKey =
   | 'barHeightPx'
   | 'locale'
   | 'todayLine'
+  | 'todayLineAt'
   | 'todayColumn'
   | 'tickLines'
   | 'headerTickRenderer'
@@ -288,8 +292,12 @@ export class FrameSettings {
     return this.#values.locale ?? this.#ports.datasetLocale();
   }
 
-  get todayLine(): boolean | Instant | TodayLineSpec {
+  get todayLine(): boolean | Instant {
     return this.#values.todayLine;
+  }
+
+  get todayLineAt(): TodayLineAt {
+    return this.#values.todayLineAt;
   }
 
   get todayColumn(): boolean {
@@ -446,6 +454,7 @@ export class FrameSettings {
       minBarWidthPx: this.#metrics.minBarWidthPx,
       barHeightPx: this.#metrics.barHeightPx,
       todayLine: this.#values.todayLine,
+      todayLineAt: this.#values.todayLineAt,
       todayColumn: this.#values.todayColumn,
       tickLines: this.#values.tickLines,
       ...(this.#values.headerTickRenderer !== undefined

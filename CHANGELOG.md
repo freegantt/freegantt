@@ -67,9 +67,10 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
   - The default is `false`, and it changes live.
   - The `--fg-today-column-bg` token sets the tint.
   - The tint paints after the time-shading bands, so an off-day band never covers it.
-- `todayLine` also takes `{ at: 'now' | 'dayCentre' }`.
-  - `{ at: 'dayCentre' }` puts the line in the middle of the current day.
-  - `true` still means the current instant.
+- The new `todayLineAt` Gantt option sets where the clock-driven today line sits: `'now'` (the default) or `'dayCenter'`.
+  - `'dayCenter'` puts the line in the middle of the current day.
+  - A pinned `todayLine` Instant ignores it.
+  - It changes live.
 - Three new tokens style the Today line: `--fg-today-line-width`, `--fg-today-line-opacity` and `--fg-today-line-animation`.
   - Each default keeps the 0.2.0 look.
   - The `fg-today-glow` keyframes run only for a reader who accepts motion.
@@ -98,7 +99,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 #### Twisty
 
 - Five new tokens style the row twisty: `--fg-twisty-glyph-collapsed`, `--fg-twisty-glyph-expanded`, `--fg-twisty-rotation-expanded`, `--fg-twisty-transition` and `--fg-twisty-gap`.
-- Three more tokens draw the twisty as a mask image: `--fg-twisty-icon`, `--fg-twisty-icon-color` and `--fg-twisty-icon-size`.
+- Four more tokens draw the twisty as a mask image: `--fg-twisty-icon`, `--fg-twisty-icon-color`, `--fg-twisty-icon-size` and `--fg-twisty-icon-align`.
 - The defaults keep the 0.2.0 look.
 
 #### Accessibility
@@ -113,8 +114,12 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 ### Changed
 
 - A column header reads `--fg-col-header-padding-inline` and `--fg-col-header-padding-block` first, then falls back to `--fg-cell-padding-inline` and `--fg-cell-padding-block`. An app that set the cell tokens keeps aligned headers. `--fg-col-header-padding-block` takes a shorthand, such as `0 10px`.
-- The TypeScript type of `gantt.todayLine` widens to `boolean | Instant | TodayLineSpec`. Code that narrows the getter's value may need a branch for the new object form. Code that never sets the object form gets the same runtime values as before.
 - `HeaderFormat` takes a `HeaderFormatContext`, which extends `FormatContext` with `rangeStart`. A function typed against `FormatContext` still compiles.
+- Every default keeps the 0.2.0 look. The type changes below can still break TypeScript code.
+- `InvalidPresetError.rule` gains `'header-height'` and `'header-align'`. A `switch` over `rule` that must be exhaustive needs two more cases.
+- `PluginContextParts.view` gains `fullWidthRowLayer`, `rowBox` and `onRowLayout`. A test double that builds `view` by hand needs the three members.
+- `ResolvedVariant` gains `unstyled: boolean`. Code that builds a `ResolvedVariant` by hand must set it.
+- `ScaleModel.ticks` takes `TickStep & { alignTo? }`. A custom `ScaleModel` must accept the wider argument.
 
 ## [0.2.0] - 2026-11-02
 

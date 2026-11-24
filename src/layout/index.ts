@@ -62,7 +62,7 @@ export type {
   DateLineDecoration,
   DateLineLabelPlacement,
   ResolveDateLinesInput,
-  TodayLineSpec,
+  TodayLineAt,
 } from './date-line.js';
 export type {
   GeometryFrame,

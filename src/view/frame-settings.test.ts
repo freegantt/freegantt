@@ -83,6 +83,7 @@ describe('FrameSettings — the invalidation table', () => {
       expected: ['invalidateBars', 'requestFrame'],
     },
     { setting: 'todayLine', patch: { todayLine: false }, expected: ['requestFrame'] },
+    { setting: 'todayLineAt', patch: { todayLineAt: 'dayCenter' }, expected: ['requestFrame'] },
     { setting: 'dateLines', patch: { dateLines: [] }, expected: ['requestFrame'] },
     {
       setting: 'dateLineLabelPlacement',

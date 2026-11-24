@@ -19,7 +19,7 @@ import type {
   DateLine,
   DateLineLabelPlacement,
   TickLines,
-  TodayLineSpec,
+  TodayLineAt,
   RowHeight,
   LaneRule,
   HeaderTickRenderer,
@@ -356,7 +356,9 @@ export interface GanttShellOptions {
    *  `a11yLabel` alike. */
   locale?: Intl.LocalesArgument;
   /** Live. Default `true`. */
-  todayLine?: boolean | Instant | TodayLineSpec;
+  todayLine?: boolean | Instant;
+  /** Live. Default `'now'`. */
+  todayLineAt?: TodayLineAt;
   /** Live. Default `false`. */
   todayColumn?: boolean;
   /** Live. Default `'tick'`. */
@@ -1883,12 +1885,20 @@ export class GanttShell {
     return this.#events.emit(name, payload);
   }
 
-  get todayLine(): boolean | Instant | TodayLineSpec {
+  get todayLine(): boolean | Instant {
     return this.#frameSettings.todayLine;
   }
 
-  set todayLine(on: boolean | Instant | TodayLineSpec) {
+  set todayLine(on: boolean | Instant) {
     this.#frameSettings.set({ todayLine: on });
+  }
+
+  get todayLineAt(): TodayLineAt {
+    return this.#frameSettings.todayLineAt;
+  }
+
+  set todayLineAt(at: TodayLineAt) {
+    this.#frameSettings.set({ todayLineAt: at });
   }
 
   get todayColumn(): boolean {
@@ -2415,6 +2425,7 @@ export class GanttShell {
       headerRenderer: options.headerRenderer,
       tooltipRenderer: options.tooltipRenderer,
       ...(options.todayLine !== undefined ? { todayLine: options.todayLine } : {}),
+      ...(options.todayLineAt !== undefined ? { todayLineAt: options.todayLineAt } : {}),
       ...(options.todayColumn !== undefined ? { todayColumn: options.todayColumn } : {}),
       ...(options.tickLines !== undefined ? { tickLines: options.tickLines } : {}),
       ...(options.rowHeight !== undefined ? { rowHeight: options.rowHeight } : {}),

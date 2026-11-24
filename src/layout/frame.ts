@@ -21,7 +21,7 @@ import {
   resolveDateFormat,
 } from '../time/index.js';
 import { resolveDateLines } from './date-line.js';
-import type { DateLine, DateLineDecoration, TodayLineSpec } from './date-line.js';
+import type { DateLine, DateLineDecoration, TodayLineAt } from './date-line.js';
 import { FrameMemory } from './frame-memory.js';
 import type { FrameColumn, ResolvedColumn, FieldCompare } from './column.js';
 import type { PlannedRow, RowSource } from './rows/row-source.js';
@@ -419,7 +419,9 @@ export interface LayoutInput {
   locale?: Intl.LocalesArgument;
   /** `true`/`undefined` reads `now()`; `false` omits the today wrapper; an `Instant` pins it with
    *  no clock read. Default `true`. */
-  todayLine?: boolean | Instant | TodayLineSpec;
+  todayLine?: boolean | Instant;
+  /** Where a clock-driven today line sits inside today. Default `'now'`. */
+  todayLineAt?: TodayLineAt;
   /** Paints a column over the finest tick that holds today. Omitted → off. */
   todayColumn?: boolean;
   /** Draws and flags one header tick. Omitted → the library text, and only the `'today'` flag. */
@@ -1095,6 +1097,7 @@ export function placeFrame(
     decorations: resolveDateLines({
       scale,
       todayLine: input.todayLine ?? true,
+      ...(input.todayLineAt !== undefined ? { todayLineAt: input.todayLineAt } : {}),
       ...(input.dateLines ? { dateLines: input.dateLines } : {}),
     }),
     // The today column paints last, so an off-day band never covers it.
