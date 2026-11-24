@@ -86,7 +86,7 @@ describe('connectors in the frame', () => {
       rule: { count: () => 2, of: (entry: Entry) => (entry.id === entryId('a') ? 1 : 0) },
       geometry,
     };
-    const [connector] = frameOf([() => [finishToStart]], { lanes }).connectors;
+    const [connector] = frameOf([() => [finishToStart]], { lanes, rowHeight: 20 }).connectors;
     expect(connector?.path[0]).toEqual({ cmd: 'M', x: 1000, y: 21 });
     expect(connector?.path.at(-1)).toEqual({ cmd: 'L', x: 2000, y: 35 });
   });

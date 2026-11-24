@@ -114,18 +114,14 @@ export class FrameMemory {
       this.#cachedRowHeightOf = bind.rowHeightOf;
       this.#cachedLanes = bind.lanes;
       this.heightIndexRevision++;
-    } else if (planChanged) {
-      // A re-sort or a same-size filter keeps the row count but moves every Row's height.
-      this.#heights = new PrefixSumHeightIndex(bind.plan.length, (index) => this.heightOfRow(index));
-      this.heightIndexRevision++;
-      if (revisionChanged) {
-        this.#produced.clear();
-        this.producedRevision++;
-      }
     } else if (revisionChanged) {
       this.#produced.clear();
       this.producedRevision++;
       this.#heights.invalidateFrom(0);
+    } else if (planChanged) {
+      // A re-sort or a same-size filter keeps the row count and the data but moves every Row's height.
+      this.#heights.invalidateFrom(0);
+      this.heightIndexRevision++;
     }
     this.#datasetRevision = bind.datasetRevision;
   }
@@ -156,7 +152,8 @@ export class FrameMemory {
     const laneHeight =
       this.#lanes === undefined || lanes === 0 ? undefined : laneRowHeight(lanes, this.#lanes.geometry);
     const resolve = this.#rowHeightOf;
-    if (resolve === undefined) return laneHeight ?? this.#rowHeight;
+    // A Lane Row never clips its stack: a default height taller than the stack wins, a shorter one does not.
+    if (resolve === undefined) return Math.max(laneHeight ?? 0, this.#rowHeight);
     const subject = planned.entryIds[0];
     const height = resolve({
       entry: subject === undefined ? undefined : this.#entryById.get(subject),
@@ -166,7 +163,7 @@ export class FrameMemory {
       laneHeight,
     });
     // A function that answers nothing usable gets the default, so one bad Row never zeroes the pane.
-    return Number.isFinite(height) && height > 0 ? height : (laneHeight ?? this.#rowHeight);
+    return Number.isFinite(height) && height > 0 ? height : Math.max(laneHeight ?? 0, this.#rowHeight);
   }
 
   /** Call: `memory.rowMemory(row.id)` — produce a row's Bars once per dataset revision. */

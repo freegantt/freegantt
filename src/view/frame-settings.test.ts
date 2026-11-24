@@ -270,6 +270,22 @@ describe('FrameSettings — toLayoutInput', () => {
   });
 });
 
+describe('FrameSettings — numeric rowHeight', () => {
+  it('uses a positive number as the default Row height', () => {
+    const { ports } = recordingPorts({ '--fg-row-height': 40 });
+    const settings = new FrameSettings(ports, { rowHeight: 52 });
+    settings.refreshPixelProperties();
+    expect(settings.rowHeight).toBe(52);
+  });
+
+  it.each([0, -8, Number.NaN, Number.POSITIVE_INFINITY])('falls back to the token for %s', (given) => {
+    const { ports } = recordingPorts({ '--fg-row-height': 40 });
+    const settings = new FrameSettings(ports, { rowHeight: given });
+    settings.refreshPixelProperties();
+    expect(settings.rowHeight).toBe(40);
+  });
+});
+
 describe('FrameSettings — lanes', () => {
   const rule = { count: () => 2, of: () => 0 };
 

@@ -345,11 +345,11 @@ export class FrameSettings {
     return this.#values.tooltipRenderer;
   }
 
-  /** The default Row height in px: the number the consumer gave, else `--fg-row-height`. Keyboard row
-   *  paging and `reveal` read it. */
+  /** The default Row height in px: the number the consumer gave, else `--fg-row-height`. A number that
+   *  is not positive gives the token too, as the function path does. Keyboard row paging reads it. */
   get rowHeight(): number {
     const given = this.#values.rowHeight;
-    return typeof given === 'number' ? given : this.#metrics.rowHeight;
+    return typeof given === 'number' && Number.isFinite(given) && given > 0 ? given : this.#metrics.rowHeight;
   }
 
   /** The consumer's height function and Lane rule as `LayoutInput` spells them. Each is absent when

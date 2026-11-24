@@ -254,6 +254,32 @@ describe('FrameMemory lanes (ADR 0043)', () => {
     expect([0, 1, 2].map((i) => memory.heights.heightAt(i))).toEqual([50, 86, 32]);
   });
 
+  it('keeps a Lane Row as tall as its Lanes when the default Row height is smaller', () => {
+    const memory = new FrameMemory();
+    memory.sync({
+      plan: planOf(entries),
+      rowHeight: 20,
+      lanes: { rule: { count: () => 2, of: () => 0 }, geometry },
+      entries,
+      registry,
+      datasetRevision: 0,
+    });
+    expect(memory.heights.heightAt(0)).toBe(86);
+  });
+
+  it('keeps a Lane Row at the default Row height when that is taller than its Lanes', () => {
+    const memory = new FrameMemory();
+    memory.sync({
+      plan: planOf(entries),
+      rowHeight: 120,
+      lanes: { rule: { count: () => 2, of: () => 0 }, geometry },
+      entries,
+      registry,
+      datasetRevision: 0,
+    });
+    expect(memory.heights.heightAt(0)).toBe(120);
+  });
+
   it('tells the height function the Lane count and the Lane height', () => {
     const memory = new FrameMemory();
     const seen: [number, number | undefined][] = [];
