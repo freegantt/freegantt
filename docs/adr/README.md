@@ -55,7 +55,7 @@ frontmatter.
 | [0041](0041-core-owns-the-connect-gesture-and-a-plugin-owns-its-meaning.md) | Core owns the connect gesture, and a plugin owns its meaning | accepted | A core `Connect` controller, a `'connect'` capability and `beforeConnect` / `connect` events; a plugin registers `ctx.view.onConnect` and maps two ends to its own record |
 | [0042](0042-an-extension-overrides-a-proposed-field-only-when-it-says-so.md) | An extension overrides a proposed field only when it says so | accepted | The extension hook may replace a Field the user proposed on the same Entry only when its result marks the override; an unmarked overwrite still throws in dev mode (amends I4) |
 | [0043](0043-a-lane-is-a-band-inside-a-row.md) | A Lane is a band inside a Row | accepted | A consumer states Lane count and Lane of a Bar. Lane geometry is tokens only |
-| [0044](0044-row-height-is-a-resolver.md) | Row height is a resolver | accepted | `gantt.rowHeight` takes a number or a function with a `RowHeightContext` that carries `laneHeight` |
+| [0044](0044-row-height-is-a-resolver.md) | Row height is a resolver | accepted | `gantt.rowHeight` takes a number or a function with a `RowHeightContext` that carries `laneCount`, `laneHeight` and `defaultHeight` |
 | [0045](0045-a-header-tick-can-be-drawn-by-the-consumer.md) | A header tick can be drawn by the consumer | accepted | `headerTickRenderer` with content and flags, and a per-band `heightPx` |
 
 ## The gap at 0014

@@ -15,7 +15,7 @@ A consumer app needs more. One Row can hold several parallel bands, such as one 
 ## Decision
 
 - **Lane**: a band inside one Row. A Row holds zero or more Lanes.
-- **`gantt.lanes`**: `{ count(entry), of(entry) }`. `count` says how many Lanes the Row holds, and an empty Lane still counts. `of` says which Lane a Bar sits in, zero-based.
+- **`gantt.lanes`**: `{ laneCount(row), laneOf(entry) }`. `laneCount` gets a `RowContext` (`entry`, `kind`, `depth`), so a header Row can hold Lanes too. It says how many Lanes the Row holds, and an empty Lane still counts. `laneOf` says which Lane a Bar sits in, zero-based.
 - **Geometry is tokens only**: `--fg-lane-height`, `--fg-lane-gap` and `--fg-lane-padding`. The library reads them through `pixel-property.ts`, as it reads `--fg-row-height`. An option for the same value would be a second source.
 - **Row height with Lanes**: `2 × padding + n × lane + (n − 1) × gap`.
 - **The frame** carries `FrameRow.lanes` as `{ top, height }[]` and `FrameBar.lane`.

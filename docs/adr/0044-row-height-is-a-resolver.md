@@ -1,6 +1,6 @@
 ---
 status: accepted — ruled 2026-11-22 by the owner. Follows [ADR 0043](0043-a-lane-is-a-band-inside-a-row.md).
-decided: `gantt.rowHeight` takes a number or a function. The function receives a `RowHeightContext` and returns a pixel height. The context carries `laneHeight`, so a resolver can defer to the Lane geometry. `--fg-row-height` stays the fallback.
+decided: `gantt.rowHeight` takes a number or a function. The function receives a `RowHeightContext` and returns a pixel height. The context carries `laneHeight` and `defaultHeight`, so a resolver can defer to the Lane geometry or to the default. `--fg-row-height` stays the fallback.
 open: none.
 ---
 
@@ -16,11 +16,15 @@ Every Row had one height from `--fg-row-height`. A consumer app has Rows of seve
 gantt.rowHeight = 32;
 gantt.rowHeight = (ctx: RowHeightContext) => number;
 
-interface RowHeightContext {
+interface RowContext {
   entry: Entry | undefined;
   kind: PlannedRowKind;
   depth: number;
-  lanes: number;                  // 0 when the Row has no Lanes
+}
+
+interface RowHeightContext extends RowContext {
+  laneCount: number;              // 0 when the Row has no Lanes
+  defaultHeight: number;          // the --fg-row-height value
   laneHeight: number | undefined; // derived from the Lane tokens
 }
 ```
