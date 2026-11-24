@@ -2570,8 +2570,6 @@ export type ResolvedRowSource = ResolvedEntriesRowSource | ResolvedGroupRowSourc
 // @public
 export type ResolvedTheme = 'light' | 'dark';
 
-// Warning: (ae-forgotten-export) The symbol "TodayHighlightSpec" needs to be exported by the entry point index.d.ts
-//
 // @public
 export type ResolvedTodayHighlight = TodayHighlightSpec | false;
 
@@ -3082,6 +3080,12 @@ export interface TimeUnitWidth {
 
 // @public
 export type TodayHighlight = boolean | TodayHighlightSpec;
+
+// @public
+export interface TodayHighlightSpec {
+    // (undocumented)
+    readonly layer: DecorationLayer;
+}
 
 // @public
 export type TodayLineAt = 'now' | 'dayCenter';

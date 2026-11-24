@@ -133,6 +133,7 @@ export type {
   TickLines,
   TodayLineAt,
   TodayHighlight,
+  TodayHighlightSpec,
   ResolvedTodayHighlight,
   ChromePlugin,
   DataPlugin,

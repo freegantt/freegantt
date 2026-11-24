@@ -41,6 +41,7 @@ import type {
   TickLines,
   TodayLineAt,
   TodayHighlight,
+  TodayHighlightSpec,
   ResolvedTodayHighlight,
 } from '../layout/index.js';
 import type {
@@ -424,6 +425,7 @@ export type {
   TickLines,
   TodayLineAt,
   TodayHighlight,
+  TodayHighlightSpec,
   ResolvedTodayHighlight,
 };
 

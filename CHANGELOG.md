@@ -66,7 +66,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 - The new `todayHighlight` Gantt option tints the finest header tick that holds today.
   - The default is `false`, and it changes live.
   - `true` paints under the bars. `{ layer: 'overBars' }` paints over the bars, for opaque bars.
-  - The getter returns the normal form: `false` or `{ layer }`.
+  - The getter returns the normal form: `false` or `{ layer }`. Its types are `TodayHighlight`, `TodayHighlightSpec` and `ResolvedTodayHighlight`.
   - The `--fg-today-highlight-bg`, `--fg-today-highlight-border` and `--fg-today-highlight-min-width` tokens style it.
   - The tint paints last in its layer, so an off-day band never covers it.
 - The new `--fg-today-line-color` token sets the today line colour. Unset, the line follows `--fg-date-line-color`.
