@@ -942,7 +942,16 @@ export function placeConnectors(
     rowHeight: input.rowHeight,
     barBox: (bar) => barSpan(bar, input.scale, settings.minBarWidthPx),
     previews: input.barPreviews ?? [],
-    barBand: (rowTop, rowHeight) => barBandAt(rowTop, rowHeight, settings.barHeightPx),
+    barBand: (bar, rowIndex, rowTop, rowHeight) => {
+      const placed = barPlacementIn(
+        memory.lanesOfRow(rowIndex, rowTop, rowHeight),
+        laneOfEntry(input.lanes, memory.entryById.get(bar.entryId)),
+        rowTop,
+        rowHeight,
+        settings.barHeightPx,
+      );
+      return { top: placed.y, bottom: placed.y + placed.height };
+    },
     previewedBarBox: (bar, preview) =>
       previewedBox(barSpan(bar, input.scale, settings.minBarWidthPx), preview),
     paintKey: `${settings.minBarWidthPx}|${settings.barHeightPx}`,

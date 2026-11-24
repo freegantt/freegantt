@@ -80,6 +80,17 @@ describe('connectors in the frame', () => {
     ]);
   });
 
+  it('ends a connector at the middle of its bar’s own Lane', () => {
+    const geometry = { heightPx: 10, gapPx: 4, paddingPx: 2 };
+    const lanes = {
+      rule: { count: () => 2, of: (entry: Entry) => (entry.id === entryId('a') ? 1 : 0) },
+      geometry,
+    };
+    const [connector] = frameOf([() => [finishToStart]], { lanes }).connectors;
+    expect(connector?.path[0]).toEqual({ cmd: 'M', x: 1000, y: 21 });
+    expect(connector?.path.at(-1)).toEqual({ cmd: 'L', x: 2000, y: 35 });
+  });
+
   it('runs along the row boundary when the target lies behind the source', () => {
     const backwards: ConnectorInput = {
       ...finishToStart,
