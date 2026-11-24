@@ -133,12 +133,12 @@ export function contentScrollsForWheel(
   while (node !== null && node !== boundary) {
     const style = getComputedStyle(node);
     const box = clientBox(node);
-    if (wheel.y !== 0 && scrollsAlong(style.overflowY, node.scrollHeight, box.height)) {
+    if (wheel.y !== 0 && scrollsAlong(node, style.overflowY, node.scrollHeight, box.height)) {
       const atEdge =
         wheel.y < 0 ? node.scrollTop <= 0 : node.scrollTop + box.height >= node.scrollHeight - EPSILON;
       if (!atEdge) return true;
     }
-    if (wheel.x !== 0 && scrollsAlong(style.overflowX, node.scrollWidth, box.width)) {
+    if (wheel.x !== 0 && scrollsAlong(node, style.overflowX, node.scrollWidth, box.width)) {
       const atEdge =
         wheel.x < 0 ? node.scrollLeft <= 0 : node.scrollLeft + box.width >= node.scrollWidth - EPSILON;
       if (!atEdge) return true;
@@ -148,6 +148,12 @@ export function contentScrollsForWheel(
   return false;
 }
 
-function scrollsAlong(overflow: string, scrollSize: number, clientSize: number): boolean {
-  return (overflow === 'auto' || overflow === 'scroll') && scrollSize > clientSize + EPSILON;
+/** Firefox reports a textarea's computed overflow as `visible` while the textarea still scrolls its
+ *  own text, so a textarea counts as scrollable unless the app hides or clips it. */
+function scrollsAlong(node: HTMLElement, overflow: string, scrollSize: number, clientSize: number): boolean {
+  const scrolls =
+    overflow === 'auto' ||
+    overflow === 'scroll' ||
+    (node instanceof HTMLTextAreaElement && overflow !== 'hidden' && overflow !== 'clip');
+  return scrolls && scrollSize > clientSize + EPSILON;
 }

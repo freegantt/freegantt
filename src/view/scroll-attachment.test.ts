@@ -194,7 +194,8 @@ describe('attachScroll reserveScrollbarGutter', () => {
 
 describe('contentScrollsForWheel', () => {
   const style = document.createElement('style');
-  style.textContent = '.wheel-auto { overflow-y: auto; } .wheel-hidden { overflow-y: hidden; }';
+  style.textContent =
+    '.wheel-auto { overflow-y: auto; } .wheel-hidden { overflow-y: hidden; } .wheel-visible { overflow-y: visible; }';
   document.head.append(style);
 
   const heights = new Map<HTMLElement, number>();
@@ -204,7 +205,7 @@ describe('contentScrollsForWheel', () => {
     top?: number;
     height: number;
     client: number;
-    overflow?: 'auto' | 'hidden';
+    overflow?: 'auto' | 'hidden' | 'visible';
   }): HTMLElement {
     const node = document.createElement('textarea');
     node.className = `wheel-${scroll.overflow ?? 'auto'}`;
@@ -244,6 +245,22 @@ describe('contentScrollsForWheel', () => {
     const boundary = boundaryOf(fits, hidden);
     expect(contentScrollsForWheel(fits, boundary, down, clientBox)).toBe(false);
     expect(contentScrollsForWheel(hidden, boundary, down, clientBox)).toBe(false);
+  });
+
+  it('says yes for a textarea whose computed overflow reads visible, as Firefox reports it', () => {
+    const area = box({ top: 10, height: 300, client: 100, overflow: 'visible' });
+    const boundary = boundaryOf(area);
+    expect(contentScrollsForWheel(area, boundary, down, clientBox)).toBe(true);
+  });
+
+  it('says no for a div whose overflow reads visible', () => {
+    const area = document.createElement('div');
+    document.body.append(area);
+    area.className = 'wheel-visible';
+    Object.defineProperty(area, 'scrollHeight', { value: 300 });
+    heights.set(area, 100);
+    const boundary = boundaryOf(area);
+    expect(contentScrollsForWheel(area, boundary, down, clientBox)).toBe(false);
   });
 
   it('looks at ancestors up to the boundary and no further', () => {
