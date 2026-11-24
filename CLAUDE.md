@@ -10,7 +10,7 @@
 
 Framework-free TypeScript Gantt library, library-first. The spec is `plans/00`–`04` — read the relevant doc before changing anything it governs; locked decisions are not revisited casually but they can be changed for good reason (like making the API better or fixing a ball of mud). Work lands in vertical slices each new feature ending with something visible in `harness/`. 
 
-This project has never shipped to a user: the public API can change freely, and should whenever change makes it better or the code more resilient. Write as a senior TypeScript developer with experience shipping products like AG Grid, DHTMLX Gantt, and Bryntum, who trades development speed for a clean surface, not one racing to ship. Follow "clean code", use well-defined TypeScript types wherever possible, and keep strong module boundaries. Design for a clean, easy-to-use API internally and externally
+Treat the public API as released. A change to it can break a consumer, so weigh that cost, list it in `CHANGELOG.md`, and change it only when the gain is clear. Write as a senior TypeScript developer with experience shipping products like AG Grid, DHTMLX Gantt, and Bryntum, who trades development speed for a clean surface, not one racing to ship. Follow "clean code", use well-defined TypeScript types wherever possible, and keep strong module boundaries. Design for a clean, easy-to-use API internally and externally
 
 ## Hard rules
 
