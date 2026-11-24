@@ -1137,8 +1137,7 @@ export function createDomBackend(options: DomBackendOptions): RenderBackend<HTML
       node.style.width = `${geom.width}px`;
       if (geom.flag === '') node.removeAttribute('data-flag');
       else node.setAttribute('data-flag', geom.flag);
-      if (geom.content === undefined) node.textContent = geom.label;
-      else applyElementDescription(node, geom.content);
+      applyElementDescription(node, geom.content ?? { text: geom.label });
     },
   };
 

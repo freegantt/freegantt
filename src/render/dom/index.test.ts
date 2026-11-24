@@ -3,6 +3,7 @@ import { createDomBackend } from './index.js';
 import { computeFrame, createVariantRegistry, fixedWidthBar } from '../../layout/index.js';
 import type {
   BarRenderer,
+  HeaderTickRenderer,
   ResolvedRenderer,
   DateLineLabelPlacement,
   Entry,
@@ -216,6 +217,41 @@ describe('render/dom backend', () => {
     const ticks = timeline.querySelectorAll('.fg-header .fg-tick');
     expect(ticks).toHaveLength(1);
     expect(ticks[0]?.textContent).toBe('tick');
+    backend.destroy();
+  });
+
+  it('drops what a tick drew once the renderer answers nothing, and keeps the tick class', () => {
+    const backend = paintingBackend();
+    const { grid, timeline } = mountSurfaces();
+    backend.mount({ grid, timeline });
+    const frameWith = (headerTickRenderer: HeaderTickRenderer) =>
+      computeFrame({
+        entries: [],
+        scale,
+        preset,
+        visible: { x: 0, y: 0, width: 0, height: 0 },
+        rowHeight: 32,
+        revision: 0,
+        datasetRevision: 0,
+        variants: variantRegistry,
+        headerTickRenderer,
+      });
+
+    backend.sync(
+      frameWith(() => ({
+        content: { text: 'drawn', class: { custom: true }, style: { color: 'red' }, attrs: { title: 'x' } },
+      })),
+    );
+    const tick = timeline.querySelector<HTMLElement>('.fg-header .fg-tick')!;
+    expect(tick.classList.contains('custom')).toBe(true);
+
+    backend.sync(frameWith(() => undefined));
+    expect(timeline.querySelector('.fg-header .fg-tick')).toBe(tick);
+    expect(tick.textContent).toBe('tick');
+    expect(tick.classList.contains('fg-tick')).toBe(true);
+    expect(tick.classList.contains('custom')).toBe(false);
+    expect(tick.style.color).toBe('');
+    expect(tick.hasAttribute('title')).toBe(false);
     backend.destroy();
   });
 
