@@ -1,4 +1,4 @@
-// layout/ — a consumer's hook into one header tick: what it draws, and what flags it carries (ADR 0046).
+// layout/ — a consumer's hook into one header tick: what it draws, and what flags it carries (ADR 0045).
 
 import type { ElementDescription, Instant } from '../model/index.js';
 import type { Tick, ZonedTime } from '../time/index.js';
