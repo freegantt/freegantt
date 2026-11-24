@@ -44,6 +44,7 @@ function recordingPorts(
       return pixels[property] ?? policy.fallback;
     },
     datasetLocale: () => datasetLocale,
+    reportHeaderTickFailure: () => calls.push('reportHeaderTickFailure'),
   };
   return { ports, calls, reads };
 }
@@ -267,6 +268,32 @@ describe('FrameSettings — toLayoutInput', () => {
     const second = new FrameSettings(recordingPorts().ports);
     first.set({ todayLine: false });
     expect(second.todayLine).toBe(true);
+  });
+});
+
+describe('FrameSettings — header tick renderer', () => {
+  const tickContext = {} as Parameters<NonNullable<FrameSettingsPatch['headerTickRenderer']>>[0];
+
+  it('reports a throw and answers nothing, so the tick keeps the library label', () => {
+    const { ports, calls } = recordingPorts();
+    const settings = new FrameSettings(ports, {
+      headerTickRenderer: () => {
+        throw new Error('bad tick');
+      },
+    });
+    const renderer = settings.toLayoutInput(perFrame()).headerTickRenderer!;
+    expect(renderer(tickContext)).toBeUndefined();
+    expect(calls).toEqual(['reportHeaderTickFailure']);
+  });
+
+  it('passes an answer through and keeps one wrapper until the renderer changes', () => {
+    const { ports } = recordingPorts();
+    const settings = new FrameSettings(ports, { headerTickRenderer: () => ({ flags: ['off'] }) });
+    const first = settings.toLayoutInput(perFrame()).headerTickRenderer!;
+    expect(first(tickContext)).toEqual({ flags: ['off'] });
+    expect(settings.toLayoutInput(perFrame()).headerTickRenderer).toBe(first);
+    settings.set({ headerTickRenderer: () => undefined });
+    expect(settings.toLayoutInput(perFrame()).headerTickRenderer).not.toBe(first);
   });
 });
 

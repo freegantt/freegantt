@@ -2383,6 +2383,13 @@ export class GanttShell {
       invalidateBars: () => this.#layout.invalidateFrom(0),
       readPixelProperty: (property, policy) => readPixelProperty(this.#container, property, policy),
       datasetLocale: () => this.#options.dataset.locale,
+      reportHeaderTickFailure: (error) => {
+        const message = 'headerTickRenderer threw — falling back to the library label';
+        this.#raiseError(
+          { code: 'renderer-failed', message, severity: 'warning', by: 'core', cause: error },
+          () => console.error(`FreeGantt: ${message}`, error),
+        );
+      },
     };
   }
 

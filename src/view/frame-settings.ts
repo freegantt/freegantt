@@ -130,6 +130,8 @@ export interface FrameSettingsPorts {
    *  own. Injected rather than imported, so this module never names `api/dataset.ts` (`view/` may
    *  not import `api/`). */
   datasetLocale(): Intl.LocalesArgument | undefined;
+  /** The consumer's `headerTickRenderer` threw. The frame goes on and the tick keeps the library label. */
+  reportHeaderTickFailure(error: unknown): void;
 }
 
 /** Every setting, with the value it currently holds. Five of them may honestly be unset, and say so
@@ -253,6 +255,7 @@ export type PerFrameLayoutInput = Omit<LayoutInput, SettingLayoutInputKey>;
 export class FrameSettings {
   #ports: FrameSettingsPorts;
   #values: FrameSettingsValues = defaultSettings();
+  #guardedTick: { source: HeaderTickRenderer; guarded: HeaderTickRenderer } | undefined;
 
   #metrics: PixelMetrics = {
     rowHeight: DEFAULT_ROW_HEIGHT,
@@ -446,7 +449,7 @@ export class FrameSettings {
       todayColumn: this.#values.todayColumn,
       tickLines: this.#values.tickLines,
       ...(this.#values.headerTickRenderer !== undefined
-        ? { headerTickRenderer: this.#values.headerTickRenderer }
+        ? { headerTickRenderer: this.#guardedHeaderTickRenderer(this.#values.headerTickRenderer) }
         : {}),
       dateLines: this.#values.dateLines,
       connectorRouting: this.#values.connectorRouting,
@@ -454,6 +457,23 @@ export class FrameSettings {
       ...this.rowPlanSettings(),
       ...(this.effectiveLocale !== undefined ? { locale: this.effectiveLocale } : {}),
     };
+  }
+
+  /** The consumer's tick renderer, wrapped so one throw reports and leaves that tick with the library
+   *  label. The same wrapper comes back until the renderer changes, because the tick paint cache
+   *  keeps its answers per renderer. */
+  #guardedHeaderTickRenderer(renderer: HeaderTickRenderer): HeaderTickRenderer {
+    if (this.#guardedTick?.source === renderer) return this.#guardedTick.guarded;
+    const guarded: HeaderTickRenderer = (context) => {
+      try {
+        return renderer(context);
+      } catch (error) {
+        this.#ports.reportHeaderTickFailure(error);
+        return undefined;
+      }
+    };
+    this.#guardedTick = { source: renderer, guarded };
+    return guarded;
   }
 
   /** Writes each key the patch carries and answers which ones actually changed value. A key the

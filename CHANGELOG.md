@@ -39,6 +39,7 @@ Every new option defaults to the 0.2.0 look. An app that sets none of them rende
 - The new `headerTickRenderer` Gantt option draws each header tick and flags it.
   - The function gets `band`, `tick`, `time`, `locale` and `rangeStart`, and returns `content` and `flags`, or nothing.
   - Each flag becomes a `data-flag` token on the tick. The library adds a `today` flag to the finest band's tick that holds today.
+  - A throw reports on the `error` event with code `renderer-failed`, and that tick keeps its library label.
   - It changes live.
 - `ViewPresetHeader.alignTo` makes a header band's cells start and end on the boundaries of a finer unit. A month band with `alignTo: 'week'` owns the weeks whose first day falls in that month.
   - A coarser or equal `alignTo` throws `InvalidPresetError` (rule `'header-align'`).
